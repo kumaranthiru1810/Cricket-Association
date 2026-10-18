@@ -1949,18 +1949,18 @@ export default function HomeScreen() {
             <View style={styles.aboutGrid}>
               <View style={styles.aboutTextCol}>
                 <Text style={styles.aboutLead}>
-                  The <Text style={{ color: '#f5c43d', fontWeight: '700' }}>Cricket Federation of Virudhunagar District (CFVD)</Text> is
+                  The <Text style={{ color: '#b45309', fontWeight: '800' }}>Cricket Federation of Virudhunagar District (CFVD)</Text> is
                   the official recognized governing body for the sport of cricket within Virudhunagar revenue district.
                 </Text>
                 <Text style={styles.aboutBody}>
                   With roots deeply anchored in sportsmanship, collegiate competition, and youth development, our emblem features
-                  the world-renowned temple gopuram of <Text style={{ fontStyle: 'italic' }}>Srivilliputhur</Text> (the state emblem of Tamil Nadu),
+                  the world-renowned temple gopuram of <Text style={{ fontStyle: 'italic', fontWeight: '700', color: '#b45309' }}>Srivilliputhur</Text> (the state emblem of Tamil Nadu),
                   reflecting the pride and resilience of our cricketers.
                 </Text>
 
                 <View style={styles.valuesList}>
                   <View style={styles.valueItem}>
-                    <Text style={{ fontSize: 18 }}>✓</Text>
+                    <Text style={{ fontSize: 18, color: '#b45309', fontWeight: '900' }}>✓</Text>
                     <View style={{ flex: 1, marginLeft: 10 }}>
                       <Text style={styles.valueTitle}>Fair Play & Ethics</Text>
                       <Text style={styles.valueDesc}>
@@ -1969,7 +1969,7 @@ export default function HomeScreen() {
                     </View>
                   </View>
                   <View style={styles.valueItem}>
-                    <Text style={{ fontSize: 18 }}>✓</Text>
+                    <Text style={{ fontSize: 18, color: '#b45309', fontWeight: '900' }}>✓</Text>
                     <View style={{ flex: 1, marginLeft: 10 }}>
                       <Text style={styles.valueTitle}>Grassroots & Collegiate Scouting</Text>
                       <Text style={styles.valueDesc}>
@@ -1978,7 +1978,7 @@ export default function HomeScreen() {
                     </View>
                   </View>
                   <View style={styles.valueItem}>
-                    <Text style={{ fontSize: 18 }}>✓</Text>
+                    <Text style={{ fontSize: 18, color: '#b45309', fontWeight: '900' }}>✓</Text>
                     <View style={{ flex: 1, marginLeft: 10 }}>
                       <Text style={styles.valueTitle}>First-Class Standard Pitches</Text>
                       <Text style={styles.valueDesc}>
@@ -3314,13 +3314,13 @@ const styles = StyleSheet.create({
   heroBtnNavy: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#07132c',
-    borderColor: '#d4af37',
+    backgroundColor: '#f59e0b',
+    borderColor: '#d97706',
     borderWidth: 1.5,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 8,
-    shadowColor: '#000',
+    shadowColor: '#d97706',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     elevation: 3
@@ -3454,12 +3454,16 @@ const styles = StyleSheet.create({
   btnPrimary: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0f2452',
-    borderColor: '#d4af37',
+    backgroundColor: '#f59e0b',
+    borderColor: '#d97706',
     borderWidth: 1.5,
     paddingHorizontal: 20,
     paddingVertical: 12,
-    borderRadius: 8
+    borderRadius: 8,
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    elevation: 3
   },
   liveDotPulse: {
     width: 8,
@@ -3474,28 +3478,28 @@ const styles = StyleSheet.create({
     fontWeight: '800'
   },
   btnOutlineGold: {
-    backgroundColor: 'rgba(212, 175, 55, 0.1)',
-    borderColor: '#d4af37',
+    backgroundColor: '#ffffff',
+    borderColor: '#f59e0b',
     borderWidth: 1.5,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 8
   },
   btnOutlineGoldText: {
-    color: '#f5c43d',
+    color: '#b45309',
     fontSize: 14,
     fontWeight: '800'
   },
   btnGlass: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderColor: '#fde68a',
     borderWidth: 1,
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderRadius: 8
   },
   btnGlassText: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 14,
     fontWeight: '700'
   },
@@ -3504,17 +3508,22 @@ const styles = StyleSheet.create({
   metricsBar: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    backgroundColor: 'rgba(10, 27, 61, 0.88)',
-    borderColor: 'rgba(212, 175, 55, 0.3)',
-    borderWidth: 1,
-    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
+    borderWidth: 1.5,
+    borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 10,
     width: '100%',
     maxWidth: 780,
     alignSelf: 'flex-start',
     justifyContent: 'space-around',
-    alignItems: 'center'
+    alignItems: 'center',
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3
   },
   metricItem: {
     alignItems: 'center',
@@ -3522,29 +3531,29 @@ const styles = StyleSheet.create({
     paddingVertical: 6
   },
   metricVal: {
-    color: '#fed966',
+    color: '#b45309',
     fontSize: 22,
     fontWeight: '900'
   },
   metricLabel: {
-    color: '#9bb0cf',
+    color: '#475569',
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
     marginTop: 2
   },
   metricDivider: {
     width: 1,
     height: 32,
-    backgroundColor: 'rgba(212, 175, 55, 0.25)'
+    backgroundColor: '#fde68a'
   },
 
   // Quick Strip
   quickStrip: {
     paddingVertical: 16,
-    backgroundColor: 'rgba(5, 13, 34, 0.65)',
+    backgroundColor: '#fffbeb',
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.2)'
+    borderColor: '#fde68a'
   },
   quickStripGrid: {
     flexDirection: 'row',
@@ -3554,17 +3563,22 @@ const styles = StyleSheet.create({
   quickCard: {
     flex: 1,
     minWidth: 240,
-    backgroundColor: 'rgba(10, 24, 56, 0.82)',
-    borderColor: 'rgba(212, 175, 55, 0.25)',
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 12,
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2
   },
   quickCardHighlight: {
-    borderColor: 'rgba(245, 196, 61, 0.6)',
-    backgroundColor: 'rgba(15, 36, 82, 0.95)'
+    borderColor: '#f59e0b',
+    backgroundColor: '#fffdf5'
   },
   quickIcon: {
     fontSize: 22,
@@ -3574,17 +3588,17 @@ const styles = StyleSheet.create({
     flex: 1
   },
   quickTitle: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 13,
-    fontWeight: '700'
+    fontWeight: '800'
   },
   quickDesc: {
-    color: '#9bb0cf',
+    color: '#64748b',
     fontSize: 11,
     marginTop: 2
   },
   quickArrow: {
-    color: '#f5c43d',
+    color: '#d97706',
     fontSize: 16,
     fontWeight: '800',
     marginLeft: 6
@@ -3599,34 +3613,34 @@ const styles = StyleSheet.create({
     marginBottom: 26
   },
   sectionTagBadge: {
-    backgroundColor: '#07152b',
-    borderColor: '#d4af37',
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b',
     borderWidth: 1.5,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 6,
     marginBottom: 10,
-    shadowColor: '#000',
+    shadowColor: '#d97706',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.12,
     shadowRadius: 4,
-    elevation: 3
+    elevation: 2
   },
   sectionTagBadgeText: {
-    color: '#f5c43d',
+    color: '#92400e',
     fontSize: 11.5,
-    fontWeight: '800',
+    fontWeight: '900',
     letterSpacing: 0.8
   },
   sectionTitle: {
-    color: '#07152b',
+    color: '#0f172a',
     fontSize: 26,
     fontWeight: '900',
     textAlign: 'center',
     letterSpacing: 0.4
   },
   sectionSubtitle: {
-    color: '#2d3748',
+    color: '#475569',
     fontSize: 13.5,
     fontWeight: '500',
     textAlign: 'center',
@@ -3640,8 +3654,8 @@ const styles = StyleSheet.create({
     marginBottom: 16
   },
   opTabBtn: {
-    backgroundColor: 'rgba(10, 24, 56, 0.75)',
-    borderColor: 'rgba(212, 175, 55, 0.25)',
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
     borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -3649,24 +3663,29 @@ const styles = StyleSheet.create({
     marginRight: 8
   },
   opTabBtnActive: {
-    backgroundColor: '#d4af37',
-    borderColor: '#fed966'
+    backgroundColor: '#f59e0b',
+    borderColor: '#d97706'
   },
   opTabBtnText: {
-    color: '#c0d1eb',
+    color: '#475569',
     fontSize: 12.5,
     fontWeight: '700'
   },
   opTabBtnTextActive: {
-    color: '#020612',
+    color: '#ffffff',
     fontWeight: '900'
   },
   cardBox: {
-    backgroundColor: 'rgba(10, 24, 56, 0.88)',
-    borderColor: 'rgba(212, 175, 55, 0.3)',
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 16
+    borderRadius: 14,
+    padding: 18,
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2
   },
   cardBoxHeader: {
     flexDirection: 'row',
@@ -3677,13 +3696,13 @@ const styles = StyleSheet.create({
     marginBottom: 16
   },
   cardBoxTitle: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 18,
     fontWeight: '800',
     marginTop: 4
   },
   cardBoxSub: {
-    color: '#9bb0cf',
+    color: '#64748b',
     fontSize: 12,
     marginTop: 2
   },
@@ -3692,23 +3711,31 @@ const styles = StyleSheet.create({
     gap: 8
   },
   btnGoldSm: {
-    backgroundColor: '#d4af37',
-    paddingHorizontal: 12,
+    backgroundColor: '#f59e0b',
+    paddingHorizontal: 14,
     paddingVertical: 7,
-    borderRadius: 6
+    borderRadius: 6,
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    elevation: 2
   },
   btnGoldSmText: {
-    color: '#020612',
+    color: '#ffffff',
     fontSize: 12,
     fontWeight: '800'
   },
   btnPrimarySm: {
-    backgroundColor: '#0f2452',
-    borderColor: '#d4af37',
+    backgroundColor: '#f59e0b',
+    borderColor: '#d97706',
     borderWidth: 1,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 7,
-    borderRadius: 6
+    borderRadius: 6,
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    elevation: 2
   },
   btnPrimarySmText: {
     color: '#ffffff',
@@ -3721,27 +3748,27 @@ const styles = StyleSheet.create({
     marginBottom: 16
   },
   subTabBtn: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: '#ffffff',
+    borderColor: '#e2e8f0',
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6
   },
   subTabBtnActive: {
-    backgroundColor: 'rgba(212, 175, 55, 0.2)',
-    borderColor: '#d4af37'
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b'
   },
   subTabBtnText: {
-    color: '#9bb0cf',
+    color: '#64748b',
     fontSize: 12,
     fontWeight: '700'
   },
   subTabBtnTextActive: {
-    color: '#f5c43d'
+    color: '#b45309'
   },
   subSectionTitle: {
-    color: '#f5c43d',
+    color: '#b45309',
     fontSize: 14,
     fontWeight: '800',
     marginBottom: 12,
@@ -3764,11 +3791,16 @@ const styles = StyleSheet.create({
   collegeCard: {
     flex: 1,
     minWidth: 260,
-    backgroundColor: 'rgba(5, 13, 34, 0.8)',
-    borderColor: 'rgba(212, 175, 55, 0.25)',
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
     borderWidth: 1,
-    borderRadius: 10,
-    padding: 12
+    borderRadius: 12,
+    padding: 14,
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1
   },
   collegeCardHeader: {
     flexDirection: 'row',
@@ -3776,18 +3808,18 @@ const styles = StyleSheet.create({
     marginBottom: 8
   },
   collegeName: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 13,
-    fontWeight: '700'
+    fontWeight: '800'
   },
   collegeTaluk: {
-    color: '#f5c43d',
+    color: '#d97706',
     fontSize: 11,
     fontWeight: '700',
     marginTop: 1
   },
   collegeMeta: {
-    color: '#c0d1eb',
+    color: '#475569',
     fontSize: 11.5,
     marginVertical: 1.5
   },
@@ -3798,13 +3830,13 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 6,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.08)'
+    borderTopColor: '#f1f5f9'
   },
   collegeTeamsBadge: {
-    backgroundColor: 'rgba(37, 99, 235, 0.2)',
-    borderColor: 'rgba(59, 130, 246, 0.4)',
+    backgroundColor: '#fef3c7',
+    borderColor: '#fde68a',
     borderWidth: 1,
-    color: '#93c5fd',
+    color: '#b45309',
     fontSize: 10.5,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -3812,7 +3844,7 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
   verifiedText: {
-    color: '#4ade80',
+    color: '#15803d',
     fontSize: 11.5,
     fontWeight: '800'
   },
@@ -3820,14 +3852,14 @@ const styles = StyleSheet.create({
   // Forms
   formContainer: {
     marginTop: 16,
-    backgroundColor: 'rgba(5, 13, 34, 0.7)',
-    borderColor: 'rgba(212, 175, 55, 0.3)',
+    backgroundColor: '#fffdf5',
+    borderColor: '#fde68a',
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 14
   },
   formHeaderTitle: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 14,
     fontWeight: '800',
     marginBottom: 12
@@ -3836,23 +3868,23 @@ const styles = StyleSheet.create({
     marginBottom: 10
   },
   formLabel: {
-    color: '#c0d1eb',
+    color: '#334155',
     fontSize: 11.5,
     fontWeight: '700',
     marginBottom: 4
   },
   formInput: {
-    backgroundColor: 'rgba(15, 36, 82, 0.6)',
-    borderColor: 'rgba(212, 175, 55, 0.3)',
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
     borderWidth: 1,
     borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 13
   },
   btnGold: {
-    backgroundColor: '#d4af37',
+    backgroundColor: '#f59e0b',
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 6,
@@ -3860,26 +3892,26 @@ const styles = StyleSheet.create({
     marginTop: 6
   },
   btnGoldText: {
-    color: '#020612',
+    color: '#ffffff',
     fontSize: 13,
     fontWeight: '800'
   },
 
   // Approval Box
   approvalBox: {
-    backgroundColor: 'rgba(5, 13, 34, 0.75)',
-    borderColor: 'rgba(212, 175, 55, 0.3)',
+    backgroundColor: '#fffdf5',
+    borderColor: '#fde68a',
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 16
   },
   approvalHeading: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 15,
     fontWeight: '800'
   },
   approvalDesc: {
-    color: '#9bb0cf',
+    color: '#475569',
     fontSize: 12,
     marginTop: 4
   },
@@ -3888,29 +3920,34 @@ const styles = StyleSheet.create({
   instCard: {
     flex: 1,
     minWidth: 260,
-    backgroundColor: 'rgba(5, 13, 34, 0.8)',
-    borderColor: 'rgba(212, 175, 55, 0.25)',
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 10,
     padding: 12,
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1
   },
   instName: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 13,
-    fontWeight: '700'
+    fontWeight: '800'
   },
   instType: {
-    color: '#9bb0cf',
+    color: '#64748b',
     fontSize: 11,
     marginTop: 2
   },
   statusPillActive: {
-    backgroundColor: 'rgba(34, 197, 94, 0.15)',
-    borderColor: '#22c55e',
+    backgroundColor: '#dcfce7',
+    borderColor: '#86efac',
     borderWidth: 1,
-    color: '#4ade80',
+    color: '#15803d',
     fontSize: 10.5,
     fontWeight: '700',
     paddingHorizontal: 6,
@@ -3920,26 +3957,31 @@ const styles = StyleSheet.create({
   teamMgmtCard: {
     flex: 1,
     minWidth: 260,
-    backgroundColor: 'rgba(5, 13, 34, 0.8)',
-    borderColor: 'rgba(212, 175, 55, 0.25)',
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 10,
     padding: 12,
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1
   },
   teamMgmtName: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 13,
-    fontWeight: '700'
+    fontWeight: '800'
   },
   teamMgmtSub: {
-    color: '#9bb0cf',
+    color: '#64748b',
     fontSize: 11,
     marginTop: 1
   },
   teamMgmtDivision: {
-    color: '#f5c43d',
+    color: '#d97706',
     fontSize: 10.5,
     fontWeight: '700',
     marginTop: 2
@@ -3955,26 +3997,31 @@ const styles = StyleSheet.create({
   formatCard: {
     flex: 1,
     minWidth: 130,
-    backgroundColor: 'rgba(5, 13, 34, 0.7)',
-    borderColor: 'rgba(212, 175, 55, 0.25)',
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 10,
     padding: 12,
-    alignItems: 'center'
+    alignItems: 'center',
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1
   },
   formatCardActive: {
-    borderColor: '#f5c43d',
-    backgroundColor: 'rgba(15, 36, 82, 0.9)'
+    borderColor: '#f59e0b',
+    backgroundColor: '#fef3c7'
   },
   formatCardTitle: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 12,
     fontWeight: '800',
     marginTop: 6,
     textAlign: 'center'
   },
   formatCardDesc: {
-    color: '#9bb0cf',
+    color: '#64748b',
     fontSize: 10,
     marginTop: 2,
     textAlign: 'center'
@@ -3986,53 +4033,55 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 8,
-    backgroundColor: 'rgba(5, 13, 34, 0.65)',
+    backgroundColor: '#fffdf5',
+    borderColor: '#fde68a',
+    borderWidth: 1,
     padding: 10,
     borderRadius: 8,
     marginBottom: 14
   },
   scoringOversLabel: {
-    color: '#f5c43d',
+    color: '#b45309',
     fontSize: 12,
-    fontWeight: '700'
+    fontWeight: '800'
   },
   oversPillBtn: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 14
   },
   oversPillBtnActive: {
-    backgroundColor: '#d4af37',
-    borderColor: '#fed966'
+    backgroundColor: '#f59e0b',
+    borderColor: '#d97706'
   },
   oversPillBtnText: {
-    color: '#c0d1eb',
+    color: '#475569',
     fontSize: 11,
     fontWeight: '700'
   },
   oversPillBtnTextActive: {
-    color: '#020612',
-    fontWeight: '800'
+    color: '#ffffff',
+    fontWeight: '900'
   },
   activeOversNotice: {
-    color: '#4ade80',
+    color: '#15803d',
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
     marginLeft: 'auto'
   },
   tossBox: {
-    backgroundColor: 'rgba(5, 13, 34, 0.6)',
-    borderColor: 'rgba(212, 175, 55, 0.25)',
+    backgroundColor: '#fffdf5',
+    borderColor: '#fde68a',
     borderWidth: 1,
     borderRadius: 8,
     padding: 12,
     marginBottom: 16
   },
   tossBoxTitle: {
-    color: '#f5c43d',
+    color: '#b45309',
     fontSize: 13,
     fontWeight: '800',
     marginBottom: 8
@@ -4047,50 +4096,55 @@ const styles = StyleSheet.create({
     gap: 6
   },
   smallChoiceBtn: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: '#ffffff',
+    borderColor: '#e2e8f0',
     borderWidth: 1,
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 4
   },
   smallChoiceBtnActive: {
-    backgroundColor: 'rgba(212, 175, 55, 0.25)',
-    borderColor: '#f5c43d'
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b'
   },
   smallChoiceBtnText: {
-    color: '#ffffff',
+    color: '#334155',
     fontSize: 11,
     fontWeight: '700'
   },
   tossResultCard: {
     marginTop: 10,
     padding: 8,
-    backgroundColor: 'rgba(212, 175, 55, 0.12)',
+    backgroundColor: '#fef3c7',
     borderRadius: 6
   },
   tossResultText: {
-    color: '#fed966',
+    color: '#92400e',
     fontSize: 11.5,
-    fontWeight: '700'
+    fontWeight: '800'
   },
   rosterCard: {
     flex: 1,
     minWidth: 260,
-    backgroundColor: 'rgba(5, 13, 34, 0.8)',
-    borderColor: 'rgba(212, 175, 55, 0.25)',
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
     borderWidth: 1,
-    borderRadius: 8,
-    padding: 12
+    borderRadius: 10,
+    padding: 12,
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1
   },
   rosterTeamTitle: {
-    color: '#d4af37',
+    color: '#b45309',
     fontSize: 13,
     fontWeight: '800',
     marginBottom: 6
   },
   rosterPlayerText: {
-    color: '#c0d1eb',
+    color: '#475569',
     fontSize: 11.5,
     lineHeight: 18
   },
@@ -4105,21 +4159,21 @@ const styles = StyleSheet.create({
   },
   filterTabBtn: {
     backgroundColor: '#ffffff',
-    borderColor: '#e2e8f0',
+    borderColor: '#fde68a',
     borderWidth: 1.5,
     paddingHorizontal: 16,
     paddingVertical: 9,
     borderRadius: 24,
-    shadowColor: '#0f172a',
+    shadowColor: '#d97706',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2
   },
   filterTabBtnActive: {
-    backgroundColor: '#0f2452',
-    borderColor: '#0f2452',
-    shadowColor: '#0f2452',
+    backgroundColor: '#f59e0b',
+    borderColor: '#d97706',
+    shadowColor: '#d97706',
     shadowOpacity: 0.25
   },
   filterTabBtnText: {
@@ -4129,7 +4183,7 @@ const styles = StyleSheet.create({
   },
   filterTabBtnTextActive: {
     color: '#ffffff',
-    fontWeight: '800'
+    fontWeight: '900'
   },
 
   // Match Cards (Clean Crisp White Theme with Rich Color Accents)
@@ -4467,16 +4521,16 @@ const styles = StyleSheet.create({
 
   // Action Buttons
   btnActionPrimary: {
-    backgroundColor: '#0f2452',
-    borderColor: '#1e3a8a',
+    backgroundColor: '#f59e0b',
+    borderColor: '#d97706',
     borderWidth: 1,
     borderRadius: 10,
     paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#0f2452',
+    shadowColor: '#d97706',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 2
   },
@@ -4521,15 +4575,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2
   },
   btnOutlineGoldBlock: {
-    backgroundColor: '#0f2452',
-    borderColor: '#1e3a8a',
-    borderWidth: 1,
+    backgroundColor: '#ffffff',
+    borderColor: '#f59e0b',
+    borderWidth: 1.5,
     borderRadius: 10,
     paddingVertical: 10,
     alignItems: 'center'
   },
   btnOutlineGoldBlockText: {
-    color: '#ffffff',
+    color: '#b45309',
     fontSize: 12,
     fontWeight: '800'
   },
@@ -4538,11 +4592,18 @@ const styles = StyleSheet.create({
   tournamentCard: {
     flex: 1,
     minWidth: 280,
-    backgroundColor: 'rgba(10, 24, 56, 0.88)',
-    borderColor: 'rgba(212, 175, 55, 0.25)',
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 16
+    borderTopWidth: 4,
+    borderTopColor: '#f59e0b',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3
   },
   tBadgeWrap: {
     flexDirection: 'row',
@@ -4550,68 +4611,82 @@ const styles = StyleSheet.create({
     marginBottom: 8
   },
   badgeGoldPill: {
-    backgroundColor: 'rgba(212, 175, 55, 0.2)',
-    color: '#f5c43d',
-    fontSize: 10,
+    backgroundColor: '#fef3c7',
+    borderColor: '#fde68a',
+    borderWidth: 1,
+    color: '#b45309',
+    fontSize: 10.5,
     fontWeight: '800',
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 2.5,
     borderRadius: 10
   },
   badgeBluePill: {
-    backgroundColor: 'rgba(59, 130, 246, 0.2)',
-    color: '#93c5fd',
-    fontSize: 10,
+    backgroundColor: '#fef9c3',
+    borderColor: '#fef08a',
+    borderWidth: 1,
+    color: '#854d0e',
+    fontSize: 10.5,
     fontWeight: '800',
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 2.5,
     borderRadius: 10
   },
   badgeRedPill: {
-    backgroundColor: 'rgba(220, 38, 38, 0.2)',
-    color: '#fca5a5',
-    fontSize: 10,
+    backgroundColor: '#fee2e2',
+    borderColor: '#fca5a5',
+    borderWidth: 1,
+    color: '#b91c1c',
+    fontSize: 10.5,
     fontWeight: '800',
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 2.5,
     borderRadius: 10
   },
   badgeGreenPill: {
-    backgroundColor: 'rgba(34, 197, 94, 0.2)',
-    color: '#86efac',
-    fontSize: 10,
+    backgroundColor: '#dcfce7',
+    borderColor: '#86efac',
+    borderWidth: 1,
+    color: '#15803d',
+    fontSize: 10.5,
     fontWeight: '800',
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 2.5,
     borderRadius: 10
   },
   tourneyIcon: {
-    fontSize: 26,
+    fontSize: 28,
     marginBottom: 4
   },
   tourneyTitle: {
-    color: '#ffffff',
-    fontSize: 16,
+    color: '#0f172a',
+    fontSize: 16.5,
     fontWeight: '800'
   },
   tourneySub: {
-    color: '#fed966',
-    fontSize: 11.5,
-    fontWeight: '600',
+    color: '#d97706',
+    fontSize: 12,
+    fontWeight: '700',
     marginBottom: 6
   },
   tourneyDesc: {
-    color: '#9bb0cf',
-    fontSize: 12,
+    color: '#475569',
+    fontSize: 12.5,
     lineHeight: 18,
     marginBottom: 10
   },
   tourneySpecs: {
-    marginBottom: 12
+    marginBottom: 12,
+    backgroundColor: '#fffdf5',
+    borderColor: '#fef3c7',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 8
   },
   tourneySpecItem: {
-    color: '#c0d1eb',
+    color: '#334155',
     fontSize: 11.5,
+    fontWeight: '600',
     marginVertical: 1.5
   },
   tourneyFooter: {
@@ -4621,15 +4696,15 @@ const styles = StyleSheet.create({
     marginTop: 'auto'
   },
   btnOutlineGoldSm: {
-    backgroundColor: 'rgba(212, 175, 55, 0.1)',
-    borderColor: '#d4af37',
-    borderWidth: 1,
+    backgroundColor: '#ffffff',
+    borderColor: '#f59e0b',
+    borderWidth: 1.5,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6
   },
   btnOutlineGoldSmText: {
-    color: '#f5c43d',
+    color: '#b45309',
     fontSize: 11.5,
     fontWeight: '800'
   },
@@ -4639,8 +4714,8 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   switchTabBtn: {
-    backgroundColor: 'rgba(10, 24, 56, 0.75)',
-    borderColor: 'rgba(212, 175, 55, 0.25)',
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -4648,33 +4723,39 @@ const styles = StyleSheet.create({
     marginRight: 8
   },
   switchTabBtnActive: {
-    backgroundColor: '#d4af37',
-    borderColor: '#fed966'
+    backgroundColor: '#f59e0b',
+    borderColor: '#d97706'
   },
   switchTabBtnText: {
-    color: '#c0d1eb',
+    color: '#475569',
     fontSize: 12,
     fontWeight: '700'
   },
   switchTabBtnTextActive: {
-    color: '#020612',
+    color: '#ffffff',
     fontWeight: '900'
   },
   tableBox: {
-    backgroundColor: 'rgba(10, 24, 56, 0.88)',
-    borderColor: 'rgba(212, 175, 55, 0.3)',
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
     borderWidth: 1,
-    borderRadius: 10,
-    padding: 8
+    borderRadius: 14,
+    padding: 8,
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2
   },
   tableHeaderRow: {
     flexDirection: 'row',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(212, 175, 55, 0.3)'
+    borderBottomColor: '#fde68a',
+    backgroundColor: '#fffdf5'
   },
   tableTh: {
-    color: '#9bb0cf',
+    color: '#b45309',
     fontSize: 11,
     fontWeight: '800',
     paddingHorizontal: 4
@@ -4684,48 +4765,48 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 7,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)'
+    borderBottomColor: '#f1f5f9'
   },
   tableRowQualified: {
-    backgroundColor: 'rgba(212, 175, 55, 0.04)'
+    backgroundColor: '#fefce8'
   },
   tableTd: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 11.5,
     paddingHorizontal: 4
   },
   pointsTeamName: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 12,
-    fontWeight: '700'
+    fontWeight: '800'
   },
   pointsTeamSub: {
-    color: '#f5c43d',
+    color: '#d97706',
     fontSize: 9.5
   },
   playerSubRole: {
-    color: '#f5c43d',
+    color: '#d97706',
     fontSize: 9.5
   },
   rankBadge: {
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center'
   },
   rankBadgeGold: {
-    backgroundColor: '#d4af37'
+    backgroundColor: '#f59e0b'
   },
   rankBadgeSilver: {
     backgroundColor: '#94a3b8'
   },
   rankBadgeBronze: {
-    backgroundColor: '#b45309'
+    backgroundColor: '#d97706'
   },
   rankBadgeText: {
-    color: '#020612',
+    color: '#ffffff',
     fontSize: 10,
     fontWeight: '900'
   },
@@ -4759,24 +4840,24 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   perfTabBtn: {
-    backgroundColor: 'rgba(10, 24, 56, 0.75)',
-    borderColor: 'rgba(212, 175, 55, 0.25)',
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 6
   },
   perfTabBtnActive: {
-    backgroundColor: '#d4af37',
-    borderColor: '#fed966'
+    backgroundColor: '#f59e0b',
+    borderColor: '#d97706'
   },
   perfTabBtnText: {
-    color: '#c0d1eb',
+    color: '#475569',
     fontSize: 12,
     fontWeight: '700'
   },
   perfTabBtnTextActive: {
-    color: '#020612',
+    color: '#ffffff',
     fontWeight: '900'
   },
 
@@ -4784,23 +4865,28 @@ const styles = StyleSheet.create({
   playerSearchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(10, 24, 56, 0.88)',
-    borderColor: 'rgba(212, 175, 55, 0.3)',
-    borderWidth: 1,
-    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
+    borderWidth: 1.5,
+    borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    marginBottom: 12
+    marginBottom: 12,
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2
   },
   playerSearchInput: {
     flex: 1,
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 13,
     paddingHorizontal: 8
   },
   playerPillBtn: {
-    backgroundColor: 'rgba(10, 24, 56, 0.75)',
-    borderColor: 'rgba(212, 175, 55, 0.25)',
+    backgroundColor: '#ffffff',
+    borderColor: '#e2e8f0',
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -4808,26 +4894,33 @@ const styles = StyleSheet.create({
     marginRight: 8
   },
   playerPillBtnActive: {
-    backgroundColor: '#d4af37',
-    borderColor: '#fed966'
+    backgroundColor: '#f59e0b',
+    borderColor: '#d97706'
   },
   playerPillBtnText: {
-    color: '#c0d1eb',
+    color: '#475569',
     fontSize: 11.5,
     fontWeight: '700'
   },
   playerPillBtnTextActive: {
-    color: '#020612',
+    color: '#ffffff',
     fontWeight: '900'
   },
   playerCard: {
     flex: 1,
     minWidth: 280,
-    backgroundColor: 'rgba(10, 24, 56, 0.88)',
-    borderColor: 'rgba(212, 175, 55, 0.25)',
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 14
+    borderTopWidth: 4,
+    borderTopColor: '#f59e0b',
+    borderRadius: 14,
+    padding: 16,
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3
   },
   playerCardHeader: {
     flexDirection: 'row',
@@ -4847,38 +4940,40 @@ const styles = StyleSheet.create({
     fontWeight: '900'
   },
   playerIdTag: {
-    color: '#9bb0cf',
+    color: '#64748b',
     fontSize: 10.5,
     fontWeight: '700'
   },
   playerVerifiedTag: {
-    color: '#4ade80',
+    color: '#15803d',
     fontSize: 10.5,
     fontWeight: '700'
   },
   playerName: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 14.5,
     fontWeight: '800'
   },
   playerCategoryBadge: {
-    color: '#f5c43d',
+    color: '#b45309',
     fontSize: 10.5,
-    fontWeight: '600'
+    fontWeight: '700'
   },
   playerCardMeta: {
     marginBottom: 8
   },
   playerMetaText: {
-    color: '#c0d1eb',
+    color: '#475569',
     fontSize: 11.5,
     marginVertical: 1.5
   },
   playerStatsSnippet: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    backgroundColor: 'rgba(5, 13, 34, 0.7)',
-    borderRadius: 6,
+    backgroundColor: '#fffdf5',
+    borderColor: '#fef3c7',
+    borderWidth: 1,
+    borderRadius: 8,
     paddingVertical: 6,
     marginBottom: 8
   },
@@ -4886,17 +4981,17 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   pssVal: {
-    color: '#fed966',
+    color: '#b45309',
     fontSize: 13,
-    fontWeight: '800'
+    fontWeight: '900'
   },
   pssLabel: {
-    color: '#9bb0cf',
+    color: '#64748b',
     fontSize: 9.5
   },
   playerBioSnippet: {
-    color: '#9bb0cf',
-    fontSize: 11,
+    color: '#475569',
+    fontSize: 11.5,
     lineHeight: 16,
     marginBottom: 10
   },
@@ -4913,14 +5008,15 @@ const styles = StyleSheet.create({
     minWidth: 300
   },
   aboutLead: {
-    color: '#ffffff',
-    fontSize: 14,
+    color: '#0f172a',
+    fontSize: 14.5,
+    fontWeight: '600',
     lineHeight: 22,
     marginBottom: 8
   },
   aboutBody: {
-    color: '#c0d1eb',
-    fontSize: 12.5,
+    color: '#334155',
+    fontSize: 13,
     lineHeight: 20,
     marginBottom: 16
   },
@@ -4932,12 +5028,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start'
   },
   valueTitle: {
-    color: '#f5c43d',
+    color: '#b45309',
     fontSize: 13,
     fontWeight: '800'
   },
   valueDesc: {
-    color: '#9bb0cf',
+    color: '#475569',
     fontSize: 11.5,
     lineHeight: 17,
     marginTop: 2
@@ -4945,13 +5041,18 @@ const styles = StyleSheet.create({
   aboutCrestCard: {
     flex: 1,
     minWidth: 260,
-    backgroundColor: 'rgba(10, 24, 56, 0.88)',
-    borderColor: 'rgba(212, 175, 55, 0.35)',
-    borderWidth: 1,
-    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
+    borderWidth: 1.5,
+    borderRadius: 16,
     padding: 20,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 3
   },
   aboutCrestImg: {
     width: 110,
@@ -4959,41 +5060,48 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   aboutCrestTitle: {
-    color: '#ffffff',
-    fontSize: 12,
+    color: '#0f172a',
+    fontSize: 12.5,
     fontWeight: '900',
     textAlign: 'center',
     letterSpacing: 0.5
   },
   aboutCrestMotto: {
-    color: '#f5c43d',
+    color: '#b45309',
     fontSize: 11.5,
     fontStyle: 'italic',
     textAlign: 'center',
     marginVertical: 4
   },
   aboutCrestBadge: {
-    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+    backgroundColor: '#fef3c7',
+    borderColor: '#fde68a',
+    borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 10,
     marginTop: 6
   },
   aboutCrestBadgeText: {
-    color: '#fed966',
+    color: '#92400e',
     fontSize: 10,
-    fontWeight: '700'
+    fontWeight: '800'
   },
   officeBearersBox: {
-    backgroundColor: 'rgba(10, 24, 56, 0.88)',
-    borderColor: 'rgba(212, 175, 55, 0.3)',
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 16,
-    alignItems: 'center'
+    alignItems: 'center',
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2
   },
   bearersHeading: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 16,
     fontWeight: '800',
     marginTop: 2,
@@ -5009,31 +5117,31 @@ const styles = StyleSheet.create({
   bearerCard: {
     flex: 1,
     minWidth: 170,
-    backgroundColor: 'rgba(5, 13, 34, 0.75)',
-    borderColor: 'rgba(212, 175, 55, 0.25)',
+    backgroundColor: '#fffdf5',
+    borderColor: '#fde68a',
     borderWidth: 1,
     borderRadius: 8,
     padding: 12,
     alignItems: 'center'
   },
   bearerCardHighlight: {
-    borderColor: '#f5c43d',
-    backgroundColor: 'rgba(15, 36, 82, 0.95)'
+    borderColor: '#f59e0b',
+    backgroundColor: '#fef3c7'
   },
   bearerName: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 12.5,
     fontWeight: '800',
     textAlign: 'center'
   },
   bearerRole: {
-    color: '#f5c43d',
+    color: '#b45309',
     fontSize: 11,
     fontWeight: '700',
     marginTop: 2
   },
   bearerTenure: {
-    color: '#9bb0cf',
+    color: '#64748b',
     fontSize: 10,
     marginTop: 1,
     textAlign: 'center'
@@ -5043,11 +5151,18 @@ const styles = StyleSheet.create({
   groundCard: {
     flex: 1,
     minWidth: 260,
-    backgroundColor: 'rgba(10, 24, 56, 0.88)',
-    borderColor: 'rgba(212, 175, 55, 0.25)',
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
     borderWidth: 1,
-    borderRadius: 12,
-    overflow: 'hidden'
+    borderTopWidth: 4,
+    borderTopColor: '#f59e0b',
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3
   },
   groundImg: {
     width: '100%',
@@ -5057,13 +5172,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     right: 10,
-    backgroundColor: '#d4af37',
+    backgroundColor: '#f59e0b',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4
   },
   groundBadgeText: {
-    color: '#020612',
+    color: '#ffffff',
     fontSize: 10,
     fontWeight: '900'
   },
@@ -5071,17 +5186,18 @@ const styles = StyleSheet.create({
     padding: 12
   },
   groundTitle: {
-    color: '#ffffff',
-    fontSize: 14,
+    color: '#0f172a',
+    fontSize: 14.5,
     fontWeight: '800'
   },
   groundLoc: {
-    color: '#f5c43d',
+    color: '#d97706',
     fontSize: 11,
+    fontWeight: '700',
     marginVertical: 3
   },
   groundDesc: {
-    color: '#9bb0cf',
+    color: '#475569',
     fontSize: 11.5,
     lineHeight: 17,
     marginBottom: 8
@@ -5092,29 +5208,36 @@ const styles = StyleSheet.create({
     gap: 6
   },
   facilityPill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    color: '#c0d1eb',
+    backgroundColor: '#fef3c7',
+    color: '#92400e',
     fontSize: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    fontWeight: '700',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
     borderRadius: 4
   },
 
   // Academy
   academyBanner: {
-    borderRadius: 12,
-    borderColor: 'rgba(212, 175, 55, 0.35)',
-    borderWidth: 1,
-    padding: 20
+    borderRadius: 14,
+    borderColor: '#fde68a',
+    borderWidth: 1.5,
+    backgroundColor: '#ffffff',
+    padding: 20,
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3
   },
   academyTitle: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 20,
     fontWeight: '900',
     marginTop: 4
   },
   academyDesc: {
-    color: '#c0d1eb',
+    color: '#334155',
     fontSize: 13,
     lineHeight: 20,
     marginTop: 6,
@@ -5130,17 +5253,19 @@ const styles = StyleSheet.create({
     minWidth: 240,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(5, 13, 34, 0.65)',
+    backgroundColor: '#fffdf5',
+    borderColor: '#fef3c7',
+    borderWidth: 1,
     padding: 10,
     borderRadius: 8
   },
   afTitle: {
-    color: '#f5c43d',
+    color: '#b45309',
     fontSize: 12.5,
     fontWeight: '800'
   },
   afDesc: {
-    color: '#9bb0cf',
+    color: '#64748b',
     fontSize: 11,
     marginTop: 1
   },
@@ -5149,11 +5274,18 @@ const styles = StyleSheet.create({
   newsCard: {
     flex: 1,
     minWidth: 260,
-    backgroundColor: 'rgba(10, 24, 56, 0.88)',
-    borderColor: 'rgba(212, 175, 55, 0.25)',
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
     borderWidth: 1,
-    borderRadius: 12,
-    overflow: 'hidden'
+    borderTopWidth: 4,
+    borderTopColor: '#f59e0b',
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3
   },
   newsImg: {
     width: '100%',
@@ -5163,24 +5295,24 @@ const styles = StyleSheet.create({
     padding: 12
   },
   newsDate: {
-    color: '#9bb0cf',
+    color: '#64748b',
     fontSize: 10
   },
   newsCatBadge: {
-    color: '#f5c43d',
+    color: '#d97706',
     fontSize: 10.5,
     fontWeight: '700',
     marginVertical: 2
   },
   newsTitle: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 13.5,
     fontWeight: '800',
     lineHeight: 18,
     marginBottom: 6
   },
   newsExcerpt: {
-    color: '#9bb0cf',
+    color: '#475569',
     fontSize: 11.5,
     lineHeight: 17,
     marginBottom: 10
@@ -5193,7 +5325,7 @@ const styles = StyleSheet.create({
     height: 180,
     borderRadius: 10,
     overflow: 'hidden',
-    borderColor: 'rgba(212, 175, 55, 0.3)',
+    borderColor: '#fde68a',
     borderWidth: 1
   },
   galleryImg: {
@@ -5205,43 +5337,55 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(2, 6, 18, 0.75)',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderTopWidth: 1,
+    borderTopColor: '#fde68a',
     padding: 8,
     alignItems: 'center'
   },
   galleryOverlayText: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 12,
-    fontWeight: '700'
+    fontWeight: '800'
   },
 
   // Contact
   contactInfoCard: {
     flex: 1,
     minWidth: 280,
-    backgroundColor: 'rgba(10, 24, 56, 0.88)',
-    borderColor: 'rgba(212, 175, 55, 0.25)',
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 16
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
+    borderWidth: 1.5,
+    borderRadius: 14,
+    padding: 16,
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3
   },
   contactFormCard: {
     flex: 1,
     minWidth: 280,
-    backgroundColor: 'rgba(10, 24, 56, 0.88)',
-    borderColor: 'rgba(212, 175, 55, 0.25)',
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 16
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
+    borderWidth: 1.5,
+    borderRadius: 14,
+    padding: 16,
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3
   },
   contactCardTitle: {
-    color: '#f5c43d',
+    color: '#b45309',
     fontSize: 15,
     fontWeight: '800',
     marginBottom: 12
   },
   contactLine: {
-    color: '#c0d1eb',
+    color: '#334155',
     fontSize: 12.5,
     lineHeight: 20,
     marginBottom: 8
@@ -5372,23 +5516,37 @@ const styles = StyleSheet.create({
     elevation: 8
   },
   playerModalBox: {
-    backgroundColor: '#07132c',
-    borderColor: '#d4af37',
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
     borderWidth: 1.5,
-    borderRadius: 12,
-    padding: 16,
+    borderTopWidth: 4,
+    borderTopColor: '#f59e0b',
+    borderRadius: 16,
+    padding: 20,
     width: '100%',
     maxWidth: 580,
-    maxHeight: '90%'
+    maxHeight: '90%',
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8
   },
   newsModalBox: {
-    backgroundColor: '#07132c',
-    borderColor: '#d4af37',
+    backgroundColor: '#ffffff',
+    borderColor: '#fde68a',
     borderWidth: 1.5,
-    borderRadius: 12,
-    padding: 16,
+    borderTopWidth: 4,
+    borderTopColor: '#f59e0b',
+    borderRadius: 16,
+    padding: 20,
     width: '100%',
-    maxWidth: 540
+    maxWidth: 540,
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8
   },
   modalHeaderRow: {
     flexDirection: 'row',
@@ -5465,7 +5623,7 @@ const styles = StyleSheet.create({
     fontWeight: '800'
   },
   inningsScoreBadge: {
-    backgroundColor: '#0f2452',
+    backgroundColor: '#f59e0b',
     color: '#ffffff',
     fontSize: 11,
     fontWeight: '800',
@@ -5514,21 +5672,25 @@ const styles = StyleSheet.create({
 
   // Player Profile Modal Internal
   playerModalBioBox: {
-    backgroundColor: 'rgba(5, 13, 34, 0.7)',
-    borderRadius: 6,
+    backgroundColor: '#fffdf5',
+    borderColor: '#fef3c7',
+    borderWidth: 1,
+    borderRadius: 8,
     padding: 10,
     marginBottom: 12
   },
   playerModalBio: {
-    color: '#c0d1eb',
+    color: '#334155',
     fontSize: 12,
     lineHeight: 18
   },
   playerModalStatsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    backgroundColor: 'rgba(5, 13, 34, 0.7)',
-    borderRadius: 6,
+    backgroundColor: '#fffdf5',
+    borderColor: '#fef3c7',
+    borderWidth: 1,
+    borderRadius: 8,
     paddingVertical: 10,
     marginBottom: 12
   },
@@ -5536,18 +5698,20 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   pmsVal: {
-    color: '#fed966',
+    color: '#b45309',
     fontSize: 16,
     fontWeight: '900'
   },
   pmsLabel: {
-    color: '#9bb0cf',
+    color: '#64748b',
     fontSize: 10,
     marginTop: 2
   },
   playerModalMetaBox: {
-    backgroundColor: 'rgba(5, 13, 34, 0.7)',
-    borderRadius: 6,
+    backgroundColor: '#fffdf5',
+    borderColor: '#fef3c7',
+    borderWidth: 1,
+    borderRadius: 8,
     padding: 10,
     marginBottom: 16
   },
@@ -5568,7 +5732,7 @@ const styles = StyleSheet.create({
     borderRadius: 8
   },
   lightboxCaption: {
-    color: '#fed966',
+    color: '#ffffff',
     fontSize: 13,
     fontWeight: '700',
     marginTop: 10,
@@ -5577,7 +5741,7 @@ const styles = StyleSheet.create({
 
   // News Modal Internal
   newsModalContent: {
-    color: '#c0d1eb',
+    color: '#334155',
     fontSize: 13,
     lineHeight: 20,
     marginBottom: 16
