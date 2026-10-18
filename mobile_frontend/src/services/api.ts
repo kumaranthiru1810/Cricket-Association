@@ -685,6 +685,10 @@ export const ScorerApi = {
 
   // --- LIVE SCORING ENGINE ---
   getLiveState: async (matchId: string) => {
+    try {
+      const res = await request(`/matches/${matchId}/live`);
+      if (res && res.data) return res;
+    } catch (_e) {}
     return request(`/scorer/matches/${matchId}/live`);
   },
 
@@ -698,6 +702,26 @@ export const ScorerApi = {
   undoDelivery: async (matchId: string) => {
     return request(`/scorer/matches/${matchId}/undo`, {
       method: 'POST'
+    });
+  },
+
+  swapStrike: async (matchId: string) => {
+    return request(`/scorer/matches/${matchId}/swap-strike`, {
+      method: 'POST'
+    });
+  },
+
+  changeBatter: async (matchId: string, payload: { target: 'striker' | 'nonStriker'; newBatterId?: string; newBatterName?: string }) => {
+    return request(`/scorer/matches/${matchId}/change-batter`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  changeBowler: async (matchId: string, payload: { newBowlerId?: string; newBowlerName?: string }) => {
+    return request(`/scorer/matches/${matchId}/change-bowler`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
     });
   },
 
@@ -728,6 +752,97 @@ export const ScorerApi = {
     });
   },
 
+  setRevisedOvers: async (matchId: string, payload: { totalOvers?: number; revisedTarget?: number; comments?: string }) => {
+    return request(`/scorer/matches/${matchId}/revised-overs`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+
+  editPlayingXI: async (matchId: string, payload: { teamId: string; playingXI: string[] }) => {
+    return request(`/scorer/matches/${matchId}/playing-xi`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  startSuperOver: async (matchId: string, payload?: { battingTeamId?: string; bowlingTeamId?: string }) => {
+    return request(`/scorer/matches/${matchId}/super-over`, {
+      method: 'POST',
+      body: JSON.stringify(payload || {})
+    });
+  },
+
+  addBreak: async (matchId: string, payload: any) => {
+    return request(`/scorer/matches/${matchId}/breaks`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  addSession: async (matchId: string, payload: any) => {
+    return request(`/scorer/matches/${matchId}/sessions`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  addEndDay: async (matchId: string, payload: any) => {
+    return request(`/scorer/matches/${matchId}/end-day`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  declareInnings: async (matchId: string) => {
+    return request(`/scorer/matches/${matchId}/declare-innings`, {
+      method: 'POST'
+    });
+  },
+
+  updateMatchTimes: async (matchId: string, payload: { date?: string; startTime?: string; endTime?: string }) => {
+    return request(`/scorer/matches/${matchId}/match-times`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  addPenalty: async (matchId: string, payload: { points: number; type: string; reason: string }) => {
+    return request(`/scorer/matches/${matchId}/penalty`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  recordOtherWicket: async (matchId: string, payload: { playerId: string; wicketType: string; comments?: string; replacementBatterId?: string }) => {
+    return request(`/scorer/matches/${matchId}/other-wicket`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  recordBallChange: async (matchId: string, payload: { ballType: string; over?: string; time?: string; comments?: string }) => {
+    return request(`/scorer/matches/${matchId}/change-ball`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  saveUmpireAssessment: async (matchId: string, payload: any) => {
+    return request(`/scorer/matches/${matchId}/umpire-assessment`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  changeTeamBeforeStart: async (matchId: string, payload: { battingTeamId: string; strikerId: string; nonStrikerId: string; bowlerId: string }) => {
+    return request(`/scorer/matches/${matchId}/change-team`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
   updateMatchStatus: async (matchId: string, status: string) => {
     return request(`/scorer/matches/${matchId}/status`, {
       method: 'PUT',
@@ -745,7 +860,7 @@ export const ScorerApi = {
 
   // --- SCORECARD ---
   getScorecard: async (matchId: string) => {
-    return request(`/scorer/matches/${matchId}/scorecard`);
+    return request(`/matches/${matchId}/scorecard`);
   },
 
   // --- REAL-TIME SOCKET.IO CONNECTION ---

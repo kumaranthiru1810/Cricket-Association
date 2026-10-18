@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image, useWindowDimensions, Platform, ActivityIndicator } from 'react-native';
 import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
 import MatchCard from '../../components/scorer/MatchCard';
-import { mockScorerProfile } from '../../data/scorerMockData';
 import SharedFooter from '../../components/scorer/SharedFooter';
 import { ScorerApi, getCurrentUser } from '../../services/api';
 
@@ -14,7 +13,7 @@ export default function ScorerDashboardScreen() {
 
   const [matches, setMatches] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [profile, setProfile] = useState<any>(params?.user || getCurrentUser() || mockScorerProfile);
+  const [profile, setProfile] = useState<any>(params?.user || getCurrentUser() || { name: 'Official Scorer', id: 'SCORER', association: 'Virudhunagar District' });
   const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
 
   useEffect(() => {
@@ -116,8 +115,8 @@ export default function ScorerDashboardScreen() {
         </View>
         <View style={styles.headerRight}>
           <View style={styles.scorerInfo}>
-            <Text style={styles.scorerName}>{profile?.name || mockScorerProfile.name}</Text>
-            <Text style={styles.scorerId}>{profile?.id || mockScorerProfile.id}</Text>
+            <Text style={styles.scorerName}>{profile?.name || 'Official Scorer'}</Text>
+            <Text style={styles.scorerId}>{profile?.id || 'SCORER'}</Text>
           </View>
           <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
             <Text style={styles.logoutText}>Log Out</Text>

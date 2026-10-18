@@ -1,7 +1,24 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { MatchData } from '../../data/scorerMockData';
 import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
+
+export interface MatchData {
+  id: string;
+  tournament?: string;
+  tournament_name?: string;
+  teamA: string;
+  teamB: string;
+  teamAShort?: string;
+  teamBShort?: string;
+  date?: string;
+  venue?: string;
+  format?: string;
+  overs?: number;
+  status: 'Upcoming' | 'Live' | 'Completed' | string;
+  scoreA?: string;
+  scoreB?: string;
+  result?: string;
+}
 
 interface Props {
   match: MatchData;

@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, useWindowDimensions, Platform } from 'react-native';
 
 import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
-import { assignedMatches } from '../../data/scorerMockData';
 import SharedFooter from '../../components/scorer/SharedFooter';
 import { ScorerApi } from '../../services/api';
 import WagonWheel from '../../components/analytics/WagonWheel';
@@ -10,7 +9,6 @@ import WagonWheel from '../../components/analytics/WagonWheel';
 export default function ScorecardScreen() {
   const { navigate, params } = useScorerNavigation();
   const matchId = params?.matchId || 'M002';
-  const defaultMatch = assignedMatches.find(m => m.id === matchId) || assignedMatches[1];
 
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
@@ -39,66 +37,46 @@ export default function ScorecardScreen() {
     }
   };
 
-  const match = scorecardData?.match || defaultMatch;
-  const inningsList = scorecardData?.innings && scorecardData.innings.length > 0 
-    ? scorecardData.innings 
-    : [
-        {
-          id: 'inn-1',
-          battingTeam: defaultMatch.teamA || 'Virudhunagar Strikers',
-          bowlingTeam: defaultMatch.teamB || 'Sivakasi Super Kings',
-          score: defaultMatch.scoreA || '145/4 (15.2 Ov)',
-          runs: 145,
-          wickets: 4,
-          overs: '15.2',
-          extras: { total: 11, breakdown: 'wd 6, nb 1, b 2, lb 2' },
-          batters: [
-            { id: '1', name: 'Suresh Kumar (c)', runs: 42, balls: 30, fours: 4, sixes: 1, strikeRate: 140.0, dismissal: 'not out' },
-            { id: '2', name: 'Muthu Raj', runs: 12, balls: 10, fours: 1, sixes: 0, strikeRate: 120.0, dismissal: 'b Karthik N' },
-            { id: '3', name: 'Vijay', runs: 18, balls: 14, fours: 2, sixes: 0, strikeRate: 128.5, dismissal: 'not out' },
-            { id: '4', name: 'R. Vignesh', runs: 35, balls: 22, fours: 3, sixes: 2, strikeRate: 159.1, dismissal: 'c Saravanan b Karthik N' },
-            { id: '5', name: 'Anand K', runs: 27, balls: 16, fours: 2, sixes: 1, strikeRate: 168.8, dismissal: 'run out' }
-          ],
-          bowlers: [
-            { id: '1', name: 'Karthik N', overs: '3.2', maidens: 0, runs: 24, wickets: 2, economy: 7.20 },
-            { id: '2', name: 'Saravanan', overs: '4.0', maidens: 1, runs: 18, wickets: 1, economy: 4.50 },
-            { id: '3', name: 'G. Balaji', overs: '4.0', maidens: 0, runs: 38, wickets: 0, economy: 9.50 },
-            { id: '4', name: 'Murugan P', overs: '4.0', maidens: 0, runs: 54, wickets: 0, economy: 13.50 }
-          ],
-          fallOfWickets: [
-            { wicket: 1, score: 28, batter: 'Muthu Raj', over: '3.1' },
-            { wicket: 2, score: 79, batter: 'R. Vignesh', over: '9.4' },
-            { wicket: 3, score: 118, batter: 'Anand K', over: '13.2' }
-          ]
-        },
-        {
-          id: 'inn-2',
-          battingTeam: defaultMatch.teamB || 'Sivakasi Super Kings',
-          bowlingTeam: defaultMatch.teamA || 'Virudhunagar Strikers',
-          score: defaultMatch.scoreB || '132/8 (20.0 Ov)',
-          runs: 132,
-          wickets: 8,
-          overs: '20.0',
-          extras: { total: 8, breakdown: 'wd 5, nb 1, lb 2' },
-          batters: [
-            { id: 'b1', name: 'K. Meenakshi', runs: 51, balls: 38, fours: 5, sixes: 2, strikeRate: 134.2, dismissal: 'c Vijay b Suresh' },
-            { id: 'b2', name: 'T. Bala', runs: 22, balls: 20, fours: 2, sixes: 0, strikeRate: 110.0, dismissal: 'b Muthu Raj' },
-            { id: 'b3', name: 'N. Muthuraman', runs: 15, balls: 18, fours: 1, sixes: 0, strikeRate: 83.3, dismissal: 'lbw b Vijay' },
-            { id: 'b4', name: 'D. Kumar', runs: 8, balls: 12, fours: 0, sixes: 0, strikeRate: 66.7, dismissal: 'c & b Vijay' }
-          ],
-          bowlers: [
-            { id: 'bw1', name: 'Suresh Kumar', overs: '4.0', maidens: 0, runs: 28, wickets: 2, economy: 7.00 },
-            { id: 'bw2', name: 'Muthu Raj', overs: '4.0', maidens: 0, runs: 24, wickets: 3, economy: 6.00 },
-            { id: 'bw3', name: 'Vijay', overs: '4.0', maidens: 1, runs: 19, wickets: 2, economy: 4.75 }
-          ],
-          fallOfWickets: [
-            { wicket: 1, score: 35, batter: 'T. Bala', over: '5.2' },
-            { wicket: 2, score: 78, batter: 'N. Muthuraman', over: '11.4' }
-          ]
-        }
-      ];
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#eab308" />
+        <Text style={{ marginTop: 12, color: '#64748b', fontWeight: '600' }}>Loading Scorecard from Database...</Text>
+      </View>
+    );
+  }
 
-  const currentInnings = inningsList[activeInningsTab] || inningsList[0];
+  if (!scorecardData || !scorecardData.match) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+        <Text style={{ fontSize: 18, fontWeight: '700', color: '#1e293b', marginBottom: 8 }}>Scorecard Not Found</Text>
+        <Text style={{ fontSize: 14, color: '#64748b', textAlign: 'center', marginBottom: 20 }}>
+          Unable to find scorecard records in the database for Match ID: {matchId}
+        </Text>
+        <TouchableOpacity style={styles.actionBtn} onPress={loadScorecard}>
+          <Text style={styles.actionBtnText}>Retry Loading</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.actionBtn, { marginTop: 12, backgroundColor: '#f1f5f9' }]} onPress={() => navigate('Dashboard')}>
+          <Text style={[styles.actionBtnText, { color: '#475569' }]}>Back to Dashboard</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const match = scorecardData.match;
+  const inningsList = scorecardData.innings || [];
+  const currentInnings = inningsList[activeInningsTab] || inningsList[0] || {
+    battingTeam: match.teamA || 'Batting Team',
+    bowlingTeam: match.teamB || 'Bowling Team',
+    score: '0/0 (0.0 Ov)',
+    runs: 0,
+    wickets: 0,
+    overs: '0.0',
+    extras: { total: 0, breakdown: 'wd 0, nb 0, b 0, lb 0' },
+    batters: [],
+    bowlers: [],
+    fallOfWickets: []
+  };
 
   // Dynamic Statistics Calculations for the active innings
   const inningsStats = useMemo(() => {
@@ -420,17 +398,47 @@ export default function ScorecardScreen() {
             </ScrollView>
           </View>
 
-          {/* FALL OF WICKETS (If available) */}
+          {/* FALL OF WICKETS */}
           {Array.isArray(currentInnings.fallOfWickets) && currentInnings.fallOfWickets.length > 0 && (
             <View style={styles.fowCard}>
               <Text style={styles.fowTitle}>Fall of Wickets</Text>
               <View style={styles.fowRow}>
-                {currentInnings.fallOfWickets.map((f: any, idx: number) => (
-                  <View key={idx} style={styles.fowPill}>
-                    <Text style={styles.fowPillScore}>{f.score}/{f.wicket}</Text>
-                    <Text style={styles.fowPillSub}>({f.batter}, {f.over} ov)</Text>
-                  </View>
-                ))}
+                {currentInnings.fallOfWickets.map((f: any, idx: number) => {
+                  let w = f?.wicket;
+                  let s = f?.score;
+                  let b = f?.batter;
+                  let o = f?.over;
+
+                  if (typeof f === 'string') {
+                    // Match pattern "1-24 (Vijay Anand, 3.2 ov)" or "24/1 (Vijay Anand, 3.2 ov)"
+                    const m1 = f.match(/^(\d+)-(\d+)\s*\((.*?),\s*([\d.]+)\s*ov\)/i);
+                    const m2 = f.match(/^(\d+)\/(\d+)\s*\((.*?),\s*([\d.]+)\s*ov\)/i);
+                    if (m1) {
+                      w = m1[1];
+                      s = m1[2];
+                      b = m1[3];
+                      o = m1[4];
+                    } else if (m2) {
+                      s = m2[1];
+                      w = m2[2];
+                      b = m2[3];
+                      o = m2[4];
+                    } else {
+                      return (
+                        <View key={idx} style={styles.fowPill}>
+                          <Text style={styles.fowPillScore}>{f}</Text>
+                        </View>
+                      );
+                    }
+                  }
+
+                  return (
+                    <View key={idx} style={styles.fowPill}>
+                      <Text style={styles.fowPillScore}>{s || '0'}/{w || (idx + 1)}</Text>
+                      <Text style={styles.fowPillSub}>({b || 'Batter'}, {o || '0.0'} ov)</Text>
+                    </View>
+                  );
+                })}
               </View>
             </View>
           )}
@@ -454,10 +462,14 @@ const styles = StyleSheet.create({
   header: {
     padding: 16,
     paddingTop: 16,
-    backgroundColor: '#0a1432',
-    borderBottomWidth: 1.5,
-    borderBottomColor: 'rgba(254, 215, 102, 0.35)',
-    elevation: 4
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 2,
+    borderBottomColor: '#fde68a',
+    shadowColor: '#d4af37',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 3
   },
   headerTopRow: {
     flexDirection: 'row',
@@ -469,23 +481,23 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingVertical: 6,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(254, 215, 102, 0.15)',
+    backgroundColor: '#fef3c7',
     borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#d4af37'
+    borderWidth: 1.5,
+    borderColor: '#fde68a'
   },
-  backText: { color: '#fde68a', fontWeight: 'bold', fontSize: 13 },
+  backText: { color: '#92400e', fontWeight: 'bold', fontSize: 13 },
   badgeLive: {
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#10b981'
   },
-  badgeLiveText: { color: '#6ee7b7', fontWeight: '800', fontSize: 11, textTransform: 'uppercase' },
-  title: { color: '#ffffff', fontSize: 20, fontWeight: '900', letterSpacing: 0.3 },
-  subtitle: { color: 'rgba(254, 215, 102, 0.85)', fontSize: 12.5, marginTop: 4, fontWeight: '600' },
+  badgeLiveText: { color: '#047857', fontWeight: '800', fontSize: 11, textTransform: 'uppercase' },
+  title: { color: '#0f172a', fontSize: 20, fontWeight: '900', letterSpacing: 0.3 },
+  subtitle: { color: '#b45309', fontSize: 12.5, marginTop: 4, fontWeight: '700' },
   scroll: { flexGrow: 1 },
   contentWrapper: { padding: 16, paddingBottom: 50, maxWidth: 1100, width: '100%', alignSelf: 'center' },
 
@@ -510,8 +522,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 4,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderWidth: 1.5,
+    borderColor: '#fde68a',
     gap: 6
   },
   tabButton: {
@@ -522,7 +534,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent'
   },
   tabButtonActive: {
-    backgroundColor: '#0a1432',
+    backgroundColor: '#fef3c7',
+    borderWidth: 1.5,
+    borderColor: '#f59e0b',
     elevation: 2
   },
   tabText: {
@@ -531,49 +545,57 @@ const styles = StyleSheet.create({
     color: '#64748b'
   },
   tabTextActive: {
-    color: '#fde68a',
-    fontWeight: '800'
+    color: '#92400e',
+    fontWeight: '900'
   },
 
   inningsHeroCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#0a1432',
+    backgroundColor: '#ffffff',
     padding: 18,
     borderRadius: 12,
     marginBottom: 18,
-    borderWidth: 1.5,
-    borderColor: 'rgba(254, 215, 102, 0.4)',
+    borderWidth: 2,
+    borderColor: '#fde68a',
+    shadowColor: '#d4af37',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
     elevation: 3
   },
   heroLeft: { flex: 1 },
-  heroBattingTeam: { color: '#ffffff', fontSize: 18, fontWeight: '900' },
-  heroVersus: { color: 'rgba(254, 215, 102, 0.75)', fontSize: 12, marginTop: 2, fontWeight: '600' },
+  heroBattingTeam: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
+  heroVersus: { color: '#b45309', fontSize: 12, marginTop: 2, fontWeight: '700' },
   heroRight: { alignItems: 'flex-end' },
-  heroScoreText: { color: '#fde68a', fontSize: 20, fontWeight: '900' },
-  heroRunRateText: { color: '#93c5fd', fontSize: 11, marginTop: 2, fontWeight: '700' },
+  heroScoreText: { color: '#d97706', fontSize: 22, fontWeight: '900' },
+  heroRunRateText: { color: '#0284c7', fontSize: 11.5, marginTop: 2, fontWeight: '800' },
 
-  // Dynamic Statistics Card Styling
+  // Dynamic Statistics Card Styling - Clean White & Warm Gold Theme
   statsCard: {
-    backgroundColor: '#0a1432',
+    backgroundColor: '#ffffff',
     borderRadius: 14,
     padding: 18,
-    borderWidth: 1.5,
-    borderColor: 'rgba(254, 215, 102, 0.35)',
+    borderWidth: 2,
+    borderColor: '#fde68a',
     marginBottom: 20,
+    shadowColor: '#d4af37',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
     elevation: 3
   },
   statsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(254, 215, 102, 0.15)',
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#fef3c7',
     paddingBottom: 10
   },
-  statsCardTitle: { color: '#ffffff', fontSize: 15, fontWeight: '800' },
-  statsCardSubtitle: { color: 'rgba(180, 196, 230, 0.75)', fontSize: 11.5, marginTop: 2 },
+  statsCardTitle: { color: '#0f172a', fontSize: 15, fontWeight: '800' },
+  statsCardSubtitle: { color: '#64748b', fontSize: 11.5, marginTop: 2 },
   statsRow: {
     alignItems: 'center',
     gap: 16,
@@ -598,40 +620,44 @@ const styles = StyleSheet.create({
     width: 84,
     height: 84,
     borderRadius: 42,
-    backgroundColor: '#071026',
+    backgroundColor: '#ffffff',
     borderWidth: 2,
-    borderColor: 'rgba(59, 130, 246, 0.3)',
+    borderColor: '#fde68a',
     alignItems: 'center',
     justifyContent: 'center'
   },
-  donutNumber: { color: '#ffffff', fontSize: 22, fontWeight: '900' },
-  donutUnitLabel: { color: 'rgba(147, 197, 253, 0.9)', fontSize: 8, fontWeight: '800', letterSpacing: 1 },
+  donutNumber: { color: '#0f172a', fontSize: 22, fontWeight: '900' },
+  donutUnitLabel: { color: '#64748b', fontSize: 8, fontWeight: '800', letterSpacing: 1 },
   metricsCol: {
     flex: 1,
     width: '100%',
     gap: 8
   },
   metricPill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: '#fffbeb',
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderLeftWidth: 4
+    borderLeftWidth: 4,
+    borderWidth: 1,
+    borderColor: '#fef3c7'
   },
-  metricLabel: { color: '#ffffff', fontSize: 12.5, fontWeight: '700' },
-  metricSub: { color: 'rgba(255, 255, 255, 0.5)', fontSize: 10.5 },
+  metricLabel: { color: '#0f172a', fontSize: 12.5, fontWeight: '700' },
+  metricSub: { color: '#64748b', fontSize: 10.5 },
   metricValue: { fontSize: 15, fontWeight: '900' },
 
   distributionBarWrapper: { width: '100%', marginTop: 8 },
   distributionBarTrack: {
     height: 10,
     borderRadius: 5,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: '#f1f5f9',
     flexDirection: 'row',
-    overflow: 'hidden'
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
   },
   distributionBarSegment: { height: '100%' },
   distributionPctRow: {

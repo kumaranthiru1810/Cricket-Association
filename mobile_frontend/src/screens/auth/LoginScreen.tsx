@@ -16,7 +16,11 @@ import { ScorerApi, setAuthToken, setCurrentUser } from '../../services/api';
 
 type UserRole = 'PLAYER' | 'TEAM' | 'SCORER' | 'UMPIRE';
 
-export default function LoginScreen() {
+interface LoginScreenProps {
+  onExit?: () => void;
+}
+
+export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
   const { navigate, goBack, params } = useAppNavigation();
 
   const [activeRole, setActiveRole] = useState<UserRole>((params?.initialRole as UserRole) || 'PLAYER');
@@ -125,7 +129,7 @@ export default function LoginScreen() {
       <View style={styles.container}>
         {/* Top Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => goBack()} style={styles.backBtn}>
+          <TouchableOpacity onPress={() => (onExit ? onExit() : navigate('Home'))} style={styles.backBtn}>
             <Text style={styles.backText}>← Exit to Main</Text>
           </TouchableOpacity>
         </View>

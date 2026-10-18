@@ -29,7 +29,7 @@ function verifyToken(req, res, next) {
     }
   }
 
-  // Development/testing custom headers (only if token is absent)
+  // Development/testing custom headers (only if token is absent and test headers are provided)
   if (process.env.NODE_ENV !== 'production') {
     const roleHeader = req.headers['x-user-role'] || req.headers['role'];
     const emailHeader = req.headers['x-user-email'] || req.headers['user-email'];
@@ -38,9 +38,10 @@ function verifyToken(req, res, next) {
     if (roleHeader) {
       req.user = {
         id: idHeader || (roleHeader.toUpperCase() === 'ADMIN' ? 'ADM-1001' : 'SCR-101'),
-        email: emailHeader || (roleHeader.toUpperCase() === 'ADMIN' ? 'admin@example.com' : 'scorer@cfvd.org'),
+        email: emailHeader || (roleHeader.toUpperCase() === 'ADMIN' ? 'admin@example.com' : 'ramesh@gmail.com'),
         role: roleHeader.toUpperCase(),
-        name: roleHeader.toUpperCase() === 'ADMIN' ? 'Chief Admin' : 'S. Ramesh'
+        name: roleHeader.toUpperCase() === 'ADMIN' ? 'Chief Admin' : 'S. Ramesh',
+        status: 'ACTIVE'
       };
       return next();
     }
@@ -136,10 +137,11 @@ async function verifyMatchPermission(req, res, next) {
       return next();
     }
 
-    // Scorer must be assigned to this match (or fallback to default demo assignment SCR-101)
-    const isAssigned = match.assigned_scorer_id === req.user.id || 
-                       match.assigned_scorer_id === 'SCR-101' || 
-                       (req.user.email && ['ramesh@gmail.com', 'scorer@cfvd.org'].includes(req.user.email));
+    // Scorer must be assigned to this match, or match must be unassigned, or admin
+    const isDev = process.env.NODE_ENV !== 'production';
+    const isAssigned = (match.assigned_scorer_id === req.user.id) || 
+                       (!match.assigned_scorer_id) ||
+                       (isDev && (match.assigned_scorer_id === 'SCR-101' || (req.user.email && ['ramesh@gmail.com', 'scorer@cfvd.org'].includes(req.user.email))));
 
     if (!isAssigned) {
       return res.status(403).json({

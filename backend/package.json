@@ -10,6 +10,7 @@
     "seed": "node seeds/seed.js",
     "test": "node tests/runTests.js",
     "test:umpire": "node tests/test_umpire_module.js",
+    "test:security": "node tests/securityVerification.js",
     "view-db": "node scripts/viewDb.js"
   },
   "dependencies": {
@@ -18,6 +19,8 @@
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^7.7.0",
     "mongoose": "^9.10.4",
@@ -26,6 +29,10 @@
     "socket.io": "^4.8.1"
   },
   "devDependencies": {
+    "chokidar": "^5.0.0",
     "nodemon": "^3.1.14"
+  },
+  "overrides": {
+    "braces": "^3.0.3"
   }
 }
