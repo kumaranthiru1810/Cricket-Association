@@ -12,10 +12,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  ScrollView,
-  Platform
+  Platform,
+  Image
 } from 'react-native';
-import { ShieldIcon, CricketBatIcon } from '../components/Icons';
+import { ShieldIcon } from '../components/Icons';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { adminApi, setStoredAdminToken, setStoredAdminUser, getStoredAdminToken, getStoredAdminUser } from '../services/adminApi';
 import { setAuthToken, setCurrentUser } from '../../services/api';
@@ -127,18 +127,32 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
     setErrorMsg(null);
   };
 
+const IMG_LOGO = require('../../../assets/logo_transparent.png');
+
   return (
-    <ScrollView contentContainerStyle={styles.rootContainer} keyboardShouldPersistTaps="handled">
-      {/* Background Accent Lines */}
+    <View style={styles.rootContainer}>
+      {/* Background Accent Line */}
       <View style={styles.topAccentBar} />
+
+      {/* Atmospheric Association Background Logo */}
+      <View style={styles.bgContainer} pointerEvents="none">
+        <View style={styles.bgAura} />
+        <Image
+          source={IMG_LOGO}
+          style={styles.bgWatermark}
+          resizeMode="contain"
+        />
+      </View>
 
       <View style={styles.cardWrapper}>
         {/* Brand & Federation Header */}
         <View style={styles.brandBox}>
           <View style={styles.emblemWrapper}>
-            <View style={styles.emblemIcon}>
-              <CricketBatIcon size={26} color="#d4af37" />
-            </View>
+            <Image
+              source={IMG_LOGO}
+              style={styles.logoMiniature}
+              resizeMode="contain"
+            />
           </View>
           <Text style={styles.brandTitle}>CRICKET FEDERATION</Text>
           <Text style={styles.brandSub}>OF VIRUDHUNAGAR DISTRICT</Text>
@@ -150,13 +164,6 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
 
         {/* Login White Card */}
         <View style={styles.loginCard}>
-          <View style={styles.loginHeader}>
-            <Text style={styles.loginTitle}>Management Console Sign In</Text>
-            <Text style={styles.loginSubtitle}>
-              Authorized federation administrators only. Review clubs, manage matches, approve scorers, and access governing operations.
-            </Text>
-          </View>
-
           {/* Error Banner */}
           {errorMsg && (
             <View style={styles.errorBanner}>
@@ -256,18 +263,54 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
           </Text>
         </View>
       </View>
-    </ScrollView>
+    </View>
   );
 };
 
-const styles = StyleSheet.create({
+const styles: any = StyleSheet.create({
   rootContainer: {
-    flexGrow: 1,
+    flex: 1,
+    width: '100%',
+    height: Platform.OS === 'web' ? ('100vh' as any) : '100%',
+    minHeight: Platform.OS === 'web' ? ('100vh' as any) : '100%',
+    maxHeight: Platform.OS === 'web' ? ('100vh' as any) : '100%',
     backgroundColor: '#f8fafc',
+    backgroundImage: (Platform.OS === 'web'
+      ? 'radial-gradient(ellipse 95% 80% at 50% 35%, #ffffff 0%, #f1f5f9 60%, #e2e8f0 100%)'
+      : undefined) as any,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 16
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    overflow: 'hidden',
+    position: 'relative'
+  },
+  bgContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    pointerEvents: 'none',
+    zIndex: 0
+  },
+  bgAura: {
+    position: 'absolute',
+    width: 620,
+    height: 620,
+    borderRadius: 310,
+    backgroundColor: 'rgba(212, 175, 55, 0.08)',
+    filter: (Platform.OS === 'web' ? 'blur(60px)' : undefined) as any
+  },
+  bgWatermark: {
+    width: 580,
+    height: 580,
+    maxWidth: '90%',
+    maxHeight: '90%',
+    opacity: 0.14,
+    filter: (Platform.OS === 'web' ? 'drop-shadow(0 0 45px rgba(15, 36, 82, 0.20))' : undefined) as any
   },
   topAccentBar: {
     position: 'absolute',
@@ -275,32 +318,40 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 4,
-    backgroundColor: '#0f2452'
+    backgroundColor: '#0f2452',
+    zIndex: 2
   },
   cardWrapper: {
     width: '100%',
-    maxWidth: 460,
-    alignItems: 'center'
+    maxWidth: 440,
+    alignItems: 'center',
+    zIndex: 1
   },
   brandBox: {
     alignItems: 'center',
-    marginBottom: 24
+    marginBottom: 16
   },
   emblemWrapper: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#0f2452',
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
     shadowColor: '#0f2452',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.14,
     shadowRadius: 10,
-    elevation: 4
+    elevation: 4,
+    borderWidth: 2,
+    borderColor: '#d4af37',
+    overflow: 'hidden'
   },
-  emblemIcon: {},
+  logoMiniature: {
+    width: 56,
+    height: 56
+  },
   brandTitle: {
     fontSize: 14,
     fontWeight: '800',
@@ -324,7 +375,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingVertical: 3,
     paddingHorizontal: 10,
-    marginTop: 8
+    marginTop: 6
   },
   affiliationText: {
     fontSize: 10.5,
@@ -333,30 +384,19 @@ const styles = StyleSheet.create({
   },
   loginCard: {
     width: '100%',
-    backgroundColor: '#ffffff',
+    backgroundColor: Platform.OS === 'web' ? 'rgba(255, 255, 255, 0.94)' : '#ffffff',
+    backdropFilter: (Platform.OS === 'web' ? 'blur(16px)' : undefined) as any,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    padding: 28,
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    elevation: 3
-  },
-  loginHeader: {
-    marginBottom: 20
-  },
-  loginTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0f172a',
-    marginBottom: 6
-  },
-  loginSubtitle: {
-    fontSize: 12.5,
-    color: '#64748b',
-    lineHeight: 18
+    paddingHorizontal: 26,
+    paddingTop: 22,
+    paddingBottom: 20,
+    shadowColor: '#0f2452',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 4
   },
   errorBanner: {
     flexDirection: 'row',
@@ -527,6 +567,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 16
   }
-});
+} as any);
 
 export default AdminLoginPage;

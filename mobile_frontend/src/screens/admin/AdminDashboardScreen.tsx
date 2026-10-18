@@ -350,6 +350,36 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   const [newNewsCategory, setNewNewsCategory] = useState<string>('ANNOUNCEMENT');
   const [newNewsAuthor, setNewNewsAuthor] = useState<string>('CFVD Secretariat');
 
+  // Dynamic Sidebar State
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
+
+  // Ensure the page and outer body is non-scrollable on web
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const origBodyOverflow = document.body.style.overflow;
+      const origBodyHeight = document.body.style.height;
+      const origDocOverflow = document.documentElement?.style.overflow || '';
+      const origDocHeight = document.documentElement?.style.height || '';
+
+      document.body.style.overflow = 'hidden';
+      document.body.style.height = '100vh';
+      if (document.documentElement) {
+        document.documentElement.style.overflow = 'hidden';
+        document.documentElement.style.height = '100vh';
+      }
+
+      return () => {
+        document.body.style.overflow = origBodyOverflow;
+        document.body.style.height = origBodyHeight;
+        if (document.documentElement) {
+          document.documentElement.style.overflow = origDocOverflow;
+          document.documentElement.style.height = origDocHeight;
+        }
+      };
+    }
+  }, []);
+
   // Load data from backend on mount
   useEffect(() => {
     if (isAdmin) {
@@ -871,13 +901,232 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   const overallRejected = scorerRejected + teamRejected + umpireRejected;
   const overallSegments = getDonutSegments(overallApproved, overallPending, overallRejected, totalOverall);
 
+  const renderSidebarContent = (isMobileDrawer: boolean = false) => {
+    const isCollapsed = !isMobileDrawer && sidebarCollapsed;
+    return (
+      <View style={[styles.sidebarInner, isCollapsed && styles.sidebarInnerCollapsed]}>
+        {/* Profile Card */}
+        <View style={[styles.sidebarProfileCard, isCollapsed && styles.sidebarProfileCardCollapsed]}>
+          <View style={styles.sidebarAvatar}>
+            <Text style={styles.sidebarAvatarText}>AD</Text>
+          </View>
+          {!isCollapsed && (
+            <View style={styles.sidebarProfileInfo}>
+              <Text style={styles.sidebarProfileName} numberOfLines={1}>CFVD Admin</Text>
+              <Text style={styles.sidebarProfileRole} numberOfLines={1}>ADMIN • EXECUTIVE</Text>
+              <View style={styles.sidebarOfficialBadge}>
+                <Text style={styles.sidebarOfficialBadgeText}>CFVD OFFICIAL</Text>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* Navigation Section */}
+        <ScrollView style={styles.sidebarNavScroll} showsVerticalScrollIndicator={false}>
+          {!isCollapsed && <Text style={styles.sidebarNavHeader}>NAVIGATION</Text>}
+
+          {/* Overview */}
+          <TouchableOpacity
+            style={[
+              styles.sidebarNavItem,
+              activeTab === 'overview' && styles.sidebarNavItemActive,
+              isCollapsed && styles.sidebarNavItemCollapsed
+            ]}
+            onPress={() => {
+              setActiveTab('overview');
+              if (isMobileDrawer) setMobileSidebarOpen(false);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.sidebarNavIcon, activeTab === 'overview' && styles.sidebarNavIconActive]}>⊞</Text>
+            {!isCollapsed && (
+              <Text style={[styles.sidebarNavLabel, activeTab === 'overview' && styles.sidebarNavLabelActive]}>
+                Overview
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Team Registrations */}
+          <TouchableOpacity
+            style={[
+              styles.sidebarNavItem,
+              activeTab === 'teams' && styles.sidebarNavItemActive,
+              isCollapsed && styles.sidebarNavItemCollapsed
+            ]}
+            onPress={() => {
+              setActiveTab('teams');
+              if (isMobileDrawer) setMobileSidebarOpen(false);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.sidebarNavIcon, activeTab === 'teams' && styles.sidebarNavIconActive]}>👥</Text>
+            {!isCollapsed && (
+              <Text style={[styles.sidebarNavLabel, activeTab === 'teams' && styles.sidebarNavLabelActive]}>
+                Team Registrations
+              </Text>
+            )}
+            {!isCollapsed && teamPending > 0 && (
+              <View style={styles.sidebarBadgeBlue}>
+                <Text style={styles.sidebarBadgeText}>{teamPending}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Scorer Management */}
+          <TouchableOpacity
+            style={[
+              styles.sidebarNavItem,
+              activeTab === 'scorers' && styles.sidebarNavItemActive,
+              isCollapsed && styles.sidebarNavItemCollapsed
+            ]}
+            onPress={() => {
+              setActiveTab('scorers');
+              if (isMobileDrawer) setMobileSidebarOpen(false);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.sidebarNavIcon, activeTab === 'scorers' && styles.sidebarNavIconActive]}>📋</Text>
+            {!isCollapsed && (
+              <Text style={[styles.sidebarNavLabel, activeTab === 'scorers' && styles.sidebarNavLabelActive]}>
+                Scorer Management
+              </Text>
+            )}
+            {!isCollapsed && scorerPending > 0 && (
+              <View style={styles.sidebarBadgeOrange}>
+                <Text style={styles.sidebarBadgeText}>{scorerPending}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Umpires */}
+          <TouchableOpacity
+            style={[
+              styles.sidebarNavItem,
+              activeTab === 'umpires' && styles.sidebarNavItemActive,
+              isCollapsed && styles.sidebarNavItemCollapsed
+            ]}
+            onPress={() => {
+              setActiveTab('umpires');
+              if (isMobileDrawer) setMobileSidebarOpen(false);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.sidebarNavIcon, activeTab === 'umpires' && styles.sidebarNavIconActive]}>⚖️</Text>
+            {!isCollapsed && (
+              <Text style={[styles.sidebarNavLabel, activeTab === 'umpires' && styles.sidebarNavLabelActive]}>
+                Umpires
+              </Text>
+            )}
+            {!isCollapsed && umpirePending > 0 && (
+              <View style={styles.sidebarBadgePurple}>
+                <Text style={styles.sidebarBadgeText}>{umpirePending}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Match Schedules */}
+          <TouchableOpacity
+            style={[
+              styles.sidebarNavItem,
+              activeTab === 'schedules' && styles.sidebarNavItemActive,
+              isCollapsed && styles.sidebarNavItemCollapsed
+            ]}
+            onPress={() => {
+              setActiveTab('schedules');
+              if (isMobileDrawer) setMobileSidebarOpen(false);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.sidebarNavIcon, activeTab === 'schedules' && styles.sidebarNavIconActive]}>⚡</Text>
+            {!isCollapsed && (
+              <Text style={[styles.sidebarNavLabel, activeTab === 'schedules' && styles.sidebarNavLabelActive]}>
+                Match Schedules
+              </Text>
+            )}
+            {!isCollapsed && scheduledMatchesCount > 0 && (
+              <View style={styles.sidebarBadgeGold}>
+                <Text style={styles.sidebarBadgeText}>{scheduledMatchesCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* News & Content */}
+          <TouchableOpacity
+            style={[
+              styles.sidebarNavItem,
+              activeTab === 'content' && styles.sidebarNavItemActive,
+              isCollapsed && styles.sidebarNavItemCollapsed
+            ]}
+            onPress={() => {
+              setActiveTab('content');
+              if (isMobileDrawer) setMobileSidebarOpen(false);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.sidebarNavIcon, activeTab === 'content' && styles.sidebarNavIconActive]}>📰</Text>
+            {!isCollapsed && (
+              <Text style={[styles.sidebarNavLabel, activeTab === 'content' && styles.sidebarNavLabelActive]}>
+                News & Content
+              </Text>
+            )}
+            {!isCollapsed && newsList.length > 0 && (
+              <View style={styles.sidebarBadgeGray}>
+                <Text style={styles.sidebarBadgeText}>{newsList.length}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+
+        {/* Sidebar Footer */}
+        <View style={styles.sidebarFooterBox}>
+          <TouchableOpacity
+            style={[styles.sidebarLogoutBtn, isCollapsed && styles.sidebarLogoutBtnCollapsed]}
+            onPress={() => setLogoutModalOpen(true)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.sidebarLogoutIcon}>↪</Text>
+            {!isCollapsed && <Text style={styles.sidebarLogoutText}>Logout</Text>}
+          </TouchableOpacity>
+
+          {!isMobileDrawer && (
+            <TouchableOpacity
+              style={styles.sidebarCollapseBtn}
+              onPress={() => setSidebarCollapsed(!sidebarCollapsed)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.sidebarCollapseText}>
+                {sidebarCollapsed ? '> Expand' : '< Collapse Sidebar'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  };
+
   return (
     <View style={styles.rootContainer}>
       {/* ─────────────────────────────────────────────────────────────
-          1. DEDICATED ADMIN TOP BAR (Website Navbar Removed)
+          1. DEDICATED ADMIN TOP BAR WITH HAMBURGER (THREE DASHES ☰)
           ───────────────────────────────────────────────────────────── */}
       <View style={[styles.adminMinimalTopBar, { paddingTop: styles.adminMinimalTopBar.paddingVertical + insetsTop }]}>
         <View style={styles.adminMinimalBrandCol}>
+          <TouchableOpacity
+            style={styles.hamburgerBtn}
+            onPress={(e: any) => {
+              if (e && e.preventDefault) e.preventDefault();
+              if (e && e.stopPropagation) e.stopPropagation();
+              if (isDesktop) {
+                setSidebarCollapsed(prev => !prev);
+              } else {
+                setMobileSidebarOpen(prev => !prev);
+              }
+            }}
+            activeOpacity={0.7}
+            accessibilityLabel="Toggle Admin Sidebar Menu"
+          >
+            <Text style={styles.hamburgerIcon}>☰</Text>
+          </TouchableOpacity>
           <Image source={IMG_LOGO} style={styles.adminMinimalLogo} resizeMode="contain" />
           <View style={{ marginLeft: 12, flex: 1 }}>
             <Text style={styles.adminMinimalTitle} numberOfLines={2}>CRICKET FEDERATION OF VIRUDHUNAGAR DISTRICT</Text>
@@ -889,7 +1138,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             <View style={styles.adminUserBadgePill}>
               <Text style={styles.adminUserBadgePillText}>👤 {adminEmail}</Text>
             </View>
-            <TouchableOpacity style={styles.adminExitBtnPill} onPress={onExit} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.adminExitBtnPill} onPress={() => setLogoutModalOpen(true)} activeOpacity={0.8}>
               <Text style={styles.adminExitBtnPillText}>← Exit</Text>
             </TouchableOpacity>
           </View>
@@ -897,115 +1146,71 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       </View>
 
       {/* ─────────────────────────────────────────────────────────────
-          2. ATMOSPHERIC CREAM STADIUM BACKGROUND & MAIN SCROLL CONTENT
+          2. DASHBOARD BODY: SIDEBAR + MAIN CONTENT AREA
           ───────────────────────────────────────────────────────────── */}
-      <ScrollView
-        style={styles.mainScrollView}
-        contentContainerStyle={styles.scrollContentContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.contentConstrained}>
-          {/* Success Notification Banner */}
-          {notification && (
-            <View style={styles.notificationBanner}>
-              <Text style={styles.notificationText}>{notification}</Text>
-            </View>
-          )}
-
-          {/* ─────────────────────────────────────────────────────────────
-              3. ADMIN SUB-NAVIGATION TABS BAR
-              ───────────────────────────────────────────────────────────── */}
-          <View style={styles.adminTabsBar}>
-            {/* Overview Tab */}
-            <TouchableOpacity
-              style={[styles.adminTabBtn, activeTab === 'overview' && styles.adminTabBtnActive]}
-              onPress={() => setActiveTab('overview')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.adminTabBtnText, activeTab === 'overview' && styles.adminTabBtnTextActive]}>
-                📊 Overview
-              </Text>
-            </TouchableOpacity>
-
-            {/* Team Registrations Tab */}
-            <TouchableOpacity
-              style={[styles.adminTabBtn, activeTab === 'teams' && styles.adminTabBtnActive]}
-              onPress={() => setActiveTab('teams')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.adminTabBtnText, activeTab === 'teams' && styles.adminTabBtnTextActive]}>
-                👥 Team Registrations
-              </Text>
-              <View style={styles.tabBadgeRed}>
-                <Text style={styles.tabBadgeRedText}>{teamPending}</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Scorer Management Tab */}
-            <TouchableOpacity
-              style={[styles.adminTabBtn, activeTab === 'scorers' && styles.adminTabBtnActive]}
-              onPress={() => setActiveTab('scorers')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.adminTabBtnText, activeTab === 'scorers' && styles.adminTabBtnTextActive]}>
-                📋 Scorer Management
-              </Text>
-              <View style={styles.tabBadgeOrange}>
-                <Text style={styles.tabBadgeOrangeText}>{scorerPending}</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Umpire Management Tab */}
-            <TouchableOpacity
-              style={[styles.adminTabBtn, activeTab === 'umpires' && styles.adminTabBtnActive]}
-              onPress={() => setActiveTab('umpires')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.adminTabBtnText, activeTab === 'umpires' && styles.adminTabBtnTextActive]}>
-                ⚖️ Umpires
-              </Text>
-              <View style={styles.tabBadgePurple}>
-                <Text style={styles.tabBadgePurpleText}>{umpirePending}</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* News & Content Tab */}
-            <TouchableOpacity
-              style={[styles.adminTabBtn, activeTab === 'content' && styles.adminTabBtnActive]}
-              onPress={() => setActiveTab('content')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.adminTabBtnText, activeTab === 'content' && styles.adminTabBtnTextActive]}>
-                📰 News & Content
-              </Text>
-              <View style={styles.tabBadgeGold}>
-                <Text style={styles.tabBadgeGoldText}>{newsList.length}</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Match Schedules Tab */}
-            <TouchableOpacity
-              style={[styles.adminTabBtn, activeTab === 'schedules' && styles.adminTabBtnActive]}
-              onPress={() => setActiveTab('schedules')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.adminTabBtnText, activeTab === 'schedules' && styles.adminTabBtnTextActive]}>
-                ⚡ Match Schedules
-              </Text>
-              <View style={styles.tabBadgeBlue}>
-                <Text style={styles.tabBadgeBlueText}>{scheduledMatchesCount}</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Logout Button on Right */}
-            <TouchableOpacity
-              style={styles.adminLogoutBtn}
-              onPress={() => setLogoutModalOpen(true)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.adminLogoutBtnText}>↪ Logout</Text>
-            </TouchableOpacity>
+      <View style={styles.dashboardBodyRow}>
+        {/* DESKTOP SIDEBAR */}
+        {isDesktop && (
+          <View style={[styles.sidebarContainer, sidebarCollapsed && styles.sidebarContainerCollapsed]}>
+            {renderSidebarContent(false)}
           </View>
+        )}
+
+        {/* MOBILE DRAWER OVERLAY */}
+        {!isDesktop && mobileSidebarOpen && (
+          <View style={styles.mobileDrawerOverlay}>
+            <TouchableOpacity
+              style={styles.mobileDrawerBackdrop}
+              activeOpacity={1}
+              onPress={() => setMobileSidebarOpen(false)}
+            />
+            <View style={styles.mobileDrawerContent}>
+              <View style={styles.mobileDrawerHeader}>
+                <Text style={styles.mobileDrawerTitle}>Admin Menu</Text>
+                <TouchableOpacity onPress={() => setMobileSidebarOpen(false)} style={styles.mobileDrawerCloseBtn}>
+                  <Text style={styles.mobileDrawerCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              {renderSidebarContent(true)}
+            </View>
+          </View>
+        )}
+
+        {/* MAIN SCROLL CONTENT AREA */}
+        <ScrollView
+          style={styles.mainScrollView}
+          contentContainerStyle={styles.scrollContentContainer}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.contentConstrained}>
+            {/* Success Notification Banner */}
+            {notification && (
+              <View style={styles.notificationBanner}>
+                <Text style={styles.notificationText}>{notification}</Text>
+              </View>
+            )}
+
+            {/* MODERN PAGE HEADER ROW */}
+            <View style={styles.pageHeaderRow}>
+              <View>
+                <Text style={styles.pageHeaderTitle}>
+                  {activeTab === 'overview' && '⊞ Overview'}
+                  {activeTab === 'teams' && '👥 Team Registrations'}
+                  {activeTab === 'scorers' && '📋 Scorer Management'}
+                  {activeTab === 'umpires' && '⚖️ Umpires Management'}
+                  {activeTab === 'schedules' && '⚡ Match Schedules'}
+                  {activeTab === 'content' && '📰 News & Content'}
+                </Text>
+                <Text style={styles.pageHeaderSubtitle}>CFVD Official Administrator Governance Console</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.btnRefreshData}
+                onPress={loadDataFromBackend}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.btnRefreshDataText}>🔄 Refresh Data</Text>
+              </TouchableOpacity>
+            </View>
 
           {/* ─────────────────────────────────────────────────────────────
               4. TAB CONTENT: SCORER MANAGEMENT (Exact Match to Screenshot)
@@ -2327,76 +2532,107 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           )}
 
           {/* ─────────────────────────────────────────────────────────────
-              8. TAB CONTENT: MATCH SCHEDULES MANAGEMENT
+              8. TAB CONTENT: MATCH SCHEDULES MANAGEMENT (Distinct Vibrant Styling)
               ───────────────────────────────────────────────────────────── */}
           {activeTab === 'schedules' && (
             <View>
               {/* TOP TWO SIDE-BY-SIDE HIGHLIGHT CARDS FOR SCHEDULES */}
-              <View style={styles.highlightCardsRow}>
+              <View style={[styles.highlightCardsRow, { flexDirection: isDesktop ? 'row' : 'column' }]}>
                 {/* Left Card: Match Schedules Stats */}
-                <View style={styles.navyStatCard}>
+                <View style={styles.schedulesStatCard}>
                   <View style={styles.statCardHeader}>
-                    <View style={styles.blueIconBox}>
+                    <View style={styles.schedulesIconBox}>
                       <Text style={{ fontSize: 16 }}>🏏</Text>
                     </View>
-                    <Text style={styles.statCardTitle}>Match Schedules</Text>
+                    <View>
+                      <Text style={styles.schedulesStatCardTitle}>Match Schedules & Live Tracking</Text>
+                      <Text style={styles.schedulesStatCardTag}>CHAMPIONSHIP OPERATIONS</Text>
+                    </View>
                   </View>
-                  <Text style={styles.statCardSubtitle}>
-                    Official district championship fixtures, venues, timing logistics, and accredited scorer appointments.
+                  <Text style={styles.schedulesStatCardSubtitle}>
+                    Real-time championship fixtures, live scoring status, venue allocations, and accredited scorer appointments.
                   </Text>
 
                   {/* 4 Colored Pill Rows */}
                   <View style={styles.pillRowsContainer}>
-                    <View style={[styles.statRowPill, styles.rowPillGreen]}>
-                      <Text style={styles.statPillLabel}>Live Matches</Text>
-                      <Text style={styles.statPillCount}>{liveMatchesCount}</Text>
+                    <View style={[styles.statRowPill, styles.schedulesPillLive]}>
+                      <View style={styles.pillLeftGroup}>
+                        <View style={[styles.glowingDot, { backgroundColor: '#ef4444' }]} />
+                        <Text style={[styles.statPillLabel, { color: '#fca5a5' }]}>Live Matches (Active)</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        {liveMatchesCount > 0 && (
+                          <View style={styles.livePulseTag}>
+                            <Text style={styles.livePulseTagText}>LIVE</Text>
+                          </View>
+                        )}
+                        <Text style={[styles.statPillCount, { color: '#f87171' }]}>{liveMatchesCount}</Text>
+                      </View>
                     </View>
-                    <View style={[styles.statRowPill, styles.rowPillBlue]}>
-                      <Text style={styles.statPillLabel}>Scheduled Fixtures</Text>
-                      <Text style={styles.statPillCount}>{scheduledMatchesCount}</Text>
+
+                    <View style={[styles.statRowPill, styles.schedulesPillScheduled]}>
+                      <View style={styles.pillLeftGroup}>
+                        <View style={[styles.glowingDot, { backgroundColor: '#38bdf8' }]} />
+                        <Text style={[styles.statPillLabel, { color: '#bae6fd' }]}>Scheduled Fixtures</Text>
+                      </View>
+                      <Text style={[styles.statPillCount, { color: '#38bdf8' }]}>{scheduledMatchesCount}</Text>
                     </View>
-                    <View style={[styles.statRowPill, styles.rowPillGray]}>
-                      <Text style={styles.statPillLabel}>Completed Matches</Text>
-                      <Text style={styles.statPillCount}>{completedMatchesCount}</Text>
+
+                    <View style={[styles.statRowPill, styles.schedulesPillCompleted]}>
+                      <View style={styles.pillLeftGroup}>
+                        <View style={[styles.glowingDot, { backgroundColor: '#34d399' }]} />
+                        <Text style={[styles.statPillLabel, { color: '#a7f3d0' }]}>Completed Matches</Text>
+                      </View>
+                      <Text style={[styles.statPillCount, { color: '#34d399' }]}>{completedMatchesCount}</Text>
                     </View>
-                    <View style={[styles.statRowPill, styles.rowPillNavy]}>
-                      <Text style={styles.statPillLabel}>Total Matches in DB</Text>
-                      <Text style={styles.statPillCount}>{matchesList.length}</Text>
+
+                    <View style={[styles.statRowPill, styles.schedulesPillTotal]}>
+                      <View style={styles.pillLeftGroup}>
+                        <View style={[styles.glowingDot, { backgroundColor: '#fbbf24' }]} />
+                        <Text style={[styles.statPillLabel, { color: '#fde68a' }]}>Total Championship Matches</Text>
+                      </View>
+                      <Text style={[styles.statPillCount, { color: '#fbbf24' }]}>{matchesList.length}</Text>
                     </View>
                   </View>
                 </View>
 
                 {/* Right Card: Quick Action & Logistics Overview */}
-                <View style={styles.navyStatCard}>
+                <View style={styles.schedulesOpsCard}>
                   <View style={styles.statCardHeader}>
-                    <View style={styles.goldIconBox}>
+                    <View style={styles.schedulesGoldIconBox}>
                       <Text style={{ fontSize: 16 }}>⚙️</Text>
                     </View>
-                    <Text style={styles.statCardTitle}>Fixture Operations</Text>
+                    <View>
+                      <Text style={styles.schedulesStatCardTitle}>Fixture Operations</Text>
+                      <Text style={styles.schedulesOpsTag}>GOVERNANCE PORTAL</Text>
+                    </View>
                   </View>
-                  <Text style={styles.statCardSubtitle}>
+                  <Text style={styles.schedulesStatCardSubtitle}>
                     Schedule new official fixtures between approved teams, designate match venues, and assign certified scorers.
                   </Text>
 
-                  <View style={{ marginTop: 16, gap: 12 }}>
+                  <View style={{ marginTop: 14, gap: 12 }}>
                     <TouchableOpacity
-                      style={styles.btnPrimarySchedule}
+                      style={styles.btnScheduleGradient}
                       onPress={() => handleOpenScheduleModal()}
                       activeOpacity={0.8}
                     >
-                      <Text style={styles.btnPrimaryScheduleText}>➕ Schedule New Match</Text>
+                      <Text style={styles.btnScheduleGradientText}>➕ Schedule New Match</Text>
                     </TouchableOpacity>
 
-                    <View style={styles.scheduleInfoBox}>
-                      <Text style={styles.scheduleInfoText}>
-                        • Approved Teams Available: <Text style={{ fontWeight: '700', color: '#f59e0b' }}>{allClubsList.length}</Text>
-                      </Text>
-                      <Text style={styles.scheduleInfoText}>
-                        • Venues Registered: <Text style={{ fontWeight: '700', color: '#f59e0b' }}>{venuesList.length}</Text>
-                      </Text>
-                      <Text style={styles.scheduleInfoText}>
-                        • Accredited Scorers & Officials: <Text style={{ fontWeight: '700', color: '#f59e0b' }}>{officialsList.length}</Text>
-                      </Text>
+                    <View style={styles.scheduleInfoBoxModern}>
+                      <View style={styles.scheduleInfoRow}>
+                        <Text style={styles.scheduleInfoLabel}>• Approved Teams Available:</Text>
+                        <Text style={styles.scheduleInfoVal}>{allClubsList.length}</Text>
+                      </View>
+                      <View style={styles.scheduleInfoRow}>
+                        <Text style={styles.scheduleInfoLabel}>• Venues Registered:</Text>
+                        <Text style={styles.scheduleInfoVal}>{venuesList.length}</Text>
+                      </View>
+                      <View style={styles.scheduleInfoRow}>
+                        <Text style={styles.scheduleInfoLabel}>• Accredited Scorers & Officials:</Text>
+                        <Text style={styles.scheduleInfoVal}>{officialsList.length}</Text>
+                      </View>
                     </View>
                   </View>
                 </View>
@@ -2420,7 +2656,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   ) : null}
                 </View>
 
-                {/* Status Filter Pills */}
+                {/* Status Filter Pills with distinctive colors */}
                 <View style={styles.filterPillsRow}>
                   <TouchableOpacity
                     style={[styles.filterPill, matchFilter === 'all' && styles.filterPillActive]}
@@ -2432,38 +2668,38 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.filterPill, matchFilter === 'SCHEDULED' && styles.filterPillActive]}
+                    style={[styles.filterPill, matchFilter === 'SCHEDULED' && styles.filterPillActiveScheduled]}
                     onPress={() => setMatchFilter('SCHEDULED')}
                   >
-                    <Text style={[styles.filterPillText, matchFilter === 'SCHEDULED' && styles.filterPillTextActive]}>
-                      Scheduled ({scheduledMatchesCount})
+                    <Text style={[styles.filterPillText, matchFilter === 'SCHEDULED' && styles.filterPillTextActiveScheduled]}>
+                      🗓 Scheduled ({scheduledMatchesCount})
                     </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.filterPill, matchFilter === 'LIVE' && styles.filterPillActive]}
+                    style={[styles.filterPill, matchFilter === 'LIVE' && styles.filterPillActiveLive]}
                     onPress={() => setMatchFilter('LIVE')}
                   >
-                    <Text style={[styles.filterPillText, matchFilter === 'LIVE' && styles.filterPillTextActive]}>
-                      Live ({liveMatchesCount})
+                    <Text style={[styles.filterPillText, matchFilter === 'LIVE' && styles.filterPillTextActiveLive]}>
+                      🔴 Live ({liveMatchesCount})
                     </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.filterPill, matchFilter === 'COMPLETED' && styles.filterPillActive]}
+                    style={[styles.filterPill, matchFilter === 'COMPLETED' && styles.filterPillActiveCompleted]}
                     onPress={() => setMatchFilter('COMPLETED')}
                   >
-                    <Text style={[styles.filterPillText, matchFilter === 'COMPLETED' && styles.filterPillTextActive]}>
-                      Completed ({completedMatchesCount})
+                    <Text style={[styles.filterPillText, matchFilter === 'COMPLETED' && styles.filterPillTextActiveCompleted]}>
+                      ✓ Completed ({completedMatchesCount})
                     </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.filterPill, matchFilter === 'CANCELLED' && styles.filterPillActive]}
+                    style={[styles.filterPill, matchFilter === 'CANCELLED' && styles.filterPillActiveCancelled]}
                     onPress={() => setMatchFilter('CANCELLED')}
                   >
-                    <Text style={[styles.filterPillText, matchFilter === 'CANCELLED' && styles.filterPillTextActive]}>
-                      Cancelled ({cancelledMatchesCount})
+                    <Text style={[styles.filterPillText, matchFilter === 'CANCELLED' && styles.filterPillTextActiveCancelled]}>
+                      ✕ Cancelled ({cancelledMatchesCount})
                     </Text>
                   </TouchableOpacity>
 
@@ -2509,12 +2745,27 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     const isCancelled = statusUpper === 'CANCELLED' || statusUpper === 'ABANDONED';
 
                     return (
-                      <View key={m.id} style={styles.itemCard}>
+                      <View
+                        key={m.id}
+                        style={[
+                          styles.itemCard,
+                          isLive && styles.matchCardLive,
+                          isScheduled && styles.matchCardScheduled,
+                          isCompleted && styles.matchCardCompleted,
+                          isCancelled && styles.matchCardCancelled
+                        ]}
+                      >
                         {/* Top Header Row */}
                         <View style={styles.itemCardTop}>
                           <View style={styles.itemTitleRow}>
-                            <View style={[styles.itemCrest, { backgroundColor: '#1e3a8a' }]}>
-                              <Text style={styles.itemCrestText}>🏏</Text>
+                            <View style={[
+                              styles.itemCrest,
+                              isLive && { backgroundColor: '#ef4444' },
+                              isScheduled && { backgroundColor: '#2563eb' },
+                              isCompleted && { backgroundColor: '#10b981' },
+                              isCancelled && { backgroundColor: '#64748b' }
+                            ]}>
+                              <Text style={styles.itemCrestText}>{isLive ? '🔴' : '🏏'}</Text>
                             </View>
                             <View style={styles.itemTitleCol}>
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -2642,6 +2893,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           )}
         </View>
       </ScrollView>
+    </View>
 
       {/* ─────────────────────────────────────────────────────────────
           8. SQUAD INSPECTION MODAL (15 Member Roster)
@@ -3378,10 +3630,317 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 // ─────────────────────────────────────────────────────────────
 // STYLES: Faithfully Matching the Previous UI
 // ─────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
+const styles: any = StyleSheet.create({
   rootContainer: {
     flex: 1,
-    backgroundColor: '#f6f2e9'
+    width: '100%',
+    height: Platform.OS === 'web' ? ('100vh' as any) : '100%',
+    maxHeight: Platform.OS === 'web' ? ('100vh' as any) : '100%',
+    overflow: 'hidden',
+    backgroundColor: '#ffffff'
+  },
+  dashboardBodyRow: {
+    flex: 1,
+    flexDirection: 'row',
+    width: '100%',
+    height: Platform.OS === 'web' ? ('calc(100vh - 64px)' as any) : '100%',
+    maxHeight: Platform.OS === 'web' ? ('calc(100vh - 64px)' as any) : '100%',
+    overflow: 'hidden',
+    backgroundColor: '#ffffff'
+  },
+  sidebarContainer: {
+    width: 250,
+    backgroundColor: '#ffffff',
+    borderRightWidth: 1,
+    borderRightColor: '#e2e8f0',
+    height: '100%',
+    maxHeight: '100%',
+    overflow: 'hidden'
+  },
+  sidebarContainerCollapsed: {
+    width: 74
+  },
+  sidebarInner: {
+    flex: 1,
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 12
+  },
+  sidebarInnerCollapsed: {
+    paddingHorizontal: 8,
+    alignItems: 'center'
+  },
+  sidebarProfileCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 16,
+    gap: 10
+  },
+  sidebarProfileCardCollapsed: {
+    padding: 6,
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    marginBottom: 12
+  },
+  sidebarAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#0a1432',
+    borderWidth: 2,
+    borderColor: '#d4af37',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  sidebarAvatarText: {
+    color: '#d4af37',
+    fontSize: 15,
+    fontWeight: '900'
+  },
+  sidebarProfileInfo: {
+    flex: 1
+  },
+  sidebarProfileName: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  sidebarProfileRole: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748b',
+    marginTop: 1
+  },
+  sidebarOfficialBadge: {
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    alignSelf: 'flex-start',
+    marginTop: 3
+  },
+  sidebarOfficialBadgeText: {
+    color: '#b45309',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5
+  },
+  sidebarNavScroll: {
+    flex: 1
+  },
+  sidebarNavHeader: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#94a3b8',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    paddingHorizontal: 6
+  },
+  sidebarNavItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 5,
+    gap: 10
+  },
+  sidebarNavItemActive: {
+    backgroundColor: '#d4af37',
+    boxShadow: '0 4px 12px rgba(212, 175, 55, 0.35)',
+    elevation: 2
+  },
+  sidebarNavItemCollapsed: {
+    paddingHorizontal: 8,
+    justifyContent: 'center'
+  },
+  sidebarNavIcon: {
+    fontSize: 16,
+    color: '#475569'
+  },
+  sidebarNavIconActive: {
+    color: '#ffffff'
+  },
+  sidebarNavLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+    flex: 1
+  },
+  sidebarNavLabelActive: {
+    color: '#ffffff',
+    fontWeight: '800'
+  },
+  sidebarBadgeBlue: {
+    backgroundColor: '#dbeafe',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2
+  },
+  sidebarBadgeOrange: {
+    backgroundColor: '#ffedd5',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2
+  },
+  sidebarBadgePurple: {
+    backgroundColor: '#f3e8ff',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2
+  },
+  sidebarBadgeGold: {
+    backgroundColor: '#fef3c7',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2
+  },
+  sidebarBadgeGray: {
+    backgroundColor: '#f1f5f9',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2
+  },
+  sidebarBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  sidebarFooterBox: {
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    paddingTop: 10,
+    gap: 8
+  },
+  sidebarLogoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    borderRadius: 8,
+    paddingVertical: 8,
+    gap: 6
+  },
+  sidebarLogoutBtnCollapsed: {
+    paddingHorizontal: 6
+  },
+  sidebarLogoutIcon: {
+    color: '#ef4444',
+    fontSize: 14,
+    fontWeight: '800'
+  },
+  sidebarLogoutText: {
+    color: '#ef4444',
+    fontSize: 12.5,
+    fontWeight: '700'
+  },
+  sidebarCollapseBtn: {
+    alignItems: 'center',
+    paddingVertical: 6
+  },
+  sidebarCollapseText: {
+    color: '#94a3b8',
+    fontSize: 11,
+    fontWeight: '600'
+  },
+  mobileDrawerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+    flexDirection: 'row'
+  },
+  mobileDrawerBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)'
+  },
+  mobileDrawerContent: {
+    width: 270,
+    backgroundColor: '#ffffff',
+    height: '100%',
+    zIndex: 1001,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 4, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10
+  },
+  mobileDrawerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0'
+  },
+  mobileDrawerTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f2452'
+  },
+  mobileDrawerCloseBtn: {
+    padding: 6
+  },
+  mobileDrawerCloseText: {
+    fontSize: 16,
+    color: '#64748b',
+    fontWeight: '700'
+  },
+  pageHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    flexWrap: 'wrap',
+    gap: 12
+  },
+  pageHeaderTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#0f172a',
+    letterSpacing: -0.2
+  },
+  pageHeaderSubtitle: {
+    fontSize: 12.5,
+    color: '#64748b',
+    marginTop: 2
+  },
+  btnRefreshData: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1
+  },
+  btnRefreshDataText: {
+    color: '#0f2452',
+    fontSize: 12.5,
+    fontWeight: '700'
   },
 
   // 1. TOP FEDERATION HEADER
@@ -3503,7 +4062,7 @@ const styles = StyleSheet.create({
   // 2. MAIN SCROLL CONTAINER
   mainScrollView: {
     flex: 1,
-    backgroundColor: '#f6f2e9'
+    backgroundColor: '#f8fafc'
   },
   scrollContentContainer: {
     paddingVertical: 24,
@@ -5058,5 +5617,241 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#0f172a',
     fontWeight: '700'
+  },
+
+  // Hamburger Button & Icon Styles
+  hamburgerBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(212, 175, 55, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    cursor: 'pointer'
+  },
+  hamburgerIcon: {
+    fontSize: 22,
+    color: '#fbbf24',
+    fontWeight: '900',
+    lineHeight: 24,
+    textAlign: 'center'
+  },
+
+  // Distinct Match Schedules Highlight & Operations Cards
+  schedulesStatCard: {
+    flex: 1,
+    minWidth: 320,
+    backgroundColor: '#0c2340',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(59, 130, 246, 0.45)',
+    padding: 22,
+    shadowColor: '#0c2340',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 4
+  },
+  schedulesOpsCard: {
+    flex: 1,
+    minWidth: 320,
+    backgroundColor: '#0a1e38',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(212, 175, 55, 0.45)',
+    padding: 22,
+    shadowColor: '#0a1e38',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    elevation: 4
+  },
+  schedulesIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#1d4ed8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#1d4ed8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 3
+  },
+  schedulesGoldIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#f59e0b',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#f59e0b',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 3
+  },
+  schedulesStatCardTitle: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '800'
+  },
+  schedulesStatCardTag: {
+    color: '#60a5fa',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8
+  },
+  schedulesOpsTag: {
+    color: '#fbbf24',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8
+  },
+  schedulesStatCardSubtitle: {
+    color: '#94a3b8',
+    fontSize: 12,
+    marginTop: 6,
+    lineHeight: 18
+  },
+
+  // Schedules Metric Pill Rows
+  schedulesPillLive: {
+    backgroundColor: 'rgba(239, 68, 68, 0.14)',
+    borderLeftWidth: 4,
+    borderLeftColor: '#ef4444',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.35)'
+  },
+  schedulesPillScheduled: {
+    backgroundColor: 'rgba(56, 189, 248, 0.14)',
+    borderLeftWidth: 4,
+    borderLeftColor: '#0284c7',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.35)'
+  },
+  schedulesPillCompleted: {
+    backgroundColor: 'rgba(16, 185, 129, 0.14)',
+    borderLeftWidth: 4,
+    borderLeftColor: '#059669',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.35)'
+  },
+  schedulesPillTotal: {
+    backgroundColor: 'rgba(245, 158, 11, 0.14)',
+    borderLeftWidth: 4,
+    borderLeftColor: '#d97706',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.35)'
+  },
+  livePulseTag: {
+    backgroundColor: '#dc2626',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 8
+  },
+  livePulseTagText: {
+    color: '#ffffff',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5
+  },
+
+  // Fixture Operations Action & Info
+  btnScheduleGradient: {
+    backgroundColor: '#f59e0b',
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#f59e0b',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 3
+  },
+  btnScheduleGradientText: {
+    color: '#0f172a',
+    fontSize: 13.5,
+    fontWeight: '800',
+    letterSpacing: 0.3
+  },
+  scheduleInfoBoxModern: {
+    backgroundColor: 'rgba(15, 31, 60, 0.7)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.25)',
+    padding: 12,
+    gap: 8
+  },
+  scheduleInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  scheduleInfoLabel: {
+    color: '#cbd5e1',
+    fontSize: 12,
+    fontWeight: '600'
+  },
+  scheduleInfoVal: {
+    color: '#f59e0b',
+    fontSize: 13,
+    fontWeight: '800'
+  },
+
+  // Filter Pills with Status-Differentiated Colors
+  filterPillActiveScheduled: {
+    backgroundColor: '#2563eb',
+    borderColor: '#1d4ed8'
+  },
+  filterPillActiveLive: {
+    backgroundColor: '#dc2626',
+    borderColor: '#b91c1c'
+  },
+  filterPillActiveCompleted: {
+    backgroundColor: '#059669',
+    borderColor: '#047857'
+  },
+  filterPillActiveCancelled: {
+    backgroundColor: '#475569',
+    borderColor: '#334155'
+  },
+
+  // Differentiated Match Cards
+  matchCardLive: {
+    borderLeftWidth: 6,
+    borderLeftColor: '#ef4444',
+    borderColor: '#fca5a5',
+    backgroundColor: '#fffafb',
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    elevation: 4
+  },
+  matchCardScheduled: {
+    borderLeftWidth: 6,
+    borderLeftColor: '#2563eb',
+    borderColor: '#bfdbfe',
+    backgroundColor: '#ffffff'
+  },
+  matchCardCompleted: {
+    borderLeftWidth: 6,
+    borderLeftColor: '#10b981',
+    borderColor: '#bbf7d0',
+    backgroundColor: '#ffffff'
+  },
+  matchCardCancelled: {
+    borderLeftWidth: 6,
+    borderLeftColor: '#94a3b8',
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+    opacity: 0.85
   }
-});
+} as any);
