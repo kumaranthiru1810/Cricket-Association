@@ -47,6 +47,12 @@ router.post('/admin/approve-registration', requireAdminAuth, (req, res) => {
   if (type === 'SCORER') {
     return authController.updateScorerStatus({ params: { id }, body: { id, status: 'APPROVED' } }, res);
   }
+  if (type === 'UMPIRE') {
+    return authController.updateUmpireStatus({ params: { id }, body: { id, status: 'APPROVED' } }, res);
+  }
+  if (type === 'PLAYER' || type === 'CONTENT' || type === 'CONTENT_CREATOR') {
+    return authController.approveRegistration(req, res);
+  }
   return authController.approveTeam({ params: { id }, body: { id } }, res);
 });
 router.post('/admin/reject-registration', requireAdminAuth, (req, res) => {
@@ -54,10 +60,18 @@ router.post('/admin/reject-registration', requireAdminAuth, (req, res) => {
   if (type === 'SCORER') {
     return authController.updateScorerStatus({ params: { id }, body: { id, status: 'REJECTED', reason } }, res);
   }
+  if (type === 'UMPIRE') {
+    return authController.updateUmpireStatus({ params: { id }, body: { id, status: 'REJECTED', reason } }, res);
+  }
+  if (type === 'PLAYER' || type === 'CONTENT' || type === 'CONTENT_CREATOR') {
+    return authController.rejectRegistration(req, res);
+  }
   return authController.rejectTeam({ params: { id }, body: { id, reason } }, res);
 });
 router.post('/admin/scorer-status', requireAdminAuth, (req, res) => authController.updateScorerStatus(req, res));
+router.post('/admin/umpire-status', requireAdminAuth, (req, res) => authController.updateUmpireStatus(req, res));
 router.get('/admin/notifications', requireAdminAuth, (req, res) => authController.getAdminNotifications(req, res));
 router.patch('/admin/scorers/:id/status', requireAdminAuth, (req, res) => authController.updateScorerStatus(req, res));
+router.patch('/admin/umpires/:id/status', requireAdminAuth, (req, res) => authController.updateUmpireStatus(req, res));
 
 module.exports = router;

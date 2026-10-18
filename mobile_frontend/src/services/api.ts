@@ -355,8 +355,21 @@ export const ScorerApi = {
     email: string;
     password?: string;
     mobile?: string;
+    dateOfBirth?: string;
+    gender?: string;
+    experience?: string;
+    experienceYears?: number;
+    qualification?: string;
+    certificationNumber?: string;
+    previousOrganization?: string;
+    specialization?: string;
+    address?: string;
+    district?: string;
+    state?: string;
     taluk?: string;
     certificationLevel?: string;
+    profilePhoto?: string;
+    additionalInfo?: string;
     pin?: string;
     otp?: string;
   }) => {
@@ -444,6 +457,13 @@ export const ScorerApi = {
 
   updateScorerStatus: async (idOrEmail: string, status: string, reason?: string) => {
     return request('/auth/admin/scorer-status', {
+      method: 'POST',
+      body: JSON.stringify({ id: idOrEmail, email: idOrEmail, status, reason })
+    });
+  },
+
+  updateUmpireStatus: async (idOrEmail: string, status: string, reason?: string) => {
+    return request('/auth/admin/umpire-status', {
       method: 'POST',
       body: JSON.stringify({ id: idOrEmail, email: idOrEmail, status, reason })
     });
@@ -938,4 +958,92 @@ export const TeamApi = {
   }
 };
 
+export const UmpireApi = {
+  // --- UMPIRE PROFILE ---
+  getProfile: async () => {
+    return request('/umpire/profile');
+  },
+
+  updateProfile: async (payload: {
+    mobile?: string;
+    taluk?: string;
+    certificationLevel?: string;
+    experienceYears?: number;
+    name?: string;
+  }) => {
+    return request('/umpire/profile', {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  // --- ASSIGNED MATCHES ---
+  getMatches: async (filter?: string) => {
+    const q = filter ? `?filter=${encodeURIComponent(filter)}` : '';
+    return request(`/umpire/matches${q}`);
+  },
+
+  // --- MATCH SUPERVISION & DETAILS ---
+  getMatchById: async (matchId: string) => {
+    return request(`/umpire/matches/${matchId}`);
+  },
+
+  // --- MATCH CONTROL ---
+  startMatch: async (matchId: string, payload?: { tossWinner?: string; tossWinnerId?: string; tossDecision?: string }) => {
+    return request(`/umpire/matches/${matchId}/start`, {
+      method: 'PUT',
+      body: JSON.stringify(payload || {})
+    });
+  },
+
+  updateMatchStatus: async (matchId: string, status: string, reason?: string) => {
+    return request(`/umpire/matches/${matchId}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status, reason })
+    });
+  },
+
+  // --- UMPIRE DECISIONS ---
+  recordDecision: async (
+    matchId: string,
+    decision: {
+      decisionType: string;
+      description?: string;
+      inning?: number;
+      over?: number;
+      ball?: number;
+    }
+  ) => {
+    return request(`/umpire/matches/${matchId}/decisions`, {
+      method: 'POST',
+      body: JSON.stringify(decision)
+    });
+  },
+
+  getDecisions: async (matchId: string) => {
+    return request(`/umpire/matches/${matchId}/decisions`);
+  },
+
+  // --- CONFIRM RESULT ---
+  confirmResult: async (
+    matchId: string,
+    payload: {
+      resultSummary?: string;
+      result?: string;
+      notes?: string;
+      playerOfMatch?: string;
+    }
+  ) => {
+    return request(`/umpire/matches/${matchId}/result`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  logout: async () => {
+    return ScorerApi.logout();
+  }
+};
+
 export const authService = ScorerApi;
+

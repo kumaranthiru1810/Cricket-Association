@@ -16,7 +16,7 @@ import { useAppNavigation } from '../../navigation/AppNavigator';
 import SharedBackground from '../../components/scorer/SharedBackground';
 import { ScorerApi } from '../../services/api';
 
-export type RegistrationRole = 'PLAYER' | 'TEAM' | 'SCORER';
+export type RegistrationRole = 'PLAYER' | 'TEAM' | 'SCORER' | 'UMPIRE';
 
 export interface SquadPlayer {
   id: string;
@@ -41,6 +41,37 @@ const BOWLING_STYLES = ['Right Arm Fast/Medium', 'Right Arm Spin', 'Left Arm Ort
 const TALUKS = ['Virudhunagar', 'Sivakasi', 'Rajapalayam', 'Srivilliputhur', 'Aruppukottai', 'Sattur', 'Watrap'];
 const TALUK_OPTIONS = [...TALUKS, 'Other'];
 const SCORER_LEVELS = ['District Certified', 'State Panel', 'Club Scorer', 'Trainee Scorer'];
+
+const UMPIRE_QUALIFICATIONS = [
+  'State Panel A (Senior)',
+  'State Panel B',
+  'BCCI Level 1 Certified',
+  'District Senior Panel',
+  'District Certified Umpire',
+  'Trainee Umpire'
+];
+const GENDERS = ['Male', 'Female', 'Other'];
+const UMPIRE_SPECIALIZATIONS = [
+  'On-field Umpire',
+  'Third / TV Umpire',
+  'Reserve Umpire',
+  'Match Referee & Official'
+];
+const DISTRICT_OPTIONS = [
+  'Virudhunagar',
+  'Madurai',
+  'Sivakasi',
+  'Rajapalayam',
+  'Srivilliputhur',
+  'Aruppukottai',
+  'Sattur',
+  'Watrap',
+  'Chennai',
+  'Coimbatore',
+  'Tirunelveli',
+  'Other'
+];
+const STATE_OPTIONS = ['Tamil Nadu', 'Kerala', 'Karnataka', 'Andhra Pradesh', 'Other'];
 
 const SAMPLE_15_SQUAD: Array<{ name: string; email: string; role: string }> = [
   { name: 'R. Saravanan', email: 'saravanan.r@strikerscc.org', role: 'Captain' },
@@ -68,6 +99,7 @@ export default function RegistrationScreen() {
     if (r === 'PLAYER') return 'PLAYER';
     if (r === 'TEAM' || r === 'COACH') return 'TEAM';
     if (r === 'SCORER') return 'SCORER';
+    if (r === 'UMPIRE') return 'UMPIRE';
     return 'PLAYER';
   };
 
@@ -122,6 +154,27 @@ export default function RegistrationScreen() {
   const [sLevel, setSLevel] = useState<string>('District Certified');
   const [sAgreed, setSAgreed] = useState<boolean>(true);
 
+  // 4. UMPIRE REGISTRATION STATE
+  const [uName, setUName] = useState<string>('');
+  const [uEmail, setUEmail] = useState<string>('');
+  const [uMobile, setUMobile] = useState<string>('');
+  const [uDob, setUDob] = useState<string>('');
+  const [uGender, setUGender] = useState<string>('Male');
+  const [uExperience, setUExperience] = useState<string>('');
+  const [uYearsOfExperience, setUYearsOfExperience] = useState<string>('');
+  const [uQualification, setUQualification] = useState<string>('District Certified Umpire');
+  const [uAddress, setUAddress] = useState<string>('');
+  const [uDistrict, setUDistrict] = useState<string>('Virudhunagar');
+  const [uCustomDistrict, setUCustomDistrict] = useState<string>('');
+  const [uState, setUState] = useState<string>('Tamil Nadu');
+  const [uProfilePhoto, setUProfilePhoto] = useState<string>('');
+  const [uCertNumber, setUCertNumber] = useState<string>('');
+  const [uPrevOrg, setUPrevOrg] = useState<string>('');
+  const [uSpecialization, setUSpecialization] = useState<string>('On-field Umpire');
+  const [uAdditionalInfo, setUAdditionalInfo] = useState<string>('');
+  const [uAgreed, setUAgreed] = useState<boolean>(true);
+  const [showOptionalUmpireFields, setShowOptionalUmpireFields] = useState<boolean>(false);
+
   // Modal Dropdown State
   const [pickerState, setPickerState] = useState<{
     visible: boolean;
@@ -138,13 +191,15 @@ export default function RegistrationScreen() {
   const getTargetEmail = (): string => {
     if (activeRole === 'PLAYER') return pEmail.trim().toLowerCase();
     if (activeRole === 'TEAM') return coachEmail.trim().toLowerCase();
-    return sEmail.trim().toLowerCase();
+    if (activeRole === 'SCORER') return sEmail.trim().toLowerCase();
+    return uEmail.trim().toLowerCase();
   };
 
   const getTargetName = (): string => {
     if (activeRole === 'PLAYER') return pName.trim();
     if (activeRole === 'TEAM') return coachName.trim();
-    return sName.trim();
+    if (activeRole === 'SCORER') return sName.trim();
+    return uName.trim();
   };
 
   const switchRole = (role: RegistrationRole) => {
@@ -550,6 +605,110 @@ export default function RegistrationScreen() {
     }
   };
 
+  // 4. Submit Umpire Registration
+  const handleUmpireSubmit = async () => {
+    setStatusMessage(null);
+    setStatusType(null);
+
+    const name = uName.trim();
+    const email = uEmail.trim().toLowerCase();
+    const targetDistrict = uDistrict === 'Other' ? uCustomDistrict.trim() : uDistrict;
+
+    if (!name) {
+      setStatusMessage('Please enter Umpire Full Name.');
+      setStatusType('error');
+      return;
+    }
+    if (!email || !validateEmail(email)) {
+      setStatusMessage('Please enter a valid Umpire Email address.');
+      setStatusType('error');
+      return;
+    }
+    if (!uExperience.trim()) {
+      setStatusMessage('Please enter Umpire Experience.');
+      setStatusType('error');
+      return;
+    }
+    if (!uQualification.trim()) {
+      setStatusMessage('Please select Umpire Certification / Qualification.');
+      setStatusType('error');
+      return;
+    }
+    if (uDistrict === 'Other' && !targetDistrict) {
+      setStatusMessage('Please specify your District name.');
+      setStatusType('error');
+      return;
+    }
+    if (!uState.trim()) {
+      setStatusMessage('Please enter State.');
+      setStatusType('error');
+      return;
+    }
+    if (!isEmailVerified) {
+      setStatusMessage('Please verify your email with the OTP code first.');
+      setStatusType('error');
+      return;
+    }
+    if (!password || password.length < 4) {
+      setStatusMessage('Please enter a password of at least 4 characters.');
+      setStatusType('error');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setStatusMessage('Passwords do not match.');
+      setStatusType('error');
+      return;
+    }
+    if (!uAgreed) {
+      setStatusMessage('Please accept the official Umpires Code of Conduct declaration.');
+      setStatusType('error');
+      return;
+    }
+
+    setIsLoading(true);
+    setStatusMessage('Submitting Official Umpire Registration...');
+    setStatusType('info');
+
+    try {
+      const resp = await ScorerApi.registerUmpire({
+        name,
+        email,
+        password,
+        experience: uExperience.trim(),
+        experienceYears: uYearsOfExperience.trim() ? parseInt(uYearsOfExperience.trim(), 10) : undefined,
+        qualification: uQualification,
+        certificationNumber: uCertNumber.trim() || undefined,
+        previousOrganization: uPrevOrg.trim() || undefined,
+        specialization: uSpecialization,
+        district: targetDistrict,
+        state: uState.trim(),
+        taluk: targetDistrict,
+        profilePhoto: uProfilePhoto.trim() || undefined,
+        additionalInfo: uAdditionalInfo.trim() || undefined,
+        otp: otpCode.trim()
+      });
+
+      setIsLoading(false);
+      const umpireNotice = `✓ Registration Request Submitted!\n\nWelcome ${name}!\nYour Umpire Registration is PENDING Admin approval.\n\nOnce approved by District Administrator, you can log in with your credentials to access the Official Umpire Dashboard.`;
+      setStatusMessage(resp?.message || umpireNotice);
+      setStatusType('success');
+
+      if (Platform.OS === 'web') {
+        alert(umpireNotice);
+      } else {
+        Alert.alert(
+          'Registration Request Submitted',
+          `Welcome ${name}!\n\nYour Umpire Registration is PENDING Admin approval.\n\nOnce approved by District Administrator, you can log in with your credentials to access the Official Umpire Dashboard.`
+        );
+      }
+      setTimeout(() => navigate('Login', { initialRole: 'UMPIRE' }), 1500);
+    } catch (err: any) {
+      setIsLoading(false);
+      setStatusMessage(err?.message || 'Umpire registration failed. Please try again.');
+      setStatusType('error');
+    }
+  };
+
   // Reusable Dropdown Component
   const DropdownField = ({
     label,
@@ -766,6 +925,15 @@ export default function RegistrationScreen() {
                 >
                   <Text style={[styles.roleTabText, activeRole === 'SCORER' && styles.roleTabTextActive]}>
                     📋 Scorer
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.roleTab, activeRole === 'UMPIRE' && styles.roleTabActive]}
+                  onPress={() => switchRole('UMPIRE')}
+                >
+                  <Text style={[styles.roleTabText, activeRole === 'UMPIRE' && styles.roleTabTextActive]}>
+                    ⚖️ Umpire
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1178,6 +1346,220 @@ export default function RegistrationScreen() {
                       <ActivityIndicator color="#000000" size="small" />
                     ) : (
                       <Text style={styles.submitBtnText}>Submit Scorer Registration</Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+
+              {/* ========================================================= */}
+              {/* 4. UMPIRE FORM */}
+              {/* ========================================================= */}
+              {activeRole === 'UMPIRE' && (
+                <>
+                  <View style={styles.sectionHeaderBox}>
+                    <Text style={styles.sectionHeaderText}>⚖️ OFFICIAL UMPIRE REGISTRATION & ACCREDITATION</Text>
+                  </View>
+
+                  {/* Row 1: Umpire Full Name */}
+                  <View style={styles.formRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Umpire Full Name *</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={uName}
+                        onChangeText={setUName}
+                        placeholder="e.g. K. Sundararajan"
+                        placeholderTextColor="#94a3b8"
+                        autoCapitalize="words"
+                      />
+                    </View>
+                  </View>
+
+                  {/* Row 2: Official Umpire Email */}
+                  <View style={styles.formRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Official Umpire Email *</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={uEmail}
+                        onChangeText={setUEmail}
+                        placeholder="e.g. sundararajan.umpire@cfvd.org"
+                        keyboardType="email-address"
+                        placeholderTextColor="#94a3b8"
+                        autoCapitalize="none"
+                      />
+                    </View>
+                  </View>
+
+                  {/* Row 3: Certification/Qualification & Umpire Experience */}
+                  <View style={styles.formRow}>
+                    <DropdownField
+                      label="Umpire Certification / Qualification *"
+                      value={uQualification}
+                      options={UMPIRE_QUALIFICATIONS}
+                      onSelect={setUQualification}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Umpire Experience *</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={uExperience}
+                        onChangeText={setUExperience}
+                        placeholder="e.g. 6 Years / Senior Panel"
+                        placeholderTextColor="#94a3b8"
+                      />
+                    </View>
+                  </View>
+
+                  {/* Row 4: District & State */}
+                  <View style={styles.formRow}>
+                    <DropdownField
+                      label="District *"
+                      value={uDistrict}
+                      options={DISTRICT_OPTIONS}
+                      onSelect={(val) => {
+                        setUDistrict(val);
+                        if (val !== 'Other') setUCustomDistrict('');
+                      }}
+                    />
+                    <DropdownField
+                      label="State *"
+                      value={uState}
+                      options={STATE_OPTIONS}
+                      onSelect={setUState}
+                    />
+                  </View>
+
+                  {/* Custom District Input if "Other" is chosen */}
+                  {uDistrict === 'Other' && (
+                    <View style={styles.formRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Specify District Name *</Text>
+                        <TextInput
+                          style={styles.input}
+                          value={uCustomDistrict}
+                          onChangeText={setUCustomDistrict}
+                          placeholder="Type your district name here..."
+                          placeholderTextColor="#94a3b8"
+                          autoCapitalize="words"
+                        />
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Toggle Optional Fields Button */}
+                  <TouchableOpacity
+                    style={styles.optionalToggleBtn}
+                    onPress={() => setShowOptionalUmpireFields(!showOptionalUmpireFields)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.optionalToggleText}>
+                      {showOptionalUmpireFields ? '▾ Hide Optional Profile Information' : '▸ Add Optional Profile Information (ID, Bio, Photos, Org)'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Optional Fields Section */}
+                  {showOptionalUmpireFields && (
+                    <View style={styles.optionalContainer}>
+                      <View style={styles.formRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.label}>Umpire ID / Certification Number</Text>
+                          <TextInput
+                            style={styles.input}
+                            value={uCertNumber}
+                            onChangeText={setUCertNumber}
+                            placeholder="e.g. TNCA-UMP-2024-042"
+                            placeholderTextColor="#94a3b8"
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.label}>Years of Experience (Numeric)</Text>
+                          <TextInput
+                            style={styles.input}
+                            value={uYearsOfExperience}
+                            onChangeText={setUYearsOfExperience}
+                            placeholder="e.g. 6"
+                            keyboardType="number-pad"
+                            placeholderTextColor="#94a3b8"
+                            maxLength={2}
+                          />
+                        </View>
+                      </View>
+
+                      <View style={styles.formRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.label}>Previous Association / Organization</Text>
+                          <TextInput
+                            style={styles.input}
+                            value={uPrevOrg}
+                            onChangeText={setUPrevOrg}
+                            placeholder="e.g. Tamil Nadu Cricket Association"
+                            placeholderTextColor="#94a3b8"
+                          />
+                        </View>
+                        <DropdownField
+                          label="Specialization"
+                          value={uSpecialization}
+                          options={UMPIRE_SPECIALIZATIONS}
+                          onSelect={setUSpecialization}
+                        />
+                      </View>
+
+                      <View style={styles.formRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.label}>Profile Photo URL</Text>
+                          <TextInput
+                            style={styles.input}
+                            value={uProfilePhoto}
+                            onChangeText={setUProfilePhoto}
+                            placeholder="https://example.com/photo.jpg"
+                            placeholderTextColor="#94a3b8"
+                            autoCapitalize="none"
+                          />
+                        </View>
+                      </View>
+
+                      <View style={styles.formRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.label}>Additional Information / Officiating Bio</Text>
+                          <TextInput
+                            style={[styles.input, { height: 60, textAlignVertical: 'top', paddingTop: 8 }]}
+                            value={uAdditionalInfo}
+                            onChangeText={setUAdditionalInfo}
+                            placeholder="Tournaments officiated, awards, or special credentials..."
+                            placeholderTextColor="#94a3b8"
+                            multiline
+                          />
+                        </View>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Verification & Password Setup */}
+                  {renderVerificationAndPasswordBlock()}
+
+                  <TouchableOpacity
+                    style={styles.checkboxRow}
+                    onPress={() => setUAgreed(!uAgreed)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.checkbox, uAgreed && styles.checkboxChecked]}>
+                      {uAgreed && <Text style={styles.checkmark}>✓</Text>}
+                    </View>
+                    <Text style={styles.checkboxLabel}>
+                      I hereby declare that all information furnished is true and I agree to abide by the official ICC / BCCI / TNCA and District Umpires Code of Conduct & Ethics.
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.submitBtn, (!isEmailVerified || isLoading) && styles.submitBtnDisabled]}
+                    onPress={handleUmpireSubmit}
+                    disabled={!isEmailVerified || isLoading}
+                  >
+                    {isLoading ? (
+                      <ActivityIndicator color="#000000" size="small" />
+                    ) : (
+                      <Text style={styles.submitBtnText}>Submit Umpire Registration</Text>
                     )}
                   </TouchableOpacity>
                 </>
@@ -1730,5 +2112,28 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#b45309',
     fontWeight: '900'
+  },
+  optionalToggleBtn: {
+    backgroundColor: '#f8fafc',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 10,
+    alignItems: 'center'
+  },
+  optionalToggleText: {
+    color: '#0284c7',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  optionalContainer: {
+    backgroundColor: '#f8fafc',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 12
   }
 });

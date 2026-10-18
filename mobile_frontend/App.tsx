@@ -11,6 +11,7 @@ import PlayerDashboardScreen from './src/screens/player/PlayerDashboardScreen';
 import TeamDashboardScreen from './src/screens/team/TeamDashboardScreen';
 import AdminDashboardScreen from './src/screens/admin/AdminDashboardScreen';
 import AdminLoginPage from './src/admin/pages/AdminLoginPage';
+import UmpireDashboardScreen from './src/screens/umpire/UmpireDashboardScreen';
 
 function MainAppShell() {
   const { currentScreen, navigate, goBack, params } = useAppNavigation();
@@ -28,6 +29,12 @@ function MainAppShell() {
           navigate('AdminLogin');
         } else if (event.data.type === 'OPEN_SCORER_MODULE' || event.data.route === '/scorer') {
           navigate('Scorer');
+        } else if (
+          event.data.type === 'OPEN_UMPIRE_DASHBOARD' ||
+          event.data.type === 'OPEN_UMPIRE_MODULE' ||
+          event.data.route === '/umpire'
+        ) {
+          navigate('Umpire', event.data.params);
         } else if (
           event.data.type === 'OPEN_PLAYER_DASHBOARD' ||
           event.data.type === 'OPEN_PLAYER_MODULE' ||
@@ -87,6 +94,8 @@ function MainAppShell() {
               navigate('AdminLogin');
             } else if (route === '/scorer' || route === '/scorer-login') {
               navigate('Scorer');
+            } else if (route === '/umpire') {
+              navigate('Umpire');
             } else if (route === '/player') {
               navigate('Player');
             } else if (route === '/team' || route === '/coach') {
@@ -132,6 +141,14 @@ function MainAppShell() {
       return <LoginScreen />;
     }
     return <ScorerNavigator onExit={(target?: any) => navigate(target || 'Registration')} initialParams={params} />;
+  }
+
+  if (currentScreen === 'Umpire') {
+    const access = checkScreenAccess('Umpire', currentUser);
+    if (!access.allowed) {
+      return <LoginScreen />;
+    }
+    return <UmpireDashboardScreen onExit={() => navigate('Home')} initialParams={params} />;
   }
 
   if (currentScreen === 'Player') {

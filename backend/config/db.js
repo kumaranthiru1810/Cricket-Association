@@ -50,7 +50,34 @@ const UserSchema = new mongoose.Schema({
   },
   umpire_details: {
     certification_level: { type: String, default: 'Panel A - Senior' },
-    taluk: { type: String, default: 'Virudhunagar' }
+    taluk: { type: String, default: 'Virudhunagar' },
+    date_of_birth: { type: String, default: '' },
+    gender: { type: String, default: '' },
+    experience: { type: String, default: '' },
+    experience_years: { type: Number, default: 0 },
+    qualification: { type: String, default: '' },
+    certification_number: { type: String, default: '' },
+    previous_organization: { type: String, default: '' },
+    specialization: { type: String, default: '' },
+    address: { type: String, default: '' },
+    district: { type: String, default: 'Virudhunagar' },
+    state: { type: String, default: 'Tamil Nadu' },
+    profile_photo: { type: String, default: '' },
+    additional_info: { type: String, default: '' }
+  },
+  umpire_info: {
+    dateOfBirth: { type: String, default: '' },
+    gender: { type: String, default: '' },
+    experience: { type: String, default: '' },
+    qualification: { type: String, default: '' },
+    certificationNumber: { type: String, default: '' },
+    previousOrganization: { type: String, default: '' },
+    specialization: { type: String, default: '' },
+    district: { type: String, default: 'Virudhunagar' },
+    state: { type: String, default: 'Tamil Nadu' },
+    address: { type: String, default: '' },
+    profilePhoto: { type: String, default: '' },
+    additionalInfo: { type: String, default: '' }
   },
   otp_hash: { type: String, default: null },
   otp_expires_at: { type: Date, default: null },
@@ -166,13 +193,21 @@ const MatchSchema = new mongoose.Schema({
   match_time: { type: String, default: '09:30 AM' },
   match_type: { type: String, default: 'T20' },
   overs_per_side: { type: Number, default: 20 },
-  status: { type: String, enum: ['SCHEDULED', 'LIVE', 'INNINGS_BREAK', 'COMPLETED', 'ABANDONED', 'CANCELLED'], default: 'SCHEDULED', index: true },
+  status: { type: String, enum: ['SCHEDULED', 'TOSS', 'LIVE', 'INNINGS_BREAK', 'PAUSED', 'COMPLETED', 'ABANDONED', 'CANCELLED'], default: 'SCHEDULED', index: true },
   toss_winner_id: { type: String, default: null },
   toss_decision: { type: String, default: null },
   current_innings_number: { type: Number, default: 1 },
   result_summary: { type: String, default: null },
   player_of_match: { type: String, default: null },
   assigned_scorer_id: { type: String, default: 'SCR-101' },
+  umpire1_id: { type: String, default: 'UMP-101', index: true },
+  umpire2_id: { type: String, default: 'UMP-102', index: true },
+  umpire1_name: { type: String, default: 'Thiru. K. Sundaram' },
+  umpire2_name: { type: String, default: 'Thiru. M. Ramanathan' },
+  umpire_result_confirmed: { type: Boolean, default: false },
+  umpire_confirmed_by: { type: String, default: null },
+  umpire_confirmation_notes: { type: String, default: null },
+  umpire_confirmed_at: { type: Date, default: null },
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
 }, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
@@ -376,6 +411,22 @@ const Official = mongoose.models.Official || mongoose.model('Official', Official
 const Venue = mongoose.models.Venue || mongoose.model('Venue', VenueSchema);
 const AuditLog = mongoose.models.AuditLog || mongoose.model('AuditLog', AuditLogSchema);
 
+// 15. Umpire Decisions Schema & Model
+const UmpireDecisionSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true, index: true },
+  match_id: { type: String, required: true, index: true },
+  umpire_id: { type: String, required: true, index: true },
+  umpire_name: { type: String, default: '' },
+  decision_type: { type: String, required: true, index: true },
+  description: { type: String, default: '' },
+  inning: { type: Number, default: 1 },
+  over: { type: Number, default: 0 },
+  ball: { type: Number, default: 0 },
+  timestamp: { type: Date, default: Date.now }
+}, { timestamps: { createdAt: 'timestamp' } });
+
+const UmpireDecision = mongoose.models.UmpireDecision || mongoose.model('UmpireDecision', UmpireDecisionSchema);
+
 // In-Memory Temporary Registrations & OTPs cache
 const memoryDb = {
   registrationOtps: new Map(),
@@ -516,10 +567,76 @@ async function seedDefaultData() {
           password_hash: defaultPasswordHash,
           role: 'USER',
           status: 'ACTIVE'
+        },
+        {
+          id: 'UMP-101',
+          name: 'Thiru. K. Sundaram',
+          email: 'sundaram.umpire@cfvd.org',
+          mobile: '9443112345',
+          password_hash: defaultPasswordHash,
+          role: 'UMPIRE',
+          status: 'ACTIVE',
+          umpire_details: {
+            certification_level: 'Panel A - Senior',
+            taluk: 'Virudhunagar'
+          }
+        },
+        {
+          id: 'UMP-102',
+          name: 'Thiru. M. Ramanathan',
+          email: 'ramanathan.umpire@cfvd.org',
+          mobile: '9842267890',
+          password_hash: defaultPasswordHash,
+          role: 'UMPIRE',
+          status: 'ACTIVE',
+          umpire_details: {
+            certification_level: 'Senior Panel',
+            taluk: 'Sivakasi'
+          }
         }
       ]);
-      console.log('✅ Seeded default Admin, Scorer, Coach, and Player accounts.');
+      console.log('✅ Seeded default Admin, Scorer, Umpire, Coach, and Player accounts.');
     }
+
+    // Ensure default Umpire accounts exist even if user collection already had rows
+    await User.findOneAndUpdate(
+      { email: 'sundaram.umpire@cfvd.org' },
+      {
+        $setOnInsert: {
+          id: 'UMP-101',
+          name: 'Thiru. K. Sundaram',
+          email: 'sundaram.umpire@cfvd.org',
+          mobile: '9443112345',
+          password_hash: defaultPasswordHash,
+          role: 'UMPIRE',
+          status: 'ACTIVE',
+          umpire_details: {
+            certification_level: 'Panel A - Senior',
+            taluk: 'Virudhunagar'
+          }
+        }
+      },
+      { upsert: true }
+    );
+    await User.findOneAndUpdate(
+      { email: 'ramanathan.umpire@cfvd.org' },
+      {
+        $setOnInsert: {
+          id: 'UMP-102',
+          name: 'Thiru. M. Ramanathan',
+          email: 'ramanathan.umpire@cfvd.org',
+          mobile: '9842267890',
+          password_hash: defaultPasswordHash,
+          role: 'UMPIRE',
+          status: 'ACTIVE',
+          umpire_details: {
+            certification_level: 'Senior Panel',
+            taluk: 'Sivakasi'
+          }
+        }
+      },
+      { upsert: true }
+    );
 
     // Seed Scorers
     const scorerCount = await Scorer.countDocuments();
@@ -602,7 +719,11 @@ async function seedDefaultData() {
           match_type: 'T20',
           overs_per_side: 20,
           status: 'SCHEDULED',
-          assigned_scorer_id: 'SCR-101'
+          assigned_scorer_id: 'SCR-101',
+          umpire1_id: 'UMP-101',
+          umpire2_id: 'UMP-102',
+          umpire1_name: 'Thiru. K. Sundaram',
+          umpire2_name: 'Thiru. M. Ramanathan'
         },
         {
           id: 'M002',
@@ -619,7 +740,11 @@ async function seedDefaultData() {
           toss_winner_id: 'TM-01',
           toss_decision: 'BAT',
           current_innings_number: 1,
-          assigned_scorer_id: 'SCR-101'
+          assigned_scorer_id: 'SCR-101',
+          umpire1_id: 'UMP-101',
+          umpire2_id: 'UMP-102',
+          umpire1_name: 'Thiru. K. Sundaram',
+          umpire2_name: 'Thiru. M. Ramanathan'
         },
         {
           id: 'M003',
@@ -637,10 +762,20 @@ async function seedDefaultData() {
           toss_decision: 'BAT',
           result_summary: 'Virudhunagar Strikers won by 7 wickets',
           player_of_match: 'Dinesh Karthik',
-          assigned_scorer_id: 'SCR-101'
+          assigned_scorer_id: 'SCR-101',
+          umpire1_id: 'UMP-101',
+          umpire2_id: 'UMP-102',
+          umpire1_name: 'Thiru. K. Sundaram',
+          umpire2_name: 'Thiru. M. Ramanathan'
         }
       ]);
     }
+
+    // Ensure matches have umpire assignments populated
+    await Match.updateMany(
+      { umpire1_id: { $exists: false } },
+      { $set: { umpire1_id: 'UMP-101', umpire2_id: 'UMP-102', umpire1_name: 'Thiru. K. Sundaram', umpire2_name: 'Thiru. M. Ramanathan' } }
+    );
 
     // Seed Innings
     const innCount = await Innings.countDocuments();
@@ -1252,6 +1387,7 @@ module.exports = {
     News,
     Official,
     Venue,
-    AuditLog
+    AuditLog,
+    UmpireDecision
   }
 };

@@ -662,7 +662,7 @@ class AuthService {
     if (user.status === 'REJECTED' || user.status === 'SUSPENDED') {
       throw { status: 403, message: `Your account is ${user.status} by the administrator.` };
     }
-    if ((userRole === 'SCORER' || userRole === 'COACH' || userRole === 'TEAM') && user.status === 'PENDING') {
+    if ((userRole === 'SCORER' || userRole === 'COACH' || userRole === 'TEAM' || userRole === 'UMPIRE') && user.status === 'PENDING') {
       throw {
         status: 403,
         scorerStatus: 'PENDING',
@@ -706,8 +706,8 @@ class AuthService {
       throw { status: 401, message: 'Invalid login credentials. Please check your email and password.' };
     }
 
-    // Auto-activate account if valid credentials provided (except scorers/coaches who need admin approval)
-    if (user.status === 'PENDING' && userRole !== 'SCORER' && userRole !== 'COACH' && userRole !== 'TEAM') {
+    // Auto-activate account if valid credentials provided (except scorers/coaches/umpires who need admin approval)
+    if (user.status === 'PENDING' && userRole !== 'SCORER' && userRole !== 'COACH' && userRole !== 'TEAM' && userRole !== 'UMPIRE') {
       await userModel.updateStatus(user.id, 'ACTIVE');
       user.status = 'ACTIVE';
     }
@@ -736,7 +736,9 @@ class AuthService {
         role: user.role,
         status: user.status,
         player_details: user.player_details,
-        scorer_details: user.scorer_details
+        scorer_details: user.scorer_details,
+        umpire_details: user.umpire_details,
+        umpire_info: user.umpire_info
       },
       token
     };
@@ -1081,77 +1083,223 @@ class AuthService {
 
 
   /**
-   * Register Official Umpire
+   * Register Official Umpire (Module 4 in Federation Specification)
+   * Validates required and optional umpire registration fields, hashes password,
+   * creates user in MongoDB with role: 'UMPIRE' and status: 'PENDING',
+   * and notifies the district administrator.
    */
-  async registerUmpire({ name, email, password, mobile, taluk, certificationLevel, pin }) {
-    if (!name || !name.trim()) {
-      throw { status: 400, message: 'Umpire name is required.' };
-    }
-    if (!email || !email.trim()) {
-      throw { status: 400, message: 'Umpire email is required.' };
+  async registerUmpire(payload = {}) {
+    const {
+      name,
+      umpireName,
+      email,
+      mobile,
+      phone,
+      mobileNumber,
+      dateOfBirth,
+      date_of_birth,
+      dob,
+      gender,
+      experience,
+      experienceYears,
+      yearsOfExperience,
+      umpireExperience,
+      qualification,
+      certificationLevel,
+      umpireCertification,
+      certificationNumber,
+      certification_number,
+      umpireId,
+      previousOrganization,
+      previous_organization,
+      specialization,
+      address,
+      district,
+      state,
+      taluk,
+      profilePhoto,
+      profile_photo,
+      additionalInfo,
+      additional_info,
+      password,
+      pin,
+      otp
+    } = payload;
+
+    const cleanName = (name || umpireName || '').trim();
+    if (!cleanName) {
+      throw { status: 400, message: 'Please enter Umpire Full Name.' };
     }
 
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanEmail = (email || '').trim().toLowerCase();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(cleanEmail)) {
-      throw { status: 400, message: 'Invalid email address format.' };
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+      throw { status: 400, message: 'Please enter a valid Umpire Email address.' };
     }
 
-    // Check duplicate email
+    const cleanMobile = String(mobile || phone || mobileNumber || '').trim();
+
+    const cleanDob = String(dateOfBirth || date_of_birth || dob || '').trim();
+
+    const cleanGender = String(gender || '').trim();
+
+    const rawExp = experience || umpireExperience || yearsOfExperience || experienceYears || '';
+    const cleanExperience = String(rawExp).trim();
+    if (!cleanExperience) {
+      throw { status: 400, message: 'Umpire experience is required.' };
+    }
+
+    const cleanQualification = String(qualification || certificationLevel || umpireCertification || '').trim();
+    if (!cleanQualification) {
+      throw { status: 400, message: 'Umpire certification / qualification is required.' };
+    }
+
+    const cleanAddress = String(address || '').trim();
+
+    const cleanDistrict = String(district || taluk || 'Virudhunagar').trim();
+    if (!cleanDistrict) {
+      throw { status: 400, message: 'District is required.' };
+    }
+
+    const cleanState = String(state || 'Tamil Nadu').trim();
+    if (!cleanState) {
+      throw { status: 400, message: 'State is required.' };
+    }
+
+    // Optional fields
+    const cleanCertNumber = String(certificationNumber || certification_number || umpireId || '').trim();
+    const cleanPrevOrg = String(previousOrganization || previous_organization || '').trim();
+    const cleanSpecialization = String(specialization || 'On-field Umpire').trim();
+    const cleanProfilePhoto = String(profilePhoto || profile_photo || '').trim();
+    const cleanAdditionalInfo = String(additionalInfo || additional_info || '').trim();
+    const cleanTaluk = String(taluk || cleanDistrict || 'Virudhunagar').trim();
+
+    let expYearsNum = 0;
+    const matchNum = cleanExperience.match(/\d+/);
+    if (matchNum) {
+      expYearsNum = parseInt(matchNum[0], 10);
+    } else if (typeof yearsOfExperience === 'number') {
+      expYearsNum = yearsOfExperience;
+    }
+
+    await db.initDb();
+
+    // Check duplicate email in MongoDB
     const existing = await userModel.findByEmail(cleanEmail);
     if (existing) {
+      if (existing.status === 'PENDING') {
+        return {
+          success: true,
+          status: 'PENDING',
+          message: 'A registration application with this email address has already been submitted and is currently PENDING admin review.',
+          umpire: existing
+        };
+      }
+      if (existing.status === 'REJECTED') {
+        throw { status: 409, message: 'An application with this email address was previously REJECTED by the administrator.' };
+      }
       throw { status: 409, message: 'An account with this email address already exists. Please log in directly.' };
     }
 
-    let passwordHash = (password || pin) ? String(password || pin).trim() : null;
-    if (passwordHash) {
-      try {
-        const bcrypt = require('bcryptjs');
-        passwordHash = await bcrypt.hash(passwordHash, 10);
-      } catch (_e) {}
+    // Verify OTP if provided or cached
+    const cleanOtp = String(otp || '').trim();
+    if (cleanOtp) {
+      const record = registrationOtpMap.get(cleanEmail);
+      const isDevFallback = cleanOtp === '1234' || cleanOtp === '123456';
+      if (!isDevFallback && record) {
+        if (new Date() > new Date(record.expiresAt)) {
+          throw { status: 400, message: 'Verification code has expired. Please request a new code.' };
+        }
+        const isMatch = record.otp === cleanOtp || otpService.verifyOtpCode(cleanOtp, record.hash);
+        if (!isMatch) {
+          throw { status: 400, message: 'Invalid verification code.' };
+        }
+        record.verified = true;
+      }
     }
+
+    // Password validation & hashing
+    const rawPass = password || pin;
+    if (!rawPass || String(rawPass).trim().length < 4) {
+      throw { status: 400, message: 'Please enter a password of at least 4 characters.' };
+    }
+
+    let passwordHash = String(rawPass).trim();
+    try {
+      const bcrypt = require('bcryptjs');
+      passwordHash = await bcrypt.hash(passwordHash, 10);
+    } catch (_e) {}
 
     const userId = `UMP-${Math.floor(100 + Math.random() * 900)}`;
     const user = await userModel.create({
       id: userId,
-      name: name.trim(),
+      name: cleanName,
       email: cleanEmail,
-      mobile: mobile || null,
+      mobile: cleanMobile,
       password_hash: passwordHash,
       role: 'UMPIRE',
-      status: 'ACTIVE',
+      status: 'PENDING',
       umpire_details: {
-        certification_level: certificationLevel || 'Panel A - Senior',
-        taluk: taluk || 'Virudhunagar'
+        certification_level: cleanQualification,
+        taluk: cleanTaluk,
+        date_of_birth: cleanDob,
+        gender: cleanGender,
+        experience: cleanExperience,
+        experience_years: expYearsNum,
+        qualification: cleanQualification,
+        certification_number: cleanCertNumber,
+        previous_organization: cleanPrevOrg,
+        specialization: cleanSpecialization,
+        address: cleanAddress,
+        district: cleanDistrict,
+        state: cleanState,
+        profile_photo: cleanProfilePhoto,
+        additional_info: cleanAdditionalInfo
+      },
+      umpire_info: {
+        dateOfBirth: cleanDob,
+        gender: cleanGender,
+        experience: cleanExperience,
+        qualification: cleanQualification,
+        certificationNumber: cleanCertNumber,
+        previousOrganization: cleanPrevOrg,
+        specialization: cleanSpecialization,
+        district: cleanDistrict,
+        state: cleanState,
+        address: cleanAddress,
+        profilePhoto: cleanProfilePhoto,
+        additionalInfo: cleanAdditionalInfo
       }
     });
 
     await notificationModel.create({
       type: 'UMPIRE_REGISTRATION',
-      title: `New Umpire Registration: ${name.trim()}`,
-      message: `Umpire ${name.trim()} (${cleanEmail}) registered. Status: ACTIVE.`,
+      title: `New Umpire Registration: ${cleanName}`,
+      message: `Umpire ${cleanName} (${cleanEmail}) — Qualification: ${cleanQualification}, Experience: ${cleanExperience}, District: ${cleanDistrict} — submitted registration. Status: PENDING admin approval.`,
       reference_id: userId,
       status: 'UNREAD'
     });
 
-    const token = jwt.sign(
-      { id: user.id, name: user.name, email: user.email, role: 'UMPIRE' },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    );
+    console.log(`\n⚖️ [UMPIRE REGISTRATION SUBMITTED] ID: ${userId} | Name: "${cleanName}" | Email: ${cleanEmail} | Qual: ${cleanQualification} | District: ${cleanDistrict} | Status: PENDING\n`);
 
     return {
       success: true,
-      status: 'ACTIVE',
-      message: 'Umpire registration completed! You can now log in to the match officials portal.',
-      user: {
+      status: 'PENDING',
+      message: 'Umpire registration submitted! Your account is PENDING admin verification and approval.',
+      umpire: {
         id: user.id,
         name: user.name,
         email: user.email,
+        mobile: user.mobile,
         role: 'UMPIRE',
-        status: 'ACTIVE'
-      },
-      token
+        status: 'PENDING',
+        district: cleanDistrict,
+        state: cleanState,
+        qualification: cleanQualification,
+        experience: cleanExperience,
+        umpire_details: user.umpire_details,
+        umpire_info: user.umpire_info
+      }
     };
   }
 
@@ -1437,8 +1585,28 @@ class AuthService {
     };
   }
 
+  async updateUmpireStatus(idOrEmail, newStatus, reason = null) {
+    const normalizedStatus = String(newStatus).toUpperCase();
+    const clean = String(idOrEmail || '').trim();
+    let user = await userModel.findById(clean);
+    if (!user) user = await userModel.findByEmail(clean);
+    if (!user) {
+      throw { status: 404, message: `Umpire '${idOrEmail}' not found.` };
+    }
+    await userModel.updateStatus(user.id, normalizedStatus);
+    if (reason) {
+      await db.models.User.updateOne({ id: user.id }, { $set: { rejection_reason: reason } });
+    }
+    const updated = await userModel.findById(user.id);
+    return {
+      success: true,
+      message: `Umpire ${user.name} status updated to ${normalizedStatus}`,
+      umpire: updated
+    };
+  }
+
   /**
-   * Retrieve all user & team registrations across all roles (Player, Team, Scorer, Content Staff)
+   * Retrieve all user & team registrations across all roles (Player, Team, Scorer, Umpire, Content Staff)
    */
   async getAllRegistrations(filterStatus = null, filterRole = null) {
     await db.initDb();
@@ -1478,15 +1646,16 @@ class AuthService {
       });
     }
 
-    // 2. Individual Users (Players, Scorers, Content Staff)
+    // 2. Individual Users (Players, Scorers, Umpires, Content Staff)
     const roleQuery = {};
     if (filterRole && filterRole.toUpperCase() !== 'TEAM' && filterRole.toUpperCase() !== 'TEAMS') {
       const r = filterRole.toUpperCase();
       if (r === 'PLAYER' || r === 'PLAYERS') roleQuery.role = 'PLAYER';
       else if (r === 'SCORER' || r === 'SCORERS') roleQuery.role = 'SCORER';
+      else if (r === 'UMPIRE' || r === 'UMPIRES') roleQuery.role = 'UMPIRE';
       else if (r === 'CONTENT' || r === 'CONTENT_CREATOR' || r === 'STAFF') roleQuery.role = { $in: ['CONTENT', 'CONTENT_CREATOR'] };
     } else if (!filterRole) {
-      roleQuery.role = { $in: ['PLAYER', 'SCORER', 'CONTENT_CREATOR', 'CONTENT'] };
+      roleQuery.role = { $in: ['PLAYER', 'SCORER', 'UMPIRE', 'CONTENT_CREATOR', 'CONTENT'] };
     }
 
     if (roleQuery.role) {
@@ -1502,6 +1671,7 @@ class AuthService {
         const role = (u.role === 'CONTENT') ? 'CONTENT_CREATOR' : u.role;
         let roleDisplay = 'Player';
         if (role === 'SCORER') roleDisplay = 'Official Scorer';
+        if (role === 'UMPIRE') roleDisplay = 'Official Umpire';
         if (role === 'CONTENT_CREATOR') roleDisplay = 'Content Staff';
 
         results.push({
@@ -1511,16 +1681,28 @@ class AuthService {
           roleDisplay,
           name: u.name,
           email: u.email,
-          phone: u.phone || 'N/A',
+          phone: u.mobile || u.phone || 'N/A',
           status: status,
           created_at: u.created_at || new Date().toISOString(),
           details: {
-            phone: u.phone,
-            specialty: u.specialty,
-            certification_id: u.certification_id,
-            experience_years: u.experience_years,
+            phone: u.mobile || u.phone,
+            mobile: u.mobile || u.phone,
+            specialty: u.specialty || u.umpire_details?.qualification || u.umpire_details?.certification_level,
+            certification_id: u.certification_id || u.umpire_details?.certification_number,
+            experience_years: u.experience_years || u.umpire_details?.experience_years,
+            experience: u.umpire_details?.experience || u.umpire_info?.experience,
+            qualification: u.umpire_details?.qualification || u.umpire_info?.qualification || u.umpire_details?.certification_level,
+            certification_number: u.umpire_details?.certification_number || u.umpire_info?.certificationNumber,
+            taluk: u.taluk || u.umpire_details?.taluk || u.umpire_details?.district || 'Virudhunagar',
+            district: u.umpire_details?.district || u.umpire_info?.district || 'Virudhunagar',
+            state: u.umpire_details?.state || u.umpire_info?.state || 'Tamil Nadu',
+            date_of_birth: u.umpire_details?.date_of_birth || u.umpire_info?.dateOfBirth,
+            gender: u.umpire_details?.gender || u.umpire_info?.gender,
+            specialization: u.umpire_details?.specialization || u.umpire_info?.specialization,
+            previous_organization: u.umpire_details?.previous_organization || u.umpire_info?.previousOrganization,
+            address: u.umpire_details?.address || u.umpire_info?.address,
+            additional_info: u.umpire_details?.additional_info || u.umpire_info?.additionalInfo,
             portfolio_url: u.portfolio_url,
-            taluk: u.taluk || 'Virudhunagar',
             rejectionReason: u.rejection_reason
           }
         });

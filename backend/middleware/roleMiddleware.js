@@ -35,5 +35,6 @@ module.exports = {
   requireRole,
   requireAdmin: requireRole('ADMIN'),
   requireScorer: requireRole('SCORER', 'ADMIN'),
-  requirePlayer: requireRole('PLAYER', 'ADMIN')
+  requirePlayer: requireRole('PLAYER', 'ADMIN'),
+  requireUmpire: requireRole('UMPIRE', 'ADMIN')
 };

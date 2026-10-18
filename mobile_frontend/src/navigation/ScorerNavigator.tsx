@@ -33,7 +33,7 @@ export default function ScorerNavigator({ onExit, initialParams }: Props) {
       return;
     }
     const role = (user.role || '').toUpperCase();
-    if (role !== 'SCORER' && role !== 'ADMIN' && role !== 'UMPIRE') {
+    if (role !== 'SCORER' && role !== 'ADMIN') {
       if (onExit) onExit();
       return;
     }

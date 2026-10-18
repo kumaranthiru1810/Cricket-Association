@@ -29,6 +29,7 @@ import {
   Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import SharedBackground from '../../components/scorer/SharedBackground';
 import { TeamApi, getCurrentUser } from '../../services/api';
 
 export interface TeamDashboardProps {
@@ -336,8 +337,9 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
   const keeperCount = squad.filter(p => (p.role || '').toUpperCase().includes('KEEP')).length;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="light-content" backgroundColor="#020612" />
+    <SharedBackground>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+        <StatusBar barStyle="dark-content" backgroundColor="#fdfbf7" />
 
       {/* TOP HEADER */}
       <View style={styles.topHeader}>
@@ -1319,23 +1321,24 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
         </View>
       </Modal>
     </SafeAreaView>
+  </SharedBackground>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#020612'
+    backgroundColor: 'transparent'
   },
   topHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#060d1f',
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b'
+    borderBottomColor: '#e2e8f0'
   },
   headerLeft: {
     flexDirection: 'row',
@@ -1347,7 +1350,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4
   },
   exitBtnText: {
-    color: '#f59e0b',
+    color: '#d97706',
     fontSize: 22,
     fontWeight: 'bold'
   },
@@ -1355,9 +1358,9 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 8,
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    backgroundColor: '#fef3c7',
     borderWidth: 1,
-    borderColor: '#f59e0b',
+    borderColor: '#eab308',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10
@@ -1371,27 +1374,31 @@ const styles = StyleSheet.create({
     gap: 8
   },
   headerTitle: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 16,
     fontWeight: 'bold'
   },
   headerSubtitle: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 11,
     marginTop: 2
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 4
   },
   statusBadgeApproved: {
-    backgroundColor: 'rgba(16, 185, 129, 0.2)'
+    backgroundColor: '#dcfce7',
+    borderWidth: 1,
+    borderColor: '#86efac'
   },
   statusBadgePending: {
-    backgroundColor: 'rgba(245, 158, 11, 0.2)'
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#fde68a'
   },
   statusDot: {
     width: 6,
@@ -1400,15 +1407,15 @@ const styles = StyleSheet.create({
     marginRight: 4
   },
   statusDotApproved: {
-    backgroundColor: '#10b981'
+    backgroundColor: '#16a34a'
   },
   statusDotPending: {
-    backgroundColor: '#f59e0b'
+    backgroundColor: '#d97706'
   },
   statusBadgeText: {
     fontSize: 9,
     fontWeight: 'bold',
-    color: '#ffffff'
+    color: '#1e293b'
   },
   headerRight: {
     flexDirection: 'row',
@@ -1416,26 +1423,30 @@ const styles = StyleSheet.create({
     gap: 8
   },
   refreshBtn: {
-    padding: 6
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: '#f1f5f9'
   },
   refreshBtnText: {
-    fontSize: 18
+    fontSize: 16
   },
   exitTextBtn: {
-    backgroundColor: '#1e293b',
-    paddingHorizontal: 10,
+    backgroundColor: '#fee2e2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6
   },
   exitTextBtnText: {
-    color: '#ffffff',
+    color: '#dc2626',
     fontSize: 12,
-    fontWeight: '600'
+    fontWeight: '700'
   },
   tabsContainer: {
-    backgroundColor: '#060d1f',
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b'
+    borderBottomColor: '#e2e8f0'
   },
   tabsScrollContent: {
     paddingHorizontal: 12,
@@ -1446,21 +1457,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#0b1329',
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
-    borderColor: '#1e293b'
+    borderColor: '#e2e8f0'
   },
   tabButtonActive: {
-    backgroundColor: '#f59e0b',
-    borderColor: '#f59e0b'
+    backgroundColor: '#d97706',
+    borderColor: '#d97706'
   },
   tabButtonText: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 12,
     fontWeight: '600'
   },
   tabButtonTextActive: {
-    color: '#020612',
+    color: '#ffffff',
     fontWeight: 'bold'
   },
   loadingContainer: {
@@ -1470,7 +1481,7 @@ const styles = StyleSheet.create({
     padding: 24
   },
   loadingText: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 13,
     marginTop: 12
   },
@@ -1482,7 +1493,7 @@ const styles = StyleSheet.create({
     paddingBottom: 40
   },
   errorBanner: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: '#fee2e2',
     borderWidth: 1,
     borderColor: '#ef4444',
     padding: 10,
@@ -1490,17 +1501,20 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   errorBannerText: {
-    color: '#ef4444',
+    color: '#dc2626',
     fontSize: 12,
     fontWeight: 'bold'
   },
   heroCard: {
-    backgroundColor: '#0b1329',
+    backgroundColor: '#ffffff',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#f59e0b',
+    borderColor: '#e2e8f0',
     padding: 16,
-    marginBottom: 14
+    marginBottom: 14,
+    ...(Platform.OS === 'web'
+      ? ({ boxShadow: '0 2px 10px rgba(0,0,0,0.05)' } as any)
+      : { elevation: 2 })
   },
   heroTopRow: {
     flexDirection: 'row',
@@ -1510,9 +1524,9 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 12,
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    backgroundColor: '#fef3c7',
     borderWidth: 2,
-    borderColor: '#f59e0b',
+    borderColor: '#eab308',
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -1520,12 +1534,12 @@ const styles = StyleSheet.create({
     fontSize: 28
   },
   heroTeamName: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 18,
     fontWeight: 'bold'
   },
   heroDivision: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 12,
     marginTop: 2
   },
@@ -1535,42 +1549,44 @@ const styles = StyleSheet.create({
     marginTop: 6
   },
   goldBadge: {
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
-    paddingHorizontal: 6,
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4
   },
   goldBadgeText: {
-    color: '#f59e0b',
+    color: '#b45309',
     fontSize: 10,
     fontWeight: 'bold'
   },
   certBadge: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    paddingHorizontal: 6,
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4
   },
   certBadgeText: {
-    color: '#10b981',
+    color: '#15803d',
     fontSize: 10,
     fontWeight: 'bold'
   },
   approvalStamp: {
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: '#dcfce7',
+    borderWidth: 1,
+    borderColor: '#86efac',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
     alignSelf: 'flex-start'
   },
   approvalStampText: {
-    color: '#10b981',
+    color: '#15803d',
     fontSize: 10,
     fontWeight: 'bold'
   },
   heroDivider: {
     height: 1,
-    backgroundColor: '#1e293b',
+    backgroundColor: '#f1f5f9',
     marginVertical: 14
   },
   heroStatsGrid: {
@@ -1583,7 +1599,7 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   heroStatValue: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 18,
     fontWeight: 'bold'
   },
@@ -1601,30 +1617,36 @@ const styles = StyleSheet.create({
   actionBtn: {
     flex: 1,
     minWidth: 140,
-    backgroundColor: '#0b1329',
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: '#e2e8f0',
     borderRadius: 8,
     paddingVertical: 10,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    ...(Platform.OS === 'web'
+      ? ({ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' } as any)
+      : { elevation: 1 })
   },
   actionBtnIcon: {
     fontSize: 18,
     marginBottom: 4
   },
   actionBtnText: {
-    color: '#ffffff',
+    color: '#1e293b',
     fontSize: 11,
     fontWeight: '600'
   },
   card: {
-    backgroundColor: '#0b1329',
+    backgroundColor: '#ffffff',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: '#e2e8f0',
     padding: 14,
-    marginBottom: 14
+    marginBottom: 14,
+    ...(Platform.OS === 'web'
+      ? ({ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' } as any)
+      : { elevation: 2 })
   },
   cardHeader: {
     flexDirection: 'row',
@@ -1633,7 +1655,7 @@ const styles = StyleSheet.create({
     marginBottom: 10
   },
   cardTitle: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 14,
     fontWeight: 'bold'
   },
@@ -1647,7 +1669,7 @@ const styles = StyleSheet.create({
     fontSize: 11
   },
   cardActionLink: {
-    color: '#f59e0b',
+    color: '#d97706',
     fontSize: 12,
     fontWeight: '600'
   },
@@ -1657,35 +1679,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#0e1726'
+    borderBottomColor: '#f1f5f9'
   },
   detailLabel: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 12,
     flex: 1
   },
   detailValue: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 12,
     fontWeight: '500',
     flex: 1,
     textAlign: 'right'
   },
   detailValueBold: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 12,
     fontWeight: 'bold',
     flex: 1,
     textAlign: 'right'
   },
   verifiedTag: {
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: '#dcfce7',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4
   },
   verifiedTagText: {
-    color: '#10b981',
+    color: '#15803d',
     fontSize: 11,
     fontWeight: 'bold'
   },
@@ -1696,22 +1718,22 @@ const styles = StyleSheet.create({
     marginVertical: 10
   },
   roleChip: {
-    backgroundColor: '#060d1f',
+    backgroundColor: '#f8fafc',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#1e293b'
+    borderColor: '#e2e8f0'
   },
   roleChipText: {
-    color: '#94a3b8',
+    color: '#475569',
     fontSize: 11,
     fontWeight: '600'
   },
   searchBarBox: {
-    backgroundColor: '#060d1f',
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: '#cbd5e1',
     borderRadius: 8,
     paddingHorizontal: 12,
     flexDirection: 'row',
@@ -1721,7 +1743,7 @@ const styles = StyleSheet.create({
   searchBarInput: {
     flex: 1,
     paddingVertical: 8,
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 12
   },
   squadPlayerCard: {
@@ -1729,57 +1751,57 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#0e1726'
+    borderBottomColor: '#f1f5f9'
   },
   squadJerseyCircle: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#1e293b',
+    backgroundColor: '#fef3c7',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#f59e0b'
   },
   squadJerseyText: {
-    color: '#f59e0b',
+    color: '#b45309',
     fontSize: 12,
     fontWeight: 'bold'
   },
   squadPlayerName: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 13,
     fontWeight: 'bold'
   },
   captainBadge: {
-    backgroundColor: '#f59e0b',
+    backgroundColor: '#fef3c7',
     paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: 4
   },
   captainBadgeText: {
-    color: '#020612',
+    color: '#b45309',
     fontSize: 9,
     fontWeight: 'bold'
   },
   vcBadge: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#eff6ff',
     paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: 4
   },
   vcBadgeText: {
-    color: '#ffffff',
+    color: '#1d4ed8',
     fontSize: 9,
     fontWeight: 'bold'
   },
   squadPlayerMeta: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 11,
     marginTop: 2
   },
   squadPlayerEmail: {
-    color: '#64748b',
+    color: '#94a3b8',
     fontSize: 10,
     marginTop: 1
   },
@@ -1787,40 +1809,42 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: '#dcfce7',
     alignItems: 'center',
     justifyContent: 'center'
   },
   verifiedMiniBadgeText: {
-    color: '#10b981',
+    color: '#15803d',
     fontSize: 11,
     fontWeight: 'bold'
   },
   editBtnSmall: {
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    backgroundColor: '#fef3c7',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4
   },
   editBtnSmallText: {
-    color: '#f59e0b',
+    color: '#b45309',
     fontSize: 11,
     fontWeight: 'bold'
   },
   actionBtnFull: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     borderRadius: 8,
     paddingVertical: 10,
     alignItems: 'center',
     marginTop: 12
   },
   actionBtnFullText: {
-    color: '#f59e0b',
+    color: '#d97706',
     fontSize: 12,
     fontWeight: 'bold'
   },
   securityNote: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 12,
     lineHeight: 18,
     marginTop: 6
@@ -1833,31 +1857,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 14,
-    backgroundColor: '#0b1329',
+    backgroundColor: '#ffffff',
     marginRight: 6,
     borderWidth: 1,
-    borderColor: '#1e293b'
+    borderColor: '#e2e8f0'
   },
   filterPillActive: {
-    backgroundColor: '#f59e0b',
-    borderColor: '#f59e0b'
+    backgroundColor: '#d97706',
+    borderColor: '#d97706'
   },
   filterPillText: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 11,
     fontWeight: '600'
   },
   filterPillTextActive: {
-    color: '#020612',
+    color: '#ffffff',
     fontWeight: 'bold'
   },
   matchCard: {
-    backgroundColor: '#0b1329',
+    backgroundColor: '#ffffff',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: '#e2e8f0',
     padding: 12,
-    marginBottom: 10
+    marginBottom: 10,
+    ...(Platform.OS === 'web'
+      ? ({ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' } as any)
+      : { elevation: 2 })
   },
   matchCardHeader: {
     flexDirection: 'row',
@@ -1866,7 +1893,7 @@ const styles = StyleSheet.create({
     marginBottom: 8
   },
   matchCardTournament: {
-    color: '#f59e0b',
+    color: '#d97706',
     fontSize: 11,
     fontWeight: '600'
   },
@@ -1876,16 +1903,15 @@ const styles = StyleSheet.create({
     borderRadius: 4
   },
   statusPillLive: {
-    backgroundColor: '#ef4444'
+    backgroundColor: '#fee2e2'
   },
   statusPillCompleted: {
-    backgroundColor: '#10b981'
+    backgroundColor: '#dcfce7'
   },
   statusPillScheduled: {
-    backgroundColor: '#3b82f6'
+    backgroundColor: '#eff6ff'
   },
   statusPillText: {
-    color: '#ffffff',
     fontSize: 9,
     fontWeight: 'bold'
   },
@@ -1900,19 +1926,19 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   matchTeamTitle: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 13,
     fontWeight: 'bold',
     textAlign: 'center'
   },
   matchScoreText: {
-    color: '#f59e0b',
+    color: '#d97706',
     fontSize: 12,
     fontWeight: 'bold',
     marginTop: 2
   },
   matchVsSmall: {
-    color: '#64748b',
+    color: '#94a3b8',
     fontSize: 11,
     fontWeight: 'bold',
     marginHorizontal: 8
@@ -1921,7 +1947,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     borderTopWidth: 1,
-    borderTopColor: '#1e293b',
+    borderTopColor: '#f1f5f9',
     paddingTop: 8,
     marginTop: 4
   },
@@ -1930,7 +1956,7 @@ const styles = StyleSheet.create({
     fontSize: 11
   },
   tournamentSubTitle: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 11,
     marginBottom: 8
   },
@@ -1938,24 +1964,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#060d1f',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     padding: 10,
     borderRadius: 8,
     marginVertical: 6
   },
   matchTeamName: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 13,
     fontWeight: 'bold'
   },
   vsBadge: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#e2e8f0',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4
   },
   vsBadgeText: {
-    color: '#64748b',
+    color: '#475569',
     fontSize: 10,
     fontWeight: 'bold'
   },
@@ -1974,59 +2002,64 @@ const styles = StyleSheet.create({
     borderRadius: 4
   },
   liveTagRed: {
-    backgroundColor: '#ef4444'
+    backgroundColor: '#fee2e2'
   },
   liveTagBlue: {
-    backgroundColor: '#3b82f6'
+    backgroundColor: '#eff6ff'
   },
   liveTagText: {
-    color: '#ffffff',
     fontSize: 9,
     fontWeight: 'bold'
   },
   resultBanner: {
-    backgroundColor: '#060d1f',
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
     padding: 8,
     borderRadius: 6,
     marginVertical: 6
   },
   resultBannerText: {
-    color: '#38bdf8',
+    color: '#1d4ed8',
     fontSize: 11,
     fontWeight: '600',
     textAlign: 'center'
   },
   scorecardTriggerBtn: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     paddingVertical: 8,
     borderRadius: 6,
     alignItems: 'center',
     marginTop: 8
   },
   scorecardTriggerBtnText: {
-    color: '#ffffff',
+    color: '#1e293b',
     fontSize: 11,
     fontWeight: '600'
   },
   viewScorecardBtn: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     paddingVertical: 6,
     borderRadius: 6,
     alignItems: 'center',
     marginTop: 8
   },
   viewScorecardBtnText: {
-    color: '#ffffff',
+    color: '#1e293b',
     fontSize: 11,
     fontWeight: '600'
   },
   noticeTitle: {
-    color: '#f59e0b',
+    color: '#b45309',
     fontSize: 13,
     fontWeight: 'bold'
   },
   noticeBody: {
-    color: '#94a3b8',
+    color: '#475569',
     fontSize: 12,
     lineHeight: 18,
     marginTop: 4
@@ -2039,17 +2072,20 @@ const styles = StyleSheet.create({
   },
   statBox: {
     width: '23%',
-    backgroundColor: '#060d1f',
+    backgroundColor: '#ffffff',
     borderRadius: 8,
     paddingVertical: 10,
     paddingHorizontal: 4,
     alignItems: 'center',
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#1e293b'
+    borderColor: '#e2e8f0',
+    ...(Platform.OS === 'web'
+      ? ({ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' } as any)
+      : { elevation: 1 })
   },
   statBoxVal: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 16,
     fontWeight: 'bold'
   },
@@ -2063,17 +2099,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#0e1726'
+    borderBottomColor: '#f1f5f9'
   },
   notifIconCircle: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#060d1f',
+    backgroundColor: '#f8fafc',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#1e293b'
+    borderColor: '#e2e8f0'
   },
   notifIcon: {
     fontSize: 14
@@ -2084,24 +2120,26 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   notifTitle: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 13,
     fontWeight: 'bold',
     flex: 1
   },
   notifDate: {
-    color: '#64748b',
+    color: '#94a3b8',
     fontSize: 10
   },
   notifMessage: {
-    color: '#94a3b8',
+    color: '#475569',
     fontSize: 12,
     marginTop: 4,
     lineHeight: 16
   },
   emptyCard: {
-    backgroundColor: '#060d1f',
+    backgroundColor: '#ffffff',
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     padding: 20,
     alignItems: 'center'
   },
@@ -2111,7 +2149,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(2, 6, 18, 0.85)',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16
@@ -2119,11 +2157,14 @@ const styles = StyleSheet.create({
   modalContainer: {
     width: '100%',
     maxHeight: '90%',
-    backgroundColor: '#0b1329',
+    backgroundColor: '#ffffff',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#1e293b',
-    overflow: 'hidden'
+    borderColor: '#e2e8f0',
+    overflow: 'hidden',
+    ...(Platform.OS === 'web'
+      ? ({ boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' } as any)
+      : { elevation: 5 })
   },
   modalHeader: {
     flexDirection: 'row',
@@ -2131,17 +2172,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#060d1f',
+    backgroundColor: '#f8fafc',
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b'
+    borderBottomColor: '#e2e8f0'
   },
   modalHeaderTitle: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 15,
     fontWeight: 'bold'
   },
   modalHeaderSub: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 11,
     marginTop: 2
   },
@@ -2149,7 +2190,7 @@ const styles = StyleSheet.create({
     padding: 6
   },
   modalCloseBtnText: {
-    color: '#ffffff',
+    color: '#475569',
     fontSize: 16,
     fontWeight: 'bold'
   },
@@ -2160,27 +2201,28 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   inputLabel: {
-    color: '#94a3b8',
+    color: '#334155',
     fontSize: 12,
     fontWeight: '600',
     marginBottom: 6
   },
   inputField: {
-    backgroundColor: '#060d1f',
+    backgroundColor: '#ffffff',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 13,
     borderWidth: 1,
-    borderColor: '#1e293b'
+    borderColor: '#cbd5e1'
   },
   inputFieldDisabled: {
-    opacity: 0.6,
-    backgroundColor: '#020612'
+    opacity: 0.8,
+    backgroundColor: '#f1f5f9',
+    color: '#64748b'
   },
   saveBtn: {
-    backgroundColor: '#f59e0b',
+    backgroundColor: '#d97706',
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: 'center',
@@ -2191,7 +2233,7 @@ const styles = StyleSheet.create({
     opacity: 0.6
   },
   saveBtnText: {
-    color: '#020612',
+    color: '#ffffff',
     fontSize: 14,
     fontWeight: 'bold'
   },
@@ -2201,19 +2243,19 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   feedbackSuccess: {
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: '#dcfce7',
     borderWidth: 1,
     borderColor: '#10b981'
   },
   feedbackError: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: '#fee2e2',
     borderWidth: 1,
     borderColor: '#ef4444'
   },
   feedbackText: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#ffffff',
+    color: '#0f172a',
     textAlign: 'center'
   },
   scorecardLoading: {
@@ -2224,25 +2266,27 @@ const styles = StyleSheet.create({
     padding: 14
   },
   scorecardBanner: {
-    backgroundColor: '#060d1f',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     padding: 12,
     borderRadius: 8,
     marginBottom: 12,
     alignItems: 'center'
   },
   scorecardBannerTournament: {
-    color: '#f59e0b',
+    color: '#b45309',
     fontSize: 11,
     fontWeight: '600'
   },
   scorecardBannerTeams: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 15,
     fontWeight: 'bold',
     marginTop: 4
   },
   scorecardBannerResult: {
-    color: '#38bdf8',
+    color: '#0284c7',
     fontSize: 12,
     marginTop: 4
   },
@@ -2252,53 +2296,56 @@ const styles = StyleSheet.create({
   },
   inningsTabBtn: {
     flex: 1,
-    backgroundColor: '#060d1f',
+    backgroundColor: '#f8fafc',
     paddingVertical: 8,
     alignItems: 'center',
     borderRadius: 6,
     marginHorizontal: 3,
     borderWidth: 1,
-    borderColor: '#1e293b'
+    borderColor: '#e2e8f0'
   },
   inningsTabBtnActive: {
-    backgroundColor: '#1e3a8a',
+    backgroundColor: '#eff6ff',
     borderColor: '#3b82f6'
   },
   inningsTabBtnText: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 11,
     fontWeight: '600'
   },
   inningsTabBtnTextActive: {
-    color: '#ffffff'
+    color: '#1d4ed8',
+    fontWeight: 'bold'
   },
   inningsContentCard: {
-    backgroundColor: '#060d1f',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     padding: 12,
     borderRadius: 8
   },
   sectionHeader: {
-    color: '#f59e0b',
+    color: '#b45309',
     fontSize: 13,
     fontWeight: 'bold',
     marginBottom: 8
   },
   scorecardTable: {
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: '#e2e8f0',
     borderRadius: 6,
     overflow: 'hidden'
   },
   tableHeaderRow: {
     flexDirection: 'row',
-    backgroundColor: '#0b1329',
+    backgroundColor: '#f8fafc',
     paddingVertical: 6,
     paddingHorizontal: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b'
+    borderBottomColor: '#e2e8f0'
   },
   tableHeaderCell: {
-    color: '#64748b',
+    color: '#475569',
     fontSize: 10,
     fontWeight: 'bold'
   },
@@ -2308,10 +2355,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#0e1726'
+    borderBottomColor: '#f1f5f9'
   },
   tableDataName: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 12,
     fontWeight: '600'
   },
@@ -2320,11 +2367,11 @@ const styles = StyleSheet.create({
     fontSize: 9
   },
   tableDataCell: {
-    color: '#94a3b8',
+    color: '#475569',
     fontSize: 11
   },
   tableDataCellBold: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 11,
     fontWeight: 'bold'
   }

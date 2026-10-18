@@ -105,8 +105,10 @@ export default function LoginScreen() {
           navigate('Player', { user: res?.user, playerName: input });
         } else if (activeRole === 'TEAM') {
           navigate('Team', { user: res?.user, teamName: res?.user?.teamName || input });
-        } else if (activeRole === 'SCORER' || activeRole === 'UMPIRE') {
+        } else if (activeRole === 'SCORER') {
           navigate('Scorer', { user: res?.user });
+        } else if (activeRole === 'UMPIRE') {
+          navigate('Umpire', { user: res?.user });
         }
       }, 500);
 

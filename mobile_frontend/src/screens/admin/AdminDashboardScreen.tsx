@@ -43,7 +43,7 @@ export interface AdminDashboardProps {
   initialParams?: any;
 }
 
-type AdminTab = 'overview' | 'teams' | 'scorers' | 'content' | 'schedules';
+type AdminTab = 'overview' | 'teams' | 'scorers' | 'umpires' | 'content' | 'schedules';
 type FilterStatus = 'all' | 'Pending' | 'Approved' | 'Rejected';
 type MatchFilterStatus = 'all' | 'SCHEDULED' | 'LIVE' | 'COMPLETED' | 'CANCELLED';
 
@@ -218,9 +218,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
   const adminEmail = initialParams?.adminEmail || currentUser?.email || 'admin@cfvd.org';
 
-  // State for Teams and Scorers
+  // State for Teams, Scorers, Umpires
   const [scorers, setScorers] = useState<any[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
+  const [umpires, setUmpires] = useState<any[]>([]);
   const [newsList, setNewsList] = useState<any[]>([]);
 
   // Filters
@@ -229,6 +230,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
   const [teamFilter, setTeamFilter] = useState<FilterStatus>('all');
   const [teamSearchQuery, setTeamSearchQuery] = useState<string>('');
+
+  const [umpireFilter, setUmpireFilter] = useState<FilterStatus>('all');
+  const [umpireSearchQuery, setUmpireSearchQuery] = useState<string>('');
+  const [selectedUmpireForView, setSelectedUmpireForView] = useState<any | null>(null);
 
   // Initial Matches data matching user screenshot
   const INITIAL_MATCHES = [
@@ -336,7 +341,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   // Modals
   const [selectedSquadModal, setSelectedSquadModal] = useState<any | null>(null);
   const [selectedScorerModal, setSelectedScorerModal] = useState<any | null>(null);
-  const [rejectionModal, setRejectionModal] = useState<{ id: string; type: 'SCORER' | 'TEAM'; name: string } | null>(null);
+  const [rejectionModal, setRejectionModal] = useState<{ id: string; type: 'SCORER' | 'TEAM' | 'UMPIRE'; name: string } | null>(null);
   const [rejectionReasonInput, setRejectionReasonInput] = useState<string>('Documents incomplete or credentials not fulfilled');
   const [logoutModalOpen, setLogoutModalOpen] = useState<boolean>(false);
 
@@ -373,6 +378,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       if (rawRegs.length > 0) {
         const backendTeams: any[] = [];
         const backendScorers: any[] = [];
+        const backendUmpires: any[] = [];
 
         rawRegs.forEach((r: any, idx: number) => {
           let normStatus = 'Pending';
@@ -418,14 +424,37 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               approvedBy: r.details?.approvedBy || (normStatus === 'Approved' ? 'admin@cfvd.org' : null),
               rejectionReason: r.details?.rejectionReason || null
             });
+          } else if (r.type === 'UMPIRE') {
+            backendUmpires.push({
+              umpireId: r.id || r.details?.certification_id || `UMP-${101 + idx}`,
+              umpireName: r.name,
+              email: r.email,
+              phone: r.phone || r.details?.phone || r.details?.mobile || '—',
+              qualification: r.details?.qualification || r.details?.specialty || r.roleDisplay || 'District Certified Umpire',
+              experience: r.details?.experience || `${r.details?.experience_years || 2} Years`,
+              experienceYears: r.details?.experience_years || 2,
+              certificationNumber: r.details?.certification_number || r.details?.certificationNumber || '—',
+              district: r.details?.district || r.details?.taluk || 'Virudhunagar',
+              state: r.details?.state || 'Tamil Nadu',
+              specialization: r.details?.specialization || 'On-field Umpire',
+              previousOrganization: r.details?.previous_organization || r.details?.previousOrganization || '—',
+              additionalInfo: r.details?.additional_info || r.details?.additionalInfo || '',
+              status: normStatus,
+              registrationDate: r.created_at || new Date().toISOString(),
+              approvedAt: r.details?.approvedAt || null,
+              approvedBy: r.details?.approvedBy || (normStatus === 'Approved' ? 'admin@cfvd.org' : null),
+              rejectionReason: r.details?.rejectionReason || null
+            });
           }
         });
 
         setTeams(backendTeams);
         setScorers(backendScorers);
+        setUmpires(backendUmpires);
       } else {
         setTeams([]);
         setScorers([]);
+        setUmpires([]);
       }
 
       // 2. Fetch live news from MongoDB
@@ -625,9 +654,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     showNotification('✓ Scorer authorized successfully in MongoDB for official match scoring.');
   };
 
-  const handleOpenRejectModal = (id: string, type: 'SCORER' | 'TEAM', name: string) => {
+  const handleOpenRejectModal = (id: string, type: 'SCORER' | 'TEAM' | 'UMPIRE', name: string) => {
     setRejectionModal({ id, type, name });
-    setRejectionReasonInput(type === 'SCORER' ? 'Required scorer certification credentials expired. Renewal required.' : 'Documentation criteria not fulfilled');
+    setRejectionReasonInput(type === 'SCORER' ? 'Required scorer certification credentials expired. Renewal required.' : type === 'UMPIRE' ? 'Umpiring certification criteria not fulfilled. Re-submission required.' : 'Documentation criteria not fulfilled');
   };
 
   const handleConfirmReject = async () => {
@@ -646,6 +675,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         prev.map(s => (s.scorerId === id ? { ...s, status: 'Rejected', rejectionReason: reason, rejectedAt: new Date().toISOString(), rejectedBy: adminEmail } : s))
       );
       showNotification(`Scorer request rejected: ${name}.`);
+    } else if (type === 'UMPIRE') {
+      setUmpires(prev =>
+        prev.map(u => (u.umpireId === id ? { ...u, status: 'Rejected', rejectionReason: reason, rejectedAt: new Date().toISOString(), rejectedBy: adminEmail } : u))
+      );
+      showNotification(`Umpire registration request rejected: ${name}.`);
     } else {
       setTeams(prev =>
         prev.map(t => (t.teamId === id ? { ...t, status: 'Rejected', rejectionReason: reason, rejectedAt: new Date().toISOString(), rejectedBy: adminEmail } : t))
@@ -654,6 +688,23 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     }
 
     setRejectionModal(null);
+  };
+
+  // Umpire Actions
+  const handleApproveUmpire = async (umpireId: string) => {
+    const target = umpires.find(u => u.umpireId === umpireId);
+    try {
+      await ScorerApi.approveRegistration(umpireId, 'UMPIRE');
+      if (target?.email) {
+        await ScorerApi.updateUmpireStatus(target.email, 'ACTIVE');
+      }
+    } catch (e) {
+      console.warn('Backend umpire approval note:', e);
+    }
+    setUmpires(prev =>
+      prev.map(u => (u.umpireId === umpireId ? { ...u, status: 'Approved', approvedBy: adminEmail, approvedAt: new Date().toISOString(), rejectionReason: null } : u))
+    );
+    showNotification('✓ Umpire accredited & authorized for match officiating in MongoDB.');
   };
 
   // Team Actions
@@ -711,6 +762,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   const teamPending = teams.filter(t => (t.status || 'Pending') === 'Pending').length;
   const teamRejected = teams.filter(t => t.status === 'Rejected').length;
 
+  // Compute Umpire metrics
+  const umpireTotal = umpires.length;
+  const umpireApproved = umpires.filter(u => u.status === 'Approved').length;
+  const umpirePending = umpires.filter(u => (u.status || 'Pending') === 'Pending').length;
+  const umpireRejected = umpires.filter(u => u.status === 'Rejected').length;
+
   // Filtered Scorers
   const filteredScorers = useMemo(() => {
     return scorers.filter(s => {
@@ -739,6 +796,22 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       return matchFilter && matchQuery;
     });
   }, [teams, teamFilter, teamSearchQuery]);
+
+  // Filtered Umpires
+  const filteredUmpires = useMemo(() => {
+    return umpires.filter(u => {
+      const matchFilter = umpireFilter === 'all' ? true : (u.status || 'Pending') === umpireFilter;
+      const q = umpireSearchQuery.toLowerCase().trim();
+      const matchQuery =
+        !q ||
+        (u.umpireName || '').toLowerCase().includes(q) ||
+        (u.email || '').toLowerCase().includes(q) ||
+        (u.qualification || '').toLowerCase().includes(q) ||
+        (u.district || '').toLowerCase().includes(q) ||
+        (u.certificationNumber || '').toLowerCase().includes(q);
+      return matchFilter && matchQuery;
+    });
+  }, [umpires, umpireFilter, umpireSearchQuery]);
 
   // Filtered Matches
   const filteredMatches = useMemo(() => {
@@ -790,11 +863,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
   const scorerSegments = getDonutSegments(scorerApproved, scorerPending, scorerRejected, scorerTotal);
   const teamSegments = getDonutSegments(teamApproved, teamPending, teamRejected, teamTotal);
+  const umpireSegments = getDonutSegments(umpireApproved, umpirePending, umpireRejected, umpireTotal);
 
-  const totalOverall = scorerTotal + teamTotal;
-  const overallApproved = scorerApproved + teamApproved;
-  const overallPending = scorerPending + teamPending;
-  const overallRejected = scorerRejected + teamRejected;
+  const totalOverall = scorerTotal + teamTotal + umpireTotal;
+  const overallApproved = scorerApproved + teamApproved + umpireApproved;
+  const overallPending = scorerPending + teamPending + umpirePending;
+  const overallRejected = scorerRejected + teamRejected + umpireRejected;
   const overallSegments = getDonutSegments(overallApproved, overallPending, overallRejected, totalOverall);
 
   return (
@@ -878,6 +952,20 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               </Text>
               <View style={styles.tabBadgeOrange}>
                 <Text style={styles.tabBadgeOrangeText}>{scorerPending}</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Umpire Management Tab */}
+            <TouchableOpacity
+              style={[styles.adminTabBtn, activeTab === 'umpires' && styles.adminTabBtnActive]}
+              onPress={() => setActiveTab('umpires')}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.adminTabBtnText, activeTab === 'umpires' && styles.adminTabBtnTextActive]}>
+                ⚖️ Umpires
+              </Text>
+              <View style={styles.tabBadgePurple}>
+                <Text style={styles.tabBadgePurpleText}>{umpirePending}</Text>
               </View>
             </TouchableOpacity>
 
@@ -1220,6 +1308,325 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           <View style={styles.rejectionNoticeBox}>
                             <Text style={styles.rejectionNoticeLabel}>Rejection Reason:</Text>
                             <Text style={styles.rejectionNoticeText}>{s.rejectionReason}</Text>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* ─────────────────────────────────────────────────────────────
+              4B. TAB CONTENT: UMPIRE MANAGEMENT
+              ───────────────────────────────────────────────────────────── */}
+          {activeTab === 'umpires' && (
+            <View>
+              {/* TOP TWO SIDE-BY-SIDE HIGHLIGHT CARDS */}
+              <View style={[styles.highlightCardsRow, { flexDirection: isDesktop ? 'row' : 'column' }]}>
+                {/* Left Card: Umpire Management Stats */}
+                <View style={styles.navyStatCard}>
+                  <View style={styles.statCardHeader}>
+                    <View style={styles.blueIconBox}>
+                      <Text style={{ fontSize: 16 }}>⚖️</Text>
+                    </View>
+                    <Text style={styles.statCardTitle}>Umpire Accreditation</Text>
+                  </View>
+                  <Text style={styles.statCardSubtitle}>
+                    Official certified umpires and match officiating access requests across Virudhunagar District.
+                  </Text>
+
+                  {/* 4 Colored Pill Rows */}
+                  <View style={styles.pillRowsContainer}>
+                    {/* Authorized Umpires */}
+                    <View style={[styles.statRowPill, styles.rowPillGreen]}>
+                      <View style={styles.pillLeftGroup}>
+                        <View style={[styles.glowingDot, { backgroundColor: '#10b981' }]} />
+                        <Text style={[styles.pillLabel, { color: '#a7f3d0' }]}>Authorized Umpires</Text>
+                      </View>
+                      <Text style={[styles.pillCount, { color: '#4ade80' }]}>{umpireApproved}</Text>
+                    </View>
+
+                    {/* Pending Approval */}
+                    <View style={[styles.statRowPill, styles.rowPillAmber]}>
+                      <View style={styles.pillLeftGroup}>
+                        <View style={[styles.glowingDot, { backgroundColor: '#eab308' }]} />
+                        <Text style={[styles.pillLabel, { color: '#fde68a' }]}>Pending Approval</Text>
+                      </View>
+                      <Text style={[styles.pillCount, { color: '#fbbf24' }]}>{umpirePending}</Text>
+                    </View>
+
+                    {/* Rejected */}
+                    <View style={[styles.statRowPill, styles.rowPillRed]}>
+                      <View style={styles.pillLeftGroup}>
+                        <View style={[styles.glowingDot, { backgroundColor: '#ef4444' }]} />
+                        <Text style={[styles.pillLabel, { color: '#fca5a5' }]}>Rejected</Text>
+                      </View>
+                      <Text style={[styles.pillCount, { color: '#f87171' }]}>{umpireRejected}</Text>
+                    </View>
+
+                    {/* Total Umpires */}
+                    <View style={[styles.statRowPill, styles.rowPillIndigo]}>
+                      <View style={styles.pillLeftGroup}>
+                        <View style={[styles.glowingDot, { backgroundColor: '#818cf8' }]} />
+                        <Text style={[styles.pillLabel, { color: '#c7d2fe' }]}>Total Umpires</Text>
+                      </View>
+                      <Text style={[styles.pillCount, { color: '#a5b4fc' }]}>{umpireTotal}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Right Card: Status Distribution with Donut Chart */}
+                <View style={[styles.navyStatCard, styles.donutCardAlign]}>
+                  <View style={styles.donutHeader}>
+                    <Text style={{ fontSize: 16, marginRight: 6 }}>📊</Text>
+                    <Text style={styles.statCardTitle}>Status Distribution</Text>
+                  </View>
+
+                  {/* Donut Chart */}
+                  <View style={styles.donutWrapper}>
+                    <View
+                      style={[
+                        styles.donutOuterRing,
+                        !isDesktop && { width: 140, height: 140, borderRadius: 70 },
+                        Platform.OS === 'web'
+                          ? ({
+                              background: `conic-gradient(#10b981 0% ${umpireSegments.appPct}%, #f59e0b ${umpireSegments.appPct}% ${umpireSegments.appPct + umpireSegments.pendPct}%, #ef4444 ${umpireSegments.appPct + umpireSegments.pendPct}% 100%)`,
+                              backgroundImage: `conic-gradient(#10b981 0% ${umpireSegments.appPct}%, #f59e0b ${umpireSegments.appPct}% ${umpireSegments.appPct + umpireSegments.pendPct}%, #ef4444 ${umpireSegments.appPct + umpireSegments.pendPct}% 100%)`
+                            } as any)
+                          : {
+                              borderWidth: 10,
+                              borderColor: '#10b981',
+                              borderTopColor: '#10b981',
+                              borderRightColor: umpireSegments.pendPct > 0 ? '#f59e0b' : '#10b981',
+                              borderBottomColor: umpireSegments.rejPct > 0 ? '#ef4444' : '#10b981',
+                              borderLeftColor: '#10b981',
+                              backgroundColor: '#071026'
+                            }
+                      ]}
+                    >
+                      {/* Center Hole */}
+                      <View style={[styles.donutHole, !isDesktop && { width: 80, height: 80, borderRadius: 40 }]}>
+                        <Text style={[styles.donutNumber, !isDesktop && { fontSize: 24 }]}>{umpireTotal}</Text>
+                        <Text style={[styles.donutUnitLabel, !isDesktop && { fontSize: 8 }]}>UMPIRES</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Dynamic Proportional Distribution Bar */}
+                  <View style={styles.distributionBarWrapper}>
+                    <View style={styles.distributionBarTrack}>
+                      {umpireSegments.appPct > 0 && (
+                        <View style={[styles.distributionBarSegment, { width: `${umpireSegments.appPct}%`, backgroundColor: '#10b981' }]} />
+                      )}
+                      {umpireSegments.pendPct > 0 && (
+                        <View style={[styles.distributionBarSegment, { width: `${umpireSegments.pendPct}%`, backgroundColor: '#f59e0b' }]} />
+                      )}
+                      {umpireSegments.rejPct > 0 && (
+                        <View style={[styles.distributionBarSegment, { width: `${umpireSegments.rejPct}%`, backgroundColor: '#ef4444' }]} />
+                      )}
+                    </View>
+                    <View style={styles.distributionPctRow}>
+                      <Text style={[styles.distributionPctText, { color: '#6ee7b7' }]}>{umpireSegments.appPct}% Authorized</Text>
+                      <Text style={[styles.distributionPctText, { color: '#fde68a' }]}>{umpireSegments.pendPct}% Pending</Text>
+                      <Text style={[styles.distributionPctText, { color: '#fca5a5' }]}>{umpireSegments.rejPct}% Rejected</Text>
+                    </View>
+                  </View>
+
+                  {/* 3-Color Legend */}
+                  <View style={styles.donutLegendRow}>
+                    <View style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: '#10b981' }]} />
+                      <Text style={[styles.legendText, { color: '#6ee7b7' }]}>Authorized ({umpireApproved})</Text>
+                    </View>
+                    <View style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
+                      <Text style={[styles.legendText, { color: '#fde68a' }]}>Pending ({umpirePending})</Text>
+                    </View>
+                    <View style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} />
+                      <Text style={[styles.legendText, { color: '#fca5a5' }]}>Rejected ({umpireRejected})</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+
+              {/* SEARCH & FILTER TOOLBAR */}
+              <View style={styles.toolbarCard}>
+                <View style={styles.searchBox}>
+                  <Text style={styles.searchIcon}>🔍</Text>
+                  <TextInput
+                    style={styles.searchInput}
+                    value={umpireSearchQuery}
+                    onChangeText={setUmpireSearchQuery}
+                    placeholder="Search by umpire name, email, qualification or district..."
+                    placeholderTextColor="#94a3b8"
+                  />
+                </View>
+
+                <View style={styles.filterPillsGroup}>
+                  <Text style={styles.filterStatusLabel}>Filter Status:</Text>
+                  <TouchableOpacity
+                    style={[styles.filterPill, umpireFilter === 'all' && styles.filterPillActive]}
+                    onPress={() => setUmpireFilter('all')}
+                  >
+                    <Text style={[styles.filterPillText, umpireFilter === 'all' && styles.filterPillTextActive]}>
+                      All ({umpireTotal})
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.filterPill, umpireFilter === 'Pending' && styles.filterPillActive]}
+                    onPress={() => setUmpireFilter('Pending')}
+                  >
+                    <Text style={[styles.filterPillText, umpireFilter === 'Pending' && styles.filterPillTextActive]}>
+                      Pending ({umpirePending})
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.filterPill, umpireFilter === 'Approved' && styles.filterPillActive]}
+                    onPress={() => setUmpireFilter('Approved')}
+                  >
+                    <Text style={[styles.filterPillText, umpireFilter === 'Approved' && styles.filterPillTextActive]}>
+                      Approved ({umpireApproved})
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.filterPill, umpireFilter === 'Rejected' && styles.filterPillActive]}
+                    onPress={() => setUmpireFilter('Rejected')}
+                  >
+                    <Text style={[styles.filterPillText, umpireFilter === 'Rejected' && styles.filterPillTextActive]}>
+                      Rejected ({umpireRejected})
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* UMPIRES LIST CARDS */}
+              <View style={styles.itemsListContainer}>
+                {filteredUmpires.length === 0 ? (
+                  <View style={[styles.whiteItemCard, { alignItems: 'center', paddingVertical: 32 }]}>
+                    <Text style={{ fontSize: 24, marginBottom: 8 }}>⚖️</Text>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#0f172a' }}>No Umpire Registrations Found</Text>
+                    <Text style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
+                      {umpireSearchQuery ? 'No umpires matched your search query.' : 'No umpires in this category.'}
+                    </Text>
+                  </View>
+                ) : (
+                  filteredUmpires.map(u => {
+                    const isApproved = u.status === 'Approved';
+                    const isPending = (u.status || 'Pending') === 'Pending';
+                    const isRejected = u.status === 'Rejected';
+
+                    return (
+                      <View
+                        key={u.umpireId}
+                        style={[
+                          styles.whiteItemCard,
+                          isApproved && styles.cardApprovedBorder,
+                          isPending && styles.cardPendingBorder,
+                          isRejected && styles.cardRejectedBorder
+                        ]}
+                      >
+                        <View style={styles.itemCardHeaderRow}>
+                          <View style={styles.itemTitleGroup}>
+                            <View style={styles.itemTitleBadgeRow}>
+                              <Text style={styles.itemNameText}>{u.umpireName}</Text>
+                              {isApproved && (
+                                <View style={styles.badgeConfirmed}>
+                                  <Text style={styles.badgeConfirmedText}>✔ Approved</Text>
+                                </View>
+                              )}
+                              {isPending && (
+                                <View style={styles.badgePending}>
+                                  <Text style={styles.badgePendingText}>⏳ Pending</Text>
+                                </View>
+                              )}
+                              {isRejected && (
+                                <View style={styles.badgeRejected}>
+                                  <Text style={styles.badgeRejectedText}>🚫 Rejected</Text>
+                                </View>
+                              )}
+                            </View>
+                            <Text style={styles.itemIdGradeText}>
+                              ID: {u.umpireId} • Qualification: {u.qualification}
+                            </Text>
+                          </View>
+
+                          {/* Action Buttons */}
+                          <View style={styles.itemActionsRow}>
+                            <TouchableOpacity
+                              style={styles.btnOutlineGold}
+                              onPress={() => setSelectedUmpireForView(u)}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={styles.btnOutlineGoldText}>👁 View</Text>
+                            </TouchableOpacity>
+
+                            {isPending ? (
+                              <>
+                                <TouchableOpacity
+                                  style={styles.btnSuccessSm}
+                                  onPress={() => handleApproveUmpire(u.umpireId)}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={styles.btnSuccessSmText}>✔ Approve</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  style={styles.btnOutlineDanger}
+                                  onPress={() => handleOpenRejectModal(u.umpireId, 'UMPIRE', u.umpireName)}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={styles.btnOutlineDangerText}>🚫 Reject</Text>
+                                </TouchableOpacity>
+                              </>
+                            ) : isApproved ? (
+                              <TouchableOpacity
+                                style={styles.btnOutlineDanger}
+                                onPress={() => handleOpenRejectModal(u.umpireId, 'UMPIRE', u.umpireName)}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={styles.btnOutlineDangerText}>🚫 Reject</Text>
+                              </TouchableOpacity>
+                            ) : (
+                              <TouchableOpacity
+                                style={styles.btnSuccessSm}
+                                onPress={() => handleApproveUmpire(u.umpireId)}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={styles.btnSuccessSmText}>✔ Approve</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        </View>
+
+                        {/* Item Meta Details */}
+                        <View style={styles.itemMetaGrid}>
+                          <View style={styles.metaCell}>
+                            <Text style={styles.metaLabel}>Official Email</Text>
+                            <Text style={styles.metaVal}>{u.email || '—'}</Text>
+                          </View>
+                          <View style={styles.metaCell}>
+                            <Text style={styles.metaLabel}>Experience</Text>
+                            <Text style={styles.metaVal}>{u.experience || `${u.experienceYears} Years`}</Text>
+                          </View>
+                          <View style={styles.metaCell}>
+                            <Text style={styles.metaLabel}>District & State</Text>
+                            <Text style={styles.metaVal}>{u.district || 'Virudhunagar'}, {u.state || 'Tamil Nadu'}</Text>
+                          </View>
+                          <View style={styles.metaCell}>
+                            <Text style={styles.metaLabel}>Cert Number</Text>
+                            <Text style={styles.metaVal}>{u.certificationNumber || '—'}</Text>
+                          </View>
+                        </View>
+
+                        {isRejected && u.rejectionReason && (
+                          <View style={styles.rejectionNoticeBox}>
+                            <Text style={styles.rejectionNoticeLabel}>Rejection Reason:</Text>
+                            <Text style={styles.rejectionNoticeText}>{u.rejectionReason}</Text>
                           </View>
                         )}
                       </View>
@@ -1659,6 +2066,63 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   </View>
                   <Text style={styles.summaryCardTitle}>Rejected Scorers</Text>
                   <Text style={styles.summaryCardDesc}>Non-compliant or expired certification profiles</Text>
+                </TouchableOpacity>
+
+                {/* 7. Pending Umpires */}
+                <TouchableOpacity
+                  style={[styles.summaryCard, styles.cardPendingBorder]}
+                  onPress={() => {
+                    setActiveTab('umpires');
+                    setUmpireFilter('Pending');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.summaryCardTop}>
+                    <View style={[styles.summaryIconBox, { backgroundColor: 'rgba(234,179,8,0.15)' }]}>
+                      <Text style={{ fontSize: 18 }}>⚖️</Text>
+                    </View>
+                    <Text style={[styles.summaryCountText, { color: '#fbbf24' }]}>{umpirePending}</Text>
+                  </View>
+                  <Text style={styles.summaryCardTitle}>Pending Umpire Applications</Text>
+                  <Text style={styles.summaryCardDesc}>Awaiting official credential verification</Text>
+                </TouchableOpacity>
+
+                {/* 8. Approved Umpires */}
+                <TouchableOpacity
+                  style={[styles.summaryCard, styles.cardApprovedBorder]}
+                  onPress={() => {
+                    setActiveTab('umpires');
+                    setUmpireFilter('Approved');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.summaryCardTop}>
+                    <View style={[styles.summaryIconBox, { backgroundColor: 'rgba(16,185,129,0.15)' }]}>
+                      <Text style={{ fontSize: 18 }}>🛡️</Text>
+                    </View>
+                    <Text style={[styles.summaryCountText, { color: '#4ade80' }]}>{umpireApproved}</Text>
+                  </View>
+                  <Text style={styles.summaryCardTitle}>Authorized Umpires</Text>
+                  <Text style={styles.summaryCardDesc}>Accredited for district match supervision</Text>
+                </TouchableOpacity>
+
+                {/* 9. Rejected Umpires */}
+                <TouchableOpacity
+                  style={[styles.summaryCard, styles.cardRejectedBorder]}
+                  onPress={() => {
+                    setActiveTab('umpires');
+                    setUmpireFilter('Rejected');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.summaryCardTop}>
+                    <View style={[styles.summaryIconBox, { backgroundColor: 'rgba(239,68,68,0.15)' }]}>
+                      <Text style={{ fontSize: 18 }}>🚫</Text>
+                    </View>
+                    <Text style={[styles.summaryCountText, { color: '#f87171' }]}>{umpireRejected}</Text>
+                  </View>
+                  <Text style={styles.summaryCardTitle}>Rejected Umpires</Text>
+                  <Text style={styles.summaryCardDesc}>Incomplete or criteria not fulfilled</Text>
                 </TouchableOpacity>
               </View>
 
@@ -2330,6 +2794,114 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   }}
                 >
                   <Text style={styles.modalApproveBtnText}>✔ Authorize Scorer</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ─────────────────────────────────────────────────────────────
+          9B. UMPIRE DETAILS MODAL
+          ───────────────────────────────────────────────────────────── */}
+      <Modal
+        visible={!!selectedUmpireForView}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedUmpireForView(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalDialogMedium}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>{selectedUmpireForView?.umpireName}</Text>
+                <Text style={styles.modalSubtitle}>Accreditation ID: {selectedUmpireForView?.umpireId}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedUmpireForView(null)} style={styles.modalCloseBtn}>
+                <Text style={styles.modalCloseBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.detailsModalBody}>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailKey}>Accreditation Qualification:</Text>
+                <Text style={styles.detailValBold}>{selectedUmpireForView?.qualification}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailKey}>Official Email:</Text>
+                <Text style={styles.detailVal}>{selectedUmpireForView?.email}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailKey}>Phone Number:</Text>
+                <Text style={styles.detailVal}>{selectedUmpireForView?.phone || '—'}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailKey}>District & State:</Text>
+                <Text style={styles.detailVal}>
+                  {selectedUmpireForView?.district || 'Virudhunagar'}, {selectedUmpireForView?.state || 'Tamil Nadu'}
+                </Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailKey}>Experience:</Text>
+                <Text style={styles.detailVal}>
+                  {selectedUmpireForView?.experience || `${selectedUmpireForView?.experienceYears} Years`}
+                </Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailKey}>Certification Number:</Text>
+                <Text style={styles.detailVal}>{selectedUmpireForView?.certificationNumber || '—'}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailKey}>Specialization:</Text>
+                <Text style={styles.detailVal}>{selectedUmpireForView?.specialization || 'On-field Umpire'}</Text>
+              </View>
+              {selectedUmpireForView?.previousOrganization && selectedUmpireForView?.previousOrganization !== '—' && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailKey}>Previous Association:</Text>
+                  <Text style={styles.detailVal}>{selectedUmpireForView?.previousOrganization}</Text>
+                </View>
+              )}
+              <View style={styles.detailRow}>
+                <Text style={styles.detailKey}>Current Status:</Text>
+                <Text
+                  style={[
+                    styles.detailValBold,
+                    {
+                      color:
+                        selectedUmpireForView?.status === 'Approved'
+                          ? '#16a34a'
+                          : selectedUmpireForView?.status === 'Rejected'
+                            ? '#dc2626'
+                            : '#d97706'
+                    }
+                  ]}
+                >
+                  {selectedUmpireForView?.status}
+                </Text>
+              </View>
+              {selectedUmpireForView?.rejectionReason && (
+                <View style={[styles.detailRow, { flexDirection: 'column', alignItems: 'flex-start' }]}>
+                  <Text style={[styles.detailKey, { color: '#dc2626' }]}>Rejection Reason:</Text>
+                  <Text style={[styles.detailVal, { color: '#dc2626', marginTop: 4 }]}>
+                    {selectedUmpireForView?.rejectionReason}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setSelectedUmpireForView(null)}>
+                <Text style={styles.modalCancelBtnText}>Close</Text>
+              </TouchableOpacity>
+              {selectedUmpireForView?.status === 'Pending' && (
+                <TouchableOpacity
+                  style={styles.modalApproveBtn}
+                  onPress={() => {
+                    handleApproveUmpire(selectedUmpireForView.umpireId);
+                    setSelectedUmpireForView(null);
+                  }}
+                >
+                  <Text style={styles.modalApproveBtnText}>✔ Authorize Umpire</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -3028,6 +3600,18 @@ const styles = StyleSheet.create({
   },
   tabBadgeGoldText: {
     color: '#b45309',
+    fontSize: 11,
+    fontWeight: '800'
+  },
+  tabBadgePurple: {
+    backgroundColor: '#f3e8ff',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 6
+  },
+  tabBadgePurpleText: {
+    color: '#7e22ce',
     fontSize: 11,
     fontWeight: '800'
   },

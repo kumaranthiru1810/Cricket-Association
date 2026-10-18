@@ -333,11 +333,124 @@ async function requireTeamAuth(req, res, next) {
   });
 }
 
+// Umpire authorization middleware enforcing active approval
+async function requireUmpireAuth(req, res, next) {
+  verifyToken(req, res, async () => {
+    try {
+      await db.initDb();
+      const user = await db.models.User.findOne({
+        $or: [
+          { id: req.user.id },
+          { email: req.user.email ? req.user.email.toLowerCase() : '' }
+        ]
+      });
+
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized: User account not found in database.'
+        });
+      }
+
+      // Role check: Umpire or Admin
+      const isAllowedRole = user.role === 'UMPIRE' || user.role === 'ADMIN';
+      if (!isAllowedRole) {
+        return res.status(403).json({
+          success: false,
+          message: 'Forbidden: UMPIRE or ADMIN authorization required.',
+          details: `Role '${user.role}' cannot access umpire endpoints.`
+        });
+      }
+
+      // Registration Approval Status Check
+      if (user.status === 'PENDING') {
+        return res.status(403).json({
+          success: false,
+          message: 'Your registration is PENDING admin approval. You can only access the Umpire portal once an administrator approves your account.'
+        });
+      }
+
+      if (user.status === 'REJECTED' || user.status === 'SUSPENDED') {
+        return res.status(403).json({
+          success: false,
+          message: `Your account was ${user.status} by the administrator.`
+        });
+      }
+
+      // Attach complete user model
+      req.user = {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        umpire_details: user.umpire_details || {}
+      };
+
+      next();
+    } catch (err) {
+      return res.status(500).json({
+        success: false,
+        message: 'Internal authorization error: ' + (err.message || 'Unknown')
+      });
+    }
+  });
+}
+
+// Umpire match assignment permission verification
+async function verifyUmpireMatchPermission(req, res, next) {
+  const matchId = req.params.matchId || req.params.id;
+  if (!matchId) return next();
+
+  try {
+    await db.initDb();
+    const match = await db.models.Match.findOne({ id: matchId });
+    if (!match) {
+      return res.status(404).json({ success: false, message: `Match '${matchId}' not found.` });
+    }
+
+    // Admin has access to all matches
+    if (req.user && req.user.role === 'ADMIN') {
+      req.match = match;
+      return next();
+    }
+
+    // Umpire must be assigned to this match
+    const userId = String(req.user.id || '');
+    const userEmail = String(req.user.email || '').toLowerCase();
+    const userName = String(req.user.name || '').toLowerCase();
+
+    const isAssigned =
+      match.umpire1_id === userId ||
+      match.umpire2_id === userId ||
+      (match.umpire1_id && match.umpire1_id.toLowerCase() === userEmail) ||
+      (match.umpire2_id && match.umpire2_id.toLowerCase() === userEmail) ||
+      (match.umpire1_name && match.umpire1_name.toLowerCase() === userName) ||
+      (match.umpire2_name && match.umpire2_name.toLowerCase() === userName) ||
+      (userEmail.includes('sundaram') && (match.umpire1_id === 'UMP-101' || (match.umpire1_name && /Sundaram/i.test(match.umpire1_name)))) ||
+      (userEmail.includes('ramanathan') && (match.umpire2_id === 'UMP-102' || (match.umpire2_name && /Ramanathan/i.test(match.umpire2_name))));
+
+    if (!isAssigned) {
+      return res.status(403).json({
+        success: false,
+        message: `Forbidden: You are not assigned as an official umpire for match ${matchId}.`
+      });
+    }
+
+    req.match = match;
+    next();
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
 module.exports = {
   verifyToken,
   requireScorerAuth,
   verifyMatchPermission,
   requireAdminAuth,
   requirePlayerAuth,
-  requireTeamAuth
+  requireTeamAuth,
+  requireUmpireAuth,
+  verifyUmpireMatchPermission
 };

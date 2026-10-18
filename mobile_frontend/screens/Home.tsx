@@ -350,8 +350,10 @@ export default function HomeScreen() {
     const role = (sessionUser.role || '').toUpperCase();
     if (role === 'ADMIN') {
       navigate('Admin', { user: sessionUser });
-    } else if (role === 'SCORER' || role === 'UMPIRE') {
+    } else if (role === 'SCORER') {
       navigate('Scorer', { user: sessionUser });
+    } else if (role === 'UMPIRE') {
+      navigate('Umpire', { user: sessionUser });
     } else if (role === 'PLAYER') {
       navigate('Player', { user: sessionUser, playerName: sessionUser.name });
     } else if (role === 'COACH' || role === 'TEAM') {

@@ -9,6 +9,7 @@
     "migrate": "node migrations/migrate.js",
     "seed": "node seeds/seed.js",
     "test": "node tests/runTests.js",
+    "test:umpire": "node tests/test_umpire_module.js",
     "view-db": "node scripts/viewDb.js"
   },
   "dependencies": {

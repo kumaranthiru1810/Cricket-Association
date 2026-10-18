@@ -22,6 +22,7 @@ const scorerRoutes = require('./routes/scorerRoutes');
 const matchRoutes = require('./routes/matchRoutes');
 const newsRoutes = require('./routes/newsRoutes');
 const portalRoutes = require('./routes/portalRoutes');
+const umpireRoutes = require('./routes/umpireRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -71,6 +72,9 @@ app.use('/api/players', playerRoutes);
 
 // Scorer & Live Scoring APIs
 app.use('/api/scorer', scorerRoutes);
+
+// Umpire Management & Supervision APIs
+app.use('/api/umpire', umpireRoutes);
 
 // Match & Tournament APIs
 app.use('/api/matches', matchRoutes);

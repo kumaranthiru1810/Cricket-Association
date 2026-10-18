@@ -8,6 +8,7 @@ export type AppScreenName =
   | 'AdminLogin'
   | 'Registration'
   | 'Scorer'
+  | 'Umpire'
   | 'Admin'
   | 'Player'
   | 'Coach'
@@ -18,7 +19,7 @@ export interface ScreenAccessResult {
   allowed: boolean;
   reason?: 'UNAUTHENTICATED' | 'ROLE_MISMATCH';
   message?: string;
-  loginRole?: 'PLAYER' | 'TEAM' | 'SCORER' | 'ADMIN';
+  loginRole?: 'PLAYER' | 'TEAM' | 'SCORER' | 'ADMIN' | 'UMPIRE';
   portalName?: string;
 }
 
@@ -26,7 +27,8 @@ export function getUserDashboardScreen(user: any): AppScreenName {
   if (!user) return 'Home';
   const role = (user.role || '').toUpperCase();
   if (role === 'ADMIN') return 'Admin';
-  if (role === 'SCORER' || role === 'UMPIRE') return 'Scorer';
+  if (role === 'SCORER') return 'Scorer';
+  if (role === 'UMPIRE') return 'Umpire';
   if (role === 'PLAYER') return 'Player';
   if (role === 'COACH' || role === 'TEAM') return 'Team';
   return 'Home';
@@ -40,7 +42,7 @@ export function checkScreenAccess(
 
   const protectionMap: Record<
     string,
-    { roles: string[]; portalName: string; loginRole: 'PLAYER' | 'TEAM' | 'SCORER' | 'ADMIN' }
+    { roles: string[]; portalName: string; loginRole: 'PLAYER' | 'TEAM' | 'SCORER' | 'ADMIN' | 'UMPIRE' }
   > = {
     Player: {
       roles: ['PLAYER', 'ADMIN'],
@@ -48,9 +50,14 @@ export function checkScreenAccess(
       loginRole: 'PLAYER'
     },
     Scorer: {
-      roles: ['SCORER', 'UMPIRE', 'ADMIN'],
+      roles: ['SCORER', 'ADMIN'],
       portalName: 'Official Match Console',
       loginRole: 'SCORER'
+    },
+    Umpire: {
+      roles: ['UMPIRE', 'ADMIN'],
+      portalName: 'Official Umpire Console',
+      loginRole: 'UMPIRE'
     },
     Team: {
       roles: ['TEAM', 'COACH', 'ADMIN'],
@@ -150,6 +157,7 @@ export default function AppNavigator({
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const p = (window.location.pathname + window.location.search + window.location.hash).toLowerCase();
       if (p.includes('admin/login') || p.includes('admin-login')) requested = 'AdminLogin';
+      else if (p.includes('umpire')) requested = 'Umpire';
       else if (p.includes('scorer')) requested = 'Scorer';
       else if (p.includes('player')) requested = 'Player';
       else if (p.includes('team') || p.includes('coach')) requested = 'Team';
@@ -183,6 +191,7 @@ export default function AppNavigator({
           fallback === 'Player' ? '/player' :
           fallback === 'Team' ? '/team' :
           fallback === 'Scorer' ? '/scorer' :
+          fallback === 'Umpire' ? '/umpire' :
           fallback === 'Admin' ? '/admin' : '/';
 
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -212,6 +221,7 @@ export default function AppNavigator({
         else if (targetScreen === 'Login') route = '/login';
         else if (targetScreen === 'Registration') route = '/register';
         else if (targetScreen === 'Scorer') route = '/scorer';
+        else if (targetScreen === 'Umpire') route = '/umpire';
         else if (targetScreen === 'Admin') route = '/admin';
         else if (targetScreen === 'Player') route = '/player';
         else if (targetScreen === 'Team' || targetScreen === 'Coach') route = '/team';
@@ -284,6 +294,7 @@ export default function AppNavigator({
           const path = window.location.pathname.toLowerCase();
           if (path.includes('admin/login') || path.includes('admin-login')) requested = 'AdminLogin';
           else if (path.includes('admin')) requested = 'Admin';
+          else if (path.includes('umpire')) requested = 'Umpire';
           else if (path.includes('scorer')) requested = 'Scorer';
           else if (path.includes('player')) requested = 'Player';
           else if (path.includes('team') || path.includes('coach')) requested = 'Team';

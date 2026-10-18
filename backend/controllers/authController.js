@@ -322,6 +322,39 @@ class AuthController {
       res.status(400).json({ success: false, message: err.message });
     }
   }
+
+  async updateUmpireStatus(req, res) {
+    try {
+      const result = await authService.updateUmpireStatus(req.params.id || req.body.id, req.body.status, req.body.reason);
+      res.status(200).json(result);
+    } catch (err) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  }
+
+  async approveRegistration(req, res) {
+    try {
+      const { id, type } = req.body;
+      const targetId = id || req.params.id;
+      const adminId = req.user?.email || 'ADMIN';
+      const result = await authService.approveRegistration(targetId, type || 'UMPIRE', adminId);
+      res.status(200).json(result);
+    } catch (err) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  }
+
+  async rejectRegistration(req, res) {
+    try {
+      const { id, type, reason } = req.body;
+      const targetId = id || req.params.id;
+      const adminId = req.user?.email || 'ADMIN';
+      const result = await authService.rejectRegistration(targetId, type || 'UMPIRE', reason || 'Criteria not met', adminId);
+      res.status(200).json(result);
+    } catch (err) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  }
 }
 
 const authController = new AuthController();
