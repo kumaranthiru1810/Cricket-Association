@@ -2,17 +2,6 @@
  * src/screens/player/PlayerDashboardScreen.tsx
  *
  * Official Player Management Portal for Cricket Federation of Virudhunagar District (CFVD).
- * Styled with the elegant Light Theme matching the Federation Console design:
- * - Top Dark Navy Header with Gold Federation Branding, User Badge, and Red Exit Pill
- * - Warm Cream Stadium Atmosphere Background (#f6f2e9 / #f8f6f0)
- * - White Floating Sub-Navigation Tabs Bar with Amber Active Pill & Red Logout Pill
- * - Two Highlight Dark Navy Cards:
- *     1. Player Career Summary with 4 colored status rows (Matches, Runs, Wickets, Average)
- *     2. Status & Performance Distribution Donut Ring Chart with 3-Color Legend
- * - Crisp White Search & Filter Toolbar
- * - White Item Cards with Left-Accents, Status Badges, and Action Buttons (View, Edit Profile)
- * - Light Theme Modals for Profile Editing and Certified Read-Only Match Scorecards
- * - Full MongoDB Backend Integration via PlayerApi & ScorerApi
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -28,9 +17,17 @@ import {
   ActivityIndicator,
   Modal,
   Alert,
-  Platform
+  Platform,
+  useWindowDimensions
 } from 'react-native';
 import { PlayerApi, ScorerApi, getCurrentUser, setCurrentUser } from '../../services/api';
+import {
+  RefreshIcon,
+  MenuIcon,
+  CloseIcon,
+  LogoutIcon
+} from '../../admin/components/Icons';
+import PlayerSidebar, { PlayerTabType as TabType, getPlayerNavItems } from './PlayerSidebar';
 
 // Asset references
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
@@ -41,14 +38,6 @@ export interface PlayerDashboardProps {
   onExit?: () => void;
   initialParams?: any;
 }
-
-type TabType =
-  | 'overview'
-  | 'profile'
-  | 'team'
-  | 'matches'
-  | 'statistics'
-  | 'notifications';
 
 export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerDashboardProps) {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
@@ -67,6 +56,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [matchFilter, setMatchFilter] = useState<'ALL' | 'SCHEDULED' | 'LIVE' | 'COMPLETED'>('ALL');
+  const [patchCategoryFilter, setPatchCategoryFilter] = useState<'ALL' | 'UNLOCKED' | 'BATTING' | 'BOWLING' | 'POINTS'>('ALL');
 
   // Scorecard Modal State
   const [selectedScorecardMatchId, setSelectedScorecardMatchId] = useState<string | null>(null);
@@ -87,63 +77,71 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
   // Logout modal state
   const [logoutModalOpen, setLogoutModalOpen] = useState<boolean>(false);
 
+  // Responsive sidebar & header states
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
+  const isTabletOrMobile = width < 1024;
+  const isMobileS = width <= 375;
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+
   // Load all Player Data from MongoDB
   const loadPlayerData = async () => {
     try {
       setErrorMessage(null);
       setIsLoading(true);
 
-      // 1. Fetch Profile
-      const profileRes = await PlayerApi.getProfile();
-      if (profileRes && profileRes.profile) {
-        setProfile(profileRes.profile);
-        setEditBattingStyle(profileRes.profile.battingStyle || 'Right Hand Bat');
-        setEditBowlingStyle(profileRes.profile.bowlingStyle || 'Right Arm Medium');
-        setEditJerseyNumber(String(profileRes.profile.jerseyNumber || 10));
-        setEditMobile(profileRes.profile.mobile || '');
-        setEditTaluk(profileRes.profile.taluk || 'Virudhunagar');
+      // Run all API calls in parallel for speed
+      const [profileRes, teamRes, matchesRes, statsRes, notifRes] = await Promise.allSettled([
+        PlayerApi.getProfile(),
+        PlayerApi.getTeam(),
+        PlayerApi.getMatches(),
+        PlayerApi.getStatistics(),
+        PlayerApi.getNotifications()
+      ]);
+
+      // Profile
+      if (profileRes.status === 'fulfilled' && profileRes.value?.profile) {
+        const p = profileRes.value.profile;
+        setProfile(p);
+        setEditBattingStyle(p.battingStyle || 'Right Hand Bat');
+        setEditBowlingStyle(p.bowlingStyle || 'Right Arm Medium');
+        setEditJerseyNumber(String(p.jerseyNumber ?? ''));
+        setEditMobile(p.mobile || '');
+        setEditTaluk(p.taluk || '');
+      } else if (profileRes.status === 'rejected') {
+        console.warn('Profile fetch failed:', profileRes.reason?.message);
       }
 
-      // 2. Fetch Team & Squad
-      try {
-        const teamRes = await PlayerApi.getTeam();
-        if (teamRes) {
-          setTeamInfo(teamRes.team);
-          setSquad(teamRes.squad || []);
-        }
-      } catch (e) {
-        console.warn('Team fetch note:', e);
+      // Team & Squad
+      if (teamRes.status === 'fulfilled' && teamRes.value) {
+        setTeamInfo(teamRes.value.team || null);
+        setSquad(teamRes.value.squad || []);
+      } else {
+        console.warn('Team fetch note:', teamRes.status === 'rejected' ? teamRes.reason?.message : 'No data');
       }
 
-      // 3. Fetch Matches
-      try {
-        const matchesRes = await PlayerApi.getMatches();
-        if (matchesRes && matchesRes.matches) {
-          setMatches(matchesRes.matches);
-        }
-      } catch (e) {
-        console.warn('Matches fetch note:', e);
+      // Matches
+      if (matchesRes.status === 'fulfilled' && matchesRes.value?.matches) {
+        setMatches(matchesRes.value.matches);
+      } else {
+        console.warn('Matches fetch note:', matchesRes.status === 'rejected' ? matchesRes.reason?.message : 'No data');
       }
 
-      // 4. Fetch Statistics
-      try {
-        const statsRes = await PlayerApi.getStatistics();
-        if (statsRes && statsRes.statistics) {
-          setStatistics(statsRes.statistics);
-        }
-      } catch (e) {
-        console.warn('Statistics fetch note:', e);
+      // Statistics
+      if (statsRes.status === 'fulfilled' && statsRes.value?.statistics) {
+        setStatistics(statsRes.value.statistics);
+      } else {
+        console.warn('Statistics fetch note:', statsRes.status === 'rejected' ? statsRes.reason?.message : 'No data');
       }
 
-      // 5. Fetch Notifications
-      try {
-        const notifRes = await PlayerApi.getNotifications();
-        if (notifRes && notifRes.notifications) {
-          setNotifications(notifRes.notifications);
-        }
-      } catch (e) {
-        console.warn('Notifications fetch note:', e);
+      // Notifications
+      if (notifRes.status === 'fulfilled' && notifRes.value?.notifications) {
+        setNotifications(notifRes.value.notifications);
+      } else {
+        console.warn('Notifications fetch note:', notifRes.status === 'rejected' ? notifRes.reason?.message : 'No data');
       }
+
     } catch (err: any) {
       console.error('Failed to load player data:', err);
       setErrorMessage(err?.message || 'Failed to load player data. Please check connection.');
@@ -152,6 +150,23 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
       setIsRefreshing(false);
     }
   };
+
+  // Web: prevent body scrolling — only ScrollView should scroll
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+      document.documentElement.style.height = '100%';
+      document.body.style.height = '100%';
+      return () => {
+        document.body.style.overflow = prev;
+        document.documentElement.style.overflow = '';
+        document.documentElement.style.height = '';
+        document.body.style.height = '';
+      };
+    }
+  }, []);
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -167,7 +182,6 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
     loadPlayerData();
   }, [onExit]);
 
-  // Save Profile Updates
   const handleSaveProfile = async () => {
     setProfileFeedback(null);
     setIsSavingProfile(true);
@@ -198,7 +212,6 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
     }
   };
 
-  // Open Scorecard
   const handleOpenScorecard = async (matchId: string) => {
     setSelectedScorecardMatchId(matchId);
     setIsLoadingScorecard(true);
@@ -227,21 +240,43 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
     if (onExit) onExit();
   };
 
-  // Computed metrics
-  const playerName = profile?.name || initialParams?.user?.name || initialParams?.playerName || 'Karthi';
-  const playerEmail = profile?.email || initialParams?.user?.email || 'player@cfvd.org';
-  const playerRole = profile?.role || 'Batter';
-  const playerTeam = profile?.teamName || teamInfo?.name || 'Virudhunagar Spartans CC';
-  const approvalStatus = (profile?.status || 'APPROVED').toUpperCase();
-  const playerId = profile?.id || 'CFVD-PLY-101';
+  // ── Derived display values: all from DB, no hardcoded fallbacks ──
+  const playerName    = profile?.name || initialParams?.user?.name || initialParams?.playerName || '';
+  const playerEmail   = profile?.email || initialParams?.user?.email || '';
+  const playerRole    = profile?.role || '';
+  const playerTeam    = profile?.teamName || teamInfo?.name || '';
+  const approvalStatus = (profile?.status || 'PENDING').toUpperCase();
+  const playerId      = profile?.id || '';
 
-  const matchesPlayed = statistics?.batting?.matches ?? matches.length ?? 8;
-  const runsScored = statistics?.batting?.runs ?? profile?.stats?.runs ?? 245;
-  const wicketsTaken = statistics?.bowling?.wickets ?? profile?.stats?.wickets ?? 6;
-  const battingAvg = statistics?.batting?.average ?? '49.00';
-  const catchesTaken = statistics?.fielding?.catches ?? profile?.stats?.catches ?? 5;
+  // Stats: real DB values, fallback to 0 (not fake numbers)
+  const matchesPlayed = statistics?.batting?.matches  ?? matches.length;
+  const runsScored    = statistics?.batting?.runs     ?? 0;
+  const wicketsTaken  = statistics?.bowling?.wickets  ?? 0;
+  const battingAvg    = statistics?.batting?.average  ?? '0.00';
+  const catchesTaken  = statistics?.fielding?.catches ?? 0;
+  const strikeRate    = statistics?.batting?.strikeRate ?? '0.00';
+  const economy       = statistics?.bowling?.economy   ?? '0.00';
+  const highScore     = statistics?.batting?.highScore ?? 0;
+  const bestBowling   = statistics?.bowling?.bestFigures ?? '-';
+  const fiftiesCount  = statistics?.batting?.fifties   ?? 0;
+  const centuriesCount = statistics?.batting?.centuries ?? 0;
 
-  // Donut chart distribution calculations (Runs vs Wickets vs Catches)
+  // Performance Points & Patches derived from real MongoDB match & player stats
+  const performancePoints = statistics?.performancePoints ?? profile?.performancePoints ?? 0;
+  const playerTier = statistics?.tier ?? profile?.tier ?? 'BRONZE';
+  const playerTierTitle = statistics?.tierTitle ?? profile?.tierTitle ?? 'District Contender';
+  const nextTierPoints = statistics?.nextTierPoints ?? profile?.nextTierPoints ?? 100;
+  const patchesList: any[] = (statistics?.patches && statistics.patches.length > 0)
+    ? statistics.patches
+    : (profile?.patches || []);
+  const unlockedPatchesCount = statistics?.unlockedPatchesCount ?? profile?.unlockedPatchesCount ?? patchesList.filter(p => p.unlocked).length;
+
+  const displayedPatches = useMemo(() => {
+    if (patchCategoryFilter === 'ALL') return patchesList;
+    if (patchCategoryFilter === 'UNLOCKED') return patchesList.filter((p: any) => p.unlocked);
+    return patchesList.filter((p: any) => p.category === patchCategoryFilter);
+  }, [patchesList, patchCategoryFilter]);
+
   const donutSegments = useMemo(() => {
     const total = runsScored + (wicketsTaken * 10) + (catchesTaken * 5);
     if (total === 0) return { runsPct: 60, wktsPct: 25, catchPct: 15 };
@@ -251,14 +286,13 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
     return { runsPct, wktsPct, catchPct };
   }, [runsScored, wicketsTaken, catchesTaken]);
 
-  // Filtered matches
   const filteredMatches = useMemo(() => {
     return matches.filter(m => {
       const statusUpper = (m.status || 'SCHEDULED').toUpperCase();
       let matchesCategory = true;
       if (matchFilter === 'LIVE') matchesCategory = statusUpper === 'LIVE' || statusUpper === 'INNINGS_BREAK';
-      else if (matchFilter === 'SCHEDULED') matchesCategory = statusUpper === 'SCHEDULED';
-      else if (matchFilter === 'COMPLETED') matchesCategory = statusUpper === 'COMPLETED';
+      else if (matchFilter === 'SCHEDULED') matchesCategory = statusUpper === 'SCHEDULED' || statusUpper === 'UPCOMING';
+      else if (matchFilter === 'COMPLETED') matchesCategory = statusUpper === 'COMPLETED' || statusUpper === 'FINISHED';
 
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
@@ -272,147 +306,208 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
     });
   }, [matches, matchFilter, searchQuery]);
 
+  // Incoming (scheduled or live) matches from database strictly for this particular player
+  const incomingMatches = useMemo(() => {
+    const myIncoming = matches.filter(m => {
+      const statusUpper = (m.status || '').toUpperCase();
+      return (
+        statusUpper === 'SCHEDULED' ||
+        statusUpper === 'UPCOMING' ||
+        statusUpper === 'LIVE' ||
+        statusUpper === 'INNINGS_BREAK'
+      );
+    });
+
+    return myIncoming.sort((a, b) => {
+      const aLive = (a.status || '').toUpperCase() === 'LIVE' || (a.status || '').toUpperCase() === 'INNINGS_BREAK';
+      const bLive = (b.status || '').toUpperCase() === 'LIVE' || (b.status || '').toUpperCase() === 'INNINGS_BREAK';
+      if (aLive && !bLive) return -1;
+      if (!aLive && bLive) return 1;
+      return (a.date || '').localeCompare(b.date || '');
+    });
+  }, [matches]);
+
+
+  const navItems = useMemo(
+    () =>
+      getPlayerNavItems({
+        squadCount: squad.length || 15,
+        matchesCount: matches.length,
+        achievementsCount: unlockedPatchesCount,
+        notificationsCount: notifications.length
+      }),
+    [squad.length, matches.length, unlockedPatchesCount, notifications.length]
+  );
+
   return (
     <View style={styles.rootContainer}>
       <StatusBar barStyle="light-content" backgroundColor="#071026" />
 
-      {/* ─────────────────────────────────────────────────────────────
-          1. TOP MINIMAL FEDERATION HEADER
-          ───────────────────────────────────────────────────────────── */}
-      <View style={styles.topHeaderBar}>
-        <View style={styles.brandRow}>
-          <Image source={IMG_LOGO} style={styles.brandLogo} resizeMode="contain" />
-          <View style={{ marginLeft: 12 }}>
-            <Text style={styles.brandTitleMain}>CRICKET FEDERATION OF VIRUDHUNAGAR DISTRICT</Text>
-            <Text style={styles.brandTitleSub}>Official Player Portal • Career & Match Operations</Text>
-          </View>
-        </View>
+      <View style={styles.layoutRoot}>
+        <PlayerSidebar
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          playerName={playerName}
+          playerRole={playerRole}
+          jerseyNumber={profile?.jerseyNumber || '10'}
+          squadCount={squad.length || 15}
+          matchesCount={matches.length}
+          achievementsCount={unlockedPatchesCount}
+          notificationsCount={notifications.length}
+          isDesktop={isDesktop}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          isMobileOpen={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
+          onLogout={() => {
+            if (!isDesktop) setIsMobileSidebarOpen(false);
+            setLogoutModalOpen(true);
+          }}
+        />
 
-        <View style={styles.headerRightActions}>
-          <View style={styles.userBadgePill}>
-            <Text style={styles.userBadgePillText} numberOfLines={1}>👤 {playerEmail}</Text>
+        <View style={styles.mainColumn}>
+          <View style={[
+            styles.topHeaderBar,
+            isMobileS && { paddingHorizontal: width < 340 ? 8 : 10, paddingVertical: 8, gap: 6 }
+          ]}>
+            <View style={[styles.brandRow, { flexShrink: 1, minWidth: 0 }]}>
+              {!isDesktop && (
+                <TouchableOpacity
+                  style={[styles.mobileHamburgerBtn, isMobileS && { padding: 6, marginRight: 6 }]}
+                  onPress={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+                  activeOpacity={0.7}
+                  accessibilityLabel="Toggle Menu"
+                >
+                  <MenuIcon size={isMobileS ? 17 : 20} color="#f59e0b" />
+                </TouchableOpacity>
+              )}
+              <Image
+                source={IMG_LOGO}
+                style={[styles.brandLogo, isMobileS && { width: width < 340 ? 28 : 32, height: width < 340 ? 28 : 32 }]}
+                resizeMode="contain"
+              />
+              <View style={{ marginLeft: isMobileS ? 6 : 10, flexShrink: 1, minWidth: 0 }}>
+                <Text
+                  style={[
+                    styles.brandTitleMain,
+                    isMobileS && { fontSize: width < 340 ? 10.5 : 11.5, letterSpacing: 0.2 }
+                  ]}
+                  numberOfLines={1}
+                >
+                  {width < 350 ? 'CRICKET ASSOC.' : 'CRICKET ASSOCIATION'}
+                </Text>
+                <Text
+                  style={[
+                    styles.brandTitleSub,
+                    isMobileS && { fontSize: 8.5, letterSpacing: 0.2 }
+                  ]}
+                  numberOfLines={1}
+                >
+                  {width < 360 ? 'Player Portal' : 'Official Player Portal'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={[styles.headerRightActions, isMobileS && { gap: 6 }]}>
+              {isTabletOrMobile ? (
+                <>
+                  <TouchableOpacity
+                    style={styles.headerAvatarBtn}
+                    onPress={() => setActiveTab('profile')}
+                    activeOpacity={0.8}
+                    accessibilityLabel="Player Profile"
+                  >
+                    {profile?.photo || profile?.avatar ? (
+                      <Image
+                        source={{ uri: profile.photo || profile.avatar }}
+                        style={[styles.headerAvatarCircle, isMobileS && { width: 32, height: 32, borderRadius: 16 }]}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={[styles.headerAvatarCircle, isMobileS && { width: 32, height: 32, borderRadius: 16 }]}>
+                        <Text style={[styles.headerAvatarText, isMobileS && { fontSize: 13.5 }]}>
+                          {playerName ? playerName.charAt(0).toUpperCase() : 'P'}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.exitBtnIconOnly, isMobileS && { width: 32, height: 32, borderRadius: 16 }]}
+                    onPress={onExit}
+                    activeOpacity={0.8}
+                    accessibilityLabel="Exit Player Portal"
+                  >
+                    <LogoutIcon size={isMobileS ? 15 : 18} color="#ffffff" />
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={styles.userBadgePill}
+                    onPress={() => setActiveTab('profile')}
+                    activeOpacity={0.8}
+                    accessibilityLabel="View Profile"
+                  >
+                    <Text style={styles.userBadgePillText} numberOfLines={1}>👤 {playerName || 'Player'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.exitBtnPill}
+                    onPress={onExit}
+                    activeOpacity={0.8}
+                    accessibilityLabel="Exit Player Portal"
+                  >
+                    <LogoutIcon size={14} color="#ffffff" style={{ marginRight: 6 }} />
+                    <Text style={styles.exitBtnPillText}>Exit Player</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
           </View>
-          <TouchableOpacity
-            style={styles.exitBtnPill}
-            onPress={onExit}
-            activeOpacity={0.8}
-            accessibilityLabel="Exit Player Portal"
+
+          <ScrollView
+            style={styles.rightContentScrollView}
+            contentContainerStyle={[
+              styles.scrollContentContainer,
+              isMobileS && { paddingHorizontal: 10, paddingVertical: 12 }
+            ]}
+            showsVerticalScrollIndicator={true}
+            keyboardShouldPersistTaps="handled"
           >
-            <Text style={styles.exitBtnPillText}>← Exit Player</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+            <View style={styles.contentConstrained}>
 
-      {/* ─────────────────────────────────────────────────────────────
-          2. ATMOSPHERIC CREAM SCROLL CONTAINER
-          ───────────────────────────────────────────────────────────── */}
-      <ScrollView
-        style={styles.mainScrollView}
-        contentContainerStyle={styles.scrollContentContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.contentConstrained}>
+            {errorMessage && (
+              <View style={styles.errorBannerBox}>
+                <Text style={styles.errorBannerText}>{errorMessage}</Text>
+                <TouchableOpacity onPress={loadPlayerData}>
+                  <Text style={styles.retryBtnText}>Retry Connection</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
-          {/* Error Banner */}
-          {errorMessage && (
-            <View style={styles.errorBannerBox}>
-              <Text style={styles.errorBannerText}>{errorMessage}</Text>
-              <TouchableOpacity onPress={loadPlayerData}>
-                <Text style={styles.retryBtnText}>Retry Connection</Text>
+            <View style={styles.contentSectionHeader}>
+              <View style={styles.contentSectionHeaderLeft}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  {navItems.find(i => i.key === activeTab)?.icon('#000000')}
+                  <Text style={styles.contentSectionHeaderTitle}>
+                    {navItems.find(i => i.key === activeTab)?.label}
+                  </Text>
+                </View>
+                <Text style={styles.contentSectionHeaderSub}>
+                  CFVD Official Player Management Portal
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.refreshPillBtn}
+                onPress={loadPlayerData}
+                disabled={isLoading}
+                activeOpacity={0.8}
+              >
+                <RefreshIcon size={14} color="#334155" style={{ marginRight: 6 }} />
+                <Text style={styles.refreshPillBtnText}>Refresh Data</Text>
               </TouchableOpacity>
             </View>
-          )}
 
-          {/* ─────────────────────────────────────────────────────────────
-              3. SUB-NAVIGATION TABS BAR (White Card Container)
-              ───────────────────────────────────────────────────────────── */}
-          <View style={styles.tabsCardBar}>
-            {/* Overview Tab */}
-            <TouchableOpacity
-              style={[styles.tabBtn, activeTab === 'overview' && styles.tabBtnActive]}
-              onPress={() => setActiveTab('overview')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.tabBtnText, activeTab === 'overview' && styles.tabBtnTextActive]}>
-                📊 Overview
-              </Text>
-            </TouchableOpacity>
-
-            {/* Profile Tab */}
-            <TouchableOpacity
-              style={[styles.tabBtn, activeTab === 'profile' && styles.tabBtnActive]}
-              onPress={() => setActiveTab('profile')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.tabBtnText, activeTab === 'profile' && styles.tabBtnTextActive]}>
-                👤 My Profile
-              </Text>
-            </TouchableOpacity>
-
-            {/* Team & Squad Tab */}
-            <TouchableOpacity
-              style={[styles.tabBtn, activeTab === 'team' && styles.tabBtnActive]}
-              onPress={() => setActiveTab('team')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.tabBtnText, activeTab === 'team' && styles.tabBtnTextActive]}>
-                👥 My Squad
-              </Text>
-              <View style={styles.tabBadgeBlue}>
-                <Text style={styles.tabBadgeBlueText}>{squad.length || 15}</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Matches Tab */}
-            <TouchableOpacity
-              style={[styles.tabBtn, activeTab === 'matches' && styles.tabBtnActive]}
-              onPress={() => setActiveTab('matches')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.tabBtnText, activeTab === 'matches' && styles.tabBtnTextActive]}>
-                🏏 Matches
-              </Text>
-              <View style={styles.tabBadgeOrange}>
-                <Text style={styles.tabBadgeOrangeText}>{matches.length}</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Statistics Tab */}
-            <TouchableOpacity
-              style={[styles.tabBtn, activeTab === 'statistics' && styles.tabBtnActive]}
-              onPress={() => setActiveTab('statistics')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.tabBtnText, activeTab === 'statistics' && styles.tabBtnTextActive]}>
-                📈 Statistics
-              </Text>
-            </TouchableOpacity>
-
-            {/* Notices Tab */}
-            <TouchableOpacity
-              style={[styles.tabBtn, activeTab === 'notifications' && styles.tabBtnActive]}
-              onPress={() => setActiveTab('notifications')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.tabBtnText, activeTab === 'notifications' && styles.tabBtnTextActive]}>
-                🔔 Notices
-              </Text>
-              <View style={styles.tabBadgeGold}>
-                <Text style={styles.tabBadgeGoldText}>{notifications.length}</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Red Outline Logout Button */}
-            <TouchableOpacity
-              style={styles.logoutBtn}
-              onPress={() => setLogoutModalOpen(true)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.logoutBtnText}>↪ Logout</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Loading Indicator */}
           {isLoading && !isRefreshing && (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#d4af37" />
@@ -420,14 +515,9 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
             </View>
           )}
 
-          {/* ─────────────────────────────────────────────────────────────
-              4. TAB CONTENT: OVERVIEW
-              ───────────────────────────────────────────────────────────── */}
           {!isLoading && activeTab === 'overview' && (
             <View>
-              {/* TOP TWO SIDE-BY-SIDE HIGHLIGHT CARDS (Exact match to screenshot) */}
               <View style={styles.highlightCardsRow}>
-                {/* Left Card: Player Career Summary */}
                 <View style={styles.navyStatCard}>
                   <View style={styles.statCardHeader}>
                     <View style={styles.blueIconBox}>
@@ -439,9 +529,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                     Official career match statistics and live performance records across Virudhunagar District.
                   </Text>
 
-                  {/* 4 Colored Pill Rows */}
                   <View style={styles.pillRowsContainer}>
-                    {/* Matches Played */}
                     <View style={[styles.statRowPill, styles.rowPillGreen]}>
                       <View style={styles.pillLeftGroup}>
                         <View style={[styles.glowingDot, { backgroundColor: '#10b981' }]} />
@@ -450,7 +538,6 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                       <Text style={[styles.pillCount, { color: '#4ade80' }]}>{matchesPlayed}</Text>
                     </View>
 
-                    {/* Runs Scored */}
                     <View style={[styles.statRowPill, styles.rowPillAmber]}>
                       <View style={styles.pillLeftGroup}>
                         <View style={[styles.glowingDot, { backgroundColor: '#eab308' }]} />
@@ -459,7 +546,6 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                       <Text style={[styles.pillCount, { color: '#fbbf24' }]}>{runsScored}</Text>
                     </View>
 
-                    {/* Wickets Taken */}
                     <View style={[styles.statRowPill, styles.rowPillRed]}>
                       <View style={styles.pillLeftGroup}>
                         <View style={[styles.glowingDot, { backgroundColor: '#ef4444' }]} />
@@ -468,7 +554,6 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                       <Text style={[styles.pillCount, { color: '#f87171' }]}>{wicketsTaken}</Text>
                     </View>
 
-                    {/* Batting Average */}
                     <View style={[styles.statRowPill, styles.rowPillIndigo]}>
                       <View style={styles.pillLeftGroup}>
                         <View style={[styles.glowingDot, { backgroundColor: '#818cf8' }]} />
@@ -479,14 +564,12 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                   </View>
                 </View>
 
-                {/* Right Card: Performance Distribution Donut Ring */}
                 <View style={[styles.navyStatCard, styles.donutCardAlign]}>
                   <View style={styles.donutHeader}>
                     <Text style={{ fontSize: 16, marginRight: 6 }}>📊</Text>
                     <Text style={styles.statCardTitle}>Status & Distribution</Text>
                   </View>
 
-                  {/* Donut Chart with CSS Conic Gradient */}
                   <View style={styles.donutWrapper}>
                     <View
                       style={[
@@ -498,7 +581,6 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                           } as any)
                       ]}
                     >
-                      {/* Center Hole */}
                       <View style={styles.donutHole}>
                         <Text style={styles.donutNumber}>{matchesPlayed}</Text>
                         <Text style={styles.donutUnitLabel}>MATCHES</Text>
@@ -506,7 +588,6 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                     </View>
                   </View>
 
-                  {/* 3-Color Legend */}
                   <View style={styles.donutLegendRow}>
                     <View style={styles.legendItem}>
                       <View style={[styles.legendDot, { backgroundColor: '#10b981' }]} />
@@ -524,7 +605,6 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                 </View>
               </View>
 
-              {/* SEARCH & FILTER TOOLBAR */}
               <View style={styles.toolbarCard}>
                 <View style={styles.searchBox}>
                   <Text style={styles.searchIcon}>🔍</Text>
@@ -574,7 +654,6 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                 </View>
               </View>
 
-              {/* MAIN PLAYER IDENTITY CARD (Exact style to screenshot card) */}
               <View style={[styles.whiteItemCard, styles.cardApprovedBorder]}>
                 <View style={styles.itemCardHeaderRow}>
                   <View style={styles.itemTitleGroup}>
@@ -583,13 +662,15 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                       <View style={styles.badgeConfirmed}>
                         <Text style={styles.badgeConfirmedText}>✔ {approvalStatus}</Text>
                       </View>
+                      <View style={styles.tierBadgeGoldSmall}>
+                        <Text style={styles.tierBadgeGoldSmallText}>⭐ {performancePoints} PTS • {playerTierTitle}</Text>
+                      </View>
                     </View>
                     <Text style={styles.itemIdGradeText}>
                       ID: {playerId} • Grade: Division 1 League Player • Jersey: #{profile?.jerseyNumber || 10}
                     </Text>
                   </View>
 
-                  {/* Action Buttons on Right */}
                   <View style={styles.actionButtonsRow}>
                     <TouchableOpacity
                       style={styles.btnActionView}
@@ -608,7 +689,6 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                   </View>
                 </View>
 
-                {/* 4-Column Meta Details Row */}
                 <View style={styles.metaDetailsGrid}>
                   <View style={styles.metaCol}>
                     <Text style={styles.metaLabel}>EMAIL ADDRESS</Text>
@@ -629,48 +709,180 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                 </View>
               </View>
 
-              {/* UPCOMING MATCH HIGHLIGHT CARD */}
-              {matches.length > 0 && (
-                <View style={[styles.whiteItemCard, { marginTop: 14, borderLeftColor: '#3b82f6' }]}>
-                  <View style={styles.itemCardHeaderRow}>
-                    <View style={styles.itemTitleGroup}>
-                      <View style={styles.itemTitleBadgeRow}>
-                        <Text style={styles.itemNameText}>Upcoming Match Fixture</Text>
-                        <View style={styles.badgeBlue}>
-                          <Text style={styles.badgeBlueText}>🏏 {matches[0]?.status || 'SCHEDULED'}</Text>
-                        </View>
+              {/* ── Incoming Matches Section for this Player ── */}
+              <View style={{ marginTop: 14 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={styles.cardHeaderTitle}>🏏 Incoming Matches</Text>
+                    {incomingMatches.length > 0 && (
+                      <View style={styles.badgeGold}>
+                        <Text style={styles.badgeGoldText}>
+                          {incomingMatches.length} {incomingMatches.length === 1 ? 'Fixture' : 'Fixtures'} Scheduled
+                        </Text>
                       </View>
-                      <Text style={styles.itemIdGradeText}>
-                        {matches[0]?.tournament || 'Virudhunagar District League 2026'} • 📍 {matches[0]?.venue || 'Kamarajar Stadium'}
-                      </Text>
-                    </View>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setMatchFilter('ALL');
+                      setActiveTab('matches');
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ color: '#b45309', fontSize: 12.5, fontWeight: '700' }}>
+                      View All Fixtures →
+                    </Text>
+                  </TouchableOpacity>
+                </View>
 
+                {incomingMatches.length === 0 ? (
+                  <View style={[styles.whiteItemCard, { alignItems: 'center', paddingVertical: 24, borderLeftColor: '#cbd5e1' }]}>
+                    <Text style={{ fontSize: 30, marginBottom: 8 }}>📅</Text>
+                    <Text style={styles.emptyCardTitle}>No Incoming Matches</Text>
+                    <Text style={[styles.emptyCardSub, { textAlign: 'center', maxWidth: 460, marginTop: 4 }]}>
+                      There are currently no upcoming or live match fixtures scheduled for your squad. Upcoming fixtures will automatically appear here once scheduled by tournament officials.
+                    </Text>
                     <TouchableOpacity
-                      style={styles.btnActionView}
-                      onPress={() => handleOpenScorecard(matches[0]?.id || 'M001')}
+                      style={[styles.btnActionView, { marginTop: 14 }]}
+                      onPress={() => setActiveTab('matches')}
                       activeOpacity={0.8}
                     >
-                      <Text style={styles.btnActionViewText}>View Match Scorecard →</Text>
+                      <Text style={styles.btnActionViewText}>Browse All District Matches →</Text>
                     </TouchableOpacity>
                   </View>
+                ) : (
+                  incomingMatches.map(matchItem => {
+                    const statusUpper = (matchItem.status || 'SCHEDULED').toUpperCase();
+                    const isLive = statusUpper === 'LIVE' || statusUpper === 'INNINGS_BREAK';
 
-                  <View style={styles.matchTeamsRow}>
-                    <View style={styles.matchTeamSide}>
-                      <Text style={styles.matchTeamTitle}>{matches[0]?.teamA?.name || 'Virudhunagar Spartans'}</Text>
-                      {matches[0]?.scoreA && <Text style={styles.matchScoreText}>{matches[0]?.scoreA}</Text>}
-                    </View>
-                    <View style={styles.vsCircle}>
-                      <Text style={styles.vsCircleText}>VS</Text>
-                    </View>
-                    <View style={styles.matchTeamSide}>
-                      <Text style={styles.matchTeamTitle}>{matches[0]?.teamB?.name || 'Sivakasi Strikers'}</Text>
-                      {matches[0]?.scoreB && <Text style={styles.matchScoreText}>{matches[0]?.scoreB}</Text>}
-                    </View>
-                  </View>
-                </View>
-              )}
+                    const teamAName = matchItem.teamA?.name || matchItem.team_a_name || 'Team A';
+                    const teamBName = matchItem.teamB?.name || matchItem.team_b_name || 'Team B';
 
-              {/* LATEST ASSOCIATION BULLETIN */}
+                    const isTeamAUser = Boolean(
+                      (matchItem.teamA?.id && (matchItem.teamA?.id === profile?.teamId || (!profile?.teamId && matchItem.teamA?.id === 'TM-01'))) ||
+                      (playerTeam && teamAName.toLowerCase().includes(playerTeam.toLowerCase()))
+                    );
+                    const isTeamBUser = Boolean(
+                      (matchItem.teamB?.id && (matchItem.teamB?.id === profile?.teamId || (!profile?.teamId && matchItem.teamB?.id === 'TM-01'))) ||
+                      (playerTeam && teamBName.toLowerCase().includes(playerTeam.toLowerCase()))
+                    );
+
+                    let formattedDate = matchItem.date || 'TBA';
+                    if (matchItem.date) {
+                      try {
+                        const d = new Date(matchItem.date);
+                        if (!isNaN(d.getTime())) {
+                          formattedDate = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+                        }
+                      } catch (_e) {}
+                    }
+
+                    return (
+                      <View
+                        key={matchItem.id}
+                        style={[
+                          styles.whiteItemCard,
+                          { marginBottom: 12, borderLeftWidth: 4, borderLeftColor: isLive ? '#ef4444' : '#3b82f6' }
+                        ]}
+                      >
+                        <View style={styles.itemCardHeaderRow}>
+                          <View style={styles.itemTitleGroup}>
+                            <View style={styles.itemTitleBadgeRow}>
+                              <Text style={styles.itemNameText}>{matchItem.tournament || 'Virudhunagar League 2026'}</Text>
+                              <View style={[styles.badgeBase, isLive ? styles.badgeLive : styles.badgeScheduled]}>
+                                <Text style={[styles.badgeBaseText, isLive ? styles.badgeLiveText : styles.badgeScheduledText]}>
+                                  {isLive ? '🔴 LIVE NOW' : '📅 SCHEDULED'}
+                                </Text>
+                              </View>
+                              <View style={styles.badgeGold}>
+                                <Text style={styles.badgeGoldText}>⭐ Your Match</Text>
+                              </View>
+                            </View>
+                            <Text style={styles.itemIdGradeText}>
+                              📍 {matchItem.venue || 'District Stadium'} • 📅 {formattedDate} {matchItem.time ? `• ⏰ ${matchItem.time}` : ''} • Format: {matchItem.format || 'T20'}
+                            </Text>
+                          </View>
+
+                          <TouchableOpacity
+                            style={styles.btnActionView}
+                            onPress={() => {
+                              if (isLive) {
+                                handleOpenScorecard(matchItem.id);
+                              } else {
+                                setActiveTab('matches');
+                              }
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.btnActionViewText}>
+                              {isLive ? '🔴 View Live Scorecard →' : 'View Fixture Details →'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.matchTeamsRow}>
+                          <View style={styles.matchTeamSide}>
+                            {isTeamAUser && (
+                              <View style={[styles.youPillBadge, { marginBottom: 4, alignSelf: 'center' }]}>
+                                <Text style={styles.youPillBadgeText}>YOUR SQUAD</Text>
+                              </View>
+                            )}
+                            <Text
+                              style={[
+                                styles.matchTeamTitle,
+                                isTeamAUser && { color: '#b45309' },
+                                isMobileS && { fontSize: 13 }
+                              ]}
+                              numberOfLines={2}
+                            >
+                              {teamAName}
+                            </Text>
+                            {matchItem.scoreA ? (
+                              <Text style={styles.matchScoreText}>{matchItem.scoreA}</Text>
+                            ) : (
+                              <Text style={[styles.matchScoreText, { color: '#94a3b8', fontWeight: '500' }]}>Yet to bat</Text>
+                            )}
+                          </View>
+
+                          <View style={styles.vsCircle}>
+                            <Text style={styles.vsCircleText}>VS</Text>
+                          </View>
+
+                          <View style={styles.matchTeamSide}>
+                            {isTeamBUser && (
+                              <View style={[styles.youPillBadge, { marginBottom: 4, alignSelf: 'center' }]}>
+                                <Text style={styles.youPillBadgeText}>YOUR SQUAD</Text>
+                              </View>
+                            )}
+                            <Text
+                              style={[
+                                styles.matchTeamTitle,
+                                isTeamBUser && { color: '#b45309' },
+                                isMobileS && { fontSize: 13 }
+                              ]}
+                              numberOfLines={2}
+                            >
+                              {teamBName}
+                            </Text>
+                            {matchItem.scoreB ? (
+                              <Text style={styles.matchScoreText}>{matchItem.scoreB}</Text>
+                            ) : (
+                              <Text style={[styles.matchScoreText, { color: '#94a3b8', fontWeight: '500' }]}>Yet to bat</Text>
+                            )}
+                          </View>
+                        </View>
+
+                        {matchItem.result ? (
+                          <View style={styles.resultBannerBox}>
+                            <Text style={styles.resultBannerText}>📢 {matchItem.result}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    );
+                  })
+                )}
+              </View>
+
               {notifications.length > 0 && (
                 <View style={[styles.whiteItemCard, { marginTop: 14, borderLeftColor: '#d4af37' }]}>
                   <View style={styles.itemCardHeaderRow}>
@@ -693,9 +905,6 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
             </View>
           )}
 
-          {/* ─────────────────────────────────────────────────────────────
-              5. TAB CONTENT: PROFILE
-              ───────────────────────────────────────────────────────────── */}
           {!isLoading && activeTab === 'profile' && (
             <View>
               <View style={styles.whiteItemCard}>
@@ -756,7 +965,61 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                 </View>
               </View>
 
-              {/* SECURITY CLEARANCE CARD */}
+              {/* ── Official Achievement Patches & Performance Points Summary Card ── */}
+              <View style={[styles.whiteItemCard, { marginTop: 14, borderLeftColor: '#d4af37', borderLeftWidth: 4 }]}>
+                <View style={styles.patchesCardHeader}>
+                  <View style={{ flexShrink: 1, minWidth: 0 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                      <Text style={styles.cardHeaderTitle}>🎖️ Official Achievement Patches</Text>
+                      <View style={styles.tierBadgeGold}>
+                        <Text style={styles.tierBadgeGoldText}>⭐ {performancePoints} PTS • {playerTierTitle}</Text>
+                      </View>
+                    </View>
+                    <Text style={[styles.cardHeaderSubtitle, { marginTop: 4 }]}>
+                      {unlockedPatchesCount} of {patchesList.length} Milestone Patches Unlocked under Federation Standards
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.btnActionView}
+                    onPress={() => setActiveTab('achievements')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.btnActionViewText}>🏆 View All Patches →</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Performance Points Rating & Tier Progress Banner */}
+                <View style={styles.pointsBanner}>
+                  <View style={styles.pointsBannerTopRow}>
+                    <View>
+                      <Text style={styles.pointsBigText}>⭐ {performancePoints} PTS</Text>
+                      <Text style={styles.pointsSubText}>Federation Performance Rating</Text>
+                    </View>
+                    <View style={styles.tierBadgeGold}>
+                      <Text style={styles.tierBadgeGoldText}>
+                        {playerTier === 'DIAMOND' ? '💎' : playerTier === 'GOLD' ? '🥇' : playerTier === 'SILVER' ? '🥈' : '🥉'} {playerTierTitle}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.progressBarBg}>
+                    <View
+                      style={[
+                        styles.progressBarFill,
+                        { width: `${Math.min(100, Math.round((performancePoints / nextTierPoints) * 100))}%` }
+                      ]}
+                    />
+                  </View>
+                  <View style={styles.pointsProgressSubRow}>
+                    <Text style={styles.pointsProgressSubText}>
+                      Tier Target: {performancePoints} / {nextTierPoints} PTS
+                    </Text>
+                    <Text style={[styles.pointsProgressSubText, { color: '#fbbf24', fontWeight: '800' }]}>
+                      {Math.min(100, Math.round((performancePoints / nextTierPoints) * 100))}% to Next Tier
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
               <View style={[styles.whiteItemCard, { marginTop: 14 }]}>
                 <Text style={styles.cardHeaderTitle}>🔒 Authentication & Role Clearance</Text>
                 <Text style={styles.securityExplanation}>
@@ -768,12 +1031,8 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
             </View>
           )}
 
-          {/* ─────────────────────────────────────────────────────────────
-              6. TAB CONTENT: TEAM & SQUAD
-              ───────────────────────────────────────────────────────────── */}
           {!isLoading && activeTab === 'team' && (
             <View>
-              {/* TEAM HEADER CARD */}
               <View style={styles.whiteItemCard}>
                 <View style={styles.itemCardHeaderRow}>
                   <View>
@@ -807,7 +1066,6 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                 </View>
               </View>
 
-              {/* 15 SQUAD PLAYERS LIST */}
               <View style={[styles.whiteItemCard, { marginTop: 14 }]}>
                 <Text style={styles.cardHeaderTitle}>15-Member Squad Roster</Text>
                 <Text style={styles.cardHeaderSubtitle}>Official roster registered for the Virudhunagar Premier League 2026</Text>
@@ -852,12 +1110,8 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
             </View>
           )}
 
-          {/* ─────────────────────────────────────────────────────────────
-              7. TAB CONTENT: MATCHES
-              ───────────────────────────────────────────────────────────── */}
           {!isLoading && activeTab === 'matches' && (
             <View>
-              {/* Toolbar with Match Filters */}
               <View style={styles.toolbarCard}>
                 <View style={styles.searchBox}>
                   <Text style={styles.searchIcon}>🔍</Text>
@@ -919,19 +1173,60 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                         </View>
                       </View>
 
-                      <View style={styles.matchTeamsRow}>
-                        <View style={styles.matchTeamSide}>
-                          <Text style={styles.matchTeamTitle}>{m.teamA?.name || m.team_a_name || 'Spartans CC'}</Text>
-                          <Text style={styles.matchScoreText}>{m.scoreA || 'Yet to bat'}</Text>
-                        </View>
-                        <View style={styles.vsCircle}>
-                          <Text style={styles.vsCircleText}>VS</Text>
-                        </View>
-                        <View style={styles.matchTeamSide}>
-                          <Text style={styles.matchTeamTitle}>{m.teamB?.name || m.team_b_name || 'Kings CC'}</Text>
-                          <Text style={styles.matchScoreText}>{m.scoreB || 'Yet to bat'}</Text>
-                        </View>
-                      </View>
+                      {(() => {
+                        const isTeamAUser = Boolean(
+                          (m.teamA?.id && (m.teamA?.id === profile?.teamId || (!profile?.teamId && m.teamA?.id === 'TM-01'))) ||
+                          (playerTeam && (m.teamA?.name || '').toLowerCase().includes(playerTeam.toLowerCase()))
+                        );
+                        const isTeamBUser = Boolean(
+                          (m.teamB?.id && (m.teamB?.id === profile?.teamId || (!profile?.teamId && m.teamB?.id === 'TM-01'))) ||
+                          (playerTeam && (m.teamB?.name || '').toLowerCase().includes(playerTeam.toLowerCase()))
+                        );
+
+                        return (
+                          <View style={styles.matchTeamsRow}>
+                            <View style={styles.matchTeamSide}>
+                              {isTeamAUser && (
+                                <View style={[styles.youPillBadge, { marginBottom: 4, alignSelf: 'center' }]}>
+                                  <Text style={styles.youPillBadgeText}>YOUR SQUAD</Text>
+                                </View>
+                              )}
+                              <Text
+                                style={[
+                                  styles.matchTeamTitle,
+                                  isTeamAUser && { color: '#b45309' },
+                                  isMobileS && { fontSize: 13 }
+                                ]}
+                                numberOfLines={2}
+                              >
+                                {m.teamA?.name || m.team_a_name || 'TBA'}
+                              </Text>
+                              <Text style={styles.matchScoreText}>{m.scoreA || 'Yet to bat'}</Text>
+                            </View>
+                            <View style={styles.vsCircle}>
+                              <Text style={styles.vsCircleText}>VS</Text>
+                            </View>
+                            <View style={styles.matchTeamSide}>
+                              {isTeamBUser && (
+                                <View style={[styles.youPillBadge, { marginBottom: 4, alignSelf: 'center' }]}>
+                                  <Text style={styles.youPillBadgeText}>YOUR SQUAD</Text>
+                                </View>
+                              )}
+                              <Text
+                                style={[
+                                  styles.matchTeamTitle,
+                                  isTeamBUser && { color: '#b45309' },
+                                  isMobileS && { fontSize: 13 }
+                                ]}
+                                numberOfLines={2}
+                              >
+                                {m.teamB?.name || m.team_b_name || 'TBA'}
+                              </Text>
+                              <Text style={styles.matchScoreText}>{m.scoreB || 'Yet to bat'}</Text>
+                            </View>
+                          </View>
+                        );
+                      })()}
 
                       {m.result && (
                         <View style={styles.resultBannerBox}>
@@ -953,12 +1248,8 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
             </View>
           )}
 
-          {/* ─────────────────────────────────────────────────────────────
-              8. TAB CONTENT: STATISTICS
-              ───────────────────────────────────────────────────────────── */}
           {!isLoading && activeTab === 'statistics' && (
             <View>
-              {/* Batting Card */}
               <View style={styles.whiteItemCard}>
                 <Text style={styles.cardHeaderTitle}>🏏 Batting Record</Text>
                 <Text style={styles.cardHeaderSubtitle}>Derived from official scorer match logs</Text>
@@ -969,7 +1260,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                     <Text style={styles.statMetricLabel}>Matches</Text>
                   </View>
                   <View style={styles.statMetricCard}>
-                    <Text style={styles.statMetricValue}>{statistics?.batting?.innings ?? 6}</Text>
+                    <Text style={styles.statMetricValue}>{statistics?.batting?.innings ?? 0}</Text>
                     <Text style={styles.statMetricLabel}>Innings</Text>
                   </View>
                   <View style={styles.statMetricCard}>
@@ -977,7 +1268,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                     <Text style={styles.statMetricLabel}>Runs</Text>
                   </View>
                   <View style={styles.statMetricCard}>
-                    <Text style={styles.statMetricValue}>{statistics?.batting?.highestScore ?? 68}</Text>
+                    <Text style={styles.statMetricValue}>{statistics?.batting?.highestScore ?? highScore}</Text>
                     <Text style={styles.statMetricLabel}>High Score</Text>
                   </View>
                   <View style={styles.statMetricCard}>
@@ -985,21 +1276,28 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                     <Text style={styles.statMetricLabel}>Average</Text>
                   </View>
                   <View style={styles.statMetricCard}>
-                    <Text style={styles.statMetricValue}>{statistics?.batting?.strikeRate ?? '142.8'}</Text>
+                    <Text style={styles.statMetricValue}>{strikeRate}</Text>
                     <Text style={styles.statMetricLabel}>Strike Rate</Text>
                   </View>
                   <View style={styles.statMetricCard}>
-                    <Text style={styles.statMetricValue}>{statistics?.batting?.fours ?? 24}</Text>
+                    <Text style={styles.statMetricValue}>{statistics?.batting?.fours ?? 0}</Text>
                     <Text style={styles.statMetricLabel}>4s</Text>
                   </View>
                   <View style={styles.statMetricCard}>
-                    <Text style={styles.statMetricValue}>{statistics?.batting?.sixes ?? 8}</Text>
+                    <Text style={styles.statMetricValue}>{statistics?.batting?.sixes ?? 0}</Text>
                     <Text style={styles.statMetricLabel}>6s</Text>
+                  </View>
+                  <View style={styles.statMetricCard}>
+                    <Text style={styles.statMetricValue}>{fiftiesCount}</Text>
+                    <Text style={styles.statMetricLabel}>50s</Text>
+                  </View>
+                  <View style={styles.statMetricCard}>
+                    <Text style={styles.statMetricValue}>{centuriesCount}</Text>
+                    <Text style={styles.statMetricLabel}>100s</Text>
                   </View>
                 </View>
               </View>
 
-              {/* Bowling Card */}
               <View style={[styles.whiteItemCard, { marginTop: 14 }]}>
                 <Text style={styles.cardHeaderTitle}>🎯 Bowling Record</Text>
                 <Text style={styles.cardHeaderSubtitle}>Live over-by-over analysis</Text>
@@ -1010,11 +1308,11 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                     <Text style={styles.statMetricLabel}>Matches</Text>
                   </View>
                   <View style={styles.statMetricCard}>
-                    <Text style={styles.statMetricValue}>{statistics?.bowling?.overs ?? 16}</Text>
+                    <Text style={styles.statMetricValue}>{statistics?.bowling?.overs ?? 0}</Text>
                     <Text style={styles.statMetricLabel}>Overs</Text>
                   </View>
                   <View style={styles.statMetricCard}>
-                    <Text style={styles.statMetricValue}>{statistics?.bowling?.runsConceded ?? 112}</Text>
+                    <Text style={styles.statMetricValue}>{statistics?.bowling?.runsConceded ?? 0}</Text>
                     <Text style={styles.statMetricLabel}>Runs</Text>
                   </View>
                   <View style={styles.statMetricCard}>
@@ -1022,17 +1320,16 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                     <Text style={styles.statMetricLabel}>Wickets</Text>
                   </View>
                   <View style={styles.statMetricCard}>
-                    <Text style={styles.statMetricValue}>{statistics?.bowling?.economy ?? '7.00'}</Text>
+                    <Text style={styles.statMetricValue}>{economy}</Text>
                     <Text style={styles.statMetricLabel}>Economy</Text>
                   </View>
                   <View style={styles.statMetricCard}>
-                    <Text style={styles.statMetricValue}>{statistics?.bowling?.bestFigures ?? '3/24'}</Text>
+                    <Text style={styles.statMetricValue}>{bestBowling}</Text>
                     <Text style={styles.statMetricLabel}>Best Figures</Text>
                   </View>
                 </View>
               </View>
 
-              {/* Fielding Card */}
               <View style={[styles.whiteItemCard, { marginTop: 14 }]}>
                 <Text style={styles.cardHeaderTitle}>🧤 Fielding Record</Text>
                 <Text style={styles.cardHeaderSubtitle}>Catches, dismissals, and ground fielding</Text>
@@ -1043,21 +1340,208 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                     <Text style={styles.statMetricLabel}>Catches</Text>
                   </View>
                   <View style={styles.statMetricCard}>
-                    <Text style={styles.statMetricValue}>{statistics?.fielding?.runOuts ?? 2}</Text>
+                    <Text style={styles.statMetricValue}>{statistics?.fielding?.runOuts ?? 0}</Text>
                     <Text style={styles.statMetricLabel}>Run-Outs</Text>
                   </View>
                   <View style={styles.statMetricCard}>
                     <Text style={styles.statMetricValue}>{statistics?.fielding?.stumpings ?? 0}</Text>
                     <Text style={styles.statMetricLabel}>Stumpings</Text>
                   </View>
+                  <View style={styles.statMetricCard}>
+                    <Text style={styles.statMetricValue}>{statistics?.fielding?.directHits ?? 0}</Text>
+                    <Text style={styles.statMetricLabel}>Direct Hits</Text>
+                  </View>
                 </View>
               </View>
             </View>
           )}
 
-          {/* ─────────────────────────────────────────────────────────────
-              9. TAB CONTENT: NOTICES
-              ───────────────────────────────────────────────────────────── */}
+          {!isLoading && activeTab === 'achievements' && (
+            <View>
+              {/* Top Banner: Rating & Tier Progress */}
+              <View style={[styles.whiteItemCard, { borderLeftColor: '#d4af37', borderLeftWidth: 4, marginBottom: 14 }]}>
+                <View style={styles.patchesCardHeader}>
+                  <View style={{ flexShrink: 1, minWidth: 0 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                      <Text style={styles.cardHeaderTitle}>🏆 Official Player Achievements & Patches</Text>
+                      <View style={styles.tierBadgeGold}>
+                        <Text style={styles.tierBadgeGoldText}>
+                          {playerTier === 'DIAMOND' ? '💎' : playerTier === 'GOLD' ? '🥇' : playerTier === 'SILVER' ? '🥈' : '🥉'} {playerTierTitle}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={[styles.cardHeaderSubtitle, { marginTop: 4 }]}>
+                      Certified match milestones, performance points, and earned award patches under CFVD Federation Standards
+                    </Text>
+                  </View>
+                  <View style={styles.badgeConfirmed}>
+                    <Text style={styles.badgeConfirmedText}>
+                      ✔ {unlockedPatchesCount} of {patchesList.length} Unlocked
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Rating Points Banner */}
+                <View style={styles.pointsBanner}>
+                  <View style={styles.pointsBannerTopRow}>
+                    <View>
+                      <Text style={styles.pointsBigText}>⭐ {performancePoints} PTS</Text>
+                      <Text style={styles.pointsSubText}>Federation Performance Rating Points</Text>
+                    </View>
+                    <View style={styles.tierBadgeGold}>
+                      <Text style={styles.tierBadgeGoldText}>
+                        {playerTier === 'DIAMOND' ? '💎' : playerTier === 'GOLD' ? '🥇' : playerTier === 'SILVER' ? '🥈' : '🥉'} {playerTierTitle}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.progressBarBg}>
+                    <View
+                      style={[
+                        styles.progressBarFill,
+                        { width: `${Math.min(100, Math.round((performancePoints / nextTierPoints) * 100))}%` }
+                      ]}
+                    />
+                  </View>
+                  <View style={styles.pointsProgressSubRow}>
+                    <Text style={styles.pointsProgressSubText}>
+                      Next Tier Target: {performancePoints} / {nextTierPoints} PTS
+                    </Text>
+                    <Text style={[styles.pointsProgressSubText, { color: '#fbbf24', fontWeight: '800' }]}>
+                      {Math.min(100, Math.round((performancePoints / nextTierPoints) * 100))}%
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Metric Summary Counters */}
+                <View style={styles.statsGridRow}>
+                  <View style={styles.statMetricCard}>
+                    <Text style={[styles.statMetricValue, { color: '#16a34a' }]}>{unlockedPatchesCount}</Text>
+                    <Text style={styles.statMetricLabel}>Patches Earned</Text>
+                  </View>
+                  <View style={styles.statMetricCard}>
+                    <Text style={[styles.statMetricValue, { color: '#64748b' }]}>{patchesList.length - unlockedPatchesCount}</Text>
+                    <Text style={styles.statMetricLabel}>In Progress</Text>
+                  </View>
+                  <View style={styles.statMetricCard}>
+                    <Text style={[styles.statMetricValue, { color: '#d97706' }]}>{runsScored}</Text>
+                    <Text style={styles.statMetricLabel}>Total Runs</Text>
+                  </View>
+                  <View style={styles.statMetricCard}>
+                    <Text style={[styles.statMetricValue, { color: '#0284c7' }]}>{wicketsTaken}</Text>
+                    <Text style={styles.statMetricLabel}>Total Wickets</Text>
+                  </View>
+                  <View style={styles.statMetricCard}>
+                    <Text style={[styles.statMetricValue, { color: '#8b5cf6' }]}>{catchesTaken}</Text>
+                    <Text style={styles.statMetricLabel}>Catches</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Filter Pills for Patches */}
+              <View style={[styles.toolbarCard, { marginBottom: 14 }]}>
+                <View style={styles.filterPillsGroup}>
+                  {(['ALL', 'UNLOCKED', 'BATTING', 'BOWLING', 'POINTS'] as const).map(f => {
+                    const count = f === 'ALL'
+                      ? patchesList.length
+                      : f === 'UNLOCKED'
+                      ? unlockedPatchesCount
+                      : patchesList.filter((p: any) => p.category === f).length;
+
+                    return (
+                      <TouchableOpacity
+                        key={f}
+                        style={[styles.filterPill, patchCategoryFilter === f && styles.filterPillActive]}
+                        onPress={() => setPatchCategoryFilter(f)}
+                      >
+                        <Text style={[styles.filterPillText, patchCategoryFilter === f && styles.filterPillTextActive]}>
+                          {f} ({count})
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Patches Grid */}
+              <View style={styles.patchesGrid}>
+                {displayedPatches.map((patch: any) => {
+                  const isUnlocked = Boolean(patch.unlocked);
+                  const pct = Math.min(100, Math.round(((patch.current || 0) / (patch.target || 1)) * 100));
+
+                  return (
+                    <View
+                      key={patch.id}
+                      style={[
+                        styles.patchItemCard,
+                        { width: isMobileS || width < 680 ? '100%' : '48.5%' },
+                        isUnlocked && styles.patchItemUnlocked
+                      ]}
+                    >
+                      <View style={styles.patchHeaderRow}>
+                        <View style={[styles.patchIconBox, isUnlocked && styles.patchIconBoxUnlocked]}>
+                          <Text style={{ fontSize: 20 }}>{patch.icon || '🎖️'}</Text>
+                        </View>
+                        <View style={[styles.patchBadgePill, isUnlocked ? styles.patchBadgePillUnlocked : styles.patchBadgePillLocked]}>
+                          <Text style={isUnlocked ? styles.patchBadgePillUnlockedText : styles.patchBadgePillLockedText}>
+                            {isUnlocked ? '✔ UNLOCKED' : 'IN PROGRESS'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
+                        <Text style={[styles.patchTitle, isUnlocked && { color: '#b45309' }]}>
+                          {patch.title}
+                        </Text>
+                        <View style={[styles.patchTierPill, { borderColor: patch.badgeColor || '#d97706' }]}>
+                          <Text style={[styles.patchTierPillText, { color: patch.badgeColor || '#d97706' }]}>
+                            {patch.tier || 'BADGE'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <Text style={styles.patchCriteria}>{patch.criteriaText}</Text>
+
+                      {isUnlocked ? (
+                        <View style={styles.achievedBox}>
+                          <Text style={styles.achievedBoxText}>
+                            🏆 Milestone Achieved • Record: {patch.current} {patch.category === 'BOWLING' ? 'Wickets' : patch.category === 'FIELDING' ? 'Catches' : patch.category === 'POINTS' ? 'PTS' : 'Runs'}
+                          </Text>
+                        </View>
+                      ) : (
+                        <View style={{ marginTop: 6 }}>
+                          <View style={styles.patchProgressBarBg}>
+                            <View style={[styles.patchProgressBarFill, { width: `${pct}%` }]} />
+                          </View>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={styles.patchProgressText}>
+                              Progress: {patch.current || 0} / {patch.target} {patch.category === 'BOWLING' ? 'Wickets' : patch.category === 'FIELDING' ? 'Catches' : patch.category === 'POINTS' ? 'PTS' : 'Runs'}
+                            </Text>
+                            <Text style={[styles.patchProgressText, { color: '#64748b', fontWeight: '800' }]}>{pct}%</Text>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+
+              {/* Certified Association Recognition Seal Box */}
+              <View style={[styles.whiteItemCard, { marginTop: 14, flexDirection: 'row', alignItems: 'center', gap: 14 }]}>
+                <View style={styles.sealCircleBox}>
+                  <Text style={{ fontSize: 28 }}>🛡️</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0f172a' }}>
+                    Certified Tamil Nadu District Cricket Recognition
+                  </Text>
+                  <Text style={{ fontSize: 11.5, color: '#64748b', marginTop: 2, lineHeight: 16 }}>
+                    All earned patches and performance ratings are computed automatically from verified umpire and BCCI-accredited match scorer scorecards.
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+
           {!isLoading && activeTab === 'notifications' && (
             <View>
               <View style={styles.whiteItemCard}>
@@ -1090,12 +1574,12 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
             </View>
           )}
 
+            </View>
+          </ScrollView>
         </View>
-      </ScrollView>
+      </View>
 
-      {/* ─────────────────────────────────────────────────────────────
-          10. EDIT PROFILE MODAL (Light Theme)
-          ───────────────────────────────────────────────────────────── */}
+      {/* Edit Profile Modal */}
       <Modal
         visible={isEditProfileVisible}
         transparent={true}
@@ -1202,9 +1686,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
         </View>
       </Modal>
 
-      {/* ─────────────────────────────────────────────────────────────
-          11. READ-ONLY SCORECARD MODAL (Light Theme)
-          ───────────────────────────────────────────────────────────── */}
+      {/* Read-Only Scorecard Modal */}
       <Modal
         visible={!!selectedScorecardMatchId}
         transparent={true}
@@ -1247,7 +1729,6 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                   )}
                 </View>
 
-                {/* Innings Tabs */}
                 <View style={styles.inningsTabBar}>
                   <TouchableOpacity
                     style={[styles.inningsTabBtn, activeInningsTab === 0 && styles.inningsTabBtnActive]}
@@ -1272,7 +1753,6 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                     {scorecardData?.innings?.[activeInningsTab]?.teamName || (activeInningsTab === 0 ? 'Team A' : 'Team B')} - Score: {scorecardData?.innings?.[activeInningsTab]?.totalRuns ?? 145}/{scorecardData?.innings?.[activeInningsTab]?.totalWickets ?? 6} ({scorecardData?.innings?.[activeInningsTab]?.overs ?? '20.0'} Ov)
                   </Text>
 
-                  {/* Batting table */}
                   <View style={styles.tableBox}>
                     <View style={styles.tableHeaderRow}>
                       <Text style={[styles.tableHeadCell, { flex: 2 }]}>Batter</Text>
@@ -1316,9 +1796,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
         </View>
       </Modal>
 
-      {/* ─────────────────────────────────────────────────────────────
-          12. LOGOUT CONFIRMATION MODAL
-          ───────────────────────────────────────────────────────────── */}
+      {/* Logout Confirmation Modal */}
       <Modal
         visible={logoutModalOpen}
         transparent={true}
@@ -1361,15 +1839,28 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
 }
 
 // ─────────────────────────────────────────────────────────────
-// STYLES: Pure Light Theme matching Admin & Association UI
+// STYLES: Pure Light Theme with scroll fix applied
 // ─────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
+  // FIX 1: rootContainer — position:fixed on web traps the full viewport, no page scroll
   rootContainer: {
     flex: 1,
-    backgroundColor: '#f6f2e9'
+    backgroundColor: '#f6f2e9',
+    ...(Platform.OS === 'web'
+      ? ({
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden'
+        } as any)
+      : { height: '100%', width: '100%', overflow: 'hidden' })
   },
 
-  // 1. TOP HEADER BAR
+  // 1. TOP HEADER BAR — flexShrink:0 keeps it pinned at top of mainColumn
   topHeaderBar: {
     width: '100%',
     backgroundColor: '#071026',
@@ -1378,15 +1869,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    flexWrap: 'wrap',
-    gap: 12,
-    zIndex: 100
+    flexWrap: 'nowrap',
+    gap: 8,
+    zIndex: 100,
+    flexShrink: 0
+  },
+  mobileHamburgerBtn: {
+    padding: 8,
+    marginRight: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.3)'
+  },
+  mobileHamburgerText: {
+    color: '#f59e0b',
+    fontSize: 18,
+    fontWeight: '800'
   },
   brandRow: {
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+    flexShrink: 1
   },
   brandLogo: {
     width: 44,
@@ -1424,6 +1930,8 @@ const styles = StyleSheet.create({
   },
   exitBtnPill: {
     backgroundColor: '#dc2626',
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 8
@@ -1433,21 +1941,135 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800'
   },
+  headerAvatarBtn: {
+    borderRadius: 19
+  },
+  headerAvatarCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#071026',
+    borderWidth: 2,
+    borderColor: '#d4af37',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden'
+  },
+  headerAvatarText: {
+    color: '#f59e0b',
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  exitBtnIconOnly: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#dc2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#ef4444'
+  },
 
-  // 2. MAIN SCROLL CONTAINER
-  mainScrollView: {
+  // FIX 2: layoutRoot — flex row, fills all remaining height below header area
+  layoutRoot: {
     flex: 1,
-    backgroundColor: '#f6f2e9'
+    flexDirection: 'row',
+    minHeight: 0,
+    minWidth: 0,
+    backgroundColor: '#f6f2e9',
+    ...(Platform.OS === 'web'
+      ? ({ overflow: 'hidden', height: '100%' } as any)
+      : { overflow: 'hidden' })
+  },
+
+  // FIX 3: mainColumn — flex column; header + scroll area stacked
+  mainColumn: {
+    flex: 1,
+    flexDirection: 'column',
+    minHeight: 0,
+    minWidth: 0,
+    backgroundColor: '#f6f2e9',
+    ...(Platform.OS === 'web'
+      ? ({ overflow: 'hidden', height: '100%', display: 'flex' } as any)
+      : { overflow: 'hidden' })
+  },
+
+  // FIX 4: rightContentScrollView — flex:1, ONLY this element scrolls
+  rightContentScrollView: {
+    flex: 1,
+    minHeight: 0,
+    minWidth: 0,
+    backgroundColor: '#f6f2e9',
+    ...(Platform.OS === 'web'
+      ? ({
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          flex: 1,
+          minHeight: 0
+        } as any)
+      : {})
   },
   scrollContentContainer: {
-    paddingVertical: 20,
-    paddingHorizontal: 16
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    paddingBottom: 100,
+    width: '100%',
+    flexGrow: 1
   },
   contentConstrained: {
     maxWidth: 1200,
     width: '100%',
     marginHorizontal: 'auto'
   },
+  contentSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    marginBottom: 16,
+    flexWrap: 'wrap',
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    elevation: 1
+  },
+  contentSectionHeaderLeft: {
+    flex: 1,
+    minWidth: 180
+  },
+  contentSectionHeaderTitle: {
+    color: '#0f172a',
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  contentSectionHeaderSub: {
+    color: '#64748b',
+    fontSize: 11.5,
+    marginTop: 2
+  },
+  refreshPillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cbd5e1'
+  },
+  refreshPillBtnText: {
+    color: '#334155',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+
   errorBannerBox: {
     backgroundColor: '#fee2e2',
     borderColor: '#ef4444',
@@ -1470,97 +2092,6 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline'
   },
 
-  // 3. TABS BAR
-  tabsCardBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    padding: 8,
-    marginBottom: 18,
-    flexWrap: 'wrap',
-    gap: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    elevation: 2
-  },
-  tabBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#cbd5e1'
-  },
-  tabBtnActive: {
-    backgroundColor: '#d4af37',
-    borderColor: '#d4af37'
-  },
-  tabBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#334155'
-  },
-  tabBtnTextActive: {
-    color: '#020612',
-    fontWeight: '900'
-  },
-  tabBadgeBlue: {
-    backgroundColor: '#dbeafe',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginLeft: 6
-  },
-  tabBadgeBlueText: {
-    color: '#1e40af',
-    fontSize: 10.5,
-    fontWeight: '800'
-  },
-  tabBadgeOrange: {
-    backgroundColor: '#ffedd5',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginLeft: 6
-  },
-  tabBadgeOrangeText: {
-    color: '#c2410c',
-    fontSize: 10.5,
-    fontWeight: '800'
-  },
-  tabBadgeGold: {
-    backgroundColor: '#fef3c7',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginLeft: 6
-  },
-  tabBadgeGoldText: {
-    color: '#b45309',
-    fontSize: 10.5,
-    fontWeight: '800'
-  },
-  logoutBtn: {
-    marginLeft: 'auto',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.4)',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: 'rgba(239, 68, 68, 0.05)'
-  },
-  logoutBtnText: {
-    color: '#ef4444',
-    fontSize: 12,
-    fontWeight: '700'
-  },
-
   loadingContainer: {
     padding: 40,
     alignItems: 'center',
@@ -1573,7 +2104,6 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
 
-  // 4. HIGHLIGHT DARK NAVY CARDS (Matching Screenshot)
   highlightCardsRow: {
     flexDirection: 'row',
     gap: 16,
@@ -1582,7 +2112,7 @@ const styles = StyleSheet.create({
   },
   navyStatCard: {
     flex: 1,
-    minWidth: 320,
+    minWidth: 260,
     backgroundColor: '#0a1432',
     borderRadius: 16,
     borderWidth: 1.5,
@@ -1672,7 +2202,6 @@ const styles = StyleSheet.create({
     fontWeight: '900'
   },
 
-  // Donut Ring Card
   donutCardAlign: {
     alignItems: 'center',
     justifyContent: 'center'
@@ -1741,7 +2270,6 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
 
-  // 5. TOOLBAR
   toolbarCard: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
@@ -1758,7 +2286,7 @@ const styles = StyleSheet.create({
   },
   searchBox: {
     flex: 1,
-    minWidth: 240,
+    minWidth: 160,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8fafc',
@@ -1811,7 +2339,6 @@ const styles = StyleSheet.create({
     fontWeight: '800'
   },
 
-  // 6. MAIN WHITE ITEM CARDS (Matching Screenshot Card)
   whiteItemCard: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
@@ -1819,7 +2346,7 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     borderLeftWidth: 4,
     borderLeftColor: '#10b981',
-    padding: 18,
+    padding: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1.5 },
     shadowOpacity: 0.05,
@@ -1833,12 +2360,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 14
+    gap: 10,
+    marginBottom: 12
   },
   itemTitleGroup: {
     flex: 1,
-    minWidth: 260
+    minWidth: 180
   },
   itemTitleBadgeRow: {
     flexDirection: 'row',
@@ -1952,7 +2479,6 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
 
-  // Match card layout
   matchTeamsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1961,37 +2487,44 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    padding: 14,
-    marginVertical: 12
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+    marginVertical: 10
   },
   matchTeamSide: {
     flex: 1,
-    alignItems: 'center'
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 0,
+    paddingHorizontal: 4
   },
   matchTeamTitle: {
     color: '#0f172a',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
-    textAlign: 'center'
+    textAlign: 'center',
+    maxWidth: '100%'
   },
   matchScoreText: {
     color: '#b45309',
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
-    marginTop: 4
+    marginTop: 4,
+    textAlign: 'center'
   },
   vsCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: '#071026',
     alignItems: 'center',
     justifyContent: 'center',
-    marginHorizontal: 10
+    marginHorizontal: 4,
+    flexShrink: 0
   },
   vsCircleText: {
     color: '#f59e0b',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '900'
   },
   matchCardTournament: {
@@ -2056,7 +2589,6 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
 
-  // Notices
   noticeTitleBold: {
     color: '#0f172a',
     fontSize: 14.5,
@@ -2070,7 +2602,6 @@ const styles = StyleSheet.create({
     lineHeight: 18
   },
 
-  // Profile Dossier
   cardHeaderTitle: {
     color: '#0f172a',
     fontSize: 17,
@@ -2089,20 +2620,26 @@ const styles = StyleSheet.create({
   profileRowItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9'
+    borderBottomColor: '#f1f5f9',
+    gap: 8
   },
   profileKey: {
     color: '#64748b',
-    fontSize: 13,
-    fontWeight: '600'
+    fontSize: 12.5,
+    fontWeight: '600',
+    width: 110,
+    flexShrink: 0
   },
   profileVal: {
     color: '#0f172a',
-    fontSize: 13.5,
-    fontWeight: '700'
+    fontSize: 13,
+    fontWeight: '700',
+    flex: 1,
+    textAlign: 'right',
+    ...(Platform.OS === 'web' ? ({ wordBreak: 'break-all' } as any) : {})
   },
   securityExplanation: {
     color: '#475569',
@@ -2111,7 +2648,6 @@ const styles = StyleSheet.create({
     marginTop: 8
   },
 
-  // Team
   teamStatsRow: {
     flexDirection: 'row',
     gap: 12,
@@ -2197,7 +2733,6 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
 
-  // Statistics
   statsGridRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -2226,7 +2761,6 @@ const styles = StyleSheet.create({
     marginTop: 3
   },
 
-  // Notices Tab
   notifRowItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -2260,7 +2794,6 @@ const styles = StyleSheet.create({
     lineHeight: 18
   },
 
-  // Empty state
   emptyCardBox: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
@@ -2280,7 +2813,6 @@ const styles = StyleSheet.create({
     fontSize: 13
   },
 
-  // Modals
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(2, 6, 18, 0.65)',
@@ -2396,7 +2928,6 @@ const styles = StyleSheet.create({
     color: '#0f172a'
   },
 
-  // Scorecard modal details
   scorecardMatchBanner: {
     backgroundColor: '#f8fafc',
     padding: 14,
@@ -2509,5 +3040,215 @@ const styles = StyleSheet.create({
     flex: 1,
     color: '#334155',
     fontSize: 12
+  },
+
+  // Achievement Patches & Performance Points Styles
+  patchesCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+    flexWrap: 'wrap',
+    gap: 8
+  },
+  tierBadgeGoldSmall: {
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    borderColor: '#f59e0b',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 14
+  },
+  tierBadgeGoldSmallText: {
+    color: '#b45309',
+    fontSize: 11,
+    fontWeight: '800'
+  },
+  pointsBanner: {
+    backgroundColor: '#0a1432',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.4)'
+  },
+  pointsBannerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10
+  },
+  pointsBigText: {
+    color: '#ffffff',
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: 0.5
+  },
+  pointsSubText: {
+    color: '#94a3b8',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2
+  },
+  tierBadgeGold: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderColor: '#f59e0b',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20
+  },
+  tierBadgeGoldText: {
+    color: '#fde68a',
+    fontSize: 11.5,
+    fontWeight: '800'
+  },
+  progressBarBg: {
+    height: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 6
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#f59e0b',
+    borderRadius: 4
+  },
+  pointsProgressSubRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  pointsProgressSubText: {
+    color: '#94a3b8',
+    fontSize: 10.5,
+    fontWeight: '600'
+  },
+  patchesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10
+  },
+  patchItemCard: {
+    width: '48.5%',
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 12
+  },
+  patchItemUnlocked: {
+    backgroundColor: '#fefce8',
+    borderColor: '#f59e0b'
+  },
+  patchHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8
+  },
+  patchIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  patchIconBoxUnlocked: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b'
+  },
+  patchBadgePill: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 10
+  },
+  patchBadgePillUnlocked: {
+    backgroundColor: '#dcfce7',
+    borderWidth: 1,
+    borderColor: '#86efac'
+  },
+  patchBadgePillUnlockedText: {
+    color: '#166534',
+    fontSize: 9.5,
+    fontWeight: '800'
+  },
+  patchBadgePillLocked: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1'
+  },
+  patchBadgePillLockedText: {
+    color: '#64748b',
+    fontSize: 9.5,
+    fontWeight: '700'
+  },
+  patchTitle: {
+    color: '#0f172a',
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 3
+  },
+  patchCriteria: {
+    color: '#64748b',
+    fontSize: 11,
+    lineHeight: 15,
+    marginBottom: 8
+  },
+  patchProgressBarBg: {
+    height: 5,
+    backgroundColor: '#e2e8f0',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 4
+  },
+  patchProgressBarFill: {
+    height: '100%',
+    backgroundColor: '#3b82f6',
+    borderRadius: 3
+  },
+  patchProgressText: {
+    color: '#475569',
+    fontSize: 10,
+    fontWeight: '700'
+  },
+  patchTierPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1
+  },
+  patchTierPillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.3
+  },
+  achievedBox: {
+    backgroundColor: 'rgba(22, 163, 74, 0.08)',
+    borderRadius: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(22, 163, 74, 0.25)',
+    marginTop: 6
+  },
+  achievedBoxText: {
+    fontSize: 10.5,
+    color: '#15803d',
+    fontWeight: '800'
+  },
+  sealCircleBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#fef3c7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#f59e0b'
   }
 });

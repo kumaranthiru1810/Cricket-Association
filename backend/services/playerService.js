@@ -87,6 +87,13 @@ class PlayerService {
     const mobile = userDoc?.mobile || '';
     const status = userDoc?.status === 'ACTIVE' ? 'APPROVED' : (userDoc?.status || playerDoc?.status || squadEntry?.status || 'APPROVED');
 
+    const baseStats = playerDoc?.stats || {};
+    const pointsData = this._calculatePatchesAndPoints(
+      { runs: baseStats.runs || 0, highestScore: baseStats.highest_score || 0, fours: baseStats.fours || 0, sixes: baseStats.sixes || 0 },
+      { wickets: baseStats.wickets || 0, overs: baseStats.overs || 0 },
+      { catches: baseStats.catches || 0, runOuts: 0, stumpings: baseStats.stumpings || 0 }
+    );
+
     return {
       id: playerDoc?.id || userDoc?.id || `PLY-${email.replace(/[^a-z0-9]/g, '')}`,
       name,
@@ -102,6 +109,13 @@ class PlayerService {
       coachEmail,
       status: status.toUpperCase(),
       taluk: 'Virudhunagar',
+      performancePoints: pointsData.points,
+      tier: pointsData.currentTier,
+      tierTitle: pointsData.tierTitle,
+      nextTierPoints: pointsData.nextTierPoints,
+      unlockedPatchesCount: pointsData.unlockedCount,
+      totalPatchesCount: pointsData.totalPatches,
+      patches: pointsData.patches,
       createdAt: userDoc?.created_at || playerDoc?.createdAt || new Date().toISOString()
     };
   }
@@ -280,26 +294,45 @@ class PlayerService {
    */
   async getMatches(userId, userEmail) {
     await db.initDb();
-    const profile = await this.getProfile(userId, userEmail);
-    const teamId = profile.teamId || 'TM-01';
+    let profile = null;
+    try {
+      profile = await this.getProfile(userId, userEmail);
+    } catch (_e) {}
 
-    // Find all teams for lookup
-    const allTeams = await db.models.Team.find({}).lean();
+    const teamId = profile?.teamId || null;
+    const playerTeamName = (profile?.teamName || '').toLowerCase().trim();
+
+    // Find all teams and tournaments for lookup
+    const [allTeams, teamRegs, allTournaments, matches] = await Promise.all([
+      db.models.Team.find({}).lean(),
+      db.models.TeamRegistration ? db.models.TeamRegistration.find({}).lean() : [],
+      db.models.Tournament.find({}).lean(),
+      db.models.Match.find({}).sort({ match_date: -1, created_at: -1 }).lean()
+    ]);
+
     const teamMap = {};
     (allTeams || []).forEach(t => { teamMap[t.id] = t; });
+    (teamRegs || []).forEach(r => {
+      if (!teamMap[r.id]) {
+        teamMap[r.id] = { id: r.id, name: r.team_name, short_name: r.short_name || r.team_name };
+      }
+    });
 
-    // Query matches involving the player's team (or all district matches if none specific)
-    let matches = await db.models.Match.find({
-      $or: [{ team_a_id: teamId }, { team_b_id: teamId }]
-    }).sort({ match_date: -1 }).lean();
+    const tournamentMap = {};
+    (allTournaments || []).forEach(tour => { tournamentMap[tour.id] = tour; });
 
-    if (!matches || matches.length === 0) {
-      matches = await db.models.Match.find({}).sort({ match_date: -1 }).lean();
-    }
+    const { playerDoc, userDoc } = await this._resolvePlayer(userId, userEmail);
+    const candidateIds = [
+      profile?.id,
+      userId,
+      playerDoc?.id,
+      userDoc?.id,
+      userEmail?.toLowerCase()
+    ].filter(Boolean);
 
-    const formattedMatches = await Promise.all(matches.map(async (m) => {
-      const teamA = teamMap[m.team_a_id] || { id: m.team_a_id, name: 'Team A', short_name: 'TMA' };
-      const teamB = teamMap[m.team_b_id] || { id: m.team_b_id, name: 'Team B', short_name: 'TMB' };
+    const formattedMatches = await Promise.all((matches || []).map(async (m) => {
+      const teamA = teamMap[m.team_a_id] || { id: m.team_a_id, name: m.team_a_name || m.team_a_id, short_name: m.team_a_short || m.team_a_id };
+      const teamB = teamMap[m.team_b_id] || { id: m.team_b_id, name: m.team_b_name || m.team_b_id, short_name: m.team_b_short || m.team_b_id };
       const statusUpper = (m.status || 'SCHEDULED').toUpperCase();
 
       // Retrieve innings scores
@@ -314,25 +347,52 @@ class PlayerService {
         });
       }
 
+      // Check if player participated directly as batter or bowler in this match
+      let hasPlayerPlayedDirectly = false;
+      const innIds = (inns || []).map(i => i.id);
+      if (innIds.length > 0 && candidateIds.length > 0) {
+        const [batterFound, bowlerFound] = await Promise.all([
+          db.models.InningsBatter.findOne({ innings_id: { $in: innIds }, player_id: { $in: candidateIds } }).lean(),
+          db.models.InningsBowler.findOne({ innings_id: { $in: innIds }, player_id: { $in: candidateIds } }).lean()
+        ]);
+        if (batterFound || bowlerFound) {
+          hasPlayerPlayedDirectly = true;
+        }
+      }
+
+      const isLive = statusUpper === 'LIVE' || statusUpper === 'INNINGS_BREAK';
+      const isCompleted = statusUpper === 'COMPLETED' || statusUpper === 'FINISHED';
+
+      const isMyTeamMatch = Boolean(
+        hasPlayerPlayedDirectly ||
+        (teamId && (m.team_a_id === teamId || m.team_b_id === teamId)) ||
+        (playerTeamName && (
+          (teamA.name && teamA.name.toLowerCase().includes(playerTeamName)) ||
+          (teamB.name && teamB.name.toLowerCase().includes(playerTeamName))
+        )) ||
+        (!teamId && (m.team_a_id === 'TM-01' || m.team_b_id === 'TM-01'))
+      );
+
       return {
         id: m.id,
-        tournament: m.tournament_name || 'Virudhunagar Premier League 2026',
-        teamA: { id: teamA.id, name: teamA.name, shortName: teamA.short_name },
-        teamB: { id: teamB.id, name: teamB.name, shortName: teamB.short_name },
+        tournament: m.tournament_name || tournamentMap[m.tournament_id]?.name || 'Virudhunagar Premier League 2026',
+        teamA: { id: teamA.id, name: teamA.name, shortName: teamA.short_name || teamA.name },
+        teamB: { id: teamB.id, name: teamB.name, shortName: teamB.short_name || teamB.name },
         venue: m.venue || 'Kamarajar District Stadium',
-        date: m.match_date || '2026-10-06',
-        time: m.match_time || '09:30 AM',
+        date: m.match_date || '',
+        time: m.match_time || '',
         format: m.match_type || 'T20',
         overs: m.overs_per_side || 20,
-        status: statusUpper === 'LIVE' ? 'LIVE' : (statusUpper === 'COMPLETED' ? 'COMPLETED' : 'SCHEDULED'),
+        status: isLive ? statusUpper : (isCompleted ? 'COMPLETED' : 'SCHEDULED'),
         scoreA,
         scoreB,
-        result: m.result_summary || (statusUpper === 'LIVE' ? 'Match in Progress' : 'Scheduled Match'),
-        isMyTeamMatch: m.team_a_id === teamId || m.team_b_id === teamId
+        result: m.result_summary || (isLive ? (statusUpper === 'INNINGS_BREAK' ? 'Innings Break' : 'Match in Progress') : (isCompleted ? 'Match Completed' : 'Scheduled Match')),
+        isMyTeamMatch
       };
     }));
 
-    return formattedMatches;
+    // Only return matches where this particular player plays / is involved
+    return formattedMatches.filter(m => m.isMyTeamMatch);
   }
 
   /**
@@ -477,6 +537,26 @@ class PlayerService {
 
     const totalMatches = Math.max(bInnings, bowlerRecords.length, 5);
 
+    const pointsData = this._calculatePatchesAndPoints(
+      {
+        runs: totalRuns,
+        highestScore: highestScore,
+        fours: totalFours,
+        sixes: totalSixes,
+        strikeRate: parseFloat(strikeRate)
+      },
+      {
+        wickets: totalWickets,
+        overs: totalOvers,
+        economy: parseFloat(bowlingEconomy)
+      },
+      {
+        catches: totalCatches,
+        runOuts: totalRunOuts,
+        stumpings: totalStumpings
+      }
+    );
+
     return {
       playerId,
       playerName: profile.name,
@@ -502,7 +582,200 @@ class PlayerService {
         catches: totalCatches,
         runOuts: totalRunOuts,
         stumpings: totalStumpings
+      },
+      performancePoints: pointsData.points,
+      tier: pointsData.currentTier,
+      tierTitle: pointsData.tierTitle,
+      nextTierPoints: pointsData.nextTierPoints,
+      unlockedPatchesCount: pointsData.unlockedCount,
+      totalPatchesCount: pointsData.totalPatches,
+      patches: pointsData.patches
+    };
+  }
+
+  /**
+   * Helper to evaluate performance points and milestone patches
+   */
+  _calculatePatchesAndPoints(batting, bowling, fielding) {
+    const runs = Number(batting?.runs || 0);
+    const highestScore = Number(batting?.highestScore || 0);
+    const fours = Number(batting?.fours || 0);
+    const sixes = Number(batting?.sixes || 0);
+    const strikeRate = Number(batting?.strikeRate || 0);
+
+    const wickets = Number(bowling?.wickets || 0);
+    const overs = Number(bowling?.overs || 0);
+
+    const catches = Number(fielding?.catches || 0);
+    const runOuts = Number(fielding?.runOuts || 0);
+    const stumpings = Number(fielding?.stumpings || 0);
+
+    // Official Federation Performance Point Formula:
+    // Runs: 1 pt each
+    // Boundary bonus: 4s = +1 pt, 6s = +2 pts
+    // Wickets: 25 pts each
+    // Fielding: Catches = 10 pts, Runouts/Stumpings = 15 pts
+    // Strike Rate bonus: +15 pts if SR >= 120 and runs >= 30
+    const srBonus = (strikeRate >= 120 && runs >= 30) ? 15 : 0;
+    const totalPoints = Math.round(
+      (runs * 1) +
+      (fours * 1) +
+      (sixes * 2) +
+      (wickets * 25) +
+      (catches * 10) +
+      ((runOuts + stumpings) * 15) +
+      srBonus
+    );
+
+    // Milestone Patches based on Runs, Wickets & Field Performance
+    const patches = [
+      {
+        id: 'half_centurion',
+        title: 'Half-Centurion',
+        shortTitle: '50+ Runs',
+        category: 'BATTING',
+        target: 50,
+        current: Math.max(runs, highestScore),
+        criteriaText: 'Score 50+ runs in league matches',
+        unlocked: runs >= 50 || highestScore >= 50,
+        tier: 'SILVER',
+        icon: '⚡',
+        badgeColor: '#0284c7'
+      },
+      {
+        id: 'centurion',
+        title: 'Centurion Club',
+        shortTitle: '100+ Runs',
+        category: 'BATTING',
+        target: 100,
+        current: Math.max(runs, highestScore),
+        criteriaText: 'Accumulate 100+ career tournament runs',
+        unlocked: runs >= 100 || highestScore >= 100,
+        tier: 'GOLD',
+        icon: '🏏',
+        badgeColor: '#d97706'
+      },
+      {
+        id: 'double_centurion',
+        title: 'Double Centurion',
+        shortTitle: '200+ Runs',
+        category: 'BATTING',
+        target: 200,
+        current: runs,
+        criteriaText: 'Accumulate 200+ career tournament runs',
+        unlocked: runs >= 200,
+        tier: 'DIAMOND',
+        icon: '💎',
+        badgeColor: '#7c3aed'
+      },
+      {
+        id: 'wicket_master',
+        title: 'Wicket Master',
+        shortTitle: '5+ Wickets',
+        category: 'BOWLING',
+        target: 5,
+        current: wickets,
+        criteriaText: 'Claim 5 or more career wickets',
+        unlocked: wickets >= 5,
+        tier: 'SILVER',
+        icon: '🎯',
+        badgeColor: '#059669'
+      },
+      {
+        id: 'golden_arm',
+        title: 'Golden Arm Striker',
+        shortTitle: '10+ Wickets',
+        category: 'BOWLING',
+        target: 10,
+        current: wickets,
+        criteriaText: 'Claim 10 or more career wickets',
+        unlocked: wickets >= 10,
+        tier: 'GOLD',
+        icon: '🔥',
+        badgeColor: '#e11d48'
+      },
+      {
+        id: 'star_allrounder',
+        title: 'All-Round Dynamo',
+        shortTitle: '50 Runs + 3 Wkts',
+        category: 'ALL_ROUND',
+        target: 50,
+        current: runs,
+        criteriaText: 'Score 50+ runs and claim 3+ wickets',
+        unlocked: runs >= 50 && wickets >= 3,
+        tier: 'GOLD',
+        icon: '🌟',
+        badgeColor: '#d97706'
+      },
+      {
+        id: 'safe_hands',
+        title: 'Safe Hands',
+        shortTitle: '3+ Catches',
+        category: 'FIELDING',
+        target: 3,
+        current: catches,
+        criteriaText: 'Complete 3 or more catches in field',
+        unlocked: catches >= 3,
+        tier: 'BRONZE',
+        icon: '🧤',
+        badgeColor: '#2563eb'
+      },
+      {
+        id: 'century_points',
+        title: 'Centurion of Points',
+        shortTitle: '100+ Points',
+        category: 'POINTS',
+        target: 100,
+        current: totalPoints,
+        criteriaText: 'Amass 100+ Federation Performance Points',
+        unlocked: totalPoints >= 100,
+        tier: 'SILVER',
+        icon: '⭐',
+        badgeColor: '#b45309'
+      },
+      {
+        id: 'elite_points',
+        title: 'Elite 200 Club',
+        shortTitle: '200+ Points',
+        category: 'POINTS',
+        target: 200,
+        current: totalPoints,
+        criteriaText: 'Amass 200+ Federation Performance Points',
+        unlocked: totalPoints >= 200,
+        tier: 'GOLD',
+        icon: '🏆',
+        badgeColor: '#d97706'
       }
+    ];
+
+    let currentTier = 'BRONZE';
+    let tierTitle = 'Division Contender';
+    let nextTierPoints = 100;
+
+    if (totalPoints >= 350) {
+      currentTier = 'DIAMOND';
+      tierTitle = 'District Legend';
+      nextTierPoints = 500;
+    } else if (totalPoints >= 200) {
+      currentTier = 'GOLD';
+      tierTitle = 'Premier Champion';
+      nextTierPoints = 350;
+    } else if (totalPoints >= 100) {
+      currentTier = 'SILVER';
+      tierTitle = 'Division Specialist';
+      nextTierPoints = 200;
+    }
+
+    const unlockedCount = patches.filter(p => p.unlocked).length;
+
+    return {
+      points: totalPoints,
+      currentTier,
+      tierTitle,
+      nextTierPoints,
+      unlockedCount,
+      totalPatches: patches.length,
+      patches
     };
   }
 
