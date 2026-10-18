@@ -76,6 +76,7 @@ export default function WagonWheel({
   // Active batter selection
   const defaultBatterId = selectedBatterId || (batters[0]?.id ?? '');
   const [activeBatterId, setActiveBatterId] = useState<string>(defaultBatterId);
+  const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
 
   // Sync if prop changes
   React.useEffect(() => {
@@ -298,29 +299,89 @@ export default function WagonWheel({
         )}
       </View>
 
-      {/* Batsman Selector Chips */}
-      {batters.length > 1 && (
-        <View style={styles.batterSelectorWrapper}>
-          <Text style={styles.selectorLabel}>SELECT BATSMAN:</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.batterChipsScroll}>
-            {batters.map(b => {
-              const isActive = b.id === activeBatterId;
-              return (
-                <TouchableOpacity
-                  key={b.id}
-                  style={[styles.batterChip, isActive && styles.batterChipActive]}
-                  onPress={() => handleBatterChange(b.id)}
-                >
-                  <Text style={[styles.batterChipName, isActive && styles.batterChipTextActive]}>
-                    {b.name}
-                  </Text>
-                  <Text style={[styles.batterChipRuns, isActive && styles.batterChipRunsActive]}>
-                    {b.runs} ({b.balls})
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+      {/* Batsman Selector Dropdown */}
+      {batters.length > 0 && (
+        <View style={styles.batterDropdownWrapper}>
+          <Text style={styles.selectorLabel}>SELECT BATSMAN (DROPDOWN):</Text>
+          <TouchableOpacity
+            style={[styles.dropdownButton, isDropdownOpen && styles.dropdownButtonActive]}
+            onPress={() => setIsDropdownOpen(!isDropdownOpen)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.dropdownLeft}>
+              <Text style={styles.dropdownPlayerIcon}>🏏</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.dropdownSelectedName}>
+                  {currentBatter?.name || 'Select Batsman'}
+                </Text>
+                <Text style={styles.dropdownSelectedStats}>
+                  {currentBatter?.runs ?? 0} runs ({currentBatter?.balls ?? 0} balls) • SR {currentBatter?.strikeRate || '0.0'} • {currentBatter?.dismissal || 'not out'}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.dropdownRight}>
+              <View style={styles.dropdownBadgeTotal}>
+                <Text style={styles.dropdownBadgeTotalText}>
+                  {batters.length} Batsmen
+                </Text>
+              </View>
+              <Text style={styles.dropdownArrow}>{isDropdownOpen ? '▲' : '▼'}</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Dropdown Menu Options */}
+          {isDropdownOpen && (
+            <View style={styles.dropdownMenu}>
+              <ScrollView style={{ maxHeight: 260 }} nestedScrollEnabled showsVerticalScrollIndicator>
+                {batters.map((b, idx) => {
+                  const isSelected = b.id === activeBatterId;
+                  return (
+                    <TouchableOpacity
+                      key={b.id || idx}
+                      style={[styles.dropdownItem, isSelected && styles.dropdownItemSelected]}
+                      onPress={() => {
+                        handleBatterChange(b.id);
+                        setIsDropdownOpen(false);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.dropdownItemLeft}>
+                        <View style={[styles.dropdownItemIndex, isSelected && styles.dropdownItemIndexActive]}>
+                          <Text style={[styles.dropdownItemIndexText, isSelected && styles.dropdownItemIndexTextActive]}>
+                            {idx + 1}
+                          </Text>
+                        </View>
+                        <View style={{ flexShrink: 1 }}>
+                          <Text style={[styles.dropdownItemName, isSelected && styles.dropdownItemNameActive]}>
+                            {b.name}
+                          </Text>
+                          <Text style={styles.dropdownItemDismissal}>
+                            {b.dismissal || (b.isOut ? 'out' : 'not out')}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.dropdownItemRight}>
+                        <View style={styles.dropdownItemStatsCol}>
+                          <Text style={[styles.dropdownItemRuns, isSelected && styles.dropdownItemRunsActive]}>
+                            {b.runs} r
+                          </Text>
+                          <Text style={styles.dropdownItemBalls}>
+                            ({b.balls} b)
+                          </Text>
+                        </View>
+                        {isSelected && (
+                          <View style={styles.dropdownCheckmark}>
+                            <Text style={styles.dropdownCheckmarkText}>✓</Text>
+                          </View>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
         </View>
       )}
 
@@ -906,17 +967,17 @@ function generateSyntheticShots(batter: BatterProfile): ShotDelivery[] {
 
 const styles = StyleSheet.create({
   cardContainer: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#1e293b',
+    borderWidth: 2,
+    borderColor: '#fde68a',
     marginVertical: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 4
+    shadowColor: '#d4af37',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3
   },
   cardHeader: {
     flexDirection: 'row',
@@ -924,25 +985,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#fef3c7',
     paddingBottom: 12,
     marginBottom: 12
   },
   headerTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#f8fafc'
+    color: '#0f172a'
   },
   headerSubtitle: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: '#64748b',
     marginTop: 2
   },
   batterBadge: {
-    backgroundColor: 'rgba(56, 189, 248, 0.12)',
-    borderColor: '#0284c7',
-    borderWidth: 1,
+    backgroundColor: '#fef3c7',
+    borderColor: '#fde68a',
+    borderWidth: 1.5,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8
@@ -950,15 +1011,179 @@ const styles = StyleSheet.create({
   batterBadgeName: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#38bdf8'
+    color: '#92400e'
   },
   batterBadgeStats: {
     fontSize: 11,
-    color: '#bae6fd',
-    marginTop: 2
+    color: '#b45309',
+    marginTop: 2,
+    fontWeight: '700'
   },
-  batterSelectorWrapper: {
-    marginBottom: 14
+  batterDropdownWrapper: {
+    marginBottom: 16,
+    position: 'relative',
+    zIndex: 20
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fffbeb',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#fde68a',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    shadowColor: '#d4af37',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2
+  },
+  dropdownButtonActive: {
+    borderColor: '#f59e0b',
+    borderBottomLeftRadius: 4,
+    borderBottomRightRadius: 4
+  },
+  dropdownLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1
+  },
+  dropdownPlayerIcon: {
+    fontSize: 22
+  },
+  dropdownSelectedName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  dropdownSelectedStats: {
+    fontSize: 11.5,
+    color: '#b45309',
+    marginTop: 2,
+    fontWeight: '600'
+  },
+  dropdownRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10
+  },
+  dropdownBadgeTotal: {
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6
+  },
+  dropdownBadgeTotalText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#92400e'
+  },
+  dropdownArrow: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#b45309'
+  },
+  dropdownMenu: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderTopWidth: 0,
+    borderColor: '#fde68a',
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    shadowColor: '#d4af37',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+    overflow: 'hidden'
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#fef3c7'
+  },
+  dropdownItemSelected: {
+    backgroundColor: '#fefce8'
+  },
+  dropdownItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1
+  },
+  dropdownItemIndex: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  dropdownItemIndexActive: {
+    backgroundColor: '#f59e0b'
+  },
+  dropdownItemIndexText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#64748b'
+  },
+  dropdownItemIndexTextActive: {
+    color: '#ffffff'
+  },
+  dropdownItemName: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#1e293b'
+  },
+  dropdownItemNameActive: {
+    color: '#92400e',
+    fontWeight: '800'
+  },
+  dropdownItemDismissal: {
+    fontSize: 10.5,
+    color: '#64748b',
+    marginTop: 1
+  },
+  dropdownItemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
+  },
+  dropdownItemStatsCol: {
+    alignItems: 'flex-end'
+  },
+  dropdownItemRuns: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  dropdownItemRunsActive: {
+    color: '#d97706'
+  },
+  dropdownItemBalls: {
+    fontSize: 10.5,
+    color: '#64748b'
+  },
+  dropdownCheckmark: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#10b981',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4
+  },
+  dropdownCheckmarkText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '900'
   },
   selectorLabel: {
     fontSize: 11,
@@ -967,40 +1192,23 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     letterSpacing: 0.5
   },
-  batterChipsScroll: {
-    gap: 8,
-    paddingVertical: 4
-  },
-  batterChip: {
-    backgroundColor: '#1e293b',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#334155',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8
-  },
-  batterChipActive: {
-    backgroundColor: '#0284c7',
-    borderColor: '#38bdf8'
-  },
   batterChipName: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#cbd5e1'
+    color: '#334155'
   },
   batterChipRuns: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#94a3b8'
+    color: '#64748b'
   },
   batterChipTextActive: {
-    color: '#ffffff'
+    color: '#92400e',
+    fontWeight: '800'
   },
   batterChipRunsActive: {
-    color: '#e0f2fe'
+    color: '#b45309',
+    fontWeight: '800'
   },
   filterBar: {
     flexDirection: 'row',
@@ -1027,13 +1235,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 14,
-    backgroundColor: '#1e293b',
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
-    borderColor: '#334155'
+    borderColor: '#e2e8f0'
   },
   filterPillActive: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#60a5fa'
+    backgroundColor: '#d97706',
+    borderColor: '#b45309'
   },
   filterPillActiveSix: {
     backgroundColor: '#be185d',
@@ -1056,7 +1264,7 @@ const styles = StyleSheet.create({
     borderColor: '#06b6d4'
   },
   filterPillActiveDot: {
-    backgroundColor: '#475569',
+    backgroundColor: '#64748b',
     borderColor: '#94a3b8'
   },
   dotMarker: {
@@ -1067,7 +1275,7 @@ const styles = StyleSheet.create({
   filterPillText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#cbd5e1'
+    color: '#475569'
   },
   filterPillTextActive: {
     color: '#ffffff',
@@ -1096,15 +1304,16 @@ const styles = StyleSheet.create({
   shotTooltip: {
     position: 'absolute',
     bottom: 12,
-    backgroundColor: 'rgba(15, 23, 42, 0.94)',
-    borderColor: '#334155',
-    borderWidth: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderColor: '#fde68a',
+    borderWidth: 1.5,
     padding: 10,
     borderRadius: 8,
     width: 220,
-    shadowColor: '#000',
-    shadowOpacity: 0.5,
-    shadowRadius: 8
+    shadowColor: '#d4af37',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4
   },
   tooltipHeader: {
     flexDirection: 'row',
@@ -1129,23 +1338,23 @@ const styles = StyleSheet.create({
   },
   tooltipPosition: {
     fontSize: 11,
-    color: '#f8fafc',
-    fontWeight: '600'
+    color: '#0f172a',
+    fontWeight: '700'
   },
   tooltipBall: {
     fontSize: 10,
-    color: '#94a3b8',
+    color: '#64748b',
     marginTop: 2
   },
   tooltipComm: {
     fontSize: 10,
-    color: '#cbd5e1',
+    color: '#334155',
     fontStyle: 'italic',
     marginTop: 4
   },
   clearFilterBtn: {
     marginTop: 8,
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
     borderWidth: 1,
     borderColor: '#ef4444',
     paddingHorizontal: 12,
@@ -1154,7 +1363,7 @@ const styles = StyleSheet.create({
   },
   clearFilterText: {
     fontSize: 11,
-    color: '#fca5a5',
+    color: '#dc2626',
     fontWeight: 'bold'
   },
   analyticsWrapper: {
@@ -1162,11 +1371,16 @@ const styles = StyleSheet.create({
     gap: 14
   },
   balanceCard: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#ffffff',
     borderRadius: 12,
     padding: 14,
-    borderWidth: 1,
-    borderColor: '#334155'
+    borderWidth: 1.5,
+    borderColor: '#fde68a',
+    shadowColor: '#d4af37',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2
   },
   balanceHeader: {
     flexDirection: 'row',
@@ -1177,21 +1391,21 @@ const styles = StyleSheet.create({
   balanceTitle: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#f1f5f9'
+    color: '#0f172a'
   },
   balanceTotalRuns: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#10b981'
+    color: '#059669'
   },
   duelBarTrack: {
     height: 26,
     borderRadius: 6,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#f1f5f9',
     flexDirection: 'row',
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#475569'
+    borderColor: '#e2e8f0'
   },
   duelBarOff: {
     backgroundColor: '#0284c7',
@@ -1215,22 +1429,29 @@ const styles = StyleSheet.create({
   },
   offDetailText: {
     fontSize: 11,
-    color: '#7dd3fc'
+    color: '#0284c7',
+    fontWeight: '600'
   },
   legDetailText: {
     fontSize: 11,
-    color: '#fdba74'
+    color: '#d97706',
+    fontWeight: '600'
   },
   boldText: {
     fontWeight: 'bold',
-    color: '#ffffff'
+    color: '#0f172a'
   },
   sectorTableCard: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#ffffff',
     borderRadius: 12,
     padding: 14,
-    borderWidth: 1,
-    borderColor: '#334155'
+    borderWidth: 1.5,
+    borderColor: '#fde68a',
+    shadowColor: '#d4af37',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2
   },
   sectorCardHeader: {
     flexDirection: 'row',
@@ -1243,25 +1464,26 @@ const styles = StyleSheet.create({
   sectorCardTitle: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#f1f5f9'
+    color: '#0f172a'
   },
   sectorCardHint: {
     fontSize: 10,
-    color: '#94a3b8'
+    color: '#64748b'
   },
   sectorGrid: {
     gap: 8
   },
   sectorRowItem: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#f8fafc',
     borderRadius: 8,
     padding: 10,
     borderWidth: 1,
-    borderColor: '#1e293b'
+    borderColor: '#e2e8f0'
   },
   sectorRowSelected: {
-    borderColor: '#38bdf8',
-    backgroundColor: 'rgba(2, 132, 199, 0.15)'
+    borderColor: '#f59e0b',
+    borderWidth: 1.5,
+    backgroundColor: '#fefce8'
   },
   sectorRowTop: {
     flexDirection: 'row',
@@ -1281,10 +1503,10 @@ const styles = StyleSheet.create({
   sectorNameText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#e2e8f0'
+    color: '#1e293b'
   },
   sectorNameActive: {
-    color: '#38bdf8',
+    color: '#92400e',
     fontWeight: 'bold'
   },
   sectorValueWrapper: {
@@ -1295,7 +1517,7 @@ const styles = StyleSheet.create({
   sectorRunsText: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#f8fafc'
+    color: '#0f172a'
   },
   sectorPctBadge: {
     fontSize: 12,
@@ -1304,7 +1526,7 @@ const styles = StyleSheet.create({
   sectorBarTrack: {
     height: 5,
     borderRadius: 3,
-    backgroundColor: '#1e293b',
+    backgroundColor: '#e2e8f0',
     marginVertical: 6,
     overflow: 'hidden'
   },
@@ -1324,8 +1546,8 @@ const styles = StyleSheet.create({
   sectorSideBadge: {
     fontSize: 9,
     fontWeight: 'bold',
-    color: '#94a3b8',
-    backgroundColor: '#1e293b',
+    color: '#64748b',
+    backgroundColor: '#f1f5f9',
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: 4
@@ -1335,8 +1557,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     marginBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#fef3c7',
     paddingBottom: 12
   },
   slideTab: {
@@ -1344,16 +1566,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#1e293b',
+    backgroundColor: '#f8fafc',
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: '#334155'
+    borderColor: '#e2e8f0'
   },
   slideTabActive: {
-    backgroundColor: 'rgba(2, 132, 199, 0.2)',
-    borderColor: '#0284c7'
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b'
   },
   slideTabIcon: {
     fontSize: 20
@@ -1366,10 +1588,10 @@ const styles = StyleSheet.create({
   slideTabTitle: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#94a3b8'
+    color: '#475569'
   },
   slideTabTitleActive: {
-    color: '#38bdf8'
+    color: '#92400e'
   },
   slideTabSubtitle: {
     fontSize: 10,
@@ -1377,17 +1599,17 @@ const styles = StyleSheet.create({
     marginTop: 2
   },
   slidePillBadge: {
-    backgroundColor: '#334155',
+    backgroundColor: '#e2e8f0',
     paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: 8
   },
   slidePillBadgeActive: {
-    backgroundColor: '#0284c7'
+    backgroundColor: '#f59e0b'
   },
   slidePillBadgeText: {
     fontSize: 9.5,
-    color: '#cbd5e1',
+    color: '#475569',
     fontWeight: 'bold'
   },
   slidePillBadgeTextActive: {
@@ -1405,9 +1627,9 @@ const styles = StyleSheet.create({
   },
   compactSideOff: {
     flex: 1,
-    backgroundColor: 'rgba(2, 132, 199, 0.15)',
+    backgroundColor: '#f0f9ff',
     borderWidth: 1,
-    borderColor: '#0284c7',
+    borderColor: '#bae6fd',
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 8,
@@ -1415,9 +1637,9 @@ const styles = StyleSheet.create({
   },
   compactSideLeg: {
     flex: 1,
-    backgroundColor: 'rgba(234, 88, 12, 0.15)',
+    backgroundColor: '#fff7ed',
     borderWidth: 1,
-    borderColor: '#ea580c',
+    borderColor: '#fed7aa',
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 8,
@@ -1425,14 +1647,14 @@ const styles = StyleSheet.create({
   },
   compactSideText: {
     fontSize: 11,
-    color: '#f8fafc',
-    fontWeight: '600'
+    color: '#0f172a',
+    fontWeight: '700'
   },
   slideNavBanner: {
     marginTop: 14,
-    backgroundColor: '#1e293b',
+    backgroundColor: '#fffbeb',
     borderWidth: 1.5,
-    borderColor: '#38bdf8',
+    borderColor: '#fde68a',
     borderRadius: 12,
     padding: 14,
     flexDirection: 'row',
@@ -1442,9 +1664,9 @@ const styles = StyleSheet.create({
   },
   slideNavBannerBack: {
     marginTop: 10,
-    backgroundColor: '#1e293b',
+    backgroundColor: '#fffbeb',
     borderWidth: 1.5,
-    borderColor: '#0284c7',
+    borderColor: '#fde68a',
     borderRadius: 12,
     padding: 14,
     flexDirection: 'row',
@@ -1456,7 +1678,7 @@ const styles = StyleSheet.create({
   },
   slideNavBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: '#0284c7',
+    backgroundColor: '#f59e0b',
     color: '#ffffff',
     fontSize: 9.5,
     fontWeight: '900',
@@ -1468,7 +1690,7 @@ const styles = StyleSheet.create({
   },
   slideNavBadgeBack: {
     alignSelf: 'flex-start',
-    backgroundColor: '#047857',
+    backgroundColor: '#10b981',
     color: '#ffffff',
     fontSize: 9.5,
     fontWeight: '900',
@@ -1481,41 +1703,46 @@ const styles = StyleSheet.create({
   slideNavTitle: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#38bdf8'
+    color: '#92400e'
   },
   slideNavTitleBack: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#34d399'
+    color: '#047857'
   },
   slideNavSubtitle: {
     fontSize: 10.5,
-    color: '#94a3b8',
+    color: '#b45309',
     marginTop: 2
   },
   slideNavSubtitleBack: {
     fontSize: 10.5,
-    color: '#94a3b8',
+    color: '#047857',
     marginTop: 2
   },
   slideNavArrow: {
     fontSize: 18,
-    color: '#38bdf8',
+    color: '#d97706',
     fontWeight: 'bold',
     marginLeft: 10
   },
   slideNavArrowBack: {
     fontSize: 20,
-    color: '#34d399',
+    color: '#10b981',
     fontWeight: 'bold'
   },
   slide2HeaderCard: {
-    backgroundColor: '#1e293b',
-    borderWidth: 1,
-    borderColor: '#334155',
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#fde68a',
     borderRadius: 12,
     padding: 14,
-    marginBottom: 4
+    marginBottom: 4,
+    shadowColor: '#d4af37',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2
   },
   slide2HeaderTop: {
     flexDirection: 'row',
@@ -1526,11 +1753,11 @@ const styles = StyleSheet.create({
   slide2Title: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#f8fafc',
+    color: '#0f172a',
     flex: 1
   },
   slide2Badge: {
-    backgroundColor: '#38bdf8',
+    backgroundColor: '#fef3c7',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6
@@ -1538,17 +1765,17 @@ const styles = StyleSheet.create({
   slide2BadgeText: {
     fontSize: 10,
     fontWeight: '900',
-    color: '#0f172a'
+    color: '#92400e'
   },
   slide2Subtitle: {
     fontSize: 11,
-    color: '#94a3b8',
+    color: '#64748b',
     lineHeight: 16
   },
   sectorInspectBtn: {
-    backgroundColor: 'rgba(2, 132, 199, 0.25)',
+    backgroundColor: '#fef3c7',
     borderWidth: 1,
-    borderColor: '#0284c7',
+    borderColor: '#fde68a',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4
@@ -1556,7 +1783,7 @@ const styles = StyleSheet.create({
   sectorInspectBtnText: {
     fontSize: 9.5,
     fontWeight: 'bold',
-    color: '#38bdf8'
+    color: '#92400e'
   },
   // Responsive overrides
   slideTabBarMobile: {

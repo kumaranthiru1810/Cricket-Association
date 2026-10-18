@@ -169,7 +169,9 @@ class ScoringEngine {
       shotType = null,
       fieldingPosition = null,
       fielderId = null,
-      fielderName = null
+      fielderName = null,
+      reason = null,
+      note = null
     } = deliveryData;
 
     // Delivery legality: Wide & No Ball are illegal deliveries
@@ -196,9 +198,9 @@ class ScoringEngine {
     // Player Names for Commentary & Scorecard
     const playerMap = await this.getFullPlayerMap();
 
-    const activeStrikerId = strikerId || innings.current_striker_id || 'P301';
-    const activeNonStrikerId = nonStrikerId || innings.current_non_striker_id || 'P302';
-    const activeBowlerId = bowlerId || innings.current_bowler_id || 'P403';
+    const activeStrikerId = strikerId || innings.current_striker_id;
+    const activeNonStrikerId = nonStrikerId || innings.current_non_striker_id;
+    const activeBowlerId = bowlerId || innings.current_bowler_id;
 
     const actualDismissedId = dismissedPlayerId || (wicket ? activeStrikerId : null);
     const dismissedBatterName = actualDismissedId ? (playerMap[actualDismissedId]?.name || 'Batter') : null;
@@ -209,7 +211,7 @@ class ScoringEngine {
 
     const dismissalText = wicket ? this.buildDismissalText(wicketType, bowlerName, actualFielderName) : null;
 
-    const commentary = this.generateCommentary(
+    let commentary = this.generateCommentary(
       strikerName,
       bowlerName,
       Number(runsBatter),
@@ -221,6 +223,13 @@ class ScoringEngine {
       actualFielderName,
       dismissedBatterName
     );
+
+    const runReason = (reason || note || deliveryData.customReason || '').trim();
+    if (runReason) {
+      commentary = `${commentary} [${runReason}]`;
+    }
+
+    const replacementId = deliveryData.replacementBatterId || deliveryData.nextBatterId;
 
     // 3. Create Delivery Document in MongoDB
     const deliveryId = 'DEL-' + Date.now() + '-' + String(++deliverySequence).padStart(6, '0');
@@ -243,6 +252,8 @@ class ScoringEngine {
       dismissal_type: wicketType,
       dismissal_text: dismissalText,
       dismissed_player_id: actualDismissedId,
+      replacement_batter_id: replacementId || null,
+      reason: runReason || null,
       boundary_type: boundaryType,
       is_legal_delivery: isLegal,
       shot_type: shotType,
@@ -273,7 +284,6 @@ class ScoringEngine {
     let nextStriker = activeStrikerId;
     let nextNonStriker = activeNonStrikerId;
 
-    const replacementId = deliveryData.replacementBatterId || deliveryData.nextBatterId;
     if (wicket && replacementId) {
       if (dismissedPlayerId && dismissedPlayerId === activeNonStrikerId) {
         nextNonStriker = replacementId;
@@ -915,6 +925,763 @@ class ScoringEngine {
         matchId,
         result: match.result_summary
       }
+    };
+  }
+
+  /**
+   * Swap strike between striker and non-striker
+   */
+  async swapStrike(matchId) {
+    await db.initDb();
+    let innings = await db.models.Innings.findOne({ match_id: matchId, is_completed: { $ne: true }, status: { $ne: "COMPLETED" } }).sort({ innings_number: -1 });
+    if (!innings) {
+      innings = await db.models.Innings.findOne({ match_id: matchId }).sort({ innings_number: -1 });
+    }
+    if (!innings) throw { status: 404, message: 'Active innings not found.' };
+
+    const oldStriker = innings.current_striker_id;
+    const oldNonStriker = innings.current_non_striker_id;
+
+    innings.current_striker_id = oldNonStriker;
+    innings.current_non_striker_id = oldStriker;
+    await innings.save();
+
+    return {
+      success: true,
+      message: 'Strike swapped successfully.',
+      strikerId: innings.current_striker_id,
+      nonStrikerId: innings.current_non_striker_id
+    };
+  }
+
+  /**
+   * Change or substitute active batter
+   */
+  async changeBatter(matchId, { target = 'striker', newBatterId, newBatterName }) {
+    await db.initDb();
+    let innings = await db.models.Innings.findOne({ match_id: matchId, is_completed: { $ne: true }, status: { $ne: "COMPLETED" } }).sort({ innings_number: -1 });
+    if (!innings) {
+      innings = await db.models.Innings.findOne({ match_id: matchId }).sort({ innings_number: -1 });
+    }
+    if (!innings) throw { status: 404, message: 'Active innings not found.' };
+
+    let resolvedId = newBatterId;
+    if (newBatterName && newBatterName.trim()) {
+      const cleanName = newBatterName.trim();
+      if (!resolvedId) {
+        resolvedId = `PLY-MANUAL-${Date.now()}`;
+      }
+      const existingPlayer = await db.models.Player.findOne({
+        $or: [{ id: resolvedId }, { name: cleanName }]
+      });
+      if (!existingPlayer) {
+        await db.models.Player.create({
+          id: resolvedId,
+          name: cleanName,
+          role: 'BATTER',
+          team_id: innings.batting_team_id
+        });
+      }
+    }
+
+    if (!resolvedId) throw { status: 400, message: 'Batter ID or name required.' };
+
+    // Initialize InningsBatter record if not present
+    let repBatter = await db.models.InningsBatter.findOne({ innings_id: innings.id, player_id: resolvedId });
+    if (!repBatter) {
+      repBatter = new db.models.InningsBatter({
+        id: `BAT-${innings.id}-${resolvedId}`,
+        innings_id: innings.id,
+        player_id: resolvedId,
+        batting_position: (await db.models.InningsBatter.countDocuments({ innings_id: innings.id })) + 1,
+        runs: 0,
+        balls: 0,
+        fours: 0,
+        sixes: 0,
+        strike_rate: 0.0,
+        is_out: false,
+        dismissal_text: 'not out'
+      });
+      await repBatter.save();
+    } else {
+      repBatter.is_out = false;
+      repBatter.dismissal_text = 'not out';
+      await repBatter.save();
+    }
+
+    if (target === 'nonStriker') {
+      innings.current_non_striker_id = resolvedId;
+    } else {
+      innings.current_striker_id = resolvedId;
+    }
+    await innings.save();
+
+    return {
+      success: true,
+      message: `${target === 'striker' ? 'Striker' : 'Non-striker'} updated to ${newBatterName || resolvedId}`,
+      strikerId: innings.current_striker_id,
+      nonStrikerId: innings.current_non_striker_id
+    };
+  }
+
+  /**
+   * Change / Substitute Active Bowler
+   */
+  async changeBowler(matchId, { newBowlerId, newBowlerName } = {}) {
+    await db.initDb();
+    let innings = await db.models.Innings.findOne({ match_id: matchId, is_completed: { $ne: true }, status: { $ne: "COMPLETED" } }).sort({ innings_number: -1 });
+    if (!innings) {
+      innings = await db.models.Innings.findOne({ match_id: matchId }).sort({ innings_number: -1 });
+    }
+    if (!innings) throw { status: 404, message: 'Active innings not found.' };
+
+    let resolvedId = newBowlerId;
+    let finalBowlerName = newBowlerName ? newBowlerName.trim() : '';
+
+    if (finalBowlerName) {
+      const existingPlayer = await db.models.Player.findOne({
+        $or: [
+          ...(resolvedId ? [{ id: resolvedId }] : []),
+          { name: finalBowlerName }
+        ]
+      });
+      if (existingPlayer) {
+        resolvedId = existingPlayer.id;
+        finalBowlerName = existingPlayer.name;
+      } else {
+        if (!resolvedId) {
+          resolvedId = `PLY-BWL-${Date.now()}`;
+        }
+        await db.models.Player.create({
+          id: resolvedId,
+          name: finalBowlerName,
+          role: 'BOWLER',
+          team_id: innings.bowling_team_id
+        });
+      }
+    } else if (resolvedId) {
+      const pDoc = await db.models.Player.findOne({ id: resolvedId }).lean();
+      if (pDoc && pDoc.name) {
+        finalBowlerName = pDoc.name;
+      }
+    }
+
+    if (!resolvedId) throw { status: 400, message: 'Bowler ID or name required.' };
+
+    // Initialize InningsBowler record if not present
+    let bowlerStats = await db.models.InningsBowler.findOne({ innings_id: innings.id, player_id: resolvedId });
+    if (!bowlerStats) {
+      bowlerStats = new db.models.InningsBowler({
+        id: `BWL-${innings.id}-${resolvedId}`,
+        innings_id: innings.id,
+        player_id: resolvedId,
+        overs: 0,
+        balls: 0,
+        maidens: 0,
+        runs_conceded: 0,
+        wickets: 0,
+        economy: 0
+      });
+      await bowlerStats.save();
+    }
+
+    innings.current_bowler_id = resolvedId;
+    innings.is_over_complete = false;
+    await innings.save();
+
+    // Socket.IO update
+    try {
+      socketService.emitScoreUpdate(matchId, {
+        matchId,
+        event: 'BOWLER_CHANGED',
+        bowlerId: resolvedId,
+        bowlerName: finalBowlerName || resolvedId
+      });
+    } catch (e) {}
+
+    return {
+      success: true,
+      message: `Bowler changed to ${finalBowlerName || resolvedId}`,
+      currentBowlerId: innings.current_bowler_id,
+      bowler: {
+        id: resolvedId,
+        name: finalBowlerName || bowlerStats?.name || resolvedId,
+        overs: bowlerStats?.overs || 0,
+        balls: bowlerStats?.balls || 0,
+        runs: bowlerStats?.runs_conceded || 0,
+        wickets: bowlerStats?.wickets || 0,
+        economy: bowlerStats?.economy || 0
+      }
+    };
+  }
+
+  /**
+   * Revised Overs & Revised Target
+   * Scorer updates total overs and/or revised target (e.g. rain interruption / DLS)
+   */
+  async setRevisedOvers(matchId, payload = {}) {
+    await db.initDb();
+    const match = await db.models.Match.findOne({ id: matchId });
+    if (!match) throw { status: 404, message: 'Match not found.' };
+
+    const totalOvers = payload.totalOvers ? parseInt(payload.totalOvers, 10) : null;
+    const revisedTarget = payload.revisedTarget ? parseInt(payload.revisedTarget, 10) : null;
+    const comments = payload.comments || '';
+
+    if (totalOvers && totalOvers > 0) {
+      match.revised_overs = totalOvers;
+    }
+    if (revisedTarget && revisedTarget > 0) {
+      match.revised_target = revisedTarget;
+    }
+    if (comments) {
+      match.revised_comments = comments;
+    }
+    await match.save();
+
+    // Update active innings
+    const currentInnings = await db.models.Innings.findOne({ match_id: matchId, is_completed: false }).sort({ innings_number: -1 });
+    if (currentInnings) {
+      if (totalOvers) currentInnings.revised_overs = totalOvers;
+      if (revisedTarget && currentInnings.innings_number === 2) {
+        currentInnings.target = revisedTarget;
+      }
+      await currentInnings.save();
+    }
+
+    try {
+      broadcastScoreUpdate(matchId, {
+        action: 'REVISED_OVERS',
+        revisedOvers: match.revised_overs,
+        revisedTarget: match.revised_target,
+        comments: match.revised_comments
+      });
+    } catch (_) {}
+
+    return {
+      success: true,
+      message: 'Revised overs/target successfully updated.',
+      data: {
+        revisedOvers: match.revised_overs,
+        revisedTarget: match.revised_target,
+        comments: match.revised_comments
+      }
+    };
+  }
+
+  /**
+   * Playing XI Edit
+   * Rule: Applicable ONLY for players who have not batted or bowled a single delivery
+   */
+  async editPlayingXI(matchId, payload = {}) {
+    await db.initDb();
+    const match = await db.models.Match.findOne({ id: matchId });
+    if (!match) throw { status: 404, message: 'Match not found.' };
+
+    const { teamId, playingXI } = payload;
+    if (!teamId || !Array.isArray(playingXI)) {
+      throw { status: 400, message: 'teamId and playingXI array are required.' };
+    }
+
+    // Determine current playing XI
+    const isTeamA = teamId === match.team_a_id;
+    const currentPlayingXI = isTeamA ? (match.team_a_playing_xi || []) : (match.team_b_playing_xi || []);
+
+    // Find players who were removed from current Playing XI
+    const removedPlayerIds = currentPlayingXI.filter(pid => !playingXI.includes(pid));
+
+    if (removedPlayerIds.length > 0) {
+      // Find all innings for this match
+      const inningsList = await db.models.Innings.find({ match_id: matchId }).lean();
+      const inningsIds = inningsList.map(inn => inn.id);
+
+      // Check if any removed player has batted (balls > 0 or runs > 0)
+      const batted = await db.models.InningsBatter.find({
+        innings_id: { $in: inningsIds },
+        player_id: { $in: removedPlayerIds },
+        $or: [{ balls: { $gt: 0 } }, { runs: { $gt: 0 } }, { is_out: true }]
+      }).lean();
+
+      if (batted.length > 0) {
+        throw {
+          status: 400,
+          message: `Cannot replace player who has already batted in the match.`
+        };
+      }
+
+      // Check if any removed player has bowled (overs > 0 or balls > 0)
+      const bowled = await db.models.InningsBowler.find({
+        innings_id: { $in: inningsIds },
+        player_id: { $in: removedPlayerIds },
+        $or: [{ balls: { $gt: 0 } }, { overs: { $gt: 0 } }]
+      }).lean();
+
+      if (bowled.length > 0) {
+        throw {
+          status: 400,
+          message: `Cannot replace player who has already bowled in the match.`
+        };
+      }
+    }
+
+    // Save updated Playing XI
+    if (isTeamA) {
+      match.team_a_playing_xi = playingXI;
+    } else {
+      match.team_b_playing_xi = playingXI;
+    }
+    await match.save();
+
+    try {
+      broadcastScoreUpdate(matchId, {
+        action: 'PLAYING_XI_UPDATED',
+        teamId,
+        playingXI
+      });
+    } catch (_) {}
+
+    return {
+      success: true,
+      message: 'Playing XI successfully updated.',
+      teamId,
+      playingXI
+    };
+  }
+
+  /**
+   * Start T20 Super Over
+   */
+  async startSuperOver(matchId, payload = {}) {
+    await db.initDb();
+    const match = await db.models.Match.findOne({ id: matchId });
+    if (!match) throw { status: 404, message: 'Match not found.' };
+
+    const { battingTeamId, bowlingTeamId, strikerId, nonStrikerId, bowlerId } = payload;
+    const bTeamId = battingTeamId || match.team_a_id;
+    const fTeamId = bowlingTeamId || (bTeamId === match.team_a_id ? match.team_b_id : match.team_a_id);
+
+    // End any existing uncompleted innings
+    await db.models.Innings.updateMany({ match_id: matchId, is_completed: false }, { is_completed: true });
+
+    // Create Super Over Innings
+    const soInningsId = `INN-${matchId}-SO-1`;
+    let soInnings = await db.models.Innings.findOne({ id: soInningsId });
+    if (!soInnings) {
+      soInnings = await db.models.Innings.create({
+        id: soInningsId,
+        match_id: matchId,
+        innings_number: 3,
+        batting_team_id: bTeamId,
+        bowling_team_id: fTeamId,
+        total_runs: 0,
+        wickets: 0,
+        overs: 0,
+        balls: 0,
+        revised_overs: 1,
+        is_super_over: true,
+        is_completed: false,
+        is_over_complete: false,
+        current_striker_id: strikerId || null,
+        current_non_striker_id: nonStrikerId || null,
+        current_bowler_id: bowlerId || null,
+        extras: { wides: 0, no_balls: 0, byes: 0, leg_byes: 0, total: 0 }
+      });
+    } else {
+      soInnings.batting_team_id = bTeamId;
+      soInnings.bowling_team_id = fTeamId;
+      soInnings.total_runs = 0;
+      soInnings.wickets = 0;
+      soInnings.overs = 0;
+      soInnings.balls = 0;
+      soInnings.revised_overs = 1;
+      soInnings.is_super_over = true;
+      soInnings.is_completed = false;
+      soInnings.is_over_complete = false;
+      soInnings.current_striker_id = strikerId || null;
+      soInnings.current_non_striker_id = nonStrikerId || null;
+      soInnings.current_bowler_id = bowlerId || null;
+      await soInnings.save();
+    }
+
+    match.status = 'LIVE';
+    match.is_super_over = true;
+    match.current_innings_number = 3;
+    match.overs_per_side = 1;
+    match.revised_overs = 1;
+    match.result_summary = 'Super Over in progress';
+    await match.save();
+
+    try {
+      broadcastScoreUpdate(matchId, {
+        action: 'SUPER_OVER_STARTED',
+        inningsId: soInningsId,
+        battingTeamId: bTeamId
+      });
+    } catch (_) {}
+
+    return {
+      success: true,
+      message: 'Super Over successfully started.',
+      inningsId: soInningsId,
+      matchStatus: 'LIVE',
+      isSuperOver: true
+    };
+  }
+
+  /**
+   * Slide Menu: Add or Update Break (Lunch, Tea, Drinks, Rain, Bad Light, etc.)
+   */
+  async addBreak(matchId, breakData = {}) {
+    await db.initDb();
+    const match = await db.models.Match.findOne({ id: matchId });
+    if (!match) throw { status: 404, message: 'Match not found.' };
+
+    if (!Array.isArray(match.breaks)) match.breaks = [];
+    match.breaks.push({
+      type: breakData.type || 'Drinks',
+      startTime: breakData.startTime || new Date().toLocaleTimeString(),
+      endTime: breakData.endTime || '',
+      duration: breakData.duration || '5',
+      comments: breakData.comments || '',
+      excludeBatsmanTime: Boolean(breakData.excludeBatsmanTime),
+      created_at: new Date()
+    });
+    await match.save();
+
+    try {
+      broadcastScoreUpdate(matchId, { action: 'BREAK_ADDED', breaks: match.breaks });
+    } catch (_) {}
+
+    return {
+      success: true,
+      message: 'Break successfully recorded.',
+      data: match.breaks
+    };
+  }
+
+  /**
+   * Slide Menu: Add or End Session (Lunch, Tea, End of Day)
+   */
+  async addSession(matchId, sessionData = {}) {
+    await db.initDb();
+    const match = await db.models.Match.findOne({ id: matchId });
+    if (!match) throw { status: 404, message: 'Match not found.' };
+
+    if (!Array.isArray(match.sessions)) match.sessions = [];
+    match.sessions.push({
+      dayNo: sessionData.dayNo || 1,
+      type: sessionData.type || 'Lunch',
+      startInningsNo: sessionData.startInningsNo || 1,
+      endInningsNo: sessionData.endInningsNo || 1,
+      startOver: sessionData.startOver || '0.0',
+      endOver: sessionData.endOver || '0.0',
+      startTime: sessionData.startTime || new Date().toLocaleTimeString(),
+      endTime: sessionData.endTime || '',
+      duration: sessionData.duration || '40',
+      created_at: new Date()
+    });
+    await match.save();
+
+    return {
+      success: true,
+      message: 'Session successfully recorded.',
+      data: match.sessions
+    };
+  }
+
+  /**
+   * Slide Menu: End Day
+   */
+  async addEndDay(matchId, endDayData = {}) {
+    await db.initDb();
+    const match = await db.models.Match.findOne({ id: matchId });
+    if (!match) throw { status: 404, message: 'Match not found.' };
+
+    if (!Array.isArray(match.end_days)) match.end_days = [];
+    match.end_days.push({
+      dayNo: endDayData.dayNo || 1,
+      startInningsNo: endDayData.startInningsNo || 1,
+      endInningsNo: endDayData.endInningsNo || 1,
+      startOver: endDayData.startOver || '0.0',
+      endOver: endDayData.endOver || '0.0',
+      startTime: endDayData.startTime || '09:30 AM',
+      endTime: endDayData.endTime || new Date().toLocaleTimeString(),
+      duration: endDayData.duration || '360',
+      comments: endDayData.comments || 'End of Day',
+      created_at: new Date()
+    });
+    await match.save();
+
+    return {
+      success: true,
+      message: 'End of Day recorded successfully.',
+      data: match.end_days
+    };
+  }
+
+  /**
+   * Slide Menu: Declare Innings
+   */
+  async declareInnings(matchId) {
+    await db.initDb();
+    const match = await db.models.Match.findOne({ id: matchId });
+    if (!match) throw { status: 404, message: 'Match not found.' };
+
+    const currentInnings = await db.models.Innings.findOne({ match_id: matchId, is_completed: false }).sort({ innings_number: -1 });
+    if (!currentInnings) throw { status: 400, message: 'No active innings to declare.' };
+
+    currentInnings.is_declared = true;
+    currentInnings.is_completed = true;
+    await currentInnings.save();
+
+    // Trigger endInnings workflow
+    return this.endInnings(matchId);
+  }
+
+  /**
+   * Slide Menu: Match Start & End Time
+   */
+  async updateMatchTimes(matchId, timesData = {}) {
+    await db.initDb();
+    const match = await db.models.Match.findOne({ id: matchId });
+    if (!match) throw { status: 404, message: 'Match not found.' };
+
+    if (timesData.startTime) match.match_start_time = timesData.startTime;
+    if (timesData.endTime) match.match_end_time = timesData.endTime;
+    if (timesData.date) match.match_date = timesData.date;
+    await match.save();
+
+    return {
+      success: true,
+      message: 'Match start/end times updated successfully.',
+      startTime: match.match_start_time,
+      endTime: match.match_end_time
+    };
+  }
+
+  /**
+   * Slide Menu: Penalty Runs (Batting or Bowling 5 points)
+   */
+  async addPenalty(matchId, penaltyData = {}) {
+    await db.initDb();
+    const match = await db.models.Match.findOne({ id: matchId });
+    if (!match) throw { status: 404, message: 'Match not found.' };
+
+    let currentInnings = await db.models.Innings.findOne({ match_id: matchId, is_completed: false }).sort({ innings_number: -1 });
+    if (!currentInnings) {
+      currentInnings = await db.models.Innings.findOne({ match_id: matchId }).sort({ innings_number: -1 });
+    }
+    if (!currentInnings) throw { status: 400, message: 'No innings found for penalty.' };
+
+    const points = penaltyData.points ? parseInt(penaltyData.points, 10) : 5;
+    const penaltyType = penaltyData.type || 'Batting Penalty';
+    const reason = penaltyData.reason || 'Penalty Points awarded';
+
+    // Award 5 runs as extras to current innings
+    currentInnings.total_runs += points;
+    if (!currentInnings.extras) {
+      currentInnings.extras = { wides: 0, no_balls: 0, byes: 0, leg_byes: 0, total: 0 };
+    }
+    currentInnings.extras.total = (currentInnings.extras.total || 0) + points;
+    await currentInnings.save();
+
+    // Create a penalty Delivery record
+    const deliveryId = `DEL-${matchId}-${Date.now()}`;
+    await db.models.Delivery.create({
+      id: deliveryId,
+      match_id: matchId,
+      innings_id: currentInnings.id,
+      over_number: currentInnings.overs,
+      ball_number: currentInnings.balls,
+      striker_id: currentInnings.current_striker_id || 'P1',
+      non_striker_id: currentInnings.current_non_striker_id || 'P2',
+      bowler_id: currentInnings.current_bowler_id || 'B1',
+      runs_batter: 0,
+      runs_extras: points,
+      total_runs: points,
+      extra_type: 'BYE',
+      is_legal_delivery: false,
+      reason: `[${penaltyType}] ${reason}`,
+      commentary: `Penalty of ${points} runs awarded: ${reason}`
+    });
+
+    try {
+      broadcastScoreUpdate(matchId, {
+        action: 'PENALTY_AWARDED',
+        points,
+        reason,
+        score: `${currentInnings.total_runs}/${currentInnings.wickets}`
+      });
+    } catch (_) {}
+
+    return {
+      success: true,
+      message: `${points} Penalty runs successfully recorded.`,
+      points,
+      reason
+    };
+  }
+
+  /**
+   * Slide Menu: Other Wickets (Absent Hurt, Timed Out, Mankading, Retired Out, Retired Hurt)
+   */
+  async recordOtherWicket(matchId, payload = {}) {
+    await db.initDb();
+    const match = await db.models.Match.findOne({ id: matchId });
+    if (!match) throw { status: 404, message: 'Match not found.' };
+
+    let currentInnings = await db.models.Innings.findOne({ match_id: matchId, is_completed: false }).sort({ innings_number: -1 });
+    if (!currentInnings) {
+      currentInnings = await db.models.Innings.findOne({ match_id: matchId }).sort({ innings_number: -1 });
+    }
+    if (!currentInnings) throw { status: 400, message: 'No innings found for wicket.' };
+
+    const { playerId, wicketType, comments, replacementBatterId } = payload;
+    if (!playerId || !wicketType) {
+      throw { status: 400, message: 'playerId and wicketType are required.' };
+    }
+
+    const isRetiredHurt = wicketType === 'RETIRED_HURT';
+
+    let batter = await db.models.InningsBatter.findOne({ innings_id: currentInnings.id, player_id: playerId });
+    if (!batter) {
+      batter = await db.models.InningsBatter.create({
+        id: `IB-${currentInnings.id}-${playerId}`,
+        innings_id: currentInnings.id,
+        player_id: playerId,
+        runs: 0,
+        balls: 0,
+        fours: 0,
+        sixes: 0,
+        strike_rate: 0.0,
+        is_out: !isRetiredHurt,
+        dismissal_type: wicketType,
+        dismissal_text: isRetiredHurt ? 'retired hurt' : wicketType.replace(/_/g, ' ').toLowerCase()
+      });
+    } else {
+      batter.is_out = !isRetiredHurt;
+      batter.dismissal_type = wicketType;
+      batter.dismissal_text = isRetiredHurt ? 'retired hurt' : wicketType.replace(/_/g, ' ').toLowerCase();
+      await batter.save();
+    }
+
+    if (!isRetiredHurt) {
+      currentInnings.wickets += 1;
+    }
+
+    // Replace the batter at crease
+    if (replacementBatterId) {
+      if (currentInnings.current_striker_id === playerId) {
+        currentInnings.current_striker_id = replacementBatterId;
+      } else if (currentInnings.current_non_striker_id === playerId) {
+        currentInnings.current_non_striker_id = replacementBatterId;
+      }
+    }
+    await currentInnings.save();
+
+    try {
+      broadcastScoreUpdate(matchId, {
+        action: 'OTHER_WICKET',
+        wicketType,
+        playerId,
+        score: `${currentInnings.total_runs}/${currentInnings.wickets}`
+      });
+    } catch (_) {}
+
+    return {
+      success: true,
+      message: `${wicketType} recorded for player successfully.`,
+      playerId,
+      wicketType
+    };
+  }
+
+  /**
+   * Slide Menu: Change Ball
+   */
+  async recordBallChange(matchId, ballData = {}) {
+    await db.initDb();
+    const match = await db.models.Match.findOne({ id: matchId });
+    if (!match) throw { status: 404, message: 'Match not found.' };
+
+    if (!Array.isArray(match.ball_changes)) match.ball_changes = [];
+    match.ball_changes.push({
+      ballType: ballData.ballType || 'New Ball',
+      over: ballData.over || '0.0',
+      time: ballData.time || new Date().toLocaleTimeString(),
+      comments: ballData.comments || '',
+      created_at: new Date()
+    });
+    await match.save();
+
+    return {
+      success: true,
+      message: `Ball change recorded: ${ballData.ballType || 'New Ball'}`,
+      data: match.ball_changes
+    };
+  }
+
+  /**
+   * Slide Menu: Umpire Assessment
+   */
+  async saveUmpireAssessment(matchId, assessmentData = {}) {
+    await db.initDb();
+    const match = await db.models.Match.findOne({ id: matchId });
+    if (!match) throw { status: 404, message: 'Match not found.' };
+
+    match.umpire_assessment = {
+      umpire1: assessmentData.umpire1 || '',
+      rating1: assessmentData.rating1 || 5,
+      umpire2: assessmentData.umpire2 || '',
+      rating2: assessmentData.rating2 || 5,
+      pitchReport: assessmentData.pitchReport || 'Good sporting pitch',
+      comments: assessmentData.comments || ''
+    };
+    await match.save();
+
+    return {
+      success: true,
+      message: 'Umpire assessment saved successfully.',
+      data: match.umpire_assessment
+    };
+  }
+
+  /**
+   * Slide Menu: Change Team (Before 1st delivery of match)
+   */
+  async changeTeamBeforeStart(matchId, payload = {}) {
+    await db.initDb();
+    const match = await db.models.Match.findOne({ id: matchId });
+    if (!match) throw { status: 404, message: 'Match not found.' };
+
+    const totalDeliveries = await db.models.Delivery.countDocuments({ match_id: matchId });
+    if (totalDeliveries > 0) {
+      throw { status: 400, message: 'Change team is applicable only before the first ball of the match is started in the Scoring App.' };
+    }
+
+    const { battingTeamId, strikerId, nonStrikerId, bowlerId } = payload;
+    const currentInnings = await db.models.Innings.findOne({ match_id: matchId, innings_number: 1 });
+    if (!currentInnings) throw { status: 400, message: 'First innings record not found.' };
+
+    if (battingTeamId) {
+      const bowlingTeamId = battingTeamId === match.team_a_id ? match.team_b_id : match.team_a_id;
+      currentInnings.batting_team_id = battingTeamId;
+      currentInnings.bowling_team_id = bowlingTeamId;
+    }
+    if (strikerId) currentInnings.current_striker_id = strikerId;
+    if (nonStrikerId) currentInnings.current_non_striker_id = nonStrikerId;
+    if (bowlerId) currentInnings.current_bowler_id = bowlerId;
+
+    await currentInnings.save();
+
+    return {
+      success: true,
+      message: 'Teams and opening players updated successfully before match start.',
+      battingTeamId: currentInnings.batting_team_id,
+      bowlingTeamId: currentInnings.bowling_team_id,
+      strikerId: currentInnings.current_striker_id,
+      nonStrikerId: currentInnings.current_non_striker_id,
+      bowlerId: currentInnings.current_bowler_id
     };
   }
 }

@@ -126,11 +126,11 @@ function MainAppShell() {
   }
 
   if (currentScreen === 'Login') {
-    return <LoginScreen />;
+    return <LoginScreen onExit={() => navigate('Home')} />;
   }
 
   if (currentScreen === 'Registration') {
-    return <RegistrationScreen />;
+    return <RegistrationScreen onExit={() => navigate('Home')} />;
   }
 
   const currentUser = getCurrentUser();
@@ -138,9 +138,9 @@ function MainAppShell() {
   if (currentScreen === 'Scorer') {
     const access = checkScreenAccess('Scorer', currentUser);
     if (!access.allowed) {
-      return <LoginScreen />;
+      return <LoginScreen onExit={() => navigate('Home')} />;
     }
-    return <ScorerNavigator onExit={(target?: any) => navigate(target || 'Registration')} initialParams={params} />;
+    return <ScorerNavigator onExit={(target?: any) => navigate(target || 'Home')} initialParams={params} />;
   }
 
   if (currentScreen === 'Umpire') {

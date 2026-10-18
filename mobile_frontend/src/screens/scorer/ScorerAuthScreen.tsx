@@ -198,7 +198,7 @@ export default function ScorerAuthScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => onExit()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => onExit('Home')} style={styles.backBtn}>
           <Text style={styles.backText}>← Exit to Main</Text>
         </TouchableOpacity>
       </View>

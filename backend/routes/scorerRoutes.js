@@ -227,10 +227,170 @@ router.post('/matches/:matchId/undo', verifyMatchPermission, async (req, res) =>
   }
 });
 
+// Swap Strike
+router.post('/matches/:matchId/swap-strike', verifyMatchPermission, async (req, res) => {
+  try {
+    const result = await scoringEngine.swapStrike(req.params.matchId);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
+// Change / Substitute Active Batter
+router.post('/matches/:matchId/change-batter', verifyMatchPermission, async (req, res) => {
+  try {
+    const result = await scoringEngine.changeBatter(req.params.matchId, req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
+// Change / Substitute Active Bowler
+router.post('/matches/:matchId/change-bowler', verifyMatchPermission, async (req, res) => {
+  try {
+    const result = await scoringEngine.changeBowler(req.params.matchId, req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
 // Conclude / End Match
 router.post('/matches/:matchId/end', verifyMatchPermission, async (req, res) => {
   try {
     const result = await scoringEngine.endMatch(req.params.matchId, req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
+// Revised Overs & Revised Target
+router.post('/matches/:matchId/revised-overs', verifyMatchPermission, async (req, res) => {
+  try {
+    const result = await scoringEngine.setRevisedOvers(req.params.matchId, req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
+// Playing XI Edit
+router.post('/matches/:matchId/playing-xi', verifyMatchPermission, async (req, res) => {
+  try {
+    const result = await scoringEngine.editPlayingXI(req.params.matchId, req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
+// Start Super Over
+router.post('/matches/:matchId/super-over', verifyMatchPermission, async (req, res) => {
+  try {
+    const result = await scoringEngine.startSuperOver(req.params.matchId, req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
+// Slide Menu: Breaks (Add / Update)
+router.post('/matches/:matchId/breaks', verifyMatchPermission, async (req, res) => {
+  try {
+    const result = await scoringEngine.addBreak(req.params.matchId, req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
+// Slide Menu: Sessions (Add / End Session)
+router.post('/matches/:matchId/sessions', verifyMatchPermission, async (req, res) => {
+  try {
+    const result = await scoringEngine.addSession(req.params.matchId, req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
+// Slide Menu: End Day
+router.post('/matches/:matchId/end-day', verifyMatchPermission, async (req, res) => {
+  try {
+    const result = await scoringEngine.addEndDay(req.params.matchId, req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
+// Slide Menu: Declare Innings
+router.post('/matches/:matchId/declare-innings', verifyMatchPermission, async (req, res) => {
+  try {
+    const result = await scoringEngine.declareInnings(req.params.matchId);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
+// Slide Menu: Match Start & End Time
+router.post('/matches/:matchId/match-times', verifyMatchPermission, async (req, res) => {
+  try {
+    const result = await scoringEngine.updateMatchTimes(req.params.matchId, req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
+// Slide Menu: Penalty Points (Batting or Bowling 5 points)
+router.post('/matches/:matchId/penalty', verifyMatchPermission, async (req, res) => {
+  try {
+    const result = await scoringEngine.addPenalty(req.params.matchId, req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
+// Slide Menu: Other Wicket (Absent Hurt, Timed Out, Mankading, Retired Out, Retired Hurt)
+router.post('/matches/:matchId/other-wicket', verifyMatchPermission, async (req, res) => {
+  try {
+    const result = await scoringEngine.recordOtherWicket(req.params.matchId, req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
+// Slide Menu: Change Ball
+router.post('/matches/:matchId/change-ball', verifyMatchPermission, async (req, res) => {
+  try {
+    const result = await scoringEngine.recordBallChange(req.params.matchId, req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
+// Slide Menu: Umpire Assessment
+router.post('/matches/:matchId/umpire-assessment', verifyMatchPermission, async (req, res) => {
+  try {
+    const result = await scoringEngine.saveUmpireAssessment(req.params.matchId, req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
+// Slide Menu: Change Team (Before first ball)
+router.post('/matches/:matchId/change-team', verifyMatchPermission, async (req, res) => {
+  try {
+    const result = await scoringEngine.changeTeamBeforeStart(req.params.matchId, req.body);
     res.json(result);
   } catch (err) {
     res.status(err.status || 500).json({ success: false, error: err.message });

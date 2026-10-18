@@ -208,6 +208,62 @@ const MatchSchema = new mongoose.Schema({
   umpire_confirmed_by: { type: String, default: null },
   umpire_confirmation_notes: { type: String, default: null },
   umpire_confirmed_at: { type: Date, default: null },
+  team_a_playing_xi: [{ type: String }],
+  team_b_playing_xi: [{ type: String }],
+  revised_overs: { type: Number, default: null },
+  revised_target: { type: Number, default: null },
+  revised_comments: { type: String, default: '' },
+  is_super_over: { type: Boolean, default: false },
+  match_start_time: { type: String, default: null },
+  match_end_time: { type: String, default: null },
+  breaks: [{
+    type: { type: String },
+    startTime: { type: String },
+    endTime: { type: String },
+    duration: { type: String },
+    comments: { type: String },
+    excludeBatsmanTime: { type: Boolean, default: false },
+    created_at: { type: Date, default: Date.now }
+  }],
+  sessions: [{
+    dayNo: { type: Number, default: 1 },
+    type: { type: String },
+    startInningsNo: { type: Number, default: 1 },
+    endInningsNo: { type: Number, default: 1 },
+    startOver: { type: String },
+    endOver: { type: String },
+    startTime: { type: String },
+    endTime: { type: String },
+    duration: { type: String },
+    created_at: { type: Date, default: Date.now }
+  }],
+  end_days: [{
+    dayNo: { type: Number, default: 1 },
+    startInningsNo: { type: Number, default: 1 },
+    endInningsNo: { type: Number, default: 1 },
+    startOver: { type: String },
+    endOver: { type: String },
+    startTime: { type: String },
+    endTime: { type: String },
+    duration: { type: String },
+    comments: { type: String },
+    created_at: { type: Date, default: Date.now }
+  }],
+  ball_changes: [{
+    ballType: { type: String },
+    over: { type: String },
+    time: { type: String },
+    comments: { type: String },
+    created_at: { type: Date, default: Date.now }
+  }],
+  umpire_assessment: {
+    umpire1: { type: String, default: '' },
+    rating1: { type: Number, default: 5 },
+    umpire2: { type: String, default: '' },
+    rating2: { type: Number, default: 5 },
+    pitchReport: { type: String, default: 'Normal Good Pitch' },
+    comments: { type: String, default: '' }
+  },
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
 }, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
@@ -224,6 +280,9 @@ const InningsSchema = new mongoose.Schema({
   overs: { type: Number, default: 0 },
   balls: { type: Number, default: 0 },
   target: { type: Number, default: null },
+  revised_overs: { type: Number, default: null },
+  is_super_over: { type: Boolean, default: false },
+  is_declared: { type: Boolean, default: false },
   status: { type: String, default: 'LIVE' },
   is_completed: { type: Boolean, default: false },
   is_over_complete: { type: Boolean, default: false },
@@ -303,6 +362,8 @@ const DeliverySchema = new mongoose.Schema({
   shot_zone: { type: String, default: null },
   fielder_id: { type: String, default: null },
   fielder_name: { type: String, default: null },
+  reason: { type: String, default: null },
+  replacement_batter_id: { type: String, default: null },
   commentary: { type: String, default: '' },
   created_by: { type: String, default: 'SCR-101' },
   timestamp: { type: Date, default: Date.now },
@@ -677,7 +738,7 @@ async function seedDefaultData() {
     const playerCount = await Player.countDocuments();
     if (playerCount === 0) {
       await Player.insertMany([
-        // Team 1
+        // Team 1 (TM-01) - 15 Genuine Players
         { id: 'P301', team_id: 'TM-01', name: 'Suresh Kumar', email: 'suresh@spartans.com', role: 'BATTER', jersey_number: 7, batting_style: 'Right Hand Bat', stats: { runs: 284, balls: 195, fours: 32, sixes: 10, highest_score: 88, wickets: 0, overs: 0, runs_conceded: 0, catches: 4, stumpings: 0 } },
         { id: 'P302', team_id: 'TM-01', name: 'Muthu Raj', email: 'muthuraj@spartans.com', role: 'ALL_ROUNDER', jersey_number: 18, batting_style: 'Right Hand Bat', bowling_style: 'Right Arm Medium', stats: { runs: 165, balls: 110, fours: 15, sixes: 6, highest_score: 54, wickets: 8, overs: 18, runs_conceded: 124, catches: 3, stumpings: 0 } },
         { id: 'P303', team_id: 'TM-01', name: 'Vijay', email: 'vijay@spartans.com', role: 'BATTER', jersey_number: 3, batting_style: 'Left Hand Bat', stats: { runs: 142, balls: 98, fours: 14, sixes: 4, highest_score: 45, wickets: 0, overs: 0, runs_conceded: 0, catches: 2, stumpings: 0 } },
@@ -685,21 +746,65 @@ async function seedDefaultData() {
         { id: 'P305', team_id: 'TM-01', name: 'R. Vignesh', email: 'vignesh@spartans.com', role: 'BOWLER', jersey_number: 23, batting_style: 'Right Hand Bat', bowling_style: 'Right Arm Fast', stats: { runs: 24, balls: 18, fours: 2, sixes: 1, highest_score: 14, wickets: 12, overs: 20, runs_conceded: 130, catches: 1, stumpings: 0 } },
         { id: 'P306', team_id: 'TM-01', name: 'Arun Pandian', email: 'player@example.com', role: 'ALL_ROUNDER', jersey_number: 10, batting_style: 'Right Hand Bat', bowling_style: 'Right Arm Medium', stats: { runs: 198, balls: 135, fours: 21, sixes: 7, highest_score: 62, wickets: 6, overs: 14, runs_conceded: 98, catches: 5, stumpings: 0 } },
         { id: 'P307', team_id: 'TM-01', name: 'Saravanan', email: 'saravanan@spartans.com', role: 'BOWLER', jersey_number: 25, batting_style: 'Right Hand Bat', bowling_style: 'Right Arm Fast', stats: { runs: 15, balls: 10, fours: 1, sixes: 0, highest_score: 8, wickets: 10, overs: 18, runs_conceded: 120, catches: 1, stumpings: 0 } },
+        { id: 'P308', team_id: 'TM-01', name: 'Vijay Anand', email: 'vijayanand@spartans.com', role: 'ALL_ROUNDER', jersey_number: 9, batting_style: 'Right Hand Bat', stats: { runs: 150, balls: 100, fours: 15, sixes: 4, highest_score: 52, wickets: 5, overs: 12, runs_conceded: 80, catches: 2, stumpings: 0 } },
+        { id: 'P309', team_id: 'TM-01', name: 'S. Manoj', role: 'BATTER', jersey_number: 11 },
+        { id: 'P310', team_id: 'TM-01', name: 'P. Rajesh', role: 'BOWLER', jersey_number: 14 },
+        { id: 'P311', team_id: 'TM-01', name: 'K. Siva', role: 'ALL_ROUNDER', jersey_number: 17 },
+        { id: 'P312', team_id: 'TM-01', name: 'T. Ashok', role: 'BOWLER', jersey_number: 24 },
+        { id: 'P313', team_id: 'TM-01', name: 'M. Guru', role: 'ALL_ROUNDER', jersey_number: 28 },
+        { id: 'P314', team_id: 'TM-01', name: 'V. Prakash', role: 'BATTER', jersey_number: 33 },
+        { id: 'P315', team_id: 'TM-01', name: 'B. Senthil', role: 'BOWLER', jersey_number: 99 },
 
-        // Team 2
+        // Team 2 (TM-02) - 15 Genuine Players
         { id: 'P401', team_id: 'TM-02', name: 'Karthik N', email: 'karthik.n@strikers.com', role: 'BOWLER', jersey_number: 21, batting_style: 'Right Hand Bat', bowling_style: 'Right Arm Fast', stats: { runs: 240, balls: 160, fours: 26, sixes: 8, highest_score: 72, wickets: 14, overs: 20, runs_conceded: 110, catches: 7, stumpings: 2 } },
         { id: 'P402', team_id: 'TM-02', name: 'R. Ashwin', email: 'ashwin@strikers.com', role: 'ALL_ROUNDER', jersey_number: 99, batting_style: 'Right Hand Bat', bowling_style: 'Right Arm Off Break', stats: { runs: 120, balls: 82, fours: 12, sixes: 3, highest_score: 41, wickets: 11, overs: 20, runs_conceded: 115, catches: 2, stumpings: 0 } },
         { id: 'P403', team_id: 'TM-02', name: 'S. Balamurugan', email: 'bala@strikers.com', role: 'BOWLER', jersey_number: 11, batting_style: 'Right Hand Bat', bowling_style: 'Left Arm Fast', stats: { runs: 18, balls: 12, fours: 2, sixes: 0, highest_score: 11, wickets: 9, overs: 19, runs_conceded: 128, catches: 1, stumpings: 0 } },
-        { id: 'P404', team_id: 'TM-02', name: 'Dinesh Karthik', email: 'dinesh@strikers.com', role: 'BATTER', jersey_number: 19, batting_style: 'Right Hand Bat', stats: { runs: 215, balls: 142, fours: 24, sixes: 6, highest_score: 72, wickets: 0, overs: 0, runs_conceded: 0, catches: 5, stumpings: 1 } },
+        { id: 'P404', team_id: 'TM-02', name: 'Dinesh Karthik', email: 'dinesh@strikers.com', role: 'WICKET_KEEPER', jersey_number: 19, batting_style: 'Right Hand Bat', stats: { runs: 215, balls: 142, fours: 24, sixes: 6, highest_score: 72, wickets: 0, overs: 0, runs_conceded: 0, catches: 5, stumpings: 1 } },
+        { id: 'P405', team_id: 'TM-02', name: 'Saravanan', email: 'saravanan.s@strikers.com', role: 'BOWLER', jersey_number: 23, batting_style: 'Right Hand Bat', stats: { runs: 30, balls: 20, fours: 3, sixes: 0, highest_score: 15, wickets: 8, overs: 16, runs_conceded: 105, catches: 2, stumpings: 0 } },
+        { id: 'P406', team_id: 'TM-02', name: 'M. Karthik', role: 'BATTER', jersey_number: 5 },
+        { id: 'P407', team_id: 'TM-02', name: 'S. Ram', role: 'ALL_ROUNDER', jersey_number: 8 },
+        { id: 'P408', team_id: 'TM-02', name: 'P. Selvam', role: 'BOWLER', jersey_number: 12 },
+        { id: 'P409', team_id: 'TM-02', name: 'K. Murugan', role: 'BATTER', jersey_number: 15 },
+        { id: 'P410', team_id: 'TM-02', name: 'T. Rajan', role: 'WICKET_KEEPER', jersey_number: 16 },
+        { id: 'P411', team_id: 'TM-02', name: 'A. Alex', role: 'ALL_ROUNDER', jersey_number: 22 },
+        { id: 'P412', team_id: 'TM-02', name: 'G. Gokul', role: 'BOWLER', jersey_number: 27 },
+        { id: 'P413', team_id: 'TM-02', name: 'D. Deepak', role: 'BATTER', jersey_number: 30 },
+        { id: 'P414', team_id: 'TM-02', name: 'N. Natarajan', role: 'BOWLER', jersey_number: 44 },
+        { id: 'P415', team_id: 'TM-02', name: 'V. Vinoth', role: 'BATTER', jersey_number: 88 },
 
-        // Team 3
+        // Team 3 (TM-03) - 15 Genuine Players
         { id: 'P501', team_id: 'TM-03', name: 'M. Vijay', email: 'vijay@royals.com', role: 'BATTER', jersey_number: 8, batting_style: 'Right Hand Bat', stats: { runs: 210, balls: 140, fours: 22, sixes: 5, highest_score: 65, wickets: 0, overs: 0, runs_conceded: 0, catches: 3, stumpings: 0 } },
         { id: 'P502', team_id: 'TM-03', name: 'K. Balaji', email: 'balaji@royals.com', role: 'ALL_ROUNDER', jersey_number: 12, batting_style: 'Right Hand Bat', bowling_style: 'Right Arm Medium', stats: { runs: 130, balls: 90, fours: 12, sixes: 3, highest_score: 42, wickets: 7, overs: 16, runs_conceded: 110, catches: 2, stumpings: 0 } },
         { id: 'P503', team_id: 'TM-03', name: 'S. Saravanan', email: 'saravanan@royals.com', role: 'BOWLER', jersey_number: 25, batting_style: 'Right Hand Bat', bowling_style: 'Right Arm Fast', stats: { runs: 15, balls: 10, fours: 1, sixes: 0, highest_score: 8, wickets: 10, overs: 18, runs_conceded: 120, catches: 1, stumpings: 0 } },
+        { id: 'P504', team_id: 'TM-03', name: 'R. Anbarasu', role: 'BATTER', jersey_number: 3 },
+        { id: 'P505', team_id: 'TM-03', name: 'S. Dhanush', role: 'BATTER', jersey_number: 7 },
+        { id: 'P506', team_id: 'TM-03', name: 'K. Manikandan', role: 'WICKET_KEEPER', jersey_number: 9 },
+        { id: 'P507', team_id: 'TM-03', name: 'P. Thirumalai', role: 'ALL_ROUNDER', jersey_number: 10 },
+        { id: 'P508', team_id: 'TM-03', name: 'V. Vasanth', role: 'BOWLER', jersey_number: 13 },
+        { id: 'P509', team_id: 'TM-03', name: 'T. Senthil Kumar', role: 'BOWLER', jersey_number: 18 },
+        { id: 'P510', team_id: 'TM-03', name: 'M. Siva Sankaran', role: 'BATTER', jersey_number: 21 },
+        { id: 'P511', team_id: 'TM-03', name: 'G. Ganeshamoorthi', role: 'BOWLER', jersey_number: 23 },
+        { id: 'P512', team_id: 'TM-03', name: 'N. Naveen Kumar', role: 'BATTER', jersey_number: 29 },
+        { id: 'P513', team_id: 'TM-03', name: 'C. Chellappa', role: 'ALL_ROUNDER', jersey_number: 31 },
+        { id: 'P514', team_id: 'TM-03', name: 'B. Balasubramanian', role: 'BOWLER', jersey_number: 77 },
+        { id: 'P515', team_id: 'TM-03', name: 'A. Ayyappan', role: 'ALL_ROUNDER', jersey_number: 91 },
 
-        // Team 4
+        // Team 4 (TM-04) - 15 Genuine Players
         { id: 'P601', team_id: 'TM-04', name: 'P. Saravanan', email: 'saravanan@aces.com', role: 'BATTER', jersey_number: 5, batting_style: 'Right Hand Bat', stats: { runs: 195, balls: 130, fours: 18, sixes: 4, highest_score: 58, wickets: 0, overs: 0, runs_conceded: 0, catches: 4, stumpings: 0 } },
-        { id: 'P602', team_id: 'TM-04', name: 'T. Prabhu', email: 'prabhu@aces.com', role: 'BOWLER', jersey_number: 14, batting_style: 'Right Hand Bat', bowling_style: 'Right Arm Medium', stats: { runs: 20, balls: 15, fours: 2, sixes: 0, highest_score: 12, wickets: 8, overs: 15, runs_conceded: 105, catches: 1, stumpings: 0 } }
+        { id: 'P602', team_id: 'TM-04', name: 'T. Prabhu', email: 'prabhu@aces.com', role: 'BOWLER', jersey_number: 14, batting_style: 'Right Hand Bat', bowling_style: 'Right Arm Medium', stats: { runs: 20, balls: 15, fours: 2, sixes: 0, highest_score: 12, wickets: 8, overs: 15, runs_conceded: 105, catches: 1, stumpings: 0 } },
+        { id: 'P603', team_id: 'TM-04', name: 'R. Kameswaran', role: 'BATTER', jersey_number: 4 },
+        { id: 'P604', team_id: 'TM-04', name: 'S. Sundaram', role: 'ALL_ROUNDER', jersey_number: 6 },
+        { id: 'P605', team_id: 'TM-04', name: 'K. Alagarsamy', role: 'WICKET_KEEPER', jersey_number: 1 },
+        { id: 'P606', team_id: 'TM-04', name: 'M. Selvakumar', role: 'BATTER', jersey_number: 11 },
+        { id: 'P607', team_id: 'TM-04', name: 'P. Pandiarajan', role: 'BOWLER', jersey_number: 15 },
+        { id: 'P608', team_id: 'TM-04', name: 'V. Vellaisamy', role: 'ALL_ROUNDER', jersey_number: 19 },
+        { id: 'P609', team_id: 'TM-04', name: 'D. Dharmaraj', role: 'BOWLER', jersey_number: 22 },
+        { id: 'P610', team_id: 'TM-04', name: 'T. Thangavel', role: 'BATTER', jersey_number: 26 },
+        { id: 'P611', team_id: 'TM-04', name: 'A. Muthukrishnan', role: 'BOWLER', jersey_number: 32 },
+        { id: 'P612', team_id: 'TM-04', name: 'S. Subramani', role: 'BATTER', jersey_number: 35 },
+        { id: 'P613', team_id: 'TM-04', name: 'K. Marimuthu', role: 'ALL_ROUNDER', jersey_number: 45 },
+        { id: 'P614', team_id: 'TM-04', name: 'M. Ramachandran', role: 'BOWLER', jersey_number: 55 },
+        { id: 'P615', team_id: 'TM-04', name: 'R. Ravichandran', role: 'BATTER', jersey_number: 66 }
       ]);
     }
 

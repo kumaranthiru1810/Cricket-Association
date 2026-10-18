@@ -9,25 +9,27 @@ const db = require('../config/db');
 class MatchService {
   async getMatchSetup(matchId) {
     await db.initDb();
+    const scorerService = require('./scorerService');
 
     const match = await db.models.Match.findOne({ id: matchId }).lean();
-    if (!match) throw { status: 404, message: `Match '${matchId}' not found.` };
+    if (!match) throw { status: 404, message: `Match '${matchId}' not found in MongoDB database.` };
 
-    const teams = await db.models.Team.find({}).lean();
-    const teamMap = {};
-    (teams || []).forEach(t => { teamMap[t.id] = t; });
+    const teamMap = await scorerService.getTeamMap();
+    const teamA = teamMap[match.team_a_id] || { id: match.team_a_id, name: match.team_a_id };
+    const teamB = teamMap[match.team_b_id] || { id: match.team_b_id, name: match.team_b_id };
 
-    const players = await db.models.Player.find({}).lean();
-    const teamAPlayers = (players || []).filter(p => p.team_id === match.team_a_id);
-    const teamBPlayers = (players || []).filter(p => p.team_id === match.team_b_id);
+    const [teamAPlayers, teamBPlayers] = await Promise.all([
+      scorerService.getSquadForTeam(match.team_a_id),
+      scorerService.getSquadForTeam(match.team_b_id)
+    ]);
 
     return {
       matchId: match.id,
       tournament: match.tournament_name || 'VPL 2026',
       venue: match.venue || 'Kamarajar Stadium, Virudhunagar',
       overs: match.overs_per_side || 20,
-      teamA: teamMap[match.team_a_id] || { id: match.team_a_id, name: 'Team A' },
-      teamB: teamMap[match.team_b_id] || { id: match.team_b_id, name: 'Team B' },
+      teamA,
+      teamB,
       teamAPlayers,
       teamBPlayers,
       tossWinner: match.toss_winner_id,

@@ -24,17 +24,42 @@ const newsRoutes = require('./routes/newsRoutes');
 const portalRoutes = require('./routes/portalRoutes');
 const umpireRoutes = require('./routes/umpireRoutes');
 
+const helmet = require('helmet');
+const {
+  sanitizeInput,
+  generalRateLimiter,
+  authRateLimiter,
+  getCorsOptions
+} = require('./middleware/securityMiddleware');
+
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
 
+// Security 1: Hide express fingerprinting
+app.disable('x-powered-by');
+
+// Security 2: Security Headers (HSTS, X-Content-Type-Options, Frameguard)
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false
+}));
+
 // Initialize Socket.IO on HTTP server for real-time live scoring
 initSocket(server);
 
-// Middleware
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
+// Security 3: Strict CORS lockdown
+app.use(cors(getCorsOptions()));
+
+// Security 4: Payload size limiting (prevent memory exhaustion denial of service)
+app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
+
+// Security 5: Global Rate Limiting
+app.use('/api', generalRateLimiter);
+
+// Security 6: Deep Input Sanitization (strip NoSQL injection operators & prototype pollution)
+app.use(sanitizeInput);
 
 // Initialize MongoDB connection & default seeding
 db.initDb().catch(err => {
@@ -53,8 +78,11 @@ app.get('/api/health', (req, res) => {
 
 const authController = require('./controllers/authController');
 
-// Direct Admin Login endpoint
-app.post('/api/admin/login', (req, res) => authController.adminLogin(req, res));
+// Security 7: Strict Rate Limiting on Authentication Endpoints (Brute-force protection)
+app.post('/api/admin/login', authRateLimiter, (req, res) => authController.adminLogin(req, res));
+app.use('/api/auth/login', authRateLimiter);
+app.use('/api/auth/send-otp', authRateLimiter);
+app.use('/api/auth/verify-otp', authRateLimiter);
 
 // Authentication APIs (Password Auth & Registration Email OTP)
 app.use('/api/auth', authRoutes);
@@ -85,12 +113,16 @@ app.use('/api/news', newsRoutes);
 // Portal Public APIs
 app.use('/api/portal', portalRoutes);
 
-// Global Error Handler
+// Security 8: Global Error Handler - Debug mode OFF in production
 app.use((err, req, res, next) => {
   console.error('Unhandled Server Error:', err);
+  const isProd = process.env.NODE_ENV === 'production';
   res.status(err.status || 500).json({
     success: false,
-    message: err.message || 'Internal Server Error'
+    message: isProd && (!err.status || err.status === 500)
+      ? 'An unexpected error occurred. Please contact support.'
+      : (err.message || 'Internal Server Error'),
+    ...(!isProd && { stack: err.stack })
   });
 });
 
