@@ -1098,20 +1098,32 @@ async function seedDefaultData() {
 }
 
 // Connect to MongoDB
+let connectionPromise = null;
 async function initDb() {
-  if (isConnected) return;
-  try {
-    mongoose.set('strictQuery', false);
-    await mongoose.connect(MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000,
-      autoIndex: true
-    });
+  if (mongoose.connection.readyState === 1) {
     isConnected = true;
-    console.log(`🍃 Connected to MongoDB Database Server at: ${MONGODB_URI}`);
-    await seedDefaultData();
-  } catch (err) {
-    console.warn(`⚠️ MongoDB connection note: ${err.message}.`);
+    return;
   }
+  if (connectionPromise) {
+    return connectionPromise;
+  }
+  connectionPromise = (async () => {
+    try {
+      mongoose.set('strictQuery', false);
+      await mongoose.connect(MONGODB_URI, {
+        serverSelectionTimeoutMS: 5000,
+        autoIndex: true
+      });
+      isConnected = true;
+      console.log(`🍃 Connected to MongoDB Database Server at: ${MONGODB_URI}`);
+      await seedDefaultData();
+    } catch (err) {
+      console.warn(`⚠️ MongoDB connection note: ${err.message}.`);
+    } finally {
+      connectionPromise = null;
+    }
+  })();
+  return connectionPromise;
 }
 
 // -------------------------------------------------------------
@@ -1462,8 +1474,6 @@ class MongoConnection {
     return mongoQuery(sql, params);
   }
 }
-
-initDb();
 
 module.exports = {
   initDb,

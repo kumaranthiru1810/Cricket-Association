@@ -242,3 +242,11 @@ export const CricketBatIcon: React.FC<IconProps> = ({ size = 20, color = 'curren
     <path d="m14 7-9.5 9.5a2 2 0 0 0-.5 1.5v2a1 1 0 0 0 1 1h2a2 2 0 0 0 1.5-.5L17 11" />
   </svg>
 );
+
+export const AwardIcon: React.FC<IconProps> = ({ size = 20, color = 'currentColor', style }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style}>
+    <circle cx="12" cy="8" r="6" />
+    <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" />
+  </svg>
+);
+
