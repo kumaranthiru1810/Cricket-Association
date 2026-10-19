@@ -17,6 +17,7 @@ import {
 import { useAppNavigation } from '../../navigation/AppNavigator';
 import SharedBackground from '../../components/scorer/SharedBackground';
 import { ScorerApi } from '../../services/api';
+import { showSuccess, showError, showWarning, showInfo } from '../../utils/sweetalert';
 
 export type RegistrationRole = 'PLAYER' | 'TEAM' | 'SCORER' | 'UMPIRE';
 
@@ -476,12 +477,12 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setStatusMessage(resp?.message || '✓ Player Account Created! You can now log in.');
       setStatusType('success');
 
-      if (Platform.OS === 'web') {
-        alert(`✓ Registration Complete!\n\nWelcome ${name}! Your password is saved. You can now sign in.`);
-      } else {
-        Alert.alert('Registration Successful', `Welcome ${name}! You can now sign in with your password.`);
-      }
-      setTimeout(() => navigate('Login', { initialRole: 'PLAYER' }), 1200);
+      await showSuccess(
+        'Registration Complete!',
+        `Welcome ${name}! Your account has been registered. You can now log in.`,
+        2200
+      );
+      navigate('Login', { initialRole: 'PLAYER' });
     } catch (err: any) {
       setIsLoading(false);
       setStatusMessage(err?.message || 'Player registration failed. Please try again.');
@@ -623,16 +624,12 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       });
 
       setIsLoading(false);
-      const teamNotice = `✓ Registration Request Submitted!\n\nTeam "${teamName.trim()}" registration is PENDING Admin approval.\n\nOnce approved by District Administrator, Coach ${coachName} can log in with password.`;
+      const teamNotice = `Team "${teamName.trim()}" registration is PENDING Admin approval.\nOnce approved by District Administrator, Coach ${coachName} can log in with password.`;
       setStatusMessage(resp?.message || teamNotice);
       setStatusType('success');
 
-      if (Platform.OS === 'web') {
-        alert(teamNotice);
-      } else {
-        Alert.alert('Registration Request Submitted', `Team "${teamName.trim()}" registration is PENDING Admin approval.\n\nOnce approved by District Administrator, Coach ${coachName} can log in.`);
-      }
-      setTimeout(() => navigate('Login', { initialRole: 'TEAM' }), 1500);
+      await showSuccess('Registration Request Submitted!', teamNotice, 3500);
+      navigate('Login', { initialRole: 'TEAM' });
     } catch (err: any) {
       setIsLoading(false);
       setStatusMessage(err?.message || 'Team registration failed. Please try again.');
@@ -701,7 +698,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       });
 
       setIsLoading(false);
-      const scorerNotice = `✓ Registration Request Submitted!\n\nWelcome ${name}! Your scorer registration request is PENDING Admin approval.\n\nOnce approved by District Administrator, you can log in with password.`;
+      const scorerNotice = `Welcome ${name}! Your scorer registration request is PENDING Admin approval.\nOnce approved by District Administrator, you can log in with your credentials.`;
       setStatusMessage(resp?.message || scorerNotice);
       setStatusType('success');
 
@@ -792,7 +789,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       });
 
       setIsLoading(false);
-      const umpireNotice = `✓ Registration Request Submitted!\n\nWelcome ${name}!\nYour Umpire Registration is PENDING Admin approval.\n\nOnce approved by District Administrator, you can log in with your credentials to access the Official Umpire Dashboard.`;
+      const umpireNotice = `Welcome ${name}!\nYour Umpire Registration is PENDING Admin approval.\nOnce approved by District Administrator, you can log in with your credentials.`;
       setStatusMessage(resp?.message || umpireNotice);
       setStatusType('success');
 

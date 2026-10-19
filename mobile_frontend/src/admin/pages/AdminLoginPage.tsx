@@ -19,6 +19,8 @@ import { ShieldIcon } from '../components/Icons';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { adminApi, setStoredAdminToken, setStoredAdminUser, getStoredAdminToken, getStoredAdminUser } from '../services/adminApi';
 import { setAuthToken, setCurrentUser } from '../../services/api';
+import { showSuccess, showError, showWarning } from '../../utils/sweetalert';
+import ForgotPasswordModal from '../../components/auth/ForgotPasswordModal';
 
 export interface Props {
   onLoginSuccess?: () => void;
@@ -35,6 +37,7 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   const handleSubmit = async (e?: any) => {
     if (e && e.preventDefault) e.preventDefault();
@@ -45,10 +48,12 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
 
     if (!cleanEmail) {
       setErrorMsg('Please enter your administrator email address.');
+      showWarning('Required Field', 'Please enter your administrator email address.');
       return;
     }
     if (!cleanPass) {
       setErrorMsg('Please enter your administrator master password.');
+      showWarning('Required Field', 'Please enter your administrator master password.');
       return;
     }
 
@@ -115,9 +120,12 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
       const activeAdminToken = getStoredAdminToken();
       if (activeAdminToken) setAuthToken(activeAdminToken);
       if (activeAdminUser) setCurrentUser(activeAdminUser);
+      await showSuccess('Admin Access Granted', 'Welcome to the Association Admin Command Portal.', 1500);
       if (onLoginSuccess) onLoginSuccess();
     } else {
-      setErrorMsg(res.message || 'Invalid administrator credentials. Access denied.');
+      const msg = res.message || 'Invalid administrator credentials. Access denied.';
+      setErrorMsg(msg);
+      showError('Authentication Failed', msg);
     }
   };
 
@@ -205,8 +213,8 @@ const IMG_LOGO = require('../../../assets/logo_transparent.png');
             />
           </View>
 
-          {/* Remember Me Option */}
-          <View style={styles.optionsRow}>
+          {/* Remember Me & Forgot Password Options */}
+          <View style={[styles.optionsRow, { justifyContent: 'space-between', alignItems: 'center' }]}>
             <TouchableOpacity
               style={styles.checkboxRow}
               onPress={() => setRememberMe(!rememberMe)}
@@ -215,7 +223,13 @@ const IMG_LOGO = require('../../../assets/logo_transparent.png');
               <View style={[styles.checkbox, rememberMe && styles.checkboxActive]}>
                 {rememberMe && <Text style={styles.checkboxTick}>✓</Text>}
               </View>
-              <Text style={styles.checkboxLabel}>Keep me signed in on this device</Text>
+              <Text style={styles.checkboxLabel}>Keep me signed in</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => setShowForgotPassword(true)} activeOpacity={0.7}>
+              <Text style={{ color: '#2563eb', fontSize: 13, fontWeight: '700' }}>
+                Forgot Password?
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -262,6 +276,18 @@ const IMG_LOGO = require('../../../assets/logo_transparent.png');
             Protected by Association Two-Factor Cryptographic Session Guard. All access attempts are audited.
           </Text>
         </View>
+
+        {/* Reusable Forgot Password Modal */}
+        <ForgotPasswordModal
+          visible={showForgotPassword}
+          onClose={() => setShowForgotPassword(false)}
+          initialEmail={email}
+          role="ADMIN"
+          onSuccess={(newEmail) => {
+            setEmail(newEmail);
+            setPassword('');
+          }}
+        />
       </View>
     </View>
   );

@@ -262,6 +262,30 @@ export const ScorerApi = {
     return res;
   },
 
+  // Forgot Password Flow (Step 1: Request 4-digit OTP)
+  requestForgotPasswordOtp: async (email: string, role?: string) => {
+    return request('/auth/forgot-password/request-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, role })
+    });
+  },
+
+  // Forgot Password Flow (Step 2: Verify 4-digit OTP)
+  verifyForgotPasswordOtp: async (email: string, otp: string) => {
+    return request('/auth/forgot-password/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp })
+    });
+  },
+
+  // Forgot Password Flow (Step 3: Reset & Encrypt Password)
+  resetPassword: async (email: string, otp: string, newPassword: string, confirmPassword?: string) => {
+    return request('/auth/forgot-password/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp, newPassword, confirmPassword })
+    });
+  },
+
 
   requestOtp: async (email: string, role?: string) => {
     return request('/auth/request-otp', {
