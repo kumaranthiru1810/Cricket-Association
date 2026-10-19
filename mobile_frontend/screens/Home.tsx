@@ -27,6 +27,7 @@ import { io } from 'socket.io-client';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppNavigation } from '../src/navigation/AppNavigator';
 import { ScorerApi, getCurrentUser, setCurrentUser, setAuthToken, SOCKET_URL } from '../src/services/api';
+import Header from '../src/layouts/Header';
 
 // ─── ASSET REFERENCES ──────────────────────────────────────────────────────────
 const IMG_LOGO = require('../assets/logo_transparent.png');
@@ -632,192 +633,17 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* TOP HEADER / NAVBAR */}
-      <View style={styles.header}>
-        <View style={styles.headerInner}>
-          {/* Brand Block */}
-          <TouchableOpacity
-            style={styles.brandBlock}
-            onPress={() => mainScrollRef.current?.scrollTo({ y: 0, animated: true })}
-            activeOpacity={0.8}
-          >
-            <Image source={IMG_LOGO} style={styles.brandLogo} resizeMode="contain" />
-            <View style={styles.brandTextBlock}>
-              <Text style={styles.brandTitleMain}>CRICKET FEDERATION</Text>
-              <Text style={styles.brandTitleSub}>OF VIRUDHUNAGAR DISTRICT</Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* Desktop Navigation Links */}
-          {!isMobile && (
-            <View style={styles.desktopNav}>
-              {/* Active Home Pill */}
-              <TouchableOpacity
-                style={styles.navHomePill}
-                onPress={() => mainScrollRef.current?.scrollTo({ y: 0, animated: true })}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.navHomePillText}>🏠  Home</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.navLinkDropdown}
-                onPress={() => scrollToSection('matchCentre')}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.navDropdownText}>🏏 Match Centre ⌄</Text>
-              </TouchableOpacity>
-
-
-              <TouchableOpacity
-                style={styles.navLinkDropdown}
-                onPress={() => scrollToSection('pointsTable')}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.navDropdownText}>📊 Standings ⌄</Text>
-              </TouchableOpacity>
-
-
-            </View>
-          )}
-
-          {/* Header Action Buttons */}
-          <View style={styles.headerActions}>
-            {sessionUser ? (
-              <>
-                <TouchableOpacity
-                  style={styles.headerUserPill}
-                  onPress={handleNavigateToUserPortal}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.headerUserNameText} numberOfLines={1}>
-                    👤 {sessionUser.name || sessionUser.email || 'User'}
-                  </Text>
-                  <View style={styles.headerUserRoleBadge}>
-                    <Text style={styles.headerUserRoleBadgeText}>
-                      {(sessionUser.role || 'USER').toUpperCase()}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.headerLogoutBtn}
-                  onPress={handleLogout}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.headerLogoutBtnText}>↪ Logout</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <TouchableOpacity
-                style={styles.headerLoginBtn}
-                onPress={() => navigate('Login')}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.headerLoginBtnText}>👤 Login</Text>
-              </TouchableOpacity>
-            )}
-
-            {isMobile && (
-              <TouchableOpacity
-                style={styles.hamburgerBtn}
-                onPress={() => setMobileNavOpen(!mobileNavOpen)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.hamburgerIcon}>{mobileNavOpen ? '✕' : '☰'}</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        {/* Mobile Navigation Dropdown Drawer */}
-        {isMobile && mobileNavOpen && (
-          <View style={styles.mobileNavDrawer}>
-            {sessionUser ? (
-              <View style={styles.mobileUserCard}>
-                <Text style={styles.mobileUserCardGreeting}>
-                  👤 Logged In: <Text style={{ color: '#f5c43d', fontWeight: 'bold' }}>{sessionUser.name || sessionUser.email}</Text>
-                </Text>
-                <Text style={styles.mobileUserCardRole}>
-                  Role: {(sessionUser.role || 'USER').toUpperCase()}
-                </Text>
-                <View style={styles.mobileUserActionsRow}>
-                  <TouchableOpacity
-                    style={styles.mobilePortalBtn}
-                    onPress={() => {
-                      setMobileNavOpen(false);
-                      handleNavigateToUserPortal();
-                    }}
-                  >
-                    <Text style={styles.mobilePortalBtnText}>🚀 Open Dashboard →</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.mobileLogoutBtn}
-                    onPress={() => {
-                      setMobileNavOpen(false);
-                      handleLogout();
-                    }}
-                  >
-                    <Text style={styles.mobileLogoutBtnText}>↪ Logout</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : (
-              <TouchableOpacity
-                style={[styles.mobileNavItem, { backgroundColor: 'rgba(245, 196, 61, 0.12)', borderRadius: 6, paddingHorizontal: 10, marginBottom: 6 }]}
-                onPress={() => {
-                  setMobileNavOpen(false);
-                  navigate('Login');
-                }}
-              >
-                <Text style={[styles.mobileNavText, { color: '#f5c43d', fontWeight: '800' }]}>
-                  👤 Login to Portal
-                </Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={styles.mobileNavItem}
-              onPress={() => {
-                mainScrollRef.current?.scrollTo({ y: 0, animated: true });
-                setMobileNavOpen(false);
-              }}
-            >
-              <Text style={styles.mobileNavText}>🏠 Home</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.mobileNavItem} onPress={() => scrollToSection('matchCentre')}>
-              <Text style={styles.mobileNavText}>🏏 Match Centre & Live Scores</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.mobileNavItem} onPress={() => scrollToSection('pointsTable')}>
-              <Text style={styles.mobileNavText}>📊 Standings & Points Table</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.mobileNavItem} onPress={() => scrollToSection('stats')}>
-              <Text style={styles.mobileNavText}>📈 Player Performance Stats</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.mobileNavItem} onPress={() => scrollToSection('players')}>
-              <Text style={styles.mobileNavText}>👥 District Talent Directory</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.mobileNavItem} onPress={() => scrollToSection('about')}>
-              <Text style={styles.mobileNavText}>🏛️ About CFVD Heritage</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.mobileNavItem} onPress={() => scrollToSection('grounds')}>
-              <Text style={styles.mobileNavText}>🏟️ Grounds & Facilities</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.mobileNavItem, { borderBottomWidth: 0, marginTop: 6 }]}
-              onPress={() => {
-                setMobileNavOpen(false);
-                navigate('Registration');
-              }}
-            >
-              <Text style={[styles.mobileNavText, { color: '#f5c43d', fontWeight: '700' }]}>
-                📝 Player / Team Registration
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
+      {/* TOP HEADER / NAVBAR (Extracted Layout Component) */}
+      <Header
+        sessionUser={sessionUser}
+        onLogout={handleLogout}
+        onNavigateToUserPortal={handleNavigateToUserPortal}
+        scrollToSection={scrollToSection}
+        onScrollToTop={() => mainScrollRef.current?.scrollTo({ y: 0, animated: true })}
+        isMobile={isMobile}
+        mobileNavOpen={mobileNavOpen}
+        setMobileNavOpen={setMobileNavOpen}
+      />
 
       {/* ─── LIVE TICKER BAR (DIRECTLY BELOW NAVBAR) ────────────────────── */}
       <View style={styles.liveTickerBar}>
@@ -924,7 +750,24 @@ export default function HomeScreen() {
           />
 
           {/* Large Gold Watermark Crest positioned center-right */}
-          <View style={[styles.heroWatermarkContainer, isMobile && { right: 'auto', left: '50%', transform: [{ translateX: -270 }, { translateY: -270 }] }]} pointerEvents="none">
+          <View
+            style={[
+              styles.heroWatermarkContainer,
+              isMobile && {
+                right: 'auto',
+                left: '50%',
+                top: '50%',
+                width: Math.min(windowWidth * 0.88, 360),
+                height: Math.min(windowWidth * 0.88, 360),
+                transform: [
+                  { translateX: -Math.min(windowWidth * 0.88, 360) / 2 },
+                  { translateY: -Math.min(windowWidth * 0.88, 360) / 2 }
+                ],
+                opacity: 0.38
+              }
+            ]}
+            pointerEvents="none"
+          >
             {/* Outer and Inner Halo Rings */}
             <View style={styles.emblemRingOuter} />
             <View style={styles.emblemRingInner} />
@@ -935,52 +778,192 @@ export default function HomeScreen() {
             />
           </View>
 
-          <View style={[styles.container, styles.heroContainer, isMobile && { alignItems: 'center' }]}>
+          {/* Mobile Overlay Layer directly above the Logo Crest for high text contrast */}
+          {isMobile && (
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  zIndex: 1,
+                  backgroundColor: 'rgba(254, 252, 246, 0.78)',
+                  ...(Platform.OS === 'web'
+                    ? ({
+                        backdropFilter: 'blur(3px)',
+                        WebkitBackdropFilter: 'blur(3px)',
+                      } as any)
+                    : {}),
+                }
+              ]}
+              pointerEvents="none"
+            >
+              <LinearGradient
+                colors={[
+                  'rgba(241, 245, 249, 0.82)',
+                  'rgba(254, 252, 246, 0.86)',
+                  'rgba(254, 243, 199, 0.80)',
+                ]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+            </View>
+          )}
+
+          <View
+            style={[
+              styles.container,
+              styles.heroContainer,
+              isMobile && {
+                alignItems: 'center',
+                alignSelf: 'center',
+                paddingLeft: 16,
+                paddingRight: 16,
+                maxWidth: '100%',
+              }
+            ]}
+          >
             {/* Pretitle badges row */}
-            <View style={styles.heroPretitleRow}>
-              <View style={styles.heroBadgeDistrict}>
-                <Text style={styles.heroBadgeDistrictText}>🛡️ OFFICIAL DISTRICT BODY</Text>
+            <View
+              style={[
+                styles.heroPretitleRow,
+                isMobile && {
+                  justifyContent: 'center',
+                  alignSelf: 'center',
+                  gap: 6,
+                  marginBottom: 12,
+                }
+              ]}
+            >
+              <View style={[styles.heroBadgeDistrict, isMobile && { paddingHorizontal: 9, paddingVertical: 4 }]}>
+                <Text style={[styles.heroBadgeDistrictText, isMobile && { fontSize: 10 }]}>🛡️ OFFICIAL DISTRICT BODY</Text>
               </View>
-              <View style={styles.heroBadgeCouncil}>
-                <Text style={styles.heroBadgeCouncilText}>⚫ CFVD GOVERNING COUNCIL</Text>
+              <View style={[styles.heroBadgeCouncil, isMobile && { paddingHorizontal: 9, paddingVertical: 4 }]}>
+                <Text style={[styles.heroBadgeCouncilText, isMobile && { fontSize: 10 }]}>⚫ CFVD GOVERNING COUNCIL</Text>
               </View>
-              <View style={styles.heroBadgeHeritage}>
-                <Text style={styles.heroBadgeHeritageText}>🛕 SRIVILLIPUTHUR HERITAGE</Text>
+              <View style={[styles.heroBadgeHeritage, isMobile && { paddingHorizontal: 9, paddingVertical: 4 }]}>
+                <Text style={[styles.heroBadgeHeritageText, isMobile && { fontSize: 10 }]}>🛕 SRIVILLIPUTHUR HERITAGE</Text>
               </View>
             </View>
 
             {/* Main Title */}
-            <Text style={[styles.heroHeadingLine1, isMobile && { textAlign: 'center' }]}>CRICKET FEDERATION OF</Text>
-            <Text style={[styles.heroHeadingLine2, isMobile && { textAlign: 'center' }]}>VIRUDHUNAGAR DISTRICT</Text>
+            <Text
+              style={[
+                styles.heroHeadingLine1,
+                isMobile && {
+                  textAlign: 'center',
+                  alignSelf: 'center',
+                  fontSize: windowWidth < 380 ? 20 : 23,
+                  letterSpacing: 0.5,
+                  color: '#07132c',
+                  marginBottom: 4,
+                }
+              ]}
+            >
+              CRICKET FEDERATION OF
+            </Text>
+            <Text
+              style={[
+                styles.heroHeadingLine2,
+                isMobile && {
+                  textAlign: 'center',
+                  alignSelf: 'center',
+                  fontSize: windowWidth < 380 ? 24 : (windowWidth < 440 ? 27 : 32),
+                  letterSpacing: 0.8,
+                  color: '#b45309',
+                  textShadowColor: 'rgba(0, 0, 0, 0.12)',
+                  textShadowOffset: { width: 0, height: 1 },
+                  textShadowRadius: 2,
+                  marginBottom: 12,
+                }
+              ]}
+            >
+              VIRUDHUNAGAR DISTRICT
+            </Text>
 
             {/* 3D Folded Golden Motto Ribbon Banner */}
-            <View style={styles.ribbonWrapper}>
+            <View
+              style={[
+                styles.ribbonWrapper,
+                isMobile && {
+                  alignSelf: 'center',
+                  marginBottom: 16,
+                }
+              ]}
+            >
               <View style={styles.ribbonTailLeft} />
               <LinearGradient
                 colors={['#fff4c4', '#f5ce55', '#d4af37', '#996515']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={styles.ribbonBody}
+                style={[
+                  styles.ribbonBody,
+                  isMobile && {
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                  }
+                ]}
               >
                 <Text style={styles.ribbonStar}>★</Text>
-                <Text style={styles.ribbonText}>Enjoy the game and chase your dreams</Text>
+                <Text
+                  style={[
+                    styles.ribbonText,
+                    isMobile && {
+                      fontSize: windowWidth < 380 ? 11.5 : 12.5,
+                      marginHorizontal: 4,
+                    }
+                  ]}
+                >
+                  Enjoy the game and chase your dreams
+                </Text>
                 <Text style={styles.ribbonStar}>★</Text>
               </LinearGradient>
               <View style={styles.ribbonTailRight} />
             </View>
 
             {/* Description */}
-            <Text style={[styles.heroDescription, isMobile && { textAlign: 'center' }]}>
+            <Text
+              style={[
+                styles.heroDescription,
+                isMobile && {
+                  textAlign: 'center',
+                  alignSelf: 'center',
+                  fontSize: 13,
+                  lineHeight: 20,
+                  color: '#1e293b',
+                  marginBottom: 22,
+                  paddingHorizontal: 4,
+                }
+              ]}
+            >
               Governing, developing, and fostering grassroots, collegiate, and competitive cricket across
               Srivilliputhur, Sivakasi, Rajapalayam, Sattur, Aruppukottai, and Virudhunagar under the official
               authority of Cricket Federation of Virudhunagar District.
             </Text>
 
             {/* 3 Hero Action Buttons */}
-            <View style={[styles.heroButtonsRow, isMobile && { justifyContent: 'center' }]}>
+            <View
+              style={[
+                styles.heroButtonsRow,
+                isMobile && {
+                  justifyContent: 'center',
+                  alignSelf: 'center',
+                  gap: 10,
+                  marginBottom: 24,
+                  width: '100%',
+                }
+              ]}
+            >
               {/* 1. Match Centre Live (Solid Navy with Gold Border) */}
               <TouchableOpacity
-                style={styles.heroBtnNavy}
+                style={[
+                  styles.heroBtnNavy,
+                  isMobile && {
+                    flex: 1,
+                    minWidth: 140,
+                    maxWidth: 200,
+                    justifyContent: 'center',
+                  }
+                ]}
                 onPress={() => scrollToSection('matchCentre')}
                 activeOpacity={0.85}
               >
@@ -988,11 +971,17 @@ export default function HomeScreen() {
                 <Text style={styles.heroBtnNavyText}>Match Centre Live</Text>
               </TouchableOpacity>
 
-
-
               {/* 3. Live Scorecard (Solid Crisp White) */}
               <TouchableOpacity
-                style={styles.heroBtnWhite}
+                style={[
+                  styles.heroBtnWhite,
+                  isMobile && {
+                    flex: 1,
+                    minWidth: 140,
+                    maxWidth: 200,
+                    justifyContent: 'center',
+                  }
+                ]}
                 onPress={() => {
                   setActiveScorecardMatch('match-1');
                   setScorecardModalVisible(true);
@@ -1002,7 +991,6 @@ export default function HomeScreen() {
                 <Text style={styles.heroBtnWhiteText}>📡 Live Scorecard</Text>
               </TouchableOpacity>
             </View>
-
 
           </View>
         </View>
@@ -2777,7 +2765,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 1540,
     alignSelf: 'center',
-    paddingHorizontal: Platform.OS === 'web' ? 32 : 16
+    paddingHorizontal: Dimensions.get('window').width < 768 ? 16 : (Platform.OS === 'web' ? 32 : 16)
   },
 
   // Atmospheric Background
@@ -3050,6 +3038,8 @@ const styles = StyleSheet.create({
   },
   liveTickerInner: {
     width: '100%',
+    maxWidth: 1540,
+    alignSelf: 'center',
     paddingHorizontal: Platform.OS === 'web' ? 32 : 16,
     paddingVertical: 8,
     flexDirection: 'row',
