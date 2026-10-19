@@ -2,7 +2,7 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 
 interface Props {
-  children: ReactNode;
+  children?: ReactNode;
   fallbackTitle?: string;
   onReset?: () => void;
 }
