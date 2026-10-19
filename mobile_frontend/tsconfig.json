@@ -8,7 +8,9 @@
     "noEmit": true
   },
   "include": [
-    "src",
+    "src/**/*",
+    "screens/**/*",
+    "layouts/**/*",
     "index.ts",
     "*.ts",
     "*.tsx"

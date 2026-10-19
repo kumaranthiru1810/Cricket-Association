@@ -1,7 +1,6 @@
 {
   "expo": {
     "name": "Cricket Federation of Virudhunagar District",
-    "shortName": "CFVD Cricket",
     "slug": "cricket-federation-virudhunagar",
     "version": "1.0.0",
     "description": "Official cricket federation portal: Live ball-by-ball scorecards, tournament fixtures, team management, and wagon wheel analytics.",
@@ -35,7 +34,8 @@
       "orientation": "any"
     },
     "plugins": [
-      "expo-asset"
+      "expo-asset",
+      "expo-font"
     ]
   }
 }
