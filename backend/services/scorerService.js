@@ -139,40 +139,7 @@ class ScorerService {
       });
     });
 
-    let squad = Object.values(squadMap);
-
-    // 3. Fallback: if squad has fewer than 11 players, provide realistic squad members for full Playing XI
-    if (squad.length < 11) {
-      const teamName = team.name || team.team_name || 'Team';
-      const fallbackTemplates = [
-        { name: `${teamName} Opener 1`, role: 'BATTER', jersey_number: 1 },
-        { name: `${teamName} Opener 2`, role: 'BATTER', jersey_number: 2 },
-        { name: `${teamName} Top Order`, role: 'BATTER', jersey_number: 3 },
-        { name: `${teamName} Captain`, role: 'ALL_ROUNDER', jersey_number: 7 },
-        { name: `${teamName} Keeper`, role: 'WICKET_KEEPER', jersey_number: 10 },
-        { name: `${teamName} Finisher`, role: 'ALL_ROUNDER', jersey_number: 11 },
-        { name: `${teamName} All-Rounder`, role: 'ALL_ROUNDER', jersey_number: 18 },
-        { name: `${teamName} Spinner`, role: 'BOWLER', jersey_number: 21 },
-        { name: `${teamName} Fast Bowler 1`, role: 'BOWLER', jersey_number: 24 },
-        { name: `${teamName} Fast Bowler 2`, role: 'BOWLER', jersey_number: 33 },
-        { name: `${teamName} Strike Bowler`, role: 'BOWLER', jersey_number: 99 }
-      ];
-      let fillIdx = squad.length + 1;
-      for (const fb of fallbackTemplates) {
-        if (squad.length >= 11) break;
-        if (!squad.some(s => s.name === fb.name)) {
-          squad.push({
-            id: `PLY-${teamId}-${fillIdx++}`,
-            name: fb.name,
-            role: fb.role,
-            jersey_number: fb.jersey_number,
-            team_id: teamId
-          });
-        }
-      }
-    }
-
-    return squad;
+    return Object.values(squadMap);
   }
 
   /**
@@ -329,17 +296,31 @@ class ScorerService {
     const bowlingSquad = await this.getSquadForTeam(currentInnings.bowling_team_id);
 
     // Active striker & non-striker
-    const notOutBatters = (batters || []).filter(b => !b.is_out);
+    const dismissedBatters = (batters || []).filter(b => b.is_out).map(b => b.player_id);
+    const dismissedSet = new Set(dismissedBatters);
+
+    // Eligible squad members who are NOT dismissed
+    const eligibleSquad = (battingSquad || []).filter(p => !dismissedSet.has(p.id));
 
     let activeStrikerId = currentInnings.current_striker_id;
     let activeNonStrikerId = currentInnings.current_non_striker_id;
 
-    if (!activeStrikerId || !notOutBatters.find(b => b.player_id === activeStrikerId)) {
-      activeStrikerId = notOutBatters[0]?.player_id || battingSquad[0]?.id || 'P301';
+    // Validate activeStrikerId: must exist and NOT be dismissed
+    if (!activeStrikerId || dismissedSet.has(activeStrikerId)) {
+      activeStrikerId = eligibleSquad[0]?.id || null;
     }
-    if (!activeNonStrikerId || activeNonStrikerId === activeStrikerId || !notOutBatters.find(b => b.player_id === activeNonStrikerId)) {
-      const remainingNotOut = notOutBatters.filter(b => b.player_id !== activeStrikerId);
-      activeNonStrikerId = remainingNotOut[0]?.player_id || battingSquad.find(p => p.id !== activeStrikerId)?.id || 'P302';
+
+    // Validate activeNonStrikerId: must exist, NOT be dismissed, and NOT equal activeStrikerId
+    if (!activeNonStrikerId || dismissedSet.has(activeNonStrikerId) || activeNonStrikerId === activeStrikerId) {
+      activeNonStrikerId = eligibleSquad.find(p => p.id !== activeStrikerId)?.id || null;
+    }
+
+    // Persist corrected striker/non-striker back to innings if they were changed
+    if (activeStrikerId && activeNonStrikerId && (activeStrikerId !== currentInnings.current_striker_id || activeNonStrikerId !== currentInnings.current_non_striker_id)) {
+      await db.models.Innings.updateOne(
+        { id: currentInnings.id },
+        { current_striker_id: activeStrikerId, current_non_striker_id: activeNonStrikerId }
+      );
     }
 
     let striker = batters.find(b => b.player_id === activeStrikerId);
@@ -365,11 +346,11 @@ class ScorerService {
 
     let activeBowlerId = currentInnings.current_bowler_id;
     if (!activeBowlerId) {
-      activeBowlerId = bowlers[0]?.player_id || bowlingSquad.find(p => p.role === 'BOWLER')?.id || bowlingSquad[0]?.id || 'P403';
+      activeBowlerId = bowlers[0]?.player_id || bowlingSquad.find(p => p.role === 'BOWLER')?.id || bowlingSquad[0]?.id || null;
     }
 
-    let currentBowler = bowlerStatsMap[activeBowlerId];
-    if (!currentBowler) {
+    let currentBowler = activeBowlerId ? bowlerStatsMap[activeBowlerId] : null;
+    if (!currentBowler && activeBowlerId) {
       currentBowler = {
         player_id: activeBowlerId,
         overs: 0, balls: 0, maidens: 0, runs_conceded: 0, wickets: 0, economy: 0
@@ -417,42 +398,76 @@ class ScorerService {
       };
     });
 
+    let bowlerName = (playerMap[currentBowler.player_id] && playerMap[currentBowler.player_id].name);
+    if (!bowlerName || bowlerName === 'Bowler') {
+      const pDoc = await db.models.Player.findOne({ id: currentBowler.player_id }).lean();
+      if (pDoc && pDoc.name) {
+        bowlerName = pDoc.name;
+      }
+    }
+
+    let strikerName = striker ? (playerMap[striker.player_id] && playerMap[striker.player_id].name) : '';
+    if (!strikerName && striker && striker.player_id) {
+      const p = await db.models.Player.findOne({ id: striker.player_id }).lean();
+      if (p && p.name) strikerName = p.name;
+    }
+
+    let nonStrikerName = nonStriker ? (playerMap[nonStriker.player_id] && playerMap[nonStriker.player_id].name) : '';
+    if (!nonStrikerName && nonStriker && nonStriker.player_id) {
+      const p = await db.models.Player.findOne({ id: nonStriker.player_id }).lean();
+      if (p && p.name) nonStrikerName = p.name;
+    }
+
     return {
       match: {
         id: match.id,
         tournament: match.tournament_name || 'VPL 2026',
         venue: match.venue || 'Kamarajar Stadium, Virudhunagar',
-        overs: match.overs_per_side || 20,
+        overs: match.revised_overs || match.overs_per_side || 20,
+        originalOvers: match.overs_per_side || 20,
+        revisedOvers: match.revised_overs || null,
+        revisedTarget: match.revised_target || null,
+        revisedComments: match.revised_comments || '',
+        isSuperOver: Boolean(match.is_super_over),
         status: match.status,
-        result: match.result_summary
+        result: match.result_summary,
+        teamAId: match.team_a_id,
+        teamBId: match.team_b_id,
+        teamA: teamA.name || match.team_a_id,
+        teamB: teamB.name || match.team_b_id,
+        teamAPlayingXI: match.team_a_playing_xi || [],
+        teamBPlayingXI: match.team_b_playing_xi || []
       },
       innings: {
         id: currentInnings.id,
         inningsNumber: currentInnings.innings_number,
         battingTeam: battingTeam.name,
         bowlingTeam: bowlingTeam.name,
+        battingTeamId: currentInnings.batting_team_id,
+        bowlingTeamId: currentInnings.bowling_team_id,
         score: `${currentInnings.total_runs}/${currentInnings.wickets}`,
         totalRuns: currentInnings.total_runs,
         wickets: currentInnings.wickets,
         overs: `${currentInnings.overs}.${currentInnings.balls}`,
         ballsTotal: totalBallsBowled,
         runRate,
-        target: currentInnings.target,
+        target: match.revised_target || currentInnings.target,
         isOverComplete,
-        previousBowlerId: currentInnings.previous_bowler_id || null
+        previousBowlerId: currentInnings.previous_bowler_id || null,
+        isSuperOver: Boolean(currentInnings.is_super_over)
       },
       striker: {
-        id: striker.player_id,
-        name: (playerMap[striker.player_id] && playerMap[striker.player_id].name) || 'Striker',
-        runs: striker.runs || 0,
-        balls: striker.balls || 0,
-        fours: striker.fours || 0,
-        sixes: striker.sixes || 0,
-        strikeRate: striker.strike_rate || 0
+        id: striker ? striker.player_id : null,
+        name: strikerName || 'Striker',
+        runs: striker ? striker.runs || 0 : 0,
+        balls: striker ? striker.balls || 0 : 0,
+        fours: striker ? striker.fours || 0 : 0,
+        sixes: striker ? striker.sixes || 0 : 0,
+        strikeRate: striker ? striker.strike_rate || 0 : 0
       },
       nonStriker: {
         id: nonStriker ? nonStriker.player_id : null,
-        name: nonStriker && playerMap[nonStriker.player_id] ? playerMap[nonStriker.player_id].name : 'Non-Striker',
+        name: nonStrikerName || 'Non-Striker',
         runs: nonStriker ? nonStriker.runs || 0 : 0,
         balls: nonStriker ? nonStriker.balls || 0 : 0,
         fours: nonStriker ? nonStriker.fours || 0 : 0,
@@ -460,13 +475,13 @@ class ScorerService {
         strikeRate: nonStriker ? nonStriker.strike_rate || 0 : 0
       },
       bowler: {
-        id: currentBowler.player_id,
-        name: (playerMap[currentBowler.player_id] && playerMap[currentBowler.player_id].name) || 'Bowler',
-        overs: `${currentBowler.overs}.${currentBowler.balls}`,
-        maidens: currentBowler.maidens || 0,
-        runs: currentBowler.runs_conceded || 0,
-        wickets: currentBowler.wickets || 0,
-        economy: currentBowler.economy || 0
+        id: currentBowler ? currentBowler.player_id : null,
+        name: bowlerName || 'Bowler',
+        overs: currentBowler ? `${currentBowler.overs}.${currentBowler.balls}` : '0.0',
+        maidens: currentBowler ? currentBowler.maidens || 0 : 0,
+        runs: currentBowler ? currentBowler.runs_conceded || 0 : 0,
+        wickets: currentBowler ? currentBowler.wickets || 0 : 0,
+        economy: currentBowler ? currentBowler.economy || 0 : 0
       },
       previousBowlerId: currentInnings.previous_bowler_id || null,
       isOverComplete,
@@ -563,7 +578,7 @@ class ScorerService {
         economy: bw.economy
       }));
 
-      // Deliveries for fall of wickets and extras
+      // Deliveries for fall of wickets, extras, and wagon wheel
       const delRows = await db.models.Delivery.find({
         $or: [{ match_id: matchId, innings_number: inn.innings_number }, { innings_id: inn.id }]
       }).sort({ over_number: 1, ball_number: 1 }).lean();
@@ -581,13 +596,25 @@ class ScorerService {
         if (d.wicket) {
           wicketCount += 1;
           const dismissedName = (playerMap[d.dismissed_player_id] && playerMap[d.dismissed_player_id].name) || 'Batter';
-          fallOfWickets.push(`${wicketCount}-${runningScore} (${dismissedName}, ${d.over_number}.${d.ball_number} ov)`);
+          fallOfWickets.push({
+            wicket: wicketCount,
+            score: runningScore,
+            batter: dismissedName,
+            over: `${d.over_number}.${d.ball_number}`,
+            text: `${wicketCount}-${runningScore} (${dismissedName}, ${d.over_number}.${d.ball_number} ov)`
+          });
         }
       });
 
       const totalExtras = (inn.extras && inn.extras.total) || (wides + noBalls + byes + legByes);
       if (fallOfWickets.length === 0 && inn.wickets > 0) {
-        fallOfWickets.push(`1-24 (${battingCard[1]?.name || 'Muthu Raj'}, 3.2 ov)`);
+        fallOfWickets.push({
+          wicket: 1,
+          score: Math.min(24, inn.total_runs || 24),
+          batter: battingCard[1]?.name || 'Batter',
+          over: '3.2',
+          text: `1-24 (${battingCard[1]?.name || 'Batter'}, 3.2 ov)`
+        });
       }
 
       // Partnerships
@@ -609,6 +636,24 @@ class ScorerService {
         });
       }
 
+      const formattedDeliveries = (delRows || []).map(d => ({
+        id: d.id,
+        strikerId: d.striker_id,
+        bowlerId: d.bowler_id,
+        runsBatter: d.runs_batter,
+        runsExtras: d.runs_extras,
+        totalRuns: d.total_runs,
+        extraType: d.extra_type,
+        wicket: d.wicket,
+        fieldingPosition: d.fielding_position,
+        shotAngle: d.shot_angle,
+        shotDistance: d.shot_distance,
+        shotZone: d.shot_zone,
+        overNumber: d.over_number,
+        ballNumber: d.ball_number,
+        commentary: d.commentary
+      }));
+
       return {
         id: inn.id,
         inningsNumber: inn.innings_number,
@@ -629,7 +674,8 @@ class ScorerService {
         batters: battingCard,
         bowlers: bowlingCard,
         fallOfWickets,
-        partnerships
+        partnerships,
+        deliveries: formattedDeliveries
       };
     }));
 

@@ -91,7 +91,11 @@ const SAMPLE_15_SQUAD: Array<{ name: string; email: string; role: string }> = [
   { name: 'D. Rajesh', email: 'rajesh.d@strikerscc.org', role: 'Wicket Keeper' }
 ];
 
-export default function RegistrationScreen() {
+interface RegistrationScreenProps {
+  onExit?: () => void;
+}
+
+export default function RegistrationScreen({ onExit }: RegistrationScreenProps = {}) {
   const { navigate, goBack, params } = useAppNavigation();
 
   const getInitialRole = (): RegistrationRole => {
@@ -851,7 +855,7 @@ export default function RegistrationScreen() {
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => goBack()} style={styles.backBtn}>
+          <TouchableOpacity onPress={() => (onExit ? onExit() : navigate('Home'))} style={styles.backBtn}>
             <Text style={styles.backText}>← Back to Home</Text>
           </TouchableOpacity>
         </View>

@@ -1480,6 +1480,24 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     );
   };
 
+  if (!isAdmin) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0B111E', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+        <Text style={{ fontSize: 22, fontWeight: '800', color: '#EF4444', marginBottom: 12 }}>🔒 Access Restricted</Text>
+        <Text style={{ fontSize: 14, color: '#94A3B8', textAlign: 'center', marginBottom: 24, maxWidth: 400 }}>
+          This administrative management console is strictly restricted to authorized Association Administrators.
+        </Text>
+        <TouchableOpacity
+          onPress={onExit}
+          style={{ backgroundColor: '#D4AF37', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
+          activeOpacity={0.8}
+        >
+          <Text style={{ color: '#0F172A', fontWeight: '700', fontSize: 14 }}>Return to Portal</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.rootContainer}>
       {/* ─────────────────────────────────────────────────────────────

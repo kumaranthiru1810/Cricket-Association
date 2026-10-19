@@ -29,12 +29,12 @@ export default function ScorerNavigator({ onExit, initialParams }: Props) {
   useEffect(() => {
     const user = getCurrentUser();
     if (!user) {
-      if (onExit) onExit();
+      if (onExit) onExit('Home');
       return;
     }
     const role = (user.role || '').toUpperCase();
-    if (role !== 'SCORER' && role !== 'ADMIN') {
-      if (onExit) onExit();
+    if (role !== 'SCORER' && role !== 'ADMIN' && role !== 'UMPIRE') {
+      if (onExit) onExit('Home');
       return;
     }
   }, [onExit]);
