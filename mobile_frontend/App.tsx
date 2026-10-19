@@ -13,6 +13,7 @@ import AdminDashboardScreen from './src/screens/admin/AdminDashboardScreen';
 import AdminLoginPage from './src/admin/pages/AdminLoginPage';
 import UmpireDashboardScreen from './src/screens/umpire/UmpireDashboardScreen';
 import ScorecardScreen from './src/screens/scorer/ScorecardScreen';
+import ErrorBoundary from './src/components/common/ErrorBoundary';
 import './src/utils/sweetalert';
 
 function MainAppShell() {
