@@ -17,7 +17,8 @@
     "react-native-svg": "15.15.4",
     "react-native-web": "^0.21.2",
     "react-native-webview": "13.16.1",
-    "socket.io-client": "^4.8.4"
+    "socket.io-client": "^4.8.4",
+    "sweetalert2": "^11.26.25"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",

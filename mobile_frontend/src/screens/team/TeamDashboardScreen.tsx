@@ -32,6 +32,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SharedBackground from '../../components/scorer/SharedBackground';
 import { TeamApi, getCurrentUser } from '../../services/api';
+import { showError } from '../../utils/sweetalert';
 
 export interface TeamDashboardProps {
   onExit?: () => void;
@@ -235,7 +236,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
         setScorecardData(raw);
       }
     } catch (err: any) {
-      Alert.alert('Scorecard Error', err?.message || 'Could not retrieve match scorecard.');
+      showError('Scorecard Error', err?.message || 'Could not retrieve match scorecard.');
     } finally {
       setIsLoadingScorecard(false);
     }

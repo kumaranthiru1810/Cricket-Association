@@ -21,6 +21,14 @@ function generateOtpCode() {
 }
 
 /**
+ * Generate a 4-digit cryptographically secure random OTP for Password Reset
+ */
+function generate4DigitOtpCode() {
+  const num = crypto.randomInt(1000, 10000);
+  return num.toString();
+}
+
+/**
  * Generate SHA-256 hash of plain text OTP
  */
 function hashOtp(otp) {
@@ -66,6 +74,7 @@ function resetRateLimit(email) {
 
 module.exports = {
   generateOtpCode,
+  generate4DigitOtpCode,
   hashOtp,
   verifyOtpCode,
   checkRateLimit,

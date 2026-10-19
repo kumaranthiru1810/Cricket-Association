@@ -4,6 +4,7 @@ import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
 import MatchCard from '../../components/scorer/MatchCard';
 import SharedFooter from '../../components/scorer/SharedFooter';
 import { ScorerApi, getCurrentUser } from '../../services/api';
+import { showInfo, showConfirm } from '../../utils/sweetalert';
 
 export default function ScorerDashboardScreen() {
   const { navigate, onExit, params } = useScorerNavigation();
@@ -64,16 +65,14 @@ export default function ScorerDashboardScreen() {
     } catch (_e) {}
   };
 
-  const handleLogout = () => {
-    if (Platform.OS === 'web') {
-      const confirmed = window.confirm('Are you sure you want to exit the scorer console?');
-      if (confirmed) onExit();
-    } else {
-      Alert.alert('Logout', 'Are you sure you want to exit the scorer console?', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Log Out', onPress: () => onExit() }
-      ]);
-    }
+  const handleLogout = async () => {
+    const confirmed = await showConfirm(
+      'Exit Scorer Console',
+      'Are you sure you want to exit the scorer console?',
+      'Yes, Exit',
+      'Cancel'
+    );
+    if (confirmed) onExit();
   };
 
   // Security rule: Scorer only sees upcoming match on Match Day, starting 2 hours before scheduled time
@@ -225,8 +224,7 @@ export default function ScorerDashboardScreen() {
                 } else if (upcomingMatches.length > 0) {
                   navigate('MatchSetup', { matchId: upcomingMatches[0].id });
                 } else {
-                  const msg = 'No live or upcoming matches scheduled at the moment.';
-                  Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Scoring', msg);
+                  showInfo('Scoring', 'No live or upcoming matches scheduled at the moment.');
                 }
               }}
             >
@@ -238,11 +236,7 @@ export default function ScorerDashboardScreen() {
             <TouchableOpacity style={styles.secondaryActionBtn} onPress={() => {
               const nextM = upcomingMatches[0] || liveMatches[0];
               const msg = `You have ${totalAssigned} matches in the system.\n\nNext Match: ${nextM ? `${nextM.teamA} vs ${nextM.teamB} (${nextM.tournament || 'Association Tournament'})` : 'No upcoming match scheduled'}`;
-              if (Platform.OS === 'web') {
-                window.alert(msg);
-              } else {
-                Alert.alert('Assigned Matches', msg);
-              }
+              showInfo('Assigned Matches', msg);
             }}>
               <Text style={styles.secondaryActionText}>ASSIGNED MATCHES</Text>
             </TouchableOpacity>
@@ -253,8 +247,7 @@ export default function ScorerDashboardScreen() {
                 if (completedMatches.length > 0) {
                   navigate('Scorecard', { matchId: completedMatches[0].id });
                 } else {
-                  const msg = 'No completed matches recorded yet.';
-                  Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Scorecards', msg);
+                  showInfo('Scorecards', 'No completed matches recorded yet.');
                 }
               }}
             >

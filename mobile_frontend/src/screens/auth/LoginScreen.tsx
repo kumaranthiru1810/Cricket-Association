@@ -14,6 +14,9 @@ import {
 import { useAppNavigation } from '../../navigation/AppNavigator';
 import SharedBackground from '../../components/scorer/SharedBackground';
 import { ScorerApi, setAuthToken, setCurrentUser } from '../../services/api';
+import { showSuccess, showError, showWarning } from '../../utils/sweetalert';
+import { validateEmail, validatePassword } from '../../utils/validation';
+import ForgotPasswordModal from '../../components/auth/ForgotPasswordModal';
 
 type UserRole = 'PLAYER' | 'TEAM' | 'SCORER' | 'UMPIRE';
 
@@ -30,6 +33,7 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
   const [emailOrUser, setEmailOrUser] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   // Loading & Feedback States
   const [isLoading, setIsLoading] = useState(false);
@@ -51,16 +55,16 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
     setFieldErrors({});
     if (activeRole === 'PLAYER') {
       setEmailOrUser('saravanan.r@strikerscc.org');
-      setPassword('1234');
+      setPassword('Striker@2026#');
     } else if (activeRole === 'TEAM') {
       setEmailOrUser('kannan.coach@strikerscc.org');
-      setPassword('1234');
+      setPassword('Coach@2026#');
     } else if (activeRole === 'SCORER') {
       setEmailOrUser('ramesh@gmail.com');
-      setPassword('1234');
+      setPassword('Scorer@2026#');
     } else if (activeRole === 'UMPIRE') {
       setEmailOrUser('sundaram.umpire@cfvd.org');
-      setPassword('1234');
+      setPassword('Umpire@2026#');
     }
   };
 
@@ -75,23 +79,23 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
 
     const newErrors: { identifier?: string; password?: string } = {};
 
-    if (!input) {
-      newErrors.identifier =
-        activeRole === 'TEAM'
-          ? 'Please enter your Coach Email or Team Name.'
-          : activeRole === 'SCORER'
-          ? 'Please enter your Scorer Email.'
-          : activeRole === 'UMPIRE'
-          ? 'Please enter your Umpire Email.'
-          : 'Please enter your Player Email or Name.';
+    // 1. Email validation: Must contain '@', '.', and valid email structure
+    const emailResult = validateEmail(input);
+    if (!emailResult.isValid) {
+      newErrors.identifier = emailResult.error;
     }
 
-    if (!pass) {
-      newErrors.password = 'Please enter your account password.';
+    // 2. Password validation: 1 uppercase, 2 special characters, min 8 characters
+    const passwordResult = validatePassword(pass);
+    if (!passwordResult.isValid) {
+      newErrors.password = passwordResult.error;
     }
 
+    // If validation fails, show error messages and DO NOT SUBMIT
     if (Object.keys(newErrors).length > 0) {
       setFieldErrors(newErrors);
+      const firstErrorMessage = newErrors.identifier || newErrors.password || 'Please correct the highlighted validation errors.';
+      showWarning('Validation Error', firstErrorMessage);
       return;
     }
 
@@ -110,19 +114,22 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
       setStatusMessage(res?.message || 'Login successful! Redirecting...');
       setStatusType('success');
 
-      setTimeout(() => {
-        setIsLoading(false);
-        if (activeRole === 'PLAYER') {
-          navigate('Player', { user: res?.user, playerName: input });
-        } else if (activeRole === 'TEAM') {
-          navigate('Team', { user: res?.user, teamName: res?.user?.teamName || input });
-        } else if (activeRole === 'SCORER') {
-          navigate('Scorer', { user: res?.user });
-        } else if (activeRole === 'UMPIRE') {
-          navigate('Umpire', { user: res?.user });
-        }
-      }, 500);
+      await showSuccess(
+        'Login Successful!',
+        res?.message || `Welcome to ${activeRole.charAt(0) + activeRole.slice(1).toLowerCase()} Portal!`,
+        1500
+      );
 
+      setIsLoading(false);
+      if (activeRole === 'PLAYER') {
+        navigate('Player', { user: res?.user, playerName: input });
+      } else if (activeRole === 'TEAM') {
+        navigate('Team', { user: res?.user, teamName: res?.user?.teamName || input });
+      } else if (activeRole === 'SCORER') {
+        navigate('Scorer', { user: res?.user });
+      } else if (activeRole === 'UMPIRE') {
+        navigate('Umpire', { user: res?.user });
+      }
     } catch (err: any) {
       setIsLoading(false);
       const rawMsg = err?.message || 'Login failed. Please check your credentials.';
@@ -132,6 +139,7 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
       } else {
         setFieldErrors({ password: rawMsg });
       }
+      showError('Authentication Failed', rawMsg);
     }
   };
 
@@ -288,8 +296,14 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
                 <Text style={styles.fieldErrorText}>{fieldErrors.identifier}</Text>
               ) : null}
 
-              {/* Password Field with Show/Hide Toggle */}
-              <Text style={styles.label}>Account Password *</Text>
+              {/* Password Field Header with Inline Forgot Password Link */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={[styles.label, { marginBottom: 0 }]}>Account Password *</Text>
+                <TouchableOpacity onPress={() => setShowForgotPassword(true)} activeOpacity={0.7}>
+                  <Text style={{ color: '#d97706', fontSize: 13, fontWeight: '700' }}>Forgot Password?</Text>
+                </TouchableOpacity>
+              </View>
+
               <View
                 style={[
                   styles.passwordContainer,
@@ -336,7 +350,7 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
                 )}
               </TouchableOpacity>
 
-              {/* Register Prompt */}
+              {/* Register Prompt & Alternate Link Row */}
               <View style={styles.registerPromptRow}>
                 <Text style={styles.promptNormalText}>Don't have an account? </Text>
                 <TouchableOpacity
@@ -345,11 +359,33 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
                 >
                   <Text style={styles.registerLinkText}>Register Here</Text>
                 </TouchableOpacity>
+                <Text style={styles.promptDividerText}> • </Text>
+                <TouchableOpacity
+                  onPress={() => setShowForgotPassword(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.forgotPasswordPromptText}>Forgot Password?</Text>
+                </TouchableOpacity>
               </View>
 
             </View>
           </View>
         </ScrollView>
+
+        {/* Reusable Forgot Password Modal */}
+        <ForgotPasswordModal
+          visible={showForgotPassword}
+          onClose={() => setShowForgotPassword(false)}
+          initialEmail={emailOrUser}
+          role={activeRole}
+          onNavigateToRegister={(targetRole) => {
+            navigate('Registration', { initialRole: targetRole || activeRole });
+          }}
+          onSuccess={(resetEmail) => {
+            setEmailOrUser(resetEmail);
+            setPassword('');
+          }}
+        />
       </View>
     </SharedBackground>
   );
@@ -562,6 +598,34 @@ const styles = StyleSheet.create({
   registerLinkText: {
     color: '#b45309',
     fontSize: 13,
+    fontWeight: '700',
+    textDecorationLine: 'underline'
+  },
+  forgotPasswordCenteredRow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    marginBottom: 4
+  },
+  forgotPasswordTouchable: {
+    paddingVertical: 6,
+    paddingHorizontal: 12
+  },
+  forgotPasswordMainText: {
+    color: '#b45309',
+    fontSize: 13.5,
+    fontWeight: '700',
+    letterSpacing: 0.2
+  },
+  promptDividerText: {
+    color: '#94a3b8',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginHorizontal: 4
+  },
+  forgotPasswordPromptText: {
+    color: '#2563eb',
+    fontSize: 14,
     fontWeight: '700',
     textDecorationLine: 'underline'
   }

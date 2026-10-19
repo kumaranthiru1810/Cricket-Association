@@ -14,6 +14,14 @@ router.post('/register-otp', (req, res) => authController.requestRegistrationOtp
 router.post('/verify-registration-otp', (req, res) => authController.verifyRegistrationOtp(req, res));
 router.post('/verify-register-otp', (req, res) => authController.verifyRegistrationOtp(req, res));
 
+// 1.1. Multi-Step Forgot Password Flow (4-Digit OTP & Bcrypt Password Reset)
+router.post('/forgot-password/request-otp', (req, res) => authController.requestForgotPasswordOtp(req, res));
+router.post('/forgot-password/verify-otp', (req, res) => authController.verifyForgotPasswordOtp(req, res));
+router.post('/forgot-password/reset-password', (req, res) => authController.resetPasswordWithOtp(req, res));
+router.post('/request-reset-otp', (req, res) => authController.requestForgotPasswordOtp(req, res));
+router.post('/verify-reset-otp', (req, res) => authController.verifyForgotPasswordOtp(req, res));
+router.post('/reset-password', (req, res) => authController.resetPasswordWithOtp(req, res));
+
 // 2. Password-Based Login for All Roles & Cookie Session Management
 router.post('/login', (req, res) => authController.login(req, res));
 router.post('/admin/login', (req, res) => authController.adminLogin(req, res));

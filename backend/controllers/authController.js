@@ -56,6 +56,57 @@ class AuthController {
     }
   }
 
+  async requestForgotPasswordOtp(req, res) {
+    try {
+      const { email, role } = req.body;
+      const result = await authService.requestForgotPasswordOtp(email, role);
+      res.status(200).json(result);
+    } catch (err) {
+      const status = err.status || 400;
+      res.status(status).json({
+        success: false,
+        notRegistered: !!err.notRegistered,
+        message: err.message || 'Failed to send password reset OTP'
+      });
+    }
+  }
+
+  // Step 2: Verify 4-digit OTP for Forgot Password
+  async verifyForgotPasswordOtp(req, res) {
+    try {
+      const { email, otp } = req.body;
+      const result = await authService.verifyForgotPasswordOtp(email, otp);
+      res.status(200).json(result);
+    } catch (err) {
+      const status = err.status || 400;
+      res.status(status).json({
+        success: false,
+        message: err.message || 'OTP verification failed'
+      });
+    }
+  }
+
+  // Step 3: Reset & Encrypt Password
+  async resetPasswordWithOtp(req, res) {
+    try {
+      const { email, otp, newPassword, confirmPassword } = req.body;
+      if (confirmPassword && newPassword !== confirmPassword) {
+        return res.status(400).json({
+          success: false,
+          message: 'New password and confirm password do not match.'
+        });
+      }
+      const result = await authService.resetPasswordWithOtp(email, otp, newPassword);
+      res.status(200).json(result);
+    } catch (err) {
+      const status = err.status || 400;
+      res.status(status).json({
+        success: false,
+        message: err.message || 'Failed to reset password'
+      });
+    }
+  }
+
   // Unified Password-Based Login (Sets JWT Cookie)
   async login(req, res) {
     try {

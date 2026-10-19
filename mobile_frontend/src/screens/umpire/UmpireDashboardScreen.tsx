@@ -33,6 +33,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SharedBackground from '../../components/scorer/SharedBackground';
 import { UmpireApi, getCurrentUser } from '../../services/api';
+import { showAlert as showSwal, showSuccess, showError } from '../../utils/sweetalert';
 
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
 
@@ -115,13 +116,9 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
     return () => sub?.remove();
   }, []);
 
-  // Show user friendly alert
-  const showAlert = (title: string, message: string) => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.alert(`${title}: ${message}`);
-    } else {
-      Alert.alert(title, message);
-    }
+  // Show user friendly alert via SweetAlert
+  const showAlert = (title: string, message: string, icon: 'info' | 'success' | 'error' | 'warning' = 'info') => {
+    showSwal(title, message, icon);
   };
 
   // Load all initial data from MongoDB

@@ -13,6 +13,7 @@ import {
 import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
 import SharedFooter from '../../components/scorer/SharedFooter';
 import { ScorerApi } from '../../services/api';
+import { showWarning, showError } from '../../utils/sweetalert';
 
 export default function MatchSetupScreen() {
   const { navigate, params } = useScorerNavigation();
@@ -56,8 +57,7 @@ export default function MatchSetupScreen() {
 
   const handleStartMatch = async () => {
     if (!tossWinner) {
-      const msg = 'Please select the Toss Winner before starting the match.';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Toss Required', msg);
+      showWarning('Toss Required', 'Please select the Toss Winner before starting the match.');
       return;
     }
 
@@ -75,8 +75,7 @@ export default function MatchSetupScreen() {
         navigate('LiveScoring', { matchId });
       }
     } catch (err: any) {
-      const msg = err.message || 'Error starting match';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Start Error', msg);
+      showError('Start Error', err.message || 'Error starting match');
     } finally {
       setIsSubmitting(false);
     }
