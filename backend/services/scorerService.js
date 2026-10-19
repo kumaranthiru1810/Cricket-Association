@@ -284,6 +284,9 @@ class ScorerService {
       currentInnings = newInn.toObject();
     }
 
+    // Query all innings to preserve previous innings (e.g. 1st innings 34/10)
+    const allInningsDocs = await db.models.Innings.find({ match_id: matchId }).sort({ innings_number: 1 }).lean();
+
     const battingTeam = teamMap[currentInnings.batting_team_id] || teamA;
     const bowlingTeam = teamMap[currentInnings.bowling_team_id] || teamB;
 
@@ -347,6 +350,12 @@ class ScorerService {
     let activeBowlerId = currentInnings.current_bowler_id;
     if (!activeBowlerId) {
       activeBowlerId = bowlers[0]?.player_id || bowlingSquad.find(p => p.role === 'BOWLER')?.id || bowlingSquad[0]?.id || null;
+      if (activeBowlerId) {
+        await db.models.Innings.updateOne(
+          { id: currentInnings.id },
+          { current_bowler_id: activeBowlerId }
+        );
+      }
     }
 
     let currentBowler = activeBowlerId ? bowlerStatsMap[activeBowlerId] : null;
@@ -510,7 +519,19 @@ class ScorerService {
         commentary: d.commentary
       })),
       battingSquad: battingSquad.map(p => ({ id: p.id, name: p.name, role: p.role, jersey_number: p.jersey_number })),
-      bowlingSquad: enrichedBowlingSquad
+      bowlingSquad: enrichedBowlingSquad,
+      allInnings: (allInningsDocs || []).map(inn => ({
+        id: inn.id,
+        inningsNumber: inn.innings_number,
+        battingTeamId: inn.batting_team_id,
+        bowlingTeamId: inn.bowling_team_id,
+        battingTeam: (teamMap[inn.batting_team_id] && teamMap[inn.batting_team_id].name) || inn.batting_team_id,
+        bowlingTeam: (teamMap[inn.bowling_team_id] && teamMap[inn.bowling_team_id].name) || inn.bowling_team_id,
+        totalRuns: inn.total_runs,
+        wickets: inn.wickets,
+        overs: `${inn.overs}.${inn.balls}`,
+        score: `${inn.total_runs}/${inn.wickets} (${inn.overs}.${inn.balls} Ov)`
+      }))
     };
   }
 

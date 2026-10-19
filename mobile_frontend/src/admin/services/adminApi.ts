@@ -5,16 +5,8 @@
  */
 
 import { Platform } from 'react-native';
-
-const getBaseUrl = () => {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    const host = window.location.hostname || 'localhost';
-    return `http://${host}:5000/api`;
-  }
-  return 'http://10.0.2.2:5000/api';
-};
-
-export const API_URL = getBaseUrl();
+import { API_URL } from '../../services/api';
+export { API_URL };
 
 const ADMIN_TOKEN_KEY = 'cfvd_admin_token';
 const ADMIN_USER_KEY = 'cfvd_admin_user';

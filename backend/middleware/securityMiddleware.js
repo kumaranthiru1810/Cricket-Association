@@ -46,9 +46,10 @@ function sanitizeInput(req, res, next) {
 // General API Rate Limiter
 const generalRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 300, // Limit each IP to 300 requests per 15 minutes
+  max: process.env.NODE_ENV === 'production' ? 300 : 3000, // Limit each IP
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.method === 'OPTIONS',
   message: {
     success: false,
     message: 'Too many requests from this IP address. Please try again after 15 minutes.'
@@ -58,9 +59,10 @@ const generalRateLimiter = rateLimit({
 // Strict Auth / Sensitive Endpoint Rate Limiter (Brute-force protection)
 const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 15, // Limit each IP to 15 login / OTP attempts per 15 minutes
+  max: process.env.NODE_ENV === 'production' ? 15 : 200, // Limit each IP
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.method === 'OPTIONS',
   message: {
     success: false,
     message: 'Too many authentication attempts. Please try again after 15 minutes.'
@@ -92,11 +94,34 @@ function getCorsOptions() {
       if (allowed.includes(origin)) {
         return callback(null, true);
       }
+      // Allow any localhost, 127.0.0.1 on any port, or local LAN IP (Expo dev server)
+      if (
+        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
+        /^https?:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin)
+      ) {
+        return callback(null, true);
+      }
       return callback(new Error(`CORS policy violation: Origin '${origin}' is not authorized.`));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Webhook-Signature', 'X-User-Role']
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'X-Webhook-Signature',
+      'X-User-Role',
+      'X-User-Email',
+      'X-User-Id',
+      'x-user-role',
+      'x-user-email',
+      'x-user-id',
+      'role',
+      'user-email',
+      'scorer-id',
+      'Accept',
+      'Origin'
+    ]
   };
 }
 

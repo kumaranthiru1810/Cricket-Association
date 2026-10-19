@@ -230,10 +230,9 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
 
     try {
       const res = await TeamApi.getScorecard(matchId);
-      if (res && res.scorecard) {
-        setScorecardData(res.scorecard);
-      } else if (res) {
-        setScorecardData(res);
+      const raw = res?.scorecard || res?.data || res;
+      if (raw) {
+        setScorecardData(raw);
       }
     } catch (err: any) {
       Alert.alert('Scorecard Error', err?.message || 'Could not retrieve match scorecard.');

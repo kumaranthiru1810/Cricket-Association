@@ -501,8 +501,9 @@ export default function HomeScreen() {
     setIsLoadingScorecard(true);
     try {
       const res = await ScorerApi.getPublicScorecard(matchItem.id);
-      if (res && res.success && res.data) {
-        setRealScorecardData(res.data);
+      const scorecard = res?.data || res?.scorecard || (res?.innings ? res : null);
+      if (scorecard) {
+        setRealScorecardData(scorecard);
       }
     } catch (err) {
       console.warn('Could not fetch detailed scorecard, falling back to match summary:', err);

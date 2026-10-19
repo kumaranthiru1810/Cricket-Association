@@ -6,23 +6,34 @@
 
 import { io, Socket } from 'socket.io-client';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
 // Determine backend host
-const getBaseUrl = () => {
+export const getBackendHost = () => {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     const host = window.location.hostname || 'localhost';
-    return `http://${host}:5000/api`;
+    return host;
   }
-  return 'http://10.0.2.2:5000/api'; // Android Emulator alias or fallback
+  // On mobile devices (Expo Go / dev client), dynamically get Metro host IP
+  try {
+    const hostUri =
+      Constants?.expoConfig?.hostUri ||
+      (Constants as any)?.manifest2?.extra?.expoGo?.debuggerHost ||
+      (Constants as any)?.manifest?.debuggerHost ||
+      (Constants as any)?.linkingUri?.replace(/^https?:\/\/|^exp:\/\//, '');
+    if (hostUri) {
+      const ip = hostUri.split(':')[0];
+      if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
+        return ip;
+      }
+    }
+  } catch (_e) {}
+  // Fallback to local network IP of the host machine
+  return '10.34.20.112';
 };
 
-const getSocketUrl = () => {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    const host = window.location.hostname || 'localhost';
-    return `http://${host}:5000`;
-  }
-  return 'http://10.0.2.2:5000';
-};
+const getBaseUrl = () => `http://${getBackendHost()}:5000/api`;
+const getSocketUrl = () => `http://${getBackendHost()}:5000`;
 
 export const API_URL = getBaseUrl();
 export const SOCKET_URL = getSocketUrl();
@@ -136,12 +147,17 @@ async function request(endpoint: string, options: RequestInit = {}) {
       : {})
   };
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
+
   try {
     const res = await fetch(url, {
       credentials: 'include',
+      signal: options.signal || controller.signal,
       ...options,
       headers: { ...headers, ...(options.headers as any) }
     });
+    clearTimeout(timeoutId);
 
     const text = await res.text();
     let data: any = {};
@@ -162,7 +178,15 @@ async function request(endpoint: string, options: RequestInit = {}) {
     }
     return data;
   } catch (err: any) {
+    clearTimeout(timeoutId);
     console.warn(`API Error on ${endpoint}:`, err?.message || err);
+    if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+      const timeoutErr = new Error(
+        `Connection timed out (${getBackendHost()}:5000). Please check if your mobile and computer are on the same Wi-Fi network.`
+      );
+      (timeoutErr as any).isNetworkError = true;
+      throw timeoutErr;
+    }
     if (
       err.message === 'Failed to fetch' ||
       err.message === 'Network request failed' ||
@@ -170,7 +194,7 @@ async function request(endpoint: string, options: RequestInit = {}) {
       err.message?.includes('ECONNREFUSED')
     ) {
       const friendly = new Error(
-        'Cannot connect to the backend server (port 5000). Please make sure the backend is running. Start it with: cd backend && node server.js'
+        `Cannot connect to backend (${getBackendHost()}:5000). Ensure the backend server is running and your mobile is on the same Wi-Fi.`
       );
       (friendly as any).isNetworkError = true;
       throw friendly;
@@ -738,6 +762,17 @@ export const ScorerApi = {
     });
   },
 
+  startNextInnings: async (matchId: string) => {
+    try {
+      const res = await request(`/scorer/matches/${matchId}/start-next-innings`, { method: 'POST' });
+      if (res && res.success) return res;
+    } catch (_e) {}
+    return request(`/scorer/matches/${matchId}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: 'LIVE' })
+    });
+  },
+
   editDelivery: async (matchId: string, deliveryId: string, delivery: any) => {
     return request(`/scorer/matches/${matchId}/deliveries/${deliveryId}`, {
       method: 'PATCH',
@@ -808,7 +843,7 @@ export const ScorerApi = {
     });
   },
 
-  addPenalty: async (matchId: string, payload: { points: number; type: string; reason: string }) => {
+  addPenalty: async (matchId: string, payload: { points: number; type: string; reason: string; targetTeamName?: string; targetTeamId?: string }) => {
     return request(`/scorer/matches/${matchId}/penalty`, {
       method: 'POST',
       body: JSON.stringify(payload)
@@ -968,7 +1003,11 @@ export const PlayerApi = {
   },
 
   getScorecard: async (id: string) => {
-    return request(`/player/matches/${id}/scorecard`);
+    try {
+      const res = await request(`/player/matches/${id}/scorecard`);
+      if (res && (res.scorecard || res.data)) return res;
+    } catch (_e) {}
+    return request(`/matches/${id}/scorecard`);
   },
 
   getStatistics: async () => {
@@ -1051,7 +1090,11 @@ export const TeamApi = {
   },
 
   getScorecard: async (id: string) => {
-    return request(`/team/matches/${id}/scorecard`);
+    try {
+      const res = await request(`/team/matches/${id}/scorecard`);
+      if (res && (res.scorecard || res.data)) return res;
+    } catch (_e) {}
+    return request(`/matches/${id}/scorecard`);
   },
 
   getStatistics: async () => {

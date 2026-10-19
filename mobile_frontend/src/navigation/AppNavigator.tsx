@@ -1,12 +1,14 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { View, StyleSheet, Platform, Alert } from 'react-native';
 import { getCurrentUser, getAuthToken } from '../services/api';
+import ErrorBoundary from '../components/common/ErrorBoundary';
 
 export type AppScreenName =
   | 'Home'
   | 'Login'
   | 'AdminLogin'
   | 'Registration'
+  | 'Scorecard'
   | 'Scorer'
   | 'Umpire'
   | 'Admin'
@@ -78,7 +80,7 @@ export function checkScreenAccess(
 
   const rule = protectionMap[normScreen];
   if (!rule) {
-    // Public screen ('Home', 'Login', 'AdminLogin', 'Registration')
+    // Public screen ('Home', 'Login', 'AdminLogin', 'Registration', 'Scorecard')
     return { allowed: true };
   }
 
@@ -154,6 +156,7 @@ export default function AppNavigator({
   // Resolve initial screen from URL on Web while enforcing authentication & role protection
   const resolveInitialRoute = (): { screen: AppScreenName; initialParams?: any } => {
     let requested: AppScreenName = initialScreen;
+    let urlParams: any = null;
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const p = (window.location.pathname + window.location.search + window.location.hash).toLowerCase();
       if (p.includes('admin/login') || p.includes('admin-login')) requested = 'AdminLogin';
@@ -162,6 +165,14 @@ export default function AppNavigator({
       else if (p.includes('player')) requested = 'Player';
       else if (p.includes('team') || p.includes('coach')) requested = 'Team';
       else if (p.includes('admin')) requested = 'Admin';
+      else if (p.includes('scorecard')) {
+        requested = 'Scorecard';
+        // Check for matchId in query
+        const match = window.location.search.match(/[?&]matchId=([^&]+)/i);
+        if (match && match[1]) {
+          urlParams = { matchId: decodeURIComponent(match[1]) };
+        }
+      }
       else if (p.includes('login')) requested = 'Login';
       else if (p.includes('register')) requested = 'Registration';
     }
@@ -180,10 +191,9 @@ export default function AppNavigator({
             window.history.replaceState({ appScreen: targetLoginScreen }, '', targetLoginRoute);
           } catch (e) {}
         }
-        showAccessAlert(access.message || 'Please log in first to access this page.');
         return {
           screen: targetLoginScreen,
-          initialParams: { initialRole: access.loginRole, attemptedScreen: requested }
+          initialParams: { initialRole: access.loginRole, attemptedScreen: requested, notice: access.message }
         };
       } else {
         const fallback = getUserDashboardScreen(user);
@@ -199,12 +209,11 @@ export default function AppNavigator({
             window.history.replaceState({ appScreen: fallback }, '', fallbackRoute);
           } catch (e) {}
         }
-        showAccessAlert(access.message || 'You do not have permission to access this page.');
         return { screen: fallback };
       }
     }
 
-    return { screen: requested };
+    return { screen: requested, initialParams: urlParams };
   };
 
   const [initialResolved] = useState(resolveInitialRoute);
@@ -213,13 +222,14 @@ export default function AppNavigator({
 
   const currentScreen = screenHistory[screenHistory.length - 1] || 'Home';
 
-  const updateBrowserUrl = (targetScreen: AppScreenName) => {
+  const updateBrowserUrl = (targetScreen: AppScreenName, screenParams?: any) => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       try {
         let route = '/';
         if (targetScreen === 'AdminLogin') route = '/admin/login';
         else if (targetScreen === 'Login') route = '/login';
         else if (targetScreen === 'Registration') route = '/register';
+        else if (targetScreen === 'Scorecard') route = screenParams?.matchId ? `/scorecard?matchId=${screenParams.matchId}` : '/scorecard';
         else if (targetScreen === 'Scorer') route = '/scorer';
         else if (targetScreen === 'Umpire') route = '/umpire';
         else if (targetScreen === 'Admin') route = '/admin';
@@ -333,7 +343,9 @@ export default function AppNavigator({
   return (
     <AppNavigationContext.Provider value={{ currentScreen, navigate, params, goBack }}>
       <View style={styles.container}>
-        {renderScreenContent ? renderScreenContent(currentScreen, navigate, params) : children}
+        <ErrorBoundary fallbackTitle="Application Error" onReset={() => navigate('Home')}>
+          {renderScreenContent ? renderScreenContent(currentScreen, navigate, params) : children}
+        </ErrorBoundary>
       </View>
     </AppNavigationContext.Provider>
   );

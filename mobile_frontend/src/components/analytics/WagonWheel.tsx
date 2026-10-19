@@ -103,14 +103,16 @@ export default function WagonWheel({
   // Filter deliveries belonging to this batter
   const batterDeliveries = useMemo(() => {
     if (!currentBatter) return [];
-    const id = currentBatter.id;
+    const id = currentBatter.id ? String(currentBatter.id) : '';
     const name = currentBatter.name?.toLowerCase() || '';
 
     // If deliveries are provided with strikerId
-    const matched = deliveries.filter(d => {
-      if (d.strikerId === id) return true;
-      // If mock id format like 'P301' or '1'
-      if (id.includes(d.strikerId) || d.strikerId.includes(id)) return true;
+    const matched = (deliveries || []).filter(d => {
+      if (!d) return false;
+      const sId = d.strikerId ? String(d.strikerId) : '';
+      if (!sId || !id) return false;
+      if (sId === id) return true;
+      if (id.includes(sId) || sId.includes(id)) return true;
       return false;
     });
 

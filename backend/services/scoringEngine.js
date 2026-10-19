@@ -149,7 +149,41 @@ class ScoringEngine {
     // 2. Fetch Active Innings
     let innings = await db.models.Innings.findOne({ match_id: matchId, is_completed: { $ne: true }, status: { $ne: "COMPLETED" } }).sort({ innings_number: -1 });
     if (!innings) {
-      innings = await db.models.Innings.findOne({ match_id: matchId }).sort({ innings_number: -1 });
+      // Check if 1st innings was completed and 2nd innings needs to be started
+      const inn1 = await db.models.Innings.findOne({ match_id: matchId, innings_number: 1 });
+      if (inn1 && inn1.is_completed && match.status !== 'COMPLETED') {
+        const target = (inn1.total_runs || 0) + 1;
+        const inn2Id = `INN-${matchId}-2`;
+        innings = await db.models.Innings.findOne({ id: inn2Id });
+        if (!innings) {
+          innings = await db.models.Innings.create({
+            id: inn2Id,
+            match_id: matchId,
+            innings_number: 2,
+            batting_team_id: inn1.bowling_team_id,
+            bowling_team_id: inn1.batting_team_id,
+            total_runs: 0,
+            wickets: 0,
+            overs: 0,
+            balls: 0,
+            target,
+            status: 'LIVE',
+            is_completed: false,
+            is_over_complete: false,
+            extras: { wides: 0, no_balls: 0, byes: 0, leg_byes: 0, total: 0 }
+          });
+        } else {
+          innings.is_completed = false;
+          innings.status = 'LIVE';
+          await innings.save();
+        }
+        match.current_innings_number = 2;
+        match.target_runs = target;
+        match.status = 'LIVE';
+        await match.save();
+      } else {
+        innings = await db.models.Innings.findOne({ match_id: matchId }).sort({ innings_number: -1 });
+      }
     }
     if (!innings) {
       throw { status: 400, message: 'No active innings found for this match. Please start the match first.' };
@@ -198,9 +232,28 @@ class ScoringEngine {
     // Player Names for Commentary & Scorecard
     const playerMap = await this.getFullPlayerMap();
 
-    const activeStrikerId = strikerId || innings.current_striker_id;
-    const activeNonStrikerId = nonStrikerId || innings.current_non_striker_id;
-    const activeBowlerId = bowlerId || innings.current_bowler_id;
+    let activeStrikerId = strikerId || innings.current_striker_id;
+    let activeNonStrikerId = nonStrikerId || innings.current_non_striker_id;
+    let activeBowlerId = bowlerId || innings.current_bowler_id;
+
+    if (!activeStrikerId || !activeNonStrikerId || !activeBowlerId) {
+      try {
+        const scorerService = require('./scorerService');
+        const battingSquad = await scorerService.getSquadForTeam(innings.batting_team_id);
+        const bowlingSquad = await scorerService.getSquadForTeam(innings.bowling_team_id);
+        if (!activeStrikerId) activeStrikerId = battingSquad[0]?.id || 'P101';
+        if (!activeNonStrikerId) activeNonStrikerId = battingSquad.find(p => p.id !== activeStrikerId)?.id || battingSquad[1]?.id || 'P102';
+        if (!activeBowlerId) activeBowlerId = bowlingSquad.find(p => p.role === 'BOWLER')?.id || bowlingSquad[0]?.id || 'P201';
+        innings.current_striker_id = activeStrikerId;
+        innings.current_non_striker_id = activeNonStrikerId;
+        innings.current_bowler_id = activeBowlerId;
+        await innings.save();
+      } catch (_e) {
+        if (!activeStrikerId) activeStrikerId = 'P101';
+        if (!activeNonStrikerId) activeNonStrikerId = 'P102';
+        if (!activeBowlerId) activeBowlerId = 'P201';
+      }
+    }
 
     const actualDismissedId = dismissedPlayerId || (wicket ? activeStrikerId : null);
     const dismissedBatterName = actualDismissedId ? (playerMap[actualDismissedId]?.name || 'Batter') : null;
@@ -476,6 +529,35 @@ class ScoringEngine {
         innings.is_over_complete = false;
         match.status = 'INNINGS_BREAK';
         await innings.save();
+
+        // Prepare 2nd Innings in DB immediately with target
+        const target = (innings.total_runs || 0) + 1;
+        const inn2Id = `INN-${matchId}-2`;
+        let inn2 = await db.models.Innings.findOne({ id: inn2Id });
+        if (!inn2) {
+          await db.models.Innings.create({
+            id: inn2Id,
+            match_id: matchId,
+            innings_number: 2,
+            batting_team_id: innings.bowling_team_id,
+            bowling_team_id: innings.batting_team_id,
+            total_runs: 0,
+            wickets: 0,
+            overs: 0,
+            balls: 0,
+            target,
+            status: 'LIVE',
+            is_completed: false,
+            is_over_complete: false,
+            extras: { wides: 0, no_balls: 0, byes: 0, leg_byes: 0, total: 0 }
+          });
+        } else {
+          inn2.target = target;
+          inn2.is_completed = false;
+          await inn2.save();
+        }
+        match.target_runs = target;
+        match.current_innings_number = 2;
         await match.save();
       } else {
         innings.is_completed = true;
@@ -882,6 +964,42 @@ class ScoringEngine {
     const match = await db.models.Match.findOne({ id: matchId });
     if (!match) throw { status: 404, message: 'Match not found.' };
 
+    // When moving to LIVE, if 1st innings is completed, activate 2nd innings
+    if (normalized === 'LIVE') {
+      const inn1 = await db.models.Innings.findOne({ match_id: matchId, innings_number: 1 });
+      if (inn1 && inn1.is_completed) {
+        const target = (inn1.total_runs || 0) + 1;
+        const inn2Id = `INN-${matchId}-2`;
+        let inn2 = await db.models.Innings.findOne({ id: inn2Id });
+        if (!inn2) {
+          inn2 = await db.models.Innings.create({
+            id: inn2Id,
+            match_id: matchId,
+            innings_number: 2,
+            batting_team_id: inn1.bowling_team_id,
+            bowling_team_id: inn1.batting_team_id,
+            total_runs: 0,
+            wickets: 0,
+            overs: 0,
+            balls: 0,
+            target,
+            status: 'LIVE',
+            is_completed: false,
+            is_over_complete: false,
+            extras: { wides: 0, no_balls: 0, byes: 0, leg_byes: 0, total: 0 }
+          });
+        } else {
+          inn2.target = target;
+          inn2.is_completed = false;
+          inn2.status = 'LIVE';
+          inn2.is_over_complete = false;
+          await inn2.save();
+        }
+        match.current_innings_number = 2;
+        match.target_runs = target;
+      }
+    }
+
     match.status = normalized;
     await match.save();
 
@@ -894,6 +1012,63 @@ class ScoringEngine {
         matchId,
         status: normalized
       }
+    };
+  }
+
+  /**
+   * Start 2nd / Next Innings
+   */
+  async startNextInnings(matchId) {
+    await db.initDb();
+    const match = await db.models.Match.findOne({ id: matchId });
+    if (!match) throw { status: 404, message: 'Match not found' };
+
+    const inn1 = await db.models.Innings.findOne({ match_id: matchId, innings_number: 1 });
+    if (!inn1) throw { status: 400, message: 'First innings not found.' };
+
+    inn1.is_completed = true;
+    await inn1.save();
+
+    const target = (inn1.total_runs || 0) + 1;
+    const inn2Id = `INN-${matchId}-2`;
+    let inn2 = await db.models.Innings.findOne({ id: inn2Id });
+    if (!inn2) {
+      inn2 = await db.models.Innings.create({
+        id: inn2Id,
+        match_id: matchId,
+        innings_number: 2,
+        batting_team_id: inn1.bowling_team_id,
+        bowling_team_id: inn1.batting_team_id,
+        total_runs: 0,
+        wickets: 0,
+        overs: 0,
+        balls: 0,
+        target,
+        status: 'LIVE',
+        is_completed: false,
+        is_over_complete: false,
+        extras: { wides: 0, no_balls: 0, byes: 0, leg_byes: 0, total: 0 }
+      });
+    } else {
+      inn2.target = target;
+      inn2.is_completed = false;
+      inn2.status = 'LIVE';
+      inn2.is_over_complete = false;
+      await inn2.save();
+    }
+
+    match.status = 'LIVE';
+    match.current_innings_number = 2;
+    match.target_runs = target;
+    await match.save();
+
+    return {
+      success: true,
+      message: '2nd Innings started successfully.',
+      matchId,
+      status: 'LIVE',
+      currentInningsNumber: 2,
+      target
     };
   }
 
@@ -1475,9 +1650,11 @@ class ScoringEngine {
 
     const points = penaltyData.points ? parseInt(penaltyData.points, 10) : 5;
     const penaltyType = penaltyData.type || 'Batting Penalty';
-    const reason = penaltyData.reason || 'Penalty Points awarded';
+    const reason = (penaltyData.reason || 'Penalty Points awarded').trim();
+    const targetTeamName = penaltyData.targetTeamName || penaltyData.teamName || (penaltyType === 'Batting Penalty' ? (match.team_a_name || 'Batting Team') : (match.team_b_name || 'Bowling Team'));
+    const targetTeamId = penaltyData.targetTeamId || null;
 
-    // Award 5 runs as extras to current innings
+    // Award points as extras to current innings
     currentInnings.total_runs += points;
     if (!currentInnings.extras) {
       currentInnings.extras = { wides: 0, no_balls: 0, byes: 0, leg_byes: 0, total: 0 };
@@ -1501,15 +1678,34 @@ class ScoringEngine {
       total_runs: points,
       extra_type: 'BYE',
       is_legal_delivery: false,
-      reason: `[${penaltyType}] ${reason}`,
-      commentary: `Penalty of ${points} runs awarded: ${reason}`
+      reason: `[${penaltyType}] ${targetTeamName ? `(${targetTeamName}) ` : ''}${reason}`,
+      commentary: `Penalty of ${points} runs awarded against ${targetTeamName}: ${reason}`
     });
+
+    // Create Official Team Inbox / Notice Notification in MongoDB
+    try {
+      if (db.models.Notification) {
+        const notifId = `NOTIF-PENALTY-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+        await db.models.Notification.create({
+          id: notifId,
+          type: 'PENALTY',
+          title: `⚠️ Official Match Notice: ${points} Runs Penalty (${targetTeamName})`,
+          message: `Official Scorer & Match Notice: A penalty of ${points} runs was awarded against ${targetTeamName} (${penaltyType}). Reason: "${reason}". Match: ${match.team_a_name || 'Team A'} vs ${match.team_b_name || 'Team B'}.`,
+          reference_id: targetTeamId || matchId,
+          status: 'UNREAD',
+          created_at: new Date()
+        });
+      }
+    } catch (notifErr) {
+      console.warn('Penalty notification create note:', notifErr.message);
+    }
 
     try {
       broadcastScoreUpdate(matchId, {
         action: 'PENALTY_AWARDED',
         points,
         reason,
+        targetTeamName,
         score: `${currentInnings.total_runs}/${currentInnings.wickets}`
       });
     } catch (_) {}

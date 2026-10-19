@@ -116,9 +116,28 @@ class AuthController {
       if (!req.user) {
         return res.status(401).json({ success: false, message: 'Not authenticated' });
       }
+      let profile = null;
+      if (req.user.id) {
+        try {
+          profile = await authService.getProfile(req.user.id);
+        } catch (_e) {}
+      }
+      const certLevel =
+        profile?.certificationLevel ||
+        profile?.scorer_details?.certification_level ||
+        profile?.scorer_details?.certificationLevel ||
+        req.user.certificationLevel ||
+        (req.user.role === 'SCORER' ? 'District Certified' : undefined);
+
+      const userData = {
+        ...req.user,
+        ...(profile ? (typeof profile.toObject === 'function' ? profile.toObject() : profile) : {}),
+        certificationLevel: certLevel
+      };
+
       res.status(200).json({
         success: true,
-        user: req.user
+        user: userData
       });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });

@@ -217,6 +217,16 @@ router.post('/matches/:matchId/end-innings', verifyMatchPermission, async (req, 
   }
 });
 
+// Start Next / 2nd Innings
+router.post('/matches/:matchId/start-next-innings', verifyMatchPermission, async (req, res) => {
+  try {
+    const result = await scoringEngine.startNextInnings(req.params.matchId);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
 // Undo Last Delivery
 router.post('/matches/:matchId/undo', verifyMatchPermission, async (req, res) => {
   try {

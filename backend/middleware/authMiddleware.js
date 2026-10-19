@@ -41,6 +41,7 @@ function verifyToken(req, res, next) {
         email: emailHeader || (roleHeader.toUpperCase() === 'ADMIN' ? 'admin@example.com' : 'ramesh@gmail.com'),
         role: roleHeader.toUpperCase(),
         name: roleHeader.toUpperCase() === 'ADMIN' ? 'Chief Admin' : 'S. Ramesh',
+        certificationLevel: 'Level 1 (District Official)',
         status: 'ACTIVE'
       };
       return next();

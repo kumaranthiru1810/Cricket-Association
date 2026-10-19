@@ -220,10 +220,33 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
 
     try {
       const res = await PlayerApi.getScorecard(matchId);
-      if (res && res.scorecard) {
-        setScorecardData(res.scorecard);
-      } else if (res) {
-        setScorecardData(res);
+      const raw = res?.scorecard || res?.data || res;
+      if (raw) {
+        const norm = {
+          ...raw,
+          tournamentName: raw.tournament || raw.tournamentName || raw.match?.tournament || 'District Match',
+          teamA: { name: raw.teamA?.name || raw.teamA || raw.match?.teamA || 'Team A' },
+          teamB: { name: raw.teamB?.name || raw.teamB || raw.match?.teamB || 'Team B' },
+          venue: raw.venue || raw.match?.venue || 'District Stadium',
+          result: raw.result || raw.match?.result,
+          innings: (raw.innings || []).map((inn: any) => ({
+            ...inn,
+            teamName: inn.teamName || inn.battingTeam || (inn.inningsNumber === 1 ? '1st Innings' : '2nd Innings'),
+            totalRuns: inn.totalRuns ?? inn.runs ?? 0,
+            totalWickets: inn.totalWickets ?? inn.wickets ?? 0,
+            overs: inn.overs ?? '0.0',
+            batting: (inn.batters || inn.batting || []).map((b: any) => ({
+              batterName: b.batterName || b.name || 'Batter',
+              runs: b.runs ?? 0,
+              balls: b.balls ?? 0,
+              fours: b.fours ?? 0,
+              sixes: b.sixes ?? 0,
+              strikeRate: b.strikeRate ? (typeof b.strikeRate === 'number' ? b.strikeRate.toFixed(1) : b.strikeRate) : ((b.runs / (b.balls || 1)) * 100).toFixed(1),
+              dismissal: b.dismissal || b.dismissalText || (b.isOut ? 'out' : 'not out')
+            }))
+          }))
+        };
+        setScorecardData(norm);
       }
     } catch (err: any) {
       Alert.alert('Scorecard Notice', err?.message || 'Could not retrieve detailed match scorecard.');

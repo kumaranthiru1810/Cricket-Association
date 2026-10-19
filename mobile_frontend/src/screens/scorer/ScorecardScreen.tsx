@@ -1,14 +1,23 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, useWindowDimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, useWindowDimensions, Platform, Image } from 'react-native';
 
 import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
 import SharedFooter from '../../components/scorer/SharedFooter';
 import { ScorerApi } from '../../services/api';
 import WagonWheel from '../../components/analytics/WagonWheel';
+import ErrorBoundary from '../../components/common/ErrorBoundary';
 
-export default function ScorecardScreen() {
-  const { navigate, params } = useScorerNavigation();
-  const matchId = params?.matchId || 'M002';
+const IMG_CHAMPIONS = require('../../../assets/cricket_champions.png');
+
+interface ScorecardScreenProps {
+  onExit?: () => void;
+  initialMatchId?: string;
+  initialParams?: any;
+}
+
+export default function ScorecardScreen({ onExit, initialMatchId, initialParams }: ScorecardScreenProps = {}) {
+  const scorerNav = useScorerNavigation();
+  const matchId = initialMatchId || initialParams?.matchId || scorerNav.params?.matchId || 'M001';
 
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
@@ -19,6 +28,14 @@ export default function ScorecardScreen() {
   const [activeInningsTab, setActiveInningsTab] = useState<number>(0);
   const [selectedWagonBatterId, setSelectedWagonBatterId] = useState<string>('');
 
+  const handleBack = () => {
+    if (onExit) {
+      onExit();
+    } else if (scorerNav?.navigate) {
+      scorerNav.navigate('Dashboard');
+    }
+  };
+
   useEffect(() => {
     loadScorecard();
   }, [matchId]);
@@ -26,66 +43,36 @@ export default function ScorecardScreen() {
   const loadScorecard = async () => {
     try {
       setIsLoading(true);
-      const res = await ScorerApi.getScorecard(matchId);
+      let res = await ScorerApi.getScorecard(matchId);
+      if (!res?.data?.match) {
+        // Fallback to M001 or M002 if specific match has no scorecard records yet
+        res = await ScorerApi.getScorecard('M001');
+      }
       if (res && res.data) {
         setScorecardData(res.data);
       }
     } catch (e) {
-      // Fallback to initial display
+      try {
+        const fallbackRes = await ScorerApi.getScorecard('M001');
+        if (fallbackRes?.data) setScorecardData(fallbackRes.data);
+      } catch (_err) {}
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (isLoading) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#eab308" />
-        <Text style={{ marginTop: 12, color: '#64748b', fontWeight: '600' }}>Loading Scorecard from Database...</Text>
-      </View>
-    );
-  }
+  const match = scorecardData?.match;
+  const inningsList = scorecardData?.innings || [];
+  const currentInnings = inningsList[activeInningsTab] || inningsList[0] || null;
 
-  if (!scorecardData || !scorecardData.match) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
-        <Text style={{ fontSize: 18, fontWeight: '700', color: '#1e293b', marginBottom: 8 }}>Scorecard Not Found</Text>
-        <Text style={{ fontSize: 14, color: '#64748b', textAlign: 'center', marginBottom: 20 }}>
-          Unable to find scorecard records in the database for Match ID: {matchId}
-        </Text>
-        <TouchableOpacity style={styles.actionBtn} onPress={loadScorecard}>
-          <Text style={styles.actionBtnText}>Retry Loading</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.actionBtn, { marginTop: 12, backgroundColor: '#f1f5f9' }]} onPress={() => navigate('Dashboard')}>
-          <Text style={[styles.actionBtnText, { color: '#475569' }]}>Back to Dashboard</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  const match = scorecardData.match;
-  const inningsList = scorecardData.innings || [];
-  const currentInnings = inningsList[activeInningsTab] || inningsList[0] || {
-    battingTeam: match.teamA || 'Batting Team',
-    bowlingTeam: match.teamB || 'Bowling Team',
-    score: '0/0 (0.0 Ov)',
-    runs: 0,
-    wickets: 0,
-    overs: '0.0',
-    extras: { total: 0, breakdown: 'wd 0, nb 0, b 0, lb 0' },
-    batters: [],
-    bowlers: [],
-    fallOfWickets: []
-  };
-
-  // Dynamic Statistics Calculations for the active innings
+  // Dynamic Statistics Calculations for the active innings (Always called at top level)
   const inningsStats = useMemo(() => {
     if (!currentInnings) return null;
     const batters = currentInnings.batters || [];
     let boundaryRuns = 0;
     let total4s = 0;
     let total6s = 0;
-    let totalRuns = currentInnings.runs || 0;
+    let totalRuns = currentInnings.runs || currentInnings.totalRuns || 0;
     let totalBalls = 0;
 
     batters.forEach((b: any) => {
@@ -124,13 +111,39 @@ export default function ScorecardScreen() {
     };
   }, [currentInnings]);
 
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#eab308" />
+        <Text style={{ marginTop: 12, color: '#64748b', fontWeight: '600' }}>Loading Scorecard from Database...</Text>
+      </View>
+    );
+  }
+
+  if (!scorecardData || !scorecardData.match) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+        <Text style={{ fontSize: 18, fontWeight: '700', color: '#1e293b', marginBottom: 8 }}>Scorecard Not Found</Text>
+        <Text style={{ fontSize: 14, color: '#64748b', textAlign: 'center', marginBottom: 20 }}>
+          Unable to find scorecard records in the database for Match ID: {matchId}
+        </Text>
+        <TouchableOpacity style={styles.actionBtn} onPress={loadScorecard}>
+          <Text style={styles.actionBtnText}>Retry Loading</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.actionBtn, { marginTop: 12, backgroundColor: '#f1f5f9' }]} onPress={handleBack}>
+          <Text style={[styles.actionBtnText, { color: '#475569' }]}>Back to Previous</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* 1. RESPONSIVE HEADER WITH SAFE AREA INSETS */}
-      <View style={[styles.header, { paddingTop: styles.header.paddingTop + insetsTop }]}>
+      <View style={[styles.header, { paddingTop: ((styles.header as any)?.paddingTop || 16) + insetsTop }]}>
         <View style={styles.headerTopRow}>
-          <TouchableOpacity onPress={() => navigate('Dashboard')} style={styles.backBtn} activeOpacity={0.8}>
-            <Text style={styles.backText}>← Dashboard</Text>
+          <TouchableOpacity onPress={handleBack} style={styles.backBtn} activeOpacity={0.8}>
+            <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
           <View style={styles.badgeLive}>
             <Text style={styles.badgeLiveText}>
@@ -146,13 +159,122 @@ export default function ScorecardScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.contentWrapper}>
-          {/* Match Result Banner */}
-          {match.result && (
-            <View style={styles.resultBanner}>
-              <Text style={styles.resultEmoji}>🏆</Text>
-              <Text style={styles.resultText}>{match.result}</Text>
-            </View>
-          )}
+          {/* Match Result / Status Card */}
+          {match.result && (() => {
+            const summary = (match.result || '').trim();
+            const isCompleted =
+              match.status === 'Completed' ||
+              match.status === 'COMPLETED' ||
+              summary.includes(' won by ') ||
+              summary.includes(' won the match') ||
+              (summary.toLowerCase().includes('won') && !summary.toLowerCase().includes('toss'));
+
+            if (!isCompleted) {
+              return (
+                <View style={[styles.championsCelebrationCard, { borderColor: '#3b82f6', backgroundColor: '#0b192c', marginBottom: 16 }]}>
+                  <View style={[styles.championTopHeader, { backgroundColor: '#1e3a8a', borderBottomColor: 'rgba(59, 130, 246, 0.4)' }]}>
+                    <View style={[styles.championPulsingDot, { backgroundColor: '#38bdf8' }]} />
+                    <Text style={[styles.championTopHeaderText, { color: '#93c5fd' }]}>
+                      ⚡ LIVE OFFICIAL MATCH SCORECARD ⚡
+                    </Text>
+                    <View style={[styles.championPulsingDot, { backgroundColor: '#38bdf8' }]} />
+                  </View>
+                  <View style={{ padding: 16, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 18, fontWeight: '900', color: '#ffffff', textAlign: 'center', marginBottom: 6 }}>
+                      {match.teamA} vs {match.teamB}
+                    </Text>
+                    <View style={[styles.winMarginChip, { backgroundColor: '#1e3a8a', borderColor: '#60a5fa' }]}>
+                      <Text style={styles.winMarginText}>Status: {summary || match.status || 'Match in progress'}</Text>
+                    </View>
+                    <Text style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
+                      🏏 {match.tournament || 'Virudhunagar District Cricket'} • {match.venue || 'CFVD Ground'}
+                    </Text>
+                  </View>
+                </View>
+              );
+            }
+
+            let winnerName = '';
+            let winMargin = '';
+
+            if (summary.includes(' won by ')) {
+              const parts = summary.split(' won by ');
+              winnerName = parts[0].trim();
+              winMargin = `Won by ${parts[1].trim()}`;
+            } else if (summary.includes(' won the match')) {
+              const parts = summary.split(' won the match');
+              winnerName = parts[0].trim();
+              winMargin = 'Won the match';
+            } else if (summary.toLowerCase().includes('won')) {
+              winnerName = summary;
+              winMargin = 'Match Champions';
+            } else {
+              winnerName = match.teamA || 'Match Concluded';
+              winMargin = 'Official Result';
+            }
+
+            return (
+              <View style={styles.championsCelebrationCard}>
+                {/* Top Status Header */}
+                <View style={styles.championTopHeader}>
+                  <View style={styles.championPulsingDot} />
+                  <Text style={styles.championTopHeaderText}>
+                    👑 OFFICIAL MATCH RESULT • CHAMPIONS 👑
+                  </Text>
+                  <View style={styles.championPulsingDot} />
+                </View>
+
+                {/* Main Card Content */}
+                <View style={styles.championCardBody}>
+                  {/* The Cricket Champions Art Illustration */}
+                  <View style={styles.championArtworkWrapper}>
+                    <Image
+                      source={IMG_CHAMPIONS}
+                      style={styles.championImage}
+                      resizeMode="cover"
+                    />
+                  </View>
+
+                  {/* The Crown ('Kiritam') & Winner Details */}
+                  <View style={styles.championDetailsCol}>
+                    {/* Glowing Crown Badge */}
+                    <View style={styles.crownContainer}>
+                      <Text style={styles.crownGlow}>✨</Text>
+                      <View style={styles.crownCircle}>
+                        <Text style={styles.crownEmoji}>👑</Text>
+                      </View>
+                      <Text style={styles.crownGlow}>✨</Text>
+                    </View>
+
+                    <Text style={styles.championKiritamLabel}>OFFICIAL MATCH CHAMPION</Text>
+
+                    {/* Team Won Name */}
+                    <Text style={styles.championTeamName} numberOfLines={2}>
+                      {winnerName}
+                    </Text>
+
+                    {/* Win Margin Badge */}
+                    <View style={styles.winMarginChip}>
+                      <Text style={styles.winMarginTrophy}>🏆</Text>
+                      <Text style={styles.winMarginText}>{winMargin}</Text>
+                    </View>
+
+                    {/* Full Result Summary */}
+                    <Text style={styles.championFullSummary}>
+                      "{summary}"
+                    </Text>
+
+                    {/* Tournament & Venue Details */}
+                    <View style={styles.championTournamentRow}>
+                      <Text style={styles.championTournamentText}>
+                        🏏 {match.tournament || 'Virudhunagar District Cricket'} • {match.venue || 'CFVD Ground'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            );
+          })()}
 
           {/* INNINGS TABS BAR */}
           {inningsList.length > 1 && (
@@ -351,14 +473,18 @@ export default function ScorecardScreen() {
           {/* ─────────────────────────────────────────────────────────────
               BATSMAN WAGON WHEEL & PLAYING AREA PERCENTAGE
               ───────────────────────────────────────────────────────────── */}
-          <WagonWheel
-            deliveries={currentInnings.deliveries || []}
-            batters={currentInnings.batters || []}
-            selectedBatterId={selectedWagonBatterId}
-            onSelectBatter={(id) => setSelectedWagonBatterId(id)}
-            title={`🏏 ${currentInnings.battingTeam} - Batsman Wagon Wheel`}
-            subtitle="Interactive Shot Trajectories, 8-Sector Playing Area & Off/Leg Balance"
-          />
+          {currentInnings && currentInnings.batters && currentInnings.batters.length > 0 && (
+            <ErrorBoundary fallbackTitle="Batsman Analytics & Wagon Wheel">
+              <WagonWheel
+                deliveries={currentInnings.deliveries || []}
+                batters={currentInnings.batters || []}
+                selectedBatterId={selectedWagonBatterId || currentInnings.batters[0]?.id}
+                onSelectBatter={(id) => setSelectedWagonBatterId(id)}
+                title={`🏏 ${currentInnings.battingTeam || 'Team'} - Batsman Wagon Wheel`}
+                subtitle="Interactive Shot Trajectories, 8-Sector Playing Area & Off/Leg Balance"
+              />
+            </ErrorBoundary>
+          )}
 
           <View style={{ height: 16 }} />
 
@@ -444,11 +570,16 @@ export default function ScorecardScreen() {
           )}
 
           {/* ACTION BUTTONS */}
-          {(match.status === 'Live' || match.status === 'LIVE') && (
-            <TouchableOpacity style={styles.actionBtn} onPress={() => navigate('LiveScoring', { matchId })}>
-              <Text style={styles.actionBtnText}>⚡ Back to Live Scoring Console</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => (scorerNav?.navigate ? scorerNav.navigate('LiveScoring', { matchId }) : handleBack())}
+          >
+            <Text style={styles.actionBtnText}>
+              {match.status === 'Live' || match.status === 'LIVE'
+                ? '⚡ Back to Live Scoring Console'
+                : '← Back to Match Portal'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         <SharedFooter />
@@ -458,7 +589,7 @@ export default function ScorecardScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f6f2e9' },
+  container: { flex: 1, backgroundColor: '#f6f2e9', width: '100%', minHeight: '100%' },
   header: {
     padding: 16,
     paddingTop: 16,
@@ -500,6 +631,165 @@ const styles = StyleSheet.create({
   subtitle: { color: '#b45309', fontSize: 12.5, marginTop: 4, fontWeight: '700' },
   scroll: { flexGrow: 1 },
   contentWrapper: { padding: 16, paddingBottom: 50, maxWidth: 1100, width: '100%', alignSelf: 'center' },
+
+  championsCelebrationCard: {
+    backgroundColor: '#0a192f',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+    overflow: 'hidden',
+    marginBottom: 20,
+    shadowColor: '#f59e0b',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8
+  },
+  championTopHeader: {
+    backgroundColor: '#172554',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(245, 158, 11, 0.3)'
+  },
+  championPulsingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#f59e0b'
+  },
+  championTopHeaderText: {
+    color: '#fef08a',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase'
+  },
+  championCardBody: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 20
+  },
+  championArtworkWrapper: {
+    width: 240,
+    height: 195,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#111e38',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(245, 158, 11, 0.4)'
+  },
+  championImage: {
+    width: '100%',
+    height: '100%'
+  },
+  championDetailsCol: {
+    flex: 1,
+    minWidth: 280,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8
+  },
+  crownContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 4
+  },
+  crownGlow: {
+    fontSize: 18,
+    color: '#fbbf24'
+  },
+  crownCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+    borderWidth: 2,
+    borderColor: '#fbbf24',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#fbbf24',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    elevation: 6
+  },
+  crownEmoji: {
+    fontSize: 28
+  },
+  championKiritamLabel: {
+    color: '#93c5fd',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginTop: 6,
+    marginBottom: 4
+  },
+  championTeamName: {
+    color: '#ffffff',
+    fontSize: 24,
+    fontWeight: '900',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+    textShadowColor: 'rgba(245, 158, 11, 0.6)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 10,
+    marginBottom: 8
+  },
+  winMarginChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#065f46',
+    borderWidth: 1.5,
+    borderColor: '#34d399',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    gap: 6,
+    marginBottom: 10,
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 3
+  },
+  winMarginTrophy: {
+    fontSize: 15
+  },
+  winMarginText: {
+    color: '#ecfdf5',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.3
+  },
+  championFullSummary: {
+    color: '#cbd5e1',
+    fontSize: 13,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginBottom: 8
+  },
+  championTournamentRow: {
+    marginBottom: 4
+  },
+  championTournamentText: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center'
+  },
 
   resultBanner: {
     flexDirection: 'row',
