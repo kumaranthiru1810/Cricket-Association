@@ -1812,7 +1812,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     style={[styles.roundReloadBtnSm, isLiveReloading && styles.roundReloadBtnSpinning]}
                     onPress={handleLiveReload}
                     activeOpacity={0.7}
-                    title="Reload live scorers"
+                    accessibilityLabel="Reload live scorers"
                   >
                     <Animated.Text style={[styles.roundReloadIconSm, { transform: [{ rotate: spinInterpolate }] }]}>
                       🔄
@@ -1937,7 +1937,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 style={styles.btnActionCall}
                                 onPress={() => handleCallContact(s.phone, s.scorerName)}
                                 activeOpacity={0.8}
-                                title="Call Scorer"
+                                accessibilityLabel="Call Scorer"
                               >
                                 <Text style={styles.btnActionCallText}>📞 Call</Text>
                               </TouchableOpacity>
@@ -1948,7 +1948,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 style={styles.btnActionEmail}
                                 onPress={() => handleEmailContact(s.email, s.scorerName)}
                                 activeOpacity={0.8}
-                                title="Email Scorer"
+                                accessibilityLabel="Email Scorer"
                               >
                                 <Text style={styles.btnActionEmailText}>✉️ Email</Text>
                               </TouchableOpacity>
@@ -2189,7 +2189,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     style={[styles.roundReloadBtnSm, isLiveReloading && styles.roundReloadBtnSpinning]}
                     onPress={handleLiveReload}
                     activeOpacity={0.7}
-                    title="Reload live umpires"
+                    accessibilityLabel="Reload live umpires"
                   >
                     <Animated.Text style={[styles.roundReloadIconSm, { transform: [{ rotate: spinInterpolate }] }]}>
                       🔄
@@ -2327,7 +2327,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 style={styles.btnActionCall}
                                 onPress={() => handleCallContact(u.phone, u.umpireName)}
                                 activeOpacity={0.8}
-                                title="Call Umpire"
+                                accessibilityLabel="Call Umpire"
                               >
                                 <Text style={styles.btnActionCallText}>📞 Call</Text>
                               </TouchableOpacity>
@@ -2338,7 +2338,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 style={styles.btnActionEmail}
                                 onPress={() => handleEmailContact(u.email, u.umpireName)}
                                 activeOpacity={0.8}
-                                title="Email Umpire"
+                                accessibilityLabel="Email Umpire"
                               >
                                 <Text style={styles.btnActionEmailText}>✉️ Email</Text>
                               </TouchableOpacity>
@@ -2572,7 +2572,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     style={[styles.roundReloadBtnSm, isLiveReloading && styles.roundReloadBtnSpinning]}
                     onPress={handleLiveReload}
                     activeOpacity={0.7}
-                    title="Reload live teams"
+                    accessibilityLabel="Reload live teams"
                   >
                     <Animated.Text style={[styles.roundReloadIconSm, { transform: [{ rotate: spinInterpolate }] }]}>
                       🔄
@@ -2719,7 +2719,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 style={styles.btnActionEmail}
                                 onPress={() => handleEmailContact(t.coach.email, t.coach?.name || t.teamName)}
                                 activeOpacity={0.8}
-                                title="Email Coach"
+                                accessibilityLabel="Email Coach"
                               >
                                 <Text style={styles.btnActionEmailText}>✉️ Email Coach</Text>
                               </TouchableOpacity>
@@ -2827,7 +2827,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     style={[styles.roundReloadBtn, isLiveReloading && styles.roundReloadBtnSpinning]}
                     onPress={handleLiveReload}
                     activeOpacity={0.7}
-                    title="Reload Complete Matrix"
+                    accessibilityLabel="Reload Complete Matrix"
                   >
                     <Animated.Text style={[styles.roundReloadIcon, { transform: [{ rotate: spinInterpolate }] }]}>
                       🔄

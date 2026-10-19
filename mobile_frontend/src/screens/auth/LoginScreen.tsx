@@ -8,7 +8,8 @@ import {
   Image,
   ScrollView,
   ActivityIndicator,
-  Platform
+  Platform,
+  useWindowDimensions
 } from 'react-native';
 import { useAppNavigation } from '../../navigation/AppNavigator';
 import SharedBackground from '../../components/scorer/SharedBackground';
@@ -134,17 +135,27 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
     }
   };
 
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const isDesktop = windowWidth >= 640;
+
   return (
     <SharedBackground>
-      <View style={styles.container}>
-        {/* Top Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => (onExit ? onExit() : navigate('Home'))} style={styles.backBtn}>
-            <Text style={styles.backText}>← Exit to Main</Text>
-          </TouchableOpacity>
-        </View>
+      <View style={[styles.container, Platform.OS === 'web' && isDesktop && ({ height: '100vh', maxHeight: '100vh', overflow: 'hidden' } as any)]}>
+        {/* Sleek Minimal Corner Exit Action */}
+        <TouchableOpacity
+          onPress={() => (onExit ? onExit() : navigate('Home'))}
+          style={styles.cornerExitBtn}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.cornerExitText}>← Exit to Main</Text>
+        </TouchableOpacity>
 
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={[styles.scroll, isDesktop && { flex: 1, justifyContent: 'center' }]}
+          scrollEnabled={!isDesktop}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.cardContainer}>
             
             {/* Federation Logo & Title */}
@@ -345,96 +356,109 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'transparent', width: '100%' },
-  header: {
-    padding: 16,
+  container: { flex: 1, backgroundColor: 'transparent', width: '100%', position: 'relative' },
+  cornerExitBtn: {
+    position: 'absolute',
+    top: 14,
+    left: 18,
+    zIndex: 99,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
     backgroundColor: '#1e293b',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderWidth: 1,
+    borderColor: '#eab308',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
-    elevation: 4
+    elevation: 5
   },
-  backBtn: { alignSelf: 'flex-start', padding: 8, paddingLeft: 0 },
-  backText: { color: '#eab308', fontSize: 16, fontWeight: 'bold' },
+  cornerExitText: {
+    color: '#eab308',
+    fontSize: 12.5,
+    fontWeight: '800',
+    letterSpacing: 0.3
+  },
   scroll: { flexGrow: 1, width: '100%' },
   cardContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
-    paddingBottom: 40,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     width: '100%'
   },
-  logoContainer: { alignItems: 'center', marginBottom: 20, marginTop: 10 },
-  logo: { width: 75, height: 75, marginBottom: 8 },
-  mainTitle: { color: '#1e293b', fontSize: 16, fontWeight: 'bold', letterSpacing: 1 },
-  mainSubtitle: { color: '#b45309', fontSize: 21, fontWeight: '900', letterSpacing: 1 },
+  logoContainer: { alignItems: 'center', marginBottom: 10, marginTop: 4 },
+  logo: { width: 56, height: 56, marginBottom: 4 },
+  mainTitle: { color: '#1e293b', fontSize: 13, fontWeight: '800', letterSpacing: 1 },
+  mainSubtitle: { color: '#b45309', fontSize: 17, fontWeight: '900', letterSpacing: 1 },
   card: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
-    padding: 24,
+    paddingHorizontal: 22,
+    paddingVertical: 18,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     width: '100%',
-    maxWidth: 580,
+    maxWidth: 540,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5
+    shadowRadius: 10,
+    elevation: 4
   },
-  title: { color: '#1e293b', fontSize: 22, fontWeight: 'bold', marginBottom: 4, textAlign: 'center' },
-  subtitle: { color: '#64748b', fontSize: 13, marginBottom: 20, textAlign: 'center', lineHeight: 18 },
+  title: { color: '#1e293b', fontSize: 20, fontWeight: 'bold', marginBottom: 2, textAlign: 'center' },
+  subtitle: { color: '#64748b', fontSize: 12, marginBottom: 12, textAlign: 'center', lineHeight: 16 },
 
-  statusBanner: { padding: 12, borderRadius: 6, marginBottom: 16, borderWidth: 1 },
+  statusBanner: { padding: 8, borderRadius: 6, marginBottom: 10, borderWidth: 1 },
   statusError: { backgroundColor: '#fef2f2', borderColor: '#fca5a5' },
   statusSuccess: { backgroundColor: '#f0fdf4', borderColor: '#86efac' },
   statusInfo: { backgroundColor: '#eff6ff', borderColor: '#93c5fd' },
-  statusText: { fontSize: 13, fontWeight: '600', textAlign: 'center' },
+  statusText: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
   statusTextError: { color: '#b91c1c' },
   statusTextSuccess: { color: '#15803d' },
   statusTextInfo: { color: '#1d4ed8' },
 
   sectionHeaderBox: {
     backgroundColor: '#f1f5f9',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: 6,
-    marginBottom: 16,
-    marginTop: 4,
+    marginBottom: 10,
+    marginTop: 2,
     borderLeftWidth: 4,
     borderLeftColor: '#eab308'
   },
   sectionHeaderText: {
     color: '#0f172a',
-    fontSize: 13.5,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.3
   },
   demoFillLink: {
     color: '#0284c7',
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: 'bold',
     backgroundColor: '#e0f2fe',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
     borderRadius: 4
   },
 
   roleTabsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
+    gap: 6,
+    marginBottom: 10,
     justifyContent: 'center'
   },
   roleTab: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#cbd5e1'
@@ -444,7 +468,7 @@ const styles = StyleSheet.create({
     borderColor: '#1e293b'
   },
   roleTabText: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '700',
     color: '#475569'
   },
@@ -453,16 +477,17 @@ const styles = StyleSheet.create({
     fontWeight: '800'
   },
 
-  label: { color: '#334155', fontSize: 13, marginBottom: 6, fontWeight: '700' },
+  label: { color: '#334155', fontSize: 12, marginBottom: 4, fontWeight: '700' },
   input: {
     backgroundColor: '#f8fafc',
     color: '#1e293b',
     borderWidth: 1,
     borderColor: '#cbd5e1',
-    padding: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 6,
-    marginBottom: 16,
-    fontSize: 14.5
+    marginBottom: 10,
+    fontSize: 13.5
   },
   inputError: {
     borderColor: '#ef4444',
@@ -482,36 +507,37 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderRadius: 6,
-    marginBottom: 16,
+    marginBottom: 10,
     alignItems: 'center',
-    paddingRight: 12
+    paddingRight: 10
   },
   passwordInput: {
     flex: 1,
     color: '#1e293b',
-    padding: 12,
-    fontSize: 14.5
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    fontSize: 13.5
   },
   toggleText: {
-    fontSize: 16
+    fontSize: 15
   },
 
   actionBtn: {
     backgroundColor: '#eab308',
-    padding: 16,
+    paddingVertical: 12,
     borderRadius: 6,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 6,
     shadowColor: '#eab308',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
-    shadowRadius: 5,
+    shadowRadius: 4,
     elevation: 3
   },
   actionText: {
     color: '#000000',
     fontWeight: 'bold',
-    fontSize: 14.5,
+    fontSize: 13.5,
     textTransform: 'uppercase',
     letterSpacing: 0.5
   },
@@ -523,19 +549,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 22,
-    paddingTop: 16,
+    marginTop: 14,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9'
   },
   promptNormalText: {
     color: '#64748b',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '400'
   },
   registerLinkText: {
     color: '#b45309',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     textDecorationLine: 'underline'
   }

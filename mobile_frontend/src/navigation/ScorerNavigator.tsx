@@ -15,6 +15,8 @@ import {
   ScorerNavigationContextType
 } from './ScorerNavigationContext';
 
+import ErrorBoundary from '../components/common/ErrorBoundary';
+
 export { ScreenName, ScorerNavigationContext, useScorerNavigation, ScorerNavigationContextType };
 
 interface Props {
@@ -50,7 +52,20 @@ export default function ScorerNavigator({ onExit, initialParams }: Props) {
       case 'Dashboard': return <ScorerDashboardScreen />;
       case 'MatchSetup': return <MatchSetupScreen />;
       case 'LiveScoring': return <LiveScoringScreen />;
-      case 'Scorecard': return <ScorecardScreen />;
+      case 'Scorecard':
+        return (
+          <ScorecardScreen
+            initialMatchId={params?.matchId}
+            initialParams={params}
+            onExit={() => {
+              if (params?.matchId) {
+                navigate('LiveScoring', { matchId: params.matchId });
+              } else {
+                navigate('Dashboard');
+              }
+            }}
+          />
+        );
       default: return <ScorerAuthScreen />;
     }
   };
@@ -59,7 +74,12 @@ export default function ScorerNavigator({ onExit, initialParams }: Props) {
     <ScorerNavigationContext.Provider value={{ currentScreen, navigate, params, onExit }}>
       <SharedBackground>
         <SafeAreaView style={styles.container}>
-          {renderScreen()}
+          <ErrorBoundary
+            fallbackTitle="Scorer Console Error"
+            onReset={() => navigate('Dashboard')}
+          >
+            {renderScreen()}
+          </ErrorBoundary>
         </SafeAreaView>
       </SharedBackground>
     </ScorerNavigationContext.Provider>

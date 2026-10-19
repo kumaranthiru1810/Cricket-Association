@@ -12,6 +12,7 @@ import TeamDashboardScreen from './src/screens/team/TeamDashboardScreen';
 import AdminDashboardScreen from './src/screens/admin/AdminDashboardScreen';
 import AdminLoginPage from './src/admin/pages/AdminLoginPage';
 import UmpireDashboardScreen from './src/screens/umpire/UmpireDashboardScreen';
+import ScorecardScreen from './src/screens/scorer/ScorecardScreen';
 
 function MainAppShell() {
   const { currentScreen, navigate, goBack, params } = useAppNavigation();
@@ -27,6 +28,8 @@ function MainAppShell() {
           event.data.route === '/admin-login'
         ) {
           navigate('AdminLogin');
+        } else if (event.data.type === 'OPEN_SCORECARD' || event.data.route?.includes('scorecard')) {
+          navigate('Scorecard', event.data.params);
         } else if (event.data.type === 'OPEN_SCORER_MODULE' || event.data.route === '/scorer') {
           navigate('Scorer');
         } else if (
@@ -131,6 +134,10 @@ function MainAppShell() {
 
   if (currentScreen === 'Registration') {
     return <RegistrationScreen onExit={() => navigate('Home')} />;
+  }
+
+  if (currentScreen === 'Scorecard') {
+    return <ScorecardScreen onExit={() => navigate('Home')} initialMatchId={params?.matchId} />;
   }
 
   const currentUser = getCurrentUser();

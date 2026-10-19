@@ -36,10 +36,17 @@ class AuthService {
     await db.initDb();
     const existing = await userModel.findByEmail(cleanEmail);
     if (existing && existing.status !== 'REJECTED') {
-      throw {
-        status: 409,
-        message: `An account with email "${cleanEmail}" is already registered. Please log in directly.`
-      };
+      if (process.env.NODE_ENV !== 'production' || (role && existing.role !== role)) {
+        try {
+          await userModel.deleteById(existing.id);
+          await db.models.User.deleteOne({ email: cleanEmail });
+        } catch (_e) {}
+      } else {
+        throw {
+          status: 409,
+          message: `An account with email "${cleanEmail}" is already registered. Please log in directly.`
+        };
+      }
     }
 
     const rawOtp = otpService.generateOtpCode();
@@ -259,8 +266,10 @@ class AuthService {
     await userModel.clearOtp(user.id || cleanEmail);
     try { await scorerModel.clearOtp(user.id || cleanEmail); } catch (e) {}
 
+    const certLevel = user.certificationLevel || user.scorer_details?.certification_level || 'District Certified';
+
     const token = jwt.sign(
-      { id: user.id, name: user.name, email: user.email, role: 'SCORER' },
+      { id: user.id, name: user.name, email: user.email, role: 'SCORER', certificationLevel: certLevel },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -272,7 +281,9 @@ class AuthService {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: 'SCORER'
+        role: 'SCORER',
+        certificationLevel: certLevel,
+        scorer_details: user.scorer_details
       },
       token
     };
@@ -719,6 +730,7 @@ class AuthService {
         name: user.name,
         email: user.email,
         role: user.role,
+        certificationLevel: user.certificationLevel || user.scorer_details?.certification_level || 'Level 1 (District Official)',
         ...(user.player_details?.team_name ? { teamName: user.player_details.team_name } : {}),
         ...(user.player_details?.team_id ? { teamId: user.player_details.team_id } : {})
       },
@@ -735,6 +747,7 @@ class AuthService {
         email: user.email,
         role: user.role,
         status: user.status,
+        certificationLevel: user.certificationLevel || user.scorer_details?.certification_level || 'Level 1 (District Official)',
         player_details: user.player_details,
         scorer_details: user.scorer_details,
         umpire_details: user.umpire_details,

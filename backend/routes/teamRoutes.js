@@ -127,4 +127,50 @@ router.put('/admin/teams/:teamId/status', requireAdminAuth, async (req, res) => 
   }
 });
 
+/**
+ * GET /api/team/notifications
+ * Official bulletins, penalty alerts & communications for team dashboard
+ */
+router.get('/notifications', async (req, res) => {
+  try {
+    const db = require('../config/db');
+    await db.initDb();
+    const notifications = await db.models.Notification.find({}).sort({ created_at: -1 }).limit(40).lean();
+    res.json({
+      success: true,
+      notifications: notifications.map(n => ({
+        id: n.id,
+        _id: n._id,
+        type: n.type || 'SYSTEM',
+        title: n.title,
+        message: n.message,
+        reference_id: n.reference_id,
+        status: n.status,
+        isRead: n.status === 'READ',
+        createdAt: n.created_at || new Date().toISOString()
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * PUT /api/team/notifications/:id/read
+ * Mark notification as read
+ */
+router.put('/notifications/:id/read', async (req, res) => {
+  try {
+    const db = require('../config/db');
+    await db.initDb();
+    await db.models.Notification.findOneAndUpdate(
+      { $or: [{ id: req.params.id }, { _id: req.params.id }] },
+      { $set: { status: 'READ' } }
+    );
+    res.json({ success: true, message: 'Notification marked as read.' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;

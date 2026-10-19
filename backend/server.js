@@ -50,6 +50,7 @@ initSocket(server);
 
 // Security 3: Strict CORS lockdown
 app.use(cors(getCorsOptions()));
+app.options('*', cors(getCorsOptions()));
 
 // Security 4: Payload size limiting (prevent memory exhaustion denial of service)
 app.use(express.json({ limit: '2mb' }));
@@ -57,6 +58,18 @@ app.use(cookieParser());
 
 // Security 5: Global Rate Limiting
 app.use('/api', generalRateLimiter);
+
+// Live Request Logger (shows API activity in terminal)
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    if (req.originalUrl !== '/api/health') {
+      const duration = Date.now() - start;
+      console.log(`📡 [${new Date().toLocaleTimeString()}] ${req.method} ${req.originalUrl} → ${res.statusCode} (${duration}ms)`);
+    }
+  });
+  next();
+});
 
 // Security 6: Deep Input Sanitization (strip NoSQL injection operators & prototype pollution)
 app.use(sanitizeInput);

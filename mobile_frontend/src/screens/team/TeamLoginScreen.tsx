@@ -4,8 +4,9 @@ import {
   ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useScorerNavigation } from '../../navigation/ScorerNavigator';
+import { API_URL } from '../../services/api';
 
-const API_BASE = 'http://localhost:5000/api/team';
+const API_BASE = `${API_URL}/team`;
 
 export default function TeamLoginScreen() {
   const { navigate } = useScorerNavigation();

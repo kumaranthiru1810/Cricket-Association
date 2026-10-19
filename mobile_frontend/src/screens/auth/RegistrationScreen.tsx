@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,13 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
+  ImageBackground,
   ScrollView,
   ActivityIndicator,
   Alert,
   Platform,
-  Modal
+  Modal,
+  useWindowDimensions
 } from 'react-native';
 import { useAppNavigation } from '../../navigation/AppNavigator';
 import SharedBackground from '../../components/scorer/SharedBackground';
@@ -107,6 +109,9 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     return 'PLAYER';
   };
 
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const isDesktop = windowWidth >= 640;
+
   const [activeRole, setActiveRole] = useState<RegistrationRole>(getInitialRole());
 
   // Global loading and status
@@ -115,16 +120,6 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   const [isVerifyingOtp, setIsVerifyingOtp] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusType, setStatusType] = useState<'info' | 'success' | 'error' | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({});
-
-  const clearError = (field: string) => {
-    setFieldErrors((prev) => {
-      if (!prev[field]) return prev;
-      const next = { ...prev };
-      delete next[field];
-      return next;
-    });
-  };
 
   // OTP & Password State
   const [otpSent, setOtpSent] = useState<boolean>(false);
@@ -133,6 +128,36 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   const [password, setPassword] = useState<string>('');
   const [confirmPassword, setConfirmPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
+
+  // Cricket OTP Popup Modal State
+  const [isOtpModalVisible, setIsOtpModalVisible] = useState<boolean>(false);
+  const [popupEmail, setPopupEmail] = useState<string>('');
+  const [otpModalError, setOtpModalError] = useState<string | null>(null);
+  const [otpModalSuccess, setOtpModalSuccess] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState<number>(0);
+
+  // Pending Admin Approval Popup Modal State
+  const [showApprovalPendingModal, setShowApprovalPendingModal] = useState<boolean>(false);
+  const [pendingApprovalData, setPendingApprovalData] = useState<{
+    name: string;
+    email: string;
+    role: string;
+    certificationLevel?: string;
+    taluk?: string;
+  } | null>(null);
+
+  // Cooldown countdown effect for Resend OTP
+  useEffect(() => {
+    let timer: any;
+    if (resendCooldown > 0) {
+      timer = setInterval(() => {
+        setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [resendCooldown]);
 
   // 1. PLAYER REGISTRATION STATE
   const [pName, setPName] = useState<string>('');
@@ -198,8 +223,35 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     onSelect: (val: string) => void;
   } | null>(null);
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string | undefined>>({});
+
+  const validateEmailValue = (val: string): string | null => {
+    const clean = (val || '').trim();
+    if (!clean) return 'Official email address is required.';
+    const atMatches = clean.match(/@/g);
+    if (!atMatches || atMatches.length === 0) return 'Email must contain "@" (e.g. name@gmail.com).';
+    if (atMatches.length > 1) return 'Invalid email: multiple "@" symbols detected.';
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(clean)) return 'Invalid email format (e.g. name@gmail.com).';
+    return null;
+  };
+
+  const validateNameValue = (val: string, label: string = 'Name'): string | null => {
+    const clean = (val || '').trim();
+    if (!clean) return `${label} is required.`;
+    if (clean.length < 3) return `${label} must be at least 3 letters.`;
+    return null;
+  };
+
+  const validateMobileValue = (val: string): string | null => {
+    const clean = (val || '').trim().replace(/\D/g, '');
+    if (!clean) return 'Mobile number is required.';
+    if (clean.length !== 10) return 'Mobile number must be exactly 10 digits.';
+    return null;
+  };
+
   const validateEmail = (val: string): boolean => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
+    return validateEmailValue(val) === null;
   };
 
   const getTargetEmail = (): string => {
@@ -207,6 +259,14 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     if (activeRole === 'TEAM') return coachEmail.trim().toLowerCase();
     if (activeRole === 'SCORER') return sEmail.trim().toLowerCase();
     return uEmail.trim().toLowerCase();
+  };
+
+  const setTargetEmail = (val: string) => {
+    const clean = val.trim();
+    if (activeRole === 'PLAYER') setPEmail(clean);
+    else if (activeRole === 'TEAM') setCoachEmail(clean);
+    else if (activeRole === 'SCORER') setSEmail(clean);
+    else setUEmail(clean);
   };
 
   const getTargetName = (): string => {
@@ -218,42 +278,47 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
   const switchRole = (role: RegistrationRole) => {
     setActiveRole(role);
+    setFieldErrors({});
     setOtpSent(false);
     setOtpCode('');
     setIsEmailVerified(false);
+    setIsOtpModalVisible(false);
+    setOtpModalError(null);
+    setOtpModalSuccess(null);
     setPassword('');
     setConfirmPassword('');
     setStatusMessage(null);
     setStatusType(null);
-    setFieldErrors({});
   };
 
   // Step 1: Send Email Verification OTP
-  const handleSendEmailOtp = async () => {
+  const handleSendEmailOtp = async (customEmail?: string, customName?: string) => {
     setStatusMessage(null);
     setStatusType(null);
+    setOtpModalError(null);
+    setOtpModalSuccess(null);
 
-    const email = getTargetEmail();
-    const name = getTargetName();
-    const newErrors: { [key: string]: string } = {};
+    const email = (customEmail || popupEmail || getTargetEmail()).trim().toLowerCase();
+    const name = (customName || getTargetName()).trim();
 
-    if (!name) {
-      if (activeRole === 'PLAYER') newErrors.pName = 'Please enter Player Full Name first.';
-      else if (activeRole === 'TEAM') newErrors.coachName = 'Please enter Coach / Manager Name first.';
-      else if (activeRole === 'SCORER') newErrors.sName = 'Please enter Scorer Full Name first.';
-      else newErrors.uName = 'Please enter Umpire Full Name first.';
-    }
-    if (!email || !validateEmail(email)) {
-      if (activeRole === 'PLAYER') newErrors.pEmail = 'Please enter a valid Player Email address to receive OTP.';
-      else if (activeRole === 'TEAM') newErrors.coachEmail = 'Please enter a valid Coach Email address to receive OTP.';
-      else if (activeRole === 'SCORER') newErrors.sEmail = 'Please enter a valid Scorer Email address to receive OTP.';
-      else newErrors.uEmail = 'Please enter a valid Umpire Email address to receive OTP.';
-    }
+    const nameErr = validateNameValue(name, activeRole === 'TEAM' ? 'Coach Name' : 'Full Name');
+    const emailErr = validateEmailValue(email);
 
-    if (Object.keys(newErrors).length > 0) {
-      setFieldErrors((prev) => ({ ...prev, ...newErrors }));
+    const errs: Record<string, string> = {};
+    if (nameErr) errs.name = nameErr;
+    if (emailErr) errs.email = emailErr;
+
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors((prev) => ({ ...prev, ...errs }));
+      const firstErr = nameErr || emailErr;
+      setStatusMessage(firstErr || 'Please correct the errors before proceeding.');
+      setStatusType('error');
+      setOtpModalError(firstErr || null);
       return;
     }
+
+    setTargetEmail(email);
+    setPopupEmail(email);
 
     setIsSendingOtp(true);
     setStatusMessage(`Sending verification code to ${email}...`);
@@ -262,22 +327,45 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     try {
       await ScorerApi.sendRegistrationOtp(email, name, activeRole);
       setOtpSent(true);
-      clearError('emailVerification');
-      setStatusMessage(`✓ Verification code sent to ${email} via Nodemailer! Please enter the 6-digit code.`);
+      setResendCooldown(30);
+      const okMsg = `✓ Verification code sent to ${email}! Enter the 6-digit code below.`;
+      setStatusMessage(okMsg);
       setStatusType('success');
+      setOtpModalSuccess(okMsg);
     } catch (err: any) {
-      const msg = err?.message || 'Failed to send OTP. Please check email address and try again.';
-      const field =
-        activeRole === 'PLAYER'
-          ? 'pEmail'
-          : activeRole === 'TEAM'
-          ? 'coachEmail'
-          : activeRole === 'SCORER'
-          ? 'sEmail'
-          : 'uEmail';
-      setFieldErrors((prev) => ({ ...prev, [field]: msg }));
+      const errMsg = err?.message || 'Failed to send OTP. Please check email address and try again.';
+      setStatusMessage(errMsg);
+      setStatusType('error');
+      setOtpModalError(errMsg);
     } finally {
       setIsSendingOtp(false);
+    }
+  };
+
+  // Open Cricket OTP Popup Modal
+  const openOtpModal = async (triggerSend: boolean = true) => {
+    const email = getTargetEmail();
+    const name = getTargetName();
+
+    const nameErr = validateNameValue(name, activeRole === 'TEAM' ? 'Coach Name' : 'Full Name');
+    const emailErr = validateEmailValue(email);
+
+    const errs: Record<string, string> = {};
+    if (nameErr) errs.name = nameErr;
+    if (emailErr) errs.email = emailErr;
+
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors((prev) => ({ ...prev, ...errs }));
+      return;
+    }
+
+    setPopupEmail(email);
+    setOtpModalError(null);
+    setOtpModalSuccess(null);
+    setIsOtpModalVisible(true);
+
+    if (triggerSend && !otpSent) {
+      await handleSendEmailOtp(email, name);
     }
   };
 
@@ -285,12 +373,17 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   const handleVerifyEmailOtp = async () => {
     setStatusMessage(null);
     setStatusType(null);
+    setOtpModalError(null);
+    setOtpModalSuccess(null);
 
-    const email = getTargetEmail();
+    const email = (popupEmail || getTargetEmail()).trim().toLowerCase();
     const cleanOtp = otpCode.trim();
 
     if (!cleanOtp) {
-      setFieldErrors((prev) => ({ ...prev, otpCode: 'Please enter the 6-digit OTP code.' }));
+      const msg = 'Please enter the 6-digit OTP code.';
+      setStatusMessage(msg);
+      setStatusType('error');
+      setOtpModalError(msg);
       return;
     }
 
@@ -298,12 +391,18 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     try {
       await ScorerApi.verifyRegistrationOtp(email, cleanOtp);
       setIsEmailVerified(true);
-      clearError('otpCode');
-      clearError('emailVerification');
-      setStatusMessage('✓ Email verified successfully! You may now set your password below.');
+      const okMsg = '✓ Email verified successfully! You may now set your password.';
+      setStatusMessage(okMsg);
       setStatusType('success');
+      setOtpModalSuccess(okMsg);
+      setTimeout(() => {
+        setIsOtpModalVisible(false);
+      }, 1000);
     } catch (err: any) {
-      setFieldErrors((prev) => ({ ...prev, otpCode: err?.message || 'Invalid or expired OTP code.' }));
+      const errMsg = err?.message || 'Invalid or expired OTP code.';
+      setStatusMessage(errMsg);
+      setStatusType('error');
+      setOtpModalError(errMsg);
     } finally {
       setIsVerifyingOtp(false);
     }
@@ -318,19 +417,39 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const email = pEmail.trim().toLowerCase();
     const mobile = pMobile.trim();
     const targetTaluk = pTaluk === 'Other' ? pCustomTaluk.trim() : pTaluk;
-    const newErrors: { [key: string]: string } = {};
 
-    if (!name) newErrors.pName = 'Please enter Player Full Name.';
-    if (!mobile || mobile.length < 10) newErrors.pMobile = 'Please enter a valid 10-digit Mobile Number.';
-    if (!email || !validateEmail(email)) newErrors.pEmail = 'Please enter a valid Player Email address.';
-    if (pTaluk === 'Other' && !targetTaluk) newErrors.pCustomTaluk = 'Please type your Taluk name.';
-    if (!isEmailVerified) newErrors.emailVerification = 'Please verify your email address with OTP before submitting.';
-    if (!password || password.length < 4) newErrors.password = 'Please enter a password of at least 4 characters.';
-    if (password && password !== confirmPassword) newErrors.confirmPassword = 'Passwords do not match.';
-    if (!pAgreed) newErrors.pAgreed = 'Please accept the declaration to submit player registration.';
+    const nameErr = validateNameValue(name, 'Player Full Name');
+    const emailErr = validateEmailValue(email);
+    const mobileErr = validateMobileValue(mobile);
+    let talukErr: string | null = null;
+    if (pTaluk === 'Other' && !targetTaluk) talukErr = 'Please enter your Taluk name.';
 
-    if (Object.keys(newErrors).length > 0) {
-      setFieldErrors(newErrors);
+    const errs: Record<string, string> = {};
+    if (nameErr) errs.name = nameErr;
+    if (emailErr) errs.email = emailErr;
+    if (mobileErr) errs.mobile = mobileErr;
+    if (talukErr) errs.taluk = talukErr;
+
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors((prev) => ({ ...prev, ...errs }));
+      return;
+    }
+
+    if (!isEmailVerified) {
+      openOtpModal(true);
+      return;
+    }
+
+    if (!password || password.length < 4) {
+      setFieldErrors((prev) => ({ ...prev, password: 'Password must be at least 4 characters.' }));
+      return;
+    }
+    if (password !== confirmPassword) {
+      setFieldErrors((prev) => ({ ...prev, confirmPassword: 'Passwords do not match.' }));
+      return;
+    }
+    if (!pAgreed) {
+      setFieldErrors((prev) => ({ ...prev, agree: 'Please accept the declaration to submit player registration.' }));
       return;
     }
 
@@ -365,17 +484,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setTimeout(() => navigate('Login', { initialRole: 'PLAYER' }), 1200);
     } catch (err: any) {
       setIsLoading(false);
-      const rawMsg = err?.message || 'Player registration failed. Please try again.';
-      const lower = rawMsg.toLowerCase();
-      if (lower.includes('email') || lower.includes('already exists') || lower.includes('registered')) {
-        setFieldErrors((prev) => ({ ...prev, pEmail: rawMsg }));
-      } else if (lower.includes('mobile') || lower.includes('phone')) {
-        setFieldErrors((prev) => ({ ...prev, pMobile: rawMsg }));
-      } else if (lower.includes('otp')) {
-        setFieldErrors((prev) => ({ ...prev, otpCode: rawMsg }));
-      } else {
-        setFieldErrors((prev) => ({ ...prev, general: rawMsg }));
-      }
+      setStatusMessage(err?.message || 'Player registration failed. Please try again.');
+      setStatusType('error');
     }
   };
 
@@ -387,19 +497,22 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const name = squadPlayerName.trim();
     const email = squadPlayerEmail.trim().toLowerCase();
     const role = squadPlayerRole.trim() || 'Batter';
-    const newErrors: { [key: string]: string } = {};
 
-    if (!name) newErrors.squadPlayerName = 'Please enter Player Name.';
-    if (!email || !validateEmail(email)) {
-      newErrors.squadPlayerEmail = 'Please enter a valid Player Email ID.';
-    } else if (coachEmail.trim() && email === coachEmail.trim().toLowerCase()) {
-      newErrors.squadPlayerEmail = `Player email cannot be identical to Coach Email.`;
-    } else if (players.some((p) => p.email.toLowerCase() === email)) {
-      newErrors.squadPlayerEmail = `A player with email "${email}" has already been added to the squad.`;
+    const nameErr = validateNameValue(name, 'Squad Player Name');
+    const emailErr = validateEmailValue(email);
+    const errs: Record<string, string> = {};
+    if (nameErr) errs.squadPlayerName = nameErr;
+    if (emailErr) errs.squadPlayerEmail = emailErr;
+
+    if (coachEmail.trim() && email === coachEmail.trim().toLowerCase()) {
+      errs.squadPlayerEmail = `Player email cannot be identical to Coach Email.`;
+    }
+    if (players.some((p) => p.email.toLowerCase() === email)) {
+      errs.squadPlayerEmail = `Player with email "${email}" already added to squad.`;
     }
 
-    if (Object.keys(newErrors).length > 0) {
-      setFieldErrors((prev) => ({ ...prev, ...newErrors }));
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors((prev) => ({ ...prev, ...errs }));
       return;
     }
 
@@ -413,9 +526,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     setPlayers((prev) => [...prev, newPlayer]);
     setSquadPlayerName('');
     setSquadPlayerEmail('');
-    clearError('players');
-    clearError('squadPlayerName');
-    clearError('squadPlayerEmail');
+    setFieldErrors((prev) => ({ ...prev, squad: undefined, squadPlayerName: undefined, squadPlayerEmail: undefined }));
 
     const newCount = players.length + 1;
     setStatusMessage(`✓ Added ${name} (${role}) to squad! (${newCount} players in squad)`);
@@ -439,7 +550,6 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     }));
 
     setPlayers(squad);
-    clearError('players');
     setStatusMessage('⚡ Sample squad loaded! Coach details and all 15 squad players added.');
     setStatusType('success');
   };
@@ -449,22 +559,45 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     setStatusType(null);
 
     const targetTaluk = teamTaluk === 'Other' ? teamCustomTaluk.trim() : teamTaluk;
-    const newErrors: { [key: string]: string } = {};
 
-    if (!teamName.trim()) newErrors.teamName = 'Please enter Team Name.';
-    if (!coachName.trim()) newErrors.coachName = 'Please enter Coach / Manager Name.';
-    if (!coachEmail.trim() || !validateEmail(coachEmail)) {
-      newErrors.coachEmail = 'Please enter a valid Coach Email Address.';
+    const teamNameErr = validateNameValue(teamName, 'Team Name');
+    const coachNameErr = validateNameValue(coachName, 'Coach Name');
+    const coachEmailErr = validateEmailValue(coachEmail);
+    let talukErr: string | null = null;
+    if (teamTaluk === 'Other' && !targetTaluk) talukErr = 'Please enter your team Taluk name.';
+
+    const errs: Record<string, string> = {};
+    if (teamNameErr) errs.teamName = teamNameErr;
+    if (coachNameErr) errs.name = coachNameErr;
+    if (coachEmailErr) errs.email = coachEmailErr;
+    if (talukErr) errs.taluk = talukErr;
+
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors((prev) => ({ ...prev, ...errs }));
+      return;
     }
-    if (teamTaluk === 'Other' && !targetTaluk) newErrors.teamCustomTaluk = 'Please type your team Taluk name.';
-    if (players.length === 0) newErrors.players = 'Please add at least one squad player to your team.';
-    if (!isEmailVerified) newErrors.emailVerification = 'Please verify coach email with the OTP code first.';
-    if (!password || password.length < 4) newErrors.password = 'Please enter a password of at least 4 characters.';
-    if (password && password !== confirmPassword) newErrors.confirmPassword = 'Passwords do not match.';
-    if (!teamAgreed) newErrors.teamAgreed = 'Please accept the team declaration.';
 
-    if (Object.keys(newErrors).length > 0) {
-      setFieldErrors(newErrors);
+    if (!isEmailVerified) {
+      openOtpModal(true);
+      return;
+    }
+
+    if (!password || password.length < 4) {
+      setFieldErrors((prev) => ({ ...prev, password: 'Password must be at least 4 characters.' }));
+      return;
+    }
+    if (password !== confirmPassword) {
+      setFieldErrors((prev) => ({ ...prev, confirmPassword: 'Passwords do not match.' }));
+      return;
+    }
+    if (players.length === 0) {
+      setFieldErrors((prev) => ({ ...prev, squad: 'Please add at least one squad player to your team.' }));
+      setStatusMessage('Please add at least one squad player to your team.');
+      setStatusType('error');
+      return;
+    }
+    if (!teamAgreed) {
+      setFieldErrors((prev) => ({ ...prev, agree: 'Please accept the team declaration.' }));
       return;
     }
 
@@ -502,17 +635,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setTimeout(() => navigate('Login', { initialRole: 'TEAM' }), 1500);
     } catch (err: any) {
       setIsLoading(false);
-      const rawMsg = err?.message || 'Team registration failed. Please try again.';
-      const lower = rawMsg.toLowerCase();
-      if (lower.includes('email') || lower.includes('already exists')) {
-        setFieldErrors((prev) => ({ ...prev, coachEmail: rawMsg }));
-      } else if (lower.includes('team name')) {
-        setFieldErrors((prev) => ({ ...prev, teamName: rawMsg }));
-      } else if (lower.includes('otp')) {
-        setFieldErrors((prev) => ({ ...prev, otpCode: rawMsg }));
-      } else {
-        setFieldErrors((prev) => ({ ...prev, general: rawMsg }));
-      }
+      setStatusMessage(err?.message || 'Team registration failed. Please try again.');
+      setStatusType('error');
     }
   };
 
@@ -525,19 +649,39 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const email = sEmail.trim().toLowerCase();
     const mobile = sMobile.trim();
     const targetTaluk = sTaluk === 'Other' ? sCustomTaluk.trim() : sTaluk;
-    const newErrors: { [key: string]: string } = {};
 
-    if (!name) newErrors.sName = 'Please enter Scorer Full Name.';
-    if (!mobile || mobile.length < 10) newErrors.sMobile = 'Please enter a valid 10-digit Mobile Number.';
-    if (!email || !validateEmail(email)) newErrors.sEmail = 'Please enter a valid Scorer Email address.';
-    if (sTaluk === 'Other' && !targetTaluk) newErrors.sCustomTaluk = 'Please type your Scorer Taluk name.';
-    if (!isEmailVerified) newErrors.emailVerification = 'Please verify your email with the OTP code first.';
-    if (!password || password.length < 4) newErrors.password = 'Please enter a password of at least 4 characters.';
-    if (password && password !== confirmPassword) newErrors.confirmPassword = 'Passwords do not match.';
-    if (!sAgreed) newErrors.sAgreed = 'Please accept the official scorer code of conduct declaration.';
+    const nameErr = validateNameValue(name, 'Scorer Full Name');
+    const emailErr = validateEmailValue(email);
+    const mobileErr = validateMobileValue(mobile);
+    let talukErr: string | null = null;
+    if (sTaluk === 'Other' && !targetTaluk) talukErr = 'Please enter your Taluk name.';
 
-    if (Object.keys(newErrors).length > 0) {
-      setFieldErrors(newErrors);
+    const errs: Record<string, string> = {};
+    if (nameErr) errs.name = nameErr;
+    if (emailErr) errs.email = emailErr;
+    if (mobileErr) errs.mobile = mobileErr;
+    if (talukErr) errs.taluk = talukErr;
+
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors((prev) => ({ ...prev, ...errs }));
+      return;
+    }
+
+    if (!isEmailVerified) {
+      openOtpModal(true);
+      return;
+    }
+
+    if (!password || password.length < 4) {
+      setFieldErrors((prev) => ({ ...prev, password: 'Password must be at least 4 characters.' }));
+      return;
+    }
+    if (password !== confirmPassword) {
+      setFieldErrors((prev) => ({ ...prev, confirmPassword: 'Passwords do not match.' }));
+      return;
+    }
+    if (!sAgreed) {
+      setFieldErrors((prev) => ({ ...prev, agree: 'Please accept the declaration to proceed.' }));
       return;
     }
 
@@ -561,25 +705,18 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setStatusMessage(resp?.message || scorerNotice);
       setStatusType('success');
 
-      if (Platform.OS === 'web') {
-        alert(scorerNotice);
-      } else {
-        Alert.alert('Registration Request Submitted', `Welcome ${name}! Your scorer registration request is PENDING Admin approval.\n\nOnce approved by District Administrator, you can log in.`);
-      }
-      setTimeout(() => navigate('Login', { initialRole: 'SCORER' }), 1500);
+      setPendingApprovalData({
+        name,
+        email,
+        role: 'Official Scorer',
+        certificationLevel: sLevel,
+        taluk: targetTaluk
+      });
+      setShowApprovalPendingModal(true);
     } catch (err: any) {
       setIsLoading(false);
-      const rawMsg = err?.message || 'Scorer registration failed. Please try again.';
-      const lower = rawMsg.toLowerCase();
-      if (lower.includes('email') || lower.includes('already exists')) {
-        setFieldErrors((prev) => ({ ...prev, sEmail: rawMsg }));
-      } else if (lower.includes('mobile') || lower.includes('phone')) {
-        setFieldErrors((prev) => ({ ...prev, sMobile: rawMsg }));
-      } else if (lower.includes('otp')) {
-        setFieldErrors((prev) => ({ ...prev, otpCode: rawMsg }));
-      } else {
-        setFieldErrors((prev) => ({ ...prev, general: rawMsg }));
-      }
+      setStatusMessage(err?.message || 'Scorer registration failed. Please try again.');
+      setStatusType('error');
     }
   };
 
@@ -591,21 +728,42 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const name = uName.trim();
     const email = uEmail.trim().toLowerCase();
     const targetDistrict = uDistrict === 'Other' ? uCustomDistrict.trim() : uDistrict;
-    const newErrors: { [key: string]: string } = {};
 
-    if (!name) newErrors.uName = 'Please enter Umpire Full Name.';
-    if (!email || !validateEmail(email)) newErrors.uEmail = 'Please enter a valid Umpire Email address.';
-    if (!uExperience.trim()) newErrors.uExperience = 'Please enter Umpire Experience.';
-    if (!uQualification.trim()) newErrors.uQualification = 'Please select Umpire Certification / Qualification.';
-    if (uDistrict === 'Other' && !targetDistrict) newErrors.uCustomDistrict = 'Please specify your District name.';
-    if (!uState.trim()) newErrors.uState = 'Please enter State.';
-    if (!isEmailVerified) newErrors.emailVerification = 'Please verify your email with the OTP code first.';
-    if (!password || password.length < 4) newErrors.password = 'Please enter a password of at least 4 characters.';
-    if (password && password !== confirmPassword) newErrors.confirmPassword = 'Passwords do not match.';
-    if (!uAgreed) newErrors.uAgreed = 'Please accept the official Umpires Code of Conduct declaration.';
+    const nameErr = validateNameValue(name, 'Umpire Full Name');
+    const emailErr = validateEmailValue(email);
+    const mobileErr = validateMobileValue(uMobile);
+    let expErr: string | null = null;
+    if (!uExperience.trim()) expErr = 'Please enter Umpire Experience.';
+    let distErr: string | null = null;
+    if (uDistrict === 'Other' && !targetDistrict) distErr = 'Please specify your District name.';
 
-    if (Object.keys(newErrors).length > 0) {
-      setFieldErrors(newErrors);
+    const errs: Record<string, string> = {};
+    if (nameErr) errs.name = nameErr;
+    if (emailErr) errs.email = emailErr;
+    if (mobileErr) errs.mobile = mobileErr;
+    if (expErr) errs.experience = expErr;
+    if (distErr) errs.district = distErr;
+
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors((prev) => ({ ...prev, ...errs }));
+      return;
+    }
+
+    if (!isEmailVerified) {
+      openOtpModal(true);
+      return;
+    }
+
+    if (!password || password.length < 4) {
+      setFieldErrors((prev) => ({ ...prev, password: 'Password must be at least 4 characters.' }));
+      return;
+    }
+    if (password !== confirmPassword) {
+      setFieldErrors((prev) => ({ ...prev, confirmPassword: 'Passwords do not match.' }));
+      return;
+    }
+    if (!uAgreed) {
+      setFieldErrors((prev) => ({ ...prev, agree: 'Please accept the declaration to proceed.' }));
       return;
     }
 
@@ -617,6 +775,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       const resp = await ScorerApi.registerUmpire({
         name,
         email,
+        mobile: uMobile.trim().replace(/\D/g, '') || undefined,
         password,
         experience: uExperience.trim(),
         experienceYears: uYearsOfExperience.trim() ? parseInt(uYearsOfExperience.trim(), 10) : undefined,
@@ -637,26 +796,18 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setStatusMessage(resp?.message || umpireNotice);
       setStatusType('success');
 
-      if (Platform.OS === 'web') {
-        alert(umpireNotice);
-      } else {
-        Alert.alert(
-          'Registration Request Submitted',
-          `Welcome ${name}!\n\nYour Umpire Registration is PENDING Admin approval.\n\nOnce approved by District Administrator, you can log in with your credentials to access the Official Umpire Dashboard.`
-        );
-      }
-      setTimeout(() => navigate('Login', { initialRole: 'UMPIRE' }), 1500);
+      setPendingApprovalData({
+        name,
+        email,
+        role: 'Official Umpire',
+        certificationLevel: uQualification,
+        taluk: targetDistrict
+      });
+      setShowApprovalPendingModal(true);
     } catch (err: any) {
       setIsLoading(false);
-      const rawMsg = err?.message || 'Umpire registration failed. Please try again.';
-      const lower = rawMsg.toLowerCase();
-      if (lower.includes('email') || lower.includes('already exists')) {
-        setFieldErrors((prev) => ({ ...prev, uEmail: rawMsg }));
-      } else if (lower.includes('otp')) {
-        setFieldErrors((prev) => ({ ...prev, otpCode: rawMsg }));
-      } else {
-        setFieldErrors((prev) => ({ ...prev, general: rawMsg }));
-      }
+      setStatusMessage(err?.message || 'Umpire registration failed. Please try again.');
+      setStatusType('error');
     }
   };
 
@@ -713,40 +864,27 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
             <TouchableOpacity
               style={[styles.actionBtn, isSendingOtp && styles.btnDisabled]}
-              onPress={handleSendEmailOtp}
+              onPress={() => openOtpModal(true)}
               disabled={isSendingOtp}
             >
               {isSendingOtp ? (
                 <ActivityIndicator color="#000000" size="small" />
               ) : (
                 <Text style={styles.actionText}>
-                  {otpSent ? 'Resend Verification OTP' : 'Send Verification OTP to Email'}
+                  {otpSent ? '🏏 Resend / Enter OTP in Popup' : '🏏 Send Verification OTP to Email'}
                 </Text>
               )}
             </TouchableOpacity>
-            {fieldErrors.emailVerification ? (
-              <Text style={[styles.fieldErrorText, { marginTop: 6, textAlign: 'center' }]}>
-                {fieldErrors.emailVerification}
-              </Text>
-            ) : null}
 
             {otpSent && (
-              <View style={{ marginTop: 10 }}>
-                <Text style={styles.label}>Enter 6-Digit Email OTP *</Text>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ marginTop: 6 }}>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
                   <TextInput
-                    style={[
-                      styles.input,
-                      { flex: 1, textAlign: 'center', letterSpacing: 4, fontWeight: 'bold', fontSize: 15, marginBottom: 0 },
-                      fieldErrors.otpCode && styles.inputError
-                    ]}
+                    style={[styles.input, { flex: 1, textAlign: 'center', letterSpacing: 4, fontWeight: 'bold', fontSize: 14, marginBottom: 0 }]}
                     placeholder="123456"
                     placeholderTextColor="#94a3b8"
                     value={otpCode}
-                    onChangeText={(text) => {
-                      setOtpCode(text);
-                      clearError('otpCode');
-                    }}
+                    onChangeText={setOtpCode}
                     keyboardType="number-pad"
                     maxLength={6}
                   />
@@ -761,10 +899,13 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       <Text style={styles.verifyBtnText}>Verify OTP</Text>
                     )}
                   </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.verifyBtn, { backgroundColor: '#1e293b' }]}
+                    onPress={() => openOtpModal(false)}
+                  >
+                    <Text style={[styles.verifyBtnText, { color: '#eab308' }]}>Popup</Text>
+                  </TouchableOpacity>
                 </View>
-                {fieldErrors.otpCode ? (
-                  <Text style={styles.fieldErrorText}>{fieldErrors.otpCode}</Text>
-                ) : null}
               </View>
             )}
           </View>
@@ -775,7 +916,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
         )}
 
         {isEmailVerified && (
-          <View style={{ marginTop: 10 }}>
+          <View style={{ marginTop: 6 }}>
             <View style={styles.formRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.label}>Password (min 4 chars) *</Text>
@@ -783,9 +924,9 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                   <TextInput
                     style={styles.passwordInput}
                     value={password}
-                    onChangeText={(text) => {
-                      setPassword(text);
-                      clearError('password');
+                    onChangeText={(val) => {
+                      setPassword(val);
+                      setFieldErrors((prev) => ({ ...prev, password: val.length >= 4 ? undefined : 'Password must be at least 4 characters.' }));
                     }}
                     secureTextEntry={!showPassword}
                     placeholder="Enter password"
@@ -795,9 +936,9 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <Text style={styles.toggleText}>{showPassword ? '👁️' : '🔒'}</Text>
                   </TouchableOpacity>
                 </View>
-                {fieldErrors.password ? (
-                  <Text style={styles.fieldErrorText}>{fieldErrors.password}</Text>
-                ) : null}
+                {fieldErrors.password && (
+                  <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.password}</Text>
+                )}
               </View>
 
               <View style={{ flex: 1 }}>
@@ -805,17 +946,17 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                 <TextInput
                   style={[styles.input, { marginBottom: 0 }, fieldErrors.confirmPassword && styles.inputError]}
                   value={confirmPassword}
-                  onChangeText={(text) => {
-                    setConfirmPassword(text);
-                    clearError('confirmPassword');
+                  onChangeText={(val) => {
+                    setConfirmPassword(val);
+                    setFieldErrors((prev) => ({ ...prev, confirmPassword: val === password ? undefined : 'Passwords do not match.' }));
                   }}
                   secureTextEntry={!showPassword}
                   placeholder="Re-enter password"
                   placeholderTextColor="#94a3b8"
                 />
-                {fieldErrors.confirmPassword ? (
-                  <Text style={styles.fieldErrorText}>{fieldErrors.confirmPassword}</Text>
-                ) : null}
+                {fieldErrors.confirmPassword && (
+                  <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.confirmPassword}</Text>
+                )}
               </View>
             </View>
           </View>
@@ -826,18 +967,24 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
   return (
     <SharedBackground>
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => (onExit ? onExit() : navigate('Home'))} style={styles.backBtn}>
-            <Text style={styles.backText}>← Back to Home</Text>
-          </TouchableOpacity>
-        </View>
+      <View style={[styles.container, Platform.OS === 'web' && isDesktop && ({ height: '100vh', maxHeight: '100vh', overflow: 'hidden' } as any)]}>
+        {/* Sleek Minimal Corner Exit Action */}
+        <TouchableOpacity
+          onPress={() => (onExit ? onExit() : navigate('Home'))}
+          style={styles.cornerExitBtn}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.cornerExitText}>← Exit to Main</Text>
+        </TouchableOpacity>
 
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={[styles.scroll, isDesktop && { flex: 1, justifyContent: 'center' }]}
+          scrollEnabled={!isDesktop}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.cardContainer}>
-            
-            {/* Federation Logo & Header */}
+            {/* Federation Logo & Title */}
             <View style={styles.logoContainer}>
               <Image
                 source={require('../../../assets/logo_transparent.png')}
@@ -849,16 +996,59 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.title}>Register Here</Text>
-              <Text style={styles.subtitle}>
-                District player registration, team squad submissions, and certified scorer enrollment
-              </Text>
+              {/* Compact Card Header: Title + Role Tabs */}
+              <View style={styles.cardTopRow}>
+                <View>
+                  <Text style={styles.title}>Register Here</Text>
+                  <Text style={styles.subtitle}>District player, team, scorer and umpire enrollment</Text>
+                </View>
 
-              {/* Status Banner - Only show success and info, NOT error banner */}
-              {statusMessage && statusType !== 'error' && (
+                {/* Role Selection Tabs */}
+                <View style={styles.roleTabsContainer}>
+                  <TouchableOpacity
+                    style={[styles.roleTab, activeRole === 'PLAYER' && styles.roleTabActive]}
+                    onPress={() => switchRole('PLAYER')}
+                  >
+                    <Text style={[styles.roleTabText, activeRole === 'PLAYER' && styles.roleTabTextActive]}>
+                      🏏 Player
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.roleTab, activeRole === 'TEAM' && styles.roleTabActive]}
+                    onPress={() => switchRole('TEAM')}
+                  >
+                    <Text style={[styles.roleTabText, activeRole === 'TEAM' && styles.roleTabTextActive]}>
+                      🛡️ Team & Coach
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.roleTab, activeRole === 'SCORER' && styles.roleTabActive]}
+                    onPress={() => switchRole('SCORER')}
+                  >
+                    <Text style={[styles.roleTabText, activeRole === 'SCORER' && styles.roleTabTextActive]}>
+                      📋 Scorer
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.roleTab, activeRole === 'UMPIRE' && styles.roleTabActive]}
+                    onPress={() => switchRole('UMPIRE')}
+                  >
+                    <Text style={[styles.roleTabText, activeRole === 'UMPIRE' && styles.roleTabTextActive]}>
+                      ⚖️ Umpire
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Status Banner */}
+              {statusMessage && (
                 <View
                   style={[
                     styles.statusBanner,
+                    statusType === 'error' && styles.statusError,
                     statusType === 'success' && styles.statusSuccess,
                     statusType === 'info' && styles.statusInfo
                   ]}
@@ -866,6 +1056,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                   <Text
                     style={[
                       styles.statusText,
+                      statusType === 'error' && styles.statusTextError,
                       statusType === 'success' && styles.statusTextSuccess,
                       statusType === 'info' && styles.statusTextInfo
                     ]}
@@ -874,45 +1065,6 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                   </Text>
                 </View>
               )}
-
-              {/* Role Selection Tabs */}
-              <View style={styles.roleTabsContainer}>
-                <TouchableOpacity
-                  style={[styles.roleTab, activeRole === 'PLAYER' && styles.roleTabActive]}
-                  onPress={() => switchRole('PLAYER')}
-                >
-                  <Text style={[styles.roleTabText, activeRole === 'PLAYER' && styles.roleTabTextActive]}>
-                    🏏 Player
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.roleTab, activeRole === 'TEAM' && styles.roleTabActive]}
-                  onPress={() => switchRole('TEAM')}
-                >
-                  <Text style={[styles.roleTabText, activeRole === 'TEAM' && styles.roleTabTextActive]}>
-                    🛡️ Team & Coach
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.roleTab, activeRole === 'SCORER' && styles.roleTabActive]}
-                  onPress={() => switchRole('SCORER')}
-                >
-                  <Text style={[styles.roleTabText, activeRole === 'SCORER' && styles.roleTabTextActive]}>
-                    📋 Scorer
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.roleTab, activeRole === 'UMPIRE' && styles.roleTabActive]}
-                  onPress={() => switchRole('UMPIRE')}
-                >
-                  <Text style={[styles.roleTabText, activeRole === 'UMPIRE' && styles.roleTabTextActive]}>
-                    ⚖️ Umpire
-                  </Text>
-                </TouchableOpacity>
-              </View>
 
               {/* ========================================================= */}
               {/* 1. PLAYER FORM */}
@@ -928,33 +1080,39 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Player Full Name *</Text>
                       <TextInput
-                        style={[styles.input, fieldErrors.pName && styles.inputError]}
+                        style={[styles.input, fieldErrors.name && styles.inputError]}
                         value={pName}
-                        onChangeText={(text) => {
-                          setPName(text);
-                          clearError('pName');
+                        onChangeText={(val) => {
+                          setPName(val);
+                          const err = validateNameValue(val, 'Player Name');
+                          setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
                         }}
                         placeholder="e.g. R. Saravanan"
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="words"
                       />
-                      {fieldErrors.pName ? <Text style={styles.fieldErrorText}>{fieldErrors.pName}</Text> : null}
+                      {fieldErrors.name && (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.name}</Text>
+                      )}
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Mobile Number (10 Digits) *</Text>
                       <TextInput
-                        style={[styles.input, fieldErrors.pMobile && styles.inputError]}
+                        style={[styles.input, fieldErrors.mobile && styles.inputError]}
                         value={pMobile}
-                        onChangeText={(text) => {
-                          setPMobile(text);
-                          clearError('pMobile');
+                        onChangeText={(val) => {
+                          setPMobile(val);
+                          const err = validateMobileValue(val);
+                          setFieldErrors((prev) => ({ ...prev, mobile: err || undefined }));
                         }}
                         placeholder="e.g. 9876543210"
                         keyboardType="phone-pad"
                         placeholderTextColor="#94a3b8"
                         maxLength={10}
                       />
-                      {fieldErrors.pMobile ? <Text style={styles.fieldErrorText}>{fieldErrors.pMobile}</Text> : null}
+                      {fieldErrors.mobile && (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.mobile}</Text>
+                      )}
                     </View>
                   </View>
 
@@ -963,18 +1121,21 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Player Email Address *</Text>
                       <TextInput
-                        style={[styles.input, fieldErrors.pEmail && styles.inputError]}
+                        style={[styles.input, fieldErrors.email && styles.inputError]}
                         value={pEmail}
-                        onChangeText={(text) => {
-                          setPEmail(text);
-                          clearError('pEmail');
+                        onChangeText={(val) => {
+                          setPEmail(val);
+                          const err = validateEmailValue(val);
+                          setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
                         }}
                         placeholder="e.g. saravanan@example.com"
                         keyboardType="email-address"
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="none"
                       />
-                      {fieldErrors.pEmail ? <Text style={styles.fieldErrorText}>{fieldErrors.pEmail}</Text> : null}
+                      {fieldErrors.email && (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.email}</Text>
+                      )}
                     </View>
                   </View>
 
@@ -993,7 +1154,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       onSelect={(val) => {
                         setPTaluk(val);
                         if (val !== 'Other') setPCustomTaluk('');
-                        clearError('pCustomTaluk');
+                        setFieldErrors((prev) => ({ ...prev, taluk: undefined }));
                       }}
                     />
                   </View>
@@ -1004,17 +1165,19 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       <View style={{ flex: 1 }}>
                         <Text style={styles.label}>Specify Taluk Name *</Text>
                         <TextInput
-                          style={[styles.input, fieldErrors.pCustomTaluk && styles.inputError]}
+                          style={[styles.input, fieldErrors.taluk && styles.inputError]}
                           value={pCustomTaluk}
-                          onChangeText={(text) => {
-                            setPCustomTaluk(text);
-                            clearError('pCustomTaluk');
+                          onChangeText={(val) => {
+                            setPCustomTaluk(val);
+                            setFieldErrors((prev) => ({ ...prev, taluk: val.trim() ? undefined : 'Please enter your Taluk name.' }));
                           }}
                           placeholder="Type your taluk name here..."
                           placeholderTextColor="#94a3b8"
                           autoCapitalize="words"
                         />
-                        {fieldErrors.pCustomTaluk ? <Text style={styles.fieldErrorText}>{fieldErrors.pCustomTaluk}</Text> : null}
+                        {fieldErrors.taluk && (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.taluk}</Text>
+                        )}
                       </View>
                     </View>
                   )}
@@ -1025,8 +1188,9 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                   <TouchableOpacity
                     style={styles.checkboxRow}
                     onPress={() => {
-                      setPAgreed(!pAgreed);
-                      clearError('pAgreed');
+                      const next = !pAgreed;
+                      setPAgreed(next);
+                      setFieldErrors((prev) => ({ ...prev, agree: next ? undefined : 'Please accept the declaration to proceed.' }));
                     }}
                     activeOpacity={0.8}
                   >
@@ -1037,23 +1201,21 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       I hereby declare that all information furnished is true and accurate according to association guidelines.
                     </Text>
                   </TouchableOpacity>
-                  {fieldErrors.pAgreed ? <Text style={styles.fieldErrorText}>{fieldErrors.pAgreed}</Text> : null}
-
-                  {fieldErrors.general ? (
-                    <View style={styles.generalErrorBox}>
-                      <Text style={styles.generalErrorText}>{fieldErrors.general}</Text>
-                    </View>
-                  ) : null}
+                  {fieldErrors.agree && (
+                    <Text style={[styles.fieldErrorText, { marginTop: -4, marginBottom: 6 }]}>⚠️ {fieldErrors.agree}</Text>
+                  )}
 
                   <TouchableOpacity
-                    style={[styles.submitBtn, (!isEmailVerified || isLoading) && styles.submitBtnDisabled]}
+                    style={[styles.submitBtn, isLoading && styles.submitBtnDisabled]}
                     onPress={handlePlayerSubmit}
-                    disabled={!isEmailVerified || isLoading}
+                    disabled={isLoading}
                   >
                     {isLoading ? (
                       <ActivityIndicator color="#000000" size="small" />
                     ) : (
-                      <Text style={styles.submitBtnText}>Submit Player Registration</Text>
+                      <Text style={styles.submitBtnText}>
+                        {isEmailVerified ? 'Submit Player Registration' : 'Verify Email & Submit Registration'}
+                      </Text>
                     )}
                   </TouchableOpacity>
                 </>
@@ -1075,28 +1237,34 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       <TextInput
                         style={[styles.input, fieldErrors.teamName && styles.inputError]}
                         value={teamName}
-                        onChangeText={(text) => {
-                          setTeamName(text);
-                          clearError('teamName');
+                        onChangeText={(val) => {
+                          setTeamName(val);
+                          const err = validateNameValue(val, 'Team Name');
+                          setFieldErrors((prev) => ({ ...prev, teamName: err || undefined }));
                         }}
                         placeholder="e.g. Sivakasi Super Strikers"
                         placeholderTextColor="#94a3b8"
                       />
-                      {fieldErrors.teamName ? <Text style={styles.fieldErrorText}>{fieldErrors.teamName}</Text> : null}
+                      {fieldErrors.teamName && (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.teamName}</Text>
+                      )}
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Head Coach / Manager Name *</Text>
                       <TextInput
-                        style={[styles.input, fieldErrors.coachName && styles.inputError]}
+                        style={[styles.input, fieldErrors.name && styles.inputError]}
                         value={coachName}
-                        onChangeText={(text) => {
-                          setCoachName(text);
-                          clearError('coachName');
+                        onChangeText={(val) => {
+                          setCoachName(val);
+                          const err = validateNameValue(val, 'Coach Name');
+                          setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
                         }}
                         placeholder="e.g. Coach S. Murugan"
                         placeholderTextColor="#94a3b8"
                       />
-                      {fieldErrors.coachName ? <Text style={styles.fieldErrorText}>{fieldErrors.coachName}</Text> : null}
+                      {fieldErrors.name && (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.name}</Text>
+                      )}
                     </View>
                   </View>
 
@@ -1105,18 +1273,21 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Coach Official Email Address *</Text>
                       <TextInput
-                        style={[styles.input, fieldErrors.coachEmail && styles.inputError]}
+                        style={[styles.input, fieldErrors.email && styles.inputError]}
                         value={coachEmail}
-                        onChangeText={(text) => {
-                          setCoachEmail(text);
-                          clearError('coachEmail');
+                        onChangeText={(val) => {
+                          setCoachEmail(val);
+                          const err = validateEmailValue(val);
+                          setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
                         }}
                         placeholder="e.g. coach@strikerscc.org"
                         keyboardType="email-address"
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="none"
                       />
-                      {fieldErrors.coachEmail ? <Text style={styles.fieldErrorText}>{fieldErrors.coachEmail}</Text> : null}
+                      {fieldErrors.email && (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.email}</Text>
+                      )}
                     </View>
                     <DropdownField
                       label="Team Taluk Jurisdiction"
@@ -1125,7 +1296,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       onSelect={(val) => {
                         setTeamTaluk(val);
                         if (val !== 'Other') setTeamCustomTaluk('');
-                        clearError('teamCustomTaluk');
+                        setFieldErrors((prev) => ({ ...prev, taluk: undefined }));
                       }}
                     />
                   </View>
@@ -1136,17 +1307,19 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       <View style={{ flex: 1 }}>
                         <Text style={styles.label}>Specify Team Taluk Name *</Text>
                         <TextInput
-                          style={[styles.input, fieldErrors.teamCustomTaluk && styles.inputError]}
+                          style={[styles.input, fieldErrors.taluk && styles.inputError]}
                           value={teamCustomTaluk}
-                          onChangeText={(text) => {
-                            setTeamCustomTaluk(text);
-                            clearError('teamCustomTaluk');
+                          onChangeText={(val) => {
+                            setTeamCustomTaluk(val);
+                            setFieldErrors((prev) => ({ ...prev, taluk: val.trim() ? undefined : 'Please enter your team Taluk name.' }));
                           }}
                           placeholder="Type your team's taluk name here..."
                           placeholderTextColor="#94a3b8"
                           autoCapitalize="words"
                         />
-                        {fieldErrors.teamCustomTaluk ? <Text style={styles.fieldErrorText}>{fieldErrors.teamCustomTaluk}</Text> : null}
+                        {fieldErrors.taluk && (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.taluk}</Text>
+                        )}
                       </View>
                     </View>
                   )}
@@ -1167,29 +1340,35 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         <TextInput
                           style={[styles.input, { marginBottom: 0 }, fieldErrors.squadPlayerName && styles.inputError]}
                           value={squadPlayerName}
-                          onChangeText={(text) => {
-                            setSquadPlayerName(text);
-                            clearError('squadPlayerName');
+                          onChangeText={(val) => {
+                            setSquadPlayerName(val);
+                            const err = validateNameValue(val, 'Squad Player Name');
+                            setFieldErrors((prev) => ({ ...prev, squadPlayerName: err || undefined }));
                           }}
                           placeholder="Player Full Name"
                           placeholderTextColor="#94a3b8"
                         />
-                        {fieldErrors.squadPlayerName ? <Text style={styles.fieldErrorText}>{fieldErrors.squadPlayerName}</Text> : null}
+                        {fieldErrors.squadPlayerName && (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.squadPlayerName}</Text>
+                        )}
                       </View>
                       <View style={{ flex: 1 }}>
                         <TextInput
                           style={[styles.input, { marginBottom: 0 }, fieldErrors.squadPlayerEmail && styles.inputError]}
                           value={squadPlayerEmail}
-                          onChangeText={(text) => {
-                            setSquadPlayerEmail(text);
-                            clearError('squadPlayerEmail');
+                          onChangeText={(val) => {
+                            setSquadPlayerEmail(val);
+                            const err = validateEmailValue(val);
+                            setFieldErrors((prev) => ({ ...prev, squadPlayerEmail: err || undefined }));
                           }}
                           placeholder="Player Email Address"
                           keyboardType="email-address"
                           placeholderTextColor="#94a3b8"
                           autoCapitalize="none"
                         />
-                        {fieldErrors.squadPlayerEmail ? <Text style={styles.fieldErrorText}>{fieldErrors.squadPlayerEmail}</Text> : null}
+                        {fieldErrors.squadPlayerEmail && (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.squadPlayerEmail}</Text>
+                        )}
                       </View>
                     </View>
                     <View style={[styles.formRow, { marginTop: 8, marginBottom: 0 }]}>
@@ -1206,11 +1385,6 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       </View>
                     </View>
                   </View>
-                  {fieldErrors.players ? (
-                    <Text style={[styles.fieldErrorText, { marginTop: 4, marginLeft: 2 }]}>
-                      {fieldErrors.players}
-                    </Text>
-                  ) : null}
 
                   {players.length > 0 && (
                     <View style={styles.playerListContainer}>
@@ -1235,6 +1409,9 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       ))}
                     </View>
                   )}
+                  {fieldErrors.squad && (
+                    <Text style={[styles.fieldErrorText, { marginBottom: 6 }]}>⚠️ {fieldErrors.squad}</Text>
+                  )}
 
                   {/* Verification & Password Setup */}
                   {renderVerificationAndPasswordBlock()}
@@ -1242,8 +1419,9 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                   <TouchableOpacity
                     style={styles.checkboxRow}
                     onPress={() => {
-                      setTeamAgreed(!teamAgreed);
-                      clearError('teamAgreed');
+                      const next = !teamAgreed;
+                      setTeamAgreed(next);
+                      setFieldErrors((prev) => ({ ...prev, agree: next ? undefined : 'Please accept the declaration to proceed.' }));
                     }}
                     activeOpacity={0.8}
                   >
@@ -1254,23 +1432,21 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       I confirm that all squad players have verified identity documents.
                     </Text>
                   </TouchableOpacity>
-                  {fieldErrors.teamAgreed ? <Text style={styles.fieldErrorText}>{fieldErrors.teamAgreed}</Text> : null}
-
-                  {fieldErrors.general ? (
-                    <View style={styles.generalErrorBox}>
-                      <Text style={styles.generalErrorText}>{fieldErrors.general}</Text>
-                    </View>
-                  ) : null}
+                  {fieldErrors.agree && (
+                    <Text style={[styles.fieldErrorText, { marginTop: -4, marginBottom: 6 }]}>⚠️ {fieldErrors.agree}</Text>
+                  )}
 
                   <TouchableOpacity
-                    style={[styles.submitBtn, (!isEmailVerified || players.length === 0 || isLoading) && styles.submitBtnDisabled]}
+                    style={[styles.submitBtn, (players.length === 0 || isLoading) && styles.submitBtnDisabled]}
                     onPress={handleTeamSubmit}
-                    disabled={!isEmailVerified || players.length === 0 || isLoading}
+                    disabled={players.length === 0 || isLoading}
                   >
                     {isLoading ? (
                       <ActivityIndicator color="#000000" size="small" />
                     ) : (
-                      <Text style={styles.submitBtnText}>Submit Team & Coach Registration</Text>
+                      <Text style={styles.submitBtnText}>
+                        {isEmailVerified ? 'Submit Team & Coach Registration' : 'Verify Email & Submit Registration'}
+                      </Text>
                     )}
                   </TouchableOpacity>
                 </>
@@ -1290,33 +1466,39 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Scorer Full Name *</Text>
                       <TextInput
-                        style={[styles.input, fieldErrors.sName && styles.inputError]}
+                        style={[styles.input, fieldErrors.name && styles.inputError]}
                         value={sName}
-                        onChangeText={(text) => {
-                          setSName(text);
-                          clearError('sName');
+                        onChangeText={(val) => {
+                          setSName(val);
+                          const err = validateNameValue(val, 'Scorer Name');
+                          setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
                         }}
                         placeholder="e.g. S. Ramesh"
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="words"
                       />
-                      {fieldErrors.sName ? <Text style={styles.fieldErrorText}>{fieldErrors.sName}</Text> : null}
+                      {fieldErrors.name && (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.name}</Text>
+                      )}
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Mobile Number *</Text>
                       <TextInput
-                        style={[styles.input, fieldErrors.sMobile && styles.inputError]}
+                        style={[styles.input, fieldErrors.mobile && styles.inputError]}
                         value={sMobile}
-                        onChangeText={(text) => {
-                          setSMobile(text);
-                          clearError('sMobile');
+                        onChangeText={(val) => {
+                          setSMobile(val);
+                          const err = validateMobileValue(val);
+                          setFieldErrors((prev) => ({ ...prev, mobile: err || undefined }));
                         }}
                         placeholder="e.g. 9876543210"
                         keyboardType="phone-pad"
                         placeholderTextColor="#94a3b8"
                         maxLength={10}
                       />
-                      {fieldErrors.sMobile ? <Text style={styles.fieldErrorText}>{fieldErrors.sMobile}</Text> : null}
+                      {fieldErrors.mobile && (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.mobile}</Text>
+                      )}
                     </View>
                   </View>
 
@@ -1325,18 +1507,21 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Official Scorer Email *</Text>
                       <TextInput
-                        style={[styles.input, fieldErrors.sEmail && styles.inputError]}
+                        style={[styles.input, fieldErrors.email && styles.inputError]}
                         value={sEmail}
-                        onChangeText={(text) => {
-                          setSEmail(text);
-                          clearError('sEmail');
+                        onChangeText={(val) => {
+                          setSEmail(val);
+                          const err = validateEmailValue(val);
+                          setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
                         }}
                         placeholder="e.g. ramesh.scorer@cfvd.org"
                         keyboardType="email-address"
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="none"
                       />
-                      {fieldErrors.sEmail ? <Text style={styles.fieldErrorText}>{fieldErrors.sEmail}</Text> : null}
+                      {fieldErrors.email && (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.email}</Text>
+                      )}
                     </View>
                   </View>
 
@@ -1355,7 +1540,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       onSelect={(val) => {
                         setSTaluk(val);
                         if (val !== 'Other') setSCustomTaluk('');
-                        clearError('sCustomTaluk');
+                        setFieldErrors((prev) => ({ ...prev, taluk: undefined }));
                       }}
                     />
                   </View>
@@ -1366,17 +1551,19 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       <View style={{ flex: 1 }}>
                         <Text style={styles.label}>Specify Scorer Taluk Name *</Text>
                         <TextInput
-                          style={[styles.input, fieldErrors.sCustomTaluk && styles.inputError]}
+                          style={[styles.input, fieldErrors.taluk && styles.inputError]}
                           value={sCustomTaluk}
-                          onChangeText={(text) => {
-                            setSCustomTaluk(text);
-                            clearError('sCustomTaluk');
+                          onChangeText={(val) => {
+                            setSCustomTaluk(val);
+                            setFieldErrors((prev) => ({ ...prev, taluk: val.trim() ? undefined : 'Please enter your Taluk name.' }));
                           }}
                           placeholder="Type your taluk name here..."
                           placeholderTextColor="#94a3b8"
                           autoCapitalize="words"
                         />
-                        {fieldErrors.sCustomTaluk ? <Text style={styles.fieldErrorText}>{fieldErrors.sCustomTaluk}</Text> : null}
+                        {fieldErrors.taluk && (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.taluk}</Text>
+                        )}
                       </View>
                     </View>
                   )}
@@ -1387,8 +1574,9 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                   <TouchableOpacity
                     style={styles.checkboxRow}
                     onPress={() => {
-                      setSAgreed(!sAgreed);
-                      clearError('sAgreed');
+                      const next = !sAgreed;
+                      setSAgreed(next);
+                      setFieldErrors((prev) => ({ ...prev, agree: next ? undefined : 'Please accept the declaration to proceed.' }));
                     }}
                     activeOpacity={0.8}
                   >
@@ -1399,23 +1587,21 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       I agree to abide by the official BCCI / TNCA and District Scorer Code of Conduct.
                     </Text>
                   </TouchableOpacity>
-                  {fieldErrors.sAgreed ? <Text style={styles.fieldErrorText}>{fieldErrors.sAgreed}</Text> : null}
-
-                  {fieldErrors.general ? (
-                    <View style={styles.generalErrorBox}>
-                      <Text style={styles.generalErrorText}>{fieldErrors.general}</Text>
-                    </View>
-                  ) : null}
+                  {fieldErrors.agree && (
+                    <Text style={[styles.fieldErrorText, { marginTop: -4, marginBottom: 6 }]}>⚠️ {fieldErrors.agree}</Text>
+                  )}
 
                   <TouchableOpacity
-                    style={[styles.submitBtn, (!isEmailVerified || isLoading) && styles.submitBtnDisabled]}
+                    style={[styles.submitBtn, isLoading && styles.submitBtnDisabled]}
                     onPress={handleScorerSubmit}
-                    disabled={!isEmailVerified || isLoading}
+                    disabled={isLoading}
                   >
                     {isLoading ? (
                       <ActivityIndicator color="#000000" size="small" />
                     ) : (
-                      <Text style={styles.submitBtnText}>Submit Scorer Registration</Text>
+                      <Text style={styles.submitBtnText}>
+                        {isEmailVerified ? 'Submit Scorer Registration' : 'Verify Email & Submit Registration'}
+                      </Text>
                     )}
                   </TouchableOpacity>
                 </>
@@ -1430,22 +1616,44 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <Text style={styles.sectionHeaderText}>⚖️ OFFICIAL UMPIRE REGISTRATION & ACCREDITATION</Text>
                   </View>
 
-                  {/* Row 1: Umpire Full Name */}
+                  {/* Row 1: Umpire Full Name (left) & Mobile Number (right) */}
                   <View style={styles.formRow}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Umpire Full Name *</Text>
                       <TextInput
-                        style={[styles.input, fieldErrors.uName && styles.inputError]}
+                        style={[styles.input, fieldErrors.name && styles.inputError]}
                         value={uName}
-                        onChangeText={(text) => {
-                          setUName(text);
-                          clearError('uName');
+                        onChangeText={(val) => {
+                          setUName(val);
+                          const err = validateNameValue(val, 'Umpire Name');
+                          setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
                         }}
                         placeholder="e.g. K. Sundararajan"
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="words"
                       />
-                      {fieldErrors.uName ? <Text style={styles.fieldErrorText}>{fieldErrors.uName}</Text> : null}
+                      {fieldErrors.name && (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.name}</Text>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Mobile Number (10 Digits) *</Text>
+                      <TextInput
+                        style={[styles.input, fieldErrors.mobile && styles.inputError]}
+                        value={uMobile}
+                        onChangeText={(val) => {
+                          setUMobile(val);
+                          const err = validateMobileValue(val);
+                          setFieldErrors((prev) => ({ ...prev, mobile: err || undefined }));
+                        }}
+                        placeholder="e.g. 9876543210"
+                        keyboardType="phone-pad"
+                        placeholderTextColor="#94a3b8"
+                        maxLength={10}
+                      />
+                      {fieldErrors.mobile && (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.mobile}</Text>
+                      )}
                     </View>
                   </View>
 
@@ -1454,18 +1662,21 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Official Umpire Email *</Text>
                       <TextInput
-                        style={[styles.input, fieldErrors.uEmail && styles.inputError]}
+                        style={[styles.input, fieldErrors.email && styles.inputError]}
                         value={uEmail}
-                        onChangeText={(text) => {
-                          setUEmail(text);
-                          clearError('uEmail');
+                        onChangeText={(val) => {
+                          setUEmail(val);
+                          const err = validateEmailValue(val);
+                          setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
                         }}
                         placeholder="e.g. sundararajan.umpire@cfvd.org"
                         keyboardType="email-address"
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="none"
                       />
-                      {fieldErrors.uEmail ? <Text style={styles.fieldErrorText}>{fieldErrors.uEmail}</Text> : null}
+                      {fieldErrors.email && (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.email}</Text>
+                      )}
                     </View>
                   </View>
 
@@ -1475,31 +1686,25 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       label="Umpire Certification / Qualification *"
                       value={uQualification}
                       options={UMPIRE_QUALIFICATIONS}
-                      onSelect={(val) => {
-                        setUQualification(val);
-                        clearError('uQualification');
-                      }}
+                      onSelect={setUQualification}
                     />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Umpire Experience *</Text>
                       <TextInput
-                        style={[styles.input, fieldErrors.uExperience && styles.inputError]}
+                        style={[styles.input, fieldErrors.experience && styles.inputError]}
                         value={uExperience}
-                        onChangeText={(text) => {
-                          setUExperience(text);
-                          clearError('uExperience');
+                        onChangeText={(val) => {
+                          setUExperience(val);
+                          setFieldErrors((prev) => ({ ...prev, experience: val.trim() ? undefined : 'Please enter Umpire Experience.' }));
                         }}
                         placeholder="e.g. 6 Years / Senior Panel"
                         placeholderTextColor="#94a3b8"
                       />
-                      {fieldErrors.uExperience ? <Text style={styles.fieldErrorText}>{fieldErrors.uExperience}</Text> : null}
+                      {fieldErrors.experience && (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.experience}</Text>
+                      )}
                     </View>
                   </View>
-                  {fieldErrors.uQualification ? (
-                    <Text style={[styles.fieldErrorText, { marginTop: -6, marginBottom: 8 }]}>
-                      {fieldErrors.uQualification}
-                    </Text>
-                  ) : null}
 
                   {/* Row 4: District & State */}
                   <View style={styles.formRow}>
@@ -1510,7 +1715,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       onSelect={(val) => {
                         setUDistrict(val);
                         if (val !== 'Other') setUCustomDistrict('');
-                        clearError('uCustomDistrict');
+                        setFieldErrors((prev) => ({ ...prev, district: undefined }));
                       }}
                     />
                     <DropdownField
@@ -1527,17 +1732,19 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       <View style={{ flex: 1 }}>
                         <Text style={styles.label}>Specify District Name *</Text>
                         <TextInput
-                          style={[styles.input, fieldErrors.uCustomDistrict && styles.inputError]}
+                          style={[styles.input, fieldErrors.district && styles.inputError]}
                           value={uCustomDistrict}
-                          onChangeText={(text) => {
-                            setUCustomDistrict(text);
-                            clearError('uCustomDistrict');
+                          onChangeText={(val) => {
+                            setUCustomDistrict(val);
+                            setFieldErrors((prev) => ({ ...prev, district: val.trim() ? undefined : 'Please specify your District name.' }));
                           }}
                           placeholder="Type your district name here..."
                           placeholderTextColor="#94a3b8"
                           autoCapitalize="words"
                         />
-                        {fieldErrors.uCustomDistrict ? <Text style={styles.fieldErrorText}>{fieldErrors.uCustomDistrict}</Text> : null}
+                        {fieldErrors.district && (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.district}</Text>
+                        )}
                       </View>
                     </View>
                   )}
@@ -1636,8 +1843,9 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                   <TouchableOpacity
                     style={styles.checkboxRow}
                     onPress={() => {
-                      setUAgreed(!uAgreed);
-                      clearError('uAgreed');
+                      const next = !uAgreed;
+                      setUAgreed(next);
+                      setFieldErrors((prev) => ({ ...prev, agree: next ? undefined : 'Please accept the declaration to proceed.' }));
                     }}
                     activeOpacity={0.8}
                   >
@@ -1648,23 +1856,21 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       I hereby declare that all information furnished is true and I agree to abide by the official ICC / BCCI / TNCA and District Umpires Code of Conduct & Ethics.
                     </Text>
                   </TouchableOpacity>
-                  {fieldErrors.uAgreed ? <Text style={styles.fieldErrorText}>{fieldErrors.uAgreed}</Text> : null}
-
-                  {fieldErrors.general ? (
-                    <View style={styles.generalErrorBox}>
-                      <Text style={styles.generalErrorText}>{fieldErrors.general}</Text>
-                    </View>
-                  ) : null}
+                  {fieldErrors.agree && (
+                    <Text style={[styles.fieldErrorText, { marginTop: -4, marginBottom: 6 }]}>⚠️ {fieldErrors.agree}</Text>
+                  )}
 
                   <TouchableOpacity
-                    style={[styles.submitBtn, (!isEmailVerified || isLoading) && styles.submitBtnDisabled]}
+                    style={[styles.submitBtn, isLoading && styles.submitBtnDisabled]}
                     onPress={handleUmpireSubmit}
-                    disabled={!isEmailVerified || isLoading}
+                    disabled={isLoading}
                   >
                     {isLoading ? (
                       <ActivityIndicator color="#000000" size="small" />
                     ) : (
-                      <Text style={styles.submitBtnText}>Submit Umpire Registration</Text>
+                      <Text style={styles.submitBtnText}>
+                        {isEmailVerified ? 'Submit Umpire Registration' : 'Verify Email & Submit Registration'}
+                      </Text>
                     )}
                   </TouchableOpacity>
                 </>
@@ -1726,62 +1932,543 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
             </TouchableOpacity>
           </Modal>
         )}
+
+        {/* Cricket OTP Popup Modal (Virat Kohli Lord's Theme) */}
+        <Modal
+          visible={isOtpModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setIsOtpModalVisible(false)}
+        >
+          <View style={styles.cricketModalOverlay}>
+            <View style={[styles.cricketModalCard, isDesktop ? styles.cricketCardDesktop : styles.cricketCardMobile]}>
+              {isDesktop ? (
+                <View style={styles.cricketDesktopBg}>
+                  {/* Left Side: Virat Kohli Image sent by user */}
+                  <View style={styles.cricketHeroImageContainer}>
+                    <Image
+                      source={require('../../../assets/virat_kohli_otp.png')}
+                      style={styles.cricketHeroFullImage}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.cricketHeroTag}>
+                      <View style={styles.cricketHeroPill}>
+                        <Text style={styles.cricketHeroPillText}>🏏 OFFICIAL REGISTRATION</Text>
+                      </View>
+                      <Text style={styles.cricketHeroHeading}>CRICKET FEDERATION OF</Text>
+                      <Text style={styles.cricketHeroSubheading}>VIRUDHUNAGAR DISTRICT</Text>
+                    </View>
+                  </View>
+
+                  {/* Right Side Space: Email + OTP + Verify */}
+                  <View style={styles.cricketRightPanel}>
+                    <View style={styles.popupTopBar}>
+                      <View>
+                        <Text style={styles.popupTag}>SECURE VERIFICATION</Text>
+                        <Text style={styles.popupTitle}>Email OTP Verification</Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => setIsOtpModalVisible(false)}
+                        style={styles.popupCloseCircle}
+                      >
+                        <Text style={styles.popupCloseX}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <Text style={styles.popupExplainer}>
+                      We have dispatched a 6-digit verification OTP to your registered email address below. Enter it to verify:
+                    </Text>
+
+                    {/* Email Display & Edit Input */}
+                    <View style={styles.popupInputGroup}>
+                      <Text style={styles.popupInputLabel}>REGISTERED EMAIL ADDRESS</Text>
+                      <View style={styles.popupEmailRow}>
+                        <Text style={styles.popupEmailIcon}>✉️</Text>
+                        <TextInput
+                          style={styles.popupEmailInput}
+                          value={popupEmail}
+                          onChangeText={(val) => {
+                            setPopupEmail(val);
+                            setTargetEmail(val);
+                          }}
+                          placeholder="your.email@example.com"
+                          placeholderTextColor="#94a3b8"
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                        />
+                      </View>
+                    </View>
+
+                    {/* OTP 6-Digit Input */}
+                    <View style={styles.popupInputGroup}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={styles.popupInputLabel}>ENTER 6-DIGIT OTP</Text>
+                        <Text style={styles.popupExpiryBadge}>Valid for 10 min</Text>
+                      </View>
+                      <TextInput
+                        style={styles.popupOtpBox}
+                        value={otpCode}
+                        onChangeText={(val) => setOtpCode(val.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="• • • • • •"
+                        placeholderTextColor="#475569"
+                        keyboardType="number-pad"
+                        maxLength={6}
+                        autoFocus
+                      />
+                    </View>
+
+                    {otpModalError && (
+                      <View style={styles.popupErrorBox}>
+                        <Text style={styles.popupErrorMsg}>⚠️ {otpModalError}</Text>
+                        {otpModalError.includes('already registered') && (
+                          <TouchableOpacity
+                            style={{ marginTop: 8, paddingVertical: 8, paddingHorizontal: 14, backgroundColor: '#f59e0b', borderRadius: 8, alignItems: 'center' }}
+                            onPress={() => {
+                              setIsOtpModalVisible(false);
+                              navigate('Login', { initialRole: activeRole });
+                            }}
+                          >
+                            <Text style={{ color: '#000000', fontWeight: '800', fontSize: 12 }}>Proceed to Login Screen ➔</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
+                    {otpModalSuccess && (
+                      <View style={styles.popupSuccessBox}>
+                        <Text style={styles.popupSuccessMsg}>{otpModalSuccess}</Text>
+                      </View>
+                    )}
+
+                    {/* Verify Action Button */}
+                    <TouchableOpacity
+                      style={[
+                        styles.popupVerifyButton,
+                        (isVerifyingOtp || !otpCode.trim() || isEmailVerified) && styles.popupBtnDisabled
+                      ]}
+                      onPress={handleVerifyEmailOtp}
+                      disabled={isVerifyingOtp || !otpCode.trim() || isEmailVerified}
+                      activeOpacity={0.85}
+                    >
+                      {isVerifyingOtp ? (
+                        <ActivityIndicator color="#000000" size="small" />
+                      ) : (
+                        <Text style={styles.popupVerifyButtonText}>
+                          {isEmailVerified ? '✓ VERIFIED SUCCESSFULLY' : 'VERIFY OTP & CONTINUE ➔'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+
+                    {/* Footer: Resend & Help */}
+                    <View style={styles.popupFooter}>
+                      <Text style={styles.popupFooterText}>Didn't receive the OTP?</Text>
+                      <TouchableOpacity
+                        disabled={isSendingOtp || resendCooldown > 0}
+                        onPress={() => handleSendEmailOtp()}
+                      >
+                        <Text
+                          style={[
+                            styles.popupResendAction,
+                            (isSendingOtp || resendCooldown > 0) && styles.popupResendDisabled
+                          ]}
+                        >
+                          {isSendingOtp
+                            ? 'Sending code...'
+                            : resendCooldown > 0
+                            ? `Resend in ${resendCooldown}s`
+                            : 'Resend OTP ↻'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                /* Mobile Layout */
+                <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+                  <View style={styles.mobileHeroImageWrap}>
+                    <Image
+                      source={require('../../../assets/virat_kohli_otp.png')}
+                      style={styles.mobileHeroImage}
+                      resizeMode="cover"
+                    />
+                    <TouchableOpacity
+                      onPress={() => setIsOtpModalVisible(false)}
+                      style={styles.mobileCloseCircle}
+                    >
+                      <Text style={styles.popupCloseX}>✕</Text>
+                    </TouchableOpacity>
+                    <View style={styles.mobileHeroOverlayTag}>
+                      <Text style={styles.cricketHeroPillText}>🏏 CFVD CRICKET</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.mobileFormBody}>
+                    <Text style={styles.popupTag}>SECURE VERIFICATION</Text>
+                    <Text style={styles.popupTitle}>Email OTP Verification</Text>
+                    <Text style={styles.popupExplainer}>
+                      We have sent a 6-digit verification code to your email. Enter below to verify:
+                    </Text>
+
+                    <View style={styles.popupInputGroup}>
+                      <Text style={styles.popupInputLabel}>REGISTERED EMAIL ADDRESS</Text>
+                      <View style={styles.popupEmailRow}>
+                        <Text style={styles.popupEmailIcon}>✉️</Text>
+                        <TextInput
+                          style={styles.popupEmailInput}
+                          value={popupEmail}
+                          onChangeText={(val) => {
+                            setPopupEmail(val);
+                            setTargetEmail(val);
+                          }}
+                          placeholder="your.email@example.com"
+                          placeholderTextColor="#94a3b8"
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                        />
+                      </View>
+                    </View>
+
+                    <View style={styles.popupInputGroup}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={styles.popupInputLabel}>ENTER 6-DIGIT OTP</Text>
+                        <Text style={styles.popupExpiryBadge}>10 min</Text>
+                      </View>
+                      <TextInput
+                        style={styles.popupOtpBox}
+                        value={otpCode}
+                        onChangeText={(val) => setOtpCode(val.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="• • • • • •"
+                        placeholderTextColor="#475569"
+                        keyboardType="number-pad"
+                        maxLength={6}
+                      />
+                    </View>
+
+                    {otpModalError && (
+                      <View style={styles.popupErrorBox}>
+                        <Text style={styles.popupErrorMsg}>⚠️ {otpModalError}</Text>
+                        {otpModalError.includes('already registered') && (
+                          <TouchableOpacity
+                            style={{ marginTop: 8, paddingVertical: 8, paddingHorizontal: 14, backgroundColor: '#f59e0b', borderRadius: 8, alignItems: 'center' }}
+                            onPress={() => {
+                              setIsOtpModalVisible(false);
+                              navigate('Login', { initialRole: activeRole });
+                            }}
+                          >
+                            <Text style={{ color: '#000000', fontWeight: '800', fontSize: 12 }}>Proceed to Login Screen ➔</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
+                    {otpModalSuccess && (
+                      <View style={styles.popupSuccessBox}>
+                        <Text style={styles.popupSuccessMsg}>{otpModalSuccess}</Text>
+                      </View>
+                    )}
+
+                    <TouchableOpacity
+                      style={[
+                        styles.popupVerifyButton,
+                        (isVerifyingOtp || !otpCode.trim() || isEmailVerified) && styles.popupBtnDisabled
+                      ]}
+                      onPress={handleVerifyEmailOtp}
+                      disabled={isVerifyingOtp || !otpCode.trim() || isEmailVerified}
+                      activeOpacity={0.85}
+                    >
+                      {isVerifyingOtp ? (
+                        <ActivityIndicator color="#000000" size="small" />
+                      ) : (
+                        <Text style={styles.popupVerifyButtonText}>
+                          {isEmailVerified ? '✓ VERIFIED' : 'VERIFY OTP & CONTINUE ➔'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+
+                    <View style={styles.popupFooter}>
+                      <Text style={styles.popupFooterText}>Didn't receive code?</Text>
+                      <TouchableOpacity
+                        disabled={isSendingOtp || resendCooldown > 0}
+                        onPress={() => handleSendEmailOtp()}
+                      >
+                        <Text
+                          style={[
+                            styles.popupResendAction,
+                            (isSendingOtp || resendCooldown > 0) && styles.popupResendDisabled
+                          ]}
+                        >
+                          {isSendingOtp
+                            ? 'Sending...'
+                            : resendCooldown > 0
+                            ? `Resend in ${resendCooldown}s`
+                            : 'Resend OTP ↻'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </ScrollView>
+              )}
+            </View>
+          </View>
+        </Modal>
+
+        {/* ========================================================= */}
+        {/* OFFICIAL PENDING ADMIN VERIFICATION POPUP MODAL */}
+        {/* ========================================================= */}
+        <Modal
+          visible={showApprovalPendingModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => {
+            setShowApprovalPendingModal(false);
+            navigate('Login', { initialRole: activeRole });
+          }}
+        >
+          <View style={styles.approvalModalOverlay}>
+            <View style={[styles.approvalModalCard, isDesktop ? styles.approvalCardDesktop : styles.approvalCardMobile]}>
+              {/* Header with HD Batsman Banner & Official App Logo */}
+              <ImageBackground
+                source={require('../../../assets/virat_kohli_otp.png')}
+                style={styles.approvalBannerBg}
+                resizeMode="cover"
+              >
+                <View style={styles.approvalBannerOverlay}>
+                  <View style={styles.approvalBannerTopRow}>
+                    <View style={styles.approvalLogoRow}>
+                      <Image
+                        source={require('../../../assets/logo_transparent.png')}
+                        style={styles.approvalAppLogo}
+                        resizeMode="contain"
+                      />
+                      <View>
+                        <Text style={styles.approvalFederationName}>CFVD OFFICIAL</Text>
+                        <Text style={styles.approvalFederationSub}>CRICKET ASSOCIATION</Text>
+                      </View>
+                    </View>
+                    <View style={styles.approvalBadgePill}>
+                      <Text style={styles.approvalBadgePillText}>⏳ PENDING ADMIN VERIFICATION</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.approvalBannerTitle}>CRICKET FEDERATION OF VIRUDHUNAGAR DISTRICT</Text>
+                </View>
+              </ImageBackground>
+
+              {/* Modal Body */}
+              <View style={styles.approvalBody}>
+                <View style={styles.approvalHeaderRow}>
+                  <View style={styles.approvalIconCircle}>
+                    <Text style={styles.approvalIconText}>🛡️</Text>
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.approvalMainHeading}>Registration Submitted Successfully!</Text>
+                    <Text style={styles.approvalSubHeading}>District Administrator Verification Required</Text>
+                  </View>
+                </View>
+
+                {/* 4-Step Verification Workflow Diagram */}
+                <View style={styles.flowDiagramCard}>
+                  <View style={styles.flowDiagramHeader}>
+                    <Text style={styles.flowDiagramTitle}>VERIFICATION & ACCESS WORKFLOW</Text>
+                    <Text style={styles.flowDiagramSubtitle}>Follow the progress of your scorer credentials</Text>
+                  </View>
+
+                  <View style={styles.flowStepsContainer}>
+                    {/* Step 1 */}
+                    <View style={styles.flowStepItem}>
+                      <View style={[styles.flowStepIconCircle, styles.flowStepCompleted]}>
+                        <Text style={styles.flowStepIcon}>📝</Text>
+                        <View style={styles.flowStepCheckBadge}>
+                          <Text style={styles.flowStepCheckText}>✓</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.flowStepNum}>STEP 1</Text>
+                      <Text style={styles.flowStepLabel}>Scorer Registration</Text>
+                      <Text style={styles.flowStepStatusGreen}>Submitted</Text>
+                    </View>
+
+                    <View style={styles.flowArrowContainer}>
+                      <Text style={styles.flowArrowText}>➔</Text>
+                    </View>
+
+                    {/* Step 2 */}
+                    <View style={styles.flowStepItem}>
+                      <View style={[styles.flowStepIconCircle, styles.flowStepActive]}>
+                        <Text style={styles.flowStepIcon}>🛡️</Text>
+                        <View style={styles.flowStepWaitBadge}>
+                          <Text style={styles.flowStepWaitText}>⏳</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.flowStepNum}>STEP 2</Text>
+                      <Text style={styles.flowStepLabel}>Admin Approval</Text>
+                      <Text style={styles.flowStepStatusAmber}>In Review</Text>
+                    </View>
+
+                    <View style={styles.flowArrowContainer}>
+                      <Text style={styles.flowArrowText}>➔</Text>
+                    </View>
+
+                    {/* Step 3 */}
+                    <View style={styles.flowStepItem}>
+                      <View style={[styles.flowStepIconCircle, styles.flowStepUpcoming]}>
+                        <Text style={styles.flowStepIcon}>✉️</Text>
+                      </View>
+                      <Text style={styles.flowStepNum}>STEP 3</Text>
+                      <Text style={styles.flowStepLabel}>Email Confirmation</Text>
+                      <Text style={styles.flowStepStatusMuted}>Sent to Inbox</Text>
+                    </View>
+
+                    <View style={styles.flowArrowContainer}>
+                      <Text style={styles.flowArrowText}>➔</Text>
+                    </View>
+
+                    {/* Step 4 */}
+                    <View style={styles.flowStepItem}>
+                      <View style={[styles.flowStepIconCircle, styles.flowStepUpcoming]}>
+                        <Text style={styles.flowStepIcon}>🔑</Text>
+                      </View>
+                      <Text style={styles.flowStepNum}>STEP 4</Text>
+                      <Text style={styles.flowStepLabel}>Portal Login</Text>
+                      <Text style={styles.flowStepStatusMuted}>Access Scorer</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Applicant Summary Card */}
+                {pendingApprovalData && (
+                  <View style={styles.approvalDetailsCard}>
+                    <View style={styles.approvalDetailRow}>
+                      <Text style={styles.approvalDetailLabel}>Applicant Name:</Text>
+                      <Text style={styles.approvalDetailVal}>{pendingApprovalData.name}</Text>
+                    </View>
+                    <View style={styles.approvalDetailRow}>
+                      <Text style={styles.approvalDetailLabel}>Role / Category:</Text>
+                      <Text style={styles.approvalDetailVal}>{pendingApprovalData.role}</Text>
+                    </View>
+                    {pendingApprovalData.certificationLevel && (
+                      <View style={styles.approvalDetailRow}>
+                        <Text style={styles.approvalDetailLabel}>Certification Level:</Text>
+                        <Text style={[styles.approvalDetailVal, { color: '#f59e0b', fontWeight: '800' }]}>
+                          🏅 {pendingApprovalData.certificationLevel}
+                        </Text>
+                      </View>
+                    )}
+                    {pendingApprovalData.taluk && (
+                      <View style={styles.approvalDetailRow}>
+                        <Text style={styles.approvalDetailLabel}>Jurisdiction / Taluk:</Text>
+                        <Text style={styles.approvalDetailVal}>{pendingApprovalData.taluk}</Text>
+                      </View>
+                    )}
+                    <View style={styles.approvalDetailRow}>
+                      <Text style={styles.approvalDetailLabel}>Registered Email:</Text>
+                      <Text style={styles.approvalDetailVal}>{pendingApprovalData.email}</Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Official English Notice Box */}
+                <View style={styles.approvalNoticeBox}>
+                  <View style={styles.approvalNoticeHeaderRow}>
+                    <Text style={styles.approvalNoticeHeaderIcon}>📢</Text>
+                    <Text style={styles.approvalNoticeHeading}>District Administrator Verification Notice</Text>
+                  </View>
+                  <Text style={styles.approvalNoticeEnglish}>
+                    Your registration application and certification documents have been submitted to the District Cricket Administrator (CFVD) for official verification.
+                  </Text>
+                  <Text style={[styles.approvalNoticeEnglish, { marginTop: 6, color: '#fde047' }]}>
+                    Once the Administrator approves your profile, an official confirmation email will be dispatched to <Text style={{ fontWeight: '800' }}>{pendingApprovalData?.email || 'your email'}</Text>. Your account status will be set to ACTIVE, enabling immediate access to the Scorer Portal.
+                  </Text>
+                </View>
+
+                {/* Action Button */}
+                <View style={styles.approvalActionRow}>
+                  <TouchableOpacity
+                    style={styles.approvalPrimaryBtn}
+                    onPress={() => {
+                      setShowApprovalPendingModal(false);
+                      navigate('Login', { initialRole: activeRole });
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.approvalPrimaryBtnText}>Proceed to Scorer Login Portal →</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
     </SharedBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'transparent', width: '100%' },
-  header: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+  container: { flex: 1, backgroundColor: 'transparent', width: '100%', position: 'relative' },
+  cornerExitBtn: {
+    position: 'absolute',
+    top: 14,
+    left: 18,
+    zIndex: 99,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
     backgroundColor: '#1e293b',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderWidth: 1,
+    borderColor: '#eab308',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
-    elevation: 4
+    elevation: 5
   },
-  backBtn: { alignSelf: 'flex-start', paddingVertical: 4 },
-  backText: { color: '#eab308', fontSize: 14.5, fontWeight: 'bold' },
-  scroll: { flexGrow: 1, width: '100%' },
+  cornerExitText: {
+    color: '#eab308',
+    fontSize: 12.5,
+    fontWeight: '800',
+    letterSpacing: 0.3
+  },
+  logoContainer: { alignItems: 'center', marginBottom: 8, marginTop: 4 },
+  logo: { width: 44, height: 44, marginBottom: 2 },
+  mainTitle: { color: '#1e293b', fontSize: 12, fontWeight: '800', letterSpacing: 1 },
+  mainSubtitle: { color: '#b45309', fontSize: 15, fontWeight: '900', letterSpacing: 1 },
+  scroll: { flexGrow: 1, width: '100%', justifyContent: 'center' },
   cardContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 12,
-    paddingBottom: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     width: '100%'
   },
-  logoContainer: { alignItems: 'center', marginBottom: 10, marginTop: 4 },
-  logo: { width: 50, height: 50, marginBottom: 4 },
-  mainTitle: { color: '#1e293b', fontSize: 13, fontWeight: 'bold', letterSpacing: 0.8 },
-  mainSubtitle: { color: '#b45309', fontSize: 17, fontWeight: '900', letterSpacing: 0.8 },
   card: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
-    padding: 18,
+    padding: 14,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     width: '100%',
-    maxWidth: 640,
+    maxWidth: 680,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3
   },
-  title: { color: '#1e293b', fontSize: 20, fontWeight: 'bold', marginBottom: 2, textAlign: 'center' },
-  subtitle: { color: '#64748b', fontSize: 12, marginBottom: 14, textAlign: 'center', lineHeight: 16 },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    flexWrap: 'wrap',
+    gap: 6
+  },
+  title: { color: '#1e293b', fontSize: 17, fontWeight: 'bold' },
+  subtitle: { color: '#64748b', fontSize: 11, marginTop: 1 },
 
-  statusBanner: { padding: 10, borderRadius: 6, marginBottom: 12, borderWidth: 1 },
+  statusBanner: { padding: 6, borderRadius: 6, marginBottom: 8, borderWidth: 1 },
   statusError: { backgroundColor: '#fef2f2', borderColor: '#fca5a5' },
   statusSuccess: { backgroundColor: '#f0fdf4', borderColor: '#86efac' },
   statusInfo: { backgroundColor: '#eff6ff', borderColor: '#93c5fd' },
-  statusText: { fontSize: 12.5, fontWeight: '600', textAlign: 'center' },
+  statusText: { fontSize: 11.5, fontWeight: '600', textAlign: 'center' },
   statusTextError: { color: '#b91c1c' },
   statusTextSuccess: { color: '#15803d' },
   statusTextInfo: { color: '#1d4ed8' },
@@ -1789,15 +2476,14 @@ const styles = StyleSheet.create({
   roleTabsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 12,
-    justifyContent: 'center'
+    gap: 6,
+    justifyContent: 'flex-end'
   },
   roleTab: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: '#ffffff',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 16,
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#cbd5e1'
   },
@@ -1806,7 +2492,7 @@ const styles = StyleSheet.create({
     borderColor: '#1e293b'
   },
   roleTabText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#475569'
   },
@@ -1817,38 +2503,36 @@ const styles = StyleSheet.create({
 
   sectionHeaderBox: {
     backgroundColor: '#f1f5f9',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 6,
-    marginBottom: 12,
-    marginTop: 2,
-    borderLeftWidth: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 5,
+    marginBottom: 6,
+    borderLeftWidth: 3,
     borderLeftColor: '#eab308'
   },
   sectionHeaderText: {
     color: '#0f172a',
-    fontSize: 12.5,
+    fontSize: 11.5,
     fontWeight: '800',
     letterSpacing: 0.3
   },
 
   formRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 10,
-    alignItems: 'flex-start'
+    gap: 8,
+    marginBottom: 6
   },
-  label: { color: '#334155', fontSize: 12, marginBottom: 4, fontWeight: '700' },
+  label: { color: '#334155', fontSize: 11.5, marginBottom: 2, fontWeight: '700' },
   input: {
     backgroundColor: '#f8fafc',
     color: '#1e293b',
     borderWidth: 1,
     borderColor: '#cbd5e1',
     paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingVertical: 5,
     borderRadius: 6,
-    fontSize: 13,
-    height: 38
+    fontSize: 12.5,
+    height: 35
   },
   inputError: {
     borderColor: '#ef4444',
@@ -1856,92 +2540,75 @@ const styles = StyleSheet.create({
   },
   fieldErrorText: {
     color: '#dc2626',
-    fontSize: 11.5,
-    fontWeight: '600',
-    marginTop: 3,
-    marginBottom: 4,
-    lineHeight: 14
-  },
-  generalErrorBox: {
-    backgroundColor: '#fef2f2',
-    borderColor: '#fca5a5',
-    borderWidth: 1,
-    padding: 10,
-    borderRadius: 6,
-    marginVertical: 10
-  },
-  generalErrorText: {
-    color: '#b91c1c',
-    fontSize: 12.5,
-    fontWeight: '600',
-    textAlign: 'center'
+    fontSize: 10.5,
+    fontWeight: '700',
+    marginTop: 2,
+    marginBottom: 2
   },
 
-  // Dropdown Box
   dropdownBox: {
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderRadius: 6,
     paddingHorizontal: 10,
-    height: 38,
+    height: 35,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between'
   },
   dropdownText: {
     color: '#1e293b',
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '600',
     flex: 1
   },
   dropdownChevron: {
     color: '#64748b',
-    fontSize: 14,
+    fontSize: 13,
     marginLeft: 4,
     fontWeight: 'bold'
   },
 
-  // Verification Box
   verifBox: {
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 8,
-    padding: 10,
-    marginVertical: 8
+    borderRadius: 6,
+    padding: 8,
+    marginVertical: 4
   },
   verifHelpText: {
     color: '#64748b',
-    fontSize: 11.5,
-    marginBottom: 8,
-    lineHeight: 16
+    fontSize: 11,
+    marginBottom: 6,
+    lineHeight: 15
   },
   actionBtn: {
     backgroundColor: '#eab308',
-    paddingVertical: 9,
-    paddingHorizontal: 12,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
     borderRadius: 6,
     alignItems: 'center'
   },
   actionText: {
     color: '#000000',
     fontWeight: 'bold',
-    fontSize: 12.5,
+    fontSize: 11.5,
     textTransform: 'uppercase',
     letterSpacing: 0.5
   },
   verifyBtn: {
     backgroundColor: '#10b981',
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
-    height: 38
+    height: 35
   },
   verifyBtnText: {
     color: '#ffffff',
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: 'bold'
   },
   verifiedCard: {
@@ -1949,12 +2616,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#86efac',
     borderRadius: 6,
-    padding: 8,
+    padding: 6,
     alignItems: 'center'
   },
   verifiedCardText: {
     color: '#15803d',
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: 'bold'
   },
   passwordContainer: {
@@ -1965,32 +2632,31 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignItems: 'center',
     paddingRight: 10,
-    height: 38
+    height: 35
   },
   passwordInput: {
     flex: 1,
     color: '#1e293b',
     paddingHorizontal: 10,
-    paddingVertical: 7,
-    fontSize: 13
+    paddingVertical: 5,
+    fontSize: 12.5
   },
   toggleText: {
-    fontSize: 14
+    fontSize: 13
   },
   btnDisabled: {
     opacity: 0.6
   },
 
-  // Squad
   squadHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8
+    marginBottom: 6
   },
   squadSectionTitle: {
     color: '#334155',
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '700'
   },
   autoFillBtn: {
@@ -1998,36 +2664,37 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#bfdbfe',
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: 4
   },
   autoFillBtnText: {
     color: '#1d4ed8',
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '800'
   },
   addPlayerContainer: {
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    padding: 10,
+    padding: 8,
     borderRadius: 6,
-    marginBottom: 10
+    marginBottom: 6
   },
   addPlayerBtn: {
     backgroundColor: '#1e293b',
-    height: 38,
+    height: 35,
     borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center'
   },
   addPlayerBtnText: {
     color: '#ffffff',
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '700'
   },
   playerListContainer: {
-    marginBottom: 10
+    marginBottom: 6,
+    maxHeight: 120
   },
   playerItemRow: {
     flexDirection: 'row',
@@ -2035,21 +2702,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    padding: 8,
-    borderRadius: 6,
-    marginBottom: 4
+    padding: 5,
+    borderRadius: 5,
+    marginBottom: 3
   },
   playerNumBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8
+    marginRight: 6
   },
   playerNumText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
     color: '#475569'
   },
@@ -2062,48 +2729,48 @@ const styles = StyleSheet.create({
     gap: 6
   },
   playerItemName: {
-    fontSize: 12.5,
+    fontSize: 11.5,
     fontWeight: '800',
     color: '#0f172a'
   },
   playerItemRoleBadge: {
     backgroundColor: 'rgba(234, 179, 8, 0.2)',
-    paddingHorizontal: 5,
+    paddingHorizontal: 4,
     paddingVertical: 1,
     borderRadius: 3
   },
   playerItemRoleText: {
     color: '#92400e',
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '800'
   },
   playerItemEmail: {
-    fontSize: 11,
+    fontSize: 10.5,
     color: '#64748b'
   },
   removeBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: '#fee2e2',
     alignItems: 'center',
     justifyContent: 'center'
   },
   removeBtnText: {
     color: '#ef4444',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '900'
   },
 
   checkboxRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 10,
+    marginVertical: 5,
     gap: 8
   },
   checkbox: {
-    width: 18,
-    height: 18,
+    width: 17,
+    height: 17,
     borderWidth: 1.5,
     borderColor: '#cbd5e1',
     borderRadius: 4,
@@ -2117,24 +2784,24 @@ const styles = StyleSheet.create({
   },
   checkmark: {
     color: '#ffffff',
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: 'bold'
   },
   checkboxLabel: {
     flex: 1,
-    fontSize: 11.5,
+    fontSize: 11,
     color: '#475569',
-    lineHeight: 16
+    lineHeight: 15
   },
 
   submitBtn: {
     backgroundColor: '#eab308',
-    paddingVertical: 12,
+    paddingVertical: 9,
     borderRadius: 6,
     alignItems: 'center',
-    marginTop: 6,
+    marginTop: 4,
     shadowColor: '#eab308',
-    shadowOffset: { width: 0, height: 3 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4
   },
@@ -2145,7 +2812,7 @@ const styles = StyleSheet.create({
   submitBtnText: {
     color: '#000000',
     fontWeight: 'bold',
-    fontSize: 13.5,
+    fontSize: 12.5,
     textTransform: 'uppercase',
     letterSpacing: 0.5
   },
@@ -2154,19 +2821,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 14,
-    paddingTop: 10,
+    marginTop: 6,
+    paddingTop: 6,
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9'
   },
   promptNormalText: {
     color: '#64748b',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '400'
   },
   loginLinkText: {
     color: '#b45309',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     textDecorationLine: 'underline'
   },
@@ -2198,13 +2865,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingBottom: 10,
+    paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
-    marginBottom: 8
+    marginBottom: 6
   },
   modalTitle: {
-    fontSize: 14.5,
+    fontSize: 14,
     fontWeight: '800',
     color: '#0f172a'
   },
@@ -2212,27 +2879,27 @@ const styles = StyleSheet.create({
     padding: 4
   },
   modalCloseBtnText: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#64748b',
     fontWeight: 'bold'
   },
   modalList: {
-    maxHeight: 300
+    maxHeight: 280
   },
   modalItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
     borderRadius: 6,
-    marginVertical: 2
+    marginVertical: 1.5
   },
   modalItemSelected: {
     backgroundColor: '#fef3c7'
   },
   modalItemText: {
-    fontSize: 13.5,
+    fontSize: 13,
     color: '#334155',
     fontWeight: '500'
   },
@@ -2241,31 +2908,651 @@ const styles = StyleSheet.create({
     fontWeight: '800'
   },
   modalCheckmark: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#b45309',
     fontWeight: '900'
   },
   optionalToggleBtn: {
     backgroundColor: '#f8fafc',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    marginBottom: 10,
+    marginBottom: 8,
     alignItems: 'center'
   },
   optionalToggleText: {
     color: '#0284c7',
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '700'
   },
   optionalContainer: {
     backgroundColor: '#f8fafc',
-    padding: 10,
-    borderRadius: 8,
+    padding: 8,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    marginBottom: 12
+    marginBottom: 8
+  },
+
+  // Cricket OTP Modal Styles (Virat Kohli Lord's Theme)
+  cricketModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(5, 10, 20, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16
+  },
+  cricketModalCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#eab308',
+    backgroundColor: '#0f172a',
+    shadowColor: '#eab308',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    elevation: 12
+  },
+  cricketCardDesktop: {
+    width: 780,
+    maxWidth: '96%',
+    height: 480
+  },
+  cricketCardMobile: {
+    width: '100%',
+    maxWidth: 420,
+    maxHeight: '90%'
+  },
+  cricketDesktopBg: {
+    width: '100%',
+    height: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#0a0f1d'
+  },
+  cricketHeroImageContainer: {
+    width: '44%',
+    height: '100%',
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: '#0a0f1d'
+  },
+  cricketHeroFullImage: {
+    width: '100%',
+    height: '100%'
+  },
+  cricketHeroTag: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+    backgroundColor: 'rgba(5, 10, 25, 0.45)'
+  },
+  cricketHeroPill: {
+    backgroundColor: 'rgba(234, 179, 8, 0.9)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    marginBottom: 6
+  },
+  cricketHeroPillText: {
+    color: '#000000',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5
+  },
+  cricketHeroHeading: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowRadius: 4,
+    textShadowOffset: { width: 1, height: 1 }
+  },
+  cricketHeroSubheading: {
+    color: '#fbbf24',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowRadius: 4,
+    textShadowOffset: { width: 1, height: 1 }
+  },
+  cricketRightPanel: {
+    width: '56%',
+    height: '100%',
+    backgroundColor: 'rgba(10, 15, 29, 0.92)',
+    paddingHorizontal: 22,
+    paddingVertical: 18,
+    justifyContent: 'space-between',
+    borderLeftWidth: 1.5,
+    borderLeftColor: 'rgba(234, 179, 8, 0.4)'
+  },
+  mobileHeroImageWrap: {
+    width: '100%',
+    height: 180,
+    position: 'relative'
+  },
+  mobileHeroImage: {
+    width: '100%',
+    height: '100%'
+  },
+  mobileCloseCircle: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#eab308'
+  },
+  mobileHeroOverlayTag: {
+    position: 'absolute',
+    bottom: 10,
+    left: 12,
+    backgroundColor: 'rgba(234, 179, 8, 0.9)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4
+  },
+  mobileFormBody: {
+    padding: 18,
+    backgroundColor: '#0f172a'
+  },
+  popupTopBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start'
+  },
+  popupTag: {
+    color: '#eab308',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+    marginBottom: 2
+  },
+  popupTitle: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '800'
+  },
+  popupCloseCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  popupCloseX: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    fontWeight: 'bold'
+  },
+  popupExplainer: {
+    color: '#cbd5e1',
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 4,
+    marginBottom: 6
+  },
+  popupInputGroup: {
+    marginVertical: 4
+  },
+  popupInputLabel: {
+    color: '#94a3b8',
+    fontSize: 10.5,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginBottom: 4
+  },
+  popupEmailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1e293b',
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    height: 38
+  },
+  popupEmailIcon: {
+    fontSize: 14,
+    marginRight: 6
+  },
+  popupEmailInput: {
+    flex: 1,
+    color: '#f8fafc',
+    fontSize: 13,
+    fontWeight: '600'
+  },
+  popupExpiryBadge: {
+    color: '#eab308',
+    fontSize: 10,
+    fontWeight: '700'
+  },
+  popupOtpBox: {
+    backgroundColor: '#1e293b',
+    borderWidth: 1.5,
+    borderColor: '#eab308',
+    borderRadius: 8,
+    height: 44,
+    textAlign: 'center',
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#fbbf24',
+    letterSpacing: 8
+  },
+  popupErrorBox: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderWidth: 1,
+    borderColor: '#ef4444',
+    borderRadius: 6,
+    padding: 6,
+    marginVertical: 4
+  },
+  popupErrorMsg: {
+    color: '#fca5a5',
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'center'
+  },
+  popupSuccessBox: {
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    borderWidth: 1,
+    borderColor: '#22c55e',
+    borderRadius: 6,
+    padding: 6,
+    marginVertical: 4
+  },
+  popupSuccessMsg: {
+    color: '#86efac',
+    fontSize: 11.5,
+    fontWeight: '700',
+    textAlign: 'center'
+  },
+  popupVerifyButton: {
+    backgroundColor: '#eab308',
+    borderRadius: 8,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+    shadowColor: '#eab308',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5
+  },
+  popupBtnDisabled: {
+    backgroundColor: '#475569',
+    shadowOpacity: 0
+  },
+  popupVerifyButtonText: {
+    color: '#000000',
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 0.6
+  },
+  popupFooter: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6
+  },
+  popupFooterText: {
+    color: '#94a3b8',
+    fontSize: 11
+  },
+  popupResendAction: {
+    color: '#eab308',
+    fontSize: 11.5,
+    fontWeight: '800',
+    textDecorationLine: 'underline'
+  },
+  popupResendDisabled: {
+    color: '#64748b',
+    textDecorationLine: 'none'
+  },
+
+  // Official Admin Approval Pending Modal Styles
+  approvalModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(5, 10, 20, 0.88)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16
+  },
+  approvalModalCard: {
+    backgroundColor: '#0f172a',
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#eab308',
+    shadowColor: '#eab308',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 15
+  },
+  approvalCardDesktop: {
+    width: 640,
+    maxWidth: '96%'
+  },
+  approvalCardMobile: {
+    width: '100%',
+    maxWidth: 440
+  },
+  approvalBannerBg: {
+    width: '100%',
+    height: 140
+  },
+  approvalBannerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(5, 12, 30, 0.70)',
+    padding: 14,
+    justifyContent: 'space-between'
+  },
+  approvalBannerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  approvalLogoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10
+  },
+  approvalAppLogo: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    borderWidth: 1.5,
+    borderColor: '#f59e0b'
+  },
+  approvalFederationName: {
+    color: '#f59e0b',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.8
+  },
+  approvalFederationSub: {
+    color: '#cbd5e1',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.5
+  },
+  approvalBadgePill: {
+    backgroundColor: '#f59e0b',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6
+  },
+  approvalBadgePillText: {
+    color: '#000000',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.6
+  },
+  approvalBannerTitle: {
+    color: '#ffffff',
+    fontSize: 12.5,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowRadius: 4,
+    textShadowOffset: { width: 1, height: 1 }
+  },
+  approvalBody: {
+    padding: 20,
+    backgroundColor: '#0f172a'
+  },
+  approvalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14
+  },
+  approvalIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#1e293b',
+    borderWidth: 1.5,
+    borderColor: '#f59e0b',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  approvalIconText: {
+    fontSize: 22
+  },
+  approvalMainHeading: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '800'
+  },
+  approvalSubHeading: {
+    color: '#f59e0b',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2
+  },
+
+  // 4-Step Flow Diagram Styles
+  flowDiagramCard: {
+    backgroundColor: '#131d31',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginBottom: 14
+  },
+  flowDiagramHeader: {
+    marginBottom: 10,
+    alignItems: 'center'
+  },
+  flowDiagramTitle: {
+    color: '#38bdf8',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.8
+  },
+  flowDiagramSubtitle: {
+    color: '#94a3b8',
+    fontSize: 10,
+    fontWeight: '500',
+    marginTop: 1
+  },
+  flowStepsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  flowStepItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 2
+  },
+  flowStepIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    marginBottom: 4
+  },
+  flowStepCompleted: {
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    borderWidth: 1.5,
+    borderColor: '#10b981'
+  },
+  flowStepActive: {
+    backgroundColor: 'rgba(245, 158, 11, 0.25)',
+    borderWidth: 2,
+    borderColor: '#f59e0b'
+  },
+  flowStepUpcoming: {
+    backgroundColor: 'rgba(51, 65, 85, 0.45)',
+    borderWidth: 1,
+    borderColor: '#475569'
+  },
+  flowStepIcon: {
+    fontSize: 16
+  },
+  flowStepCheckBadge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    backgroundColor: '#10b981',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  flowStepCheckText: {
+    color: '#ffffff',
+    fontSize: 9,
+    fontWeight: '900'
+  },
+  flowStepWaitBadge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    backgroundColor: '#f59e0b',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  flowStepWaitText: {
+    fontSize: 8
+  },
+  flowStepNum: {
+    color: '#64748b',
+    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: 0.5
+  },
+  flowStepLabel: {
+    color: '#f8fafc',
+    fontSize: 9.5,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 2
+  },
+  flowStepStatusGreen: {
+    color: '#34d399',
+    fontSize: 8.5,
+    fontWeight: '800',
+    marginTop: 2
+  },
+  flowStepStatusAmber: {
+    color: '#fbbf24',
+    fontSize: 8.5,
+    fontWeight: '800',
+    marginTop: 2
+  },
+  flowStepStatusMuted: {
+    color: '#64748b',
+    fontSize: 8.5,
+    fontWeight: '600',
+    marginTop: 2
+  },
+  flowArrowContainer: {
+    paddingHorizontal: 2,
+    marginBottom: 16
+  },
+  flowArrowText: {
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '900'
+  },
+
+  // Applicant Summary Card
+  approvalDetailsCard: {
+    backgroundColor: '#1e293b',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginBottom: 14,
+    gap: 6
+  },
+  approvalDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  approvalDetailLabel: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '600'
+  },
+  approvalDetailVal: {
+    color: '#f8fafc',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+
+  // Official English Notice Box
+  approvalNoticeBox: {
+    backgroundColor: 'rgba(234, 179, 8, 0.10)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(234, 179, 8, 0.35)',
+    padding: 12,
+    marginBottom: 16
+  },
+  approvalNoticeHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4
+  },
+  approvalNoticeHeaderIcon: {
+    fontSize: 14
+  },
+  approvalNoticeHeading: {
+    color: '#fde047',
+    fontSize: 12,
+    fontWeight: '800'
+  },
+  approvalNoticeEnglish: {
+    color: '#cbd5e1',
+    fontSize: 11,
+    lineHeight: 16
+  },
+  approvalActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end'
+  },
+  approvalPrimaryBtn: {
+    backgroundColor: '#f59e0b',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%'
+  },
+  approvalPrimaryBtnText: {
+    color: '#000000',
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 0.5
   }
 });
