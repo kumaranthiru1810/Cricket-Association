@@ -199,10 +199,12 @@ function MainAppShell() {
 
 export default function App() {
   return (
-    <SafeAreaProvider style={{ flex: 1 }}>
-      <AppNavigator>
-        <MainAppShell />
-      </AppNavigator>
+    <SafeAreaProvider style={{ flex: 1, width: '100%', minHeight: '100%' }}>
+      <ErrorBoundary fallbackTitle="Cricket Federation Portal">
+        <AppNavigator>
+          <MainAppShell />
+        </AppNavigator>
+      </ErrorBoundary>
     </SafeAreaProvider>
   );
 }

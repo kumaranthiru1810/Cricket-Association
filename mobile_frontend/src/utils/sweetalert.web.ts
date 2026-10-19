@@ -18,20 +18,30 @@ export interface SweetAlertOptions {
 }
 
 // Configured SweetAlert2 instance with Clean White Background & Federation styling
-const CricSwal = Swal.mixin({
-  background: '#ffffff',
-  color: '#0f172a',
-  confirmButtonColor: '#eab308',
-  cancelButtonColor: '#64748b',
-  buttonsStyling: true,
-  customClass: {
-    popup: 'cric-swal-popup',
-    title: 'cric-swal-title',
-    htmlContainer: 'cric-swal-text',
-    confirmButton: 'cric-swal-confirm-btn',
-    cancelButton: 'cric-swal-cancel-btn',
-  }
-});
+const CricSwal = (Swal && typeof (Swal as any).mixin === 'function')
+  ? (Swal as any).mixin({
+      background: '#ffffff',
+      color: '#0f172a',
+      confirmButtonColor: '#eab308',
+      cancelButtonColor: '#64748b',
+      buttonsStyling: true,
+      customClass: {
+        popup: 'cric-swal-popup',
+        title: 'cric-swal-title',
+        htmlContainer: 'cric-swal-text',
+        confirmButton: 'cric-swal-confirm-btn',
+        cancelButton: 'cric-swal-cancel-btn',
+      }
+    })
+  : {
+      fire: async (opts: any) => {
+        if (typeof window !== 'undefined') {
+          const msg = typeof opts === 'string' ? opts : (opts?.title ? `${opts.title}: ${opts?.text || ''}` : opts?.text || '');
+          window.alert(msg);
+        }
+        return { isConfirmed: true, isDismissed: false };
+      }
+    };
 
 /**
  * Show a standard alert popup
@@ -134,17 +144,20 @@ export const showToast = async (
   icon: SweetAlertIcon = 'success',
   timer: number = 3000
 ) => {
-  return Swal.fire({
-    toast: true,
-    position: 'top-end',
-    icon,
-    title,
-    showConfirmButton: false,
-    timer,
-    timerProgressBar: true,
-    background: '#ffffff',
-    color: '#0f172a',
-  });
+  if (Swal && typeof (Swal as any).fire === 'function') {
+    return Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon,
+      title,
+      showConfirmButton: false,
+      timer,
+      timerProgressBar: true,
+      background: '#ffffff',
+      color: '#0f172a',
+    });
+  }
+  return CricSwal.fire({ title });
 };
 
 export const swal = CricSwal;
