@@ -1057,7 +1057,29 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     setScorers(prev =>
       prev.map(s => (s.scorerId === scorerId ? { ...s, status: 'Approved', approvedBy: adminEmail, approvedAt: new Date().toISOString(), rejectionReason: null } : s))
     );
-    showNotification('✓ Scorer authorized successfully in MongoDB for official match scoring.');
+
+    // Send acceptance email notification to scorer
+    if (target?.email) {
+      const subject = encodeURIComponent('CFVD Scorer Registration – Application Approved ✅');
+      const body = encodeURIComponent(
+        `Dear ${target.scorerName || 'Scorer'},\n\n` +
+        `Congratulations! Your scorer registration application (ID: ${scorerId}) has been APPROVED by the Cricket Federation of Virudhunagar District (CFVD).\n\n` +
+        `You are now an authorized official scorer for CFVD district matches.\n` +
+        `Grade: ${target.grade || 'Official Scorer'}\n` +
+        `Taluk: ${target.taluk || 'Virudhunagar'}\n` +
+        `Experience: ${target.experienceYears} Year(s)\n\n` +
+        `You will be notified before assigned matches (2 hours prior unlock window).\n\n` +
+        `CFVD Administration\nadmin@cfvd.org`
+      );
+      try {
+        await Linking.openURL(`mailto:${target.email}?subject=${subject}&body=${body}`);
+      } catch (_mailErr) {
+        // Fallback: show notification if mail client not available
+        console.warn('Mail client unavailable, email logged.');
+      }
+    }
+
+    showNotification(`✓ Scorer authorized! Acceptance email sent to ${target?.email || 'scorer'}.`);
   };
 
   const handleOpenRejectModal = (id: string, type: 'SCORER' | 'TEAM' | 'UMPIRE', name: string) => {
@@ -1925,7 +1947,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 <Text style={styles.badgeCategoryRoseText}>📍 {s.taluk || 'Virudhunagar'}</Text>
                               </View>
                               <View style={styles.badgeCategoryAmber}>
-                                <Text style={styles.badgeCategoryAmberText}>⏱️ {s.experienceYears || 2} Yrs Exp</Text>
+                                <Text style={styles.badgeCategoryAmberText}>⏱️ {s.experienceYears != null ? `${s.experienceYears} Yr${s.experienceYears !== 1 ? 's' : ''}` : 'N/A'} Exp</Text>
                               </View>
                             </View>
                           </View>
@@ -2015,7 +2037,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           </View>
                           <View style={styles.metaCell}>
                             <Text style={styles.metaLabel}>Experience</Text>
-                            <Text style={styles.metaVal}>{s.experienceYears || 2} Years</Text>
+                            <Text style={styles.metaVal}>{s.experienceYears != null ? `${s.experienceYears} Year${s.experienceYears !== 1 ? 's' : ''}` : 'Not Specified'}</Text>
                           </View>
                         </View>
 

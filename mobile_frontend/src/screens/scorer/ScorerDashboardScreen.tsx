@@ -48,7 +48,35 @@ export default function ScorerDashboardScreen() {
       }
     }
 
-    setMatches(loadedMatches);
+    // Filter: Scorer sees ONLY matches assigned to them (by scorer_id / assigned_scorer)
+    // If no assignment data exists on any match (old/legacy data), show all as fallback
+    const currentUser = getCurrentUser();
+    const myId = (params?.user?.id || currentUser?.id || currentUser?.scorerId || '').toString().toLowerCase();
+    const myEmail = (params?.user?.email || currentUser?.email || '').toString().toLowerCase();
+
+    let assignedMatches = loadedMatches;
+    if (loadedMatches.length > 0) {
+      const hasAssignmentData = loadedMatches.some((m: any) => m.scorer_id || m.scorerId || m.assigned_scorer || m.assignedScorerId);
+      if (hasAssignmentData && myId) {
+        assignedMatches = loadedMatches.filter((m: any) => {
+          const mScorerId = (m.scorer_id || m.scorerId || m.assignedScorerId || '').toString().toLowerCase();
+          const mScorerEmail = (m.scorer_email || m.scorerEmail || m.assigned_scorer_email || '').toString().toLowerCase();
+          const mScorerName = (m.assigned_scorer || m.scorerName || '').toString().toLowerCase();
+          const myName = (params?.user?.name || currentUser?.name || '').toString().toLowerCase();
+          return (
+            (myId && (mScorerId === myId || mScorerId.includes(myId))) ||
+            (myEmail && mScorerEmail === myEmail) ||
+            (myName && mScorerName.includes(myName.split(' ')[0]))
+          );
+        });
+        // If filtering returns 0, show all (no assignments yet for this scorer)
+        if (assignedMatches.length === 0) {
+          assignedMatches = loadedMatches;
+        }
+      }
+    }
+
+    setMatches(assignedMatches);
     setIsLoading(false);
 
     // Load profile

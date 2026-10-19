@@ -155,15 +155,21 @@ const IMG_LOGO = require('../../../assets/logo_transparent.png');
       <View style={styles.cardWrapper}>
         {/* Brand & Federation Header */}
         <View style={styles.brandBox}>
-          <View style={styles.emblemWrapper}>
-            <Image
-              source={IMG_LOGO}
-              style={styles.logoMiniature}
-              resizeMode="contain"
-            />
+          {/* Premium Logo Emblem */}
+          <View style={styles.emblemOuterRing}>
+            <View style={styles.emblemInnerRing}>
+              <View style={styles.emblemWrapper}>
+                <Image
+                  source={IMG_LOGO}
+                  style={styles.logoMiniature}
+                  resizeMode="contain"
+                />
+              </View>
+            </View>
           </View>
           <Text style={styles.brandTitle}>CRICKET FEDERATION</Text>
           <Text style={styles.brandSub}>OF VIRUDHUNAGAR DISTRICT</Text>
+          <Text style={styles.brandEst}>Est. 1987 • CFVD • Official Administrative Portal</Text>
           <View style={styles.affiliationBadge}>
             <ShieldIcon size={12} color="#059669" />
             <Text style={styles.affiliationText}>Official Governing Body • TNCA Affiliated</Text>
@@ -231,6 +237,7 @@ const IMG_LOGO = require('../../../assets/logo_transparent.png');
                 Forgot Password?
               </Text>
             </TouchableOpacity>
+            {/* No Forgot Password - Admin accounts managed by CFVD Secretary only */}
           </View>
 
           {/* Submit Button */}
@@ -357,26 +364,58 @@ const styles: any = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16
   },
+  emblemOuterRing: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(212,175,55,0.18)',
+    borderWidth: 2,
+    borderColor: 'rgba(212,175,55,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+    shadowColor: '#d4af37',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 14,
+    elevation: 6
+  },
+  emblemInnerRing: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: 'rgba(15,36,82,0.08)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(212,175,55,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
   emblemWrapper: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
     shadowColor: '#0f2452',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.14,
+    shadowOpacity: 0.18,
     shadowRadius: 10,
     elevation: 4,
-    borderWidth: 2,
-    borderColor: '#d4af37',
     overflow: 'hidden'
   },
   logoMiniature: {
-    width: 56,
-    height: 56
+    width: 64,
+    height: 64
+  },
+  brandEst: {
+    fontSize: 9.5,
+    color: '#94a3b8',
+    fontWeight: '500',
+    letterSpacing: 0.5,
+    marginTop: 2,
+    marginBottom: 4,
+    textAlign: 'center'
   },
   brandTitle: {
     fontSize: 14,
