@@ -34,17 +34,20 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
   const [isLoading, setIsLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusType, setStatusType] = useState<'info' | 'success' | 'error' | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ identifier?: string; password?: string }>({});
 
   const resetFormState = (newRole: UserRole) => {
     setActiveRole(newRole);
     setStatusMessage(null);
     setStatusType(null);
+    setFieldErrors({});
     setEmailOrUser('');
     setPassword('');
   };
 
   // Quick fill helper for demo/testing
   const handleDemoFill = () => {
+    setFieldErrors({});
     if (activeRole === 'PLAYER') {
       setEmailOrUser('saravanan.r@strikerscc.org');
       setPassword('1234');
@@ -64,27 +67,30 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
   const handleLogin = async () => {
     setStatusMessage(null);
     setStatusType(null);
+    setFieldErrors({});
 
     const input = emailOrUser.trim();
     const pass = password.trim();
 
+    const newErrors: { identifier?: string; password?: string } = {};
+
     if (!input) {
-      setStatusMessage(
+      newErrors.identifier =
         activeRole === 'TEAM'
           ? 'Please enter your Coach Email or Team Name.'
           : activeRole === 'SCORER'
           ? 'Please enter your Scorer Email.'
           : activeRole === 'UMPIRE'
           ? 'Please enter your Umpire Email.'
-          : 'Please enter your Player Email or Name.'
-      );
-      setStatusType('error');
-      return;
+          : 'Please enter your Player Email or Name.';
     }
 
     if (!pass) {
-      setStatusMessage('Please enter your account password.');
-      setStatusType('error');
+      newErrors.password = 'Please enter your account password.';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setFieldErrors(newErrors);
       return;
     }
 
@@ -119,8 +125,12 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
     } catch (err: any) {
       setIsLoading(false);
       const rawMsg = err?.message || 'Login failed. Please check your credentials.';
-      setStatusMessage(rawMsg);
-      setStatusType('error');
+      const lower = rawMsg.toLowerCase();
+      if (lower.includes('user') || lower.includes('not found') || lower.includes('account') || lower.includes('email')) {
+        setFieldErrors({ identifier: rawMsg });
+      } else {
+        setFieldErrors({ password: rawMsg });
+      }
     }
   };
 
@@ -155,12 +165,11 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
                 Login Here with your registered account credentials and password
               </Text>
 
-              {/* Status Banner */}
-              {statusMessage && (
+              {/* Status Banner (Only for success and info, not error banner) */}
+              {statusMessage && statusType !== 'error' && (
                 <View
                   style={[
                     styles.statusBanner,
-                    statusType === 'error' && styles.statusError,
                     statusType === 'success' && styles.statusSuccess,
                     statusType === 'info' && styles.statusInfo
                   ]}
@@ -168,7 +177,6 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
                   <Text
                     style={[
                       styles.statusText,
-                      statusType === 'error' && styles.statusTextError,
                       statusType === 'success' && styles.statusTextSuccess,
                       statusType === 'info' && styles.statusTextInfo
                     ]}
@@ -240,9 +248,18 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
                 {activeRole === 'UMPIRE' && 'Official Umpire Email Address *'}
               </Text>
               <TextInput
-                style={styles.input}
+                style={[
+                  styles.input,
+                  fieldErrors.identifier && styles.inputError,
+                  fieldErrors.identifier && { marginBottom: 4 }
+                ]}
                 value={emailOrUser}
-                onChangeText={setEmailOrUser}
+                onChangeText={(text) => {
+                  setEmailOrUser(text);
+                  if (fieldErrors.identifier) {
+                    setFieldErrors((prev) => ({ ...prev, identifier: undefined }));
+                  }
+                }}
                 placeholder={
                   activeRole === 'PLAYER'
                     ? 'e.g. saravanan.r@strikerscc.org'
@@ -256,14 +273,28 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
                 keyboardType="email-address"
                 autoCapitalize="none"
               />
+              {fieldErrors.identifier ? (
+                <Text style={styles.fieldErrorText}>{fieldErrors.identifier}</Text>
+              ) : null}
 
               {/* Password Field with Show/Hide Toggle */}
               <Text style={styles.label}>Account Password *</Text>
-              <View style={styles.passwordContainer}>
+              <View
+                style={[
+                  styles.passwordContainer,
+                  fieldErrors.password && styles.inputError,
+                  fieldErrors.password && { marginBottom: 4 }
+                ]}
+              >
                 <TextInput
                   style={styles.passwordInput}
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    if (fieldErrors.password) {
+                      setFieldErrors((prev) => ({ ...prev, password: undefined }));
+                    }
+                  }}
                   secureTextEntry={!showPassword}
                   placeholder="Enter your password"
                   placeholderTextColor="#94a3b8"
@@ -272,6 +303,9 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
                   <Text style={styles.toggleText}>{showPassword ? '👁️' : '🔒'}</Text>
                 </TouchableOpacity>
               </View>
+              {fieldErrors.password ? (
+                <Text style={styles.fieldErrorText}>{fieldErrors.password}</Text>
+              ) : null}
 
               {/* Action Button */}
               <TouchableOpacity
@@ -429,6 +463,18 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginBottom: 16,
     fontSize: 14.5
+  },
+  inputError: {
+    borderColor: '#ef4444',
+    backgroundColor: '#fef2f2'
+  },
+  fieldErrorText: {
+    color: '#dc2626',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: -2,
+    marginBottom: 12,
+    marginLeft: 2
   },
   passwordContainer: {
     flexDirection: 'row',

@@ -115,6 +115,16 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   const [isVerifyingOtp, setIsVerifyingOtp] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusType, setStatusType] = useState<'info' | 'success' | 'error' | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({});
+
+  const clearError = (field: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
 
   // OTP & Password State
   const [otpSent, setOtpSent] = useState<boolean>(false);
@@ -215,6 +225,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     setConfirmPassword('');
     setStatusMessage(null);
     setStatusType(null);
+    setFieldErrors({});
   };
 
   // Step 1: Send Email Verification OTP
@@ -224,15 +235,23 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
     const email = getTargetEmail();
     const name = getTargetName();
+    const newErrors: { [key: string]: string } = {};
 
     if (!name) {
-      setStatusMessage(`Please enter your ${activeRole === 'TEAM' ? 'Coach' : 'Full'} Name first.`);
-      setStatusType('error');
-      return;
+      if (activeRole === 'PLAYER') newErrors.pName = 'Please enter Player Full Name first.';
+      else if (activeRole === 'TEAM') newErrors.coachName = 'Please enter Coach / Manager Name first.';
+      else if (activeRole === 'SCORER') newErrors.sName = 'Please enter Scorer Full Name first.';
+      else newErrors.uName = 'Please enter Umpire Full Name first.';
     }
     if (!email || !validateEmail(email)) {
-      setStatusMessage('Please enter a valid email address to receive the OTP.');
-      setStatusType('error');
+      if (activeRole === 'PLAYER') newErrors.pEmail = 'Please enter a valid Player Email address to receive OTP.';
+      else if (activeRole === 'TEAM') newErrors.coachEmail = 'Please enter a valid Coach Email address to receive OTP.';
+      else if (activeRole === 'SCORER') newErrors.sEmail = 'Please enter a valid Scorer Email address to receive OTP.';
+      else newErrors.uEmail = 'Please enter a valid Umpire Email address to receive OTP.';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setFieldErrors((prev) => ({ ...prev, ...newErrors }));
       return;
     }
 
@@ -243,11 +262,20 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     try {
       await ScorerApi.sendRegistrationOtp(email, name, activeRole);
       setOtpSent(true);
+      clearError('emailVerification');
       setStatusMessage(`✓ Verification code sent to ${email} via Nodemailer! Please enter the 6-digit code.`);
       setStatusType('success');
     } catch (err: any) {
-      setStatusMessage(err?.message || 'Failed to send OTP. Please check email address and try again.');
-      setStatusType('error');
+      const msg = err?.message || 'Failed to send OTP. Please check email address and try again.';
+      const field =
+        activeRole === 'PLAYER'
+          ? 'pEmail'
+          : activeRole === 'TEAM'
+          ? 'coachEmail'
+          : activeRole === 'SCORER'
+          ? 'sEmail'
+          : 'uEmail';
+      setFieldErrors((prev) => ({ ...prev, [field]: msg }));
     } finally {
       setIsSendingOtp(false);
     }
@@ -262,8 +290,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const cleanOtp = otpCode.trim();
 
     if (!cleanOtp) {
-      setStatusMessage('Please enter the 6-digit OTP code.');
-      setStatusType('error');
+      setFieldErrors((prev) => ({ ...prev, otpCode: 'Please enter the 6-digit OTP code.' }));
       return;
     }
 
@@ -271,11 +298,12 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     try {
       await ScorerApi.verifyRegistrationOtp(email, cleanOtp);
       setIsEmailVerified(true);
+      clearError('otpCode');
+      clearError('emailVerification');
       setStatusMessage('✓ Email verified successfully! You may now set your password below.');
       setStatusType('success');
     } catch (err: any) {
-      setStatusMessage(err?.message || 'Invalid or expired OTP code.');
-      setStatusType('error');
+      setFieldErrors((prev) => ({ ...prev, otpCode: err?.message || 'Invalid or expired OTP code.' }));
     } finally {
       setIsVerifyingOtp(false);
     }
@@ -290,45 +318,19 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const email = pEmail.trim().toLowerCase();
     const mobile = pMobile.trim();
     const targetTaluk = pTaluk === 'Other' ? pCustomTaluk.trim() : pTaluk;
+    const newErrors: { [key: string]: string } = {};
 
-    if (!name) {
-      setStatusMessage('Please enter Player Full Name.');
-      setStatusType('error');
-      return;
-    }
-    if (!email || !validateEmail(email)) {
-      setStatusMessage('Please enter a valid Player Email address.');
-      setStatusType('error');
-      return;
-    }
-    if (!mobile || mobile.length < 10) {
-      setStatusMessage('Please enter a valid 10-digit Mobile Number.');
-      setStatusType('error');
-      return;
-    }
-    if (pTaluk === 'Other' && !targetTaluk) {
-      setStatusMessage('Please type your Taluk name.');
-      setStatusType('error');
-      return;
-    }
-    if (!isEmailVerified) {
-      setStatusMessage('Please verify your email address with the OTP before submitting.');
-      setStatusType('error');
-      return;
-    }
-    if (!password || password.length < 4) {
-      setStatusMessage('Please enter a password of at least 4 characters.');
-      setStatusType('error');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setStatusMessage('Passwords do not match.');
-      setStatusType('error');
-      return;
-    }
-    if (!pAgreed) {
-      setStatusMessage('Please accept the declaration to submit player registration.');
-      setStatusType('error');
+    if (!name) newErrors.pName = 'Please enter Player Full Name.';
+    if (!mobile || mobile.length < 10) newErrors.pMobile = 'Please enter a valid 10-digit Mobile Number.';
+    if (!email || !validateEmail(email)) newErrors.pEmail = 'Please enter a valid Player Email address.';
+    if (pTaluk === 'Other' && !targetTaluk) newErrors.pCustomTaluk = 'Please type your Taluk name.';
+    if (!isEmailVerified) newErrors.emailVerification = 'Please verify your email address with OTP before submitting.';
+    if (!password || password.length < 4) newErrors.password = 'Please enter a password of at least 4 characters.';
+    if (password && password !== confirmPassword) newErrors.confirmPassword = 'Passwords do not match.';
+    if (!pAgreed) newErrors.pAgreed = 'Please accept the declaration to submit player registration.';
+
+    if (Object.keys(newErrors).length > 0) {
+      setFieldErrors(newErrors);
       return;
     }
 
@@ -363,8 +365,17 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setTimeout(() => navigate('Login', { initialRole: 'PLAYER' }), 1200);
     } catch (err: any) {
       setIsLoading(false);
-      setStatusMessage(err?.message || 'Player registration failed. Please try again.');
-      setStatusType('error');
+      const rawMsg = err?.message || 'Player registration failed. Please try again.';
+      const lower = rawMsg.toLowerCase();
+      if (lower.includes('email') || lower.includes('already exists') || lower.includes('registered')) {
+        setFieldErrors((prev) => ({ ...prev, pEmail: rawMsg }));
+      } else if (lower.includes('mobile') || lower.includes('phone')) {
+        setFieldErrors((prev) => ({ ...prev, pMobile: rawMsg }));
+      } else if (lower.includes('otp')) {
+        setFieldErrors((prev) => ({ ...prev, otpCode: rawMsg }));
+      } else {
+        setFieldErrors((prev) => ({ ...prev, general: rawMsg }));
+      }
     }
   };
 
@@ -376,27 +387,22 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const name = squadPlayerName.trim();
     const email = squadPlayerEmail.trim().toLowerCase();
     const role = squadPlayerRole.trim() || 'Batter';
+    const newErrors: { [key: string]: string } = {};
 
-    if (!name) {
-      setStatusMessage('Please enter Player Name.');
-      setStatusType('error');
-      return;
-    }
+    if (!name) newErrors.squadPlayerName = 'Please enter Player Name.';
     if (!email || !validateEmail(email)) {
-      setStatusMessage('Please enter a valid Player Email ID.');
-      setStatusType('error');
+      newErrors.squadPlayerEmail = 'Please enter a valid Player Email ID.';
+    } else if (coachEmail.trim() && email === coachEmail.trim().toLowerCase()) {
+      newErrors.squadPlayerEmail = `Player email cannot be identical to Coach Email.`;
+    } else if (players.some((p) => p.email.toLowerCase() === email)) {
+      newErrors.squadPlayerEmail = `A player with email "${email}" has already been added to the squad.`;
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setFieldErrors((prev) => ({ ...prev, ...newErrors }));
       return;
     }
-    if (coachEmail.trim() && email === coachEmail.trim().toLowerCase()) {
-      setStatusMessage(`Player email "${email}" cannot be identical to Coach Email.`);
-      setStatusType('error');
-      return;
-    }
-    if (players.some((p) => p.email.toLowerCase() === email)) {
-      setStatusMessage(`A player with email "${email}" has already been added to the squad.`);
-      setStatusType('error');
-      return;
-    }
+
     const newPlayer: SquadPlayer = {
       id: Date.now().toString() + Math.random().toString(36).substring(2, 6),
       name,
@@ -407,6 +413,9 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     setPlayers((prev) => [...prev, newPlayer]);
     setSquadPlayerName('');
     setSquadPlayerEmail('');
+    clearError('players');
+    clearError('squadPlayerName');
+    clearError('squadPlayerEmail');
 
     const newCount = players.length + 1;
     setStatusMessage(`✓ Added ${name} (${role}) to squad! (${newCount} players in squad)`);
@@ -430,6 +439,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     }));
 
     setPlayers(squad);
+    clearError('players');
     setStatusMessage('⚡ Sample squad loaded! Coach details and all 15 squad players added.');
     setStatusType('success');
   };
@@ -439,50 +449,22 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     setStatusType(null);
 
     const targetTaluk = teamTaluk === 'Other' ? teamCustomTaluk.trim() : teamTaluk;
+    const newErrors: { [key: string]: string } = {};
 
-    if (!teamName.trim()) {
-      setStatusMessage('Please enter Team Name.');
-      setStatusType('error');
-      return;
-    }
-    if (!coachName.trim()) {
-      setStatusMessage('Please enter Coach / Manager Name.');
-      setStatusType('error');
-      return;
-    }
+    if (!teamName.trim()) newErrors.teamName = 'Please enter Team Name.';
+    if (!coachName.trim()) newErrors.coachName = 'Please enter Coach / Manager Name.';
     if (!coachEmail.trim() || !validateEmail(coachEmail)) {
-      setStatusMessage('Please enter a valid Coach Email Address.');
-      setStatusType('error');
-      return;
+      newErrors.coachEmail = 'Please enter a valid Coach Email Address.';
     }
-    if (teamTaluk === 'Other' && !targetTaluk) {
-      setStatusMessage('Please type your team Taluk name.');
-      setStatusType('error');
-      return;
-    }
-    if (!isEmailVerified) {
-      setStatusMessage('Please verify coach email with the OTP code first.');
-      setStatusType('error');
-      return;
-    }
-    if (!password || password.length < 4) {
-      setStatusMessage('Please enter a password of at least 4 characters.');
-      setStatusType('error');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setStatusMessage('Passwords do not match.');
-      setStatusType('error');
-      return;
-    }
-    if (players.length === 0) {
-      setStatusMessage('Please add at least one squad player to your team.');
-      setStatusType('error');
-      return;
-    }
-    if (!teamAgreed) {
-      setStatusMessage('Please accept the team declaration.');
-      setStatusType('error');
+    if (teamTaluk === 'Other' && !targetTaluk) newErrors.teamCustomTaluk = 'Please type your team Taluk name.';
+    if (players.length === 0) newErrors.players = 'Please add at least one squad player to your team.';
+    if (!isEmailVerified) newErrors.emailVerification = 'Please verify coach email with the OTP code first.';
+    if (!password || password.length < 4) newErrors.password = 'Please enter a password of at least 4 characters.';
+    if (password && password !== confirmPassword) newErrors.confirmPassword = 'Passwords do not match.';
+    if (!teamAgreed) newErrors.teamAgreed = 'Please accept the team declaration.';
+
+    if (Object.keys(newErrors).length > 0) {
+      setFieldErrors(newErrors);
       return;
     }
 
@@ -520,8 +502,17 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setTimeout(() => navigate('Login', { initialRole: 'TEAM' }), 1500);
     } catch (err: any) {
       setIsLoading(false);
-      setStatusMessage(err?.message || 'Team registration failed. Please try again.');
-      setStatusType('error');
+      const rawMsg = err?.message || 'Team registration failed. Please try again.';
+      const lower = rawMsg.toLowerCase();
+      if (lower.includes('email') || lower.includes('already exists')) {
+        setFieldErrors((prev) => ({ ...prev, coachEmail: rawMsg }));
+      } else if (lower.includes('team name')) {
+        setFieldErrors((prev) => ({ ...prev, teamName: rawMsg }));
+      } else if (lower.includes('otp')) {
+        setFieldErrors((prev) => ({ ...prev, otpCode: rawMsg }));
+      } else {
+        setFieldErrors((prev) => ({ ...prev, general: rawMsg }));
+      }
     }
   };
 
@@ -534,45 +525,19 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const email = sEmail.trim().toLowerCase();
     const mobile = sMobile.trim();
     const targetTaluk = sTaluk === 'Other' ? sCustomTaluk.trim() : sTaluk;
+    const newErrors: { [key: string]: string } = {};
 
-    if (!name) {
-      setStatusMessage('Please enter Scorer Full Name.');
-      setStatusType('error');
-      return;
-    }
-    if (!email || !validateEmail(email)) {
-      setStatusMessage('Please enter a valid Scorer Email address.');
-      setStatusType('error');
-      return;
-    }
-    if (!mobile || mobile.length < 10) {
-      setStatusMessage('Please enter a valid 10-digit Mobile Number.');
-      setStatusType('error');
-      return;
-    }
-    if (sTaluk === 'Other' && !targetTaluk) {
-      setStatusMessage('Please type your Scorer Taluk name.');
-      setStatusType('error');
-      return;
-    }
-    if (!isEmailVerified) {
-      setStatusMessage('Please verify your email with the OTP code first.');
-      setStatusType('error');
-      return;
-    }
-    if (!password || password.length < 4) {
-      setStatusMessage('Please enter a password of at least 4 characters.');
-      setStatusType('error');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setStatusMessage('Passwords do not match.');
-      setStatusType('error');
-      return;
-    }
-    if (!sAgreed) {
-      setStatusMessage('Please accept the official scorer code of conduct declaration.');
-      setStatusType('error');
+    if (!name) newErrors.sName = 'Please enter Scorer Full Name.';
+    if (!mobile || mobile.length < 10) newErrors.sMobile = 'Please enter a valid 10-digit Mobile Number.';
+    if (!email || !validateEmail(email)) newErrors.sEmail = 'Please enter a valid Scorer Email address.';
+    if (sTaluk === 'Other' && !targetTaluk) newErrors.sCustomTaluk = 'Please type your Scorer Taluk name.';
+    if (!isEmailVerified) newErrors.emailVerification = 'Please verify your email with the OTP code first.';
+    if (!password || password.length < 4) newErrors.password = 'Please enter a password of at least 4 characters.';
+    if (password && password !== confirmPassword) newErrors.confirmPassword = 'Passwords do not match.';
+    if (!sAgreed) newErrors.sAgreed = 'Please accept the official scorer code of conduct declaration.';
+
+    if (Object.keys(newErrors).length > 0) {
+      setFieldErrors(newErrors);
       return;
     }
 
@@ -604,8 +569,17 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setTimeout(() => navigate('Login', { initialRole: 'SCORER' }), 1500);
     } catch (err: any) {
       setIsLoading(false);
-      setStatusMessage(err?.message || 'Scorer registration failed. Please try again.');
-      setStatusType('error');
+      const rawMsg = err?.message || 'Scorer registration failed. Please try again.';
+      const lower = rawMsg.toLowerCase();
+      if (lower.includes('email') || lower.includes('already exists')) {
+        setFieldErrors((prev) => ({ ...prev, sEmail: rawMsg }));
+      } else if (lower.includes('mobile') || lower.includes('phone')) {
+        setFieldErrors((prev) => ({ ...prev, sMobile: rawMsg }));
+      } else if (lower.includes('otp')) {
+        setFieldErrors((prev) => ({ ...prev, otpCode: rawMsg }));
+      } else {
+        setFieldErrors((prev) => ({ ...prev, general: rawMsg }));
+      }
     }
   };
 
@@ -617,55 +591,21 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const name = uName.trim();
     const email = uEmail.trim().toLowerCase();
     const targetDistrict = uDistrict === 'Other' ? uCustomDistrict.trim() : uDistrict;
+    const newErrors: { [key: string]: string } = {};
 
-    if (!name) {
-      setStatusMessage('Please enter Umpire Full Name.');
-      setStatusType('error');
-      return;
-    }
-    if (!email || !validateEmail(email)) {
-      setStatusMessage('Please enter a valid Umpire Email address.');
-      setStatusType('error');
-      return;
-    }
-    if (!uExperience.trim()) {
-      setStatusMessage('Please enter Umpire Experience.');
-      setStatusType('error');
-      return;
-    }
-    if (!uQualification.trim()) {
-      setStatusMessage('Please select Umpire Certification / Qualification.');
-      setStatusType('error');
-      return;
-    }
-    if (uDistrict === 'Other' && !targetDistrict) {
-      setStatusMessage('Please specify your District name.');
-      setStatusType('error');
-      return;
-    }
-    if (!uState.trim()) {
-      setStatusMessage('Please enter State.');
-      setStatusType('error');
-      return;
-    }
-    if (!isEmailVerified) {
-      setStatusMessage('Please verify your email with the OTP code first.');
-      setStatusType('error');
-      return;
-    }
-    if (!password || password.length < 4) {
-      setStatusMessage('Please enter a password of at least 4 characters.');
-      setStatusType('error');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setStatusMessage('Passwords do not match.');
-      setStatusType('error');
-      return;
-    }
-    if (!uAgreed) {
-      setStatusMessage('Please accept the official Umpires Code of Conduct declaration.');
-      setStatusType('error');
+    if (!name) newErrors.uName = 'Please enter Umpire Full Name.';
+    if (!email || !validateEmail(email)) newErrors.uEmail = 'Please enter a valid Umpire Email address.';
+    if (!uExperience.trim()) newErrors.uExperience = 'Please enter Umpire Experience.';
+    if (!uQualification.trim()) newErrors.uQualification = 'Please select Umpire Certification / Qualification.';
+    if (uDistrict === 'Other' && !targetDistrict) newErrors.uCustomDistrict = 'Please specify your District name.';
+    if (!uState.trim()) newErrors.uState = 'Please enter State.';
+    if (!isEmailVerified) newErrors.emailVerification = 'Please verify your email with the OTP code first.';
+    if (!password || password.length < 4) newErrors.password = 'Please enter a password of at least 4 characters.';
+    if (password && password !== confirmPassword) newErrors.confirmPassword = 'Passwords do not match.';
+    if (!uAgreed) newErrors.uAgreed = 'Please accept the official Umpires Code of Conduct declaration.';
+
+    if (Object.keys(newErrors).length > 0) {
+      setFieldErrors(newErrors);
       return;
     }
 
@@ -708,8 +648,15 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setTimeout(() => navigate('Login', { initialRole: 'UMPIRE' }), 1500);
     } catch (err: any) {
       setIsLoading(false);
-      setStatusMessage(err?.message || 'Umpire registration failed. Please try again.');
-      setStatusType('error');
+      const rawMsg = err?.message || 'Umpire registration failed. Please try again.';
+      const lower = rawMsg.toLowerCase();
+      if (lower.includes('email') || lower.includes('already exists')) {
+        setFieldErrors((prev) => ({ ...prev, uEmail: rawMsg }));
+      } else if (lower.includes('otp')) {
+        setFieldErrors((prev) => ({ ...prev, otpCode: rawMsg }));
+      } else {
+        setFieldErrors((prev) => ({ ...prev, general: rawMsg }));
+      }
     }
   };
 
@@ -777,17 +724,29 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                 </Text>
               )}
             </TouchableOpacity>
+            {fieldErrors.emailVerification ? (
+              <Text style={[styles.fieldErrorText, { marginTop: 6, textAlign: 'center' }]}>
+                {fieldErrors.emailVerification}
+              </Text>
+            ) : null}
 
             {otpSent && (
               <View style={{ marginTop: 10 }}>
                 <Text style={styles.label}>Enter 6-Digit Email OTP *</Text>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TextInput
-                    style={[styles.input, { flex: 1, textAlign: 'center', letterSpacing: 4, fontWeight: 'bold', fontSize: 15, marginBottom: 0 }]}
+                    style={[
+                      styles.input,
+                      { flex: 1, textAlign: 'center', letterSpacing: 4, fontWeight: 'bold', fontSize: 15, marginBottom: 0 },
+                      fieldErrors.otpCode && styles.inputError
+                    ]}
                     placeholder="123456"
                     placeholderTextColor="#94a3b8"
                     value={otpCode}
-                    onChangeText={setOtpCode}
+                    onChangeText={(text) => {
+                      setOtpCode(text);
+                      clearError('otpCode');
+                    }}
                     keyboardType="number-pad"
                     maxLength={6}
                   />
@@ -803,6 +762,9 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     )}
                   </TouchableOpacity>
                 </View>
+                {fieldErrors.otpCode ? (
+                  <Text style={styles.fieldErrorText}>{fieldErrors.otpCode}</Text>
+                ) : null}
               </View>
             )}
           </View>
@@ -817,11 +779,14 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
             <View style={styles.formRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.label}>Password (min 4 chars) *</Text>
-                <View style={styles.passwordContainer}>
+                <View style={[styles.passwordContainer, fieldErrors.password && styles.inputError]}>
                   <TextInput
                     style={styles.passwordInput}
                     value={password}
-                    onChangeText={setPassword}
+                    onChangeText={(text) => {
+                      setPassword(text);
+                      clearError('password');
+                    }}
                     secureTextEntry={!showPassword}
                     placeholder="Enter password"
                     placeholderTextColor="#94a3b8"
@@ -830,18 +795,27 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <Text style={styles.toggleText}>{showPassword ? '👁️' : '🔒'}</Text>
                   </TouchableOpacity>
                 </View>
+                {fieldErrors.password ? (
+                  <Text style={styles.fieldErrorText}>{fieldErrors.password}</Text>
+                ) : null}
               </View>
 
               <View style={{ flex: 1 }}>
                 <Text style={styles.label}>Confirm Password *</Text>
                 <TextInput
-                  style={[styles.input, { marginBottom: 0 }]}
+                  style={[styles.input, { marginBottom: 0 }, fieldErrors.confirmPassword && styles.inputError]}
                   value={confirmPassword}
-                  onChangeText={setConfirmPassword}
+                  onChangeText={(text) => {
+                    setConfirmPassword(text);
+                    clearError('confirmPassword');
+                  }}
                   secureTextEntry={!showPassword}
                   placeholder="Re-enter password"
                   placeholderTextColor="#94a3b8"
                 />
+                {fieldErrors.confirmPassword ? (
+                  <Text style={styles.fieldErrorText}>{fieldErrors.confirmPassword}</Text>
+                ) : null}
               </View>
             </View>
           </View>
@@ -880,12 +854,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                 District player registration, team squad submissions, and certified scorer enrollment
               </Text>
 
-              {/* Status Banner */}
-              {statusMessage && (
+              {/* Status Banner - Only show success and info, NOT error banner */}
+              {statusMessage && statusType !== 'error' && (
                 <View
                   style={[
                     styles.statusBanner,
-                    statusType === 'error' && styles.statusError,
                     statusType === 'success' && styles.statusSuccess,
                     statusType === 'info' && styles.statusInfo
                   ]}
@@ -893,7 +866,6 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                   <Text
                     style={[
                       styles.statusText,
-                      statusType === 'error' && styles.statusTextError,
                       statusType === 'success' && styles.statusTextSuccess,
                       statusType === 'info' && styles.statusTextInfo
                     ]}
@@ -956,25 +928,33 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Player Full Name *</Text>
                       <TextInput
-                        style={styles.input}
+                        style={[styles.input, fieldErrors.pName && styles.inputError]}
                         value={pName}
-                        onChangeText={setPName}
+                        onChangeText={(text) => {
+                          setPName(text);
+                          clearError('pName');
+                        }}
                         placeholder="e.g. R. Saravanan"
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="words"
                       />
+                      {fieldErrors.pName ? <Text style={styles.fieldErrorText}>{fieldErrors.pName}</Text> : null}
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Mobile Number (10 Digits) *</Text>
                       <TextInput
-                        style={styles.input}
+                        style={[styles.input, fieldErrors.pMobile && styles.inputError]}
                         value={pMobile}
-                        onChangeText={setPMobile}
+                        onChangeText={(text) => {
+                          setPMobile(text);
+                          clearError('pMobile');
+                        }}
                         placeholder="e.g. 9876543210"
                         keyboardType="phone-pad"
                         placeholderTextColor="#94a3b8"
                         maxLength={10}
                       />
+                      {fieldErrors.pMobile ? <Text style={styles.fieldErrorText}>{fieldErrors.pMobile}</Text> : null}
                     </View>
                   </View>
 
@@ -983,14 +963,18 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Player Email Address *</Text>
                       <TextInput
-                        style={styles.input}
+                        style={[styles.input, fieldErrors.pEmail && styles.inputError]}
                         value={pEmail}
-                        onChangeText={setPEmail}
+                        onChangeText={(text) => {
+                          setPEmail(text);
+                          clearError('pEmail');
+                        }}
                         placeholder="e.g. saravanan@example.com"
                         keyboardType="email-address"
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="none"
                       />
+                      {fieldErrors.pEmail ? <Text style={styles.fieldErrorText}>{fieldErrors.pEmail}</Text> : null}
                     </View>
                   </View>
 
@@ -1009,6 +993,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       onSelect={(val) => {
                         setPTaluk(val);
                         if (val !== 'Other') setPCustomTaluk('');
+                        clearError('pCustomTaluk');
                       }}
                     />
                   </View>
@@ -1019,13 +1004,17 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       <View style={{ flex: 1 }}>
                         <Text style={styles.label}>Specify Taluk Name *</Text>
                         <TextInput
-                          style={styles.input}
+                          style={[styles.input, fieldErrors.pCustomTaluk && styles.inputError]}
                           value={pCustomTaluk}
-                          onChangeText={setPCustomTaluk}
+                          onChangeText={(text) => {
+                            setPCustomTaluk(text);
+                            clearError('pCustomTaluk');
+                          }}
                           placeholder="Type your taluk name here..."
                           placeholderTextColor="#94a3b8"
                           autoCapitalize="words"
                         />
+                        {fieldErrors.pCustomTaluk ? <Text style={styles.fieldErrorText}>{fieldErrors.pCustomTaluk}</Text> : null}
                       </View>
                     </View>
                   )}
@@ -1035,7 +1024,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
                   <TouchableOpacity
                     style={styles.checkboxRow}
-                    onPress={() => setPAgreed(!pAgreed)}
+                    onPress={() => {
+                      setPAgreed(!pAgreed);
+                      clearError('pAgreed');
+                    }}
                     activeOpacity={0.8}
                   >
                     <View style={[styles.checkbox, pAgreed && styles.checkboxChecked]}>
@@ -1045,6 +1037,13 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       I hereby declare that all information furnished is true and accurate according to association guidelines.
                     </Text>
                   </TouchableOpacity>
+                  {fieldErrors.pAgreed ? <Text style={styles.fieldErrorText}>{fieldErrors.pAgreed}</Text> : null}
+
+                  {fieldErrors.general ? (
+                    <View style={styles.generalErrorBox}>
+                      <Text style={styles.generalErrorText}>{fieldErrors.general}</Text>
+                    </View>
+                  ) : null}
 
                   <TouchableOpacity
                     style={[styles.submitBtn, (!isEmailVerified || isLoading) && styles.submitBtnDisabled]}
@@ -1074,22 +1073,30 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Official Club / Team Name *</Text>
                       <TextInput
-                        style={styles.input}
+                        style={[styles.input, fieldErrors.teamName && styles.inputError]}
                         value={teamName}
-                        onChangeText={setTeamName}
+                        onChangeText={(text) => {
+                          setTeamName(text);
+                          clearError('teamName');
+                        }}
                         placeholder="e.g. Sivakasi Super Strikers"
                         placeholderTextColor="#94a3b8"
                       />
+                      {fieldErrors.teamName ? <Text style={styles.fieldErrorText}>{fieldErrors.teamName}</Text> : null}
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Head Coach / Manager Name *</Text>
                       <TextInput
-                        style={styles.input}
+                        style={[styles.input, fieldErrors.coachName && styles.inputError]}
                         value={coachName}
-                        onChangeText={setCoachName}
+                        onChangeText={(text) => {
+                          setCoachName(text);
+                          clearError('coachName');
+                        }}
                         placeholder="e.g. Coach S. Murugan"
                         placeholderTextColor="#94a3b8"
                       />
+                      {fieldErrors.coachName ? <Text style={styles.fieldErrorText}>{fieldErrors.coachName}</Text> : null}
                     </View>
                   </View>
 
@@ -1098,14 +1105,18 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Coach Official Email Address *</Text>
                       <TextInput
-                        style={styles.input}
+                        style={[styles.input, fieldErrors.coachEmail && styles.inputError]}
                         value={coachEmail}
-                        onChangeText={setCoachEmail}
+                        onChangeText={(text) => {
+                          setCoachEmail(text);
+                          clearError('coachEmail');
+                        }}
                         placeholder="e.g. coach@strikerscc.org"
                         keyboardType="email-address"
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="none"
                       />
+                      {fieldErrors.coachEmail ? <Text style={styles.fieldErrorText}>{fieldErrors.coachEmail}</Text> : null}
                     </View>
                     <DropdownField
                       label="Team Taluk Jurisdiction"
@@ -1114,6 +1125,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       onSelect={(val) => {
                         setTeamTaluk(val);
                         if (val !== 'Other') setTeamCustomTaluk('');
+                        clearError('teamCustomTaluk');
                       }}
                     />
                   </View>
@@ -1124,13 +1136,17 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       <View style={{ flex: 1 }}>
                         <Text style={styles.label}>Specify Team Taluk Name *</Text>
                         <TextInput
-                          style={styles.input}
+                          style={[styles.input, fieldErrors.teamCustomTaluk && styles.inputError]}
                           value={teamCustomTaluk}
-                          onChangeText={setTeamCustomTaluk}
+                          onChangeText={(text) => {
+                            setTeamCustomTaluk(text);
+                            clearError('teamCustomTaluk');
+                          }}
                           placeholder="Type your team's taluk name here..."
                           placeholderTextColor="#94a3b8"
                           autoCapitalize="words"
                         />
+                        {fieldErrors.teamCustomTaluk ? <Text style={styles.fieldErrorText}>{fieldErrors.teamCustomTaluk}</Text> : null}
                       </View>
                     </View>
                   )}
@@ -1149,23 +1165,31 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <View style={styles.formRow}>
                       <View style={{ flex: 1 }}>
                         <TextInput
-                          style={[styles.input, { marginBottom: 0 }]}
+                          style={[styles.input, { marginBottom: 0 }, fieldErrors.squadPlayerName && styles.inputError]}
                           value={squadPlayerName}
-                          onChangeText={setSquadPlayerName}
+                          onChangeText={(text) => {
+                            setSquadPlayerName(text);
+                            clearError('squadPlayerName');
+                          }}
                           placeholder="Player Full Name"
                           placeholderTextColor="#94a3b8"
                         />
+                        {fieldErrors.squadPlayerName ? <Text style={styles.fieldErrorText}>{fieldErrors.squadPlayerName}</Text> : null}
                       </View>
                       <View style={{ flex: 1 }}>
                         <TextInput
-                          style={[styles.input, { marginBottom: 0 }]}
+                          style={[styles.input, { marginBottom: 0 }, fieldErrors.squadPlayerEmail && styles.inputError]}
                           value={squadPlayerEmail}
-                          onChangeText={setSquadPlayerEmail}
+                          onChangeText={(text) => {
+                            setSquadPlayerEmail(text);
+                            clearError('squadPlayerEmail');
+                          }}
                           placeholder="Player Email Address"
                           keyboardType="email-address"
                           placeholderTextColor="#94a3b8"
                           autoCapitalize="none"
                         />
+                        {fieldErrors.squadPlayerEmail ? <Text style={styles.fieldErrorText}>{fieldErrors.squadPlayerEmail}</Text> : null}
                       </View>
                     </View>
                     <View style={[styles.formRow, { marginTop: 8, marginBottom: 0 }]}>
@@ -1182,6 +1206,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       </View>
                     </View>
                   </View>
+                  {fieldErrors.players ? (
+                    <Text style={[styles.fieldErrorText, { marginTop: 4, marginLeft: 2 }]}>
+                      {fieldErrors.players}
+                    </Text>
+                  ) : null}
 
                   {players.length > 0 && (
                     <View style={styles.playerListContainer}>
@@ -1212,7 +1241,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
                   <TouchableOpacity
                     style={styles.checkboxRow}
-                    onPress={() => setTeamAgreed(!teamAgreed)}
+                    onPress={() => {
+                      setTeamAgreed(!teamAgreed);
+                      clearError('teamAgreed');
+                    }}
                     activeOpacity={0.8}
                   >
                     <View style={[styles.checkbox, teamAgreed && styles.checkboxChecked]}>
@@ -1222,6 +1254,13 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       I confirm that all squad players have verified identity documents.
                     </Text>
                   </TouchableOpacity>
+                  {fieldErrors.teamAgreed ? <Text style={styles.fieldErrorText}>{fieldErrors.teamAgreed}</Text> : null}
+
+                  {fieldErrors.general ? (
+                    <View style={styles.generalErrorBox}>
+                      <Text style={styles.generalErrorText}>{fieldErrors.general}</Text>
+                    </View>
+                  ) : null}
 
                   <TouchableOpacity
                     style={[styles.submitBtn, (!isEmailVerified || players.length === 0 || isLoading) && styles.submitBtnDisabled]}
@@ -1251,25 +1290,33 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Scorer Full Name *</Text>
                       <TextInput
-                        style={styles.input}
+                        style={[styles.input, fieldErrors.sName && styles.inputError]}
                         value={sName}
-                        onChangeText={setSName}
+                        onChangeText={(text) => {
+                          setSName(text);
+                          clearError('sName');
+                        }}
                         placeholder="e.g. S. Ramesh"
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="words"
                       />
+                      {fieldErrors.sName ? <Text style={styles.fieldErrorText}>{fieldErrors.sName}</Text> : null}
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Mobile Number *</Text>
                       <TextInput
-                        style={styles.input}
+                        style={[styles.input, fieldErrors.sMobile && styles.inputError]}
                         value={sMobile}
-                        onChangeText={setSMobile}
+                        onChangeText={(text) => {
+                          setSMobile(text);
+                          clearError('sMobile');
+                        }}
                         placeholder="e.g. 9876543210"
                         keyboardType="phone-pad"
                         placeholderTextColor="#94a3b8"
                         maxLength={10}
                       />
+                      {fieldErrors.sMobile ? <Text style={styles.fieldErrorText}>{fieldErrors.sMobile}</Text> : null}
                     </View>
                   </View>
 
@@ -1278,14 +1325,18 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Official Scorer Email *</Text>
                       <TextInput
-                        style={styles.input}
+                        style={[styles.input, fieldErrors.sEmail && styles.inputError]}
                         value={sEmail}
-                        onChangeText={setSEmail}
+                        onChangeText={(text) => {
+                          setSEmail(text);
+                          clearError('sEmail');
+                        }}
                         placeholder="e.g. ramesh.scorer@cfvd.org"
                         keyboardType="email-address"
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="none"
                       />
+                      {fieldErrors.sEmail ? <Text style={styles.fieldErrorText}>{fieldErrors.sEmail}</Text> : null}
                     </View>
                   </View>
 
@@ -1304,6 +1355,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       onSelect={(val) => {
                         setSTaluk(val);
                         if (val !== 'Other') setSCustomTaluk('');
+                        clearError('sCustomTaluk');
                       }}
                     />
                   </View>
@@ -1314,13 +1366,17 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       <View style={{ flex: 1 }}>
                         <Text style={styles.label}>Specify Scorer Taluk Name *</Text>
                         <TextInput
-                          style={styles.input}
+                          style={[styles.input, fieldErrors.sCustomTaluk && styles.inputError]}
                           value={sCustomTaluk}
-                          onChangeText={setSCustomTaluk}
+                          onChangeText={(text) => {
+                            setSCustomTaluk(text);
+                            clearError('sCustomTaluk');
+                          }}
                           placeholder="Type your taluk name here..."
                           placeholderTextColor="#94a3b8"
                           autoCapitalize="words"
                         />
+                        {fieldErrors.sCustomTaluk ? <Text style={styles.fieldErrorText}>{fieldErrors.sCustomTaluk}</Text> : null}
                       </View>
                     </View>
                   )}
@@ -1330,7 +1386,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
                   <TouchableOpacity
                     style={styles.checkboxRow}
-                    onPress={() => setSAgreed(!sAgreed)}
+                    onPress={() => {
+                      setSAgreed(!sAgreed);
+                      clearError('sAgreed');
+                    }}
                     activeOpacity={0.8}
                   >
                     <View style={[styles.checkbox, sAgreed && styles.checkboxChecked]}>
@@ -1340,6 +1399,13 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       I agree to abide by the official BCCI / TNCA and District Scorer Code of Conduct.
                     </Text>
                   </TouchableOpacity>
+                  {fieldErrors.sAgreed ? <Text style={styles.fieldErrorText}>{fieldErrors.sAgreed}</Text> : null}
+
+                  {fieldErrors.general ? (
+                    <View style={styles.generalErrorBox}>
+                      <Text style={styles.generalErrorText}>{fieldErrors.general}</Text>
+                    </View>
+                  ) : null}
 
                   <TouchableOpacity
                     style={[styles.submitBtn, (!isEmailVerified || isLoading) && styles.submitBtnDisabled]}
@@ -1369,13 +1435,17 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Umpire Full Name *</Text>
                       <TextInput
-                        style={styles.input}
+                        style={[styles.input, fieldErrors.uName && styles.inputError]}
                         value={uName}
-                        onChangeText={setUName}
+                        onChangeText={(text) => {
+                          setUName(text);
+                          clearError('uName');
+                        }}
                         placeholder="e.g. K. Sundararajan"
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="words"
                       />
+                      {fieldErrors.uName ? <Text style={styles.fieldErrorText}>{fieldErrors.uName}</Text> : null}
                     </View>
                   </View>
 
@@ -1384,14 +1454,18 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Official Umpire Email *</Text>
                       <TextInput
-                        style={styles.input}
+                        style={[styles.input, fieldErrors.uEmail && styles.inputError]}
                         value={uEmail}
-                        onChangeText={setUEmail}
+                        onChangeText={(text) => {
+                          setUEmail(text);
+                          clearError('uEmail');
+                        }}
                         placeholder="e.g. sundararajan.umpire@cfvd.org"
                         keyboardType="email-address"
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="none"
                       />
+                      {fieldErrors.uEmail ? <Text style={styles.fieldErrorText}>{fieldErrors.uEmail}</Text> : null}
                     </View>
                   </View>
 
@@ -1401,19 +1475,31 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       label="Umpire Certification / Qualification *"
                       value={uQualification}
                       options={UMPIRE_QUALIFICATIONS}
-                      onSelect={setUQualification}
+                      onSelect={(val) => {
+                        setUQualification(val);
+                        clearError('uQualification');
+                      }}
                     />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Umpire Experience *</Text>
                       <TextInput
-                        style={styles.input}
+                        style={[styles.input, fieldErrors.uExperience && styles.inputError]}
                         value={uExperience}
-                        onChangeText={setUExperience}
+                        onChangeText={(text) => {
+                          setUExperience(text);
+                          clearError('uExperience');
+                        }}
                         placeholder="e.g. 6 Years / Senior Panel"
                         placeholderTextColor="#94a3b8"
                       />
+                      {fieldErrors.uExperience ? <Text style={styles.fieldErrorText}>{fieldErrors.uExperience}</Text> : null}
                     </View>
                   </View>
+                  {fieldErrors.uQualification ? (
+                    <Text style={[styles.fieldErrorText, { marginTop: -6, marginBottom: 8 }]}>
+                      {fieldErrors.uQualification}
+                    </Text>
+                  ) : null}
 
                   {/* Row 4: District & State */}
                   <View style={styles.formRow}>
@@ -1424,6 +1510,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       onSelect={(val) => {
                         setUDistrict(val);
                         if (val !== 'Other') setUCustomDistrict('');
+                        clearError('uCustomDistrict');
                       }}
                     />
                     <DropdownField
@@ -1440,13 +1527,17 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       <View style={{ flex: 1 }}>
                         <Text style={styles.label}>Specify District Name *</Text>
                         <TextInput
-                          style={styles.input}
+                          style={[styles.input, fieldErrors.uCustomDistrict && styles.inputError]}
                           value={uCustomDistrict}
-                          onChangeText={setUCustomDistrict}
+                          onChangeText={(text) => {
+                            setUCustomDistrict(text);
+                            clearError('uCustomDistrict');
+                          }}
                           placeholder="Type your district name here..."
                           placeholderTextColor="#94a3b8"
                           autoCapitalize="words"
                         />
+                        {fieldErrors.uCustomDistrict ? <Text style={styles.fieldErrorText}>{fieldErrors.uCustomDistrict}</Text> : null}
                       </View>
                     </View>
                   )}
@@ -1544,7 +1635,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
                   <TouchableOpacity
                     style={styles.checkboxRow}
-                    onPress={() => setUAgreed(!uAgreed)}
+                    onPress={() => {
+                      setUAgreed(!uAgreed);
+                      clearError('uAgreed');
+                    }}
                     activeOpacity={0.8}
                   >
                     <View style={[styles.checkbox, uAgreed && styles.checkboxChecked]}>
@@ -1554,6 +1648,13 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       I hereby declare that all information furnished is true and I agree to abide by the official ICC / BCCI / TNCA and District Umpires Code of Conduct & Ethics.
                     </Text>
                   </TouchableOpacity>
+                  {fieldErrors.uAgreed ? <Text style={styles.fieldErrorText}>{fieldErrors.uAgreed}</Text> : null}
+
+                  {fieldErrors.general ? (
+                    <View style={styles.generalErrorBox}>
+                      <Text style={styles.generalErrorText}>{fieldErrors.general}</Text>
+                    </View>
+                  ) : null}
 
                   <TouchableOpacity
                     style={[styles.submitBtn, (!isEmailVerified || isLoading) && styles.submitBtnDisabled]}
@@ -1734,7 +1835,8 @@ const styles = StyleSheet.create({
   formRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 10
+    marginBottom: 10,
+    alignItems: 'flex-start'
   },
   label: { color: '#334155', fontSize: 12, marginBottom: 4, fontWeight: '700' },
   input: {
@@ -1747,6 +1849,32 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     fontSize: 13,
     height: 38
+  },
+  inputError: {
+    borderColor: '#ef4444',
+    backgroundColor: '#fef2f2'
+  },
+  fieldErrorText: {
+    color: '#dc2626',
+    fontSize: 11.5,
+    fontWeight: '600',
+    marginTop: 3,
+    marginBottom: 4,
+    lineHeight: 14
+  },
+  generalErrorBox: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fca5a5',
+    borderWidth: 1,
+    padding: 10,
+    borderRadius: 6,
+    marginVertical: 10
+  },
+  generalErrorText: {
+    color: '#b91c1c',
+    fontSize: 12.5,
+    fontWeight: '600',
+    textAlign: 'center'
   },
 
   // Dropdown Box
