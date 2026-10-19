@@ -2220,16 +2220,22 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
           }}
         >
           <View style={styles.approvalModalOverlay}>
-            <View style={[styles.approvalModalCard, isDesktop ? styles.approvalCardDesktop : styles.approvalCardMobile]}>
-              {/* Header with HD Batsman Banner & Official App Logo */}
-              <ImageBackground
-                source={require('../../../assets/virat_kohli_otp.png')}
-                style={styles.approvalBannerBg}
-                resizeMode="cover"
-              >
-                <View style={styles.approvalBannerOverlay}>
-                  <View style={styles.approvalBannerTopRow}>
-                    <View style={styles.approvalLogoRow}>
+            <View style={[
+              styles.approvalModalCard,
+              isDesktop ? styles.approvalCardDesktop : styles.approvalCardMobile
+            ]}>
+              {isDesktop ? (
+                /* Desktop 2-Column Side-by-Side Layout */
+                <View style={styles.approvalDesktopContainer}>
+                  {/* Left Column: Full Virat Kohli HD Celebration Image */}
+                  <View style={styles.approvalHeroImageContainer}>
+                    <Image
+                      source={require('../../../assets/virat_kohli_otp.png')}
+                      style={styles.approvalHeroFullImage}
+                      resizeMode="cover"
+                    />
+                    {/* Top Overlay Badge with App Logo */}
+                    <View style={styles.approvalHeroTopOverlay}>
                       <Image
                         source={require('../../../assets/logo_transparent.png')}
                         style={styles.approvalAppLogo}
@@ -2240,154 +2246,385 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         <Text style={styles.approvalFederationSub}>CRICKET ASSOCIATION</Text>
                       </View>
                     </View>
-                    <View style={styles.approvalBadgePill}>
-                      <Text style={styles.approvalBadgePillText}>⏳ PENDING ADMIN VERIFICATION</Text>
+
+                    {/* Bottom Overlay Info */}
+                    <View style={styles.approvalHeroBottomOverlay}>
+                      <View style={styles.approvalBadgePill}>
+                        <Text style={styles.approvalBadgePillText}>🏏 OFFICIAL VERIFICATION</Text>
+                      </View>
+                      <Text style={styles.approvalHeroTitle}>CRICKET FEDERATION OF</Text>
+                      <Text style={styles.approvalHeroSubTitle}>VIRUDHUNAGAR DISTRICT</Text>
                     </View>
                   </View>
-                  <Text style={styles.approvalBannerTitle}>CRICKET FEDERATION OF VIRUDHUNAGAR DISTRICT</Text>
-                </View>
-              </ImageBackground>
 
-              {/* Modal Body */}
-              <View style={styles.approvalBody}>
-                <View style={styles.approvalHeaderRow}>
-                  <View style={styles.approvalIconCircle}>
-                    <Text style={styles.approvalIconText}>🛡️</Text>
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={styles.approvalMainHeading}>Registration Submitted Successfully!</Text>
-                    <Text style={styles.approvalSubHeading}>District Administrator Verification Required</Text>
-                  </View>
-                </View>
+                  {/* Right Column: Scrollable Workflow & Verification Details */}
+                  <View style={styles.approvalRightPanel}>
+                    <ScrollView
+                      showsVerticalScrollIndicator={true}
+                      contentContainerStyle={styles.approvalRightScrollContent}
+                    >
+                      {/* Top Bar with Pending Pill & Close X */}
+                      <View style={styles.approvalTopBarRow}>
+                        <View style={styles.approvalStatusPill}>
+                          <Text style={styles.approvalStatusPillText}>⏳ PENDING ADMIN VERIFICATION</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.approvalCloseCircle}
+                          onPress={() => {
+                            setShowApprovalPendingModal(false);
+                            navigate('Login', { initialRole: activeRole });
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.approvalCloseX}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
 
-                {/* 4-Step Verification Workflow Diagram */}
-                <View style={styles.flowDiagramCard}>
-                  <View style={styles.flowDiagramHeader}>
-                    <Text style={styles.flowDiagramTitle}>VERIFICATION & ACCESS WORKFLOW</Text>
-                    <Text style={styles.flowDiagramSubtitle}>Follow the progress of your scorer credentials</Text>
-                  </View>
-
-                  <View style={styles.flowStepsContainer}>
-                    {/* Step 1 */}
-                    <View style={styles.flowStepItem}>
-                      <View style={[styles.flowStepIconCircle, styles.flowStepCompleted]}>
-                        <Text style={styles.flowStepIcon}>📝</Text>
-                        <View style={styles.flowStepCheckBadge}>
-                          <Text style={styles.flowStepCheckText}>✓</Text>
+                      {/* Header Row */}
+                      <View style={styles.approvalHeaderRow}>
+                        <View style={styles.approvalIconCircle}>
+                          <Text style={styles.approvalIconText}>🛡️</Text>
+                        </View>
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                          <Text style={styles.approvalMainHeading}>Registration Submitted Successfully!</Text>
+                          <Text style={styles.approvalSubHeading}>District Administrator Verification Required</Text>
                         </View>
                       </View>
-                      <Text style={styles.flowStepNum}>STEP 1</Text>
-                      <Text style={styles.flowStepLabel}>Scorer Registration</Text>
-                      <Text style={styles.flowStepStatusGreen}>Submitted</Text>
-                    </View>
 
-                    <View style={styles.flowArrowContainer}>
-                      <Text style={styles.flowArrowText}>➔</Text>
-                    </View>
+                      {/* 4-Step Verification Workflow Diagram */}
+                      <View style={styles.flowDiagramCard}>
+                        <View style={styles.flowDiagramHeader}>
+                          <Text style={styles.flowDiagramTitle}>VERIFICATION & ACCESS WORKFLOW</Text>
+                          <Text style={styles.flowDiagramSubtitle}>
+                            Follow the progress of your {pendingApprovalData?.role ? pendingApprovalData.role.toLowerCase() : 'official'} credentials
+                          </Text>
+                        </View>
 
-                    {/* Step 2 */}
-                    <View style={styles.flowStepItem}>
-                      <View style={[styles.flowStepIconCircle, styles.flowStepActive]}>
-                        <Text style={styles.flowStepIcon}>🛡️</Text>
-                        <View style={styles.flowStepWaitBadge}>
-                          <Text style={styles.flowStepWaitText}>⏳</Text>
+                        <View style={styles.flowStepsContainer}>
+                          {/* Step 1 */}
+                          <View style={styles.flowStepItem}>
+                            <View style={[styles.flowStepIconCircle, styles.flowStepCompleted]}>
+                              <Text style={styles.flowStepIcon}>📝</Text>
+                              <View style={styles.flowStepCheckBadge}>
+                                <Text style={styles.flowStepCheckText}>✓</Text>
+                              </View>
+                            </View>
+                            <Text style={styles.flowStepNum}>STEP 1</Text>
+                            <Text style={styles.flowStepLabel}>
+                              {pendingApprovalData?.role?.includes('Umpire') ? 'Umpire Registration' : 'Scorer Registration'}
+                            </Text>
+                            <Text style={styles.flowStepStatusGreen}>Submitted</Text>
+                          </View>
+
+                          <View style={styles.flowArrowContainer}>
+                            <Text style={styles.flowArrowText}>➔</Text>
+                          </View>
+
+                          {/* Step 2 */}
+                          <View style={styles.flowStepItem}>
+                            <View style={[styles.flowStepIconCircle, styles.flowStepActive]}>
+                              <Text style={styles.flowStepIcon}>🛡️</Text>
+                              <View style={styles.flowStepWaitBadge}>
+                                <Text style={styles.flowStepWaitText}>⏳</Text>
+                              </View>
+                            </View>
+                            <Text style={styles.flowStepNum}>STEP 2</Text>
+                            <Text style={styles.flowStepLabel}>Admin Approval</Text>
+                            <Text style={styles.flowStepStatusAmber}>In Review</Text>
+                          </View>
+
+                          <View style={styles.flowArrowContainer}>
+                            <Text style={styles.flowArrowText}>➔</Text>
+                          </View>
+
+                          {/* Step 3 */}
+                          <View style={styles.flowStepItem}>
+                            <View style={[styles.flowStepIconCircle, styles.flowStepUpcoming]}>
+                              <Text style={styles.flowStepIcon}>✉️</Text>
+                            </View>
+                            <Text style={styles.flowStepNum}>STEP 3</Text>
+                            <Text style={styles.flowStepLabel}>Email Confirmation</Text>
+                            <Text style={styles.flowStepStatusMuted}>Sent to Inbox</Text>
+                          </View>
+
+                          <View style={styles.flowArrowContainer}>
+                            <Text style={styles.flowArrowText}>➔</Text>
+                          </View>
+
+                          {/* Step 4 */}
+                          <View style={styles.flowStepItem}>
+                            <View style={[styles.flowStepIconCircle, styles.flowStepUpcoming]}>
+                              <Text style={styles.flowStepIcon}>🔑</Text>
+                            </View>
+                            <Text style={styles.flowStepNum}>STEP 4</Text>
+                            <Text style={styles.flowStepLabel}>Portal Login</Text>
+                            <Text style={styles.flowStepStatusMuted}>
+                              {pendingApprovalData?.role?.includes('Umpire') ? 'Access Umpire' : 'Access Scorer'}
+                            </Text>
+                          </View>
                         </View>
                       </View>
-                      <Text style={styles.flowStepNum}>STEP 2</Text>
-                      <Text style={styles.flowStepLabel}>Admin Approval</Text>
-                      <Text style={styles.flowStepStatusAmber}>In Review</Text>
-                    </View>
 
-                    <View style={styles.flowArrowContainer}>
-                      <Text style={styles.flowArrowText}>➔</Text>
-                    </View>
+                      {/* Applicant Summary Card */}
+                      {pendingApprovalData && (
+                        <View style={styles.approvalDetailsCard}>
+                          <View style={styles.approvalDetailRow}>
+                            <Text style={styles.approvalDetailLabel}>Applicant Name:</Text>
+                            <Text style={styles.approvalDetailVal}>{pendingApprovalData.name}</Text>
+                          </View>
+                          <View style={styles.approvalDetailRow}>
+                            <Text style={styles.approvalDetailLabel}>Role / Category:</Text>
+                            <Text style={styles.approvalDetailVal}>{pendingApprovalData.role}</Text>
+                          </View>
+                          {pendingApprovalData.certificationLevel && (
+                            <View style={styles.approvalDetailRow}>
+                              <Text style={styles.approvalDetailLabel}>Certification Level:</Text>
+                              <Text style={[styles.approvalDetailVal, { color: '#f59e0b', fontWeight: '800' }]}>
+                                🏅 {pendingApprovalData.certificationLevel}
+                              </Text>
+                            </View>
+                          )}
+                          {pendingApprovalData.taluk && (
+                            <View style={styles.approvalDetailRow}>
+                              <Text style={styles.approvalDetailLabel}>Jurisdiction / Taluk:</Text>
+                              <Text style={styles.approvalDetailVal}>{pendingApprovalData.taluk}</Text>
+                            </View>
+                          )}
+                          <View style={styles.approvalDetailRow}>
+                            <Text style={styles.approvalDetailLabel}>Registered Email:</Text>
+                            <Text style={styles.approvalDetailVal}>{pendingApprovalData.email}</Text>
+                          </View>
+                        </View>
+                      )}
 
-                    {/* Step 3 */}
-                    <View style={styles.flowStepItem}>
-                      <View style={[styles.flowStepIconCircle, styles.flowStepUpcoming]}>
-                        <Text style={styles.flowStepIcon}>✉️</Text>
-                      </View>
-                      <Text style={styles.flowStepNum}>STEP 3</Text>
-                      <Text style={styles.flowStepLabel}>Email Confirmation</Text>
-                      <Text style={styles.flowStepStatusMuted}>Sent to Inbox</Text>
-                    </View>
-
-                    <View style={styles.flowArrowContainer}>
-                      <Text style={styles.flowArrowText}>➔</Text>
-                    </View>
-
-                    {/* Step 4 */}
-                    <View style={styles.flowStepItem}>
-                      <View style={[styles.flowStepIconCircle, styles.flowStepUpcoming]}>
-                        <Text style={styles.flowStepIcon}>🔑</Text>
-                      </View>
-                      <Text style={styles.flowStepNum}>STEP 4</Text>
-                      <Text style={styles.flowStepLabel}>Portal Login</Text>
-                      <Text style={styles.flowStepStatusMuted}>Access Scorer</Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Applicant Summary Card */}
-                {pendingApprovalData && (
-                  <View style={styles.approvalDetailsCard}>
-                    <View style={styles.approvalDetailRow}>
-                      <Text style={styles.approvalDetailLabel}>Applicant Name:</Text>
-                      <Text style={styles.approvalDetailVal}>{pendingApprovalData.name}</Text>
-                    </View>
-                    <View style={styles.approvalDetailRow}>
-                      <Text style={styles.approvalDetailLabel}>Role / Category:</Text>
-                      <Text style={styles.approvalDetailVal}>{pendingApprovalData.role}</Text>
-                    </View>
-                    {pendingApprovalData.certificationLevel && (
-                      <View style={styles.approvalDetailRow}>
-                        <Text style={styles.approvalDetailLabel}>Certification Level:</Text>
-                        <Text style={[styles.approvalDetailVal, { color: '#f59e0b', fontWeight: '800' }]}>
-                          🏅 {pendingApprovalData.certificationLevel}
+                      {/* Official English Notice Box */}
+                      <View style={styles.approvalNoticeBox}>
+                        <View style={styles.approvalNoticeHeaderRow}>
+                          <Text style={styles.approvalNoticeHeaderIcon}>📢</Text>
+                          <Text style={styles.approvalNoticeHeading}>District Administrator Verification Notice</Text>
+                        </View>
+                        <Text style={styles.approvalNoticeEnglish}>
+                          Your registration application and certification documents have been submitted to the District Cricket Administrator (CFVD) for official verification.
+                        </Text>
+                        <Text style={[styles.approvalNoticeEnglish, { marginTop: 6, color: '#fde047' }]}>
+                          Once the Administrator approves your profile, an official confirmation email will be dispatched to <Text style={{ fontWeight: '800' }}>{pendingApprovalData?.email || 'your email'}</Text>. Your account status will be set to ACTIVE, enabling immediate access to the Portal.
                         </Text>
                       </View>
-                    )}
-                    {pendingApprovalData.taluk && (
-                      <View style={styles.approvalDetailRow}>
-                        <Text style={styles.approvalDetailLabel}>Jurisdiction / Taluk:</Text>
-                        <Text style={styles.approvalDetailVal}>{pendingApprovalData.taluk}</Text>
+
+                      {/* Action Button */}
+                      <View style={styles.approvalActionRow}>
+                        <TouchableOpacity
+                          style={styles.approvalPrimaryBtn}
+                          onPress={() => {
+                            setShowApprovalPendingModal(false);
+                            navigate('Login', { initialRole: activeRole });
+                          }}
+                          activeOpacity={0.85}
+                        >
+                          <Text style={styles.approvalPrimaryBtnText}>
+                            {pendingApprovalData?.role?.includes('Umpire')
+                              ? 'Proceed to Umpire Login Portal →'
+                              : 'Proceed to Scorer Login Portal →'}
+                          </Text>
+                        </TouchableOpacity>
                       </View>
-                    )}
-                    <View style={styles.approvalDetailRow}>
-                      <Text style={styles.approvalDetailLabel}>Registered Email:</Text>
-                      <Text style={styles.approvalDetailVal}>{pendingApprovalData.email}</Text>
+                    </ScrollView>
+                  </View>
+                </View>
+              ) : (
+                /* Mobile Single-Column Scrollable Layout */
+                <ScrollView
+                  showsVerticalScrollIndicator={true}
+                  contentContainerStyle={{ flexGrow: 1 }}
+                >
+                  {/* Top Mobile Hero Banner with Full Image */}
+                  <View style={styles.approvalMobileHeroWrap}>
+                    <Image
+                      source={require('../../../assets/virat_kohli_otp.png')}
+                      style={styles.approvalMobileHeroImage}
+                      resizeMode="cover"
+                    />
+                    <TouchableOpacity
+                      onPress={() => {
+                        setShowApprovalPendingModal(false);
+                        navigate('Login', { initialRole: activeRole });
+                      }}
+                      style={styles.approvalMobileCloseCircle}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.approvalCloseX}>✕</Text>
+                    </TouchableOpacity>
+                    <View style={styles.approvalMobileTopOverlay}>
+                      <Image
+                        source={require('../../../assets/logo_transparent.png')}
+                        style={styles.approvalAppLogo}
+                        resizeMode="contain"
+                      />
+                      <View>
+                        <Text style={styles.approvalFederationName}>CFVD OFFICIAL</Text>
+                        <Text style={styles.approvalFederationSub}>CRICKET ASSOCIATION</Text>
+                      </View>
+                    </View>
+                    <View style={styles.approvalMobileBottomOverlay}>
+                      <View style={styles.approvalBadgePill}>
+                        <Text style={styles.approvalBadgePillText}>⏳ PENDING ADMIN VERIFICATION</Text>
+                      </View>
+                      <Text style={styles.approvalHeroTitleMobile}>CRICKET FEDERATION OF VIRUDHUNAGAR DISTRICT</Text>
                     </View>
                   </View>
-                )}
 
-                {/* Official English Notice Box */}
-                <View style={styles.approvalNoticeBox}>
-                  <View style={styles.approvalNoticeHeaderRow}>
-                    <Text style={styles.approvalNoticeHeaderIcon}>📢</Text>
-                    <Text style={styles.approvalNoticeHeading}>District Administrator Verification Notice</Text>
+                  {/* Body Content */}
+                  <View style={styles.approvalBody}>
+                    <View style={styles.approvalHeaderRow}>
+                      <View style={styles.approvalIconCircle}>
+                        <Text style={styles.approvalIconText}>🛡️</Text>
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <Text style={styles.approvalMainHeading}>Registration Submitted Successfully!</Text>
+                        <Text style={styles.approvalSubHeading}>District Administrator Verification Required</Text>
+                      </View>
+                    </View>
+
+                    {/* 4-Step Verification Workflow Diagram */}
+                    <View style={styles.flowDiagramCard}>
+                      <View style={styles.flowDiagramHeader}>
+                        <Text style={styles.flowDiagramTitle}>VERIFICATION & ACCESS WORKFLOW</Text>
+                        <Text style={styles.flowDiagramSubtitle}>
+                          Follow the progress of your {pendingApprovalData?.role ? pendingApprovalData.role.toLowerCase() : 'official'} credentials
+                        </Text>
+                      </View>
+
+                      <View style={styles.flowStepsContainer}>
+                        {/* Step 1 */}
+                        <View style={styles.flowStepItem}>
+                          <View style={[styles.flowStepIconCircle, styles.flowStepCompleted]}>
+                            <Text style={styles.flowStepIcon}>📝</Text>
+                            <View style={styles.flowStepCheckBadge}>
+                              <Text style={styles.flowStepCheckText}>✓</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.flowStepNum}>STEP 1</Text>
+                          <Text style={styles.flowStepLabel}>
+                            {pendingApprovalData?.role?.includes('Umpire') ? 'Umpire Registration' : 'Scorer Registration'}
+                          </Text>
+                          <Text style={styles.flowStepStatusGreen}>Submitted</Text>
+                        </View>
+
+                        <View style={styles.flowArrowContainer}>
+                          <Text style={styles.flowArrowText}>➔</Text>
+                        </View>
+
+                        {/* Step 2 */}
+                        <View style={styles.flowStepItem}>
+                          <View style={[styles.flowStepIconCircle, styles.flowStepActive]}>
+                            <Text style={styles.flowStepIcon}>🛡️</Text>
+                            <View style={styles.flowStepWaitBadge}>
+                              <Text style={styles.flowStepWaitText}>⏳</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.flowStepNum}>STEP 2</Text>
+                          <Text style={styles.flowStepLabel}>Admin Approval</Text>
+                          <Text style={styles.flowStepStatusAmber}>In Review</Text>
+                        </View>
+
+                        <View style={styles.flowArrowContainer}>
+                          <Text style={styles.flowArrowText}>➔</Text>
+                        </View>
+
+                        {/* Step 3 */}
+                        <View style={styles.flowStepItem}>
+                          <View style={[styles.flowStepIconCircle, styles.flowStepUpcoming]}>
+                            <Text style={styles.flowStepIcon}>✉️</Text>
+                          </View>
+                          <Text style={styles.flowStepNum}>STEP 3</Text>
+                          <Text style={styles.flowStepLabel}>Email Confirmation</Text>
+                          <Text style={styles.flowStepStatusMuted}>Sent to Inbox</Text>
+                        </View>
+
+                        <View style={styles.flowArrowContainer}>
+                          <Text style={styles.flowArrowText}>➔</Text>
+                        </View>
+
+                        {/* Step 4 */}
+                        <View style={styles.flowStepItem}>
+                          <View style={[styles.flowStepIconCircle, styles.flowStepUpcoming]}>
+                            <Text style={styles.flowStepIcon}>🔑</Text>
+                          </View>
+                          <Text style={styles.flowStepNum}>STEP 4</Text>
+                          <Text style={styles.flowStepLabel}>Portal Login</Text>
+                          <Text style={styles.flowStepStatusMuted}>
+                            {pendingApprovalData?.role?.includes('Umpire') ? 'Access Umpire' : 'Access Scorer'}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Applicant Summary Card */}
+                    {pendingApprovalData && (
+                      <View style={styles.approvalDetailsCard}>
+                        <View style={styles.approvalDetailRow}>
+                          <Text style={styles.approvalDetailLabel}>Applicant Name:</Text>
+                          <Text style={styles.approvalDetailVal}>{pendingApprovalData.name}</Text>
+                        </View>
+                        <View style={styles.approvalDetailRow}>
+                          <Text style={styles.approvalDetailLabel}>Role / Category:</Text>
+                          <Text style={styles.approvalDetailVal}>{pendingApprovalData.role}</Text>
+                        </View>
+                        {pendingApprovalData.certificationLevel && (
+                          <View style={styles.approvalDetailRow}>
+                            <Text style={styles.approvalDetailLabel}>Certification Level:</Text>
+                            <Text style={[styles.approvalDetailVal, { color: '#f59e0b', fontWeight: '800' }]}>
+                              🏅 {pendingApprovalData.certificationLevel}
+                            </Text>
+                          </View>
+                        )}
+                        {pendingApprovalData.taluk && (
+                          <View style={styles.approvalDetailRow}>
+                            <Text style={styles.approvalDetailLabel}>Jurisdiction / Taluk:</Text>
+                            <Text style={styles.approvalDetailVal}>{pendingApprovalData.taluk}</Text>
+                          </View>
+                        )}
+                        <View style={styles.approvalDetailRow}>
+                          <Text style={styles.approvalDetailLabel}>Registered Email:</Text>
+                          <Text style={styles.approvalDetailVal}>{pendingApprovalData.email}</Text>
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Official English Notice Box */}
+                    <View style={styles.approvalNoticeBox}>
+                      <View style={styles.approvalNoticeHeaderRow}>
+                        <Text style={styles.approvalNoticeHeaderIcon}>📢</Text>
+                        <Text style={styles.approvalNoticeHeading}>District Administrator Verification Notice</Text>
+                      </View>
+                      <Text style={styles.approvalNoticeEnglish}>
+                        Your registration application and certification documents have been submitted to the District Cricket Administrator (CFVD) for official verification.
+                      </Text>
+                      <Text style={[styles.approvalNoticeEnglish, { marginTop: 6, color: '#fde047' }]}>
+                        Once the Administrator approves your profile, an official confirmation email will be dispatched to <Text style={{ fontWeight: '800' }}>{pendingApprovalData?.email || 'your email'}</Text>. Your account status will be set to ACTIVE, enabling immediate access to the Portal.
+                      </Text>
+                    </View>
+
+                    {/* Action Button */}
+                    <View style={styles.approvalActionRow}>
+                      <TouchableOpacity
+                        style={styles.approvalPrimaryBtn}
+                        onPress={() => {
+                          setShowApprovalPendingModal(false);
+                          navigate('Login', { initialRole: activeRole });
+                        }}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.approvalPrimaryBtnText}>
+                          {pendingApprovalData?.role?.includes('Umpire')
+                            ? 'Proceed to Umpire Login Portal →'
+                            : 'Proceed to Scorer Login Portal →'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <Text style={styles.approvalNoticeEnglish}>
-                    Your registration application and certification documents have been submitted to the District Cricket Administrator (CFVD) for official verification.
-                  </Text>
-                  <Text style={[styles.approvalNoticeEnglish, { marginTop: 6, color: '#fde047' }]}>
-                    Once the Administrator approves your profile, an official confirmation email will be dispatched to <Text style={{ fontWeight: '800' }}>{pendingApprovalData?.email || 'your email'}</Text>. Your account status will be set to ACTIVE, enabling immediate access to the Scorer Portal.
-                  </Text>
-                </View>
-
-                {/* Action Button */}
-                <View style={styles.approvalActionRow}>
-                  <TouchableOpacity
-                    style={styles.approvalPrimaryBtn}
-                    onPress={() => {
-                      setShowApprovalPendingModal(false);
-                      navigate('Login', { initialRole: activeRole });
-                    }}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.approvalPrimaryBtnText}>Proceed to Scorer Login Portal →</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+                </ScrollView>
+              )}
             </View>
           </View>
         </Modal>
@@ -3243,87 +3480,201 @@ const styles = StyleSheet.create({
     elevation: 15
   },
   approvalCardDesktop: {
-    width: 640,
-    maxWidth: '96%'
+    width: 860,
+    maxWidth: '96%',
+    height: 570,
+    maxHeight: '92%'
   },
   approvalCardMobile: {
     width: '100%',
-    maxWidth: 440
+    maxWidth: 440,
+    maxHeight: '92%'
   },
-  approvalBannerBg: {
-    width: '100%',
-    height: 140
-  },
-  approvalBannerOverlay: {
+  approvalDesktopContainer: {
     flex: 1,
-    backgroundColor: 'rgba(5, 12, 30, 0.70)',
+    flexDirection: 'row',
+    width: '100%',
+    height: '100%'
+  },
+  approvalHeroImageContainer: {
+    width: '42%',
+    height: '100%',
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: '#0a0f1d'
+  },
+  approvalHeroFullImage: {
+    width: '100%',
+    height: '100%'
+  },
+  approvalHeroTopOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     padding: 14,
-    justifyContent: 'space-between'
+    backgroundColor: 'rgba(5, 12, 30, 0.65)'
   },
-  approvalBannerTopRow: {
+  approvalHeroBottomOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 14,
+    backgroundColor: 'rgba(5, 12, 30, 0.82)'
+  },
+  approvalHeroTitle: {
+    color: '#ffffff',
+    fontSize: 11.5,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    marginTop: 6
+  },
+  approvalHeroSubTitle: {
+    color: '#fbbf24',
+    fontSize: 13.5,
+    fontWeight: '900',
+    letterSpacing: 0.8
+  },
+  approvalHeroTitleMobile: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    marginTop: 4
+  },
+  approvalRightPanel: {
+    flex: 1,
+    width: '58%',
+    height: '100%',
+    backgroundColor: '#0f172a'
+  },
+  approvalRightScrollContent: {
+    padding: 18
+  },
+  approvalTopBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between'
+    justifyContent: 'space-between',
+    marginBottom: 12
   },
-  approvalLogoRow: {
+  approvalStatusPill: {
+    backgroundColor: '#f59e0b',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6
+  },
+  approvalStatusPillText: {
+    color: '#000000',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.6
+  },
+  approvalCloseCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(234, 179, 8, 0.3)'
+  },
+  approvalCloseX: {
+    color: '#e2e8f0',
+    fontSize: 13,
+    fontWeight: 'bold'
+  },
+  approvalMobileHeroWrap: {
+    width: '100%',
+    height: 195,
+    position: 'relative'
+  },
+  approvalMobileHeroImage: {
+    width: '100%',
+    height: '100%'
+  },
+  approvalMobileCloseCircle: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#eab308',
+    zIndex: 10
+  },
+  approvalMobileTopOverlay: {
+    position: 'absolute',
+    top: 8,
+    left: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10
+    gap: 8,
+    backgroundColor: 'rgba(5, 12, 30, 0.6)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6
+  },
+  approvalMobileBottomOverlay: {
+    position: 'absolute',
+    bottom: 8,
+    left: 10,
+    right: 10
   },
   approvalAppLogo: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'rgba(15, 23, 42, 0.85)',
     borderWidth: 1.5,
     borderColor: '#f59e0b'
   },
   approvalFederationName: {
     color: '#f59e0b',
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '900',
     letterSpacing: 0.8
   },
   approvalFederationSub: {
     color: '#cbd5e1',
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: '700',
     letterSpacing: 0.5
   },
   approvalBadgePill: {
     backgroundColor: '#f59e0b',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 5,
+    alignSelf: 'flex-start'
   },
   approvalBadgePillText: {
     color: '#000000',
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '900',
-    letterSpacing: 0.6
-  },
-  approvalBannerTitle: {
-    color: '#ffffff',
-    fontSize: 12.5,
-    fontWeight: '900',
-    letterSpacing: 0.8,
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowRadius: 4,
-    textShadowOffset: { width: 1, height: 1 }
+    letterSpacing: 0.5
   },
   approvalBody: {
-    padding: 20,
+    padding: 16,
     backgroundColor: '#0f172a'
   },
   approvalHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14
+    marginBottom: 12
   },
   approvalIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: '#1e293b',
     borderWidth: 1.5,
     borderColor: '#f59e0b',
@@ -3331,7 +3682,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   approvalIconText: {
-    fontSize: 22
+    fontSize: 20
   },
   approvalMainHeading: {
     color: '#ffffff',
@@ -3340,7 +3691,7 @@ const styles = StyleSheet.create({
   },
   approvalSubHeading: {
     color: '#f59e0b',
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '600',
     marginTop: 2
   },
