@@ -12,10 +12,9 @@ import {
   Alert,
   Platform,
   Modal,
-  useWindowDimensions
+  useWindowDimensions,
 } from 'react-native';
 import { useAppNavigation } from '../../navigation/AppNavigator';
-import SharedBackground from '../../components/scorer/SharedBackground';
 import { ScorerApi } from '../../services/api';
 import { showSuccess, showError, showWarning, showInfo } from '../../utils/sweetalert';
 
@@ -963,8 +962,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   };
 
   return (
-    <SharedBackground>
-      <View style={[styles.container, Platform.OS === 'web' && isDesktop && ({ height: '100vh', maxHeight: '100vh', overflow: 'hidden' } as any)]}>
+    <View style={[styles.container, Platform.OS === 'web' && isDesktop && ({ height: '100vh', maxHeight: '100vh', overflow: 'hidden' } as any)]}>
         {/* Sleek Minimal Corner Exit Action */}
         <TouchableOpacity
           onPress={() => (onExit ? onExit() : navigate('Home'))}
@@ -2629,12 +2627,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
           </View>
         </Modal>
       </View>
-    </SharedBackground>
-  );
+    );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'transparent', width: '100%', position: 'relative' },
+  container: { flex: 1, backgroundColor: '#f8fafc', width: '100%', position: 'relative' },
   cornerExitBtn: {
     position: 'absolute',
     top: 14,

@@ -12,7 +12,6 @@ import {
   useWindowDimensions
 } from 'react-native';
 import { useAppNavigation } from '../../navigation/AppNavigator';
-import SharedBackground from '../../components/scorer/SharedBackground';
 import { ScorerApi, setAuthToken, setCurrentUser } from '../../services/api';
 import { showSuccess, showError, showWarning } from '../../utils/sweetalert';
 import { validateEmail, validatePassword } from '../../utils/validation';
@@ -147,8 +146,7 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
   const isDesktop = windowWidth >= 640;
 
   return (
-    <SharedBackground>
-      <View style={[styles.container, Platform.OS === 'web' && isDesktop && ({ height: '100vh', maxHeight: '100vh', overflow: 'hidden' } as any)]}>
+    <View style={[styles.container, Platform.OS === 'web' && isDesktop && ({ height: '100vh', maxHeight: '100vh', overflow: 'hidden' } as any)]}>
         {/* Sleek Minimal Corner Exit Action */}
         <TouchableOpacity
           onPress={() => (onExit ? onExit() : navigate('Home'))}
@@ -387,12 +385,11 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
           }}
         />
       </View>
-    </SharedBackground>
-  );
+    );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'transparent', width: '100%', position: 'relative' },
+  container: { flex: 1, backgroundColor: '#f8fafc', width: '100%', position: 'relative' },
   cornerExitBtn: {
     position: 'absolute',
     top: 14,
