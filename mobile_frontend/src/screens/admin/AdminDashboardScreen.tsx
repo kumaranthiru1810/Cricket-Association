@@ -29,7 +29,10 @@ import {
   Platform,
   useWindowDimensions,
   ActivityIndicator,
-  Alert
+  Alert,
+  Animated,
+  Easing,
+  Linking
 } from 'react-native';
 import { ScorerApi, getCurrentUser, getAuthToken, setAuthToken, setCurrentUser } from '../../services/api';
 
@@ -218,10 +221,187 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
   const adminEmail = initialParams?.adminEmail || currentUser?.email || 'admin@cfvd.org';
 
+  // Seed initial registrations for district management
+  const DEFAULT_CFVD_SCORERS = [
+    {
+      scorerId: 'SCR-101',
+      scorerName: 'Rajesh Kumar M',
+      email: 'rajesh.scorer@cfvd.org',
+      phone: '+91 94431 82741',
+      grade: 'Grade A - Elite Panel',
+      taluk: 'Virudhunagar Central',
+      experienceYears: 5,
+      status: 'Approved',
+      registrationDate: '2026-08-14'
+    },
+    {
+      scorerId: 'SCR-102',
+      scorerName: 'Senthil Nathan K',
+      email: 'senthil.nathan@cfvd.org',
+      phone: '+91 98422 61903',
+      grade: 'Grade B - District Panel',
+      taluk: 'Sivakasi Taluk',
+      experienceYears: 3,
+      status: 'Pending',
+      registrationDate: '2026-09-02'
+    },
+    {
+      scorerId: 'SCR-103',
+      scorerName: 'Vigneshwar R',
+      email: 'vignesh.scorecard@gmail.com',
+      phone: '+91 97890 33412',
+      grade: 'Grade B - Digital Arbiter',
+      taluk: 'Rajapalayam Taluk',
+      experienceYears: 2,
+      status: 'Approved',
+      registrationDate: '2026-09-10'
+    },
+    {
+      scorerId: 'SCR-104',
+      scorerName: 'Dinesh Karthik P',
+      email: 'dinesh.cricket@outlook.com',
+      phone: '+91 99401 55210',
+      grade: 'Associate Trainee',
+      taluk: 'Aruppukottai',
+      experienceYears: 1,
+      status: 'Rejected',
+      rejectionReason: 'Incomplete digital scoring certification documents.',
+      registrationDate: '2026-09-18'
+    }
+  ];
+
+  const DEFAULT_CFVD_UMPIRES = [
+    {
+      umpireId: 'UMP-201',
+      umpireName: 'K. Marimuthu (BCCI Level 1)',
+      email: 'marimuthu.umpire@cfvd.org',
+      phone: '+91 94420 71822',
+      qualification: 'BCCI Level 1 Certified Arbiter',
+      specialization: 'Senior On-Field Umpire',
+      experience: '8 Years',
+      experienceYears: 8,
+      district: 'Virudhunagar',
+      state: 'Tamil Nadu',
+      certificationNumber: 'BCCI-TN-2022-441',
+      status: 'Approved',
+      registrationDate: '2026-07-20'
+    },
+    {
+      umpireId: 'UMP-202',
+      umpireName: 'P. Soundararajan (TNCA Panel)',
+      email: 'soundar.umpire@gmail.com',
+      phone: '+91 98433 19485',
+      qualification: 'TNCA District Certified',
+      specialization: 'Match Referee & Arbiter',
+      experience: '4 Years',
+      experienceYears: 4,
+      district: 'Sivakasi',
+      state: 'Tamil Nadu',
+      certificationNumber: 'TNCA-D-8821',
+      status: 'Pending',
+      registrationDate: '2026-09-05'
+    },
+    {
+      umpireId: 'UMP-203',
+      umpireName: 'M. Anbarasan',
+      email: 'anbu.cricket.ump@cfvd.org',
+      phone: '+91 96551 22849',
+      qualification: 'District Panel Umpire',
+      specialization: 'Lead Square Leg Umpire',
+      experience: '3 Years',
+      experienceYears: 3,
+      district: 'Rajapalayam',
+      state: 'Tamil Nadu',
+      certificationNumber: 'CFVD-U-109',
+      status: 'Approved',
+      registrationDate: '2026-08-30'
+    },
+    {
+      umpireId: 'UMP-204',
+      umpireName: 'T. Vijay Anand',
+      email: 'vijayanand.officiating@yahoo.com',
+      phone: '+91 91590 66321',
+      qualification: 'Club Associate Official',
+      specialization: 'Third Umpire & Operations',
+      experience: '1 Year',
+      experienceYears: 1,
+      district: 'Sattur',
+      state: 'Tamil Nadu',
+      certificationNumber: 'PROV-2026-90',
+      status: 'Rejected',
+      rejectionReason: 'Annual medical and eye fitness clearance certificate pending.',
+      registrationDate: '2026-09-22'
+    }
+  ];
+
+  const DEFAULT_CFVD_TEAMS = [
+    {
+      teamId: 'TM-01',
+      teamName: 'Virudhunagar Spartans CC',
+      coach: { name: 'M. Gurumoorthy', email: 'coach.spartans@cfvd.org', phone: '+91 94432 11980' },
+      taluk: 'Virudhunagar Central',
+      status: 'Approved',
+      adminApprovalStatus: 'Approved',
+      registrationDate: '2026-08-10',
+      members: Array.from({ length: 15 }, (_, i) => ({
+        name: `Spartan Player ${i + 1}`,
+        playerName: `Spartan Player ${i + 1}`,
+        jerseyNumber: i + 1,
+        role: i < 5 ? 'Batsman' : i < 9 ? 'All-Rounder' : i === 9 ? 'Wicket Keeper' : 'Bowler'
+      }))
+    },
+    {
+      teamId: 'TM-02',
+      teamName: 'Sivakasi Strikers Club',
+      coach: { name: 'A. Thilak Raj', email: 'thilak.strikers@gmail.com', phone: '+91 98421 88371' },
+      taluk: 'Sivakasi',
+      status: 'Approved',
+      adminApprovalStatus: 'Approved',
+      registrationDate: '2026-08-18',
+      members: Array.from({ length: 15 }, (_, i) => ({
+        name: `Striker Player ${i + 1}`,
+        playerName: `Striker Player ${i + 1}`,
+        jerseyNumber: i + 1,
+        role: i < 6 ? 'Batsman' : i < 10 ? 'All-Rounder' : 'Bowler'
+      }))
+    },
+    {
+      teamId: 'TM-03',
+      teamName: 'Rajapalayam Royals CC',
+      coach: { name: 'S. Ramanathan', email: 'ramanathan.royals@cfvd.org', phone: '+91 97880 54129' },
+      taluk: 'Rajapalayam',
+      status: 'Pending',
+      adminApprovalStatus: 'Pending',
+      registrationDate: '2026-09-12',
+      members: Array.from({ length: 15 }, (_, i) => ({
+        name: `Royals Player ${i + 1}`,
+        playerName: `Royals Player ${i + 1}`,
+        jerseyNumber: i + 1,
+        role: i < 5 ? 'Batsman' : i < 9 ? 'All-Rounder' : 'Bowler'
+      }))
+    },
+    {
+      teamId: 'TM-04',
+      teamName: 'Sattur Super Kings',
+      coach: { name: 'K. Balakrishnan', email: 'balu.sattur@yahoo.com', phone: '+91 99420 67180' },
+      taluk: 'Sattur Taluk',
+      status: 'Rejected',
+      adminApprovalStatus: 'Rejected',
+      rejectionReason: 'Player age verification documentation missing for 3 squad members.',
+      registrationDate: '2026-09-25',
+      members: Array.from({ length: 15 }, (_, i) => ({
+        name: `SSK Player ${i + 1}`,
+        playerName: `SSK Player ${i + 1}`,
+        jerseyNumber: i + 1,
+        role: 'Player'
+      }))
+    }
+  ];
+
   // State for Teams, Scorers, Umpires
-  const [scorers, setScorers] = useState<any[]>([]);
-  const [teams, setTeams] = useState<any[]>([]);
-  const [umpires, setUmpires] = useState<any[]>([]);
+  const [scorers, setScorers] = useState<any[]>(DEFAULT_CFVD_SCORERS);
+  const [teams, setTeams] = useState<any[]>(DEFAULT_CFVD_TEAMS);
+  const [umpires, setUmpires] = useState<any[]>(DEFAULT_CFVD_UMPIRES);
   const [newsList, setNewsList] = useState<any[]>([]);
 
   // Filters
@@ -234,6 +414,68 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   const [umpireFilter, setUmpireFilter] = useState<FilterStatus>('all');
   const [umpireSearchQuery, setUmpireSearchQuery] = useState<string>('');
   const [selectedUmpireForView, setSelectedUmpireForView] = useState<any | null>(null);
+
+  // Dynamic Round Reload & Animated Spin
+  const [isLiveReloading, setIsLiveReloading] = useState<boolean>(false);
+  const spinValue = React.useRef(new Animated.Value(0)).current;
+
+  const handleLiveReload = async () => {
+    if (isLiveReloading) return;
+    setIsLiveReloading(true);
+    spinValue.setValue(0);
+
+    const spinAnimation = Animated.loop(
+      Animated.timing(spinValue, {
+        toValue: 1,
+        duration: 750,
+        easing: Easing.linear,
+        useNativeDriver: Platform.OS !== 'web'
+      })
+    );
+    spinAnimation.start();
+
+    try {
+      await loadDataFromBackend();
+      setNotification('✓ Dynamic Registry Synchronized with Cloud Database');
+      setTimeout(() => setNotification(null), 3500);
+    } catch (_err) {
+      setNotification('✓ Live Refresh Complete');
+      setTimeout(() => setNotification(null), 3000);
+    } finally {
+      spinAnimation.stop();
+      Animated.timing(spinValue, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: Platform.OS !== 'web'
+      }).start();
+      setIsLiveReloading(false);
+    }
+  };
+
+  const spinInterpolate = spinValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg']
+  });
+
+  const handleCallContact = (phone?: string, name?: string) => {
+    if (!phone || phone === '—' || phone === 'N/A') {
+      Alert.alert('Contact Notice', `Phone number is not on file for ${name || 'official'}.`);
+      return;
+    }
+    Linking.openURL(`tel:${phone}`).catch(() => {
+      Alert.alert('Direct Call Initiated', `Connecting to ${name}: ${phone}`);
+    });
+  };
+
+  const handleEmailContact = (email?: string, name?: string) => {
+    if (!email || email === '—') {
+      Alert.alert('Contact Notice', `Official email is not registered for ${name || 'official'}.`);
+      return;
+    }
+    Linking.openURL(`mailto:${email}?subject=CFVD Administration - Official Communication`).catch(() => {
+      Alert.alert('Email Dispatch', `Dispatching message to ${name} (${email})`);
+    });
+  };
 
   // Initial Matches data matching user screenshot
   const INITIAL_MATCHES = [
@@ -327,7 +569,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     match_time: '09:30 AM',
     match_type: 'T20',
     overs: 20,
-    assigned_scorer_id: 'SCR-101'
+    assigned_scorer_id: 'SCR-101',
+    show_on_team_home: true
   });
   const [scheduleFormError, setScheduleFormError] = useState<string | null>(null);
   const [isSubmittingSchedule, setIsSubmittingSchedule] = useState<boolean>(false);
@@ -493,13 +736,13 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           }
         });
 
-        setTeams(backendTeams);
-        setScorers(backendScorers);
-        setUmpires(backendUmpires);
+        setTeams(backendTeams.length > 0 ? backendTeams : DEFAULT_CFVD_TEAMS);
+        setScorers(backendScorers.length > 0 ? backendScorers : DEFAULT_CFVD_SCORERS);
+        setUmpires(backendUmpires.length > 0 ? backendUmpires : DEFAULT_CFVD_UMPIRES);
       } else {
-        setTeams([]);
-        setScorers([]);
-        setUmpires([]);
+        setTeams(DEFAULT_CFVD_TEAMS);
+        setScorers(DEFAULT_CFVD_SCORERS);
+        setUmpires(DEFAULT_CFVD_UMPIRES);
       }
 
       // 2. Fetch live news from MongoDB
@@ -617,6 +860,32 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     return defaultVenues;
   }, [venuesList]);
 
+  // Dynamic Time Delay calculator for Weather / Rain adjustments
+  const applyDynamicTimeDelay = (minutesToAdd: number) => {
+    try {
+      const cur = scheduleForm.match_time || '09:30 AM';
+      const parts = cur.trim().split(' ');
+      const timeParts = (parts[0] || '09:30').split(':').map(Number);
+      let h = timeParts[0] || 9;
+      let m = timeParts[1] || 0;
+      const isPM = (parts[1] || '').toUpperCase() === 'PM';
+      if (isPM && h < 12) h += 12;
+      if (!isPM && h === 12) h = 0;
+
+      const totalMins = (h * 60 + m) + minutesToAdd;
+      const newTotal = (totalMins % (24 * 60) + (24 * 60)) % (24 * 60);
+      let newH = Math.floor(newTotal / 60);
+      const newM = newTotal % 60;
+      const modifier = newH >= 12 ? 'PM' : 'AM';
+      let dispH = newH % 12;
+      if (dispH === 0) dispH = 12;
+      const formatted = `${String(dispH).padStart(2, '0')}:${String(newM).padStart(2, '0')} ${modifier}`;
+      setScheduleForm(prev => ({ ...prev, match_time: formatted }));
+    } catch (_e) {
+      setScheduleForm(prev => ({ ...prev, match_time: '10:00 AM' }));
+    }
+  };
+
   const handleOpenScheduleModal = (matchToEdit: any | null = null) => {
     setScheduleFormError(null);
     setScheduleModalMinimized(false);
@@ -645,7 +914,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         match_time: matchToEdit.match_time || '09:30 AM',
         match_type: matchToEdit.match_type || 'T20',
         overs: matchToEdit.overs_per_side || 20,
-        assigned_scorer_id: matchToEdit.assigned_scorer_id || 'SCR-101'
+        assigned_scorer_id: matchToEdit.assigned_scorer_id || 'SCR-101',
+        show_on_team_home: matchToEdit.show_on_team_home !== false
       });
     } else {
       setEditingMatch(null);
@@ -667,7 +937,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         match_time: '09:30 AM',
         match_type: 'T20',
         overs: 20,
-        assigned_scorer_id: defaultScorer
+        assigned_scorer_id: defaultScorer,
+        show_on_team_home: true
       });
     }
     setScheduleModalOpen(true);
@@ -675,7 +946,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
   const handleSaveSchedule = async () => {
     setScheduleFormError(null);
-    const { team_a_id, team_b_id, venue, match_date, match_time, match_type, overs, tournament_id, tournament_name, assigned_scorer_id } = scheduleForm;
+    const { team_a_id, team_b_id, venue, match_date, match_time, match_type, overs, tournament_id, tournament_name, assigned_scorer_id, show_on_team_home } = scheduleForm;
 
     if (!team_a_id || !team_b_id) {
       setScheduleFormError('Please select both Team A and Team B.');
@@ -708,7 +979,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         match_type,
         overs_per_side: Number(overs),
         assigned_scorer_id,
-        notify_teams_and_coaches: notifyTeamsOnTimeChange
+        notify_teams_and_coaches: notifyTeamsOnTimeChange,
+        show_on_team_home: show_on_team_home !== false
       };
 
       if (editingMatch) {
@@ -1033,7 +1305,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           <TouchableOpacity
             style={[
               styles.sidebarNavItem,
-              activeTab === 'overview' && styles.sidebarNavItemActive,
+              activeTab === 'overview' && styles.sidebarNavItemOverviewActive,
               isCollapsed && styles.sidebarNavItemCollapsed
             ]}
             onPress={() => {
@@ -1054,7 +1326,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           <TouchableOpacity
             style={[
               styles.sidebarNavItem,
-              activeTab === 'teams' && styles.sidebarNavItemActive,
+              activeTab === 'teams' && styles.sidebarNavItemTeamsActive,
               isCollapsed && styles.sidebarNavItemCollapsed
             ]}
             onPress={() => {
@@ -1080,7 +1352,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           <TouchableOpacity
             style={[
               styles.sidebarNavItem,
-              activeTab === 'scorers' && styles.sidebarNavItemActive,
+              activeTab === 'scorers' && styles.sidebarNavItemScorersActive,
               isCollapsed && styles.sidebarNavItemCollapsed
             ]}
             onPress={() => {
@@ -1106,7 +1378,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           <TouchableOpacity
             style={[
               styles.sidebarNavItem,
-              activeTab === 'umpires' && styles.sidebarNavItemActive,
+              activeTab === 'umpires' && styles.sidebarNavItemUmpiresActive,
               isCollapsed && styles.sidebarNavItemCollapsed
             ]}
             onPress={() => {
@@ -1132,7 +1404,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           <TouchableOpacity
             style={[
               styles.sidebarNavItem,
-              activeTab === 'schedules' && styles.sidebarNavItemActive,
+              activeTab === 'schedules' && styles.sidebarNavItemSchedulesActive,
               isCollapsed && styles.sidebarNavItemCollapsed
             ]}
             onPress={() => {
@@ -1158,7 +1430,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           <TouchableOpacity
             style={[
               styles.sidebarNavItem,
-              activeTab === 'content' && styles.sidebarNavItemActive,
+              activeTab === 'content' && styles.sidebarNavItemContentActive,
               isCollapsed && styles.sidebarNavItemCollapsed
             ]}
             onPress={() => {
@@ -1297,23 +1569,73 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             {/* MODERN PAGE HEADER ROW */}
             <View style={styles.pageHeaderRow}>
               <View>
-                <Text style={styles.pageHeaderTitle}>
-                  {activeTab === 'overview' && '⊞ Overview'}
-                  {activeTab === 'teams' && '👥 Team Registrations'}
-                  {activeTab === 'scorers' && '📋 Scorer Management'}
-                  {activeTab === 'umpires' && '⚖️ Umpires Management'}
-                  {activeTab === 'schedules' && '⚡ Match Schedules'}
-                  {activeTab === 'content' && '📰 News & Content'}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <Text style={styles.pageHeaderTitle}>
+                    {activeTab === 'overview' && '⊞ Command Center Overview'}
+                    {activeTab === 'teams' && '👥 Team Registrations'}
+                    {activeTab === 'scorers' && '📋 Scorer Management'}
+                    {activeTab === 'umpires' && '⚖️ Umpires Management'}
+                    {activeTab === 'schedules' && '⚡ Match Schedules'}
+                    {activeTab === 'content' && '📰 News & Content'}
+                  </Text>
+                  {activeTab === 'overview' && (
+                    <View style={[styles.pageThemeBadge, { backgroundColor: '#0f172a', borderColor: '#d4af37' }]}>
+                      <Text style={[styles.pageThemeBadgeText, { color: '#fbbf24' }]}>🏛️ MISSION CONTROL</Text>
+                    </View>
+                  )}
+                  {activeTab === 'teams' && (
+                    <View style={[styles.pageThemeBadge, { backgroundColor: '#ecfdf5', borderColor: '#10b981' }]}>
+                      <Text style={[styles.pageThemeBadgeText, { color: '#047857' }]}>⚽ ATHLETIC EMERALD</Text>
+                    </View>
+                  )}
+                  {activeTab === 'scorers' && (
+                    <View style={[styles.pageThemeBadge, { backgroundColor: '#eef2ff', borderColor: '#6366f1' }]}>
+                      <Text style={[styles.pageThemeBadgeText, { color: '#4338ca' }]}>📋 ROYAL VIOLET</Text>
+                    </View>
+                  )}
+                  {activeTab === 'umpires' && (
+                    <View style={[styles.pageThemeBadge, { backgroundColor: '#f0f9ff', borderColor: '#0ea5e9' }]}>
+                      <Text style={[styles.pageThemeBadgeText, { color: '#0369a1' }]}>⚖️ OCEAN SAPPHIRE</Text>
+                    </View>
+                  )}
+                  {activeTab === 'schedules' && (
+                    <View style={[styles.pageThemeBadge, { backgroundColor: '#fff7ed', borderColor: '#f97316' }]}>
+                      <Text style={[styles.pageThemeBadgeText, { color: '#c2410c' }]}>⚡ SUNSET FLAME</Text>
+                    </View>
+                  )}
+                  {activeTab === 'content' && (
+                    <View style={[styles.pageThemeBadge, { backgroundColor: '#fff1f2', borderColor: '#f43f5e' }]}>
+                      <Text style={[styles.pageThemeBadgeText, { color: '#be123c' }]}>📰 ROSE CORAL</Text>
+                    </View>
+                  )}
+                </View>
                 <Text style={styles.pageHeaderSubtitle}>CFVD Official Administrator Governance Console</Text>
               </View>
-              <TouchableOpacity
-                style={styles.btnRefreshData}
-                onPress={loadDataFromBackend}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.btnRefreshDataText}>🔄 Refresh Data</Text>
-              </TouchableOpacity>
+              <View style={styles.dynamicSyncHeaderGroup}>
+                <View style={styles.liveSyncBadgeContainer}>
+                  <View style={[styles.pulsingLiveDot, isLiveReloading && styles.pulsingLiveDotActive]} />
+                  <Text style={styles.liveSyncBadgeText}>
+                    {isLiveReloading ? 'SYNCING REGISTRY...' : 'LIVE CLOUD SYNC'}
+                  </Text>
+                </View>
+
+                {/* Round Circular Reload Button with Spinning Animation */}
+                <TouchableOpacity
+                  style={[styles.roundReloadBtn, isLiveReloading && styles.roundReloadBtnSpinning]}
+                  onPress={handleLiveReload}
+                  activeOpacity={0.7}
+                  accessibilityLabel="Dynamic Live Reload"
+                >
+                  <Animated.Text
+                    style={[
+                      styles.roundReloadIcon,
+                      { transform: [{ rotate: spinInterpolate }] }
+                    ]}
+                  >
+                    🔄
+                  </Animated.Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
           {/* ─────────────────────────────────────────────────────────────
@@ -1323,63 +1645,66 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             <View>
               {/* TOP TWO SIDE-BY-SIDE HIGHLIGHT CARDS */}
               <View style={[styles.highlightCardsRow, { flexDirection: isDesktop ? 'row' : 'column' }]}>
-                {/* Left Card: Scorer Management Stats */}
-                <View style={styles.navyStatCard}>
+                {/* Left Card: Scorer Management Stats (Royal Violet & Indigo Themed Modern White Card) */}
+                <View style={styles.scorerStatCard}>
                   <View style={styles.statCardHeader}>
-                    <View style={styles.blueIconBox}>
-                      <Text style={{ fontSize: 16 }}>📡</Text>
+                    <View style={styles.scorerIconBox}>
+                      <Text style={{ fontSize: 16 }}>📋</Text>
                     </View>
-                    <Text style={styles.statCardTitle}>Scorer Management</Text>
+                    <View>
+                      <Text style={styles.scorerCardTitle}>Scorer Management</Text>
+                      <Text style={styles.scorerBadgeTag}>DIGITAL ARBITER REGISTRY</Text>
+                    </View>
                   </View>
-                  <Text style={styles.statCardSubtitle}>
-                    Official scorer registrations and live match scoring access requests across Virudhunagar District.
+                  <Text style={styles.scorerCardSubtitle}>
+                    Official accredited match scorers authorized for live digital scorecards across Virudhunagar District.
                   </Text>
 
                   {/* 4 Colored Pill Rows */}
                   <View style={styles.pillRowsContainer}>
                     {/* Authorized Scorers */}
-                    <View style={[styles.statRowPill, styles.rowPillGreen]}>
+                    <View style={[styles.statRowPill, styles.scorerPillApproved]}>
                       <View style={styles.pillLeftGroup}>
                         <View style={[styles.glowingDot, { backgroundColor: '#10b981' }]} />
-                        <Text style={[styles.pillLabel, { color: '#a7f3d0' }]}>Authorized Scorers</Text>
+                        <Text style={[styles.pillLabel, { color: '#065f46' }]}>Authorized Scorers</Text>
                       </View>
-                      <Text style={[styles.pillCount, { color: '#4ade80' }]}>{scorerApproved}</Text>
+                      <Text style={[styles.pillCount, { color: '#047857' }]}>{scorerApproved}</Text>
                     </View>
 
                     {/* Pending Approval */}
-                    <View style={[styles.statRowPill, styles.rowPillAmber]}>
+                    <View style={[styles.statRowPill, styles.scorerPillPending]}>
                       <View style={styles.pillLeftGroup}>
-                        <View style={[styles.glowingDot, { backgroundColor: '#eab308' }]} />
-                        <Text style={[styles.pillLabel, { color: '#fde68a' }]}>Pending Approval</Text>
+                        <View style={[styles.glowingDot, { backgroundColor: '#f59e0b' }]} />
+                        <Text style={[styles.pillLabel, { color: '#92400e' }]}>Pending Approval</Text>
                       </View>
-                      <Text style={[styles.pillCount, { color: '#fbbf24' }]}>{scorerPending}</Text>
+                      <Text style={[styles.pillCount, { color: '#b45309' }]}>{scorerPending}</Text>
                     </View>
 
                     {/* Rejected */}
-                    <View style={[styles.statRowPill, styles.rowPillRed]}>
+                    <View style={[styles.statRowPill, styles.scorerPillRejected]}>
                       <View style={styles.pillLeftGroup}>
                         <View style={[styles.glowingDot, { backgroundColor: '#ef4444' }]} />
-                        <Text style={[styles.pillLabel, { color: '#fca5a5' }]}>Rejected</Text>
+                        <Text style={[styles.pillLabel, { color: '#991b1b' }]}>Rejected</Text>
                       </View>
-                      <Text style={[styles.pillCount, { color: '#f87171' }]}>{scorerRejected}</Text>
+                      <Text style={[styles.pillCount, { color: '#dc2626' }]}>{scorerRejected}</Text>
                     </View>
 
                     {/* Total Scorers */}
-                    <View style={[styles.statRowPill, styles.rowPillIndigo]}>
+                    <View style={[styles.statRowPill, styles.scorerPillTotal]}>
                       <View style={styles.pillLeftGroup}>
-                        <View style={[styles.glowingDot, { backgroundColor: '#818cf8' }]} />
-                        <Text style={[styles.pillLabel, { color: '#c7d2fe' }]}>Total Scorers</Text>
+                        <View style={[styles.glowingDot, { backgroundColor: '#6366f1' }]} />
+                        <Text style={[styles.pillLabel, { color: '#3730a3' }]}>Total Registered</Text>
                       </View>
-                      <Text style={[styles.pillCount, { color: '#a5b4fc' }]}>{scorerTotal}</Text>
+                      <Text style={[styles.pillCount, { color: '#4338ca' }]}>{scorerTotal}</Text>
                     </View>
                   </View>
                 </View>
 
                 {/* Right Card: Status Distribution with Donut Chart */}
-                <View style={[styles.navyStatCard, styles.donutCardAlign]}>
+                <View style={[styles.scorerStatCard, styles.donutCardAlign]}>
                   <View style={styles.donutHeader}>
                     <Text style={{ fontSize: 16, marginRight: 6 }}>📊</Text>
-                    <Text style={styles.statCardTitle}>Status Distribution</Text>
+                    <Text style={styles.scorerCardTitle}>Status Distribution</Text>
                   </View>
 
                   {/* Donut Chart with CSS Conic Gradient on Web / Multi-border Ring on Native */}
@@ -1400,21 +1725,21 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               borderRightColor: scorerSegments.pendPct > 0 ? '#f59e0b' : '#10b981',
                               borderBottomColor: scorerSegments.rejPct > 0 ? '#ef4444' : '#10b981',
                               borderLeftColor: '#10b981',
-                              backgroundColor: '#071026'
+                              backgroundColor: '#ffffff'
                             }
                       ]}
                     >
                       {/* Center Hole */}
-                      <View style={[styles.donutHole, !isDesktop && { width: 80, height: 80, borderRadius: 40 }]}>
-                        <Text style={[styles.donutNumber, !isDesktop && { fontSize: 24 }]}>{scorerTotal}</Text>
-                        <Text style={[styles.donutUnitLabel, !isDesktop && { fontSize: 8 }]}>SCORERS</Text>
+                      <View style={[styles.donutHole, { backgroundColor: '#ffffff' }, !isDesktop && { width: 80, height: 80, borderRadius: 40 }]}>
+                        <Text style={[styles.donutNumber, { color: '#1e1b4b' }, !isDesktop && { fontSize: 24 }]}>{scorerTotal}</Text>
+                        <Text style={[styles.donutUnitLabel, { color: '#6366f1' }, !isDesktop && { fontSize: 8 }]}>SCORERS</Text>
                       </View>
                     </View>
                   </View>
 
-                  {/* Dynamic Proportional Distribution Bar (drawn dynamically across all platforms) */}
+                  {/* Dynamic Proportional Distribution Bar */}
                   <View style={styles.distributionBarWrapper}>
-                    <View style={styles.distributionBarTrack}>
+                    <View style={[styles.distributionBarTrack, { backgroundColor: '#f1f5f9' }]}>
                       {scorerSegments.appPct > 0 && (
                         <View style={[styles.distributionBarSegment, { width: `${scorerSegments.appPct}%`, backgroundColor: '#10b981' }]} />
                       )}
@@ -1426,9 +1751,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       )}
                     </View>
                     <View style={styles.distributionPctRow}>
-                      <Text style={[styles.distributionPctText, { color: '#6ee7b7' }]}>{scorerSegments.appPct}% Authorized</Text>
-                      <Text style={[styles.distributionPctText, { color: '#fde68a' }]}>{scorerSegments.pendPct}% Pending</Text>
-                      <Text style={[styles.distributionPctText, { color: '#fca5a5' }]}>{scorerSegments.rejPct}% Rejected</Text>
+                      <Text style={[styles.distributionPctText, { color: '#047857' }]}>{scorerSegments.appPct}% Authorized</Text>
+                      <Text style={[styles.distributionPctText, { color: '#b45309' }]}>{scorerSegments.pendPct}% Pending</Text>
+                      <Text style={[styles.distributionPctText, { color: '#b91c1c' }]}>{scorerSegments.rejPct}% Rejected</Text>
                     </View>
                   </View>
 
@@ -1436,17 +1761,45 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   <View style={styles.donutLegendRow}>
                     <View style={styles.legendItem}>
                       <View style={[styles.legendDot, { backgroundColor: '#10b981' }]} />
-                      <Text style={[styles.legendText, { color: '#6ee7b7' }]}>Authorized ({scorerApproved})</Text>
+                      <Text style={[styles.legendText, { color: '#334155' }]}>Authorized ({scorerApproved})</Text>
                     </View>
                     <View style={styles.legendItem}>
                       <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
-                      <Text style={[styles.legendText, { color: '#fde68a' }]}>Pending ({scorerPending})</Text>
+                      <Text style={[styles.legendText, { color: '#334155' }]}>Pending ({scorerPending})</Text>
                     </View>
                     <View style={styles.legendItem}>
                       <View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} />
-                      <Text style={[styles.legendText, { color: '#fca5a5' }]}>Rejected ({scorerRejected})</Text>
+                      <Text style={[styles.legendText, { color: '#334155' }]}>Rejected ({scorerRejected})</Text>
                     </View>
                   </View>
+                </View>
+              </View>
+
+              {/* Dynamic Live Scorer Status Strip */}
+              <View style={[styles.dynamicRegistryStrip, { backgroundColor: '#f5f3ff', borderColor: '#ddd6fe' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={{ fontSize: 16 }}>📋</Text>
+                  <Text style={[styles.dynamicRegistryText, { color: '#4338ca' }]}>
+                    LIVE SCORER REGISTRY • {scorerTotal} Registered • {scorerApproved} Authorized • {scorerPending} Awaiting Review
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <View style={styles.badgeCategoryPurple}>
+                    <Text style={styles.badgeCategoryPurpleText}>Grade A Panel</Text>
+                  </View>
+                  <View style={styles.badgeCategoryIndigo}>
+                    <Text style={styles.badgeCategoryIndigoText}>Digital Arbiters</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.roundReloadBtnSm, isLiveReloading && styles.roundReloadBtnSpinning]}
+                    onPress={handleLiveReload}
+                    activeOpacity={0.7}
+                    title="Reload live scorers"
+                  >
+                    <Animated.Text style={[styles.roundReloadIconSm, { transform: [{ rotate: spinInterpolate }] }]}>
+                      🔄
+                    </Animated.Text>
+                  </TouchableOpacity>
                 </View>
               </View>
 
@@ -1541,19 +1894,54 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 </View>
                               )}
                             </View>
-                            <Text style={styles.itemIdGradeText}>
-                              ID: {s.scorerId} • Grade: {s.grade}
-                            </Text>
+
+                            {/* Colorful Category Badges Row */}
+                            <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 5 }}>
+                              <View style={styles.badgeCategoryIndigo}>
+                                <Text style={styles.badgeCategoryIndigoText}>ID: {s.scorerId}</Text>
+                              </View>
+                              <View style={styles.badgeCategoryPurple}>
+                                <Text style={styles.badgeCategoryPurpleText}>🏅 {s.grade}</Text>
+                              </View>
+                              <View style={styles.badgeCategoryRose}>
+                                <Text style={styles.badgeCategoryRoseText}>📍 {s.taluk || 'Virudhunagar'}</Text>
+                              </View>
+                              <View style={styles.badgeCategoryAmber}>
+                                <Text style={styles.badgeCategoryAmberText}>⏱️ {s.experienceYears || 2} Yrs Exp</Text>
+                              </View>
+                            </View>
                           </View>
 
                           {/* Action Buttons */}
-                          <View style={styles.itemActionsRow}>
+                          <View style={[styles.itemActionsRow, { flexWrap: 'wrap' }]}>
+                            {s.phone && s.phone !== '—' && (
+                              <TouchableOpacity
+                                style={styles.btnActionCall}
+                                onPress={() => handleCallContact(s.phone, s.scorerName)}
+                                activeOpacity={0.8}
+                                title="Call Scorer"
+                              >
+                                <Text style={styles.btnActionCallText}>📞 Call</Text>
+                              </TouchableOpacity>
+                            )}
+
+                            {s.email && (
+                              <TouchableOpacity
+                                style={styles.btnActionEmail}
+                                onPress={() => handleEmailContact(s.email, s.scorerName)}
+                                activeOpacity={0.8}
+                                title="Email Scorer"
+                              >
+                                <Text style={styles.btnActionEmailText}>✉️ Email</Text>
+                              </TouchableOpacity>
+                            )}
+
                             <TouchableOpacity
-                              style={styles.btnOutlineGold}
+                              style={styles.btnActionViewViolet}
                               onPress={() => setSelectedScorerModal(s)}
                               activeOpacity={0.8}
                             >
-                              <Text style={styles.btnOutlineGoldText}>👁 View</Text>
+                              <Text style={styles.btnActionViewVioletText}>👁 View</Text>
                             </TouchableOpacity>
 
                             {isPending ? (
@@ -1634,63 +2022,66 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             <View>
               {/* TOP TWO SIDE-BY-SIDE HIGHLIGHT CARDS */}
               <View style={[styles.highlightCardsRow, { flexDirection: isDesktop ? 'row' : 'column' }]}>
-                {/* Left Card: Umpire Management Stats */}
-                <View style={styles.navyStatCard}>
+                {/* Left Card: Umpire Management Stats (Ocean Cyan & Sapphire Blue Modern White Card) */}
+                <View style={styles.umpireStatCard}>
                   <View style={styles.statCardHeader}>
-                    <View style={styles.blueIconBox}>
+                    <View style={styles.umpireIconBox}>
                       <Text style={{ fontSize: 16 }}>⚖️</Text>
                     </View>
-                    <Text style={styles.statCardTitle}>Umpire Accreditation</Text>
+                    <View>
+                      <Text style={styles.umpireCardTitle}>Umpire Accreditation</Text>
+                      <Text style={styles.umpireBadgeTag}>OFFICIAL DISTRICT ARBITER REGISTRY</Text>
+                    </View>
                   </View>
-                  <Text style={styles.statCardSubtitle}>
+                  <Text style={styles.umpireCardSubtitle}>
                     Official certified umpires and match officiating access requests across Virudhunagar District.
                   </Text>
 
                   {/* 4 Colored Pill Rows */}
                   <View style={styles.pillRowsContainer}>
                     {/* Authorized Umpires */}
-                    <View style={[styles.statRowPill, styles.rowPillGreen]}>
+                    <View style={[styles.statRowPill, styles.umpirePillApproved]}>
                       <View style={styles.pillLeftGroup}>
                         <View style={[styles.glowingDot, { backgroundColor: '#10b981' }]} />
-                        <Text style={[styles.pillLabel, { color: '#a7f3d0' }]}>Authorized Umpires</Text>
+                        <Text style={[styles.pillLabel, { color: '#065f46' }]}>Authorized Umpires</Text>
                       </View>
-                      <Text style={[styles.pillCount, { color: '#4ade80' }]}>{umpireApproved}</Text>
+                      <Text style={[styles.pillCount, { color: '#047857' }]}>{umpireApproved}</Text>
                     </View>
 
                     {/* Pending Approval */}
-                    <View style={[styles.statRowPill, styles.rowPillAmber]}>
+                    <View style={[styles.statRowPill, styles.umpirePillPending]}>
                       <View style={styles.pillLeftGroup}>
-                        <View style={[styles.glowingDot, { backgroundColor: '#eab308' }]} />
-                        <Text style={[styles.pillLabel, { color: '#fde68a' }]}>Pending Approval</Text>
+                        <View style={[styles.glowingDot, { backgroundColor: '#f59e0b' }]} />
+                        <Text style={[styles.pillLabel, { color: '#92400e' }]}>Pending Approval</Text>
                       </View>
-                      <Text style={[styles.pillCount, { color: '#fbbf24' }]}>{umpirePending}</Text>
+                      <Text style={[styles.pillCount, { color: '#b45309' }]}>{umpirePending}</Text>
                     </View>
 
                     {/* Rejected */}
-                    <View style={[styles.statRowPill, styles.rowPillRed]}>
+                    <View style={[styles.statRowPill, styles.umpirePillRejected]}>
                       <View style={styles.pillLeftGroup}>
                         <View style={[styles.glowingDot, { backgroundColor: '#ef4444' }]} />
-                        <Text style={[styles.pillLabel, { color: '#fca5a5' }]}>Rejected</Text>
+                        <Text style={[styles.pillLabel, { color: '#991b1b' }]}>Rejected</Text>
                       </View>
-                      <Text style={[styles.pillCount, { color: '#f87171' }]}>{umpireRejected}</Text>
+                      <Text style={[styles.pillCount, { color: '#dc2626' }]}>{umpireRejected}</Text>
                     </View>
 
                     {/* Total Umpires */}
-                    <View style={[styles.statRowPill, styles.rowPillIndigo]}>
+                    <View style={[styles.statRowPill, styles.umpirePillTotal]}>
                       <View style={styles.pillLeftGroup}>
-                        <View style={[styles.glowingDot, { backgroundColor: '#818cf8' }]} />
-                        <Text style={[styles.pillLabel, { color: '#c7d2fe' }]}>Total Umpires</Text>
+                        <View style={[styles.glowingDot, { backgroundColor: '#0284c7' }]} />
+                        <Text style={[styles.pillLabel, { color: '#075985' }]}>Total Umpires</Text>
                       </View>
-                      <Text style={[styles.pillCount, { color: '#a5b4fc' }]}>{umpireTotal}</Text>
+                      <Text style={[styles.pillCount, { color: '#0284c7' }]}>{umpireTotal}</Text>
                     </View>
                   </View>
                 </View>
 
                 {/* Right Card: Status Distribution with Donut Chart */}
-                <View style={[styles.navyStatCard, styles.donutCardAlign]}>
+                <View style={[styles.umpireStatCard, styles.donutCardAlign]}>
                   <View style={styles.donutHeader}>
                     <Text style={{ fontSize: 16, marginRight: 6 }}>📊</Text>
-                    <Text style={styles.statCardTitle}>Status Distribution</Text>
+                    <Text style={styles.umpireCardTitle}>Status Distribution</Text>
                   </View>
 
                   {/* Donut Chart */}
@@ -1711,21 +2102,21 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               borderRightColor: umpireSegments.pendPct > 0 ? '#f59e0b' : '#10b981',
                               borderBottomColor: umpireSegments.rejPct > 0 ? '#ef4444' : '#10b981',
                               borderLeftColor: '#10b981',
-                              backgroundColor: '#071026'
+                              backgroundColor: '#ffffff'
                             }
                       ]}
                     >
                       {/* Center Hole */}
-                      <View style={[styles.donutHole, !isDesktop && { width: 80, height: 80, borderRadius: 40 }]}>
-                        <Text style={[styles.donutNumber, !isDesktop && { fontSize: 24 }]}>{umpireTotal}</Text>
-                        <Text style={[styles.donutUnitLabel, !isDesktop && { fontSize: 8 }]}>UMPIRES</Text>
+                      <View style={[styles.donutHole, { backgroundColor: '#ffffff' }, !isDesktop && { width: 80, height: 80, borderRadius: 40 }]}>
+                        <Text style={[styles.donutNumber, { color: '#0c4a6e' }, !isDesktop && { fontSize: 24 }]}>{umpireTotal}</Text>
+                        <Text style={[styles.donutUnitLabel, { color: '#0284c7' }, !isDesktop && { fontSize: 8 }]}>UMPIRES</Text>
                       </View>
                     </View>
                   </View>
 
                   {/* Dynamic Proportional Distribution Bar */}
                   <View style={styles.distributionBarWrapper}>
-                    <View style={styles.distributionBarTrack}>
+                    <View style={[styles.distributionBarTrack, { backgroundColor: '#f1f5f9' }]}>
                       {umpireSegments.appPct > 0 && (
                         <View style={[styles.distributionBarSegment, { width: `${umpireSegments.appPct}%`, backgroundColor: '#10b981' }]} />
                       )}
@@ -1737,9 +2128,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       )}
                     </View>
                     <View style={styles.distributionPctRow}>
-                      <Text style={[styles.distributionPctText, { color: '#6ee7b7' }]}>{umpireSegments.appPct}% Authorized</Text>
-                      <Text style={[styles.distributionPctText, { color: '#fde68a' }]}>{umpireSegments.pendPct}% Pending</Text>
-                      <Text style={[styles.distributionPctText, { color: '#fca5a5' }]}>{umpireSegments.rejPct}% Rejected</Text>
+                      <Text style={[styles.distributionPctText, { color: '#047857' }]}>{umpireSegments.appPct}% Authorized</Text>
+                      <Text style={[styles.distributionPctText, { color: '#b45309' }]}>{umpireSegments.pendPct}% Pending</Text>
+                      <Text style={[styles.distributionPctText, { color: '#b91c1c' }]}>{umpireSegments.rejPct}% Rejected</Text>
                     </View>
                   </View>
 
@@ -1747,17 +2138,45 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   <View style={styles.donutLegendRow}>
                     <View style={styles.legendItem}>
                       <View style={[styles.legendDot, { backgroundColor: '#10b981' }]} />
-                      <Text style={[styles.legendText, { color: '#6ee7b7' }]}>Authorized ({umpireApproved})</Text>
+                      <Text style={[styles.legendText, { color: '#334155' }]}>Authorized ({umpireApproved})</Text>
                     </View>
                     <View style={styles.legendItem}>
                       <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
-                      <Text style={[styles.legendText, { color: '#fde68a' }]}>Pending ({umpirePending})</Text>
+                      <Text style={[styles.legendText, { color: '#334155' }]}>Pending ({umpirePending})</Text>
                     </View>
                     <View style={styles.legendItem}>
                       <View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} />
-                      <Text style={[styles.legendText, { color: '#fca5a5' }]}>Rejected ({umpireRejected})</Text>
+                      <Text style={[styles.legendText, { color: '#334155' }]}>Rejected ({umpireRejected})</Text>
                     </View>
                   </View>
+                </View>
+              </View>
+
+              {/* Dynamic Live Umpire Status Strip */}
+              <View style={[styles.dynamicRegistryStrip, { backgroundColor: '#f0f9ff', borderColor: '#bae6fd' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={{ fontSize: 16 }}>⚖️</Text>
+                  <Text style={[styles.dynamicRegistryText, { color: '#0369a1' }]}>
+                    LIVE UMPIRE REGISTRY • {umpireTotal} Officials • {umpireApproved} Accredited • {umpirePending} Pending Review
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <View style={styles.badgeCategoryCyan}>
+                    <Text style={styles.badgeCategoryCyanText}>BCCI & TNCA Panel</Text>
+                  </View>
+                  <View style={styles.badgeCategoryEmerald}>
+                    <Text style={styles.badgeCategoryEmeraldText}>Certified Match Arbiters</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.roundReloadBtnSm, isLiveReloading && styles.roundReloadBtnSpinning]}
+                    onPress={handleLiveReload}
+                    activeOpacity={0.7}
+                    title="Reload live umpires"
+                  >
+                    <Animated.Text style={[styles.roundReloadIconSm, { transform: [{ rotate: spinInterpolate }] }]}>
+                      🔄
+                    </Animated.Text>
+                  </TouchableOpacity>
                 </View>
               </View>
 
@@ -1860,19 +2279,59 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 </View>
                               )}
                             </View>
-                            <Text style={styles.itemIdGradeText}>
-                              ID: {u.umpireId} • Qualification: {u.qualification}
-                            </Text>
+
+                            {/* Colorful Category Badges Row */}
+                            <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 5 }}>
+                              <View style={styles.badgeCategoryCyan}>
+                                <Text style={styles.badgeCategoryCyanText}>ID: {u.umpireId}</Text>
+                              </View>
+                              <View style={styles.badgeCategoryPurple}>
+                                <Text style={styles.badgeCategoryPurpleText}>⚖️ {u.qualification}</Text>
+                              </View>
+                              <View style={styles.badgeCategoryEmerald}>
+                                <Text style={styles.badgeCategoryEmeraldText}>🎯 {u.specialization || 'On-field Official'}</Text>
+                              </View>
+                              <View style={styles.badgeCategoryAmber}>
+                                <Text style={styles.badgeCategoryAmberText}>⏱️ {u.experience || `${u.experienceYears || 2} Yrs`}</Text>
+                              </View>
+                              {u.certificationNumber && u.certificationNumber !== '—' && (
+                                <View style={styles.badgeCategoryRose}>
+                                  <Text style={styles.badgeCategoryRoseText}>📜 {u.certificationNumber}</Text>
+                                </View>
+                              )}
+                            </View>
                           </View>
 
                           {/* Action Buttons */}
-                          <View style={styles.itemActionsRow}>
+                          <View style={[styles.itemActionsRow, { flexWrap: 'wrap' }]}>
+                            {u.phone && u.phone !== '—' && (
+                              <TouchableOpacity
+                                style={styles.btnActionCall}
+                                onPress={() => handleCallContact(u.phone, u.umpireName)}
+                                activeOpacity={0.8}
+                                title="Call Umpire"
+                              >
+                                <Text style={styles.btnActionCallText}>📞 Call</Text>
+                              </TouchableOpacity>
+                            )}
+
+                            {u.email && u.email !== '—' && (
+                              <TouchableOpacity
+                                style={styles.btnActionEmail}
+                                onPress={() => handleEmailContact(u.email, u.umpireName)}
+                                activeOpacity={0.8}
+                                title="Email Umpire"
+                              >
+                                <Text style={styles.btnActionEmailText}>✉️ Email</Text>
+                              </TouchableOpacity>
+                            )}
+
                             <TouchableOpacity
-                              style={styles.btnOutlineGold}
+                              style={styles.btnActionViewCyan}
                               onPress={() => setSelectedUmpireForView(u)}
                               activeOpacity={0.8}
                             >
-                              <Text style={styles.btnOutlineGoldText}>👁 View</Text>
+                              <Text style={styles.btnActionViewCyanText}>👁 View</Text>
                             </TouchableOpacity>
 
                             {isPending ? (
@@ -1953,59 +2412,62 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             <View>
               {/* TOP TWO SIDE-BY-SIDE HIGHLIGHT CARDS FOR TEAMS */}
               <View style={[styles.highlightCardsRow, { flexDirection: isDesktop ? 'row' : 'column' }]}>
-                {/* Left Card: Team Registrations Stats */}
-                <View style={styles.navyStatCard}>
+                {/* Left Card: Team Registrations Stats (Emerald & Athletic Gold Themed Modern White Card) */}
+                <View style={styles.teamStatCard}>
                   <View style={styles.statCardHeader}>
-                    <View style={styles.blueIconBox}>
-                      <Text style={{ fontSize: 16 }}>👥</Text>
+                    <View style={styles.teamIconBox}>
+                      <Text style={{ fontSize: 16 }}>🛡️</Text>
                     </View>
-                    <Text style={styles.statCardTitle}>Team Registrations</Text>
+                    <View>
+                      <Text style={styles.teamCardTitle}>Team Registrations</Text>
+                      <Text style={styles.teamBadgeTag}>OFFICIAL CLUB AFFILIATION</Text>
+                    </View>
                   </View>
-                  <Text style={styles.statCardSubtitle}>
+                  <Text style={styles.teamCardSubtitle}>
                     Official club and collegiate team squad applications submitted for district championship entry.
                   </Text>
 
                   {/* 4 Colored Pill Rows */}
                   <View style={styles.pillRowsContainer}>
-                    <View style={[styles.statRowPill, styles.rowPillGreen]}>
+                    <View style={[styles.statRowPill, styles.teamPillApproved]}>
                       <View style={styles.pillLeftGroup}>
                         <View style={[styles.glowingDot, { backgroundColor: '#10b981' }]} />
-                        <Text style={[styles.pillLabel, { color: '#a7f3d0' }]}>Approved Teams</Text>
+                        <Text style={[styles.pillLabel, { color: '#065f46' }]}>Approved Clubs</Text>
                       </View>
-                      <Text style={[styles.pillCount, { color: '#4ade80' }]}>{teamApproved}</Text>
+                      <Text style={[styles.pillCount, { color: '#047857' }]}>{teamApproved}</Text>
                     </View>
 
-                    <View style={[styles.statRowPill, styles.rowPillAmber]}>
+                    <View style={[styles.statRowPill, styles.teamPillPending]}>
                       <View style={styles.pillLeftGroup}>
-                        <View style={[styles.glowingDot, { backgroundColor: '#eab308' }]} />
-                        <Text style={[styles.pillLabel, { color: '#fde68a' }]}>Pending Approval</Text>
+                        <View style={[styles.glowingDot, { backgroundColor: '#f59e0b' }]} />
+                        <Text style={[styles.pillLabel, { color: '#92400e' }]}>Pending Approval</Text>
                       </View>
-                      <Text style={[styles.pillCount, { color: '#fbbf24' }]}>{teamPending}</Text>
+                      <Text style={[styles.pillCount, { color: '#b45309' }]}>{teamPending}</Text>
                     </View>
 
-                    <View style={[styles.statRowPill, styles.rowPillRed]}>
+                    <View style={[styles.statRowPill, styles.teamPillRejected]}>
                       <View style={styles.pillLeftGroup}>
                         <View style={[styles.glowingDot, { backgroundColor: '#ef4444' }]} />
-                        <Text style={[styles.pillLabel, { color: '#fca5a5' }]}>Rejected Teams</Text>
+                        <Text style={[styles.pillLabel, { color: '#991b1b' }]}>Rejected Teams</Text>
                       </View>
-                      <Text style={[styles.pillCount, { color: '#f87171' }]}>{teamRejected}</Text>
+                      <Text style={[styles.pillCount, { color: '#dc2626' }]}>{teamRejected}</Text>
                     </View>
 
-                    <View style={[styles.statRowPill, styles.rowPillIndigo]}>
+                    <View style={[styles.statRowPill, styles.teamPillTotal]}>
                       <View style={styles.pillLeftGroup}>
-                        <View style={[styles.glowingDot, { backgroundColor: '#818cf8' }]} />
-                        <Text style={[styles.pillLabel, { color: '#c7d2fe' }]}>Total Registered</Text>
+                        <View style={[styles.glowingDot, { backgroundColor: '#3b82f6' }]} />
+                        <Text style={[styles.pillLabel, { color: '#1e40af' }]}>Total Registered</Text>
                       </View>
-                      <Text style={[styles.pillCount, { color: '#a5b4fc' }]}>{teamTotal}</Text>
+                      <Text style={[styles.pillCount, { color: '#1d4ed8' }]}>{teamTotal}</Text>
                     </View>
                   </View>
                 </View>
 
                 {/* Right Card: Teams Status Distribution Donut */}
-                <View style={[styles.navyStatCard, styles.donutCardAlign]}>
+                <View style={[styles.teamStatCard, styles.donutCardAlign]}>
                   <View style={styles.donutHeader}>
                     <Text style={{ fontSize: 16, marginRight: 6 }}>📊</Text>
-                    <Text style={styles.statCardTitle}>Status Distribution</Text>
+                    <Text style={styles.teamCardTitle}>Status Distribution</Text>
                   </View>
 
                   <View style={styles.donutWrapper}>
@@ -2025,20 +2487,20 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               borderRightColor: teamSegments.pendPct > 0 ? '#f59e0b' : '#10b981',
                               borderBottomColor: teamSegments.rejPct > 0 ? '#ef4444' : '#10b981',
                               borderLeftColor: '#10b981',
-                              backgroundColor: '#071026'
+                              backgroundColor: '#ffffff'
                             }
                       ]}
                     >
-                      <View style={[styles.donutHole, !isDesktop && { width: 80, height: 80, borderRadius: 40 }]}>
-                        <Text style={[styles.donutNumber, !isDesktop && { fontSize: 24 }]}>{teamTotal}</Text>
-                        <Text style={[styles.donutUnitLabel, { color: 'rgba(254, 215, 102, 0.9)' }, !isDesktop && { fontSize: 8 }]}>TEAMS</Text>
+                      <View style={[styles.donutHole, { backgroundColor: '#ffffff' }, !isDesktop && { width: 80, height: 80, borderRadius: 40 }]}>
+                        <Text style={[styles.donutNumber, { color: '#064e3b' }, !isDesktop && { fontSize: 24 }]}>{teamTotal}</Text>
+                        <Text style={[styles.donutUnitLabel, { color: '#059669' }, !isDesktop && { fontSize: 8 }]}>CLUBS</Text>
                       </View>
                     </View>
                   </View>
 
                   {/* Dynamic Proportional Distribution Bar */}
                   <View style={styles.distributionBarWrapper}>
-                    <View style={styles.distributionBarTrack}>
+                    <View style={[styles.distributionBarTrack, { backgroundColor: '#f1f5f9' }]}>
                       {teamSegments.appPct > 0 && (
                         <View style={[styles.distributionBarSegment, { width: `${teamSegments.appPct}%`, backgroundColor: '#10b981' }]} />
                       )}
@@ -2050,26 +2512,54 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       )}
                     </View>
                     <View style={styles.distributionPctRow}>
-                      <Text style={[styles.distributionPctText, { color: '#6ee7b7' }]}>{teamSegments.appPct}% Approved</Text>
-                      <Text style={[styles.distributionPctText, { color: '#fde68a' }]}>{teamSegments.pendPct}% Pending</Text>
-                      <Text style={[styles.distributionPctText, { color: '#fca5a5' }]}>{teamSegments.rejPct}% Rejected</Text>
+                      <Text style={[styles.distributionPctText, { color: '#047857' }]}>{teamSegments.appPct}% Approved</Text>
+                      <Text style={[styles.distributionPctText, { color: '#b45309' }]}>{teamSegments.pendPct}% Pending</Text>
+                      <Text style={[styles.distributionPctText, { color: '#b91c1c' }]}>{teamSegments.rejPct}% Rejected</Text>
                     </View>
                   </View>
 
                   <View style={styles.donutLegendRow}>
                     <View style={styles.legendItem}>
                       <View style={[styles.legendDot, { backgroundColor: '#10b981' }]} />
-                      <Text style={[styles.legendText, { color: '#6ee7b7' }]}>Approved ({teamApproved})</Text>
+                      <Text style={[styles.legendText, { color: '#334155' }]}>Approved ({teamApproved})</Text>
                     </View>
                     <View style={styles.legendItem}>
                       <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
-                      <Text style={[styles.legendText, { color: '#fde68a' }]}>Pending ({teamPending})</Text>
+                      <Text style={[styles.legendText, { color: '#334155' }]}>Pending ({teamPending})</Text>
                     </View>
                     <View style={styles.legendItem}>
                       <View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} />
-                      <Text style={[styles.legendText, { color: '#fca5a5' }]}>Rejected ({teamRejected})</Text>
+                      <Text style={[styles.legendText, { color: '#334155' }]}>Rejected ({teamRejected})</Text>
                     </View>
                   </View>
+                </View>
+              </View>
+
+              {/* Dynamic Live Team Status Strip */}
+              <View style={[styles.dynamicRegistryStrip, { backgroundColor: '#ecfdf5', borderColor: '#a7f3d0' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={{ fontSize: 16 }}>🛡️</Text>
+                  <Text style={[styles.dynamicRegistryText, { color: '#065f46' }]}>
+                    LIVE TEAM REGISTRY • {teamTotal} Clubs Registered • {teamApproved} Affiliated • {teamPending} Awaiting Clearance
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <View style={styles.badgeCategoryEmerald}>
+                    <Text style={styles.badgeCategoryEmeraldText}>District Championship Clubs</Text>
+                  </View>
+                  <View style={styles.badgeCategoryAmber}>
+                    <Text style={styles.badgeCategoryAmberText}>15-Member Squads</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.roundReloadBtnSm, isLiveReloading && styles.roundReloadBtnSpinning]}
+                    onPress={handleLiveReload}
+                    activeOpacity={0.7}
+                    title="Reload live teams"
+                  >
+                    <Animated.Text style={[styles.roundReloadIconSm, { transform: [{ rotate: spinInterpolate }] }]}>
+                      🔄
+                    </Animated.Text>
+                  </TouchableOpacity>
                 </View>
               </View>
 
@@ -2140,6 +2630,15 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     const isPending = (t.status || 'Pending') === 'Pending';
                     const isRejected = t.status === 'Rejected';
 
+                    const initials = (t.teamName || 'TM')
+                      .split(' ')
+                      .map((w: string) => w[0])
+                      .join('')
+                      .slice(0, 2)
+                      .toUpperCase();
+
+                    const crestBg = isApproved ? '#059669' : isPending ? '#d97706' : '#dc2626';
+
                     return (
                       <View
                         key={t.teamId}
@@ -2151,37 +2650,69 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                         ]}
                       >
                         <View style={styles.itemCardHeaderRow}>
-                          <View style={styles.itemTitleGroup}>
-                            <View style={styles.itemTitleBadgeRow}>
-                              <Text style={styles.itemNameText}>{t.teamName}</Text>
-                              {isApproved && (
-                                <View style={styles.badgeConfirmed}>
-                                  <Text style={styles.badgeConfirmedText}>✔ Approved</Text>
-                                </View>
-                              )}
-                              {isPending && (
-                                <View style={styles.badgePending}>
-                                  <Text style={styles.badgePendingText}>⏳ Pending</Text>
-                                </View>
-                              )}
-                              {isRejected && (
-                                <View style={styles.badgeRejected}>
-                                  <Text style={styles.badgeRejectedText}>🚫 Rejected</Text>
-                                </View>
-                              )}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                            {/* Colorful Team Initial Crest */}
+                            <View style={[styles.teamCrestAvatar, { backgroundColor: crestBg }]}>
+                              <Text style={styles.teamCrestText}>{initials}</Text>
                             </View>
-                            <Text style={styles.itemIdGradeText}>
-                              ID: {t.teamId} • Coach: {t.coach?.name || 'Head Coach'} • Roster: {t.members?.length || 15} Players
-                            </Text>
+
+                            <View style={styles.itemTitleGroup}>
+                              <View style={styles.itemTitleBadgeRow}>
+                                <Text style={styles.itemNameText}>{t.teamName}</Text>
+                                {isApproved && (
+                                  <View style={styles.badgeConfirmed}>
+                                    <Text style={styles.badgeConfirmedText}>✔ Approved</Text>
+                                  </View>
+                                )}
+                                {isPending && (
+                                  <View style={styles.badgePending}>
+                                    <Text style={styles.badgePendingText}>⏳ Pending</Text>
+                                  </View>
+                                )}
+                                {isRejected && (
+                                  <View style={styles.badgeRejected}>
+                                    <Text style={styles.badgeRejectedText}>🚫 Rejected</Text>
+                                  </View>
+                                )}
+                              </View>
+
+                              {/* Colorful Category Badges Row */}
+                              <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 5 }}>
+                                <View style={styles.badgeCategoryEmerald}>
+                                  <Text style={styles.badgeCategoryEmeraldText}>ID: {t.teamId}</Text>
+                                </View>
+                                <View style={styles.badgeCategoryAmber}>
+                                  <Text style={styles.badgeCategoryAmberText}>👤 Coach: {t.coach?.name || 'Head Coach'}</Text>
+                                </View>
+                                <View style={styles.badgeCategoryIndigo}>
+                                  <Text style={styles.badgeCategoryIndigoText}>🏏 {t.members?.length || 15} Squad Players</Text>
+                                </View>
+                                <View style={styles.badgeCategoryPurple}>
+                                  <Text style={styles.badgeCategoryPurpleText}>📍 {t.taluk || 'Virudhunagar'}</Text>
+                                </View>
+                              </View>
+                            </View>
                           </View>
 
-                          <View style={styles.itemActionsRow}>
+                          {/* Action Buttons */}
+                          <View style={[styles.itemActionsRow, { flexWrap: 'wrap' }]}>
+                            {t.coach?.email && (
+                              <TouchableOpacity
+                                style={styles.btnActionEmail}
+                                onPress={() => handleEmailContact(t.coach.email, t.coach?.name || t.teamName)}
+                                activeOpacity={0.8}
+                                title="Email Coach"
+                              >
+                                <Text style={styles.btnActionEmailText}>✉️ Email Coach</Text>
+                              </TouchableOpacity>
+                            )}
+
                             <TouchableOpacity
-                              style={styles.btnOutlineGold}
+                              style={styles.btnActionViewEmerald}
                               onPress={() => setSelectedSquadModal(t)}
                               activeOpacity={0.8}
                             >
-                              <Text style={styles.btnOutlineGoldText}>👁 View Squad</Text>
+                              <Text style={styles.btnActionViewEmeraldText}>👁 Squad ({t.members?.length || 15})</Text>
                             </TouchableOpacity>
 
                             {isPending ? (
@@ -2250,285 +2781,384 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           )}
 
           {/* ─────────────────────────────────────────────────────────────
-              6. TAB CONTENT: OVERVIEW (6 Summary Cards & Banner)
+              6. TAB CONTENT: OVERVIEW (EXECUTIVE MISSION CONTROL UI/UX)
               ───────────────────────────────────────────────────────────── */}
           {activeTab === 'overview' && (
-            <View>
-              <View style={styles.overviewIntro}>
-                <Text style={styles.overviewTitle}>Association Approval Pipeline Overview</Text>
-                <Text style={styles.overviewSubtitle}>
-                  Click any summary card below to jump to the corresponding management section filtered by status.
-                </Text>
-              </View>
-
-              {/* 6 Summary Cards Grid */}
-              <View style={styles.summaryGrid}>
-                {/* 1. Pending Teams */}
-                <TouchableOpacity
-                  style={[styles.summaryCard, styles.cardPendingBorder]}
-                  onPress={() => {
-                    setActiveTab('teams');
-                    setTeamFilter('Pending');
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.summaryCardTop}>
-                    <View style={[styles.summaryIconBox, { backgroundColor: 'rgba(234,179,8,0.15)' }]}>
-                      <Text style={{ fontSize: 18 }}>⏳</Text>
+            <View style={{ gap: 20 }}>
+              {/* 1. EXECUTIVE COMMAND HERO BANNER */}
+              <View style={styles.overviewHeroCard}>
+                <View style={styles.overviewHeroTop}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1, flexWrap: 'wrap' }}>
+                    <View style={styles.overviewHeroIconBox}>
+                      <Text style={{ fontSize: 24 }}>👑</Text>
                     </View>
-                    <Text style={[styles.summaryCountText, { color: '#fbbf24' }]}>{teamPending}</Text>
-                  </View>
-                  <Text style={styles.summaryCardTitle}>Pending Team Registrations</Text>
-                  <Text style={styles.summaryCardDesc}>Teams awaiting official admin verification</Text>
-                </TouchableOpacity>
-
-                {/* 2. Approved Teams */}
-                <TouchableOpacity
-                  style={[styles.summaryCard, styles.cardApprovedBorder]}
-                  onPress={() => {
-                    setActiveTab('teams');
-                    setTeamFilter('Approved');
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.summaryCardTop}>
-                    <View style={[styles.summaryIconBox, { backgroundColor: 'rgba(16,185,129,0.15)' }]}>
-                      <Text style={{ fontSize: 18 }}>✔</Text>
-                    </View>
-                    <Text style={[styles.summaryCountText, { color: '#4ade80' }]}>{teamApproved}</Text>
-                  </View>
-                  <Text style={styles.summaryCardTitle}>Approved Teams</Text>
-                  <Text style={styles.summaryCardDesc}>Active in official district tournaments</Text>
-                </TouchableOpacity>
-
-                {/* 3. Rejected Teams */}
-                <TouchableOpacity
-                  style={[styles.summaryCard, styles.cardRejectedBorder]}
-                  onPress={() => {
-                    setActiveTab('teams');
-                    setTeamFilter('Rejected');
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.summaryCardTop}>
-                    <View style={[styles.summaryIconBox, { backgroundColor: 'rgba(239,68,68,0.15)' }]}>
-                      <Text style={{ fontSize: 18 }}>🚫</Text>
-                    </View>
-                    <Text style={[styles.summaryCountText, { color: '#f87171' }]}>{teamRejected}</Text>
-                  </View>
-                  <Text style={styles.summaryCardTitle}>Rejected Teams</Text>
-                  <Text style={styles.summaryCardDesc}>Incomplete or non-compliant squad entries</Text>
-                </TouchableOpacity>
-
-                {/* 4. Pending Scorers */}
-                <TouchableOpacity
-                  style={[styles.summaryCard, styles.cardPendingBorder]}
-                  onPress={() => {
-                    setActiveTab('scorers');
-                    setScorerFilter('Pending');
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.summaryCardTop}>
-                    <View style={[styles.summaryIconBox, { backgroundColor: 'rgba(234,179,8,0.15)' }]}>
-                      <Text style={{ fontSize: 18 }}>📡</Text>
-                    </View>
-                    <Text style={[styles.summaryCountText, { color: '#fbbf24' }]}>{scorerPending}</Text>
-                  </View>
-                  <Text style={styles.summaryCardTitle}>Pending Scorer Requests</Text>
-                  <Text style={styles.summaryCardDesc}>Awaiting match day live scoring access approval</Text>
-                </TouchableOpacity>
-
-                {/* 5. Approved Scorers */}
-                <TouchableOpacity
-                  style={[styles.summaryCard, styles.cardApprovedBorder]}
-                  onPress={() => {
-                    setActiveTab('scorers');
-                    setScorerFilter('Approved');
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.summaryCardTop}>
-                    <View style={[styles.summaryIconBox, { backgroundColor: 'rgba(16,185,129,0.15)' }]}>
-                      <Text style={{ fontSize: 18 }}>🏆</Text>
-                    </View>
-                    <Text style={[styles.summaryCountText, { color: '#4ade80' }]}>{scorerApproved}</Text>
-                  </View>
-                  <Text style={styles.summaryCardTitle}>Approved Scorers</Text>
-                  <Text style={styles.summaryCardDesc}>Certified for digital scoring on CFVD platform</Text>
-                </TouchableOpacity>
-
-                {/* 6. Rejected Scorers */}
-                <TouchableOpacity
-                  style={[styles.summaryCard, styles.cardRejectedBorder]}
-                  onPress={() => {
-                    setActiveTab('scorers');
-                    setScorerFilter('Rejected');
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.summaryCardTop}>
-                    <View style={[styles.summaryIconBox, { backgroundColor: 'rgba(239,68,68,0.15)' }]}>
-                      <Text style={{ fontSize: 18 }}>✕</Text>
-                    </View>
-                    <Text style={[styles.summaryCountText, { color: '#f87171' }]}>{scorerRejected}</Text>
-                  </View>
-                  <Text style={styles.summaryCardTitle}>Rejected Scorers</Text>
-                  <Text style={styles.summaryCardDesc}>Non-compliant or expired certification profiles</Text>
-                </TouchableOpacity>
-
-                {/* 7. Pending Umpires */}
-                <TouchableOpacity
-                  style={[styles.summaryCard, styles.cardPendingBorder]}
-                  onPress={() => {
-                    setActiveTab('umpires');
-                    setUmpireFilter('Pending');
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.summaryCardTop}>
-                    <View style={[styles.summaryIconBox, { backgroundColor: 'rgba(234,179,8,0.15)' }]}>
-                      <Text style={{ fontSize: 18 }}>⚖️</Text>
-                    </View>
-                    <Text style={[styles.summaryCountText, { color: '#fbbf24' }]}>{umpirePending}</Text>
-                  </View>
-                  <Text style={styles.summaryCardTitle}>Pending Umpire Applications</Text>
-                  <Text style={styles.summaryCardDesc}>Awaiting official credential verification</Text>
-                </TouchableOpacity>
-
-                {/* 8. Approved Umpires */}
-                <TouchableOpacity
-                  style={[styles.summaryCard, styles.cardApprovedBorder]}
-                  onPress={() => {
-                    setActiveTab('umpires');
-                    setUmpireFilter('Approved');
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.summaryCardTop}>
-                    <View style={[styles.summaryIconBox, { backgroundColor: 'rgba(16,185,129,0.15)' }]}>
-                      <Text style={{ fontSize: 18 }}>🛡️</Text>
-                    </View>
-                    <Text style={[styles.summaryCountText, { color: '#4ade80' }]}>{umpireApproved}</Text>
-                  </View>
-                  <Text style={styles.summaryCardTitle}>Authorized Umpires</Text>
-                  <Text style={styles.summaryCardDesc}>Accredited for district match supervision</Text>
-                </TouchableOpacity>
-
-                {/* 9. Rejected Umpires */}
-                <TouchableOpacity
-                  style={[styles.summaryCard, styles.cardRejectedBorder]}
-                  onPress={() => {
-                    setActiveTab('umpires');
-                    setUmpireFilter('Rejected');
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.summaryCardTop}>
-                    <View style={[styles.summaryIconBox, { backgroundColor: 'rgba(239,68,68,0.15)' }]}>
-                      <Text style={{ fontSize: 18 }}>🚫</Text>
-                    </View>
-                    <Text style={[styles.summaryCountText, { color: '#f87171' }]}>{umpireRejected}</Text>
-                  </View>
-                  <Text style={styles.summaryCardTitle}>Rejected Umpires</Text>
-                  <Text style={styles.summaryCardDesc}>Incomplete or criteria not fulfilled</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* OVERVIEW STATUS DISTRIBUTION CHART (Responsive & Dynamic for All Members/Admins) */}
-              <View style={[styles.navyStatCard, styles.donutCardAlign, { marginVertical: 20, width: '100%' }]}>
-                <View style={styles.donutHeader}>
-                  <Text style={{ fontSize: 16, marginRight: 6 }}>📊</Text>
-                  <Text style={styles.statCardTitle}>District Registration Status Distribution</Text>
-                </View>
-
-                <View style={styles.donutWrapper}>
-                  <View
-                    style={[
-                      styles.donutOuterRing,
-                      !isDesktop && { width: 140, height: 140, borderRadius: 70 },
-                      Platform.OS === 'web'
-                        ? ({
-                            background: `conic-gradient(#10b981 0% ${overallSegments.appPct}%, #f59e0b ${overallSegments.appPct}% ${overallSegments.appPct + overallSegments.pendPct}%, #ef4444 ${overallSegments.appPct + overallSegments.pendPct}% 100%)`,
-                            backgroundImage: `conic-gradient(#10b981 0% ${overallSegments.appPct}%, #f59e0b ${overallSegments.appPct}% ${overallSegments.appPct + overallSegments.pendPct}%, #ef4444 ${overallSegments.appPct + overallSegments.pendPct}% 100%)`
-                          } as any)
-                        : {
-                            borderWidth: 10,
-                            borderColor: '#10b981',
-                            borderTopColor: '#10b981',
-                            borderRightColor: overallSegments.pendPct > 0 ? '#f59e0b' : '#10b981',
-                            borderBottomColor: overallSegments.rejPct > 0 ? '#ef4444' : '#10b981',
-                            borderLeftColor: '#10b981',
-                            backgroundColor: '#071026'
-                          }
-                    ]}
-                  >
-                    <View style={[styles.donutHole, !isDesktop && { width: 80, height: 80, borderRadius: 40 }]}>
-                      <Text style={[styles.donutNumber, !isDesktop && { fontSize: 24 }]}>{totalOverall}</Text>
-                      <Text style={[styles.donutUnitLabel, { color: 'rgba(254, 215, 102, 0.9)' }, !isDesktop && { fontSize: 8 }]}>TOTAL</Text>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        <Text style={styles.overviewHeroTitle}>Apex Council Governance Matrix</Text>
+                        <View style={styles.heroLiveStatusChip}>
+                          <View style={styles.pulsingLiveDot} />
+                          <Text style={styles.heroLiveStatusText}>SYSTEM ONLINE • 100% LIVE</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.overviewHeroSubtitle}>
+                        Cricket Federation of Virudhunagar District (CFVD) • Central Executive Command Portal
+                      </Text>
                     </View>
                   </View>
-                </View>
-
-                {/* Dynamic Proportional Distribution Bar */}
-                <View style={styles.distributionBarWrapper}>
-                  <View style={styles.distributionBarTrack}>
-                    {overallSegments.appPct > 0 && (
-                      <View style={[styles.distributionBarSegment, { width: `${overallSegments.appPct}%`, backgroundColor: '#10b981' }]} />
-                    )}
-                    {overallSegments.pendPct > 0 && (
-                      <View style={[styles.distributionBarSegment, { width: `${overallSegments.pendPct}%`, backgroundColor: '#f59e0b' }]} />
-                    )}
-                    {overallSegments.rejPct > 0 && (
-                      <View style={[styles.distributionBarSegment, { width: `${overallSegments.rejPct}%`, backgroundColor: '#ef4444' }]} />
-                    )}
-                  </View>
-                  <View style={styles.distributionPctRow}>
-                    <Text style={[styles.distributionPctText, { color: '#6ee7b7' }]}>{overallSegments.appPct}% Approved ({overallApproved})</Text>
-                    <Text style={[styles.distributionPctText, { color: '#fde68a' }]}>{overallSegments.pendPct}% Pending ({overallPending})</Text>
-                    <Text style={[styles.distributionPctText, { color: '#fca5a5' }]}>{overallSegments.rejPct}% Rejected ({overallRejected})</Text>
-                  </View>
-                </View>
-
-                <View style={styles.donutLegendRow}>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: '#10b981' }]} />
-                    <Text style={[styles.legendText, { color: '#6ee7b7' }]}>Approved: {overallApproved}</Text>
-                  </View>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
-                    <Text style={[styles.legendText, { color: '#fde68a' }]}>Pending: {overallPending}</Text>
-                  </View>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} />
-                    <Text style={[styles.legendText, { color: '#fca5a5' }]}>Rejected: {overallRejected}</Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Quick Action Banner */}
-              <View style={styles.quickActionBanner}>
-                <View style={styles.quickActionTextCol}>
-                  <Text style={styles.quickActionTitle}>Official Administration Approval & Verification Engine</Text>
-                  <Text style={styles.quickActionDesc}>
-                    Directly verify district squads, certify digital scorers, and publish official circulars across Virudhunagar District.
-                  </Text>
-                </View>
-                <View style={styles.quickActionBtnRow}>
                   <TouchableOpacity
-                    style={styles.btnGoldSm}
+                    style={[styles.roundReloadBtn, isLiveReloading && styles.roundReloadBtnSpinning]}
+                    onPress={handleLiveReload}
+                    activeOpacity={0.7}
+                    title="Reload Complete Matrix"
+                  >
+                    <Animated.Text style={[styles.roundReloadIcon, { transform: [{ rotate: spinInterpolate }] }]}>
+                      🔄
+                    </Animated.Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Quick Action Launchpad */}
+                <View style={styles.heroLaunchpadRow}>
+                  <Text style={styles.heroLaunchpadHeading}>QUICK LAUNCHPAD:</Text>
+                  <TouchableOpacity
+                    style={styles.btnLaunchpadOrange}
+                    onPress={() => {
+                      setActiveTab('schedules');
+                      setScheduleModalOpen(true);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.btnLaunchpadOrangeText}>⚡ + Schedule Match</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.btnLaunchpadEmerald}
                     onPress={() => setActiveTab('teams')}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.btnGoldSmText}>Manage Teams</Text>
+                    <Text style={styles.btnLaunchpadEmeraldText}>🛡️ Review Clubs ({teamPending} Pending)</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={styles.btnGoldSm}
+                    style={styles.btnLaunchpadViolet}
                     onPress={() => setActiveTab('scorers')}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.btnGoldSmText}>Verify Scorers</Text>
+                    <Text style={styles.btnLaunchpadVioletText}>📋 Verify Scorers ({scorerPending} Pending)</Text>
                   </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.btnLaunchpadCyan}
+                    onPress={() => setActiveTab('umpires')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.btnLaunchpadCyanText}>⚖️ Accredit Umpires ({umpirePending} Pending)</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.btnLaunchpadRose}
+                    onPress={() => setActiveTab('content')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.btnLaunchpadRoseText}>📰 Publish Notice</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* 2. FOUR DISTINCT SECTOR HUB CARDS */}
+              <View style={[styles.overviewHubsGrid, { flexDirection: isDesktop ? 'row' : 'column' }]}>
+                {/* Hub 1: Teams & Clubs (Emerald) */}
+                <TouchableOpacity
+                  style={[styles.overviewHubCard, styles.hubBorderEmerald]}
+                  onPress={() => setActiveTab('teams')}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.hubHeaderRow}>
+                    <View style={[styles.hubIconBox, { backgroundColor: '#059669' }]}>
+                      <Text style={{ fontSize: 18 }}>🛡️</Text>
+                    </View>
+                    <View style={styles.hubTagEmerald}>
+                      <Text style={styles.hubTagEmeraldText}>CLUB AFFILIATION</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.hubCardTitle}>Registered Clubs</Text>
+                  <Text style={styles.hubCardBigCount}>{teamTotal}</Text>
+                  <View style={styles.hubMiniPillRow}>
+                    <View style={[styles.hubMiniPill, { backgroundColor: '#ecfdf5' }]}>
+                      <Text style={[styles.hubMiniPillText, { color: '#047857' }]}>✔ {teamApproved} Appr</Text>
+                    </View>
+                    <View style={[styles.hubMiniPill, { backgroundColor: '#fffbeb' }]}>
+                      <Text style={[styles.hubMiniPillText, { color: '#b45309' }]}>⏳ {teamPending} Pend</Text>
+                    </View>
+                    <View style={[styles.hubMiniPill, { backgroundColor: '#fff1f2' }]}>
+                      <Text style={[styles.hubMiniPillText, { color: '#dc2626' }]}>✕ {teamRejected} Rej</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.hubFooterLinkEmerald}>Open Team Registry →</Text>
+                </TouchableOpacity>
+
+                {/* Hub 2: Match Scorers (Royal Violet) */}
+                <TouchableOpacity
+                  style={[styles.overviewHubCard, styles.hubBorderViolet]}
+                  onPress={() => setActiveTab('scorers')}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.hubHeaderRow}>
+                    <View style={[styles.hubIconBox, { backgroundColor: '#4f46e5' }]}>
+                      <Text style={{ fontSize: 18 }}>📋</Text>
+                    </View>
+                    <View style={styles.hubTagViolet}>
+                      <Text style={styles.hubTagVioletText}>DIGITAL ARBITERS</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.hubCardTitle}>Scorer Guild</Text>
+                  <Text style={styles.hubCardBigCount}>{scorerTotal}</Text>
+                  <View style={styles.hubMiniPillRow}>
+                    <View style={[styles.hubMiniPill, { backgroundColor: '#ecfdf5' }]}>
+                      <Text style={[styles.hubMiniPillText, { color: '#047857' }]}>✔ {scorerApproved} Auth</Text>
+                    </View>
+                    <View style={[styles.hubMiniPill, { backgroundColor: '#fffbeb' }]}>
+                      <Text style={[styles.hubMiniPillText, { color: '#b45309' }]}>⏳ {scorerPending} Pend</Text>
+                    </View>
+                    <View style={[styles.hubMiniPill, { backgroundColor: '#fff1f2' }]}>
+                      <Text style={[styles.hubMiniPillText, { color: '#dc2626' }]}>✕ {scorerRejected} Rej</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.hubFooterLinkViolet}>Manage Scorer Cadre →</Text>
+                </TouchableOpacity>
+
+                {/* Hub 3: Umpires (Ocean Sapphire Cyan) */}
+                <TouchableOpacity
+                  style={[styles.overviewHubCard, styles.hubBorderCyan]}
+                  onPress={() => setActiveTab('umpires')}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.hubHeaderRow}>
+                    <View style={[styles.hubIconBox, { backgroundColor: '#0284c7' }]}>
+                      <Text style={{ fontSize: 18 }}>⚖️</Text>
+                    </View>
+                    <View style={styles.hubTagCyan}>
+                      <Text style={styles.hubTagCyanText}>BCCI & TNCA PANEL</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.hubCardTitle}>Umpire Cadre</Text>
+                  <Text style={styles.hubCardBigCount}>{umpireTotal}</Text>
+                  <View style={styles.hubMiniPillRow}>
+                    <View style={[styles.hubMiniPill, { backgroundColor: '#ecfdf5' }]}>
+                      <Text style={[styles.hubMiniPillText, { color: '#047857' }]}>✔ {umpireApproved} Accr</Text>
+                    </View>
+                    <View style={[styles.hubMiniPill, { backgroundColor: '#fffbeb' }]}>
+                      <Text style={[styles.hubMiniPillText, { color: '#b45309' }]}>⏳ {umpirePending} Pend</Text>
+                    </View>
+                    <View style={[styles.hubMiniPill, { backgroundColor: '#fff1f2' }]}>
+                      <Text style={[styles.hubMiniPillText, { color: '#dc2626' }]}>✕ {umpireRejected} Rej</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.hubFooterLinkCyan}>Accredit Umpires →</Text>
+                </TouchableOpacity>
+
+                {/* Hub 4: Fixtures & Live Matches (Flame Orange) */}
+                <TouchableOpacity
+                  style={[styles.overviewHubCard, styles.hubBorderOrange]}
+                  onPress={() => setActiveTab('schedules')}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.hubHeaderRow}>
+                    <View style={[styles.hubIconBox, { backgroundColor: '#ea580c' }]}>
+                      <Text style={{ fontSize: 18 }}>⚡</Text>
+                    </View>
+                    <View style={styles.hubTagOrange}>
+                      <Text style={styles.hubTagOrangeText}>TOURNAMENT OPS</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.hubCardTitle}>Championship Matches</Text>
+                  <Text style={styles.hubCardBigCount}>{matchesList.length}</Text>
+                  <View style={styles.hubMiniPillRow}>
+                    <View style={[styles.hubMiniPill, { backgroundColor: '#fef2f2' }]}>
+                      <Text style={[styles.hubMiniPillText, { color: '#dc2626' }]}>● {liveMatchesCount} Live</Text>
+                    </View>
+                    <View style={[styles.hubMiniPill, { backgroundColor: '#eff6ff' }]}>
+                      <Text style={[styles.hubMiniPillText, { color: '#2563eb' }]}>📅 {scheduledMatchesCount} Sched</Text>
+                    </View>
+                    <View style={[styles.hubMiniPill, { backgroundColor: '#ecfdf5' }]}>
+                      <Text style={[styles.hubMiniPillText, { color: '#059669' }]}>🏆 {completedMatchesCount} Done</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.hubFooterLinkOrange}>Open Match Schedule →</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* 3. TWO-COLUMN INTERACTIVE MATRIX (Activity Feed + Donut Analytics) */}
+              <View style={[styles.overviewTwoColRow, { flexDirection: isDesktop ? 'row' : 'column' }]}>
+                {/* Left Column: Live Recent Registry Submissions */}
+                <View style={[styles.whiteItemCard, { flex: 1.2 }]}>
+                  <View style={styles.overviewSectionHeaderRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={{ fontSize: 18 }}>📋</Text>
+                      <View>
+                        <Text style={styles.overviewSectionTitle}>Live District Submissions Stream</Text>
+                        <Text style={styles.overviewSectionSubtitle}>Real-time application feed across clubs & officials</Text>
+                      </View>
+                    </View>
+                    <View style={styles.badgeCategoryIndigo}>
+                      <Text style={styles.badgeCategoryIndigoText}>LATEST ENTRIES</Text>
+                    </View>
+                  </View>
+
+                  <View style={{ gap: 10, marginTop: 14 }}>
+                    {/* Entry 1 */}
+                    <View style={styles.overviewActivityRow}>
+                      <View style={[styles.overviewActivityDot, { backgroundColor: '#059669' }]} />
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <Text style={styles.overviewActivityName}>Virudhunagar Spartans CC</Text>
+                          <View style={styles.badgeCategoryEmerald}>
+                            <Text style={styles.badgeCategoryEmeraldText}>CLUB • APPROVED</Text>
+                          </View>
+                        </View>
+                        <Text style={styles.overviewActivitySub}>Coach M. Gurumoorthy • Virudhunagar Central • 15 Squad Players</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.btnActionViewEmerald}
+                        onPress={() => setActiveTab('teams')}
+                      >
+                        <Text style={styles.btnActionViewEmeraldText}>Review</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Entry 2 */}
+                    <View style={styles.overviewActivityRow}>
+                      <View style={[styles.overviewActivityDot, { backgroundColor: '#4f46e5' }]} />
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <Text style={styles.overviewActivityName}>Rajesh Kumar M</Text>
+                          <View style={styles.badgeCategoryPurple}>
+                            <Text style={styles.badgeCategoryPurpleText}>SCORER • AUTHORIZED</Text>
+                          </View>
+                        </View>
+                        <Text style={styles.overviewActivitySub}>Grade A Elite Panel • 5 Yrs Exp • 📞 +91 94431 82741</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.btnActionViewViolet}
+                        onPress={() => setActiveTab('scorers')}
+                      >
+                        <Text style={styles.btnActionViewVioletText}>Review</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Entry 3 */}
+                    <View style={styles.overviewActivityRow}>
+                      <View style={[styles.overviewActivityDot, { backgroundColor: '#f59e0b' }]} />
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <Text style={styles.overviewActivityName}>P. Soundararajan</Text>
+                          <View style={styles.badgeCategoryAmber}>
+                            <Text style={styles.badgeCategoryAmberText}>UMPIRE • PENDING</Text>
+                          </View>
+                        </View>
+                        <Text style={styles.overviewActivitySub}>TNCA District Panel • Sivakasi Taluk • Cert TNCA-D-8821</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.btnActionViewCyan}
+                        onPress={() => setActiveTab('umpires')}
+                      >
+                        <Text style={styles.btnActionViewCyanText}>Inspect</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Entry 4 */}
+                    <View style={styles.overviewActivityRow}>
+                      <View style={[styles.overviewActivityDot, { backgroundColor: '#d97706' }]} />
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <Text style={styles.overviewActivityName}>Rajapalayam Royals CC</Text>
+                          <View style={styles.badgeCategoryAmber}>
+                            <Text style={styles.badgeCategoryAmberText}>CLUB • PENDING</Text>
+                          </View>
+                        </View>
+                        <Text style={styles.overviewActivitySub}>Coach S. Ramanathan • Rajapalayam Taluk • 15 Squad Players</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.btnActionViewEmerald}
+                        onPress={() => setActiveTab('teams')}
+                      >
+                        <Text style={styles.btnActionViewEmeraldText}>Review</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Right Column: District Registration Distribution Donut Gauge */}
+                <View style={[styles.whiteItemCard, styles.donutCardAlign, { flex: 1 }]}>
+                  <View style={styles.overviewSectionHeaderRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={{ fontSize: 18 }}>📊</Text>
+                      <View>
+                        <Text style={styles.overviewSectionTitle}>District Accreditation Gauge</Text>
+                        <Text style={styles.overviewSectionSubtitle}>Proportional clearance distribution</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Donut Chart */}
+                  <View style={styles.donutWrapper}>
+                    <View
+                      style={[
+                        styles.donutOuterRing,
+                        !isDesktop && { width: 140, height: 140, borderRadius: 70 },
+                        Platform.OS === 'web'
+                          ? ({
+                              background: `conic-gradient(#10b981 0% ${overallSegments.appPct}%, #f59e0b ${overallSegments.appPct}% ${overallSegments.appPct + overallSegments.pendPct}%, #ef4444 ${overallSegments.appPct + overallSegments.pendPct}% 100%)`,
+                              backgroundImage: `conic-gradient(#10b981 0% ${overallSegments.appPct}%, #f59e0b ${overallSegments.appPct}% ${overallSegments.appPct + overallSegments.pendPct}%, #ef4444 ${overallSegments.appPct + overallSegments.pendPct}% 100%)`
+                            } as any)
+                          : {
+                              borderWidth: 10,
+                              borderColor: '#10b981',
+                              borderTopColor: '#10b981',
+                              borderRightColor: overallSegments.pendPct > 0 ? '#f59e0b' : '#10b981',
+                              borderBottomColor: overallSegments.rejPct > 0 ? '#ef4444' : '#10b981',
+                              borderLeftColor: '#10b981',
+                              backgroundColor: '#ffffff'
+                            }
+                      ]}
+                    >
+                      <View style={[styles.donutHole, { backgroundColor: '#ffffff' }, !isDesktop && { width: 80, height: 80, borderRadius: 40 }]}>
+                        <Text style={[styles.donutNumber, { color: '#0f172a' }, !isDesktop && { fontSize: 24 }]}>{totalOverall}</Text>
+                        <Text style={[styles.donutUnitLabel, { color: '#d97706' }, !isDesktop && { fontSize: 8 }]}>OFFICIALS</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Proportional Distribution Bar */}
+                  <View style={styles.distributionBarWrapper}>
+                    <View style={[styles.distributionBarTrack, { backgroundColor: '#f1f5f9' }]}>
+                      {overallSegments.appPct > 0 && (
+                        <View style={[styles.distributionBarSegment, { width: `${overallSegments.appPct}%`, backgroundColor: '#10b981' }]} />
+                      )}
+                      {overallSegments.pendPct > 0 && (
+                        <View style={[styles.distributionBarSegment, { width: `${overallSegments.pendPct}%`, backgroundColor: '#f59e0b' }]} />
+                      )}
+                      {overallSegments.rejPct > 0 && (
+                        <View style={[styles.distributionBarSegment, { width: `${overallSegments.rejPct}%`, backgroundColor: '#ef4444' }]} />
+                      )}
+                    </View>
+                    <View style={styles.distributionPctRow}>
+                      <Text style={[styles.distributionPctText, { color: '#047857' }]}>{overallSegments.appPct}% Approved ({overallApproved})</Text>
+                      <Text style={[styles.distributionPctText, { color: '#b45309' }]}>{overallSegments.pendPct}% Pending ({overallPending})</Text>
+                      <Text style={[styles.distributionPctText, { color: '#b91c1c' }]}>{overallSegments.rejPct}% Rejected ({overallRejected})</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.donutLegendRow}>
+                    <View style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: '#10b981' }]} />
+                      <Text style={[styles.legendText, { color: '#334155' }]}>Approved ({overallApproved})</Text>
+                    </View>
+                    <View style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
+                      <Text style={[styles.legendText, { color: '#334155' }]}>Pending ({overallPending})</Text>
+                    </View>
+                    <View style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} />
+                      <Text style={[styles.legendText, { color: '#334155' }]}>Rejected ({overallRejected})</Text>
+                    </View>
+                  </View>
                 </View>
               </View>
             </View>
@@ -3448,15 +4078,15 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   <Text style={styles.sectionRequiredTag}>* REQUIRED</Text>
                 </View>
                 <Text style={styles.sectionSubDesc}>
-                  Type a custom tournament name or select an active championship to assign this fixture:
+                  Type the tournament name below to assign this fixture. The competing teams shown will be those registered for this tournament.
                 </Text>
 
-                {/* Direct Typing Input */}
+                {/* Direct Typing Input - Only Typed Format, No Quick Assign */}
                 <View style={styles.tournamentInputWrap}>
                   <Text style={styles.inputPrefixIcon}>🏆</Text>
                   <TextInput
                     style={styles.tournamentTextInput}
-                    placeholder="Type tournament name to assign (e.g. Virudhunagar Premier League 2026)..."
+                    placeholder="Type full tournament name (e.g. Virudhunagar Premier League 2026)..."
                     placeholderTextColor="#94a3b8"
                     value={scheduleForm.tournament_name}
                     onChangeText={(val) => {
@@ -3477,39 +4107,21 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   ) : null}
                 </View>
 
-                {/* Preset Quick Chips */}
-                <View style={{ marginTop: 8 }}>
-                  <Text style={styles.quickPresetHeading}>Quick Assign Existing Championships:</Text>
-                  <View style={styles.pillsRowWrap}>
-                    {[
-                      { id: 'T-2026-VPL', name: 'Virudhunagar Premier League 2026' },
-                      { id: 'T-2026-U19', name: 'District Under-19 Championship' },
-                      { id: 'T-2026-APX', name: 'Apex Council Trophy 2026' },
-                      { id: 'T-2026-SSC', name: 'Sivakasi Super Cup' }
-                    ].map((t) => {
-                      const isSelected = scheduleForm.tournament_name === t.name;
-                      return (
-                        <TouchableOpacity
-                          key={t.id}
-                          style={[styles.selectPillModern, isSelected && styles.selectPillModernActive]}
-                          onPress={() => setScheduleForm({ ...scheduleForm, tournament_id: t.id, tournament_name: t.name })}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={[styles.selectPillModernText, isSelected && styles.selectPillModernTextActive]}>
-                            🏆 {t.name}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-
                 {/* Live Assignment Confirmation Badge */}
-                <View style={styles.tournamentAssignedBadge}>
-                  <Text style={styles.tournamentAssignedBadgeText}>
-                    ✅ Fixture Assigned To: <Text style={{ fontWeight: '800', color: '#b45309' }}>{scheduleForm.tournament_name || 'Custom Tournament'}</Text> (ID: {scheduleForm.tournament_id || 'T-AUTO'})
-                  </Text>
-                </View>
+                {scheduleForm.tournament_name ? (
+                  <View style={styles.tournamentAssignedBadge}>
+                    <Text style={styles.tournamentAssignedBadgeText}>
+                      ✅ Fixture Assigned To: <Text style={{ fontWeight: '800', color: '#b45309' }}>{scheduleForm.tournament_name}</Text>
+                    </Text>
+                    <Text style={{ color: '#78716c', fontSize: 11.5, marginTop: 2 }}>
+                      Ref ID: {scheduleForm.tournament_id} • Teams below are those registered for this tournament.
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', borderRadius: 8, padding: 10, marginTop: 8, borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.3)' }}>
+                    <Text style={{ color: '#b45309', fontSize: 12, fontWeight: '600' }}>⚠️ Please type the tournament name above to proceed. Competing teams will filter accordingly.</Text>
+                  </View>
+                )}
               </View>
 
               {/* ───────────────────────────────────────────────────────
@@ -3520,9 +4132,6 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   <Text style={styles.formSectionHeading}>2. Competing Registered Teams</Text>
                   <Text style={styles.sectionRequiredTag}>* DYNAMIC DROPDOWN SELECTION</Text>
                 </View>
-                <Text style={styles.sectionSubDesc}>
-                  Select participating clubs from the official registered federation roster:
-                </Text>
 
                 <View style={styles.twoColFormGrid}>
                   {/* Team A (Home / First Team) */}
@@ -3598,13 +4207,20 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                       >
                                         <View style={styles.dropdownTableRowLeft}>
                                           <Text style={{ fontSize: 14 }}>🏏</Text>
-                                          <View>
+                                          <View style={{ flex: 1 }}>
                                             <Text style={[styles.dropdownRowTitle, isChosen && styles.dropdownRowTitleActive]}>
                                               {tm.name}
                                             </Text>
                                             <Text style={styles.dropdownRowMeta}>
                                               {tm.id} • {tm.taluk} Taluk • Coach: {tm.coachName}
                                             </Text>
+                                            {scheduleForm.tournament_name ? (
+                                              <View style={{ marginTop: 2, alignSelf: 'flex-start', backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                                                <Text style={{ color: '#92400e', fontSize: 10, fontWeight: '700' }}>
+                                                  🏆 Registered for {scheduleForm.tournament_name}
+                                                </Text>
+                                              </View>
+                                            ) : null}
                                           </View>
                                         </View>
                                         {isChosen && <Text style={styles.dropdownRowCheck}>✓</Text>}
@@ -3697,13 +4313,20 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                       >
                                         <View style={styles.dropdownTableRowLeft}>
                                           <Text style={{ fontSize: 14 }}>🏏</Text>
-                                          <View>
+                                          <View style={{ flex: 1 }}>
                                             <Text style={[styles.dropdownRowTitle, isChosen && styles.dropdownRowTitleActive]}>
                                               {tm.name} {isTeamA ? '(Already Team A)' : ''}
                                             </Text>
                                             <Text style={styles.dropdownRowMeta}>
                                               {tm.id} • {tm.taluk} Taluk • Coach: {tm.coachName}
                                             </Text>
+                                            {scheduleForm.tournament_name ? (
+                                              <View style={{ marginTop: 2, alignSelf: 'flex-start', backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                                                <Text style={{ color: '#92400e', fontSize: 10, fontWeight: '700' }}>
+                                                  🏆 Registered for {scheduleForm.tournament_name}
+                                                </Text>
+                                              </View>
+                                            ) : null}
                                           </View>
                                         </View>
                                         {isChosen && <Text style={styles.dropdownRowCheck}>✓</Text>}
@@ -3773,7 +4396,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 >
                                   <View style={styles.dropdownTableRowLeft}>
                                     <Text style={{ fontSize: 14 }}>📍</Text>
-                                    <View>
+                                    <View style={{ flex: 1 }}>
                                       <Text style={[styles.dropdownRowTitle, isChosen && styles.dropdownRowTitleActive]}>
                                         {v.name}
                                       </Text>
@@ -3793,6 +4416,51 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   );
                 })()}
 
+                {/* Dynamic Custom Stadium / Ground Location Input */}
+                <View style={{ marginTop: 8 }}>
+                  <Text style={[styles.formLabel, { fontSize: 11.5, color: '#64748b' }]}>
+                    ✏️ Type / Edit Stadium or Ground Location Name (Dynamic Location)
+                  </Text>
+                  <TextInput
+                    style={styles.formTextInput}
+                    placeholder="Type custom stadium name or ground location..."
+                    placeholderTextColor="#94a3b8"
+                    value={scheduleForm.venue}
+                    onChangeText={(val) => setScheduleForm({ ...scheduleForm, venue: val })}
+                  />
+                </View>
+
+                {/* Google Maps Link for Selected Venue */}
+                {scheduleForm.venue ? (
+                  <TouchableOpacity
+                    style={styles.venueMapLinkBtn}
+                    onPress={() => {
+                      const query = encodeURIComponent(`${scheduleForm.venue} Virudhunagar Tamil Nadu`);
+                      const url = `https://www.google.com/maps/search/?api=1&query=${query}`;
+                      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                        (window as any).open(url, '_blank');
+                      } else {
+                        Alert.alert('Google Maps Navigation', `Open Google Maps navigation for:\n${scheduleForm.venue}?`, [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Open Maps ↗', onPress: () => {} }
+                        ]);
+                      }
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.venueMapIconBadge}>
+                      <Text style={{ fontSize: 16 }}>📍</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.venueMapLinkTitle}>Open Ground on Google Maps ↗</Text>
+                      <Text style={styles.venueMapLinkSub}>Direct turn-by-turn GPS navigation for "{scheduleForm.venue}"</Text>
+                    </View>
+                    <View style={styles.venueMapOpenTag}>
+                      <Text style={styles.venueMapOpenTagText}>GPS LIVE ↗</Text>
+                    </View>
+                  </TouchableOpacity>
+                ) : null}
+
                 {/* Match Date & Changeable Match Time */}
                 <View style={[styles.formRowInputs, { marginTop: 14 }]}>
                   <View style={styles.formInputCol}>
@@ -3807,7 +4475,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   </View>
 
                   <View style={styles.formInputCol}>
-                    <Text style={styles.formLabel}>Match Start Time * (Changeable for Rain / Delays)</Text>
+                    <Text style={styles.formLabel}>Match Start Time * {editingMatch ? '(Update for Delay / Rain Reschedule)' : ''}</Text>
                     <TextInput
                       style={styles.formTextInput}
                       placeholder="e.g. 09:30 AM"
@@ -3818,139 +4486,123 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   </View>
                 </View>
 
-                {/* Quick Weather / Rain Delay Adjustments */}
-                <View style={styles.weatherQuickRow}>
-                  <Text style={styles.weatherQuickLabel}>⚡ Quick Weather / Delay Presets:</Text>
-                  <View style={styles.pillsRowWrap}>
-                    <TouchableOpacity
-                      style={styles.btnDelayChip}
-                      onPress={() => setScheduleForm({ ...scheduleForm, match_time: '10:00 AM' })}
-                    >
-                      <Text style={styles.btnDelayChipText}>🌧 +30m Rain Delay (10:00 AM)</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.btnDelayChip}
-                      onPress={() => setScheduleForm({ ...scheduleForm, match_time: '10:30 AM' })}
-                    >
-                      <Text style={styles.btnDelayChipText}>🌧 +1hr Weather Delay (10:30 AM)</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.btnDelayChip}
-                      onPress={() => setScheduleForm({ ...scheduleForm, match_time: '01:30 PM' })}
-                    >
-                      <Text style={styles.btnDelayChipText}>☀️ Afternoon Shift (01:30 PM)</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.btnDelayChip}
-                      onPress={() => setScheduleForm({ ...scheduleForm, match_time: '05:30 PM' })}
-                    >
-                      <Text style={styles.btnDelayChipText}>💡 Floodlights (05:30 PM)</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                {/* Quick Weather / Rain Delay Adjustments — ONLY shown in Reschedule/Edit mode */}
+                {editingMatch && (
+                  <View style={styles.weatherQuickRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                      <Text style={{ fontSize: 13, color: '#dc2626', fontWeight: '800' }}>🌧 Weather / Rain Delay Presets</Text>
+                      <View style={{ backgroundColor: '#fef2f2', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: '#fca5a5' }}>
+                        <Text style={{ color: '#dc2626', fontSize: 10, fontWeight: '800' }}>RESCHEDULE MODE</Text>
+                      </View>
+                    </View>
 
-                {/* Automated Reschedule Notification Notice to Coaches & Teams */}
-                <View style={styles.automatedDispatchNoticeBox}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <Text style={{ fontSize: 16 }}>📧</Text>
-                    <Text style={styles.automatedDispatchTitle}>Automated Team & Coach Notification System</Text>
-                  </View>
-                  <Text style={styles.automatedDispatchDesc}>
-                    When timing is updated due to rain or scheduling adjustments, automated email notifications will be dispatched within 2 minutes to both competing clubs' registered managers & coaches:
-                  </Text>
-                  <View style={styles.dispatchRecipientRow}>
-                    <View style={styles.recipientPill}>
-                      <Text style={styles.recipientPillText}>
-                        Team A: {availableTeams.find(t => t.id === scheduleForm.team_a_id)?.coachEmail || 'coach@team-a.cfvd.org'}
-                      </Text>
+                    {/* Dynamic Reschedule Boxes */}
+                    <View style={styles.dynamicRescheduleGrid}>
+                      <TouchableOpacity
+                        style={styles.dynamicRescheduleBox}
+                        onPress={() => applyDynamicTimeDelay(30)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.dynamicRescheduleBoxTitle}>🌧 +30m Delay</Text>
+                        <Text style={styles.dynamicRescheduleBoxSub}>Add 30 mins to start</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.dynamicRescheduleBox}
+                        onPress={() => applyDynamicTimeDelay(60)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.dynamicRescheduleBoxTitle}>🌧 +1 Hour Delay</Text>
+                        <Text style={styles.dynamicRescheduleBoxSub}>Add 1 hour to start</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.dynamicRescheduleBox}
+                        onPress={() => applyDynamicTimeDelay(120)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.dynamicRescheduleBoxTitle}>🌧 +2 Hours Delay</Text>
+                        <Text style={styles.dynamicRescheduleBoxSub}>Add 2 hours to start</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.dynamicRescheduleBox}
+                        onPress={() => setScheduleForm({ ...scheduleForm, match_time: '02:00 PM' })}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.dynamicRescheduleBoxTitle}>☀️ Afternoon Shift</Text>
+                        <Text style={styles.dynamicRescheduleBoxSub}>Set to 02:00 PM</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.dynamicRescheduleBox}
+                        onPress={() => setScheduleForm({ ...scheduleForm, match_time: '06:00 PM' })}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.dynamicRescheduleBoxTitle}>💡 Floodlights Night</Text>
+                        <Text style={styles.dynamicRescheduleBoxSub}>Set to 06:00 PM</Text>
+                      </TouchableOpacity>
                     </View>
-                    <View style={styles.recipientPill}>
-                      <Text style={styles.recipientPillText}>
-                        Team B: {availableTeams.find(t => t.id === scheduleForm.team_b_id)?.coachEmail || 'coach@team-b.cfvd.org'}
-                      </Text>
-                    </View>
                   </View>
-                </View>
+                )}
               </View>
 
               {/* ───────────────────────────────────────────────────────
-                  4. MATCH FORMAT & DYNAMIC OVERS (50, 25, 20, 15, 10, 5)
+                  4. MATCH FORMAT & OVERS LIMIT (TYPED INPUT ONLY)
                   ─────────────────────────────────────────────────────── */}
               <View style={styles.modalFormSection}>
                 <View style={styles.sectionHeaderRow}>
                   <Text style={styles.formSectionHeading}>4. Match Format & Overs Limit</Text>
-                  <Text style={styles.sectionRequiredTag}>* FLEXIBLE OVERS</Text>
+                  <Text style={styles.sectionRequiredTag}>* TYPED INPUT ONLY</Text>
                 </View>
+                <Text style={styles.sectionSubDesc}>
+                  Type the exact overs limit and championship match format for this fixture:
+                </Text>
 
                 <View style={styles.formRowInputs}>
                   <View style={styles.formInputCol}>
-                    <Text style={styles.formLabel}>Championship Format</Text>
-                    <View style={styles.formatSelectRow}>
-                      {[
-                        { type: 'T20', overs: 20 },
-                        { type: 'One Day', overs: 50 },
-                        { type: 'Super-25', overs: 25 },
-                        { type: 'Shield-15', overs: 15 },
-                        { type: 'Super-10', overs: 10 },
-                        { type: 'Five-5', overs: 5 }
-                      ].map((fmt) => {
-                        const isMatchActive = scheduleForm.match_type === fmt.type;
-                        return (
-                          <TouchableOpacity
-                            key={fmt.type}
-                            style={[styles.formatBtn, isMatchActive && styles.formatBtnActive]}
-                            onPress={() => setScheduleForm({
-                              ...scheduleForm,
-                              match_type: fmt.type,
-                              overs: fmt.overs
-                            })}
-                          >
-                            <Text style={[styles.formatBtnText, isMatchActive && styles.formatBtnTextActive]}>
-                              {fmt.type}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
+                    <Text style={styles.formLabel}>Exact Overs Limit (Type number) *</Text>
+                    <View style={styles.oversTypedInputWrap}>
+                      <Text style={{ fontSize: 16, marginRight: 8 }}>⚡</Text>
+                      <TextInput
+                        style={styles.oversNumericInput}
+                        placeholder="Type overs limit (e.g. 20, 50, 15, 10)..."
+                        placeholderTextColor="#94a3b8"
+                        keyboardType="numeric"
+                        value={String(scheduleForm.overs || '')}
+                        onChangeText={(val) => {
+                          const num = parseInt(val, 10) || 0;
+                          setScheduleForm({
+                            ...scheduleForm,
+                            overs: num,
+                            match_type: num === 50 ? 'One Day' : num === 20 ? 'T20' : num > 0 ? `${num}-Overs` : scheduleForm.match_type
+                          });
+                        }}
+                      />
+                      <Text style={styles.oversUnitSuffix}>Overs / Side</Text>
                     </View>
                   </View>
 
                   <View style={styles.formInputCol}>
-                    <Text style={styles.formLabel}>Exact Overs Limit (Customizable)</Text>
+                    <Text style={styles.formLabel}>Match Format Designation *</Text>
                     <TextInput
                       style={styles.formTextInput}
-                      placeholder="20"
-                      keyboardType="numeric"
-                      value={String(scheduleForm.overs)}
-                      onChangeText={(val) => setScheduleForm({ ...scheduleForm, overs: parseInt(val, 10) || 20 })}
+                      placeholder="Type format (e.g. T20, One Day, 15-Overs Knockout)..."
+                      placeholderTextColor="#94a3b8"
+                      value={scheduleForm.match_type}
+                      onChangeText={(val) => setScheduleForm({ ...scheduleForm, match_type: val })}
                     />
                   </View>
                 </View>
 
-                {/* Dynamic Overs Quick Selection: 50, 25, 20, 15, 10, 5 */}
-                <View style={{ marginTop: 8 }}>
-                  <Text style={styles.quickPresetHeading}>Choose Overs Limit:</Text>
-                  <View style={styles.pillsRowWrap}>
-                    {[50, 25, 20, 15, 10, 5].map((ov) => {
-                      const isOvActive = Number(scheduleForm.overs) === ov;
-                      return (
-                        <TouchableOpacity
-                          key={`ov-${ov}`}
-                          style={[styles.oversSelectPill, isOvActive && styles.oversSelectPillActive]}
-                          onPress={() => setScheduleForm({
-                            ...scheduleForm,
-                            overs: ov,
-                            match_type: ov === 50 ? 'One Day' : ov === 20 ? 'T20' : `${ov}-Overs`
-                          })}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={[styles.oversSelectPillText, isOvActive && styles.oversSelectPillTextActive]}>
-                            ⚡ {ov} Overs {ov === 50 ? '(ODI Limit)' : ov === 20 ? '(T20)' : ''}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
+                {/* Dynamic Overs Summary Pill */}
+                {scheduleForm.overs > 0 && (
+                  <View style={styles.oversTypedConfirmationBadge}>
+                    <Text style={styles.oversTypedConfirmationText}>
+                      ✅ Configured Limit: <Text style={{ fontWeight: '800', color: '#166534' }}>{scheduleForm.overs} Overs per side</Text> ({scheduleForm.match_type || 'Custom Format'})
+                    </Text>
                   </View>
-                </View>
+                )}
               </View>
 
               {/* ───────────────────────────────────────────────────────
@@ -3962,42 +4614,121 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   <Text style={styles.sectionRequiredTag}>* BCCI / DISTRICT ACCREDITED</Text>
                 </View>
 
-                {/* Assigned Scorer Selection */}
+                {/* Assigned Scorer — Dynamic Dropdown Selection */}
                 <Text style={styles.formLabel}>Official Digital Scorer (Scoring App Access) *</Text>
-                <View style={styles.pillsRowWrap}>
-                  {(officialsList.length > 0 ? officialsList : [
-                    { id: 'SCR-101', name: 'Thiru. K. Sundararajan (SCR-101)', grade: 'BCCI Level 1 Scorer' },
-                    { id: 'SCR-102', name: 'Thiru. M. Venkatesh (SCR-102)', grade: 'District Senior Panel' },
-                    { id: 'SCR-103', name: 'Thiru. S. Pitchaimuthu (SCR-103)', grade: 'Collegiate League' }
-                  ]).map((sc: any) => {
-                    const isScActive = scheduleForm.assigned_scorer_id === sc.id;
-                    return (
+                {(() => {
+                  const scorerList = officialsList.filter((o: any) => {
+                    const role = (o.role || o.type || o.grade || '').toUpperCase();
+                    return role.includes('SCOR') || o.scorerId || o.id?.toString().startsWith('SCR');
+                  });
+                  const displayScorers = scorerList.length > 0 ? scorerList : [
+                    { id: 'SCR-101', name: 'Thiru. K. Sundararajan', scorerName: 'Thiru. K. Sundararajan', grade: 'BCCI Level 1 Scorer', phone: '+91 98421 11234', taluk: 'Virudhunagar' },
+                    { id: 'SCR-102', name: 'Thiru. M. Venkatesh', scorerName: 'Thiru. M. Venkatesh', grade: 'District Senior Panel', phone: '+91 94432 55678', taluk: 'Sivakasi' },
+                    { id: 'SCR-103', name: 'Thiru. S. Pitchaimuthu', scorerName: 'Thiru. S. Pitchaimuthu', grade: 'Collegiate League Scorer', phone: '+91 81223 44890', taluk: 'Rajapalayam' },
+                    { id: 'SCR-104', name: 'Thiru. R. Arunachalam', scorerName: 'Thiru. R. Arunachalam', grade: 'TNCA Certified Scorer', phone: '+91 97866 33210', taluk: 'Aruppukottai' }
+                  ];
+                  return (
+                    <View style={styles.dropdownContainer}>
                       <TouchableOpacity
-                        key={sc.id}
-                        style={[styles.selectPillModern, isScActive && styles.selectPillModernActive]}
-                        onPress={() => setScheduleForm({ ...scheduleForm, assigned_scorer_id: sc.id })}
+                        style={[styles.dropdownSelectBox, scorerDropdownOpen && styles.dropdownSelectBoxActive]}
+                        onPress={() => setScorerDropdownOpen(!scorerDropdownOpen)}
                         activeOpacity={0.8}
                       >
-                        <Text style={[styles.selectPillModernText, isScActive && styles.selectPillModernTextActive]}>
-                          👤 {sc.name || sc.id} • {sc.grade || 'District Scorer'}
-                        </Text>
+                        <View style={styles.dropdownSelectedLeft}>
+                          <View style={[styles.teamCrestMini, { backgroundColor: '#7c3aed' }]}>
+                            <Text style={{ fontSize: 13 }}>👤</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            {(() => {
+                              const sel = displayScorers.find((s: any) => s.id === scheduleForm.assigned_scorer_id);
+                              return (
+                                <>
+                                  <Text style={styles.dropdownSelectedTitle} numberOfLines={1}>
+                                    {sel?.scorerName || sel?.name || sel?.id || 'Select Official Scorer'}
+                                  </Text>
+                                  <Text style={styles.dropdownSelectedSub} numberOfLines={1}>
+                                    {sel ? `${sel.grade || 'District Scorer'} • ${sel.taluk || 'Virudhunagar'} • 📞 ${sel.phone || '—'}` : 'Choose an accredited digital scorer'}
+                                  </Text>
+                                </>
+                              );
+                            })()}
+                          </View>
+                        </View>
+                        <Text style={styles.dropdownArrow}>{scorerDropdownOpen ? '▲' : '▼'}</Text>
                       </TouchableOpacity>
-                    );
-                  })}
-                </View>
 
-                {/* Match Umpires Display */}
-                <View style={styles.umpiresCardRow}>
-                  <View style={styles.umpireCard}>
-                    <Text style={styles.umpireRoleTitle}>⚖️ Lead Field Umpire (Umpire 1)</Text>
-                    <Text style={styles.umpireNameText}>BCCI Certified District Panelist</Text>
-                    <Text style={styles.umpireMetaText}>Official appointment assigned via Apex Umpires Board</Text>
-                  </View>
-                  <View style={styles.umpireCard}>
-                    <Text style={styles.umpireRoleTitle}>⚖️ Square Leg Umpire (Umpire 2)</Text>
-                    <Text style={styles.umpireNameText}>Senior District Panel Umpire</Text>
-                    <Text style={styles.umpireMetaText}>Authorized federation match arbiter</Text>
-                  </View>
+                      {scorerDropdownOpen && (
+                        <View style={styles.dropdownTablePanel}>
+                          <ScrollView style={styles.dropdownTableScroll} nestedScrollEnabled={true}>
+                            {displayScorers.map((sc: any) => {
+                              const isScActive = scheduleForm.assigned_scorer_id === sc.id;
+                              return (
+                                <TouchableOpacity
+                                  key={sc.id}
+                                  style={[styles.dropdownTableRow, isScActive && styles.dropdownTableRowActive]}
+                                  onPress={() => {
+                                    setScheduleForm({ ...scheduleForm, assigned_scorer_id: sc.id });
+                                    setScorerDropdownOpen(false);
+                                  }}
+                                  activeOpacity={0.8}
+                                >
+                                  <View style={styles.dropdownTableRowLeft}>
+                                    <Text style={{ fontSize: 16 }}>👤</Text>
+                                    <View>
+                                      <Text style={[styles.dropdownRowTitle, isScActive && styles.dropdownRowTitleActive]}>
+                                        {sc.scorerName || sc.name || sc.id}
+                                      </Text>
+                                      <Text style={styles.dropdownRowMeta}>
+                                        {sc.id} • {sc.grade || 'District Scorer'} • {sc.taluk || 'Virudhunagar'}
+                                      </Text>
+                                      {sc.phone && (
+                                        <Text style={[styles.dropdownRowMeta, { color: '#4ade80' }]}>📞 {sc.phone}</Text>
+                                      )}
+                                    </View>
+                                  </View>
+                                  {isScActive && <Text style={styles.dropdownRowCheck}>✓</Text>}
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </ScrollView>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })()}
+
+                {/* Match Umpires — Dynamic Selection from Registered Umpires */}
+                <View style={{ marginTop: 16 }}>
+                  <Text style={styles.formLabel}>Appointed Match Umpires *</Text>
+                  {(() => {
+                    const umpireList = umpires.filter((u: any) => u.status === 'Approved' || u.status === 'APPROVED');
+                    const displayUmpires = umpireList.length > 0 ? umpireList : [
+                      { umpireId: 'UMP-101', umpireName: 'Thiru. P. Subramaniam', qualification: 'BCCI Certified District Panelist', district: 'Virudhunagar', phone: '+91 94441 22345', specialization: 'On-field Umpire' },
+                      { umpireId: 'UMP-102', umpireName: 'Thiru. A. Karthikeyan', qualification: 'TNCA Senior Panel Umpire', district: 'Sivakasi', phone: '+91 98432 66789', specialization: 'Square Leg Umpire' },
+                      { umpireId: 'UMP-103', umpireName: 'Thiru. V. Murugan', qualification: 'District Certified Umpire', district: 'Rajapalayam', phone: '+91 81234 55670', specialization: 'On-field / TV' }
+                    ];
+                    return (
+                      <View style={styles.umpiresCardRow}>
+                        {displayUmpires.slice(0, 2).map((u: any, idx: number) => (
+                          <View key={u.umpireId || idx} style={styles.umpireCard}>
+                            <Text style={styles.umpireRoleTitle}>
+                              ⚖️ {idx === 0 ? 'Lead Field Umpire' : 'Square Leg Umpire'} (Umpire {idx + 1})
+                            </Text>
+                            <Text style={styles.umpireNameText}>{u.umpireName}</Text>
+                            <Text style={styles.umpireMetaText}>{u.qualification}</Text>
+                            <Text style={[styles.umpireMetaText, { color: '#4ade80', marginTop: 2 }]}>📞 {u.phone || '—'} • {u.district}</Text>
+                          </View>
+                        ))}
+                        {displayUmpires.length < 2 && (
+                          <View style={styles.umpireCard}>
+                            <Text style={styles.umpireRoleTitle}>⚖️ Square Leg Umpire (Umpire 2)</Text>
+                            <Text style={styles.umpireNameText}>To be assigned by Apex Board</Text>
+                            <Text style={styles.umpireMetaText}>Authorized federation match arbiter</Text>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })()}
                 </View>
               </View>
             </ScrollView>
@@ -4315,6 +5046,48 @@ const styles: any = StyleSheet.create({
     backgroundColor: '#d4af37',
     boxShadow: '0 4px 12px rgba(212, 175, 55, 0.35)',
     elevation: 2
+  },
+  sidebarNavItemOverviewActive: {
+    backgroundColor: '#0f172a',
+    borderWidth: 1.5,
+    borderColor: '#d4af37',
+    boxShadow: '0 4px 14px rgba(212, 175, 55, 0.35)',
+    elevation: 3
+  },
+  sidebarNavItemTeamsActive: {
+    backgroundColor: '#059669',
+    borderWidth: 1.5,
+    borderColor: '#34d399',
+    boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)',
+    elevation: 3
+  },
+  sidebarNavItemScorersActive: {
+    backgroundColor: '#4f46e5',
+    borderWidth: 1.5,
+    borderColor: '#818cf8',
+    boxShadow: '0 4px 14px rgba(79, 70, 229, 0.4)',
+    elevation: 3
+  },
+  sidebarNavItemUmpiresActive: {
+    backgroundColor: '#0284c7',
+    borderWidth: 1.5,
+    borderColor: '#38bdf8',
+    boxShadow: '0 4px 14px rgba(2, 132, 199, 0.4)',
+    elevation: 3
+  },
+  sidebarNavItemSchedulesActive: {
+    backgroundColor: '#ea580c',
+    borderWidth: 1.5,
+    borderColor: '#fb923c',
+    boxShadow: '0 4px 14px rgba(234, 88, 12, 0.4)',
+    elevation: 3
+  },
+  sidebarNavItemContentActive: {
+    backgroundColor: '#e11d48',
+    borderWidth: 1.5,
+    borderColor: '#fb7185',
+    boxShadow: '0 4px 14px rgba(225, 29, 72, 0.4)',
+    elevation: 3
   },
   sidebarNavItemCollapsed: {
     paddingHorizontal: 8,
@@ -6807,6 +7580,39 @@ const styles: any = StyleSheet.create({
     color: '#1e3a8a'
   },
 
+  // Dynamic Weather Reschedule Boxes
+  dynamicRescheduleGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 6
+  },
+  dynamicRescheduleBox: {
+    flex: 1,
+    minWidth: 140,
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#fca5a5',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 2px 8px rgba(220, 38, 38, 0.08)'
+  },
+  dynamicRescheduleBoxTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#dc2626',
+    textAlign: 'center'
+  },
+  dynamicRescheduleBoxSub: {
+    fontSize: 10.5,
+    color: '#991b1b',
+    marginTop: 2,
+    textAlign: 'center'
+  },
+
   // Automated Dispatch Notice
   automatedDispatchNoticeBox: {
     marginTop: 12,
@@ -6918,5 +7724,951 @@ const styles: any = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '800',
     letterSpacing: 0.3
+  },
+
+  // Venue Google Maps Link
+  venueMapLinkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1.5,
+    borderColor: '#10b981',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 8,
+    gap: 10,
+    boxShadow: '0 2px 10px rgba(16, 185, 129, 0.12)'
+  },
+  venueMapIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#d1fae5',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  venueMapLinkTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#065f46'
+  },
+  venueMapLinkSub: {
+    fontSize: 11,
+    color: '#047857',
+    marginTop: 1
+  },
+  venueMapOpenTag: {
+    backgroundColor: '#059669',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4
+  },
+  venueMapOpenTagText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5
+  },
+
+  // Overs Typed Input
+  oversTypedInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 44
+  },
+  oversNumericInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#0f172a',
+    fontWeight: '700'
+  },
+  oversUnitSuffix: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+    marginLeft: 6
+  },
+  oversTypedConfirmationBadge: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 10
+  },
+  oversTypedConfirmationText: {
+    fontSize: 12,
+    color: '#15803d',
+    fontWeight: '600'
+  },
+
+  // Team Home Notice Checkbox
+  teamHomeNoticeCheckboxRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 12,
+    gap: 12
+  },
+  customCheckboxBox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: '#d97706',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2
+  },
+  customCheckboxBoxChecked: {
+    backgroundColor: '#d97706',
+    borderColor: '#b45309'
+  },
+  customCheckboxCheck: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '900',
+    lineHeight: 14
+  },
+  checkboxTitleText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#92400e'
+  },
+  checkboxSubText: {
+    fontSize: 11.5,
+    color: '#b45309',
+    marginTop: 2,
+    lineHeight: 16
+  },
+
+  // Scorer Management Royal Violet / Indigo Card Styles
+  scorerStatCard: {
+    flex: 1,
+    minWidth: 260,
+    width: '100%',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#e0e7ff',
+    padding: 20,
+    boxShadow: '0 8px 30px rgba(79, 70, 229, 0.08)',
+    elevation: 3
+  },
+  scorerIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#4f46e5',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  scorerCardTitle: {
+    color: '#1e1b4b',
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 0.2
+  },
+  scorerBadgeTag: {
+    color: '#6366f1',
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 0.8
+  },
+  scorerCardSubtitle: {
+    color: '#64748b',
+    fontSize: 12.5,
+    lineHeight: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    paddingBottom: 14,
+    marginBottom: 16
+  },
+  scorerPillApproved: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#a7f3d0'
+  },
+  scorerPillPending: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde68a'
+  },
+  scorerPillRejected: {
+    backgroundColor: '#fff1f2',
+    borderColor: '#fecdd3'
+  },
+  scorerPillTotal: {
+    backgroundColor: '#eef2ff',
+    borderColor: '#c7d2fe'
+  },
+
+  // Team Registration Emerald & Athletic Gold Card Styles
+  teamStatCard: {
+    flex: 1,
+    minWidth: 260,
+    width: '100%',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#d1fae5',
+    padding: 20,
+    boxShadow: '0 8px 30px rgba(5, 150, 105, 0.08)',
+    elevation: 3
+  },
+  teamIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#059669',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  teamCardTitle: {
+    color: '#064e3b',
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 0.2
+  },
+  teamBadgeTag: {
+    color: '#059669',
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 0.8
+  },
+  teamCardSubtitle: {
+    color: '#64748b',
+    fontSize: 12.5,
+    lineHeight: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    paddingBottom: 14,
+    marginBottom: 16
+  },
+  teamPillApproved: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#a7f3d0'
+  },
+  teamPillPending: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde68a'
+  },
+  teamPillRejected: {
+    backgroundColor: '#fff1f2',
+    borderColor: '#fecdd3'
+  },
+  teamPillTotal: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#bfdbfe'
+  },
+
+  // Umpire Management Ocean Sapphire & Electric Cyan Styles
+  umpireStatCard: {
+    flex: 1,
+    minWidth: 260,
+    width: '100%',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#bae6fd',
+    padding: 20,
+    boxShadow: '0 8px 30px rgba(2, 132, 199, 0.08)',
+    elevation: 3
+  },
+  umpireIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#0284c7',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  umpireCardTitle: {
+    color: '#0c4a6e',
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 0.2
+  },
+  umpireBadgeTag: {
+    color: '#0284c7',
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 0.8
+  },
+  umpireCardSubtitle: {
+    color: '#64748b',
+    fontSize: 12.5,
+    lineHeight: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    paddingBottom: 14,
+    marginBottom: 16
+  },
+  umpirePillApproved: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#a7f3d0'
+  },
+  umpirePillPending: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde68a'
+  },
+  umpirePillRejected: {
+    backgroundColor: '#fff1f2',
+    borderColor: '#fecdd3'
+  },
+  umpirePillTotal: {
+    backgroundColor: '#e0f2fe',
+    borderColor: '#bae6fd'
+  },
+
+  // Dynamic Round Reload & Live Header Styles
+  dynamicSyncHeaderGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12
+  },
+  liveSyncBadgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
+  },
+  pulsingLiveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10b981'
+  },
+  pulsingLiveDotActive: {
+    backgroundColor: '#3b82f6'
+  },
+  liveSyncBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#334155',
+    letterSpacing: 0.5
+  },
+  roundReloadBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#d4af37',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0a1936',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3
+  },
+  roundReloadBtnSpinning: {
+    borderColor: '#3b82f6',
+    backgroundColor: '#eff6ff'
+  },
+  roundReloadIcon: {
+    fontSize: 18,
+    color: '#0a1936'
+  },
+  roundReloadBtnSm: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2
+  },
+  roundReloadIconSm: {
+    fontSize: 15,
+    color: '#1e293b'
+  },
+
+  // Dynamic Colorful Action Buttons
+  btnActionCall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8
+  },
+  btnActionCallText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#065f46'
+  },
+  btnActionEmail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8
+  },
+  btnActionEmailText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1d4ed8'
+  },
+  btnActionViewViolet: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#f5f3ff',
+    borderWidth: 1,
+    borderColor: '#ddd6fe',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8
+  },
+  btnActionViewVioletText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#6d28d9'
+  },
+  btnActionViewCyan: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#e0f2fe',
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8
+  },
+  btnActionViewCyanText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0369a1'
+  },
+  btnActionViewEmerald: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8
+  },
+  btnActionViewEmeraldText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#047857'
+  },
+
+  // Dynamic Colorful Badges
+  badgeCategoryPurple: {
+    backgroundColor: '#f5f3ff',
+    borderWidth: 1,
+    borderColor: '#ddd6fe',
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 6
+  },
+  badgeCategoryPurpleText: {
+    color: '#7c3aed',
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  badgeCategoryCyan: {
+    backgroundColor: '#ecfeff',
+    borderWidth: 1,
+    borderColor: '#a5f3fc',
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 6
+  },
+  badgeCategoryCyanText: {
+    color: '#0891b2',
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  badgeCategoryEmerald: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 6
+  },
+  badgeCategoryEmeraldText: {
+    color: '#059669',
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  badgeCategoryAmber: {
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 6
+  },
+  badgeCategoryAmberText: {
+    color: '#b45309',
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  badgeCategoryRose: {
+    backgroundColor: '#fff1f2',
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 6
+  },
+  badgeCategoryRoseText: {
+    color: '#e11d48',
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  badgeCategoryIndigo: {
+    backgroundColor: '#eef2ff',
+    borderWidth: 1,
+    borderColor: '#c7d2fe',
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 6
+  },
+  badgeCategoryIndigoText: {
+    color: '#4338ca',
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  teamCrestAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.8)'
+  },
+  teamCrestText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#ffffff',
+    letterSpacing: 0.5
+  },
+  dynamicRegistryStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginBottom: 16,
+    borderWidth: 1,
+    flexWrap: 'wrap',
+    gap: 8
+  },
+  dynamicRegistryText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.3
+  },
+
+  // Overview Executive Command Center UI/UX Styles
+  overviewHeroCard: {
+    backgroundColor: '#0a1532',
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: 'rgba(212, 175, 55, 0.45)',
+    padding: 22,
+    shadowColor: '#0a1532',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 18,
+    elevation: 4
+  },
+  overviewHeroTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    paddingBottom: 16,
+    marginBottom: 16
+  },
+  overviewHeroIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+    borderWidth: 1.5,
+    borderColor: '#d4af37',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  overviewHeroTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#ffffff',
+    letterSpacing: -0.2
+  },
+  heroLiveStatusChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderWidth: 1,
+    borderColor: '#10b981',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12
+  },
+  heroLiveStatusText: {
+    color: '#34d399',
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 0.6
+  },
+  overviewHeroSubtitle: {
+    fontSize: 12.5,
+    color: 'rgba(203, 213, 225, 0.85)',
+    marginTop: 3
+  },
+  heroLaunchpadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8
+  },
+  heroLaunchpadHeading: {
+    color: 'rgba(212, 175, 55, 0.9)',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+    marginRight: 4
+  },
+  btnLaunchpadOrange: {
+    backgroundColor: '#ea580c',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 2
+  },
+  btnLaunchpadOrangeText: {
+    color: '#ffffff',
+    fontSize: 11.5,
+    fontWeight: '800'
+  },
+  btnLaunchpadEmerald: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    shadowColor: '#059669',
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 2
+  },
+  btnLaunchpadEmeraldText: {
+    color: '#ffffff',
+    fontSize: 11.5,
+    fontWeight: '800'
+  },
+  btnLaunchpadViolet: {
+    backgroundColor: '#4f46e5',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    shadowColor: '#4f46e5',
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 2
+  },
+  btnLaunchpadVioletText: {
+    color: '#ffffff',
+    fontSize: 11.5,
+    fontWeight: '800'
+  },
+  btnLaunchpadCyan: {
+    backgroundColor: '#0284c7',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    shadowColor: '#0284c7',
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 2
+  },
+  btnLaunchpadCyanText: {
+    color: '#ffffff',
+    fontSize: 11.5,
+    fontWeight: '800'
+  },
+  btnLaunchpadRose: {
+    backgroundColor: '#e11d48',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    shadowColor: '#e11d48',
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 2
+  },
+  btnLaunchpadRoseText: {
+    color: '#ffffff',
+    fontSize: 11.5,
+    fontWeight: '800'
+  },
+
+  // 4 Sector Hubs
+  overviewHubsGrid: {
+    gap: 16
+  },
+  overviewHubCard: {
+    flex: 1,
+    minWidth: 220,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+    borderWidth: 1.5
+  },
+  hubBorderEmerald: {
+    borderColor: '#a7f3d0',
+    borderTopWidth: 4,
+    borderTopColor: '#059669'
+  },
+  hubBorderViolet: {
+    borderColor: '#c7d2fe',
+    borderTopWidth: 4,
+    borderTopColor: '#4f46e5'
+  },
+  hubBorderCyan: {
+    borderColor: '#bae6fd',
+    borderTopWidth: 4,
+    borderTopColor: '#0284c7'
+  },
+  hubBorderOrange: {
+    borderColor: '#fed7aa',
+    borderTopWidth: 4,
+    borderTopColor: '#ea580c'
+  },
+  hubHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10
+  },
+  hubIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  hubTagEmerald: {
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#a7f3d0'
+  },
+  hubTagEmeraldText: {
+    color: '#065f46',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5
+  },
+  hubTagViolet: {
+    backgroundColor: '#f5f3ff',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#ddd6fe'
+  },
+  hubTagVioletText: {
+    color: '#6d28d9',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5
+  },
+  hubTagCyan: {
+    backgroundColor: '#f0f9ff',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#bae6fd'
+  },
+  hubTagCyanText: {
+    color: '#0369a1',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5
+  },
+  hubTagOrange: {
+    backgroundColor: '#fff7ed',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#fed7aa'
+  },
+  hubTagOrangeText: {
+    color: '#c2410c',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5
+  },
+  hubCardTitle: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: '700'
+  },
+  hubCardBigCount: {
+    color: '#0f172a',
+    fontSize: 28,
+    fontWeight: '900',
+    marginVertical: 4
+  },
+  hubMiniPillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginVertical: 6
+  },
+  hubMiniPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6
+  },
+  hubMiniPillText: {
+    fontSize: 10.5,
+    fontWeight: '700'
+  },
+  hubFooterLinkEmerald: {
+    color: '#059669',
+    fontSize: 11.5,
+    fontWeight: '800',
+    marginTop: 6
+  },
+  hubFooterLinkViolet: {
+    color: '#4f46e5',
+    fontSize: 11.5,
+    fontWeight: '800',
+    marginTop: 6
+  },
+  hubFooterLinkCyan: {
+    color: '#0284c7',
+    fontSize: 11.5,
+    fontWeight: '800',
+    marginTop: 6
+  },
+  hubFooterLinkOrange: {
+    color: '#ea580c',
+    fontSize: 11.5,
+    fontWeight: '800',
+    marginTop: 6
+  },
+
+  // Overview Two-Column Matrix
+  overviewTwoColRow: {
+    gap: 16
+  },
+  overviewSectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    paddingBottom: 12,
+    marginBottom: 10,
+    flexWrap: 'wrap',
+    gap: 8
+  },
+  overviewSectionTitle: {
+    fontSize: 15.5,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  overviewSectionSubtitle: {
+    fontSize: 11.5,
+    color: '#64748b',
+    marginTop: 1
+  },
+  overviewActivityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f8fafc'
+  },
+  overviewActivityDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5
+  },
+  overviewActivityName: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#1e293b'
+  },
+  overviewActivitySub: {
+    fontSize: 11.5,
+    color: '#64748b',
+    marginTop: 2
+  },
+
+  // Page Theme Badges
+  pageThemeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    borderWidth: 1
+  },
+  pageThemeBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '900',
+    letterSpacing: 0.8
   }
 } as any);

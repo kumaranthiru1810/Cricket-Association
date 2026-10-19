@@ -26,7 +26,8 @@ import {
   ActivityIndicator,
   Modal,
   Alert,
-  Platform
+  Platform,
+  Linking
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SharedBackground from '../../components/scorer/SharedBackground';
@@ -460,6 +461,73 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
           {/* ======================================================== */}
           {activeTab === 'overview' && (
             <View>
+              {/* PROMINENT MATCH DAY ALERT BANNER ON TEAM HOME PAGE */}
+              {(() => {
+                const todayStr = new Date().toISOString().split('T')[0];
+                const activeMatch = matches.find((m: any) => {
+                  const mTeamAId = m.teamAId || m.team_a_id || '';
+                  const mTeamBId = m.teamBId || m.team_b_id || '';
+                  const mTeamAName = (m.team_a_name || m.teamA || '').toLowerCase();
+                  const mTeamBName = (m.team_b_name || m.teamB || '').toLowerCase();
+                  const curName = teamName.toLowerCase();
+                  const isOurMatch = mTeamAId === teamId || mTeamBId === teamId || mTeamAName.includes(curName) || mTeamBName.includes(curName);
+                  const mDate = m.match_date || m.date || '';
+                  const isTodayOrActive = mDate === todayStr || m.status === 'LIVE' || m.status === 'Live' || m.status === 'SCHEDULED' || m.status === 'Scheduled';
+                  const showOnHome = m.show_on_team_home !== false;
+                  return isOurMatch && isTodayOrActive && showOnHome;
+                }) || (matches.length > 0 && matches[0]?.status !== 'COMPLETED' ? matches[0] : null);
+
+                if (!activeMatch) return null;
+
+                const isTeamA = activeMatch.team_a_id === teamId || (activeMatch.team_a_name || activeMatch.teamA || '').toLowerCase().includes(teamName.toLowerCase());
+                const opponentName = isTeamA
+                  ? (activeMatch.team_b_name || activeMatch.teamB || 'Opponent Club')
+                  : (activeMatch.team_a_name || activeMatch.teamA || 'Opponent Club');
+                const matchVenue = activeMatch.venue || 'Kamarajar District Stadium';
+                const matchTime = activeMatch.match_time || activeMatch.time || '09:30 AM';
+                const matchOvers = activeMatch.overs_per_side || activeMatch.overs || 20;
+
+                return (
+                  <View style={styles.matchDayAlertBanner}>
+                    <View style={styles.matchDayAlertHeader}>
+                      <View style={styles.matchDayBadge}>
+                        <Text style={styles.matchDayBadgeDot}>🔴</Text>
+                        <Text style={styles.matchDayBadgeText}>MATCH DAY FIXTURE NOTICE</Text>
+                      </View>
+                      <Text style={styles.matchDayDateText}>Today • {matchTime}</Text>
+                    </View>
+                    <Text style={styles.matchDayTitleText}>
+                      🏏 {teamName} <Text style={{ color: '#f59e0b' }}>VS</Text> {opponentName}
+                    </Text>
+                    <Text style={styles.matchDayMetaText}>
+                      📍 Ground: {matchVenue} • {matchOvers} Overs Limit • Format: {activeMatch.match_type || 'T20'}
+                    </Text>
+                    <View style={styles.matchDayActionsRow}>
+                      <TouchableOpacity
+                        style={styles.matchDayMapBtn}
+                        onPress={() => {
+                          const query = encodeURIComponent(`${matchVenue} Virudhunagar Tamil Nadu`);
+                          const url = `https://www.google.com/maps/search/?api=1&query=${query}`;
+                          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                            window.open(url, '_blank');
+                          } else {
+                            Linking.openURL(url).catch(() => {});
+                          }
+                        }}
+                      >
+                        <Text style={styles.matchDayMapBtnText}>🗺️ View Ground on Google Maps</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.matchDaySquadBtn}
+                        onPress={() => setActiveTab('squad')}
+                      >
+                        <Text style={styles.matchDaySquadBtnText}>👥 Review 15-Member Squad</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })()}
+
               {/* HERO CARD */}
               <View style={styles.heroCard}>
                 <View style={styles.heroTopRow}>
@@ -2374,5 +2442,93 @@ const styles = StyleSheet.create({
     color: '#0f172a',
     fontSize: 11,
     fontWeight: 'bold'
+  },
+
+  // Match Day Alert Banner on Team Home Page
+  matchDayAlertBanner: {
+    backgroundColor: '#0f172a',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+    shadowColor: '#f59e0b',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 4
+  },
+  matchDayAlertHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8
+  },
+  matchDayBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.4)'
+  },
+  matchDayBadgeDot: {
+    fontSize: 10
+  },
+  matchDayBadgeText: {
+    color: '#ef4444',
+    fontSize: 10.5,
+    fontWeight: '900',
+    letterSpacing: 0.6
+  },
+  matchDayDateText: {
+    color: '#f59e0b',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  matchDayTitleText: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '900',
+    marginBottom: 4,
+    letterSpacing: 0.2
+  },
+  matchDayMetaText: {
+    color: '#94a3b8',
+    fontSize: 13,
+    marginBottom: 12,
+    fontWeight: '500'
+  },
+  matchDayActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10
+  },
+  matchDayMapBtn: {
+    backgroundColor: '#1e293b',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#38bdf8'
+  },
+  matchDayMapBtnText: {
+    color: '#38bdf8',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  matchDaySquadBtn: {
+    backgroundColor: '#f59e0b',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8
+  },
+  matchDaySquadBtnText: {
+    color: '#0f172a',
+    fontSize: 12,
+    fontWeight: '800'
   }
 });

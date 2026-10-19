@@ -77,9 +77,41 @@ export default function ScorerDashboardScreen() {
     }
   };
 
-  const upcomingMatches = matches.filter(m => m.status === 'Upcoming');
-  const liveMatches = matches.filter(m => m.status === 'Live');
-  const completedMatches = matches.filter(m => m.status === 'Completed');
+  // Security rule: Scorer only sees upcoming match on Match Day, starting 2 hours before scheduled time
+  const isMatchUnlockedForScorer = (m: any) => {
+    const s = (m.status || '').toLowerCase();
+    if (s === 'live' || s === 'completed') return true;
+
+    const matchDateStr = m.date || m.match_date;
+    const matchTimeStr = m.time || m.match_time || '09:30 AM';
+    if (!matchDateStr) return true;
+
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      if (matchDateStr > todayStr) return false;
+      if (matchDateStr === todayStr) {
+        const [timePart, modifier] = matchTimeStr.trim().split(' ');
+        let [hours, minutes] = timePart.split(':').map(Number);
+        if (modifier && modifier.toUpperCase() === 'PM' && hours < 12) hours += 12;
+        if (modifier && modifier.toUpperCase() === 'AM' && hours === 12) hours = 0;
+
+        const matchDateTime = new Date();
+        matchDateTime.setHours(hours, minutes || 0, 0, 0);
+
+        const now = new Date();
+        const twoHoursBefore = new Date(matchDateTime.getTime() - (2 * 60 * 60 * 1000));
+        return now >= twoHoursBefore;
+      }
+      return true;
+    } catch (_e) {
+      return true;
+    }
+  };
+
+  const upcomingMatches = matches.filter(m => (m.status === 'Upcoming' || m.status === 'SCHEDULED' || m.status === 'Scheduled') && isMatchUnlockedForScorer(m));
+  const lockedUpcomingMatches = matches.filter(m => (m.status === 'Upcoming' || m.status === 'SCHEDULED' || m.status === 'Scheduled') && !isMatchUnlockedForScorer(m));
+  const liveMatches = matches.filter(m => m.status === 'Live' || m.status === 'LIVE');
+  const completedMatches = matches.filter(m => m.status === 'Completed' || m.status === 'COMPLETED');
   const totalAssigned = matches.length;
 
   const chartSegments = [
@@ -260,7 +292,25 @@ export default function ScorerDashboardScreen() {
                       <MatchCard key={match.id} match={match} variant="upcoming" />
                     ))
                   ) : (
-                    <Text style={styles.emptyText}>No upcoming assigned matches.</Text>
+                    <Text style={styles.emptyText}>No unlocked matches for scoring right now.</Text>
+                  )}
+
+                  {lockedUpcomingMatches.length > 0 && (
+                    <View style={{ marginTop: 12, padding: 12, backgroundColor: '#f8fafc', borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748b', marginBottom: 4 }}>
+                        🔒 Security Locked Matches ({lockedUpcomingMatches.length})
+                      </Text>
+                      <Text style={{ fontSize: 11.5, color: '#94a3b8' }}>
+                        Under federation digital governance, upcoming fixtures unlock automatically on Match Day, 2 hours prior to start time.
+                      </Text>
+                      {lockedUpcomingMatches.map(lm => (
+                        <View key={lm.id} style={{ marginTop: 6, paddingVertical: 4, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: '#475569' }}>
+                            • {lm.teamA || lm.team_a_name} vs {lm.teamB || lm.team_b_name} ({lm.date || lm.match_date} at {lm.time || lm.match_time})
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
                   )}
                 </View>
               )}
