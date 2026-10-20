@@ -35,6 +35,7 @@ import {
   Linking
 } from 'react-native';
 import { ScorerApi, getCurrentUser, getAuthToken, setAuthToken, setCurrentUser } from '../../services/api';
+import { showSuccess, showError, showWarning, showConfirm, showInfo } from '../../utils/sweetalert';
 
 // Asset references
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
@@ -950,19 +951,53 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
     if (!team_a_id || !team_b_id) {
       setScheduleFormError('Please select both Team A and Team B.');
+      await showWarning('Missing Teams', 'Please select both Team A and Team B for this match fixture.');
       return;
     }
     if (team_a_id === team_b_id) {
       setScheduleFormError('Team A and Team B cannot be the same team.');
+      await showWarning('Invalid Teams', 'Team A and Team B cannot be the same club.');
       return;
     }
     if (!match_date || !match_date.trim()) {
       setScheduleFormError('Please enter a valid match date (YYYY-MM-DD).');
+      await showWarning('Missing Match Date', 'Please enter a valid match date (YYYY-MM-DD).');
       return;
     }
     if (!match_time || !match_time.trim()) {
       setScheduleFormError('Please enter match start time.');
+      await showWarning('Missing Match Time', 'Please enter match start time.');
       return;
+    }
+
+    const cleanDate = match_date.trim();
+    const normalizeDate = (dStr: string) => (dStr ? dStr.split('T')[0].trim() : '');
+
+    // Check if another match is ALREADY scheduled on this exact match day
+    const alreadyFixedOnDay = matchesList.find(m => {
+      if (editingMatch && (m.id === editingMatch.id || m._id === editingMatch._id)) return false;
+      const statusUpper = (m.status || '').toUpperCase();
+      if (statusUpper === 'CANCELLED') return false;
+      const d = normalizeDate(m.match_date || m.date);
+      return d === cleanDate;
+    });
+
+    if (alreadyFixedOnDay) {
+      const matchA = alreadyFixedOnDay.team_a_name || alreadyFixedOnDay.team_a_id || 'Team A';
+      const matchB = alreadyFixedOnDay.team_b_name || alreadyFixedOnDay.team_b_id || 'Team B';
+      const matchVenue = alreadyFixedOnDay.venue || 'District Grounds';
+      const matchTime = alreadyFixedOnDay.match_time || alreadyFixedOnDay.time || 'Scheduled';
+
+      const confirmProceed = await showConfirm(
+        'Match Already Scheduled on this Day ⚠️',
+        `A match is already scheduled on ${cleanDate}:\n• ${matchA} vs ${matchB}\n• Venue: ${matchVenue} (${matchTime})\n\nDo you want to fix another match on this day?`,
+        'Yes, Schedule Match',
+        'Choose Another Date',
+        'warning'
+      );
+      if (!confirmProceed) {
+        return;
+      }
     }
 
     setIsSubmittingSchedule(true);
@@ -974,7 +1009,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         team_a_id,
         team_b_id,
         venue,
-        match_date: match_date.trim(),
+        match_date: cleanDate,
         match_time: match_time.trim(),
         match_type,
         overs_per_side: Number(overs),
@@ -983,15 +1018,27 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         show_on_team_home: show_on_team_home !== false
       };
 
+      const teamAName = availableTeams.find(t => t.id === team_a_id)?.name || team_a_id;
+      const teamBName = availableTeams.find(t => t.id === team_b_id)?.name || team_b_id;
+
       if (editingMatch) {
         await ScorerApi.updateMatch(editingMatch.id, payload);
         const alertMsg = notifyTeamsOnTimeChange
           ? `✓ Match ${editingMatch.id} updated! Automated rescheduling dispatch sent to registered team coaches & managers.`
           : `✓ Match ${editingMatch.id} successfully updated and rescheduled.`;
         showNotification(alertMsg);
+        await showSuccess(
+          'Match Rescheduled Successfully',
+          `Match fixture ${editingMatch.id} (${teamAName} vs ${teamBName}) has been updated and rescheduled for ${cleanDate} at ${venue || 'District Grounds'}. Teams have been notified.`
+        );
       } else {
         const res = await ScorerApi.scheduleMatch(payload);
-        showNotification(`✓ New match fixture successfully scheduled (ID: ${res?.match?.id || 'Created'}).`);
+        const newId = res?.match?.id || res?.match?._id || 'Created';
+        showNotification(`✓ New match fixture successfully scheduled (ID: ${newId}).`);
+        await showSuccess(
+          'Match Scheduled Successfully',
+          `Official fixture ${teamAName} vs ${teamBName} has been successfully scheduled for ${cleanDate} (${match_time.trim()}) at ${venue || 'District Grounds'}!`
+        );
       }
 
       setScheduleModalOpen(false);
@@ -1000,6 +1047,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       await loadMatchesAndLogistics();
     } catch (err: any) {
       setScheduleFormError(err.message || 'Failed to save match schedule.');
+      await showError('Scheduling Error', err.message || 'Failed to save match schedule.');
     } finally {
       setIsSubmittingSchedule(false);
     }
@@ -1011,30 +1059,40 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     try {
       await ScorerApi.cancelMatch(cancelMatchModal.id, cancelReasonInput);
       showNotification(`✓ Match ${cancelMatchModal.id} has been marked as CANCELLED.`);
+      await showWarning(
+        'Match Fixture Cancelled',
+        `Match fixture ${cancelMatchModal.id} has been marked as CANCELLED.`
+      );
       setCancelMatchModal(null);
       await loadMatchesAndLogistics();
     } catch (err: any) {
-      if (Platform.OS === 'web') alert(`Cancellation failed: ${err.message}`);
-      else Alert.alert('Cancellation Error', err.message);
+      await showError('Cancellation Error', err.message || 'Failed to cancel match.');
     } finally {
       setIsCancellingMatch(false);
     }
   };
 
   const handleDeleteMatch = async (matchId: string) => {
-    const confirmed = Platform.OS === 'web'
-      ? window.confirm(`Permanently delete scheduled match fixture ${matchId}?`)
-      : true;
+    const confirmed = await showConfirm(
+      'Delete Match Fixture?',
+      `Are you sure you want to permanently delete match fixture ${matchId}? This action cannot be undone.`,
+      'Yes, Delete',
+      'Cancel',
+      'warning'
+    );
 
     if (!confirmed) return;
 
     try {
       await ScorerApi.deleteMatch(matchId);
       showNotification(`✓ Match fixture ${matchId} permanently removed.`);
+      await showSuccess(
+        'Match Fixture Deleted',
+        `Match fixture ${matchId} has been permanently removed from the schedule.`
+      );
       await loadMatchesAndLogistics();
     } catch (err: any) {
-      if (Platform.OS === 'web') alert(`Deletion error: ${err.message}`);
-      else Alert.alert('Deletion Error', err.message);
+      await showError('Deletion Error', err.message || 'Failed to delete fixture.');
     }
   };
 
@@ -1074,12 +1132,16 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       try {
         await Linking.openURL(`mailto:${target.email}?subject=${subject}&body=${body}`);
       } catch (_mailErr) {
-        // Fallback: show notification if mail client not available
         console.warn('Mail client unavailable, email logged.');
       }
     }
 
     showNotification(`✓ Scorer authorized! Acceptance email sent to ${target?.email || 'scorer'}.`);
+    // Rich SweetAlert modal matching screenshot
+    await showSuccess(
+      'Scorer Application Approved',
+      `Official scorer ${target?.scorerName || 'Official'} (ID: ${scorerId}) has been successfully approved! Acceptance email notification dispatched.`
+    );
   };
 
   const handleOpenRejectModal = (id: string, type: 'SCORER' | 'TEAM' | 'UMPIRE', name: string) => {
@@ -1103,16 +1165,28 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         prev.map(s => (s.scorerId === id ? { ...s, status: 'Rejected', rejectionReason: reason, rejectedAt: new Date().toISOString(), rejectedBy: adminEmail } : s))
       );
       showNotification(`Scorer request rejected: ${name}.`);
+      await showWarning(
+        'Scorer Application Rejected',
+        `The scorer application for ${name} has been rejected.\nReason: ${reason}`
+      );
     } else if (type === 'UMPIRE') {
       setUmpires(prev =>
         prev.map(u => (u.umpireId === id ? { ...u, status: 'Rejected', rejectionReason: reason, rejectedAt: new Date().toISOString(), rejectedBy: adminEmail } : u))
       );
       showNotification(`Umpire registration request rejected: ${name}.`);
+      await showWarning(
+        'Umpire Registration Rejected',
+        `The umpire application for ${name} has been rejected.\nReason: ${reason}`
+      );
     } else {
       setTeams(prev =>
         prev.map(t => (t.teamId === id ? { ...t, status: 'Rejected', rejectionReason: reason, rejectedAt: new Date().toISOString(), rejectedBy: adminEmail } : t))
       );
       showNotification(`Team registration rejected: ${name}.`);
+      await showWarning(
+        'Team Registration Rejected',
+        `The team registration for ${name} has been rejected.\nReason: ${reason}`
+      );
     }
 
     setRejectionModal(null);
@@ -1133,10 +1207,15 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       prev.map(u => (u.umpireId === umpireId ? { ...u, status: 'Approved', approvedBy: adminEmail, approvedAt: new Date().toISOString(), rejectionReason: null } : u))
     );
     showNotification('✓ Umpire accredited & authorized for match officiating in MongoDB.');
+    await showSuccess(
+      'Umpire Accredited & Approved',
+      `Official umpire ${target?.umpireName || 'Official'} (ID: ${umpireId}) has been accredited and approved for match officiating!`
+    );
   };
 
   // Team Actions
   const handleApproveTeam = async (teamId: string) => {
+    const target = teams.find(t => t.teamId === teamId);
     try {
       await ScorerApi.approveRegistration(teamId, 'TEAM');
     } catch (e) {
@@ -1146,6 +1225,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       prev.map(t => (t.teamId === teamId ? { ...t, status: 'Approved', approvedBy: adminEmail, approvedAt: new Date().toISOString(), rejectionReason: null } : t))
     );
     showNotification('✓ Team registration approved for district tournaments.');
+    await showSuccess(
+      'Team Registration Approved',
+      `Club / Team ${target?.teamName || teamId} has been successfully authorized for district tournament participation!`
+    );
   };
 
   // News Actions
