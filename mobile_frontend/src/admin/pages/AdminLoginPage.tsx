@@ -13,7 +13,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   Platform,
-  Image
+  Image,
+  ScrollView
 } from 'react-native';
 import { ShieldIcon } from '../components/Icons';
 import { useAdminAuth } from '../context/AdminAuthContext';
@@ -135,7 +136,7 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
     setErrorMsg(null);
   };
 
-const IMG_LOGO = require('../../../assets/logo_transparent.png');
+  const IMG_LOGO = require('../../../assets/logo_transparent.png');
 
   return (
     <View style={styles.rootContainer}>
@@ -152,150 +153,171 @@ const IMG_LOGO = require('../../../assets/logo_transparent.png');
         />
       </View>
 
-      <View style={styles.cardWrapper}>
-        {/* Brand & Federation Header */}
-        <View style={styles.brandBox}>
-          {/* Premium Logo Emblem */}
-          <View style={styles.emblemOuterRing}>
-            <View style={styles.emblemInnerRing}>
-              <View style={styles.emblemWrapper}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.cardWrapper}>
+          {/* Brand & Federation Header */}
+          <View style={styles.brandBox}>
+            {/* Premium Logo Emblem */}
+            <View style={styles.emblemOuterRing}>
+              <View style={styles.emblemInnerRing}>
+                <View style={styles.emblemWrapper}>
+                  <Image
+                    source={IMG_LOGO}
+                    style={styles.logoMiniature}
+                    resizeMode="contain"
+                  />
+                </View>
+              </View>
+            </View>
+            <Text style={styles.brandTitle}>CRICKET FEDERATION</Text>
+            <Text style={styles.brandSub}>OF VIRUDHUNAGAR DISTRICT</Text>
+            <Text style={styles.brandEst}>Est. 1987 • CFVD • Official Administrative Portal</Text>
+            <View style={styles.affiliationBadge}>
+              <ShieldIcon size={12} color="#10b981" />
+              <Text style={styles.affiliationText}>Official Governing Body • TNCA Affiliated</Text>
+            </View>
+          </View>
+
+          {/* Login Card (Official Association Midnight Navy Box with Gold Border) */}
+          <View style={styles.loginCard}>
+            {/* Association Card Header with Icon */}
+            <View style={styles.cardHeaderBox}>
+              <View style={styles.cardEmblemSmall}>
                 <Image
                   source={IMG_LOGO}
-                  style={styles.logoMiniature}
+                  style={styles.cardLogoMini}
                   resizeMode="contain"
                 />
               </View>
+              <View style={styles.cardHeaderTextCol}>
+                <Text style={styles.cardHeaderTitle}>ASSOCIATION ADMIN ACCESS</Text>
+                <Text style={styles.cardHeaderSub}>Authorized CFVD Officials Only</Text>
+              </View>
             </View>
-          </View>
-          <Text style={styles.brandTitle}>CRICKET FEDERATION</Text>
-          <Text style={styles.brandSub}>OF VIRUDHUNAGAR DISTRICT</Text>
-          <Text style={styles.brandEst}>Est. 1987 • CFVD • Official Administrative Portal</Text>
-          <View style={styles.affiliationBadge}>
-            <ShieldIcon size={12} color="#059669" />
-            <Text style={styles.affiliationText}>Official Governing Body • TNCA Affiliated</Text>
-          </View>
-        </View>
 
-        {/* Login White Card */}
-        <View style={styles.loginCard}>
-          {/* Error Banner */}
-          {errorMsg && (
-            <View style={styles.errorBanner}>
-              <View style={styles.errorDot} />
-              <Text style={styles.errorText}>{errorMsg}</Text>
+            {/* Error Banner */}
+            {errorMsg && (
+              <View style={styles.errorBanner}>
+                <View style={styles.errorDot} />
+                <Text style={styles.errorText}>{errorMsg}</Text>
+              </View>
+            )}
+
+            {/* Form */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Admin Email ID</Text>
+              <TextInput
+                style={styles.input}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="e.g. admin@cfvd.org"
+                placeholderTextColor="#64748b"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                editable={!loading}
+              />
             </View>
-          )}
 
-          {/* Form */}
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Admin Email ID</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="e.g. admin@cfvd.org"
-              placeholderTextColor="#94a3b8"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              editable={!loading}
-            />
-          </View>
+            <View style={styles.formGroup}>
+              <View style={styles.labelRow}>
+                <Text style={styles.label}>Master Password</Text>
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                  <Text style={styles.showPassText}>{showPassword ? 'Hide' : 'Show'}</Text>
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                placeholder="Enter administrator password"
+                placeholderTextColor="#64748b"
+                editable={!loading}
+              />
+            </View>
 
-          <View style={styles.formGroup}>
-            <View style={styles.labelRow}>
-              <Text style={styles.label}>Master Password</Text>
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                <Text style={styles.showPassText}>{showPassword ? 'Hide' : 'Show'}</Text>
+            {/* Remember Me & Forgot Password Options */}
+            <View style={styles.optionsRow}>
+              <TouchableOpacity
+                style={styles.checkboxRow}
+                onPress={() => setRememberMe(!rememberMe)}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.checkbox, rememberMe && styles.checkboxActive]}>
+                  {rememberMe && <Text style={styles.checkboxTick}>✓</Text>}
+                </View>
+                <Text style={styles.checkboxLabel}>Keep me signed in</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => setShowForgotPassword(true)} activeOpacity={0.7}>
+                <Text style={styles.forgotPasswordText}>
+                  Forgot Password?
+                </Text>
               </TouchableOpacity>
             </View>
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              placeholder="Enter administrator password"
-              placeholderTextColor="#94a3b8"
-              editable={!loading}
-            />
-          </View>
 
-          {/* Remember Me & Forgot Password Options */}
-          <View style={[styles.optionsRow, { justifyContent: 'space-between', alignItems: 'center' }]}>
+            {/* Submit Button */}
             <TouchableOpacity
-              style={styles.checkboxRow}
-              onPress={() => setRememberMe(!rememberMe)}
+              style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
+              onPress={handleSubmit}
+              disabled={loading}
               activeOpacity={0.8}
             >
-              <View style={[styles.checkbox, rememberMe && styles.checkboxActive]}>
-                {rememberMe && <Text style={styles.checkboxTick}>✓</Text>}
-              </View>
-              <Text style={styles.checkboxLabel}>Keep me signed in</Text>
+              {loading ? (
+                <ActivityIndicator color="#020617" size="small" />
+              ) : (
+                <Text style={styles.submitBtnText}>Access Admin Dashboard →</Text>
+              )}
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => setShowForgotPassword(true)} activeOpacity={0.7}>
-              <Text style={{ color: '#2563eb', fontSize: 13, fontWeight: '700' }}>
-                Forgot Password?
+            {/* Quick Dev Credentials Autofill */}
+            <View style={styles.devHintBox}>
+              <View style={styles.devHintHeader}>
+                <Text style={styles.devHintTitle}>Development Credentials</Text>
+                <TouchableOpacity onPress={handleUseDevCredentials}>
+                  <Text style={styles.devAutofillLink}>Autofill</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.devHintText}>
+                Email: <Text style={styles.devCode}>admin@cfvd.org</Text> • Password:{' '}
+                <Text style={styles.devCode}>CFVD@Admin2026</Text>
               </Text>
-            </TouchableOpacity>
-            {/* No Forgot Password - Admin accounts managed by CFVD Secretary only */}
+            </View>
+
+            {/* Back to Public Site */}
+            {handleBack && (
+              <TouchableOpacity style={styles.backLink} onPress={handleBack} activeOpacity={0.7}>
+                <Text style={styles.backLinkText}>← Return to Public Cricket Portal</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
-          {/* Submit Button */}
-          <TouchableOpacity
-            style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
-            onPress={handleSubmit}
-            disabled={loading}
-            activeOpacity={0.8}
-          >
-            {loading ? (
-              <ActivityIndicator color="#ffffff" size="small" />
-            ) : (
-              <Text style={styles.submitBtnText}>Access Admin Dashboard →</Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Quick Dev Credentials Autofill */}
-          <View style={styles.devHintBox}>
-            <View style={styles.devHintHeader}>
-              <Text style={styles.devHintTitle}>Development Credentials</Text>
-              <TouchableOpacity onPress={handleUseDevCredentials}>
-                <Text style={styles.devAutofillLink}>Autofill</Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.devHintText}>
-              Email: <Text style={styles.devCode}>admin@cfvd.org</Text> • Password:{' '}
-              <Text style={styles.devCode}>CFVD@Admin2026</Text>
+          {/* Security Notice */}
+          <View style={styles.securityFooter}>
+            <ShieldIcon size={14} color="#64748b" />
+            <Text style={styles.securityText}>
+              Protected by Association Two-Factor Cryptographic Session Guard. All access attempts are audited.
             </Text>
           </View>
 
-          {/* Back to Public Site */}
-          {handleBack && (
-            <TouchableOpacity style={styles.backLink} onPress={handleBack} activeOpacity={0.7}>
-              <Text style={styles.backLinkText}>← Return to Public Cricket Portal</Text>
-            </TouchableOpacity>
-          )}
+          {/* Reusable Forgot Password Modal */}
+          <ForgotPasswordModal
+            visible={showForgotPassword}
+            onClose={() => setShowForgotPassword(false)}
+            initialEmail={email}
+            role="ADMIN"
+            onSuccess={(newEmail) => {
+              setEmail(newEmail);
+              setPassword('');
+            }}
+          />
         </View>
-
-        {/* Security Notice */}
-        <View style={styles.securityFooter}>
-          <ShieldIcon size={14} color="#64748b" />
-          <Text style={styles.securityText}>
-            Protected by Association Two-Factor Cryptographic Session Guard. All access attempts are audited.
-          </Text>
-        </View>
-
-        {/* Reusable Forgot Password Modal */}
-        <ForgotPasswordModal
-          visible={showForgotPassword}
-          onClose={() => setShowForgotPassword(false)}
-          initialEmail={email}
-          role="ADMIN"
-          onSuccess={(newEmail) => {
-            setEmail(newEmail);
-            setPassword('');
-          }}
-        />
-      </View>
+      </ScrollView>
     </View>
   );
 };
@@ -304,19 +326,24 @@ const styles: any = StyleSheet.create({
   rootContainer: {
     flex: 1,
     width: '100%',
-    height: Platform.OS === 'web' ? ('100vh' as any) : '100%',
     minHeight: Platform.OS === 'web' ? ('100vh' as any) : '100%',
-    maxHeight: Platform.OS === 'web' ? ('100vh' as any) : '100%',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#071124',
     backgroundImage: (Platform.OS === 'web'
-      ? 'radial-gradient(ellipse 95% 80% at 50% 35%, #ffffff 0%, #f1f5f9 60%, #e2e8f0 100%)'
+      ? 'radial-gradient(ellipse 95% 80% at 50% 30%, #0f2452 0%, #081329 55%, #020612 100%)'
       : undefined) as any,
+    overflow: 'visible',
+    position: 'relative'
+  },
+  scrollView: {
+    flex: 1,
+    width: '100%'
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    overflow: 'hidden',
-    position: 'relative'
+    paddingVertical: 36,
+    paddingHorizontal: 16
   },
   bgContainer: {
     position: 'absolute',
@@ -331,19 +358,19 @@ const styles: any = StyleSheet.create({
   },
   bgAura: {
     position: 'absolute',
-    width: 620,
-    height: 620,
-    borderRadius: 310,
-    backgroundColor: 'rgba(212, 175, 55, 0.08)',
-    filter: (Platform.OS === 'web' ? 'blur(60px)' : undefined) as any
+    width: 650,
+    height: 650,
+    borderRadius: 325,
+    backgroundColor: 'rgba(212, 175, 55, 0.09)',
+    filter: (Platform.OS === 'web' ? 'blur(80px)' : undefined) as any
   },
   bgWatermark: {
-    width: 580,
-    height: 580,
-    maxWidth: '90%',
-    maxHeight: '90%',
-    opacity: 0.14,
-    filter: (Platform.OS === 'web' ? 'drop-shadow(0 0 45px rgba(15, 36, 82, 0.20))' : undefined) as any
+    width: 600,
+    height: 600,
+    maxWidth: '92%',
+    maxHeight: '92%',
+    opacity: 0.16,
+    filter: (Platform.OS === 'web' ? 'drop-shadow(0 0 50px rgba(212, 175, 55, 0.25))' : undefined) as any
   },
   topAccentBar: {
     position: 'absolute',
@@ -351,124 +378,176 @@ const styles: any = StyleSheet.create({
     left: 0,
     right: 0,
     height: 4,
-    backgroundColor: '#0f2452',
-    zIndex: 2
+    backgroundColor: '#d4af37',
+    zIndex: 20
   },
   cardWrapper: {
     width: '100%',
-    maxWidth: 440,
+    maxWidth: 460,
     alignItems: 'center',
     zIndex: 1
   },
   brandBox: {
     alignItems: 'center',
-    marginBottom: 16
+    marginBottom: 20
   },
   emblemOuterRing: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(212,175,55,0.18)',
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: 'rgba(212, 175, 55, 0.16)',
     borderWidth: 2,
-    borderColor: 'rgba(212,175,55,0.55)',
+    borderColor: '#d4af37',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 10,
     shadowColor: '#d4af37',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 14,
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
     elevation: 6
   },
   emblemInnerRing: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: 'rgba(15,36,82,0.08)',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(15, 36, 82, 0.4)',
     borderWidth: 1.5,
-    borderColor: 'rgba(212,175,55,0.35)',
+    borderColor: 'rgba(212, 175, 55, 0.5)',
     justifyContent: 'center',
     alignItems: 'center'
   },
   emblemWrapper: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#0f2452',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.25,
     shadowRadius: 10,
     elevation: 4,
     overflow: 'hidden'
   },
   logoMiniature: {
-    width: 64,
-    height: 64
-  },
-  brandEst: {
-    fontSize: 9.5,
-    color: '#94a3b8',
-    fontWeight: '500',
-    letterSpacing: 0.5,
-    marginTop: 2,
-    marginBottom: 4,
-    textAlign: 'center'
+    width: 60,
+    height: 60
   },
   brandTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0f2452',
-    letterSpacing: 1.5
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#ffffff',
+    letterSpacing: 2,
+    textAlign: 'center'
   },
   brandSub: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#b8860b',
-    letterSpacing: 1,
-    marginTop: 2
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#eab308',
+    letterSpacing: 1.2,
+    marginTop: 2,
+    textAlign: 'center'
+  },
+  brandEst: {
+    fontSize: 10,
+    color: '#94a3b8',
+    fontWeight: '500',
+    letterSpacing: 0.6,
+    marginTop: 3,
+    marginBottom: 6,
+    textAlign: 'center'
   },
   affiliationBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#ecfdf5',
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
     borderWidth: 1,
-    borderColor: '#a7f3d0',
+    borderColor: 'rgba(16, 185, 129, 0.35)',
     borderRadius: 20,
-    paddingVertical: 3,
-    paddingHorizontal: 10,
-    marginTop: 6
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    marginTop: 4
   },
   affiliationText: {
-    fontSize: 10.5,
+    fontSize: 11,
     fontWeight: '700',
-    color: '#059669'
+    color: '#34d399'
   },
+
+  // Box Color: Association Royal Midnight Navy with Gold Border & Ambient Glow
   loginCard: {
     width: '100%',
-    backgroundColor: Platform.OS === 'web' ? 'rgba(255, 255, 255, 0.94)' : '#ffffff',
+    backgroundColor: Platform.OS === 'web' ? 'rgba(11, 23, 50, 0.95)' : '#0b1732',
     backdropFilter: (Platform.OS === 'web' ? 'blur(16px)' : undefined) as any,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: 'rgba(212, 175, 55, 0.65)',
     paddingHorizontal: 26,
     paddingTop: 22,
-    paddingBottom: 20,
-    shadowColor: '#0f2452',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 20,
-    elevation: 4
+    paddingBottom: 22,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.5,
+    shadowRadius: 30,
+    elevation: 8,
+    boxShadow: (Platform.OS === 'web' ? '0 24px 60px -10px rgba(0, 0, 0, 0.6), 0 0 35px -5px rgba(212, 175, 55, 0.22)' : undefined) as any
   },
+
+  // In-Card Association Icon Header
+  cardHeaderBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingBottom: 14,
+    marginBottom: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(212, 175, 55, 0.2)'
+  },
+  cardEmblemSmall: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#d4af37',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    shadowColor: '#d4af37',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 3
+  },
+  cardLogoMini: {
+    width: 38,
+    height: 38
+  },
+  cardHeaderTextCol: {
+    flex: 1
+  },
+  cardHeaderTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#f8fafc',
+    letterSpacing: 0.8
+  },
+  cardHeaderSub: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#eab308',
+    marginTop: 1
+  },
+
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fef2f2',
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
     borderWidth: 1,
-    borderColor: '#fecaca',
+    borderColor: 'rgba(239, 68, 68, 0.35)',
     borderRadius: 8,
     paddingVertical: 9,
     paddingHorizontal: 12,
@@ -483,7 +562,7 @@ const styles: any = StyleSheet.create({
   },
   errorText: {
     fontSize: 12.5,
-    color: '#dc2626',
+    color: '#f87171',
     fontWeight: '600',
     flex: 1
   },
@@ -499,23 +578,23 @@ const styles: any = StyleSheet.create({
   label: {
     fontSize: 12.5,
     fontWeight: '700',
-    color: '#334155',
+    color: '#e2e8f0',
     marginBottom: 6
   },
   showPassText: {
     fontSize: 11.5,
-    color: '#0f2452',
+    color: '#eab308',
     fontWeight: '700'
   },
   input: {
     height: 44,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderColor: '#243b73',
+    borderRadius: 10,
+    paddingHorizontal: 14,
     fontSize: 13.5,
-    color: '#0f172a',
-    backgroundColor: '#f8fafc'
+    color: '#ffffff',
+    backgroundColor: '#12203d'
   },
   optionsRow: {
     flexDirection: 'row',
@@ -533,53 +612,65 @@ const styles: any = StyleSheet.create({
     height: 18,
     borderRadius: 4,
     borderWidth: 1.5,
-    borderColor: '#94a3b8',
-    backgroundColor: '#ffffff',
+    borderColor: '#475569',
+    backgroundColor: '#12203d',
     justifyContent: 'center',
     alignItems: 'center'
   },
   checkboxActive: {
-    backgroundColor: '#0f2452',
-    borderColor: '#0f2452'
+    backgroundColor: '#eab308',
+    borderColor: '#eab308'
   },
   checkboxTick: {
-    color: '#ffffff',
+    color: '#020617',
     fontSize: 11,
-    fontWeight: '800'
+    fontWeight: '900'
   },
   checkboxLabel: {
     fontSize: 12.5,
-    color: '#475569',
+    color: '#cbd5e1',
     fontWeight: '500'
   },
+  forgotPasswordText: {
+    color: '#eab308',
+    fontSize: 13,
+    fontWeight: '700'
+  },
+
+  // Submit Button (Official Golden Action)
   submitBtn: {
     height: 46,
-    backgroundColor: '#0f2452',
-    borderRadius: 8,
+    backgroundColor: '#eab308',
+    backgroundImage: (Platform.OS === 'web'
+      ? 'linear-gradient(135deg, #eab308 0%, #ca8a04 100%)'
+      : undefined) as any,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#0f2452',
+    shadowColor: '#eab308',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 2
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 4
   },
   submitBtnDisabled: {
     opacity: 0.7
   },
   submitBtnText: {
-    color: '#ffffff',
+    color: '#020617',
     fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 0.3
+    fontWeight: '900',
+    letterSpacing: 0.4
   },
+
+  // Inset Dev Credentials Box
   devHintBox: {
     marginTop: 20,
     padding: 12,
-    borderRadius: 8,
-    backgroundColor: '#f1f5f9',
+    borderRadius: 10,
+    backgroundColor: '#07101f',
     borderWidth: 1,
-    borderColor: '#e2e8f0'
+    borderColor: '#1e3860'
   },
   devHintHeader: {
     flexDirection: 'row',
@@ -590,14 +681,14 @@ const styles: any = StyleSheet.create({
   devHintTitle: {
     fontSize: 11.5,
     fontWeight: '800',
-    color: '#475569',
+    color: '#94a3b8',
     textTransform: 'uppercase',
     letterSpacing: 0.5
   },
   devAutofillLink: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#0f2452',
+    color: '#eab308',
     textDecorationLine: 'underline'
   },
   devHintText: {
@@ -606,7 +697,7 @@ const styles: any = StyleSheet.create({
   },
   devCode: {
     fontFamily: (Platform.OS === 'web' ? 'monospace' : 'Courier') as any,
-    color: '#0f2452',
+    color: '#38bdf8',
     fontWeight: '700'
   },
   backLink: {
@@ -616,7 +707,7 @@ const styles: any = StyleSheet.create({
   },
   backLinkText: {
     fontSize: 12.5,
-    color: '#64748b',
+    color: '#94a3b8',
     fontWeight: '600'
   },
   securityFooter: {
@@ -628,7 +719,7 @@ const styles: any = StyleSheet.create({
   },
   securityText: {
     fontSize: 11,
-    color: '#94a3b8',
+    color: '#64748b',
     textAlign: 'center',
     lineHeight: 16
   }
