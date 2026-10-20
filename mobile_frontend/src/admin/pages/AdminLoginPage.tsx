@@ -327,9 +327,9 @@ const styles: any = StyleSheet.create({
     flex: 1,
     width: '100%',
     minHeight: Platform.OS === 'web' ? ('100vh' as any) : '100%',
-    backgroundColor: '#071124',
+    backgroundColor: '#ffffff',
     backgroundImage: (Platform.OS === 'web'
-      ? 'radial-gradient(ellipse 95% 80% at 50% 30%, #0f2452 0%, #081329 55%, #020612 100%)'
+      ? 'radial-gradient(ellipse 95% 80% at 50% 30%, #ffffff 0%, #f8fafc 55%, #eef2f6 100%)'
       : undefined) as any,
     overflow: 'visible',
     position: 'relative'
@@ -361,7 +361,7 @@ const styles: any = StyleSheet.create({
     width: 650,
     height: 650,
     borderRadius: 325,
-    backgroundColor: 'rgba(212, 175, 55, 0.09)',
+    backgroundColor: 'rgba(212, 175, 55, 0.08)',
     filter: (Platform.OS === 'web' ? 'blur(80px)' : undefined) as any
   },
   bgWatermark: {
@@ -369,8 +369,8 @@ const styles: any = StyleSheet.create({
     height: 600,
     maxWidth: '92%',
     maxHeight: '92%',
-    opacity: 0.16,
-    filter: (Platform.OS === 'web' ? 'drop-shadow(0 0 50px rgba(212, 175, 55, 0.25))' : undefined) as any
+    opacity: 0.12,
+    filter: (Platform.OS === 'web' ? 'drop-shadow(0 0 45px rgba(15, 36, 82, 0.18))' : undefined) as any
   },
   topAccentBar: {
     position: 'absolute',
@@ -378,7 +378,7 @@ const styles: any = StyleSheet.create({
     left: 0,
     right: 0,
     height: 4,
-    backgroundColor: '#d4af37',
+    backgroundColor: '#0f2452',
     zIndex: 20
   },
   cardWrapper: {
@@ -395,7 +395,7 @@ const styles: any = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: 'rgba(212, 175, 55, 0.16)',
+    backgroundColor: 'rgba(212, 175, 55, 0.18)',
     borderWidth: 2,
     borderColor: '#d4af37',
     justifyContent: 'center',
@@ -403,17 +403,17 @@ const styles: any = StyleSheet.create({
     marginBottom: 10,
     shadowColor: '#d4af37',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
+    shadowOpacity: 0.28,
+    shadowRadius: 14,
     elevation: 6
   },
   emblemInnerRing: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(15, 36, 82, 0.4)',
+    backgroundColor: 'rgba(15, 36, 82, 0.08)',
     borderWidth: 1.5,
-    borderColor: 'rgba(212, 175, 55, 0.5)',
+    borderColor: 'rgba(212, 175, 55, 0.45)',
     justifyContent: 'center',
     alignItems: 'center'
   },
@@ -424,9 +424,9 @@ const styles: any = StyleSheet.create({
     backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: '#0f2452',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.18,
     shadowRadius: 10,
     elevation: 4,
     overflow: 'hidden'
@@ -438,22 +438,22 @@ const styles: any = StyleSheet.create({
   brandTitle: {
     fontSize: 15,
     fontWeight: '900',
-    color: '#ffffff',
+    color: '#0f2452',
     letterSpacing: 2,
     textAlign: 'center'
   },
   brandSub: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#eab308',
+    color: '#b8860b',
     letterSpacing: 1.2,
     marginTop: 2,
     textAlign: 'center'
   },
   brandEst: {
     fontSize: 10,
-    color: '#94a3b8',
-    fontWeight: '500',
+    color: '#64748b',
+    fontWeight: '600',
     letterSpacing: 0.6,
     marginTop: 3,
     marginBottom: 6,
@@ -463,9 +463,9 @@ const styles: any = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    backgroundColor: '#ecfdf5',
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.35)',
+    borderColor: '#a7f3d0',
     borderRadius: 20,
     paddingVertical: 4,
     paddingHorizontal: 12,
@@ -474,7 +474,7 @@ const styles: any = StyleSheet.create({
   affiliationText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#34d399'
+    color: '#059669'
   },
 
   // Box Color: Association Royal Midnight Navy with Gold Border & Ambient Glow
