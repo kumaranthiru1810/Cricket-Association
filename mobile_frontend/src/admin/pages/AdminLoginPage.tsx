@@ -269,7 +269,7 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
               activeOpacity={0.8}
             >
               {loading ? (
-                <ActivityIndicator color="#020617" size="small" />
+                <ActivityIndicator color="#ffffff" size="small" />
               ) : (
                 <Text style={styles.submitBtnText}>Access Admin Dashboard →</Text>
               )}
@@ -477,23 +477,23 @@ const styles: any = StyleSheet.create({
     color: '#059669'
   },
 
-  // Box Color: Association Royal Midnight Navy with Gold Border & Ambient Glow
+  // Box Color: Pure White with Association Gold Accent Border & Soft Shadow
   loginCard: {
     width: '100%',
-    backgroundColor: Platform.OS === 'web' ? 'rgba(11, 23, 50, 0.95)' : '#0b1732',
+    backgroundColor: Platform.OS === 'web' ? 'rgba(255, 255, 255, 0.98)' : '#ffffff',
     backdropFilter: (Platform.OS === 'web' ? 'blur(16px)' : undefined) as any,
     borderRadius: 18,
     borderWidth: 1.5,
-    borderColor: 'rgba(212, 175, 55, 0.65)',
+    borderColor: 'rgba(212, 175, 55, 0.4)',
     paddingHorizontal: 26,
     paddingTop: 22,
     paddingBottom: 22,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.5,
-    shadowRadius: 30,
-    elevation: 8,
-    boxShadow: (Platform.OS === 'web' ? '0 24px 60px -10px rgba(0, 0, 0, 0.6), 0 0 35px -5px rgba(212, 175, 55, 0.22)' : undefined) as any
+    shadowColor: '#0f2452',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.12,
+    shadowRadius: 25,
+    elevation: 6,
+    boxShadow: (Platform.OS === 'web' ? '0 20px 50px -10px rgba(15, 36, 82, 0.14), 0 0 25px -5px rgba(212, 175, 55, 0.15)' : undefined) as any
   },
 
   // In-Card Association Icon Header
@@ -504,7 +504,7 @@ const styles: any = StyleSheet.create({
     paddingBottom: 14,
     marginBottom: 18,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(212, 175, 55, 0.2)'
+    borderBottomColor: '#f1f5f9'
   },
   cardEmblemSmall: {
     width: 44,
@@ -518,7 +518,7 @@ const styles: any = StyleSheet.create({
     overflow: 'hidden',
     shadowColor: '#d4af37',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 6,
     elevation: 3
   },
@@ -532,22 +532,22 @@ const styles: any = StyleSheet.create({
   cardHeaderTitle: {
     fontSize: 13,
     fontWeight: '900',
-    color: '#f8fafc',
+    color: '#0f2452',
     letterSpacing: 0.8
   },
   cardHeaderSub: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#eab308',
+    fontWeight: '700',
+    color: '#b8860b',
     marginTop: 1
   },
 
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: '#fef2f2',
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.35)',
+    borderColor: '#fecaca',
     borderRadius: 8,
     paddingVertical: 9,
     paddingHorizontal: 12,
@@ -562,7 +562,7 @@ const styles: any = StyleSheet.create({
   },
   errorText: {
     fontSize: 12.5,
-    color: '#f87171',
+    color: '#dc2626',
     fontWeight: '600',
     flex: 1
   },
@@ -578,23 +578,23 @@ const styles: any = StyleSheet.create({
   label: {
     fontSize: 12.5,
     fontWeight: '700',
-    color: '#e2e8f0',
+    color: '#334155',
     marginBottom: 6
   },
   showPassText: {
     fontSize: 11.5,
-    color: '#eab308',
+    color: '#0f2452',
     fontWeight: '700'
   },
   input: {
     height: 44,
     borderWidth: 1,
-    borderColor: '#243b73',
+    borderColor: '#cbd5e1',
     borderRadius: 10,
     paddingHorizontal: 14,
     fontSize: 13.5,
-    color: '#ffffff',
-    backgroundColor: '#12203d'
+    color: '#0f172a',
+    backgroundColor: '#f8fafc'
   },
   optionsRow: {
     flexDirection: 'row',
@@ -612,54 +612,51 @@ const styles: any = StyleSheet.create({
     height: 18,
     borderRadius: 4,
     borderWidth: 1.5,
-    borderColor: '#475569',
-    backgroundColor: '#12203d',
+    borderColor: '#94a3b8',
+    backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center'
   },
   checkboxActive: {
-    backgroundColor: '#eab308',
-    borderColor: '#eab308'
+    backgroundColor: '#0f2452',
+    borderColor: '#0f2452'
   },
   checkboxTick: {
-    color: '#020617',
+    color: '#ffffff',
     fontSize: 11,
     fontWeight: '900'
   },
   checkboxLabel: {
     fontSize: 12.5,
-    color: '#cbd5e1',
+    color: '#475569',
     fontWeight: '500'
   },
   forgotPasswordText: {
-    color: '#eab308',
+    color: '#2563eb',
     fontSize: 13,
     fontWeight: '700'
   },
 
-  // Submit Button (Official Golden Action)
+  // Submit Button (Official Association Navy Action)
   submitBtn: {
     height: 46,
-    backgroundColor: '#eab308',
-    backgroundImage: (Platform.OS === 'web'
-      ? 'linear-gradient(135deg, #eab308 0%, #ca8a04 100%)'
-      : undefined) as any,
+    backgroundColor: '#0f2452',
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#eab308',
+    shadowColor: '#0f2452',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 4
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 3
   },
   submitBtnDisabled: {
     opacity: 0.7
   },
   submitBtnText: {
-    color: '#020617',
+    color: '#ffffff',
     fontSize: 14,
-    fontWeight: '900',
+    fontWeight: '800',
     letterSpacing: 0.4
   },
 
@@ -668,9 +665,9 @@ const styles: any = StyleSheet.create({
     marginTop: 20,
     padding: 12,
     borderRadius: 10,
-    backgroundColor: '#07101f',
+    backgroundColor: '#f1f5f9',
     borderWidth: 1,
-    borderColor: '#1e3860'
+    borderColor: '#e2e8f0'
   },
   devHintHeader: {
     flexDirection: 'row',
@@ -681,14 +678,14 @@ const styles: any = StyleSheet.create({
   devHintTitle: {
     fontSize: 11.5,
     fontWeight: '800',
-    color: '#94a3b8',
+    color: '#475569',
     textTransform: 'uppercase',
     letterSpacing: 0.5
   },
   devAutofillLink: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#eab308',
+    color: '#0f2452',
     textDecorationLine: 'underline'
   },
   devHintText: {
@@ -697,7 +694,7 @@ const styles: any = StyleSheet.create({
   },
   devCode: {
     fontFamily: (Platform.OS === 'web' ? 'monospace' : 'Courier') as any,
-    color: '#38bdf8',
+    color: '#0f2452',
     fontWeight: '700'
   },
   backLink: {
@@ -707,7 +704,7 @@ const styles: any = StyleSheet.create({
   },
   backLinkText: {
     fontSize: 12.5,
-    color: '#94a3b8',
+    color: '#64748b',
     fontWeight: '600'
   },
   securityFooter: {
