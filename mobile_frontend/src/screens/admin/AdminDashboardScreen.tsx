@@ -16,7 +16,7 @@
  * - Full Live Integration with MongoDB backend via ScorerApi & persistent local state
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -35,7 +35,7 @@ import {
   Linking
 } from 'react-native';
 import { ScorerApi, getCurrentUser, getAuthToken, setAuthToken, setCurrentUser } from '../../services/api';
-import { showSuccess, showError, showWarning, showConfirm, showInfo } from '../../utils/sweetalert';
+import { showSuccess, showError, showWarning, showConfirm, showInfo, swal } from '../../utils/sweetalert';
 
 // Asset references
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
@@ -557,9 +557,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     { id: 'TM-02', name: 'Sivakasi Strikers' }
   ]);
 
-  // Schedule Modal State
+  // Schedule Modal State & 3-Step Guided Workflow
   const [scheduleModalOpen, setScheduleModalOpen] = useState<boolean>(false);
+  const [scheduleStep, setScheduleStep] = useState<1 | 2 | 3>(1);
   const [editingMatch, setEditingMatch] = useState<any | null>(null);
+  const initialScheduleFormRef = useRef<any>(null);
   const [scheduleForm, setScheduleForm] = useState({
     tournament_id: 'T-2026-VPL',
     tournament_name: 'Virudhunagar Premier League 2026',
@@ -571,7 +573,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     match_type: 'T20',
     overs: 20,
     assigned_scorer_id: 'SCR-101',
-    show_on_team_home: true
+    show_on_team_home: true,
+    match_notes: ''
   });
   const [scheduleFormError, setScheduleFormError] = useState<string | null>(null);
   const [isSubmittingSchedule, setIsSubmittingSchedule] = useState<boolean>(false);
@@ -585,6 +588,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   const [tournamentDropdownOpen, setTournamentDropdownOpen] = useState<boolean>(false);
   const [formatDropdownOpen, setFormatDropdownOpen] = useState<boolean>(false);
   const [scorerDropdownOpen, setScorerDropdownOpen] = useState<boolean>(false);
+  const [tournamentSearchQuery, setTournamentSearchQuery] = useState<string>('');
   const [teamSearchQueryA, setTeamSearchQueryA] = useState<string>('');
   const [teamSearchQueryB, setTeamSearchQueryB] = useState<string>('');
   const [venueSearchQuery, setVenueSearchQuery] = useState<string>('');
@@ -887,8 +891,49 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     }
   };
 
+  // Comprehensive tournaments list with season & format info
+  const availableTournaments = useMemo(() => {
+    const list: any[] = [];
+    const ids = new Set<string>();
+
+    if (Array.isArray(tournamentsList) && tournamentsList.length > 0) {
+      tournamentsList.forEach((t: any) => {
+        const id = t.id || t.tournament_id || t._id;
+        const name = t.name || t.tournament_name || id;
+        if (id && !ids.has(id)) {
+          ids.add(id);
+          list.push({
+            id,
+            name,
+            season: t.season || '2026 Season',
+            format: t.format || 'T20 Championship',
+            clubsCount: t.teamsCount || t.clubsCount || 12,
+            status: t.status || 'Active'
+          });
+        }
+      });
+    }
+
+    const defaultTournaments = [
+      { id: 'T-2026-VPL', name: 'Virudhunagar Premier League 2026', season: 'Season 2026', format: 'T20 Championship', clubsCount: 12, status: 'Active' },
+      { id: 'T-2026-DCT', name: 'CFVD District Championship Trophy 2026', season: '2026-2027', format: '50-Overs One Day', clubsCount: 8, status: 'Upcoming' },
+      { id: 'T-2026-KMTC', name: 'Kamarajar Memorial T20 Cup', season: 'Annual 2026', format: 'Knockout T20', clubsCount: 16, status: 'Active' },
+      { id: 'T-2026-ITSL', name: 'Virudhunagar Inter-Taluk Super League', season: 'Taluk Division 2026', format: 'T20 League', clubsCount: 6, status: 'Active' }
+    ];
+
+    defaultTournaments.forEach(d => {
+      if (!ids.has(d.id) && !list.some(l => l.name.toLowerCase() === d.name.toLowerCase())) {
+        ids.add(d.id);
+        list.push(d);
+      }
+    });
+
+    return list;
+  }, [tournamentsList]);
+
   const handleOpenScheduleModal = (matchToEdit: any | null = null) => {
     setScheduleFormError(null);
+    setScheduleStep(1);
     setScheduleModalMinimized(false);
     setScheduleModalMaximized(false);
     setTeamADropdownOpen(false);
@@ -897,6 +942,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     setTournamentDropdownOpen(false);
     setFormatDropdownOpen(false);
     setScorerDropdownOpen(false);
+    setTournamentSearchQuery('');
     setTeamSearchQueryA('');
     setTeamSearchQueryB('');
     setVenueSearchQuery('');
@@ -905,7 +951,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       setEditingMatch(matchToEdit);
       const tourName = matchToEdit.tournament_name || 'Virudhunagar Premier League 2026';
       setCustomTournamentInput(tourName);
-      setScheduleForm({
+      const formData = {
         tournament_id: matchToEdit.tournament_id || 'T-2026-VPL',
         tournament_name: tourName,
         team_a_id: matchToEdit.team_a_id || '',
@@ -916,8 +962,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         match_type: matchToEdit.match_type || 'T20',
         overs: matchToEdit.overs_per_side || 20,
         assigned_scorer_id: matchToEdit.assigned_scorer_id || 'SCR-101',
-        show_on_team_home: matchToEdit.show_on_team_home !== false
-      });
+        show_on_team_home: matchToEdit.show_on_team_home !== false,
+        match_notes: matchToEdit.notes || matchToEdit.match_notes || ''
+      };
+      setScheduleForm(formData);
+      initialScheduleFormRef.current = { ...formData };
     } else {
       setEditingMatch(null);
       const defaultTeamA = availableTeams[0]?.id || 'TM-01';
@@ -928,7 +977,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       const defaultScorer = officialsList.find(o => o.role === 'SCORER')?.id || 'SCR-101';
       setCustomTournamentInput(defaultTour);
 
-      setScheduleForm({
+      const formData = {
         tournament_id: defaultTourId,
         tournament_name: defaultTour,
         team_a_id: defaultTeamA,
@@ -939,70 +988,274 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         match_type: 'T20',
         overs: 20,
         assigned_scorer_id: defaultScorer,
-        show_on_team_home: true
-      });
+        show_on_team_home: true,
+        match_notes: ''
+      };
+      setScheduleForm(formData);
+      initialScheduleFormRef.current = { ...formData };
     }
     setScheduleModalOpen(true);
   };
 
+  // Requirement 3.G: Unsaved Changes Dialog before closing modal
+  const handleCloseScheduleModal = async () => {
+    if (isSubmittingSchedule) return;
+
+    const init = initialScheduleFormRef.current;
+    const isDirty = init && (
+      (init.tournament_name || '') !== (scheduleForm.tournament_name || '') ||
+      (init.team_a_id || '') !== (scheduleForm.team_a_id || '') ||
+      (init.team_b_id || '') !== (scheduleForm.team_b_id || '') ||
+      (init.venue || '') !== (scheduleForm.venue || '') ||
+      (init.match_date || '') !== (scheduleForm.match_date || '') ||
+      (init.match_time || '') !== (scheduleForm.match_time || '') ||
+      (init.match_type || '') !== (scheduleForm.match_type || '') ||
+      Number(init.overs || 0) !== Number(scheduleForm.overs || 0) ||
+      (init.assigned_scorer_id || '') !== (scheduleForm.assigned_scorer_id || '') ||
+      (init.match_notes || '') !== (scheduleForm.match_notes || '')
+    );
+
+    if (isDirty) {
+      const confirmed = await showConfirm(
+        'Discard Unsaved Changes?',
+        'You have unsaved changes in this match fixture. Are you sure you want to discard them and exit?',
+        'Discard Changes',
+        'Keep Editing',
+        'warning'
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setScheduleModalOpen(false);
+    setScheduleModalMinimized(false);
+    setEditingMatch(null);
+    setScheduleStep(1);
+    setScheduleFormError(null);
+  };
+
+  // Step 1 -> Step 2 validation (Requirement 3.B)
+  const handleProceedToStep2 = async () => {
+    setScheduleFormError(null);
+    if (!scheduleForm.tournament_name || !scheduleForm.tournament_name.trim()) {
+      setScheduleFormError('Please select or specify a tournament championship.');
+      await showWarning(
+        'Complete Required Fields',
+        'Please select or type a tournament championship before continuing to team selection.'
+      );
+      return;
+    }
+    setScheduleStep(2);
+  };
+
+  // Step 2 -> Step 3 validation (Requirement 3.B)
+  const handleProceedToStep3 = async () => {
+    setScheduleFormError(null);
+    if (!scheduleForm.team_a_id || !scheduleForm.team_b_id) {
+      setScheduleFormError('Please select both Home Team and Away Team.');
+      await showWarning(
+        'Complete Required Fields',
+        'Please select both competing clubs (Home and Away) before continuing.'
+      );
+      return;
+    }
+    if (scheduleForm.team_a_id === scheduleForm.team_b_id) {
+      setScheduleFormError('Home Team and Away Team cannot be the same club.');
+      await showWarning(
+        'Invalid Team Selection',
+        'Home Team and Away Team cannot be the same club. Please select two distinct teams.'
+      );
+      return;
+    }
+    if (!scheduleForm.venue || !scheduleForm.venue.trim()) {
+      setScheduleFormError('Please select or enter the official match stadium.');
+      await showWarning(
+        'Complete Required Fields',
+        'Please select or enter the stadium venue for this fixture before continuing.'
+      );
+      return;
+    }
+    setScheduleStep(3);
+  };
+
   const handleSaveSchedule = async () => {
     setScheduleFormError(null);
-    const { team_a_id, team_b_id, venue, match_date, match_time, match_type, overs, tournament_id, tournament_name, assigned_scorer_id, show_on_team_home } = scheduleForm;
+    const { team_a_id, team_b_id, venue, match_date, match_time, match_type, overs, tournament_id, tournament_name, assigned_scorer_id, show_on_team_home, match_notes } = scheduleForm;
 
+    // 1. Comprehensive Validation (Requirement 3.B)
+    if (!tournament_name || !tournament_name.trim()) {
+      setScheduleStep(1);
+      setScheduleFormError('Please select or specify a tournament championship.');
+      await showWarning(
+        'Complete Required Fields',
+        'Please select a tournament, both teams, venue, date, and time before continuing.'
+      );
+      return;
+    }
     if (!team_a_id || !team_b_id) {
-      setScheduleFormError('Please select both Team A and Team B.');
-      await showWarning('Missing Teams', 'Please select both Team A and Team B for this match fixture.');
+      setScheduleStep(2);
+      setScheduleFormError('Please select both Home Team and Away Team.');
+      await showWarning(
+        'Complete Required Fields',
+        'Please select both Home and Away clubs for this match fixture.'
+      );
       return;
     }
     if (team_a_id === team_b_id) {
-      setScheduleFormError('Team A and Team B cannot be the same team.');
-      await showWarning('Invalid Teams', 'Team A and Team B cannot be the same club.');
+      setScheduleStep(2);
+      setScheduleFormError('Home Team and Away Team cannot be the same club.');
+      await showWarning(
+        'Invalid Teams',
+        'Home Team and Away Team cannot be the same club. Please choose two distinct teams.'
+      );
+      return;
+    }
+    if (!venue || !venue.trim()) {
+      setScheduleStep(2);
+      setScheduleFormError('Please select or specify the stadium or venue.');
+      await showWarning(
+        'Complete Required Fields',
+        'Please select a stadium or venue for this fixture.'
+      );
       return;
     }
     if (!match_date || !match_date.trim()) {
       setScheduleFormError('Please enter a valid match date (YYYY-MM-DD).');
-      await showWarning('Missing Match Date', 'Please enter a valid match date (YYYY-MM-DD).');
+      await showWarning('Complete Required Fields', 'Please enter a valid match date (YYYY-MM-DD).');
       return;
     }
     if (!match_time || !match_time.trim()) {
       setScheduleFormError('Please enter match start time.');
-      await showWarning('Missing Match Time', 'Please enter match start time.');
+      await showWarning('Complete Required Fields', 'Please enter match start time.');
       return;
     }
 
     const cleanDate = match_date.trim();
     const normalizeDate = (dStr: string) => (dStr ? dStr.split('T')[0].trim() : '');
+    const teamAName = availableTeams.find(t => t.id === team_a_id)?.name || team_a_id;
+    const teamBName = availableTeams.find(t => t.id === team_b_id)?.name || team_b_id;
+    const effectiveTourName = (tournament_name || customTournamentInput || 'Virudhunagar Premier League 2026').trim();
 
-    // Check if another match is ALREADY scheduled on this exact match day
-    const alreadyFixedOnDay = matchesList.find(m => {
+    // 2. Duplicate Fixture Check (Requirement 3.C)
+    const duplicateMatch = matchesList.find(m => {
       if (editingMatch && (m.id === editingMatch.id || m._id === editingMatch._id)) return false;
       const statusUpper = (m.status || '').toUpperCase();
       if (statusUpper === 'CANCELLED') return false;
-      const d = normalizeDate(m.match_date || m.date);
-      return d === cleanDate;
+      const sameTeams = (m.team_a_id === team_a_id && m.team_b_id === team_b_id) ||
+                        (m.team_a_id === team_b_id && m.team_b_id === team_a_id);
+      const mDate = normalizeDate(m.match_date || m.date);
+      return sameTeams && mDate === cleanDate;
     });
 
-    if (alreadyFixedOnDay) {
-      const matchA = alreadyFixedOnDay.team_a_name || alreadyFixedOnDay.team_a_id || 'Team A';
-      const matchB = alreadyFixedOnDay.team_b_name || alreadyFixedOnDay.team_b_id || 'Team B';
-      const matchVenue = alreadyFixedOnDay.venue || 'District Grounds';
-      const matchTime = alreadyFixedOnDay.match_time || alreadyFixedOnDay.time || 'Scheduled';
-
-      const confirmProceed = await showConfirm(
-        'Match Already Scheduled on this Day ⚠️',
-        `A match is already scheduled on ${cleanDate}:\n• ${matchA} vs ${matchB}\n• Venue: ${matchVenue} (${matchTime})\n\nDo you want to fix another match on this day?`,
-        'Yes, Schedule Match',
-        'Choose Another Date',
+    if (duplicateMatch) {
+      const proceedDuplicate = await showConfirm(
+        'Duplicate Fixture Detected ⚠️',
+        `A match between ${teamAName} and ${teamBName} is already scheduled on ${cleanDate} at ${duplicateMatch.venue || 'District Grounds'}.\n\nDo you want to proceed with scheduling another fixture for these clubs on the same day?`,
+        'Proceed Anyway',
+        'Return to Edit',
         'warning'
       );
-      if (!confirmProceed) {
+      if (!proceedDuplicate) {
         return;
       }
     }
 
+    // 3. Scheduling Conflict Warnings (Requirement 3.D)
+    // A) Venue conflict: Another match already booked at this exact stadium & time
+    const venueConflict = matchesList.find(m => {
+      if (editingMatch && (m.id === editingMatch.id || m._id === editingMatch._id)) return false;
+      const statusUpper = (m.status || '').toUpperCase();
+      if (statusUpper === 'CANCELLED') return false;
+      const mDate = normalizeDate(m.match_date || m.date);
+      const mVenue = (m.venue || '').toLowerCase().trim();
+      const targetVenue = (venue || '').toLowerCase().trim();
+      const mTime = (m.match_time || m.time || '').toLowerCase().trim();
+      return mDate === cleanDate && mVenue === targetVenue && mTime === match_time.trim().toLowerCase();
+    });
+
+    if (venueConflict) {
+      const proceedVenue = await showConfirm(
+        'Scheduling Conflict — Venue Booked ⚠️',
+        `The venue "${venue}" is already booked on ${cleanDate} at ${match_time.trim()} for ${venueConflict.team_a_name || 'Team A'} vs ${venueConflict.team_b_name || 'Team B'}.\n\nWould you like to proceed anyway, or change the venue / time?`,
+        'Proceed Anyway',
+        'Change Venue / Time',
+        'warning'
+      );
+      if (!proceedVenue) {
+        setScheduleStep(2);
+        return;
+      }
+    }
+
+    // B) Team conflict: One of the teams already booked for another match on this day
+    const teamConflict = matchesList.find(m => {
+      if (editingMatch && (m.id === editingMatch.id || m._id === editingMatch._id)) return false;
+      const statusUpper = (m.status || '').toUpperCase();
+      if (statusUpper === 'CANCELLED') return false;
+      const mDate = normalizeDate(m.match_date || m.date);
+      return mDate === cleanDate && (
+        m.team_a_id === team_a_id || m.team_b_id === team_a_id ||
+        m.team_a_id === team_b_id || m.team_b_id === team_b_id
+      );
+    });
+
+    if (teamConflict) {
+      const conflictClub = (teamConflict.team_a_id === team_a_id || teamConflict.team_b_id === team_a_id) ? teamAName : teamBName;
+      const proceedTeam = await showConfirm(
+        'Scheduling Conflict — Team Already Booked ⚠️',
+        `${conflictClub} is already scheduled to play a fixture on ${cleanDate} (${teamConflict.team_a_name || 'Team A'} vs ${teamConflict.team_b_name || 'Team B'}).\n\nDo you want to proceed with scheduling a double-header?`,
+        'Proceed Anyway',
+        'Change Date',
+        'warning'
+      );
+      if (!proceedTeam) {
+        return;
+      }
+    }
+
+    // 4. Clean Pre-submission SweetAlert2 Confirmation Dialog (Requirement 3.A)
+    const confirmResult = await swal.fire({
+      title: editingMatch ? 'Confirm Match Reschedule' : 'Schedule Match Confirmation',
+      html: `
+        <div style="text-align: left; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin-top: 12px; font-size: 13.5px; line-height: 1.6; color: #1e293b;">
+          <div style="font-size: 16px; font-weight: 800; color: #0f172a; margin-bottom: 8px;">
+            🏏 ${teamAName} <span style="color: #64748b; font-weight: 500;">vs</span> ${teamBName}
+          </div>
+          <div style="display: flex; gap: 6px; margin-bottom: 4px;">
+            <span style="color: #64748b; min-width: 95px; font-weight: 600;">🏆 Tournament:</span>
+            <span style="font-weight: 700; color: #0f172a;">${effectiveTourName}</span>
+          </div>
+          <div style="display: flex; gap: 6px; margin-bottom: 4px;">
+            <span style="color: #64748b; min-width: 95px; font-weight: 600;">📅 Date & Time:</span>
+            <span style="font-weight: 700; color: #0f172a;">${cleanDate} • ${match_time.trim()}</span>
+          </div>
+          <div style="display: flex; gap: 6px; margin-bottom: 4px;">
+            <span style="color: #64748b; min-width: 95px; font-weight: 600;">📍 Stadium:</span>
+            <span style="font-weight: 700; color: #0f172a;">${venue || 'District Grounds'}</span>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <span style="color: #64748b; min-width: 95px; font-weight: 600;">⚡ Format:</span>
+            <span style="font-weight: 700; color: #0f172a;">${match_type || 'T20'} (${Number(overs)} Overs/side)</span>
+          </div>
+        </div>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: editingMatch ? 'Confirm & Reschedule' : 'Confirm & Schedule',
+      cancelButtonText: 'Review Details',
+      confirmButtonColor: '#10b981',
+      cancelButtonColor: '#64748b',
+      reverseButtons: true
+    });
+
+    if (!confirmResult.isConfirmed) {
+      return;
+    }
+
+    // 5. Submit to Backend API
     setIsSubmittingSchedule(true);
     try {
-      const effectiveTourName = (tournament_name || customTournamentInput || 'Virudhunagar Premier League 2026').trim();
       const payload = {
         tournament_id: tournament_id || effectiveTourName.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 24),
         tournament_name: effectiveTourName,
@@ -1015,11 +1268,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         overs_per_side: Number(overs),
         assigned_scorer_id,
         notify_teams_and_coaches: notifyTeamsOnTimeChange,
-        show_on_team_home: show_on_team_home !== false
+        show_on_team_home: show_on_team_home !== false,
+        notes: match_notes || ''
       };
-
-      const teamAName = availableTeams.find(t => t.id === team_a_id)?.name || team_a_id;
-      const teamBName = availableTeams.find(t => t.id === team_b_id)?.name || team_b_id;
 
       if (editingMatch) {
         await ScorerApi.updateMatch(editingMatch.id, payload);
@@ -1027,27 +1278,43 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           ? `✓ Match ${editingMatch.id} updated! Automated rescheduling dispatch sent to registered team coaches & managers.`
           : `✓ Match ${editingMatch.id} successfully updated and rescheduled.`;
         showNotification(alertMsg);
+
+        // Requirement 3.E: Successful Scheduling dialog
         await showSuccess(
-          'Match Rescheduled Successfully',
-          `Match fixture ${editingMatch.id} (${teamAName} vs ${teamBName}) has been updated and rescheduled for ${cleanDate} at ${venue || 'District Grounds'}. Teams have been notified.`
+          'Match Rescheduled Successfully!',
+          `The fixture between ${teamAName} and ${teamBName} has been saved successfully and dispatches broadcasted.`
         );
       } else {
         const res = await ScorerApi.scheduleMatch(payload);
         const newId = res?.match?.id || res?.match?._id || 'Created';
         showNotification(`✓ New match fixture successfully scheduled (ID: ${newId}).`);
+
+        // Requirement 3.E: Successful Scheduling dialog
         await showSuccess(
-          'Match Scheduled Successfully',
-          `Official fixture ${teamAName} vs ${teamBName} has been successfully scheduled for ${cleanDate} (${match_time.trim()}) at ${venue || 'District Grounds'}!`
+          'Match Scheduled Successfully!',
+          `The fixture between ${teamAName} and ${teamBName} has been saved successfully.`
         );
       }
 
+      initialScheduleFormRef.current = null;
       setScheduleModalOpen(false);
       setScheduleModalMinimized(false);
       setEditingMatch(null);
+      setScheduleStep(1);
       await loadMatchesAndLogistics();
     } catch (err: any) {
+      // Requirement 3.F: API Error with retry option and preserve form data
       setScheduleFormError(err.message || 'Failed to save match schedule.');
-      await showError('Scheduling Error', err.message || 'Failed to save match schedule.');
+      const shouldRetry = await showConfirm(
+        'Scheduling Failed',
+        `${err.message || 'Failed to communicate with match scheduling service.'}\n\nWould you like to retry?`,
+        'Retry Now',
+        'Review Form',
+        'error'
+      );
+      if (shouldRetry) {
+        handleSaveSchedule();
+      }
     } finally {
       setIsSubmittingSchedule(false);
     }
@@ -4121,10 +4388,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         visible={scheduleModalOpen && !scheduleModalMinimized}
         transparent
         animationType="fade"
-        onRequestClose={() => setScheduleModalOpen(false)}
+        onRequestClose={handleCloseScheduleModal}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalDialogLarge, scheduleModalMaximized && styles.modalDialogMaximized]}>
+          <View style={[styles.modalDialogLarge, styles.scheduleModalDialog, scheduleModalMaximized && styles.modalDialogMaximized]}>
             {/* Modal Header with Icon and Top Controls: Minimize (-), Maximize (🗖), and Red Close (✕) */}
             <View style={styles.modalHeader}>
               <View style={styles.scheduleModalHeaderLeft}>
@@ -4170,13 +4437,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   <Text style={styles.modalMaximizeText}>{scheduleModalMaximized ? '🗗' : '🗖'}</Text>
                 </TouchableOpacity>
 
-                {/* Close Button: Red on top */}
+                {/* Close Button: Red on top (Requirement 3.G: Checks unsaved changes) */}
                 <TouchableOpacity
                   style={[styles.modalWindowBtn, styles.modalCloseRedBtn]}
-                  onPress={() => {
-                    setScheduleModalOpen(false);
-                    setScheduleModalMinimized(false);
-                  }}
+                  onPress={handleCloseScheduleModal}
                   activeOpacity={0.7}
                   accessibilityLabel="Close Window"
                 >
@@ -4185,706 +4449,981 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               </View>
             </View>
 
-            <ScrollView style={styles.modalBodyScroll} showsVerticalScrollIndicator={true}>
+            {/* ───────────────────────────────────────────────────────
+                GUIDED 3-STEP PROGRESS INDICATOR (Requirement 2)
+                ─────────────────────────────────────────────────────── */}
+            <View style={styles.stepProgressBar}>
+              {/* Step 1: Tournament */}
+              <TouchableOpacity
+                style={[styles.stepItem, scheduleStep === 1 && styles.stepItemActive, scheduleStep > 1 && styles.stepItemDone]}
+                onPress={() => setScheduleStep(1)}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.stepCircle, scheduleStep === 1 && styles.stepCircleActive, scheduleStep > 1 && styles.stepCircleDone]}>
+                  <Text style={[styles.stepCircleText, (scheduleStep === 1 || scheduleStep > 1) && styles.stepCircleTextActive]}>
+                    {scheduleStep > 1 ? '✓' : '1'}
+                  </Text>
+                </View>
+                <View style={styles.stepTextWrap}>
+                  <Text style={[styles.stepNumberLabel, scheduleStep === 1 && styles.stepNumberLabelActive]}>STEP 1</Text>
+                  <Text style={[styles.stepTitleLabel, scheduleStep === 1 && styles.stepTitleLabelActive]}>Tournament</Text>
+                </View>
+              </TouchableOpacity>
+
+              <View style={[styles.stepConnectorLine, scheduleStep >= 2 && styles.stepConnectorLineActive]} />
+
+              {/* Step 2: Teams & Venue */}
+              <TouchableOpacity
+                style={[styles.stepItem, scheduleStep === 2 && styles.stepItemActive, scheduleStep > 2 && styles.stepItemDone]}
+                onPress={() => {
+                  if (scheduleForm.tournament_name) setScheduleStep(2);
+                }}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.stepCircle, scheduleStep === 2 && styles.stepCircleActive, scheduleStep > 2 && styles.stepCircleDone]}>
+                  <Text style={[styles.stepCircleText, (scheduleStep === 2 || scheduleStep > 2) && styles.stepCircleTextActive]}>
+                    {scheduleStep > 2 ? '✓' : '2'}
+                  </Text>
+                </View>
+                <View style={styles.stepTextWrap}>
+                  <Text style={[styles.stepNumberLabel, scheduleStep === 2 && styles.stepNumberLabelActive]}>STEP 2</Text>
+                  <Text style={[styles.stepTitleLabel, scheduleStep === 2 && styles.stepTitleLabelActive]}>Teams & Venue</Text>
+                </View>
+              </TouchableOpacity>
+
+              <View style={[styles.stepConnectorLine, scheduleStep >= 3 && styles.stepConnectorLineActive]} />
+
+              {/* Step 3: Match Details */}
+              <TouchableOpacity
+                style={[styles.stepItem, scheduleStep === 3 && styles.stepItemActive]}
+                onPress={() => {
+                  if (scheduleForm.tournament_name && scheduleForm.team_a_id && scheduleForm.team_b_id && scheduleForm.venue) {
+                    setScheduleStep(3);
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.stepCircle, scheduleStep === 3 && styles.stepCircleActive]}>
+                  <Text style={[styles.stepCircleText, scheduleStep === 3 && styles.stepCircleTextActive]}>3</Text>
+                </View>
+                <View style={styles.stepTextWrap}>
+                  <Text style={[styles.stepNumberLabel, scheduleStep === 3 && styles.stepNumberLabelActive]}>STEP 3</Text>
+                  <Text style={[styles.stepTitleLabel, scheduleStep === 3 && styles.stepTitleLabelActive]}>Match Details</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            {/* Scrollable Form Body */}
+            <ScrollView style={styles.scheduleModalBodyScroll} showsVerticalScrollIndicator={true}>
               {scheduleFormError && (
-                <View style={styles.formErrorBox}>
+                <View style={styles.formErrorBoxCompact}>
                   <Text style={styles.formErrorText}>⚠️ {scheduleFormError}</Text>
                 </View>
               )}
 
               {/* ───────────────────────────────────────────────────────
-                  1. TOURNAMENT CHAMPIONSHIP & ASSIGNMENT (TYPED FORMAT)
+                  STEP 1: TOURNAMENT SELECTION (Requirement 2 - Step 1)
                   ─────────────────────────────────────────────────────── */}
-              <View style={styles.modalFormSection}>
-                <View style={styles.sectionHeaderRow}>
-                  <Text style={styles.formSectionHeading}>1. Tournament Championship & Assignment</Text>
-                  <Text style={styles.sectionRequiredTag}>* REQUIRED</Text>
-                </View>
-                <Text style={styles.sectionSubDesc}>
-                  Type the tournament name below to assign this fixture. The competing teams shown will be those registered for this tournament.
-                </Text>
+              {scheduleStep === 1 && (
+                <View style={styles.stepSectionContainer}>
+                  <View style={styles.stepHeaderCard}>
+                    <View style={styles.stepHeaderCardLeft}>
+                      <Text style={styles.stepHeaderTitle}>🏆 Select Tournament Championship</Text>
+                      <Text style={styles.stepHeaderSubtitle}>
+                        Assign this fixture to an affiliated district tournament or enter a sanctioned championship.
+                      </Text>
+                    </View>
+                    <View style={styles.stepTagPill}>
+                      <Text style={styles.stepTagPillText}>AFFILIATED SEASON 2026</Text>
+                    </View>
+                  </View>
 
-                {/* Direct Typing Input - Only Typed Format, No Quick Assign */}
-                <View style={styles.tournamentInputWrap}>
-                  <Text style={styles.inputPrefixIcon}>🏆</Text>
-                  <TextInput
-                    style={styles.tournamentTextInput}
-                    placeholder="Type full tournament name (e.g. Virudhunagar Premier League 2026)..."
-                    placeholderTextColor="#94a3b8"
-                    value={scheduleForm.tournament_name}
-                    onChangeText={(val) => {
-                      setScheduleForm({
-                        ...scheduleForm,
-                        tournament_name: val,
-                        tournament_id: val ? val.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 24) : 'T-CUSTOM'
-                      });
-                    }}
-                  />
+                  {/* Searchable Tournament Dropdown / Selector */}
+                  <View style={{ marginTop: 14 }}>
+                    <Text style={styles.formFieldLabel}>Championship Tournament *</Text>
+                    <View style={styles.tournamentInputWrap}>
+                      <Text style={styles.inputPrefixIcon}>🏆</Text>
+                      <TextInput
+                        style={styles.tournamentTextInput}
+                        placeholder="Search or type tournament name (e.g. Virudhunagar Premier League 2026)..."
+                        placeholderTextColor="#94a3b8"
+                        value={scheduleForm.tournament_name}
+                        onChangeText={(val) => {
+                          setScheduleForm({
+                            ...scheduleForm,
+                            tournament_name: val,
+                            tournament_id: val ? val.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 24) : 'T-CUSTOM'
+                          });
+                        }}
+                      />
+                      {scheduleForm.tournament_name ? (
+                        <TouchableOpacity
+                          onPress={() => setScheduleForm({ ...scheduleForm, tournament_name: '', tournament_id: 'T-CUSTOM' })}
+                          style={{ padding: 6 }}
+                        >
+                          <Text style={{ color: '#94a3b8', fontSize: 15 }}>✕</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  </View>
+
+                  {/* Registered Tournaments Quick Selection Grid */}
+                  <View style={{ marginTop: 14 }}>
+                    <Text style={styles.compactSubHeading}>Available District Tournaments</Text>
+                    <View style={styles.tournamentsGrid}>
+                      {availableTournaments.map((t) => {
+                        const isSelected = (scheduleForm.tournament_name || '').toLowerCase() === t.name.toLowerCase();
+                        return (
+                          <TouchableOpacity
+                            key={t.id}
+                            style={[styles.tournamentCard, isSelected && styles.tournamentCardSelected]}
+                            onPress={() => {
+                              setScheduleForm({
+                                ...scheduleForm,
+                                tournament_name: t.name,
+                                tournament_id: t.id
+                              });
+                              setScheduleFormError(null);
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <View style={styles.tournamentCardHeader}>
+                              <Text style={styles.tournamentCardIcon}>🏆</Text>
+                              <View style={{ flex: 1 }}>
+                                <Text style={[styles.tournamentCardTitle, isSelected && styles.tournamentCardTitleActive]}>
+                                  {t.name}
+                                </Text>
+                                <Text style={styles.tournamentCardSeason}>{t.season} • {t.format}</Text>
+                              </View>
+                              {isSelected ? (
+                                <View style={styles.tournamentCheckBadge}>
+                                  <Text style={styles.tournamentCheckBadgeText}>✓</Text>
+                                </View>
+                              ) : null}
+                            </View>
+                            <View style={styles.tournamentCardFooter}>
+                              <Text style={styles.tournamentClubCountText}>
+                                👥 {t.clubsCount} Registered Clubs
+                              </Text>
+                              <View style={[styles.tournamentStatusPill, t.status === 'Active' ? styles.statusActivePill : styles.statusUpcomingPill]}>
+                                <Text style={styles.tournamentStatusText}>{t.status}</Text>
+                              </View>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* Dynamic Registered Teams Preview for Selected Tournament */}
                   {scheduleForm.tournament_name ? (
-                    <TouchableOpacity
-                      onPress={() => setScheduleForm({ ...scheduleForm, tournament_name: '', tournament_id: 'T-CUSTOM' })}
-                      style={{ padding: 6 }}
-                    >
-                      <Text style={{ color: '#94a3b8', fontSize: 16 }}>✕</Text>
-                    </TouchableOpacity>
-                  ) : null}
+                    <View style={styles.tournamentAssignedBox}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                        <Text style={styles.tournamentAssignedTitle}>
+                          ✅ Assigned Championship: <Text style={{ color: '#166534', fontWeight: '800' }}>{scheduleForm.tournament_name}</Text>
+                        </Text>
+                        <View style={styles.eligibleTeamsPill}>
+                          <Text style={styles.eligibleTeamsPillText}>
+                            {availableTeams.length} Clubs Eligible
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.tournamentAssignedSub}>
+                        Competing clubs in Step 2 will dynamically load registered squads for this championship.
+                      </Text>
+                      {/* Compact Clubs Badge Preview */}
+                      <View style={styles.teamBadgePreviewRow}>
+                        {availableTeams.slice(0, 5).map(tm => (
+                          <View key={tm.id} style={styles.teamMiniChip}>
+                            <Text style={styles.teamMiniChipText}>🏏 {tm.name}</Text>
+                          </View>
+                        ))}
+                        {availableTeams.length > 5 && (
+                          <View style={[styles.teamMiniChip, { backgroundColor: '#e2e8f0' }]}>
+                            <Text style={[styles.teamMiniChipText, { color: '#475569' }]}>+{availableTeams.length - 5} More</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.inlineWarningAlert}>
+                      <Text style={styles.inlineWarningAlertText}>
+                        ⚠️ Please select or type a tournament above to proceed to team and venue selection.
+                      </Text>
+                    </View>
+                  )}
                 </View>
-
-                {/* Live Assignment Confirmation Badge */}
-                {scheduleForm.tournament_name ? (
-                  <View style={styles.tournamentAssignedBadge}>
-                    <Text style={styles.tournamentAssignedBadgeText}>
-                      ✅ Fixture Assigned To: <Text style={{ fontWeight: '800', color: '#b45309' }}>{scheduleForm.tournament_name}</Text>
-                    </Text>
-                    <Text style={{ color: '#78716c', fontSize: 11.5, marginTop: 2 }}>
-                      Ref ID: {scheduleForm.tournament_id} • Teams below are those registered for this tournament.
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', borderRadius: 8, padding: 10, marginTop: 8, borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.3)' }}>
-                    <Text style={{ color: '#b45309', fontSize: 12, fontWeight: '600' }}>⚠️ Please type the tournament name above to proceed. Competing teams will filter accordingly.</Text>
-                  </View>
-                )}
-              </View>
+              )}
 
               {/* ───────────────────────────────────────────────────────
-                  2. COMPETING TEAMS (DYNAMIC DROPDOWN TABLES)
+                  STEP 2: TEAMS AND VENUE (Requirement 2 - Step 2)
                   ─────────────────────────────────────────────────────── */}
-              <View style={styles.modalFormSection}>
-                <View style={styles.sectionHeaderRow}>
-                  <Text style={styles.formSectionHeading}>2. Competing Registered Teams</Text>
-                  <Text style={styles.sectionRequiredTag}>* DYNAMIC DROPDOWN SELECTION</Text>
-                </View>
+              {scheduleStep === 2 && (
+                <View style={styles.stepSectionContainer}>
+                  <View style={styles.stepHeaderCard}>
+                    <View style={styles.stepHeaderCardLeft}>
+                      <Text style={styles.stepHeaderTitle}>🏏 Competing Clubs & Venue Selection</Text>
+                      <Text style={styles.stepHeaderSubtitle}>
+                        Select Home and Away clubs for {scheduleForm.tournament_name || 'this fixture'}, and appoint the official venue stadium.
+                      </Text>
+                    </View>
+                    <View style={styles.stepTagPill}>
+                      <Text style={styles.stepTagPillText}>STEP 2 OF 3</Text>
+                    </View>
+                  </View>
 
-                <View style={styles.twoColFormGrid}>
-                  {/* Team A (Home / First Team) */}
-                  <View style={{ flex: 1, minWidth: 280 }}>
-                    <Text style={styles.formLabel}>Team A (Home / Host Club) *</Text>
-                    {/* Selected Box / Dropdown Toggle */}
+                  {/* Competing Teams Grid (Home vs Away) */}
+                  <View style={styles.twoColFormGrid}>
+                    {/* Team A (Home / Host Club) */}
+                    <View style={styles.colFormCard}>
+                      <View style={styles.fieldLabelRow}>
+                        <Text style={styles.formFieldLabel}>Team A (Home / Host Club) *</Text>
+                        <Text style={styles.fieldSubBadge}>HOST</Text>
+                      </View>
+
+                      {(() => {
+                        const selectedA = availableTeams.find(tm => tm.id === scheduleForm.team_a_id) || availableTeams[0];
+                        return (
+                          <View style={styles.dropdownContainer}>
+                            <TouchableOpacity
+                              style={[styles.dropdownSelectBoxCompact, teamADropdownOpen && styles.dropdownSelectBoxActive]}
+                              onPress={() => {
+                                setTeamADropdownOpen(!teamADropdownOpen);
+                                setTeamBDropdownOpen(false);
+                                setVenueDropdownOpen(false);
+                              }}
+                              activeOpacity={0.8}
+                            >
+                              <View style={styles.dropdownSelectedLeft}>
+                                <View style={[styles.teamCrestMini, { backgroundColor: '#1e3a8a' }]}>
+                                  <Text style={{ fontSize: 13 }}>🏏</Text>
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.dropdownSelectedTitle} numberOfLines={1}>
+                                    {selectedA?.name || 'Select Home Club'}
+                                  </Text>
+                                  <Text style={styles.dropdownSelectedSub} numberOfLines={1}>
+                                    {selectedA?.id} • {selectedA?.taluk} • Coach: {selectedA?.coachName}
+                                  </Text>
+                                </View>
+                              </View>
+                              <Text style={styles.dropdownArrow}>{teamADropdownOpen ? '▲' : '▼'}</Text>
+                            </TouchableOpacity>
+
+                            {teamADropdownOpen && (
+                              <View style={styles.dropdownTablePanelCompact}>
+                                <View style={styles.dropdownSearchWrapCompact}>
+                                  <Text style={{ fontSize: 12, marginRight: 6 }}>🔍</Text>
+                                  <TextInput
+                                    style={styles.dropdownSearchInputCompact}
+                                    placeholder="Search registered clubs..."
+                                    placeholderTextColor="#94a3b8"
+                                    value={teamSearchQueryA}
+                                    onChangeText={setTeamSearchQueryA}
+                                  />
+                                  {teamSearchQueryA ? (
+                                    <TouchableOpacity onPress={() => setTeamSearchQueryA('')}>
+                                      <Text style={{ color: '#94a3b8', fontSize: 12 }}>✕</Text>
+                                    </TouchableOpacity>
+                                  ) : null}
+                                </View>
+
+                                <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
+                                  {availableTeams
+                                    .filter(tm => !teamSearchQueryA || tm.name.toLowerCase().includes(teamSearchQueryA.toLowerCase()) || tm.taluk.toLowerCase().includes(teamSearchQueryA.toLowerCase()))
+                                    .map(tm => {
+                                      const isChosen = scheduleForm.team_a_id === tm.id;
+                                      const isTeamB = scheduleForm.team_b_id === tm.id;
+                                      return (
+                                        <TouchableOpacity
+                                          key={`dd-a-${tm.id}`}
+                                          style={[
+                                            styles.dropdownTableRowCompact,
+                                            isChosen && styles.dropdownTableRowActive,
+                                            isTeamB && { opacity: 0.55, backgroundColor: '#f8fafc' }
+                                          ]}
+                                          onPress={() => {
+                                            if (isTeamB) {
+                                              setScheduleFormError('Team A cannot be the same as Team B.');
+                                            } else {
+                                              setScheduleFormError(null);
+                                              setScheduleForm({ ...scheduleForm, team_a_id: tm.id });
+                                              setTeamADropdownOpen(false);
+                                            }
+                                          }}
+                                          activeOpacity={0.8}
+                                        >
+                                          <View style={styles.dropdownTableRowLeft}>
+                                            <Text style={{ fontSize: 14 }}>🏏</Text>
+                                            <View style={{ flex: 1 }}>
+                                              <Text style={[styles.dropdownRowTitle, isChosen && styles.dropdownRowTitleActive]}>
+                                                {tm.name} {isTeamB ? '(Already Away Team)' : ''}
+                                              </Text>
+                                              <Text style={styles.dropdownRowMeta}>
+                                                {tm.id} • {tm.taluk} • Coach: {tm.coachName}
+                                              </Text>
+                                            </View>
+                                          </View>
+                                          {isChosen && <Text style={styles.dropdownRowCheck}>✓</Text>}
+                                        </TouchableOpacity>
+                                      );
+                                    })}
+                                </ScrollView>
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })()}
+                    </View>
+
+                    {/* Team B (Away / Opponent Club) */}
+                    <View style={styles.colFormCard}>
+                      <View style={styles.fieldLabelRow}>
+                        <Text style={styles.formFieldLabel}>Team B (Away / Opponent Club) *</Text>
+                        <Text style={[styles.fieldSubBadge, { color: '#d97706', borderColor: '#fde68a', backgroundColor: '#fffbeb' }]}>AWAY</Text>
+                      </View>
+
+                      {(() => {
+                        const selectedB = availableTeams.find(tm => tm.id === scheduleForm.team_b_id) || availableTeams[1];
+                        return (
+                          <View style={styles.dropdownContainer}>
+                            <TouchableOpacity
+                              style={[styles.dropdownSelectBoxCompact, teamBDropdownOpen && styles.dropdownSelectBoxActive]}
+                              onPress={() => {
+                                setTeamBDropdownOpen(!teamBDropdownOpen);
+                                setTeamADropdownOpen(false);
+                                setVenueDropdownOpen(false);
+                              }}
+                              activeOpacity={0.8}
+                            >
+                              <View style={styles.dropdownSelectedLeft}>
+                                <View style={[styles.teamCrestMini, { backgroundColor: '#d97706' }]}>
+                                  <Text style={{ fontSize: 13 }}>🏏</Text>
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.dropdownSelectedTitle} numberOfLines={1}>
+                                    {selectedB?.name || 'Select Away Club'}
+                                  </Text>
+                                  <Text style={styles.dropdownSelectedSub} numberOfLines={1}>
+                                    {selectedB?.id} • {selectedB?.taluk} • Coach: {selectedB?.coachName}
+                                  </Text>
+                                </View>
+                              </View>
+                              <Text style={styles.dropdownArrow}>{teamBDropdownOpen ? '▲' : '▼'}</Text>
+                            </TouchableOpacity>
+
+                            {teamBDropdownOpen && (
+                              <View style={styles.dropdownTablePanelCompact}>
+                                <View style={styles.dropdownSearchWrapCompact}>
+                                  <Text style={{ fontSize: 12, marginRight: 6 }}>🔍</Text>
+                                  <TextInput
+                                    style={styles.dropdownSearchInputCompact}
+                                    placeholder="Search registered clubs..."
+                                    placeholderTextColor="#94a3b8"
+                                    value={teamSearchQueryB}
+                                    onChangeText={setTeamSearchQueryB}
+                                  />
+                                  {teamSearchQueryB ? (
+                                    <TouchableOpacity onPress={() => setTeamSearchQueryB('')}>
+                                      <Text style={{ color: '#94a3b8', fontSize: 12 }}>✕</Text>
+                                    </TouchableOpacity>
+                                  ) : null}
+                                </View>
+
+                                <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
+                                  {availableTeams
+                                    .filter(tm => !teamSearchQueryB || tm.name.toLowerCase().includes(teamSearchQueryB.toLowerCase()) || tm.taluk.toLowerCase().includes(teamSearchQueryB.toLowerCase()))
+                                    .map(tm => {
+                                      const isChosen = scheduleForm.team_b_id === tm.id;
+                                      const isTeamA = scheduleForm.team_a_id === tm.id;
+                                      return (
+                                        <TouchableOpacity
+                                          key={`dd-b-${tm.id}`}
+                                          style={[
+                                            styles.dropdownTableRowCompact,
+                                            isChosen && styles.dropdownTableRowActive,
+                                            isTeamA && { opacity: 0.55, backgroundColor: '#f8fafc' }
+                                          ]}
+                                          onPress={() => {
+                                            if (isTeamA) {
+                                              setScheduleFormError('Team B cannot be the same as Team A.');
+                                            } else {
+                                              setScheduleFormError(null);
+                                              setScheduleForm({ ...scheduleForm, team_b_id: tm.id });
+                                              setTeamBDropdownOpen(false);
+                                            }
+                                          }}
+                                          activeOpacity={0.8}
+                                        >
+                                          <View style={styles.dropdownTableRowLeft}>
+                                            <Text style={{ fontSize: 14 }}>🏏</Text>
+                                            <View style={{ flex: 1 }}>
+                                              <Text style={[styles.dropdownRowTitle, isChosen && styles.dropdownRowTitleActive]}>
+                                                {tm.name} {isTeamA ? '(Already Home Team)' : ''}
+                                              </Text>
+                                              <Text style={styles.dropdownRowMeta}>
+                                                {tm.id} • {tm.taluk} • Coach: {tm.coachName}
+                                              </Text>
+                                            </View>
+                                          </View>
+                                          {isChosen && <Text style={styles.dropdownRowCheck}>✓</Text>}
+                                        </TouchableOpacity>
+                                      );
+                                    })}
+                                </ScrollView>
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })()}
+                    </View>
+                  </View>
+
+                  {/* Venue and Stadium Selection */}
+                  <View style={[styles.colFormCard, { marginTop: 14 }]}>
+                    <View style={styles.fieldLabelRow}>
+                      <Text style={styles.formFieldLabel}>Official Stadium / Venue *</Text>
+                      <Text style={[styles.fieldSubBadge, { color: '#059669', borderColor: '#a7f3d0', backgroundColor: '#ecfdf5' }]}>SANCTIONED</Text>
+                    </View>
+
                     {(() => {
-                      const selectedA = availableTeams.find(tm => tm.id === scheduleForm.team_a_id) || availableTeams[0];
+                      const selectedVenue = availableVenues.find(v => v.name === scheduleForm.venue) || availableVenues[0];
                       return (
                         <View style={styles.dropdownContainer}>
                           <TouchableOpacity
-                            style={[styles.dropdownSelectBox, teamADropdownOpen && styles.dropdownSelectBoxActive]}
+                            style={[styles.dropdownSelectBoxCompact, venueDropdownOpen && styles.dropdownSelectBoxActive]}
                             onPress={() => {
-                              setTeamADropdownOpen(!teamADropdownOpen);
+                              setVenueDropdownOpen(!venueDropdownOpen);
+                              setTeamADropdownOpen(false);
                               setTeamBDropdownOpen(false);
                             }}
                             activeOpacity={0.8}
                           >
                             <View style={styles.dropdownSelectedLeft}>
-                              <View style={[styles.teamCrestMini, { backgroundColor: '#1e3a8a' }]}>
-                                <Text style={{ fontSize: 13 }}>🏏</Text>
+                              <View style={[styles.teamCrestMini, { backgroundColor: '#059669' }]}>
+                                <Text style={{ fontSize: 13 }}>📍</Text>
                               </View>
                               <View style={{ flex: 1 }}>
                                 <Text style={styles.dropdownSelectedTitle} numberOfLines={1}>
-                                  {selectedA?.name || 'Select Team A'}
+                                  {selectedVenue?.name || scheduleForm.venue}
                                 </Text>
                                 <Text style={styles.dropdownSelectedSub} numberOfLines={1}>
-                                  ID: {selectedA?.id} • {selectedA?.taluk} • Coach: {selectedA?.coachName}
+                                  {selectedVenue?.location} • {selectedVenue?.capacity}
                                 </Text>
                               </View>
                             </View>
-                            <Text style={styles.dropdownArrow}>{teamADropdownOpen ? '▲' : '▼'}</Text>
+                            <Text style={styles.dropdownArrow}>{venueDropdownOpen ? '▲' : '▼'}</Text>
                           </TouchableOpacity>
 
-                          {/* Open Dropdown Table */}
-                          {teamADropdownOpen && (
-                            <View style={styles.dropdownTablePanel}>
-                              <View style={styles.dropdownSearchWrap}>
-                                <Text style={{ fontSize: 13, marginRight: 6 }}>🔍</Text>
-                                <TextInput
-                                  style={styles.dropdownSearchInput}
-                                  placeholder="Search registered clubs..."
-                                  placeholderTextColor="#94a3b8"
-                                  value={teamSearchQueryA}
-                                  onChangeText={setTeamSearchQueryA}
-                                />
-                                {teamSearchQueryA ? (
-                                  <TouchableOpacity onPress={() => setTeamSearchQueryA('')}>
-                                    <Text style={{ color: '#94a3b8', fontSize: 13 }}>✕</Text>
-                                  </TouchableOpacity>
-                                ) : null}
-                              </View>
-
-                              <ScrollView style={styles.dropdownTableScroll} nestedScrollEnabled={true}>
-                                {availableTeams
-                                  .filter(tm => !teamSearchQueryA || tm.name.toLowerCase().includes(teamSearchQueryA.toLowerCase()) || tm.taluk.toLowerCase().includes(teamSearchQueryA.toLowerCase()))
-                                  .map(tm => {
-                                    const isChosen = scheduleForm.team_a_id === tm.id;
-                                    return (
-                                      <TouchableOpacity
-                                        key={`dd-a-${tm.id}`}
-                                        style={[styles.dropdownTableRow, isChosen && styles.dropdownTableRowActive]}
-                                        onPress={() => {
-                                          if (scheduleForm.team_b_id === tm.id) {
-                                            setScheduleFormError('Team A and Team B cannot be the same club.');
-                                          } else {
-                                            setScheduleFormError(null);
-                                            setScheduleForm({ ...scheduleForm, team_a_id: tm.id });
-                                            setTeamADropdownOpen(false);
-                                          }
-                                        }}
-                                        activeOpacity={0.8}
-                                      >
-                                        <View style={styles.dropdownTableRowLeft}>
-                                          <Text style={{ fontSize: 14 }}>🏏</Text>
-                                          <View style={{ flex: 1 }}>
-                                            <Text style={[styles.dropdownRowTitle, isChosen && styles.dropdownRowTitleActive]}>
-                                              {tm.name}
-                                            </Text>
-                                            <Text style={styles.dropdownRowMeta}>
-                                              {tm.id} • {tm.taluk} Taluk • Coach: {tm.coachName}
-                                            </Text>
-                                            {scheduleForm.tournament_name ? (
-                                              <View style={{ marginTop: 2, alignSelf: 'flex-start', backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
-                                                <Text style={{ color: '#92400e', fontSize: 10, fontWeight: '700' }}>
-                                                  🏆 Registered for {scheduleForm.tournament_name}
-                                                </Text>
-                                              </View>
-                                            ) : null}
-                                          </View>
+                          {venueDropdownOpen && (
+                            <View style={styles.dropdownTablePanelCompact}>
+                              <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
+                                {availableVenues.map(v => {
+                                  const isChosen = scheduleForm.venue === v.name;
+                                  return (
+                                    <TouchableOpacity
+                                      key={v.id}
+                                      style={[styles.dropdownTableRowCompact, isChosen && styles.dropdownTableRowActive]}
+                                      onPress={() => {
+                                        setScheduleForm({ ...scheduleForm, venue: v.name });
+                                        setVenueDropdownOpen(false);
+                                        setScheduleFormError(null);
+                                      }}
+                                      activeOpacity={0.8}
+                                    >
+                                      <View style={styles.dropdownTableRowLeft}>
+                                        <Text style={{ fontSize: 14 }}>📍</Text>
+                                        <View style={{ flex: 1 }}>
+                                          <Text style={[styles.dropdownRowTitle, isChosen && styles.dropdownRowTitleActive]}>
+                                            {v.name}
+                                          </Text>
+                                          <Text style={styles.dropdownRowMeta}>
+                                            {v.location} • {v.capacity}
+                                          </Text>
                                         </View>
-                                        {isChosen && <Text style={styles.dropdownRowCheck}>✓</Text>}
-                                      </TouchableOpacity>
-                                    );
-                                  })}
+                                      </View>
+                                      {isChosen && <Text style={styles.dropdownRowCheck}>✓</Text>}
+                                    </TouchableOpacity>
+                                  );
+                                })}
                               </ScrollView>
                             </View>
                           )}
                         </View>
                       );
                     })()}
+
+                    {/* Dynamic Custom Stadium / Ground Location Input */}
+                    <View style={{ marginTop: 8 }}>
+                      <Text style={[styles.formFieldLabel, { fontSize: 11, color: '#64748b' }]}>
+                        ✏️ Custom Ground Name or Specific Pitch (Optional Override)
+                      </Text>
+                      <TextInput
+                        style={styles.formTextInputCompact}
+                        placeholder="Type ground name or specific turf..."
+                        placeholderTextColor="#94a3b8"
+                        value={scheduleForm.venue}
+                        onChangeText={(val) => setScheduleForm({ ...scheduleForm, venue: val })}
+                      />
+                    </View>
+
+                    {/* Google Maps GPS Navigation link */}
+                    {scheduleForm.venue ? (
+                      <TouchableOpacity
+                        style={styles.venueMapLinkBtnCompact}
+                        onPress={() => {
+                          const query = encodeURIComponent(`${scheduleForm.venue} Virudhunagar Tamil Nadu`);
+                          const url = `https://www.google.com/maps/search/?api=1&query=${query}`;
+                          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                            (window as any).open(url, '_blank');
+                          } else {
+                            Alert.alert('Google Maps Navigation', `Open Google Maps navigation for:\n${scheduleForm.venue}?`);
+                          }
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={{ fontSize: 14 }}>📍</Text>
+                        <Text style={styles.venueMapLinkText} numberOfLines={1}>
+                          Open Ground on Google Maps ↗ (GPS Navigation)
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                </View>
+              )}
+
+              {/* ───────────────────────────────────────────────────────
+                  STEP 3: MATCH DETAILS & CONFIRMATION (Requirement 2 - Step 3)
+                  ─────────────────────────────────────────────────────── */}
+              {scheduleStep === 3 && (
+                <View style={styles.stepSectionContainer}>
+                  <View style={styles.stepHeaderCard}>
+                    <View style={styles.stepHeaderCardLeft}>
+                      <Text style={styles.stepHeaderTitle}>⚙️ Match Logistics, Format & Officials</Text>
+                      <Text style={styles.stepHeaderSubtitle}>
+                        Configure the fixture date, start timing, match format, overs limit, and assigned officials.
+                      </Text>
+                    </View>
+                    <View style={styles.stepTagPill}>
+                      <Text style={styles.stepTagPillText}>STEP 3 OF 3</Text>
+                    </View>
                   </View>
 
-                  {/* Team B (Away / Opponent Team) */}
-                  <View style={{ flex: 1, minWidth: 280 }}>
-                    <Text style={styles.formLabel}>Team B (Away / Opponent Club) *</Text>
-                    {/* Selected Box / Dropdown Toggle */}
+                  {/* Date & Start Time Selector */}
+                  <View style={styles.twoColFormGrid}>
+                    <View style={styles.colFormCard}>
+                      <Text style={styles.formFieldLabel}>Match Date (YYYY-MM-DD) *</Text>
+                      <TextInput
+                        style={styles.formTextInputCompact}
+                        placeholder="e.g. 2026-10-24"
+                        placeholderTextColor="#94a3b8"
+                        value={scheduleForm.match_date}
+                        onChangeText={(val) => setScheduleForm({ ...scheduleForm, match_date: val })}
+                      />
+                      {/* Quick Date Presets */}
+                      <View style={styles.quickPresetRow}>
+                        <TouchableOpacity
+                          style={styles.quickDateChip}
+                          onPress={() => setScheduleForm({ ...scheduleForm, match_date: new Date().toISOString().split('T')[0] })}
+                        >
+                          <Text style={styles.quickDateChipText}>Today</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.quickDateChip}
+                          onPress={() => {
+                            const d = new Date();
+                            d.setDate(d.getDate() + 1);
+                            setScheduleForm({ ...scheduleForm, match_date: d.toISOString().split('T')[0] });
+                          }}
+                        >
+                          <Text style={styles.quickDateChipText}>Tomorrow</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.quickDateChip}
+                          onPress={() => {
+                            const d = new Date();
+                            d.setDate(d.getDate() + 3);
+                            setScheduleForm({ ...scheduleForm, match_date: d.toISOString().split('T')[0] });
+                          }}
+                        >
+                          <Text style={styles.quickDateChipText}>+3 Days</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.quickDateChip}
+                          onPress={() => {
+                            const d = new Date();
+                            d.setDate(d.getDate() + 7);
+                            setScheduleForm({ ...scheduleForm, match_date: d.toISOString().split('T')[0] });
+                          }}
+                        >
+                          <Text style={styles.quickDateChipText}>+1 Week</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    <View style={styles.colFormCard}>
+                      <Text style={styles.formFieldLabel}>Match Start Time *</Text>
+                      <TextInput
+                        style={styles.formTextInputCompact}
+                        placeholder="e.g. 09:30 AM"
+                        placeholderTextColor="#94a3b8"
+                        value={scheduleForm.match_time}
+                        onChangeText={(val) => setScheduleForm({ ...scheduleForm, match_time: val })}
+                      />
+                      {/* Quick Time Presets */}
+                      <View style={styles.quickPresetRow}>
+                        {['07:00 AM', '09:30 AM', '02:00 PM', '05:30 PM'].map((tStr) => (
+                          <TouchableOpacity
+                            key={tStr}
+                            style={[styles.quickDateChip, scheduleForm.match_time === tStr && styles.quickDateChipActive]}
+                            onPress={() => setScheduleForm({ ...scheduleForm, match_time: tStr })}
+                          >
+                            <Text style={[styles.quickDateChipText, scheduleForm.match_time === tStr && styles.quickDateChipTextActive]}>
+                              {tStr}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Weather / Rain Delay Adjustments (Shown in Reschedule Mode) */}
+                  {editingMatch && (
+                    <View style={styles.weatherQuickRowCompact}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <Text style={{ fontSize: 12, color: '#dc2626', fontWeight: '800' }}>🌧 Weather / Rain Delay Adjustments</Text>
+                        <View style={styles.rescheduleBadgePill}>
+                          <Text style={styles.rescheduleBadgePillText}>RESCHEDULE MODE</Text>
+                        </View>
+                      </View>
+                      <View style={styles.dynamicRescheduleGrid}>
+                        <TouchableOpacity style={styles.dynamicRescheduleBox} onPress={() => applyDynamicTimeDelay(30)} activeOpacity={0.8}>
+                          <Text style={styles.dynamicRescheduleBoxTitle}>🌧 +30m Delay</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.dynamicRescheduleBox} onPress={() => applyDynamicTimeDelay(60)} activeOpacity={0.8}>
+                          <Text style={styles.dynamicRescheduleBoxTitle}>🌧 +1 Hour Delay</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.dynamicRescheduleBox} onPress={() => applyDynamicTimeDelay(120)} activeOpacity={0.8}>
+                          <Text style={styles.dynamicRescheduleBoxTitle}>🌧 +2 Hours Delay</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.dynamicRescheduleBox} onPress={() => setScheduleForm({ ...scheduleForm, match_time: '02:00 PM' })} activeOpacity={0.8}>
+                          <Text style={styles.dynamicRescheduleBoxTitle}>☀️ 02:00 PM</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.dynamicRescheduleBox} onPress={() => setScheduleForm({ ...scheduleForm, match_time: '06:00 PM' })} activeOpacity={0.8}>
+                          <Text style={styles.dynamicRescheduleBoxTitle}>💡 06:00 PM D/N</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Match Format & Overs Limit */}
+                  <View style={[styles.colFormCard, { marginTop: 14 }]}>
+                    <Text style={styles.formFieldLabel}>Match Format & Overs Limit *</Text>
+                    <View style={styles.twoColFormGrid}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.formFieldLabel, { fontSize: 11, color: '#64748b' }]}>Exact Overs per side</Text>
+                        <TextInput
+                          style={styles.formTextInputCompact}
+                          placeholder="20"
+                          placeholderTextColor="#94a3b8"
+                          keyboardType="numeric"
+                          value={String(scheduleForm.overs || '')}
+                          onChangeText={(val) => {
+                            const num = parseInt(val, 10) || 0;
+                            setScheduleForm({
+                              ...scheduleForm,
+                              overs: num,
+                              match_type: num === 50 ? 'One Day' : num === 20 ? 'T20' : num > 0 ? `${num}-Overs` : scheduleForm.match_type
+                            });
+                          }}
+                        />
+                      </View>
+                      <View style={{ flex: 1.4 }}>
+                        <Text style={[styles.formFieldLabel, { fontSize: 11, color: '#64748b' }]}>Format Designation</Text>
+                        <TextInput
+                          style={styles.formTextInputCompact}
+                          placeholder="e.g. T20, One Day, 10-Overs..."
+                          placeholderTextColor="#94a3b8"
+                          value={scheduleForm.match_type}
+                          onChangeText={(val) => setScheduleForm({ ...scheduleForm, match_type: val })}
+                        />
+                      </View>
+                    </View>
+
+                    {/* Quick Format Buttons */}
+                    <View style={[styles.quickPresetRow, { marginTop: 8 }]}>
+                      {[
+                        { label: 'T20 (20 Overs)', overs: 20, type: 'T20' },
+                        { label: 'One Day (50 Overs)', overs: 50, type: 'One Day' },
+                        { label: '10-Overs Knockout', overs: 10, type: '10-Overs' },
+                        { label: '15-Overs League', overs: 15, type: '15-Overs' }
+                      ].map((fmt) => (
+                        <TouchableOpacity
+                          key={fmt.type}
+                          style={[styles.quickDateChip, scheduleForm.overs === fmt.overs && styles.quickDateChipActive]}
+                          onPress={() => setScheduleForm({ ...scheduleForm, overs: fmt.overs, match_type: fmt.type })}
+                        >
+                          <Text style={[styles.quickDateChipText, scheduleForm.overs === fmt.overs && styles.quickDateChipTextActive]}>
+                            {fmt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Accredited Match Officials (Scorer & Umpires) */}
+                  <View style={[styles.colFormCard, { marginTop: 14 }]}>
+                    <Text style={styles.formFieldLabel}>Accredited Digital Scorer *</Text>
                     {(() => {
-                      const selectedB = availableTeams.find(tm => tm.id === scheduleForm.team_b_id) || availableTeams[1];
+                      const scorerList = officialsList.filter((o: any) => {
+                        const role = (o.role || o.type || o.grade || '').toUpperCase();
+                        return role.includes('SCOR') || o.scorerId || o.id?.toString().startsWith('SCR');
+                      });
+                      const displayScorers = scorerList.length > 0 ? scorerList : [
+                        { id: 'SCR-101', name: 'Thiru. K. Sundararajan', scorerName: 'Thiru. K. Sundararajan', grade: 'BCCI Level 1 Scorer', phone: '+91 98421 11234', taluk: 'Virudhunagar' },
+                        { id: 'SCR-102', name: 'Thiru. M. Venkatesh', scorerName: 'Thiru. M. Venkatesh', grade: 'District Senior Panel', phone: '+91 94432 55678', taluk: 'Sivakasi' },
+                        { id: 'SCR-103', name: 'Thiru. S. Pitchaimuthu', scorerName: 'Thiru. S. Pitchaimuthu', grade: 'Collegiate League Scorer', phone: '+91 81223 44890', taluk: 'Rajapalayam' }
+                      ];
+                      const sel = displayScorers.find((s: any) => s.id === scheduleForm.assigned_scorer_id) || displayScorers[0];
+
                       return (
                         <View style={styles.dropdownContainer}>
                           <TouchableOpacity
-                            style={[styles.dropdownSelectBox, teamBDropdownOpen && styles.dropdownSelectBoxActive]}
-                            onPress={() => {
-                              setTeamBDropdownOpen(!teamBDropdownOpen);
-                              setTeamADropdownOpen(false);
-                            }}
+                            style={[styles.dropdownSelectBoxCompact, scorerDropdownOpen && styles.dropdownSelectBoxActive]}
+                            onPress={() => setScorerDropdownOpen(!scorerDropdownOpen)}
                             activeOpacity={0.8}
                           >
                             <View style={styles.dropdownSelectedLeft}>
-                              <View style={[styles.teamCrestMini, { backgroundColor: '#d97706' }]}>
-                                <Text style={{ fontSize: 13 }}>🏏</Text>
+                              <View style={[styles.teamCrestMini, { backgroundColor: '#7c3aed' }]}>
+                                <Text style={{ fontSize: 13 }}>👤</Text>
                               </View>
                               <View style={{ flex: 1 }}>
                                 <Text style={styles.dropdownSelectedTitle} numberOfLines={1}>
-                                  {selectedB?.name || 'Select Team B'}
+                                  {sel?.scorerName || sel?.name || sel?.id}
                                 </Text>
                                 <Text style={styles.dropdownSelectedSub} numberOfLines={1}>
-                                  ID: {selectedB?.id} • {selectedB?.taluk} • Coach: {selectedB?.coachName}
+                                  {sel?.grade || 'District Scorer'} • {sel?.taluk || 'Virudhunagar'} • 📞 {sel?.phone || '—'}
                                 </Text>
                               </View>
                             </View>
-                            <Text style={styles.dropdownArrow}>{teamBDropdownOpen ? '▲' : '▼'}</Text>
+                            <Text style={styles.dropdownArrow}>{scorerDropdownOpen ? '▲' : '▼'}</Text>
                           </TouchableOpacity>
 
-                          {/* Open Dropdown Table */}
-                          {teamBDropdownOpen && (
-                            <View style={styles.dropdownTablePanel}>
-                              <View style={styles.dropdownSearchWrap}>
-                                <Text style={{ fontSize: 13, marginRight: 6 }}>🔍</Text>
-                                <TextInput
-                                  style={styles.dropdownSearchInput}
-                                  placeholder="Search registered clubs..."
-                                  placeholderTextColor="#94a3b8"
-                                  value={teamSearchQueryB}
-                                  onChangeText={setTeamSearchQueryB}
-                                />
-                                {teamSearchQueryB ? (
-                                  <TouchableOpacity onPress={() => setTeamSearchQueryB('')}>
-                                    <Text style={{ color: '#94a3b8', fontSize: 13 }}>✕</Text>
-                                  </TouchableOpacity>
-                                ) : null}
-                              </View>
-
-                              <ScrollView style={styles.dropdownTableScroll} nestedScrollEnabled={true}>
-                                {availableTeams
-                                  .filter(tm => !teamSearchQueryB || tm.name.toLowerCase().includes(teamSearchQueryB.toLowerCase()) || tm.taluk.toLowerCase().includes(teamSearchQueryB.toLowerCase()))
-                                  .map(tm => {
-                                    const isChosen = scheduleForm.team_b_id === tm.id;
-                                    const isTeamA = scheduleForm.team_a_id === tm.id;
-                                    return (
-                                      <TouchableOpacity
-                                        key={`dd-b-${tm.id}`}
-                                        style={[
-                                          styles.dropdownTableRow,
-                                          isChosen && styles.dropdownTableRowActive,
-                                          isTeamA && { opacity: 0.45, backgroundColor: '#f1f5f9' }
-                                        ]}
-                                        onPress={() => {
-                                          if (isTeamA) {
-                                            setScheduleFormError('Team B cannot be the same as Team A.');
-                                          } else {
-                                            setScheduleFormError(null);
-                                            setScheduleForm({ ...scheduleForm, team_b_id: tm.id });
-                                            setTeamBDropdownOpen(false);
-                                          }
-                                        }}
-                                        activeOpacity={0.8}
-                                      >
-                                        <View style={styles.dropdownTableRowLeft}>
-                                          <Text style={{ fontSize: 14 }}>🏏</Text>
-                                          <View style={{ flex: 1 }}>
-                                            <Text style={[styles.dropdownRowTitle, isChosen && styles.dropdownRowTitleActive]}>
-                                              {tm.name} {isTeamA ? '(Already Team A)' : ''}
-                                            </Text>
-                                            <Text style={styles.dropdownRowMeta}>
-                                              {tm.id} • {tm.taluk} Taluk • Coach: {tm.coachName}
-                                            </Text>
-                                            {scheduleForm.tournament_name ? (
-                                              <View style={{ marginTop: 2, alignSelf: 'flex-start', backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
-                                                <Text style={{ color: '#92400e', fontSize: 10, fontWeight: '700' }}>
-                                                  🏆 Registered for {scheduleForm.tournament_name}
-                                                </Text>
-                                              </View>
-                                            ) : null}
-                                          </View>
+                          {scorerDropdownOpen && (
+                            <View style={styles.dropdownTablePanelCompact}>
+                              <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
+                                {displayScorers.map((sc: any) => {
+                                  const isScActive = scheduleForm.assigned_scorer_id === sc.id;
+                                  return (
+                                    <TouchableOpacity
+                                      key={sc.id}
+                                      style={[styles.dropdownTableRowCompact, isScActive && styles.dropdownTableRowActive]}
+                                      onPress={() => {
+                                        setScheduleForm({ ...scheduleForm, assigned_scorer_id: sc.id });
+                                        setScorerDropdownOpen(false);
+                                      }}
+                                      activeOpacity={0.8}
+                                    >
+                                      <View style={styles.dropdownTableRowLeft}>
+                                        <Text style={{ fontSize: 14 }}>👤</Text>
+                                        <View>
+                                          <Text style={[styles.dropdownRowTitle, isScActive && styles.dropdownRowTitleActive]}>
+                                            {sc.scorerName || sc.name || sc.id}
+                                          </Text>
+                                          <Text style={styles.dropdownRowMeta}>
+                                            {sc.id} • {sc.grade || 'District Scorer'} • {sc.taluk || 'Virudhunagar'}
+                                          </Text>
                                         </View>
-                                        {isChosen && <Text style={styles.dropdownRowCheck}>✓</Text>}
-                                      </TouchableOpacity>
-                                    );
-                                  })}
+                                      </View>
+                                      {isScActive && <Text style={styles.dropdownRowCheck}>✓</Text>}
+                                    </TouchableOpacity>
+                                  );
+                                })}
                               </ScrollView>
                             </View>
                           )}
                         </View>
                       );
                     })()}
-                  </View>
-                </View>
-              </View>
 
-              {/* ───────────────────────────────────────────────────────
-                  3. VENUE & WEATHER / RAIN RESCHEDULE CONTROLS
-                  ─────────────────────────────────────────────────────── */}
-              <View style={styles.modalFormSection}>
-                <View style={styles.sectionHeaderRow}>
-                  <Text style={styles.formSectionHeading}>3. Venue & Logistics (Weather / Rain Reschedule Controls)</Text>
-                  <Text style={styles.sectionRequiredTag}>* REAL-TIME DISPATCH</Text>
-                </View>
-
-                {/* Venue Dropdown Table */}
-                <Text style={styles.formLabel}>Official Stadium / Venue *</Text>
-                {(() => {
-                  const selectedVenue = availableVenues.find(v => v.name === scheduleForm.venue) || availableVenues[0];
-                  return (
-                    <View style={styles.dropdownContainer}>
-                      <TouchableOpacity
-                        style={[styles.dropdownSelectBox, venueDropdownOpen && styles.dropdownSelectBoxActive]}
-                        onPress={() => setVenueDropdownOpen(!venueDropdownOpen)}
-                        activeOpacity={0.8}
-                      >
-                        <View style={styles.dropdownSelectedLeft}>
-                          <View style={[styles.teamCrestMini, { backgroundColor: '#059669' }]}>
-                            <Text style={{ fontSize: 13 }}>📍</Text>
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.dropdownSelectedTitle} numberOfLines={1}>
-                              {selectedVenue?.name || scheduleForm.venue}
-                            </Text>
-                            <Text style={styles.dropdownSelectedSub} numberOfLines={1}>
-                              {selectedVenue?.location} • {selectedVenue?.capacity}
-                            </Text>
-                          </View>
+                    {/* Appointed Umpires Display */}
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={[styles.formFieldLabel, { fontSize: 11.5, color: '#475569' }]}>Appointed Match Umpires</Text>
+                      <View style={styles.umpiresCardRowCompact}>
+                        <View style={styles.umpireCardCompact}>
+                          <Text style={styles.umpireRoleTitleCompact}>⚖️ Lead Field Umpire</Text>
+                          <Text style={styles.umpireNameTextCompact}>Thiru. P. Subramaniam</Text>
+                          <Text style={styles.umpireMetaTextCompact}>BCCI Certified Panelist • Virudhunagar</Text>
                         </View>
-                        <Text style={styles.dropdownArrow}>{venueDropdownOpen ? '▲' : '▼'}</Text>
-                      </TouchableOpacity>
-
-                      {venueDropdownOpen && (
-                        <View style={styles.dropdownTablePanel}>
-                          <ScrollView style={styles.dropdownTableScroll} nestedScrollEnabled={true}>
-                            {availableVenues.map(v => {
-                              const isChosen = scheduleForm.venue === v.name;
-                              return (
-                                <TouchableOpacity
-                                  key={v.id}
-                                  style={[styles.dropdownTableRow, isChosen && styles.dropdownTableRowActive]}
-                                  onPress={() => {
-                                    setScheduleForm({ ...scheduleForm, venue: v.name });
-                                    setVenueDropdownOpen(false);
-                                  }}
-                                  activeOpacity={0.8}
-                                >
-                                  <View style={styles.dropdownTableRowLeft}>
-                                    <Text style={{ fontSize: 14 }}>📍</Text>
-                                    <View style={{ flex: 1 }}>
-                                      <Text style={[styles.dropdownRowTitle, isChosen && styles.dropdownRowTitleActive]}>
-                                        {v.name}
-                                      </Text>
-                                      <Text style={styles.dropdownRowMeta}>
-                                        {v.location} • {v.capacity}
-                                      </Text>
-                                    </View>
-                                  </View>
-                                  {isChosen && <Text style={styles.dropdownRowCheck}>✓</Text>}
-                                </TouchableOpacity>
-                              );
-                            })}
-                          </ScrollView>
+                        <View style={styles.umpireCardCompact}>
+                          <Text style={styles.umpireRoleTitleCompact}>⚖️ Square Leg Umpire</Text>
+                          <Text style={styles.umpireNameTextCompact}>Thiru. A. Karthikeyan</Text>
+                          <Text style={styles.umpireMetaTextCompact}>TNCA Senior Panel • Sivakasi</Text>
                         </View>
-                      )}
+                      </View>
                     </View>
-                  );
-                })()}
-
-                {/* Dynamic Custom Stadium / Ground Location Input */}
-                <View style={{ marginTop: 8 }}>
-                  <Text style={[styles.formLabel, { fontSize: 11.5, color: '#64748b' }]}>
-                    ✏️ Type / Edit Stadium or Ground Location Name (Dynamic Location)
-                  </Text>
-                  <TextInput
-                    style={styles.formTextInput}
-                    placeholder="Type custom stadium name or ground location..."
-                    placeholderTextColor="#94a3b8"
-                    value={scheduleForm.venue}
-                    onChangeText={(val) => setScheduleForm({ ...scheduleForm, venue: val })}
-                  />
-                </View>
-
-                {/* Google Maps Link for Selected Venue */}
-                {scheduleForm.venue ? (
-                  <TouchableOpacity
-                    style={styles.venueMapLinkBtn}
-                    onPress={() => {
-                      const query = encodeURIComponent(`${scheduleForm.venue} Virudhunagar Tamil Nadu`);
-                      const url = `https://www.google.com/maps/search/?api=1&query=${query}`;
-                      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                        (window as any).open(url, '_blank');
-                      } else {
-                        Alert.alert('Google Maps Navigation', `Open Google Maps navigation for:\n${scheduleForm.venue}?`, [
-                          { text: 'Cancel', style: 'cancel' },
-                          { text: 'Open Maps ↗', onPress: () => {} }
-                        ]);
-                      }
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <View style={styles.venueMapIconBadge}>
-                      <Text style={{ fontSize: 16 }}>📍</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.venueMapLinkTitle}>Open Ground on Google Maps ↗</Text>
-                      <Text style={styles.venueMapLinkSub}>Direct turn-by-turn GPS navigation for "{scheduleForm.venue}"</Text>
-                    </View>
-                    <View style={styles.venueMapOpenTag}>
-                      <Text style={styles.venueMapOpenTagText}>GPS LIVE ↗</Text>
-                    </View>
-                  </TouchableOpacity>
-                ) : null}
-
-                {/* Match Date & Changeable Match Time */}
-                <View style={[styles.formRowInputs, { marginTop: 14 }]}>
-                  <View style={styles.formInputCol}>
-                    <Text style={styles.formLabel}>Match Date (YYYY-MM-DD) *</Text>
-                    <TextInput
-                      style={styles.formTextInput}
-                      placeholder="e.g. 2026-10-18"
-                      placeholderTextColor="#94a3b8"
-                      value={scheduleForm.match_date}
-                      onChangeText={(val) => setScheduleForm({ ...scheduleForm, match_date: val })}
-                    />
                   </View>
 
-                  <View style={styles.formInputCol}>
-                    <Text style={styles.formLabel}>Match Start Time * {editingMatch ? '(Update for Delay / Rain Reschedule)' : ''}</Text>
+                  {/* Optional Match Notes & Preferences */}
+                  <View style={[styles.colFormCard, { marginTop: 14 }]}>
+                    <Text style={styles.formFieldLabel}>Match Notes & Ground Logistics (Optional)</Text>
                     <TextInput
-                      style={styles.formTextInput}
-                      placeholder="e.g. 09:30 AM"
+                      style={styles.formTextAreaCompact}
+                      placeholder="e.g. Pitch report: Dry batting wicket, reserve day scheduled in case of inclement weather..."
                       placeholderTextColor="#94a3b8"
-                      value={scheduleForm.match_time}
-                      onChangeText={(val) => setScheduleForm({ ...scheduleForm, match_time: val })}
+                      multiline={true}
+                      numberOfLines={2}
+                      value={scheduleForm.match_notes}
+                      onChangeText={(val) => setScheduleForm({ ...scheduleForm, match_notes: val })}
                     />
-                  </View>
-                </View>
 
-                {/* Quick Weather / Rain Delay Adjustments — ONLY shown in Reschedule/Edit mode */}
-                {editingMatch && (
-                  <View style={styles.weatherQuickRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                      <Text style={{ fontSize: 13, color: '#dc2626', fontWeight: '800' }}>🌧 Weather / Rain Delay Presets</Text>
-                      <View style={{ backgroundColor: '#fef2f2', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: '#fca5a5' }}>
-                        <Text style={{ color: '#dc2626', fontSize: 10, fontWeight: '800' }}>RESCHEDULE MODE</Text>
+                    {/* Dispatch Alert Preference */}
+                    <TouchableOpacity
+                      style={styles.toggleRow}
+                      onPress={() => setNotifyTeamsOnTimeChange(!notifyTeamsOnTimeChange)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.toggleCheckbox, notifyTeamsOnTimeChange && styles.toggleCheckboxActive]}>
+                        {notifyTeamsOnTimeChange && <Text style={styles.toggleCheckText}>✓</Text>}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.toggleTitle}>Automated Club Dispatch</Text>
+                        <Text style={styles.toggleSubtitle}>Broadcast automated fixture alerts to competing clubs & officials upon confirmation.</Text>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* ───────────────────────────────────────────────────────
+                      COMPACT MATCH SUMMARY CARD BEFORE SUBMIT (Requirement 2 & 3)
+                      ─────────────────────────────────────────────────────── */}
+                  <View style={styles.matchSummaryCard}>
+                    <View style={styles.summaryCardHeader}>
+                      <Text style={styles.summaryCardHeaderTitle}>📋 Fixture Preview & Pre-Dispatch Summary</Text>
+                      <View style={styles.summaryCardBadge}>
+                        <Text style={styles.summaryCardBadgeText}>{scheduleForm.match_type || 'T20'} • {scheduleForm.overs} OVERS</Text>
                       </View>
                     </View>
 
-                    {/* Dynamic Reschedule Boxes */}
-                    <View style={styles.dynamicRescheduleGrid}>
-                      <TouchableOpacity
-                        style={styles.dynamicRescheduleBox}
-                        onPress={() => applyDynamicTimeDelay(30)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.dynamicRescheduleBoxTitle}>🌧 +30m Delay</Text>
-                        <Text style={styles.dynamicRescheduleBoxSub}>Add 30 mins to start</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.dynamicRescheduleBox}
-                        onPress={() => applyDynamicTimeDelay(60)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.dynamicRescheduleBoxTitle}>🌧 +1 Hour Delay</Text>
-                        <Text style={styles.dynamicRescheduleBoxSub}>Add 1 hour to start</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.dynamicRescheduleBox}
-                        onPress={() => applyDynamicTimeDelay(120)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.dynamicRescheduleBoxTitle}>🌧 +2 Hours Delay</Text>
-                        <Text style={styles.dynamicRescheduleBoxSub}>Add 2 hours to start</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.dynamicRescheduleBox}
-                        onPress={() => setScheduleForm({ ...scheduleForm, match_time: '02:00 PM' })}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.dynamicRescheduleBoxTitle}>☀️ Afternoon Shift</Text>
-                        <Text style={styles.dynamicRescheduleBoxSub}>Set to 02:00 PM</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.dynamicRescheduleBox}
-                        onPress={() => setScheduleForm({ ...scheduleForm, match_time: '06:00 PM' })}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.dynamicRescheduleBoxTitle}>💡 Floodlights Night</Text>
-                        <Text style={styles.dynamicRescheduleBoxSub}>Set to 06:00 PM</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-              </View>
-
-              {/* ───────────────────────────────────────────────────────
-                  4. MATCH FORMAT & OVERS LIMIT (TYPED INPUT ONLY)
-                  ─────────────────────────────────────────────────────── */}
-              <View style={styles.modalFormSection}>
-                <View style={styles.sectionHeaderRow}>
-                  <Text style={styles.formSectionHeading}>4. Match Format & Overs Limit</Text>
-                  <Text style={styles.sectionRequiredTag}>* TYPED INPUT ONLY</Text>
-                </View>
-                <Text style={styles.sectionSubDesc}>
-                  Type the exact overs limit and championship match format for this fixture:
-                </Text>
-
-                <View style={styles.formRowInputs}>
-                  <View style={styles.formInputCol}>
-                    <Text style={styles.formLabel}>Exact Overs Limit (Type number) *</Text>
-                    <View style={styles.oversTypedInputWrap}>
-                      <Text style={{ fontSize: 16, marginRight: 8 }}>⚡</Text>
-                      <TextInput
-                        style={styles.oversNumericInput}
-                        placeholder="Type overs limit (e.g. 20, 50, 15, 10)..."
-                        placeholderTextColor="#94a3b8"
-                        keyboardType="numeric"
-                        value={String(scheduleForm.overs || '')}
-                        onChangeText={(val) => {
-                          const num = parseInt(val, 10) || 0;
-                          setScheduleForm({
-                            ...scheduleForm,
-                            overs: num,
-                            match_type: num === 50 ? 'One Day' : num === 20 ? 'T20' : num > 0 ? `${num}-Overs` : scheduleForm.match_type
-                          });
-                        }}
-                      />
-                      <Text style={styles.oversUnitSuffix}>Overs / Side</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.formInputCol}>
-                    <Text style={styles.formLabel}>Match Format Designation *</Text>
-                    <TextInput
-                      style={styles.formTextInput}
-                      placeholder="Type format (e.g. T20, One Day, 15-Overs Knockout)..."
-                      placeholderTextColor="#94a3b8"
-                      value={scheduleForm.match_type}
-                      onChangeText={(val) => setScheduleForm({ ...scheduleForm, match_type: val })}
-                    />
-                  </View>
-                </View>
-
-                {/* Dynamic Overs Summary Pill */}
-                {scheduleForm.overs > 0 && (
-                  <View style={styles.oversTypedConfirmationBadge}>
-                    <Text style={styles.oversTypedConfirmationText}>
-                      ✅ Configured Limit: <Text style={{ fontWeight: '800', color: '#166534' }}>{scheduleForm.overs} Overs per side</Text> ({scheduleForm.match_type || 'Custom Format'})
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              {/* ───────────────────────────────────────────────────────
-                  5. MATCH OFFICIALS (SCORER & UMPIRES UI)
-                  ─────────────────────────────────────────────────────── */}
-              <View style={styles.modalFormSection}>
-                <View style={styles.sectionHeaderRow}>
-                  <Text style={styles.formSectionHeading}>5. Accredited Match Officials (Scorer & Umpires)</Text>
-                  <Text style={styles.sectionRequiredTag}>* BCCI / DISTRICT ACCREDITED</Text>
-                </View>
-
-                {/* Assigned Scorer — Dynamic Dropdown Selection */}
-                <Text style={styles.formLabel}>Official Digital Scorer (Scoring App Access) *</Text>
-                {(() => {
-                  const scorerList = officialsList.filter((o: any) => {
-                    const role = (o.role || o.type || o.grade || '').toUpperCase();
-                    return role.includes('SCOR') || o.scorerId || o.id?.toString().startsWith('SCR');
-                  });
-                  const displayScorers = scorerList.length > 0 ? scorerList : [
-                    { id: 'SCR-101', name: 'Thiru. K. Sundararajan', scorerName: 'Thiru. K. Sundararajan', grade: 'BCCI Level 1 Scorer', phone: '+91 98421 11234', taluk: 'Virudhunagar' },
-                    { id: 'SCR-102', name: 'Thiru. M. Venkatesh', scorerName: 'Thiru. M. Venkatesh', grade: 'District Senior Panel', phone: '+91 94432 55678', taluk: 'Sivakasi' },
-                    { id: 'SCR-103', name: 'Thiru. S. Pitchaimuthu', scorerName: 'Thiru. S. Pitchaimuthu', grade: 'Collegiate League Scorer', phone: '+91 81223 44890', taluk: 'Rajapalayam' },
-                    { id: 'SCR-104', name: 'Thiru. R. Arunachalam', scorerName: 'Thiru. R. Arunachalam', grade: 'TNCA Certified Scorer', phone: '+91 97866 33210', taluk: 'Aruppukottai' }
-                  ];
-                  return (
-                    <View style={styles.dropdownContainer}>
-                      <TouchableOpacity
-                        style={[styles.dropdownSelectBox, scorerDropdownOpen && styles.dropdownSelectBoxActive]}
-                        onPress={() => setScorerDropdownOpen(!scorerDropdownOpen)}
-                        activeOpacity={0.8}
-                      >
-                        <View style={styles.dropdownSelectedLeft}>
-                          <View style={[styles.teamCrestMini, { backgroundColor: '#7c3aed' }]}>
-                            <Text style={{ fontSize: 13 }}>👤</Text>
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            {(() => {
-                              const sel = displayScorers.find((s: any) => s.id === scheduleForm.assigned_scorer_id);
-                              return (
-                                <>
-                                  <Text style={styles.dropdownSelectedTitle} numberOfLines={1}>
-                                    {sel?.scorerName || sel?.name || sel?.id || 'Select Official Scorer'}
-                                  </Text>
-                                  <Text style={styles.dropdownSelectedSub} numberOfLines={1}>
-                                    {sel ? `${sel.grade || 'District Scorer'} • ${sel.taluk || 'Virudhunagar'} • 📞 ${sel.phone || '—'}` : 'Choose an accredited digital scorer'}
-                                  </Text>
-                                </>
-                              );
-                            })()}
-                          </View>
+                    {/* Competing Teams Matchup */}
+                    <View style={styles.summaryMatchupRow}>
+                      <View style={styles.summaryTeamBox}>
+                        <View style={[styles.teamCrestMini, { backgroundColor: '#1e3a8a' }]}>
+                          <Text style={{ fontSize: 13 }}>🏏</Text>
                         </View>
-                        <Text style={styles.dropdownArrow}>{scorerDropdownOpen ? '▲' : '▼'}</Text>
-                      </TouchableOpacity>
-
-                      {scorerDropdownOpen && (
-                        <View style={styles.dropdownTablePanel}>
-                          <ScrollView style={styles.dropdownTableScroll} nestedScrollEnabled={true}>
-                            {displayScorers.map((sc: any) => {
-                              const isScActive = scheduleForm.assigned_scorer_id === sc.id;
-                              return (
-                                <TouchableOpacity
-                                  key={sc.id}
-                                  style={[styles.dropdownTableRow, isScActive && styles.dropdownTableRowActive]}
-                                  onPress={() => {
-                                    setScheduleForm({ ...scheduleForm, assigned_scorer_id: sc.id });
-                                    setScorerDropdownOpen(false);
-                                  }}
-                                  activeOpacity={0.8}
-                                >
-                                  <View style={styles.dropdownTableRowLeft}>
-                                    <Text style={{ fontSize: 16 }}>👤</Text>
-                                    <View>
-                                      <Text style={[styles.dropdownRowTitle, isScActive && styles.dropdownRowTitleActive]}>
-                                        {sc.scorerName || sc.name || sc.id}
-                                      </Text>
-                                      <Text style={styles.dropdownRowMeta}>
-                                        {sc.id} • {sc.grade || 'District Scorer'} • {sc.taluk || 'Virudhunagar'}
-                                      </Text>
-                                      {sc.phone && (
-                                        <Text style={[styles.dropdownRowMeta, { color: '#4ade80' }]}>📞 {sc.phone}</Text>
-                                      )}
-                                    </View>
-                                  </View>
-                                  {isScActive && <Text style={styles.dropdownRowCheck}>✓</Text>}
-                                </TouchableOpacity>
-                              );
-                            })}
-                          </ScrollView>
-                        </View>
-                      )}
-                    </View>
-                  );
-                })()}
-
-                {/* Match Umpires — Dynamic Selection from Registered Umpires */}
-                <View style={{ marginTop: 16 }}>
-                  <Text style={styles.formLabel}>Appointed Match Umpires *</Text>
-                  {(() => {
-                    const umpireList = umpires.filter((u: any) => u.status === 'Approved' || u.status === 'APPROVED');
-                    const displayUmpires = umpireList.length > 0 ? umpireList : [
-                      { umpireId: 'UMP-101', umpireName: 'Thiru. P. Subramaniam', qualification: 'BCCI Certified District Panelist', district: 'Virudhunagar', phone: '+91 94441 22345', specialization: 'On-field Umpire' },
-                      { umpireId: 'UMP-102', umpireName: 'Thiru. A. Karthikeyan', qualification: 'TNCA Senior Panel Umpire', district: 'Sivakasi', phone: '+91 98432 66789', specialization: 'Square Leg Umpire' },
-                      { umpireId: 'UMP-103', umpireName: 'Thiru. V. Murugan', qualification: 'District Certified Umpire', district: 'Rajapalayam', phone: '+91 81234 55670', specialization: 'On-field / TV' }
-                    ];
-                    return (
-                      <View style={styles.umpiresCardRow}>
-                        {displayUmpires.slice(0, 2).map((u: any, idx: number) => (
-                          <View key={u.umpireId || idx} style={styles.umpireCard}>
-                            <Text style={styles.umpireRoleTitle}>
-                              ⚖️ {idx === 0 ? 'Lead Field Umpire' : 'Square Leg Umpire'} (Umpire {idx + 1})
-                            </Text>
-                            <Text style={styles.umpireNameText}>{u.umpireName}</Text>
-                            <Text style={styles.umpireMetaText}>{u.qualification}</Text>
-                            <Text style={[styles.umpireMetaText, { color: '#4ade80', marginTop: 2 }]}>📞 {u.phone || '—'} • {u.district}</Text>
-                          </View>
-                        ))}
-                        {displayUmpires.length < 2 && (
-                          <View style={styles.umpireCard}>
-                            <Text style={styles.umpireRoleTitle}>⚖️ Square Leg Umpire (Umpire 2)</Text>
-                            <Text style={styles.umpireNameText}>To be assigned by Apex Board</Text>
-                            <Text style={styles.umpireMetaText}>Authorized federation match arbiter</Text>
-                          </View>
-                        )}
+                        <Text style={styles.summaryTeamName} numberOfLines={1}>
+                          {availableTeams.find(t => t.id === scheduleForm.team_a_id)?.name || 'Home Club'}
+                        </Text>
+                        <Text style={styles.summaryTeamRole}>HOME</Text>
                       </View>
-                    );
-                  })()}
+
+                      <View style={styles.summaryVsBox}>
+                        <Text style={styles.summaryVsText}>VS</Text>
+                      </View>
+
+                      <View style={styles.summaryTeamBox}>
+                        <View style={[styles.teamCrestMini, { backgroundColor: '#d97706' }]}>
+                          <Text style={{ fontSize: 13 }}>🏏</Text>
+                        </View>
+                        <Text style={styles.summaryTeamName} numberOfLines={1}>
+                          {availableTeams.find(t => t.id === scheduleForm.team_b_id)?.name || 'Away Club'}
+                        </Text>
+                        <Text style={styles.summaryTeamRole}>AWAY</Text>
+                      </View>
+                    </View>
+
+                    {/* Logistics Breakdown Table */}
+                    <View style={styles.summaryDetailsGrid}>
+                      <View style={styles.summaryDetailItem}>
+                        <Text style={styles.summaryDetailKey}>🏆 Tournament</Text>
+                        <Text style={styles.summaryDetailVal} numberOfLines={1}>{scheduleForm.tournament_name || 'Virudhunagar League'}</Text>
+                      </View>
+                      <View style={styles.summaryDetailItem}>
+                        <Text style={styles.summaryDetailKey}>📅 Date & Time</Text>
+                        <Text style={styles.summaryDetailVal}>{scheduleForm.match_date} • {scheduleForm.match_time}</Text>
+                      </View>
+                      <View style={styles.summaryDetailItem}>
+                        <Text style={styles.summaryDetailKey}>📍 Stadium</Text>
+                        <Text style={styles.summaryDetailVal} numberOfLines={1}>{scheduleForm.venue || 'District Stadium'}</Text>
+                      </View>
+                      <View style={styles.summaryDetailItem}>
+                        <Text style={styles.summaryDetailKey}>👤 Digital Scorer</Text>
+                        <Text style={styles.summaryDetailVal} numberOfLines={1}>
+                          {officialsList.find(o => o.id === scheduleForm.assigned_scorer_id)?.name || scheduleForm.assigned_scorer_id || 'K. Murugan'}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
                 </View>
-              </View>
+              )}
             </ScrollView>
 
-            {/* Modal Footer with Dynamic Responsive Submit Button */}
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => {
-                  setScheduleModalOpen(false);
-                  setScheduleModalMinimized(false);
-                }}
-                disabled={isSubmittingSchedule}
-              >
-                <Text style={styles.modalCancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalDynamicSubmitBtn, isSubmittingSchedule && { opacity: 0.6 }]}
-                onPress={handleSaveSchedule}
-                disabled={isSubmittingSchedule}
-                activeOpacity={0.85}
-              >
-                {isSubmittingSchedule ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <ActivityIndicator size="small" color="#ffffff" />
-                    <Text style={styles.modalDynamicSubmitBtnText}>Broadcasting Schedule...</Text>
-                  </View>
+            {/* ───────────────────────────────────────────────────────
+                COMPACT, RESPONSIVE ACTION BAR (Requirement 4)
+                ─────────────────────────────────────────────────────── */}
+            <View style={styles.modalFooterCompact}>
+              <View style={styles.modalFooterLeft}>
+                {scheduleStep === 1 ? (
+                  <TouchableOpacity
+                    style={styles.btnSecondaryCompact}
+                    onPress={handleCloseScheduleModal}
+                    disabled={isSubmittingSchedule}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={styles.btnSecondaryCompactText}>Cancel</Text>
+                  </TouchableOpacity>
                 ) : (
-                  <Text style={styles.modalDynamicSubmitBtnText}>
-                    {editingMatch ? '💾 Save Reschedule & Dispatch Alerts' : '➕ Confirm & Schedule Championship Match'}
-                  </Text>
+                  <TouchableOpacity
+                    style={styles.btnSecondaryCompact}
+                    onPress={() => setScheduleStep((prev) => (prev === 3 ? 2 : 1))}
+                    disabled={isSubmittingSchedule}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={styles.btnSecondaryCompactText}>← Back</Text>
+                  </TouchableOpacity>
                 )}
-              </TouchableOpacity>
+              </View>
+
+              <View style={styles.modalFooterRight}>
+                {scheduleStep === 1 && (
+                  <TouchableOpacity
+                    style={styles.btnPrimaryGreenCompact}
+                    onPress={handleProceedToStep2}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.btnPrimaryGreenCompactText}>Continue to Teams & Venue →</Text>
+                  </TouchableOpacity>
+                )}
+
+                {scheduleStep === 2 && (
+                  <TouchableOpacity
+                    style={styles.btnPrimaryGreenCompact}
+                    onPress={handleProceedToStep3}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.btnPrimaryGreenCompactText}>Continue to Match Details →</Text>
+                  </TouchableOpacity>
+                )}
+
+                {scheduleStep === 3 && (
+                  <TouchableOpacity
+                    style={[styles.btnPrimaryGreenCompact, isSubmittingSchedule && { opacity: 0.6 }]}
+                    onPress={handleSaveSchedule}
+                    disabled={isSubmittingSchedule}
+                    activeOpacity={0.85}
+                  >
+                    {isSubmittingSchedule ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <ActivityIndicator size="small" color="#ffffff" />
+                        <Text style={styles.btnPrimaryGreenCompactText}>Broadcasting Schedule...</Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.btnPrimaryGreenCompactText}>
+                        {editingMatch ? '💾 Save Reschedule & Dispatch Alerts' : '➕ Confirm & Schedule Championship Match'}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           </View>
         </View>
@@ -7975,6 +8514,703 @@ const styles: any = StyleSheet.create({
     color: '#b45309',
     marginTop: 2,
     lineHeight: 16
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // MODERN 3-STEP MATCH SCHEDULING INTERFACE STYLES (Requirements 1, 2, 4)
+  // ─────────────────────────────────────────────────────────────
+  scheduleModalDialog: {
+    maxWidth: 820,
+    maxHeight: '92%',
+    height: '90%',
+    display: 'flex',
+    flexDirection: 'column'
+  },
+  scheduleModalBodyScroll: {
+    flex: 1,
+    paddingHorizontal: 22,
+    paddingVertical: 14
+  },
+  formErrorBoxCompact: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12
+  },
+
+  // 3-Step Guided Progress Indicator (Requirement 2)
+  stepProgressBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0'
+  },
+  stepItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    borderRadius: 8
+  },
+  stepItemActive: {},
+  stepItemDone: {},
+  stepCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1'
+  },
+  stepCircleActive: {
+    backgroundColor: '#0f172a',
+    borderColor: '#0f172a'
+  },
+  stepCircleDone: {
+    backgroundColor: '#16a34a',
+    borderColor: '#16a34a'
+  },
+  stepCircleText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#64748b'
+  },
+  stepCircleTextActive: {
+    color: '#ffffff'
+  },
+  stepTextWrap: {},
+  stepNumberLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#94a3b8',
+    letterSpacing: 0.5
+  },
+  stepNumberLabelActive: {
+    color: '#0f172a'
+  },
+  stepTitleLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b'
+  },
+  stepTitleLabelActive: {
+    color: '#0f172a',
+    fontWeight: '800'
+  },
+  stepConnectorLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: '#e2e8f0',
+    marginHorizontal: 8
+  },
+  stepConnectorLineActive: {
+    backgroundColor: '#16a34a'
+  },
+
+  // Step Section Card
+  stepSectionContainer: {
+    paddingBottom: 16
+  },
+  stepHeaderCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 8,
+    gap: 10
+  },
+  stepHeaderCardLeft: {
+    flex: 1
+  },
+  stepHeaderTitle: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  stepHeaderSubtitle: {
+    fontSize: 11.5,
+    color: '#64748b',
+    marginTop: 2,
+    lineHeight: 16
+  },
+  stepTagPill: {
+    backgroundColor: '#e0e7ff',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3
+  },
+  stepTagPillText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#3730a3',
+    letterSpacing: 0.5
+  },
+  formFieldLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 5
+  },
+  fieldLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 5
+  },
+  fieldSubBadge: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#2563eb',
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4
+  },
+  compactSubHeading: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#334155',
+    marginBottom: 8
+  },
+
+  // Tournament Cards Grid
+  tournamentsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10
+  },
+  tournamentCard: {
+    flex: 1,
+    minWidth: 260,
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    padding: 12,
+    boxShadow: '0 1px 4px rgba(0,0,0,0.03)'
+  },
+  tournamentCardSelected: {
+    borderColor: '#16a34a',
+    backgroundColor: '#f0fdf4',
+    boxShadow: '0 4px 14px rgba(22, 163, 74, 0.12)'
+  },
+  tournamentCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8
+  },
+  tournamentCardIcon: {
+    fontSize: 18,
+    marginTop: 1
+  },
+  tournamentCardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  tournamentCardTitleActive: {
+    color: '#15803d',
+    fontWeight: '800'
+  },
+  tournamentCardSeason: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2
+  },
+  tournamentCheckBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#16a34a',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  tournamentCheckBadgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '900'
+  },
+  tournamentCardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9'
+  },
+  tournamentClubCountText: {
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '600'
+  },
+  tournamentStatusPill: {
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2
+  },
+  statusActivePill: {
+    backgroundColor: '#dcfce7'
+  },
+  statusUpcomingPill: {
+    backgroundColor: '#fef3c7'
+  },
+  tournamentStatusText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#166534'
+  },
+
+  // Tournament Assigned Box & dynamic preview
+  tournamentAssignedBox: {
+    marginTop: 12,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    borderRadius: 10,
+    padding: 12
+  },
+  tournamentAssignedTitle: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#166534'
+  },
+  eligibleTeamsPill: {
+    backgroundColor: '#dcfce7',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2.5
+  },
+  eligibleTeamsPillText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#15803d'
+  },
+  tournamentAssignedSub: {
+    fontSize: 11,
+    color: '#15803d',
+    marginTop: 3
+  },
+  teamBadgePreviewRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8
+  },
+  teamMiniChip: {
+    backgroundColor: '#ffffff',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    paddingHorizontal: 8,
+    paddingVertical: 3
+  },
+  teamMiniChipText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  inlineWarningAlert: {
+    backgroundColor: '#fffbeb',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    padding: 10,
+    marginTop: 12
+  },
+  inlineWarningAlertText: {
+    color: '#b45309',
+    fontSize: 11.5,
+    fontWeight: '600'
+  },
+
+  // Two column grid & compact cards
+  colFormCard: {
+    flex: 1,
+    minWidth: 280,
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 12
+  },
+  dropdownSelectBoxCompact: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  dropdownTablePanelCompact: {
+    marginTop: 6,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#16a34a',
+    padding: 8,
+    boxShadow: '0 8px 24px rgba(0,0,0,0.1)',
+    maxHeight: 200
+  },
+  dropdownSearchWrapCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    paddingHorizontal: 8,
+    height: 32,
+    marginBottom: 6
+  },
+  dropdownSearchInputCompact: {
+    flex: 1,
+    fontSize: 11.5,
+    color: '#0f172a'
+  },
+  dropdownTableScrollCompact: {
+    maxHeight: 150
+  },
+  dropdownTableRowCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9'
+  },
+  formTextInputCompact: {
+    height: 38,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    fontSize: 13,
+    color: '#0f172a',
+    backgroundColor: '#ffffff'
+  },
+  venueMapLinkBtnCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#ecfdf5',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#a7f3d0'
+  },
+  venueMapLinkText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#065f46'
+  },
+
+  // Quick Preset Chips
+  quickPresetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6
+  },
+  quickDateChip: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4
+  },
+  quickDateChipActive: {
+    backgroundColor: '#0f172a',
+    borderColor: '#0f172a'
+  },
+  quickDateChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569'
+  },
+  quickDateChipTextActive: {
+    color: '#ffffff'
+  },
+
+  // Weather quick row compact
+  weatherQuickRowCompact: {
+    marginTop: 10,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 8,
+    padding: 10
+  },
+  rescheduleBadgePill: {
+    backgroundColor: '#ffffff',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5
+  },
+  rescheduleBadgePillText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#dc2626'
+  },
+
+  // Umpires compact cards
+  umpiresCardRowCompact: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap'
+  },
+  umpireCardCompact: {
+    flex: 1,
+    minWidth: 200,
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 8
+  },
+  umpireRoleTitleCompact: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  umpireNameTextCompact: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#2563eb',
+    marginTop: 2
+  },
+  umpireMetaTextCompact: {
+    fontSize: 10,
+    color: '#64748b',
+    marginTop: 1
+  },
+
+  // Textarea and Toggles
+  formTextAreaCompact: {
+    minHeight: 50,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 12,
+    color: '#0f172a',
+    backgroundColor: '#ffffff',
+    textAlignVertical: 'top'
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 10
+  },
+  toggleCheckbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  toggleCheckboxActive: {
+    backgroundColor: '#16a34a',
+    borderColor: '#16a34a'
+  },
+  toggleCheckText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '900'
+  },
+  toggleTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  toggleSubtitle: {
+    fontSize: 10.5,
+    color: '#64748b'
+  },
+
+  // Compact Match Summary Card (Requirement 2 & 3)
+  matchSummaryCard: {
+    marginTop: 14,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    padding: 14,
+    boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+  },
+  summaryCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0'
+  },
+  summaryCardHeaderTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  summaryCardBadge: {
+    backgroundColor: '#e0f2fe',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2.5
+  },
+  summaryCardBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0284c7'
+  },
+  summaryMatchupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingVertical: 8,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 10
+  },
+  summaryTeamBox: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 8
+  },
+  summaryTeamName: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginTop: 4,
+    textAlign: 'center'
+  },
+  summaryTeamRole: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#64748b',
+    marginTop: 1
+  },
+  summaryVsBox: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9'
+  },
+  summaryVsText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#64748b'
+  },
+  summaryDetailsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10
+  },
+  summaryDetailItem: {
+    flex: 1,
+    minWidth: 160,
+    backgroundColor: '#ffffff',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 8
+  },
+  summaryDetailKey: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748b'
+  },
+  summaryDetailVal: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginTop: 2
+  },
+
+  // Compact Footer Action Bar (Requirement 4)
+  modalFooterCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: '#f8fafc',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0'
+  },
+  modalFooterLeft: {
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  modalFooterRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10
+  },
+  btnSecondaryCompact: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  btnSecondaryCompactText: {
+    color: '#475569',
+    fontSize: 12.5,
+    fontWeight: '700'
+  },
+  btnPrimaryGreenCompact: {
+    backgroundColor: '#16a34a',
+    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 4px 12px rgba(22, 163, 74, 0.28)',
+    elevation: 2
+  },
+  btnPrimaryGreenCompactText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.3
   },
 
   // Scorer Management Royal Violet / Indigo Card Styles
