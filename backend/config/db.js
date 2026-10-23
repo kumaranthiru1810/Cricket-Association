@@ -36,8 +36,13 @@ const UserSchema = new mongoose.Schema({
     index: true 
   },
   player_details: {
-    batting_style: { type: String, default: 'Right Hand Bat' },
-    bowling_style: { type: String, default: 'Right Arm Fast/Medium' },
+    batting_style: { type: String, default: 'Right-Handed Batsman' },
+    bowling_style: { type: String, default: 'Right-arm Fast' },
+    role: { type: String, default: 'Batsman' },
+    playing_role: { type: String, default: 'Batsman' },
+    bowling_arm: { type: String, default: '' },
+    bowling_category: { type: String, default: '' },
+    bowling_action: { type: String, default: '' },
     taluk: { type: String, default: 'Virudhunagar' },
     category: { type: String, default: 'Senior Men' },
     club_choice: { type: String, default: '' },

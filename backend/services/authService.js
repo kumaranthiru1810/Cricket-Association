@@ -1602,7 +1602,7 @@ class AuthService {
    * Register Individual Player (Module 2 in PDF Specification)
    * Player personal details, playing role, age category, contact info.
    */
-  async registerPlayer({ name, email, password, mobile, role, category, taluk, battingStyle, bowlingStyle, clubChoice }) {
+  async registerPlayer({ name, email, password, mobile, role, category, taluk, battingStyle, bowlingStyle, bowlingArm, bowlingCategory, bowlingAction, clubChoice }) {
     if (!name || !email) {
       throw { status: 400, message: 'Player name and email are required.' };
     }
@@ -1631,10 +1631,15 @@ class AuthService {
       role: 'PLAYER',
       status: 'ACTIVE',
       player_details: {
+        role: role || 'Batsman',
+        playing_role: role || 'Batsman',
         category: category || 'Senior Men',
         taluk: taluk || 'Virudhunagar',
-        batting_style: battingStyle || 'Right Hand Bat',
-        bowling_style: bowlingStyle || 'Right Arm Fast/Medium',
+        batting_style: battingStyle || 'Right-Handed Batsman',
+        bowling_style: bowlingStyle || 'Right-arm Fast',
+        bowling_arm: bowlingArm || '',
+        bowling_category: bowlingCategory || '',
+        bowling_action: bowlingAction || '',
         club_choice: clubChoice || ''
       }
     });

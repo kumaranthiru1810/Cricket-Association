@@ -31,15 +31,37 @@ const COMMON_ROLES = [
   'Captain',
   'Vice Captain',
   'Wicket Keeper',
+  'Batsman',
   'Batter',
   'Bowler',
   'All-Rounder'
 ];
 
-const PLAYER_ROLES = ['Batter', 'Bowler', 'All-Rounder', 'Wicket Keeper'];
-const AGE_CATEGORIES = ['Senior Men', "Women's Senior", 'Under-23', 'Under-19', 'Under-16', 'Under-14'];
-const BATTING_STYLES = ['Right Hand Bat', 'Left Hand Bat'];
-const BOWLING_STYLES = ['Right Arm Fast/Medium', 'Right Arm Spin', 'Left Arm Orthodox', 'Left Arm Fast'];
+const PLAYER_ROLES = ['Batsman', 'Bowler', 'All-Rounder', 'Wicket Keeper'];
+const AGE_CATEGORIES = ['Senior Men', "Women's Senior", 'Under-23', 'Under-19', 'Under-16', 'Under-14', 'Under-12'];
+const BATTING_STYLES = ['Right-Handed Batsman', 'Left-Handed Batsman'];
+const BOWLING_ARMS = ['Right-arm', 'Left-arm'];
+const BOWLING_CATEGORIES = ['Fast Bowler', 'Medium Pacer', 'Spin Bowler'];
+
+const BOWLING_ACTIONS_MAP: Record<string, Record<string, string[]>> = {
+  'Right-arm': {
+    'Fast Bowler': ['Right-Arm Fast', 'Right-Arm Fast-Medium'],
+    'Medium Pacer': ['Right-Arm Medium Pace', 'Right-Arm Medium-Fast'],
+    'Spin Bowler': ['Off Spinner (Off Break)', 'Leg Spinner (Leg Break)']
+  },
+  'Left-arm': {
+    'Fast Bowler': ['Left-Arm Fast', 'Left-Arm Fast-Medium'],
+    'Medium Pacer': ['Left-Arm Medium Pace', 'Left-Arm Medium-Fast'],
+    'Spin Bowler': ['Left-Arm Orthodox (Finger Spin)', 'Left-Arm Chinaman (Wrist Spin)']
+  }
+};
+
+const WICKET_KEEPER_SPECIALIZATIONS = [
+  'Wicket Keeper Batsman',
+  'Specialist Wicket Keeper'
+];
+
+const BOWLING_STYLES = ['Right-Arm Fast', 'Right-Arm Fast-Medium', 'Right-Arm Medium Pace', 'Right-Arm Medium-Fast', 'Off Spinner (Off Break)', 'Leg Spinner (Leg Break)', 'Left-Arm Fast', 'Left-Arm Orthodox (Finger Spin)', 'Left-Arm Chinaman (Wrist Spin)'];
 const TALUKS = ['Virudhunagar', 'Sivakasi', 'Rajapalayam', 'Srivilliputhur', 'Aruppukottai', 'Sattur', 'Watrap'];
 const TALUK_OPTIONS = [...TALUKS, 'Other'];
 const SCORER_LEVELS = ['District Certified', 'State Panel', 'Club Scorer', 'Trainee Scorer'];
@@ -163,14 +185,66 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   const [pName, setPName] = useState<string>('');
   const [pEmail, setPEmail] = useState<string>('');
   const [pMobile, setPMobile] = useState<string>('');
-  const [pRole, setPRole] = useState<string>('Batter');
+  const [pRole, setPRole] = useState<string>('Batsman');
   const [pCategory, setPCategory] = useState<string>('Senior Men');
   const [pTaluk, setPTaluk] = useState<string>('Virudhunagar');
   const [pCustomTaluk, setPCustomTaluk] = useState<string>('');
-  const [pBattingStyle, setPBattingStyle] = useState<string>('Right Hand Bat');
-  const [pBowlingStyle, setPBowlingStyle] = useState<string>('Right Arm Fast/Medium');
+  const [pBattingStyle, setPBattingStyle] = useState<string>('Right-Handed Batsman');
+  const [pBowlingArm, setPBowlingArm] = useState<string>('Right-arm');
+  const [pBowlingCategory, setPBowlingCategory] = useState<string>('Fast Bowler');
+  const [pBowlingAction, setPBowlingAction] = useState<string>('Right-Arm Fast');
+  const [pKeeperSpec, setPKeeperSpec] = useState<string>('Wicket Keeper Batsman');
   const [pClub, setPClub] = useState<string>('');
   const [pAgreed, setPAgreed] = useState<boolean>(true);
+
+  // Helper to retrieve valid bowling action options for given arm & category
+  const getBowlingActionOptions = (arm: string, category: string): string[] => {
+    const validArm = arm === 'Left-arm' ? 'Left-arm' : 'Right-arm';
+    const catMap = BOWLING_ACTIONS_MAP[validArm] || BOWLING_ACTIONS_MAP['Right-arm'];
+    return catMap[category] || catMap['Fast Bowler'] || ['Fast Bowler'];
+  };
+
+  const handleRoleChange = (newRole: string) => {
+    setPRole(newRole);
+    if (newRole === 'Batsman' || newRole === 'Batter') {
+      if (!pBattingStyle) setPBattingStyle('Right-Handed Batsman');
+    } else if (newRole === 'Bowler') {
+      const arm = pBowlingArm || 'Right-arm';
+      const cat = pBowlingCategory || 'Fast Bowler';
+      const validOpts = getBowlingActionOptions(arm, cat);
+      if (!validOpts.includes(pBowlingAction)) {
+        setPBowlingAction(validOpts[0]);
+      }
+      if (!pBattingStyle) setPBattingStyle('Right-Handed Batsman');
+    } else if (newRole === 'All-Rounder') {
+      if (!pBattingStyle) setPBattingStyle('Right-Handed Batsman');
+      const arm = pBowlingArm || 'Right-arm';
+      const cat = pBowlingCategory || 'Fast Bowler';
+      const validOpts = getBowlingActionOptions(arm, cat);
+      if (!validOpts.includes(pBowlingAction)) {
+        setPBowlingAction(validOpts[0]);
+      }
+    } else if (newRole === 'Wicket Keeper') {
+      if (!pBattingStyle) setPBattingStyle('Right-Handed Batsman');
+      if (!pKeeperSpec) setPKeeperSpec('Wicket Keeper Batsman');
+    }
+  };
+
+  const handleBowlingArmChange = (newArm: string) => {
+    setPBowlingArm(newArm);
+    const validOpts = getBowlingActionOptions(newArm, pBowlingCategory);
+    if (!validOpts.includes(pBowlingAction)) {
+      setPBowlingAction(validOpts[0]);
+    }
+  };
+
+  const handleBowlingCategoryChange = (newCat: string) => {
+    setPBowlingCategory(newCat);
+    const validOpts = getBowlingActionOptions(pBowlingArm, newCat);
+    if (!validOpts.includes(pBowlingAction)) {
+      setPBowlingAction(validOpts[0]);
+    }
+  };
 
   // 2. TEAM REGISTRATION STATE
   const [teamName, setTeamName] = useState<string>('');
@@ -458,6 +532,20 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     setStatusType('info');
 
     try {
+      const isBatsman = pRole === 'Batsman' || pRole === 'Batter';
+      const isBowler = pRole === 'Bowler';
+      const isAllRounder = pRole === 'All-Rounder';
+      const isWicketKeeper = pRole === 'Wicket Keeper';
+
+      let computedBowlingStyle = 'N/A';
+      if (isBowler || isAllRounder) {
+        computedBowlingStyle = pBowlingAction || `${pBowlingArm} ${pBowlingCategory}`;
+      } else if (isBatsman) {
+        computedBowlingStyle = 'N/A (Batsman)';
+      } else if (isWicketKeeper) {
+        computedBowlingStyle = `N/A (${pKeeperSpec})`;
+      }
+
       const resp = await ScorerApi.registerPlayer({
         name,
         email,
@@ -467,7 +555,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
         category: pCategory,
         taluk: targetTaluk,
         battingStyle: pBattingStyle,
-        bowlingStyle: pBowlingStyle,
+        bowlingStyle: computedBowlingStyle,
+        bowlingArm: (isBowler || isAllRounder) ? pBowlingArm : undefined,
+        bowlingCategory: (isBowler || isAllRounder) ? pBowlingCategory : undefined,
+        bowlingAction: (isBowler || isAllRounder) ? pBowlingAction : undefined,
         clubChoice: pClub.trim() || undefined,
         otp: otpCode.trim()
       });
@@ -961,6 +1052,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     );
   };
 
+  const isBatsman = pRole === 'Batsman' || pRole === 'Batter';
+  const isBowler = pRole === 'Bowler';
+  const isAllRounder = pRole === 'All-Rounder';
+  const isWicketKeeper = pRole === 'Wicket Keeper';
+
   return (
     <View style={[styles.container, Platform.OS === 'web' && isDesktop && ({ height: '100vh', maxHeight: '100vh', overflow: 'hidden' } as any)]}>
         {/* Sleek Minimal Corner Exit Action */}
@@ -1140,7 +1236,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       label="Playing Role"
                       value={pRole}
                       options={PLAYER_ROLES}
-                      onSelect={setPRole}
+                      onSelect={handleRoleChange}
                     />
                     <DropdownField
                       label="Taluk Jurisdiction"
@@ -1176,6 +1272,122 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       </View>
                     </View>
                   )}
+
+                  {/* Dynamic Role Specialization Columns */}
+                  {/* Case 1: Batsman */}
+                  {isBatsman && (
+                    <View style={styles.formRow}>
+                      <DropdownField
+                        label="Batting Style"
+                        value={pBattingStyle}
+                        options={BATTING_STYLES}
+                        onSelect={setPBattingStyle}
+                      />
+                      <DropdownField
+                        label="Age Category"
+                        value={pCategory}
+                        options={AGE_CATEGORIES}
+                        onSelect={setPCategory}
+                      />
+                    </View>
+                  )}
+
+                  {/* Case 2: Bowler */}
+                  {isBowler && (
+                    <>
+                      <View style={styles.formRow}>
+                        <DropdownField
+                          label="Bowling Arm"
+                          value={pBowlingArm}
+                          options={BOWLING_ARMS}
+                          onSelect={handleBowlingArmChange}
+                        />
+                        <DropdownField
+                          label="Bowling Type"
+                          value={pBowlingCategory}
+                          options={BOWLING_CATEGORIES}
+                          onSelect={handleBowlingCategoryChange}
+                        />
+                      </View>
+                      <View style={styles.formRow}>
+                        <DropdownField
+                          label="Bowling Action / Sub-Type"
+                          value={pBowlingAction}
+                          options={getBowlingActionOptions(pBowlingArm, pBowlingCategory)}
+                          onSelect={setPBowlingAction}
+                        />
+                        <DropdownField
+                          label="Batting Hand"
+                          value={pBattingStyle}
+                          options={BATTING_STYLES}
+                          onSelect={setPBattingStyle}
+                        />
+                      </View>
+                    </>
+                  )}
+
+                  {/* Case 3: All-Rounder */}
+                  {isAllRounder && (
+                    <>
+                      <View style={styles.formRow}>
+                        <DropdownField
+                          label="Batting Hand / Style"
+                          value={pBattingStyle}
+                          options={BATTING_STYLES}
+                          onSelect={setPBattingStyle}
+                        />
+                        <DropdownField
+                          label="Bowling Arm"
+                          value={pBowlingArm}
+                          options={BOWLING_ARMS}
+                          onSelect={handleBowlingArmChange}
+                        />
+                      </View>
+                      <View style={styles.formRow}>
+                        <DropdownField
+                          label="Bowling Type"
+                          value={pBowlingCategory}
+                          options={BOWLING_CATEGORIES}
+                          onSelect={handleBowlingCategoryChange}
+                        />
+                        <DropdownField
+                          label="Bowling Action / Sub-Type"
+                          value={pBowlingAction}
+                          options={getBowlingActionOptions(pBowlingArm, pBowlingCategory)}
+                          onSelect={setPBowlingAction}
+                        />
+                      </View>
+                    </>
+                  )}
+
+                  {/* Case 4: Wicket Keeper */}
+                  {isWicketKeeper && (
+                    <View style={styles.formRow}>
+                      <DropdownField
+                        label="Batting Hand / Style"
+                        value={pBattingStyle}
+                        options={BATTING_STYLES}
+                        onSelect={setPBattingStyle}
+                      />
+                      <DropdownField
+                        label="Keeper Specialization"
+                        value={pKeeperSpec}
+                        options={WICKET_KEEPER_SPECIALIZATIONS}
+                        onSelect={setPKeeperSpec}
+                      />
+                    </View>
+                  )}
+
+                  {/* Dynamic Cricketing Profile Summary Pill */}
+                  <View style={styles.cricketSummaryBadge}>
+                    <Text style={styles.cricketSummaryText}>
+                      🏏 <Text style={{ fontWeight: '800', color: '#b45309' }}>Role Specification:</Text>{' '}
+                      {isBatsman && `${pBattingStyle} • ${pCategory}`}
+                      {isBowler && `${pBowlingAction} (${pBowlingArm} ${pBowlingCategory}) • Bat: ${pBattingStyle}`}
+                      {isAllRounder && `Bat: ${pBattingStyle} • Bowl: ${pBowlingAction}`}
+                      {isWicketKeeper && `${pBattingStyle} • ${pKeeperSpec}`}
+                    </Text>
+                  </View>
 
                   {/* Verification & Password Setup */}
                   {renderVerificationAndPasswordBlock()}
@@ -2799,6 +3011,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginLeft: 4,
     fontWeight: 'bold'
+  },
+
+  cricketSummaryBadge: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde68a',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 8,
+    marginTop: 2,
+    borderLeftWidth: 3,
+    borderLeftColor: '#d97706'
+  },
+  cricketSummaryText: {
+    color: '#334155',
+    fontSize: 11,
+    fontWeight: '600'
   },
 
   verifBox: {
