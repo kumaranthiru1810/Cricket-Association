@@ -361,6 +361,9 @@ export const ScorerApi = {
     taluk?: string;
     battingStyle?: string;
     bowlingStyle?: string;
+    bowlingArm?: string;
+    bowlingCategory?: string;
+    bowlingAction?: string;
     clubChoice?: string;
     otp?: string;
   }) => {
