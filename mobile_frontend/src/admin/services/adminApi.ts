@@ -172,8 +172,13 @@ export const adminApi = {
   },
 
   // 6. Tournaments Management
-  getTournaments: async () => {
-    return adminRequest('/admin/tournaments');
+  getTournaments: async (params?: { status?: string; search?: string }) => {
+    const q = new URLSearchParams(params as any).toString();
+    return adminRequest(`/admin/tournaments${q ? '?' + q : ''}`);
+  },
+
+  getTournamentById: async (id: string) => {
+    return adminRequest(`/admin/tournaments/${id}`);
   },
 
   createTournament: async (data: any) => {
@@ -188,6 +193,76 @@ export const adminApi = {
       method: 'PUT',
       body: JSON.stringify(data)
     });
+  },
+
+  deleteTournament: async (id: string) => {
+    return adminRequest(`/admin/tournaments/${id}`, {
+      method: 'DELETE'
+    });
+  },
+
+  addTournamentTeams: async (id: string, teams: string[]) => {
+    return adminRequest(`/admin/tournaments/${id}/teams`, {
+      method: 'POST',
+      body: JSON.stringify({ teams })
+    });
+  },
+
+  removeTournamentTeam: async (id: string, teamId: string) => {
+    return adminRequest(`/admin/tournaments/${id}/teams/${teamId}`, {
+      method: 'DELETE'
+    });
+  },
+
+  generateTournamentMatches: async (id: string, options?: any) => {
+    return adminRequest(`/admin/tournaments/${id}/generate-matches`, {
+      method: 'POST',
+      body: JSON.stringify(options || {})
+    });
+  },
+
+  getTournamentSchedule: async (id: string) => {
+    return adminRequest(`/admin/tournaments/${id}/schedule`);
+  },
+
+  getTournamentPointsTable: async (id: string) => {
+    return adminRequest(`/admin/tournaments/${id}/points-table`);
+  },
+
+  getTournamentStatistics: async (id: string) => {
+    return adminRequest(`/admin/tournaments/${id}/statistics`);
+  },
+
+  updateTournamentStatus: async (id: string, status: string) => {
+    return adminRequest(`/admin/tournaments/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status })
+    });
+  },
+
+  getAllTournamentRegistrations: async (tournamentId?: string, status?: string) => {
+    const params = new URLSearchParams();
+    if (tournamentId && tournamentId !== 'ALL') params.append('tournamentId', tournamentId);
+    if (status && status !== 'ALL') params.append('status', status);
+    const q = params.toString();
+    return adminRequest(`/admin/tournaments/registrations/all${q ? '?' + q : ''}`);
+  },
+
+  approveTournamentRegistration: async (regId: string) => {
+    return adminRequest(`/admin/tournaments/registrations/${regId}/approve`, {
+      method: 'PATCH'
+    });
+  },
+
+  rejectTournamentRegistration: async (regId: string, reason?: string) => {
+    return adminRequest(`/admin/tournaments/registrations/${regId}/reject`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason })
+    });
+  },
+
+  getTournamentApprovedTeams: async (tournamentId: string) => {
+    return adminRequest(`/admin/tournaments/${tournamentId}/approved-teams`);
   },
 
   // 7. Matches Management

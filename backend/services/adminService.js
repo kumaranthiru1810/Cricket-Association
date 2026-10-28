@@ -199,7 +199,12 @@ async function scheduleMatch(fixtureData, adminEmail) {
     match_type,
     overs,
     overs_per_side,
-    assigned_scorer_id
+    assigned_scorer_id,
+    umpire1_id,
+    umpire2_id,
+    umpire1_name,
+    umpire2_name,
+    stage
   } = fixtureData;
 
   if (!team_a_id || !team_b_id) {
@@ -212,6 +217,51 @@ async function scheduleMatch(fixtureData, adminEmail) {
 
   if (!match_date || !String(match_date).trim()) {
     throw new Error('Match date is required.');
+  }
+
+  const cleanDate = String(match_date).trim();
+  const cleanTime = (match_time && String(match_time).trim()) || '09:30 AM';
+
+  // Prevent duplicate umpire assignment in the same fixture
+  if (umpire1_id && umpire2_id && umpire1_id === umpire2_id) {
+    throw new Error('Cannot assign the same official as both Umpire 1 and Umpire 2 for the same fixture.');
+  }
+
+  let resolvedUmpire1Name = umpire1_name || null;
+  let resolvedUmpire2Name = umpire2_name || null;
+
+  if (umpire1_id && !resolvedUmpire1Name) {
+    const uDoc = await db.models.User.findOne({ id: umpire1_id }).lean();
+    if (uDoc) resolvedUmpire1Name = uDoc.name;
+  }
+  if (umpire2_id && !resolvedUmpire2Name) {
+    const uDoc = await db.models.User.findOne({ id: umpire2_id }).lean();
+    if (uDoc) resolvedUmpire2Name = uDoc.name;
+  }
+
+  // Prevent assigning an already committed umpire to an overlapping fixture
+  if (umpire1_id) {
+    const conflict = await db.models.Match.findOne({
+      match_date: cleanDate,
+      match_time: cleanTime,
+      status: { $in: ['SCHEDULED', 'LIVE', 'TOSS', 'INNINGS_BREAK'] },
+      $or: [{ umpire1_id }, { umpire2_id: umpire1_id }]
+    }).lean();
+    if (conflict) {
+      throw new Error(`Umpire '${resolvedUmpire1Name || umpire1_id}' is already assigned to Match ${conflict.id} on ${cleanDate} at ${cleanTime}.`);
+    }
+  }
+
+  if (umpire2_id) {
+    const conflict = await db.models.Match.findOne({
+      match_date: cleanDate,
+      match_time: cleanTime,
+      status: { $in: ['SCHEDULED', 'LIVE', 'TOSS', 'INNINGS_BREAK'] },
+      $or: [{ umpire1_id: umpire2_id }, { umpire2_id }]
+    }).lean();
+    if (conflict) {
+      throw new Error(`Umpire '${resolvedUmpire2Name || umpire2_id}' is already assigned to Match ${conflict.id} on ${cleanDate} at ${cleanTime}.`);
+    }
   }
 
   let finalTourName = tournament_name;
@@ -228,12 +278,17 @@ async function scheduleMatch(fixtureData, adminEmail) {
     team_a_id,
     team_b_id,
     venue: venue || 'Kamarajar District Stadium',
-    match_date: String(match_date).trim(),
-    match_time: (match_time && String(match_time).trim()) || '09:30 AM',
+    match_date: cleanDate,
+    match_time: cleanTime,
     match_type: match_type || 'T20',
     overs_per_side: Number(overs_per_side || overs || 20),
+    stage: stage || 'LEAGUE',
     status: 'SCHEDULED',
-    assigned_scorer_id: assigned_scorer_id || 'SCR-101'
+    assigned_scorer_id: assigned_scorer_id || 'SCR-101',
+    umpire1_id: umpire1_id || null,
+    umpire2_id: umpire2_id || null,
+    umpire1_name: resolvedUmpire1Name || (umpire1_id ? 'Official Umpire 1' : null),
+    umpire2_name: resolvedUmpire2Name || (umpire2_id ? 'Official Umpire 2' : null)
   });
 
   await addAuditLog({
@@ -290,6 +345,15 @@ async function updateMatch(matchId, fixtureData, adminEmail) {
   if (fixtureData.match_type) match.match_type = fixtureData.match_type;
   if (fixtureData.overs_per_side || fixtureData.overs) match.overs_per_side = Number(fixtureData.overs_per_side || fixtureData.overs);
   if (fixtureData.assigned_scorer_id) match.assigned_scorer_id = fixtureData.assigned_scorer_id;
+  if (fixtureData.stage) match.stage = fixtureData.stage;
+  if (fixtureData.umpire1_id !== undefined) {
+    match.umpire1_id = fixtureData.umpire1_id;
+    if (fixtureData.umpire1_name) match.umpire1_name = fixtureData.umpire1_name;
+  }
+  if (fixtureData.umpire2_id !== undefined) {
+    match.umpire2_id = fixtureData.umpire2_id;
+    if (fixtureData.umpire2_name) match.umpire2_name = fixtureData.umpire2_name;
+  }
   if (fixtureData.status && !isLive) match.status = fixtureData.status;
 
   match.updated_at = new Date();

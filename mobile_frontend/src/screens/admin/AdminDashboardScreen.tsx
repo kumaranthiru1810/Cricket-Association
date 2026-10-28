@@ -36,6 +36,7 @@ import {
 } from 'react-native';
 import { ScorerApi, getCurrentUser, getAuthToken, setAuthToken, setCurrentUser } from '../../services/api';
 import { showSuccess, showError, showWarning, showConfirm, showInfo, swal } from '../../utils/sweetalert';
+import TournamentManagement from '../../admin/components/TournamentManagement';
 
 // Asset references
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
@@ -47,7 +48,7 @@ export interface AdminDashboardProps {
   initialParams?: any;
 }
 
-type AdminTab = 'overview' | 'teams' | 'scorers' | 'umpires' | 'content' | 'schedules';
+type AdminTab = 'overview' | 'teams' | 'scorers' | 'umpires' | 'content' | 'schedules' | 'tournaments';
 type FilterStatus = 'all' | 'Pending' | 'Approved' | 'Rejected';
 type MatchFilterStatus = 'all' | 'SCHEDULED' | 'LIVE' | 'COMPLETED' | 'CANCELLED';
 
@@ -219,6 +220,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [notification, setNotification] = useState<string | null>(null);
+  const [pendingTournamentsCount, setPendingTournamentsCount] = useState<number>(0);
 
   const adminEmail = initialParams?.adminEmail || currentUser?.email || 'admin@cfvd.org';
 
@@ -757,6 +759,16 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
       // 3. Fetch match schedules & logistics
       await loadMatchesAndLogistics();
+
+      // 4. Fetch live tournament registrations count
+      try {
+        const tourRegRes = await ScorerApi.getAllTournamentRegistrations();
+        const regs = tourRegRes.registrations || tourRegRes.data || [];
+        const pend = regs.filter((r: any) => (r.status || 'PENDING').toUpperCase() === 'PENDING').length;
+        setPendingTournamentsCount(pend);
+      } catch (e) {
+        // safe fallback
+      }
     } catch (err) {
       console.warn('Backend sync note: using initial local state', err);
     } finally {
@@ -1245,8 +1257,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       confirmButtonText: editingMatch ? 'Confirm & Reschedule' : 'Confirm & Schedule',
       cancelButtonText: 'Review Details',
       confirmButtonColor: '#10b981',
-      cancelButtonColor: '#64748b',
-      reverseButtons: true
+      cancelButtonColor: '#64748b'
     });
 
     if (!confirmResult.isConfirmed) {
@@ -1798,6 +1809,32 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             )}
           </TouchableOpacity>
 
+          {/* Tournaments Management */}
+          <TouchableOpacity
+            style={[
+              styles.sidebarNavItem,
+              activeTab === 'tournaments' && styles.sidebarNavItemTournamentsActive,
+              isCollapsed && styles.sidebarNavItemCollapsed
+            ]}
+            onPress={() => {
+              setActiveTab('tournaments');
+              if (isMobileDrawer) setMobileSidebarOpen(false);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.sidebarNavIcon, activeTab === 'tournaments' && styles.sidebarNavIconActive]}>🏆</Text>
+            {!isCollapsed && (
+              <Text style={[styles.sidebarNavLabel, activeTab === 'tournaments' && styles.sidebarNavLabelActive]}>
+                Tournaments
+              </Text>
+            )}
+            {!isCollapsed && pendingTournamentsCount > 0 && (
+              <View style={styles.sidebarBadgeAmber}>
+                <Text style={styles.sidebarBadgeText}>{pendingTournamentsCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
           {/* News & Content */}
           <TouchableOpacity
             style={[
@@ -1966,6 +2003,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     {activeTab === 'scorers' && '📋 Scorer Management'}
                     {activeTab === 'umpires' && '⚖️ Umpires Management'}
                     {activeTab === 'schedules' && '⚡ Match Schedules'}
+                    {activeTab === 'tournaments' && '🏆 Tournament Management & Approvals'}
                     {activeTab === 'content' && '📰 News & Content'}
                   </Text>
                   {activeTab === 'overview' && (
@@ -1996,6 +2034,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   {activeTab === 'content' && (
                     <View style={[styles.pageThemeBadge, { backgroundColor: '#fff1f2', borderColor: '#f43f5e' }]}>
                       <Text style={[styles.pageThemeBadgeText, { color: '#be123c' }]}>📰 ROSE CORAL</Text>
+                    </View>
+                  )}
+                  {activeTab === 'tournaments' && (
+                    <View style={[styles.pageThemeBadge, { backgroundColor: '#fffbeb', borderColor: '#f59e0b' }]}>
+                      <Text style={[styles.pageThemeBadgeText, { color: '#b45309' }]}>🏆 GOLDEN CHAMPIONSHIP</Text>
                     </View>
                   )}
                 </View>
@@ -4015,6 +4058,13 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               </View>
             </View>
           )}
+
+          {/* ─────────────────────────────────────────────────────────────
+              9. TAB CONTENT: TOURNAMENT MANAGEMENT & TEAM APPROVALS
+              ───────────────────────────────────────────────────────────── */}
+          {activeTab === 'tournaments' && (
+            <TournamentManagement />
+          )}
         </View>
       </ScrollView>
     </View>
@@ -5749,6 +5799,13 @@ const styles: any = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#fb7185',
     boxShadow: '0 4px 14px rgba(225, 29, 72, 0.4)',
+    elevation: 3
+  },
+  sidebarNavItemTournamentsActive: {
+    backgroundColor: '#b45309',
+    borderWidth: 1.5,
+    borderColor: '#f59e0b',
+    boxShadow: '0 4px 14px rgba(212, 175, 55, 0.4)',
     elevation: 3
   },
   sidebarNavItemCollapsed: {

@@ -658,8 +658,106 @@ export const ScorerApi = {
     });
   },
 
-  getTournaments: async () => {
-    return request('/admin/tournaments');
+  getTournaments: async (params?: { status?: string; search?: string }) => {
+    const q = new URLSearchParams(params as any).toString();
+    return request(`/tournaments${q ? '?' + q : ''}`);
+  },
+
+  getTournamentById: async (id: string) => {
+    return request(`/tournaments/${id}`);
+  },
+
+  createTournament: async (data: any) => {
+    return request('/tournaments', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+
+  updateTournament: async (id: string, data: any) => {
+    return request(`/tournaments/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+  },
+
+  deleteTournament: async (id: string) => {
+    return request(`/tournaments/${id}`, {
+      method: 'DELETE'
+    });
+  },
+
+  addTournamentTeams: async (id: string, teams: string[]) => {
+    return request(`/tournaments/${id}/teams`, {
+      method: 'POST',
+      body: JSON.stringify({ teams })
+    });
+  },
+
+  removeTournamentTeam: async (id: string, teamId: string) => {
+    return request(`/tournaments/${id}/teams/${teamId}`, {
+      method: 'DELETE'
+    });
+  },
+
+  generateTournamentMatches: async (id: string, options?: any) => {
+    return request(`/tournaments/${id}/generate-matches`, {
+      method: 'POST',
+      body: JSON.stringify(options || {})
+    });
+  },
+
+  getTournamentSchedule: async (id: string) => {
+    return request(`/tournaments/${id}/schedule`);
+  },
+
+  getTournamentPointsTable: async (id: string) => {
+    return request(`/tournaments/${id}/points-table`);
+  },
+
+  getTournamentStatistics: async (id: string) => {
+    return request(`/tournaments/${id}/statistics`);
+  },
+
+  updateTournamentStatus: async (id: string, status: string) => {
+    return request(`/tournaments/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status })
+    });
+  },
+
+  registerTeamForTournament: async (tournamentId: string, payloadOrNotes?: string | { notes?: string }) => {
+    const notes = typeof payloadOrNotes === 'string' ? payloadOrNotes : payloadOrNotes?.notes;
+    return request(`/tournaments/${tournamentId}/register`, {
+      method: 'POST',
+      body: JSON.stringify({ notes })
+    });
+  },
+
+  getMyTournamentRegistrations: async () => {
+    return request('/tournaments/my-registrations');
+  },
+
+  getAllTournamentRegistrations: async (params?: { tournamentId?: string; status?: string; search?: string }) => {
+    const q = new URLSearchParams(params as any).toString();
+    return request(`/tournaments/registrations/all${q ? '?' + q : ''}`);
+  },
+
+  approveTournamentRegistration: async (regId: string) => {
+    return request(`/tournaments/registrations/${regId}/approve`, {
+      method: 'PATCH'
+    });
+  },
+
+  rejectTournamentRegistration: async (regId: string, reason?: string) => {
+    return request(`/tournaments/registrations/${regId}/reject`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason })
+    });
+  },
+
+  getTournamentApprovedTeams: async (tournamentId: string) => {
+    return request(`/tournaments/${tournamentId}/approved-teams`);
   },
 
   getPublicMatches: async () => {
@@ -1140,6 +1238,28 @@ export const TeamApi = {
     return request(`/team/notifications/${id}/read`, {
       method: 'PUT'
     });
+  },
+
+  // --- TOURNAMENTS & REGISTRATION ---
+  getTournaments: async (params?: { status?: string; search?: string }) => {
+    const q = new URLSearchParams(params as any).toString();
+    return request(`/tournaments${q ? '?' + q : ''}`);
+  },
+
+  registerForTournament: async (tournamentId: string, payloadOrNotes?: string | { notes?: string }) => {
+    const notes = typeof payloadOrNotes === 'string' ? payloadOrNotes : payloadOrNotes?.notes;
+    return request(`/tournaments/${tournamentId}/register`, {
+      method: 'POST',
+      body: JSON.stringify({ notes })
+    });
+  },
+
+  getMyRegistrations: async () => {
+    return request('/tournaments/my-registrations');
+  },
+
+  getTournamentApprovedTeams: async (tournamentId: string) => {
+    return request(`/tournaments/${tournamentId}/approved-teams`);
   }
 };
 

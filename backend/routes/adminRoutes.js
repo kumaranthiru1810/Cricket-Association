@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const adminService = require('../services/adminService');
 const authService = require('../services/authService');
+const tournamentController = require('../controllers/tournamentController');
 const { requireAdminAuth } = require('../middleware/authMiddleware');
 
 // Enforce ADMIN role across all administrative management routes
@@ -207,27 +208,27 @@ router.post('/teams', async (req, res) => {
 });
 
 /**
- * GET /api/admin/tournaments & POST /api/admin/tournaments
- * Create or update tournament
+ * Tournament Management APIs under /api/admin/tournaments
  */
-router.get('/tournaments', async (req, res) => {
-  try {
-    const tournaments = await adminService.getTournaments();
-    res.json({ success: true, tournaments });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-router.post('/tournaments', async (req, res) => {
-  try {
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
-    const tournament = await adminService.saveTournament(req.body, adminEmail);
-    res.json({ success: true, message: 'Tournament saved', tournament });
-  } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
-  }
-});
+router.get('/tournaments', (req, res) => tournamentController.getTournaments(req, res));
+router.get('/tournaments/:id', (req, res) => tournamentController.getTournamentById(req, res));
+router.post('/tournaments', (req, res) => tournamentController.createTournament(req, res));
+router.put('/tournaments/:id', (req, res) => tournamentController.updateTournament(req, res));
+router.delete('/tournaments/:id', (req, res) => tournamentController.deleteTournament(req, res));
+router.post('/tournaments/:id/teams', (req, res) => tournamentController.addTeams(req, res));
+router.delete('/tournaments/:id/teams/:teamId', (req, res) => tournamentController.removeTeam(req, res));
+router.post('/tournaments/:id/generate-matches', (req, res) => tournamentController.generateMatches(req, res));
+router.get('/tournaments/:id/schedule', (req, res) => tournamentController.getSchedule(req, res));
+router.get('/tournaments/:id/points-table', (req, res) => tournamentController.getPointsTable(req, res));
+router.get('/tournaments/:id/statistics', (req, res) => tournamentController.getStatistics(req, res));
+router.get('/tournaments/registrations/all', (req, res) => tournamentController.getAllRegistrations(req, res));
+router.patch('/tournaments/registrations/:regId/approve', (req, res) => tournamentController.approveRegistration(req, res));
+router.post('/tournaments/registrations/:regId/approve', (req, res) => tournamentController.approveRegistration(req, res));
+router.patch('/tournaments/registrations/:regId/reject', (req, res) => tournamentController.rejectRegistration(req, res));
+router.post('/tournaments/registrations/:regId/reject', (req, res) => tournamentController.rejectRegistration(req, res));
+router.get('/tournaments/:id/registrations', (req, res) => tournamentController.getAllRegistrations(req, res));
+router.get('/tournaments/:id/approved-teams', (req, res) => tournamentController.getApprovedTeams(req, res));
+router.patch('/tournaments/:id/status', (req, res) => tournamentController.updateStatus(req, res));
 
 /**
  * Match Schedule Management APIs

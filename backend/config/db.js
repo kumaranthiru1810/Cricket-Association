@@ -95,15 +95,87 @@ const UserSchema = new mongoose.Schema({
 // 2. Tournament Schema
 const TournamentSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true, index: true },
-  name: { type: String, required: true },
-  season: { type: String, default: '2026' },
+  name: { type: String, required: true, trim: true },
+  short_name: { type: String, default: '', trim: true },
+  logo_url: { type: String, default: '' },
+  description: { type: String, default: '' },
+  tournament_type: { 
+    type: String, 
+    enum: ['LEAGUE', 'KNOCKOUT', 'LEAGUE_KNOCKOUT'], 
+    default: 'LEAGUE' 
+  },
   category: { type: String, default: 'Senior District Trophy' },
-  format: { type: String, default: 'T20' },
-  rules: { type: String, default: 'Standard ICC / TNCA Playing Conditions' },
-  status: { type: String, enum: ['UPCOMING', 'ACTIVE', 'COMPLETED'], default: 'ACTIVE' },
+  gender: { type: String, default: 'Men' },
+  ball_type: { type: String, default: 'Red Leather' },
+  match_format: { 
+    type: String, 
+    enum: ['T10', 'T20', 'ODI', 'CUSTOM'], 
+    default: 'T20' 
+  },
+  format: { type: String, default: 'T20' }, // Legacy compatibility
+  overs_per_match: { type: Number, default: 20 },
+  season: { type: String, default: '2026' },
+  venue: { type: String, default: 'Kamarajar District Stadium' },
   start_date: { type: String },
-  end_date: { type: String }
+  end_date: { type: String },
+  registration_start_date: { type: String, default: null },
+  registration_end_date: { type: String, default: null },
+  max_teams: { type: Number, default: 16 },
+  min_teams: { type: Number, default: 2 },
+  points_win: { type: Number, default: 2 },
+  points_tie: { type: Number, default: 1 },
+  points_no_result: { type: Number, default: 1 },
+  playing_xi_size: { type: Number, default: 11 },
+  substitute_count: { type: Number, default: 4 },
+  allow_super_over: { type: Boolean, default: true },
+  allow_dls: { type: Boolean, default: false },
+  rules: { type: String, default: 'Standard ICC / TNCA Playing Conditions' },
+  format_config: {
+    round_robin_type: { type: String, enum: ['SINGLE', 'DOUBLE'], default: 'SINGLE' },
+    knockout_stages: [{ type: String }],
+    qualifying_teams_count: { type: Number, default: 4 },
+    qualification_rules: { type: String, default: 'Top qualifying teams advance to knockout stage' }
+  },
+  teams: [{ type: String, ref: 'Team' }],
+  status: { 
+    type: String, 
+    enum: ['UPCOMING', 'REGISTRATION_OPEN', 'REGISTRATION_CLOSED', 'ONGOING', 'COMPLETED', 'CANCELLED', 'ACTIVE', 'INACTIVE'], 
+    default: 'UPCOMING',
+    index: true 
+  },
+  created_by: { type: String, default: 'admin@cfvd.org' }
 }, { timestamps: true });
+
+// 2b. Tournament Registration Schema (Team registrations for specific Tournaments)
+const TournamentRegistrationSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true, index: true },
+  tournament_id: { type: String, required: true, index: true },
+  tournament_name: { type: String, required: true },
+  team_id: { type: String, required: true, index: true },
+  team_name: { type: String, required: true },
+  coach_name: { type: String, required: true },
+  coach_email: { type: String, required: true, lowercase: true, trim: true, index: true },
+  coach_phone: { type: String, default: '' },
+  team_city: { type: String, default: 'Virudhunagar' },
+  team_taluk: { type: String, default: 'Virudhunagar' },
+  captain: { type: String, default: '' },
+  squad_count: { type: Number, default: 15 },
+  status: { 
+    type: String, 
+    enum: ['PENDING', 'APPROVED', 'REJECTED'], 
+    default: 'PENDING',
+    index: true 
+  },
+  registration_date: { type: Date, default: Date.now },
+  approved_by: { type: String, default: null },
+  approved_at: { type: Date, default: null },
+  rejected_by: { type: String, default: null },
+  rejected_at: { type: Date, default: null },
+  rejection_reason: { type: String, default: null },
+  notes: { type: String, default: '' }
+}, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
+
+TournamentRegistrationSchema.index({ tournament_id: 1, team_id: 1 });
 
 // 3. Team Schema
 const TeamSchema = new mongoose.Schema({
@@ -198,6 +270,7 @@ const MatchSchema = new mongoose.Schema({
   match_time: { type: String, default: '09:30 AM' },
   match_type: { type: String, default: 'T20' },
   overs_per_side: { type: Number, default: 20 },
+  stage: { type: String, default: 'LEAGUE' }, // LEAGUE, QUARTER_FINAL, SEMI_FINAL, FINAL, etc.
   status: { type: String, enum: ['SCHEDULED', 'TOSS', 'LIVE', 'INNINGS_BREAK', 'PAUSED', 'COMPLETED', 'ABANDONED', 'CANCELLED'], default: 'SCHEDULED', index: true },
   toss_winner_id: { type: String, default: null },
   toss_decision: { type: String, default: null },
@@ -461,6 +534,7 @@ const AuditLogSchema = new mongoose.Schema({
 // Create or reuse Mongoose Models
 const User = mongoose.models.User || mongoose.model('User', UserSchema);
 const Tournament = mongoose.models.Tournament || mongoose.model('Tournament', TournamentSchema);
+const TournamentRegistration = mongoose.models.TournamentRegistration || mongoose.model('TournamentRegistration', TournamentRegistrationSchema);
 const Team = mongoose.models.Team || mongoose.model('Team', TeamSchema);
 const Player = mongoose.models.Player || mongoose.model('Player', PlayerSchema);
 const TeamRegistration = mongoose.models.TeamRegistration || mongoose.model('TeamRegistration', TeamRegistrationSchema);
@@ -723,8 +797,128 @@ async function seedDefaultData() {
     const tournamentCount = await Tournament.countDocuments();
     if (tournamentCount === 0) {
       await Tournament.insertMany([
-        { id: 'T-2026-VPL', name: 'Virudhunagar Premier League 2026', season: '2026', category: 'Senior District Trophy', format: 'T20', status: 'ACTIVE', start_date: '2026-10-01', end_date: '2026-10-25' },
-        { id: 'T-2026-U19', name: 'District Under-19 Championship', season: '2026', category: 'Junior Championship', format: 'One Day 50 Overs', status: 'UPCOMING', start_date: '2026-11-01', end_date: '2026-11-20' }
+        { 
+          id: 'T-2026-VPL', 
+          name: 'Virudhunagar Premier League 2026', 
+          short_name: 'VPL 2026',
+          description: 'Official Premier League of Virudhunagar District Cricket Association with 16 elite regional clubs.',
+          tournament_type: 'LEAGUE_KNOCKOUT',
+          season: '2026', 
+          category: 'Senior District Trophy', 
+          format: 'T20', 
+          match_format: 'T20',
+          overs_per_match: 20,
+          venue: 'Kamarajar District Stadium, Virudhunagar',
+          max_teams: 16,
+          min_teams: 4,
+          registration_start_date: '2026-09-01',
+          registration_end_date: '2026-11-30',
+          status: 'REGISTRATION_OPEN', 
+          start_date: '2026-10-01', 
+          end_date: '2026-11-25',
+          teams: ['TM-01', 'TM-02']
+        },
+        { 
+          id: 'T-2026-U19', 
+          name: 'District Under-19 Championship', 
+          short_name: 'U19 District Cup',
+          description: 'Annual inter-taluk talent championship for under-19 district player selections.',
+          tournament_type: 'KNOCKOUT',
+          season: '2026', 
+          category: 'Junior Championship', 
+          format: 'ODI', 
+          match_format: 'ODI',
+          overs_per_match: 50,
+          venue: 'Municipal Cricket Complex, Sivakasi',
+          max_teams: 12,
+          min_teams: 4,
+          registration_start_date: '2026-09-15',
+          registration_end_date: '2026-12-15',
+          status: 'REGISTRATION_OPEN', 
+          start_date: '2026-11-01', 
+          end_date: '2026-11-20',
+          teams: []
+        },
+        { 
+          id: 'T-2026-SUPER8', 
+          name: 'Kamarajar Memorial Knockout Trophy 2026', 
+          short_name: 'KMKT 2026',
+          description: 'Prestigious high-octane knockout championship open for all district affiliated cricket teams.',
+          tournament_type: 'KNOCKOUT',
+          season: '2026', 
+          category: 'District Open Knockout', 
+          format: 'T20', 
+          match_format: 'T20',
+          overs_per_match: 20,
+          venue: 'Kamarajar District Stadium, Virudhunagar',
+          max_teams: 8,
+          min_teams: 4,
+          registration_start_date: '2026-10-01',
+          registration_end_date: '2026-12-31',
+          status: 'REGISTRATION_OPEN', 
+          start_date: '2026-12-01', 
+          end_date: '2026-12-15',
+          teams: []
+        }
+      ]);
+    }
+
+    // Seed Tournament Registrations
+    const tourRegCount = await TournamentRegistration.countDocuments();
+    if (tourRegCount === 0) {
+      await TournamentRegistration.insertMany([
+        {
+          id: 'TREG-101',
+          tournament_id: 'T-2026-VPL',
+          tournament_name: 'Virudhunagar Premier League 2026',
+          team_id: 'TM-01',
+          team_name: 'Virudhunagar Spartans',
+          coach_name: 'K. Muthu',
+          coach_email: 'coach@cfvd.org',
+          team_city: 'Virudhunagar',
+          team_taluk: 'Virudhunagar',
+          captain: 'Suresh Kumar',
+          squad_count: 15,
+          status: 'APPROVED',
+          registration_date: new Date('2026-09-05'),
+          approved_by: 'admin@cfvd.org',
+          approved_at: new Date('2026-09-06'),
+          notes: 'Official club registration'
+        },
+        {
+          id: 'TREG-102',
+          tournament_id: 'T-2026-VPL',
+          tournament_name: 'Virudhunagar Premier League 2026',
+          team_id: 'TM-02',
+          team_name: 'Sivakasi Strikers',
+          coach_name: 'S. Ganesan',
+          coach_email: 'ganesan@strikers.com',
+          team_city: 'Sivakasi',
+          team_taluk: 'Sivakasi',
+          captain: 'Dinesh Karthik',
+          squad_count: 15,
+          status: 'APPROVED',
+          registration_date: new Date('2026-09-10'),
+          approved_by: 'admin@cfvd.org',
+          approved_at: new Date('2026-09-11'),
+          notes: 'All squad players verified'
+        },
+        {
+          id: 'TREG-103',
+          tournament_id: 'T-2026-VPL',
+          tournament_name: 'Virudhunagar Premier League 2026',
+          team_id: 'TM-03',
+          team_name: 'Rajapalayam Royals',
+          coach_name: 'R. Subramanian',
+          coach_email: 'coach.royals@gmail.com',
+          team_city: 'Rajapalayam',
+          team_taluk: 'Rajapalayam',
+          captain: 'M. Vijay',
+          squad_count: 15,
+          status: 'PENDING',
+          registration_date: new Date('2026-10-15'),
+          notes: 'Awaiting Apex Council verification'
+        }
       ]);
     }
 
@@ -1493,6 +1687,7 @@ module.exports = {
   models: {
     User,
     Tournament,
+    TournamentRegistration,
     Team,
     Player,
     TeamRegistration,

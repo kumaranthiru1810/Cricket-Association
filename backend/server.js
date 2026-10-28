@@ -23,6 +23,7 @@ const matchRoutes = require('./routes/matchRoutes');
 const newsRoutes = require('./routes/newsRoutes');
 const portalRoutes = require('./routes/portalRoutes');
 const umpireRoutes = require('./routes/umpireRoutes');
+const tournamentRoutes = require('./routes/tournamentRoutes');
 
 const helmet = require('helmet');
 const {
@@ -119,6 +120,7 @@ app.use('/api/umpire', umpireRoutes);
 
 // Match & Tournament APIs
 app.use('/api/matches', matchRoutes);
+app.use('/api/tournaments', tournamentRoutes);
 
 // News & Announcements APIs
 app.use('/api/news', newsRoutes);

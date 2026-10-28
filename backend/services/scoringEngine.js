@@ -577,6 +577,13 @@ class ScoringEngine {
       }
     }
 
+    if (isMatchCompleted) {
+      try {
+        const tournamentService = require('./tournamentService');
+        tournamentService.onMatchCompleted(matchId);
+      } catch (_err) {}
+    }
+
     // 9. Real-time Socket.IO Broadcast
     try {
       socketService.emitScoreUpdate(matchId, {
@@ -1088,6 +1095,11 @@ class ScoringEngine {
       match.player_of_match = payload.playerOfMatch;
     }
     await match.save();
+
+    try {
+      const tournamentService = require('./tournamentService');
+      tournamentService.onMatchCompleted(matchId);
+    } catch (_err) {}
 
     return {
       success: true,
