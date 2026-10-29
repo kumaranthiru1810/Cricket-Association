@@ -8,6 +8,7 @@ const router = express.Router();
 const adminService = require('../services/adminService');
 const authService = require('../services/authService');
 const tournamentController = require('../controllers/tournamentController');
+const adminDashboardController = require('../controllers/adminDashboardController');
 const { requireAdminAuth } = require('../middleware/authMiddleware');
 
 // Enforce ADMIN role across all administrative management routes
@@ -421,5 +422,35 @@ router.delete('/content/:id', async (req, res) => {
     res.status(400).json({ success: false, error: err.message });
   }
 });
+
+/**
+ * --------------------------------------------------------------------------
+ * Admin Panel Dedicated Endpoints (powering mobile_frontend/src/admin)
+ * --------------------------------------------------------------------------
+ */
+router.get('/dashboard-stats', (req, res) => adminDashboardController.getDashboardStats(req, res));
+router.put('/users/:id', (req, res) => adminDashboardController.updateUser(req, res));
+router.delete('/users/:id', (req, res) => adminDashboardController.deleteUser(req, res));
+
+router.get('/approvals', (req, res) => adminDashboardController.getApprovals(req, res));
+router.post('/approvals/:type/:id', (req, res) => adminDashboardController.handleApproval(req, res));
+
+router.get('/notifications', (req, res) => adminDashboardController.getNotifications(req, res));
+router.post('/notifications', (req, res) => adminDashboardController.createNotification(req, res));
+router.patch('/notifications/:id/read', (req, res) => adminDashboardController.markNotificationRead(req, res));
+router.delete('/notifications/:id', (req, res) => adminDashboardController.deleteNotification(req, res));
+
+router.get('/teams-list', (req, res) => adminDashboardController.getTeams(req, res));
+router.get('/teams-list/:id', (req, res) => adminDashboardController.getTeamById(req, res));
+router.patch('/teams-list/:id/status', (req, res) => adminDashboardController.updateTeamStatus(req, res));
+
+router.get('/players', (req, res) => adminDashboardController.getPlayers(req, res));
+router.post('/players', (req, res) => adminDashboardController.createPlayer(req, res));
+router.put('/players/:id', (req, res) => adminDashboardController.updatePlayer(req, res));
+
+router.get('/live-scoring', (req, res) => adminDashboardController.getLiveScoring(req, res));
+router.get('/statistics', (req, res) => adminDashboardController.getStatistics(req, res));
+router.get('/settings', (req, res) => adminDashboardController.getSettings(req, res));
+router.put('/settings', (req, res) => adminDashboardController.updateSettings(req, res));
 
 module.exports = router;

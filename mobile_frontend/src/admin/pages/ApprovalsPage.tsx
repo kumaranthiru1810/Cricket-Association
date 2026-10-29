@@ -19,7 +19,7 @@ export const ApprovalsPage: React.FC = () => {
   const { showToast } = useAdminLayout();
   const [approvals, setApprovals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'ALL' | 'SCORER' | 'TEAM' | 'PLAYER'>('ALL');
+  const [activeTab, setActiveTab] = useState<'ALL' | 'SCORER' | 'TEAM' | 'UMPIRE' | 'PLAYER'>('ALL');
 
   // View Modal
   const [activeItem, setActiveItem] = useState<any | null>(null);
@@ -107,36 +107,46 @@ export const ApprovalsPage: React.FC = () => {
     },
     {
       header: 'Application Type',
-      accessor: (item) => (
-        <span
-          style={{
-            display: 'inline-block',
-            padding: '3px 8px',
-            borderRadius: 4,
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: '0.04em',
-            backgroundColor:
-              item.type === 'SCORER'
+      accessor: (item) => {
+        const typeNorm = (item.type || '').toUpperCase();
+        const isScorer = typeNorm === 'SCORER';
+        const isTeam = typeNorm === 'TEAM';
+        const isUmpire = typeNorm === 'UMPIRE';
+        return (
+          <span
+            style={{
+              display: 'inline-block',
+              padding: '3px 8px',
+              borderRadius: 4,
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              backgroundColor: isScorer
                 ? '#EFF6FF'
-                : item.type === 'TEAM'
+                : isTeam
                 ? '#FDF2F8'
+                : isUmpire
+                ? '#FEF3C7'
                 : '#F0FDF4',
-            color:
-              item.type === 'SCORER'
+              color: isScorer
                 ? '#1D4ED8'
-                : item.type === 'TEAM'
+                : isTeam
                 ? '#BE185D'
+                : isUmpire
+                ? '#B45309'
                 : '#15803D'
-          }}
-        >
-          {item.type === 'SCORER'
-            ? 'OFFICIAL SCORER'
-            : item.type === 'TEAM'
-            ? 'CLUB / TEAM'
-            : 'PLAYER REGISTRATION'}
-        </span>
-      )
+            }}
+          >
+            {isScorer
+              ? 'OFFICIAL SCORER'
+              : isTeam
+              ? 'CLUB / TEAM'
+              : isUmpire
+              ? 'OFFICIAL UMPIRE'
+              : 'PLAYER REGISTRATION'}
+          </span>
+        );
+      }
     },
     {
       header: 'Affiliation / Club',
@@ -211,6 +221,7 @@ export const ApprovalsPage: React.FC = () => {
             { id: 'ALL', label: 'All Applications' },
             { id: 'SCORER', label: 'Official Scorers' },
             { id: 'TEAM', label: 'Clubs / Teams' },
+            { id: 'UMPIRE', label: 'Umpires' },
             { id: 'PLAYER', label: 'Players' }
           ].map((t) => (
             <TouchableOpacity
@@ -297,6 +308,12 @@ export const ApprovalsPage: React.FC = () => {
                       <StatusBadge status={activeItem.status || 'PENDING'} />
                     </View>
                   </View>
+                  {(activeItem.qualification || activeItem.certificationLevel) && (
+                    <View style={styles.detailBox}>
+                      <Text style={styles.detailBoxLabel}>Certification / Level</Text>
+                      <Text style={styles.detailBoxValue}>{activeItem.qualification || activeItem.certificationLevel}</Text>
+                    </View>
+                  )}
                 </View>
 
                 {activeItem.rejectionReason && (

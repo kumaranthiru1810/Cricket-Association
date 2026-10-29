@@ -34,8 +34,11 @@ class NotificationModel {
 
   async markAsRead(id) {
     await db.initDb();
+    const mongoose = require('mongoose');
+    const isMongoId = mongoose.Types.ObjectId.isValid(id);
+    const query = isMongoId ? { $or: [{ id }, { _id: id }] } : { id };
     return this.Model.findOneAndUpdate(
-      { id },
+      query,
       { $set: { status: 'READ' } },
       { returnDocument: 'after' }
     ).lean();
