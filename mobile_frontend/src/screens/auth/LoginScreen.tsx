@@ -357,12 +357,12 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
                 >
                   <Text style={styles.registerLinkText}>Register Here</Text>
                 </TouchableOpacity>
-                <Text style={styles.promptDividerText}> • </Text>
+                {/*<Text style={styles.promptDividerText}> • </Text>*/}
                 <TouchableOpacity
                   onPress={() => setShowForgotPassword(true)}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.forgotPasswordPromptText}>Forgot Password?</Text>
+                  {/*<Text style={styles.forgotPasswordPromptText}>Forgot Password?</Text>*/}
                 </TouchableOpacity>
               </View>
 
