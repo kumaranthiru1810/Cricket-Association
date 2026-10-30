@@ -24,6 +24,7 @@ const newsRoutes = require('./routes/newsRoutes');
 const portalRoutes = require('./routes/portalRoutes');
 const umpireRoutes = require('./routes/umpireRoutes');
 const tournamentRoutes = require('./routes/tournamentRoutes');
+const cricketLawsRoutes = require('./routes/cricketLawsRoutes');
 
 const helmet = require('helmet');
 const {
@@ -127,6 +128,9 @@ app.use('/api/news', newsRoutes);
 
 // Portal Public APIs
 app.use('/api/portal', portalRoutes);
+
+// Cricket Laws (MCC 2017 Code – Fourth Edition 2026) APIs
+app.use('/api/cricket-laws', cricketLawsRoutes);
 
 // Security 8: Global Error Handler - Debug mode OFF in production
 app.use((err, req, res, next) => {

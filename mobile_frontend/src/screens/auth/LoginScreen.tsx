@@ -281,7 +281,7 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
                   activeRole === 'PLAYER'
                     ? 'e.g. saravanan.r@strikerscc.org'
                     : activeRole === 'TEAM'
-                    ? 'e.g. coach@strikerscc.org'
+                    ? 'e.g. kannan.coach@strikerscc.org'
                     : activeRole === 'SCORER'
                     ? 'e.g. ramesh@gmail.com'
                     : 'e.g. sundaram.umpire@cfvd.org'
@@ -348,7 +348,7 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
                 )}
               </TouchableOpacity>
 
-              {/* Register Prompt & Alternate Link Row */}
+              {/* Register Prompt Link Row */}
               <View style={styles.registerPromptRow}>
                 <Text style={styles.promptNormalText}>Don't have an account? </Text>
                 <TouchableOpacity
@@ -356,13 +356,6 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
                   activeOpacity={0.7}
                 >
                   <Text style={styles.registerLinkText}>Register Here</Text>
-                </TouchableOpacity>
-                <Text style={styles.promptDividerText}> • </Text>
-                <TouchableOpacity
-                  onPress={() => setShowForgotPassword(true)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.forgotPasswordPromptText}>Forgot Password?</Text>
                 </TouchableOpacity>
               </View>
 
@@ -485,16 +478,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 10,
+    marginBottom: 12,
     justifyContent: 'center'
   },
   roleTab: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    flex: 1,
+    minWidth: 100,
+    height: 34,
+    paddingHorizontal: 8,
+    borderRadius: 17,
     backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#cbd5e1'
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   roleTabActive: {
     backgroundColor: '#1e293b',
@@ -503,7 +500,8 @@ const styles = StyleSheet.create({
   roleTabText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#475569'
+    color: '#475569',
+    textAlign: 'center'
   },
   roleTabTextActive: {
     color: '#ffffff',
@@ -516,7 +514,7 @@ const styles = StyleSheet.create({
     color: '#1e293b',
     borderWidth: 1,
     borderColor: '#cbd5e1',
-    paddingVertical: 8,
+    height: 42,
     paddingHorizontal: 12,
     borderRadius: 6,
     marginBottom: 10,
@@ -540,14 +538,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderRadius: 6,
+    height: 42,
     marginBottom: 10,
     alignItems: 'center',
     paddingRight: 10
   },
   passwordInput: {
     flex: 1,
+    height: '100%',
     color: '#1e293b',
-    paddingVertical: 8,
     paddingHorizontal: 12,
     fontSize: 13.5
   },
@@ -557,9 +556,10 @@ const styles = StyleSheet.create({
 
   actionBtn: {
     backgroundColor: '#eab308',
-    paddingVertical: 12,
+    height: 44,
     borderRadius: 6,
     alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 6,
     shadowColor: '#eab308',
     shadowOffset: { width: 0, height: 3 },

@@ -43,6 +43,8 @@ export const AdminTopbar: React.FC<Props> = ({
     statistics: 'Federation Analytics & Statistics',
     notifications: 'Notifications & Announcements',
     content: 'Website Content Management',
+    laws: 'MCC Laws of Cricket (2026 Edition)',
+    calculations: 'DLS & VJD Live Chasing Predictor',
     settings: 'Association Settings & Preferences'
   };
 
