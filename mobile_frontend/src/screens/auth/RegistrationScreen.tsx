@@ -14,6 +14,7 @@ import {
   Modal,
   useWindowDimensions,
 } from 'react-native';
+import { validateEmail, validatePassword } from '../../utils/validation';
 import { useAppNavigation } from '../../navigation/AppNavigator';
 import { ScorerApi } from '../../services/api';
 import { showSuccess, showError, showWarning, showInfo } from '../../utils/sweetalert';
@@ -355,14 +356,21 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | undefined>>({});
 
-  const validateEmailValue = (val: string): string | null => {
+  const validateEmailValue = (val: string, label: string = 'Email address'): string | null => {
     const clean = (val || '').trim();
-    if (!clean) return 'Official email address is required.';
-    const atMatches = clean.match(/@/g);
-    if (!atMatches || atMatches.length === 0) return 'Email must contain "@" (e.g. name@gmail.com).';
-    if (atMatches.length > 1) return 'Invalid email: multiple "@" symbols detected.';
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(clean)) return 'Invalid email format (e.g. name@gmail.com).';
+    if (!clean) return `${label} is required.`;
+    const res = validateEmail(clean, `${label} is required.`);
+    if (!res.isValid) {
+      return res.error || 'Please enter a valid email address format with "@" and domain (e.g. name@domain.com).';
+    }
+    return null;
+  };
+
+  const validatePasswordValue = (val: string): string | null => {
+    const res = validatePassword(val);
+    if (!res.isValid) {
+      return res.error || 'Password must be at least 8 characters, with 1 uppercase letter and 2 special characters.';
+    }
     return null;
   };
 
@@ -378,10 +386,6 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     if (!clean) return 'Mobile number is required.';
     if (clean.length !== 10) return 'Mobile number must be exactly 10 digits.';
     return null;
-  };
-
-  const validateEmail = (val: string): boolean => {
-    return validateEmailValue(val) === null;
   };
 
   const getTargetEmail = (): string => {
@@ -498,7 +502,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const name = (customName || getTargetName()).trim();
 
     const nameErr = validateNameValue(name, activeRole === 'TEAM' ? 'Coach Name' : 'Full Name');
-    const emailErr = validateEmailValue(email);
+    const emailErr = validateEmailValue(email, activeRole === 'TEAM' ? 'Coach Official Email Address' : 'Email Address');
 
     const errs: Record<string, string> = {};
     if (nameErr) errs.name = nameErr;
@@ -510,6 +514,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setStatusMessage(firstErr || 'Please correct the errors before proceeding.');
       setStatusType('error');
       setOtpModalError(firstErr || null);
+      showWarning('Validation Error', firstErr || 'Please correct the highlighted validation errors.');
       return;
     }
 
@@ -533,6 +538,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setStatusMessage(errMsg);
       setStatusType('error');
       setOtpModalError(errMsg);
+      showError('OTP Request Failed', errMsg);
     } finally {
       setIsSendingOtp(false);
     }
@@ -544,7 +550,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const name = getTargetName();
 
     const nameErr = validateNameValue(name, activeRole === 'TEAM' ? 'Coach Name' : 'Full Name');
-    const emailErr = validateEmailValue(email);
+    const emailErr = validateEmailValue(email, activeRole === 'TEAM' ? 'Coach Official Email Address' : 'Email Address');
 
     const errs: Record<string, string> = {};
     if (nameErr) errs.name = nameErr;
@@ -552,6 +558,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
     if (Object.keys(errs).length > 0) {
       setFieldErrors((prev) => ({ ...prev, ...errs }));
+      const firstErr = nameErr || emailErr || 'Please correct errors before verifying email.';
+      showWarning('Validation Error', firstErr);
       return;
     }
 
@@ -615,7 +623,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const targetTaluk = pTaluk === 'Other' ? pCustomTaluk.trim() : pTaluk;
 
     const nameErr = validateNameValue(name, 'Player Full Name');
-    const emailErr = validateEmailValue(email);
+    const emailErr = validateEmailValue(email, 'Player Email Address');
     const mobileErr = validateMobileValue(mobile);
     let talukErr: string | null = null;
     if (pTaluk === 'Other' && !targetTaluk) talukErr = 'Please enter your Taluk name.';
@@ -628,24 +636,31 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
     if (Object.keys(errs).length > 0) {
       setFieldErrors((prev) => ({ ...prev, ...errs }));
+      const firstErr = Object.values(errs)[0];
+      showWarning('Validation Error', firstErr || 'Please correct the highlighted validation errors.');
       return;
     }
 
     if (!isEmailVerified) {
+      showWarning('Email Verification Required', 'Please verify your email address with OTP before submitting registration.');
       openOtpModal(true);
       return;
     }
 
-    if (!password || password.length < 4) {
-      setFieldErrors((prev) => ({ ...prev, password: 'Password must be at least 4 characters.' }));
+    const passResult = validatePassword(password);
+    if (!passResult.isValid) {
+      setFieldErrors((prev) => ({ ...prev, password: passResult.error }));
+      showWarning('Password Error', passResult.error || 'Please enter a valid password.');
       return;
     }
     if (password !== confirmPassword) {
       setFieldErrors((prev) => ({ ...prev, confirmPassword: 'Passwords do not match.' }));
+      showWarning('Password Error', 'Passwords do not match. Please verify your confirm password.');
       return;
     }
     if (!pAgreed) {
       setFieldErrors((prev) => ({ ...prev, agree: 'Please accept the declaration to submit player registration.' }));
+      showWarning('Declaration Required', 'Please accept the declaration to submit player registration.');
       return;
     }
 
@@ -712,7 +727,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const role = squadPlayerRole.trim() || 'Batter';
 
     const nameErr = validateNameValue(name, 'Squad Player Name');
-    const emailErr = validateEmailValue(email);
+    const emailErr = validateEmailValue(email, 'Squad Player Email');
     const errs: Record<string, string> = {};
     if (nameErr) errs.squadPlayerName = nameErr;
     if (emailErr) errs.squadPlayerEmail = emailErr;
@@ -726,6 +741,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
     if (Object.keys(errs).length > 0) {
       setFieldErrors((prev) => ({ ...prev, ...errs }));
+      const firstErr = Object.values(errs)[0];
+      showWarning('Squad Player Error', firstErr || 'Please check squad player details.');
       return;
     }
 
@@ -775,7 +792,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
     const teamNameErr = validateNameValue(teamName, 'Team Name');
     const coachNameErr = validateNameValue(coachName, 'Coach Name');
-    const coachEmailErr = validateEmailValue(coachEmail);
+    const coachEmailErr = validateEmailValue(coachEmail, 'Coach Official Email Address');
     let talukErr: string | null = null;
     if (teamTaluk === 'Other' && !targetTaluk) talukErr = 'Please enter your team Taluk name.';
 
@@ -787,30 +804,38 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
     if (Object.keys(errs).length > 0) {
       setFieldErrors((prev) => ({ ...prev, ...errs }));
+      const firstErr = Object.values(errs)[0];
+      showWarning('Validation Error', firstErr || 'Please correct the highlighted validation errors.');
       return;
     }
 
     if (!isEmailVerified) {
+      showWarning('Email Verification Required', 'Please verify Coach email with OTP before submitting registration.');
       openOtpModal(true);
       return;
     }
 
-    if (!password || password.length < 4) {
-      setFieldErrors((prev) => ({ ...prev, password: 'Password must be at least 4 characters.' }));
+    const passResult = validatePassword(password);
+    if (!passResult.isValid) {
+      setFieldErrors((prev) => ({ ...prev, password: passResult.error }));
+      showWarning('Password Error', passResult.error || 'Please enter a valid password.');
       return;
     }
     if (password !== confirmPassword) {
       setFieldErrors((prev) => ({ ...prev, confirmPassword: 'Passwords do not match.' }));
+      showWarning('Password Error', 'Passwords do not match. Please verify your confirm password.');
       return;
     }
     if (players.length === 0) {
       setFieldErrors((prev) => ({ ...prev, squad: 'Please add at least one squad player to your team.' }));
       setStatusMessage('Please add at least one squad player to your team.');
       setStatusType('error');
+      showWarning('Squad Required', 'Please add at least one squad player to your team.');
       return;
     }
     if (!teamAgreed) {
       setFieldErrors((prev) => ({ ...prev, agree: 'Please accept the team declaration.' }));
+      showWarning('Declaration Required', 'Please accept the team declaration.');
       return;
     }
 
@@ -867,7 +892,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const targetTaluk = sTaluk === 'Other' ? sCustomTaluk.trim() : sTaluk;
 
     const nameErr = validateNameValue(name, 'Scorer Full Name');
-    const emailErr = validateEmailValue(email);
+    const emailErr = validateEmailValue(email, 'Official Scorer Email');
     const mobileErr = validateMobileValue(mobile);
     let talukErr: string | null = null;
     if (sTaluk === 'Other' && !targetTaluk) talukErr = 'Please enter your Taluk name.';
@@ -880,24 +905,31 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
     if (Object.keys(errs).length > 0) {
       setFieldErrors((prev) => ({ ...prev, ...errs }));
+      const firstErr = Object.values(errs)[0];
+      showWarning('Validation Error', firstErr || 'Please correct the highlighted validation errors.');
       return;
     }
 
     if (!isEmailVerified) {
+      showWarning('Email Verification Required', 'Please verify your official email with OTP before submitting registration.');
       openOtpModal(true);
       return;
     }
 
-    if (!password || password.length < 4) {
-      setFieldErrors((prev) => ({ ...prev, password: 'Password must be at least 4 characters.' }));
+    const passResult = validatePassword(password);
+    if (!passResult.isValid) {
+      setFieldErrors((prev) => ({ ...prev, password: passResult.error }));
+      showWarning('Password Error', passResult.error || 'Please enter a valid password.');
       return;
     }
     if (password !== confirmPassword) {
       setFieldErrors((prev) => ({ ...prev, confirmPassword: 'Passwords do not match.' }));
+      showWarning('Password Error', 'Passwords do not match. Please verify your confirm password.');
       return;
     }
     if (!sAgreed) {
       setFieldErrors((prev) => ({ ...prev, agree: 'Please accept the declaration to proceed.' }));
+      showWarning('Declaration Required', 'Please accept the declaration to proceed.');
       return;
     }
 
@@ -946,7 +978,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const targetDistrict = uDistrict === 'Other' ? uCustomDistrict.trim() : uDistrict;
 
     const nameErr = validateNameValue(name, 'Umpire Full Name');
-    const emailErr = validateEmailValue(email);
+    const emailErr = validateEmailValue(email, 'Official Umpire Email');
     const mobileErr = validateMobileValue(uMobile);
     let expErr: string | null = null;
     if (!uExperience.trim()) expErr = 'Please enter Umpire Experience.';
@@ -962,24 +994,31 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
     if (Object.keys(errs).length > 0) {
       setFieldErrors((prev) => ({ ...prev, ...errs }));
+      const firstErr = Object.values(errs)[0];
+      showWarning('Validation Error', firstErr || 'Please correct the highlighted validation errors.');
       return;
     }
 
     if (!isEmailVerified) {
+      showWarning('Email Verification Required', 'Please verify your official email with OTP before submitting registration.');
       openOtpModal(true);
       return;
     }
 
-    if (!password || password.length < 4) {
-      setFieldErrors((prev) => ({ ...prev, password: 'Password must be at least 4 characters.' }));
+    const passResult = validatePassword(password);
+    if (!passResult.isValid) {
+      setFieldErrors((prev) => ({ ...prev, password: passResult.error }));
+      showWarning('Password Error', passResult.error || 'Please enter a valid password.');
       return;
     }
     if (password !== confirmPassword) {
       setFieldErrors((prev) => ({ ...prev, confirmPassword: 'Passwords do not match.' }));
+      showWarning('Password Error', 'Passwords do not match. Please verify your confirm password.');
       return;
     }
     if (!uAgreed) {
       setFieldErrors((prev) => ({ ...prev, agree: 'Please accept the declaration to proceed.' }));
+      showWarning('Declaration Required', 'Please accept the declaration to proceed.');
       return;
     }
 
@@ -1099,17 +1138,22 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
           <View style={{ marginTop: 6 }}>
             <View style={styles.formRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Password (min 4 chars) *</Text>
+                <Text style={styles.label}>Account Password *</Text>
                 <View style={[styles.passwordContainer, fieldErrors.password && styles.inputError]}>
                   <TextInput
                     style={styles.passwordInput}
                     value={password}
                     onChangeText={(val) => {
                       setPassword(val);
-                      setFieldErrors((prev) => ({ ...prev, password: val.length >= 4 ? undefined : 'Password must be at least 4 characters.' }));
+                      const res = validatePassword(val);
+                      setFieldErrors((prev) => ({
+                        ...prev,
+                        password: res.isValid ? undefined : res.error,
+                        confirmPassword: confirmPassword && val !== confirmPassword ? 'Passwords do not match.' : (val === confirmPassword ? undefined : prev.confirmPassword)
+                      }));
                     }}
                     secureTextEntry={!showPassword}
-                    placeholder="Enter password"
+                    placeholder="Enter password (e.g. User@2026#)"
                     placeholderTextColor="#94a3b8"
                   />
                   <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
@@ -1128,7 +1172,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                   value={confirmPassword}
                   onChangeText={(val) => {
                     setConfirmPassword(val);
-                    setFieldErrors((prev) => ({ ...prev, confirmPassword: val === password ? undefined : 'Passwords do not match.' }));
+                    setFieldErrors((prev) => ({
+                      ...prev,
+                      confirmPassword: val === password ? undefined : 'Passwords do not match.'
+                    }));
                   }}
                   secureTextEntry={!showPassword}
                   placeholder="Re-enter password"
@@ -1139,6 +1186,30 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                 )}
               </View>
             </View>
+
+            {/* Password Validation Requirements Pill Box */}
+            {/* <View style={{ marginTop: 8, padding: 8, backgroundColor: '#f8fafc', borderRadius: 6, borderWidth: 1, borderColor: '#e2e8f0' }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155', marginBottom: 4 }}>
+                🔒 Password Rules (Required for Login & Register):
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: password.length >= 8 ? '#dcfce7' : '#ffffff', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: password.length >= 8 ? '#86efac' : '#cbd5e1' }}>
+                  <Text style={{ fontSize: 10.5, fontWeight: '700', color: password.length >= 8 ? '#15803d' : '#64748b' }}>
+                    {password.length >= 8 ? '✓' : '○'} Min 8 Characters
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: /[A-Z]/.test(password) ? '#dcfce7' : '#ffffff', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: /[A-Z]/.test(password) ? '#86efac' : '#cbd5e1' }}>
+                  <Text style={{ fontSize: 10.5, fontWeight: '700', color: /[A-Z]/.test(password) ? '#15803d' : '#64748b' }}>
+                    {/[A-Z]/.test(password) ? '✓' : '○'} 1 Uppercase (A-Z)
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: ((password.match(/[^A-Za-z0-9\s]/g) || []).length >= 2) ? '#dcfce7' : '#ffffff', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: ((password.match(/[^A-Za-z0-9\s]/g) || []).length >= 2) ? '#86efac' : '#cbd5e1' }}>
+                  <Text style={{ fontSize: 10.5, fontWeight: '700', color: ((password.match(/[^A-Za-z0-9\s]/g) || []).length >= 2) ? '#15803d' : '#64748b' }}>
+                    {((password.match(/[^A-Za-z0-9\s]/g) || []).length >= 2) ? '✓' : '○'} 2 Special Chars (e.g. !@#$)
+                  </Text>
+                </View>
+              </View>
+            </View> */}
           </View>
         )}
       </View>
@@ -1386,7 +1457,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         value={pEmail}
                         onChangeText={(val) => {
                           setPEmail(val);
-                          const err = validateEmailValue(val);
+                          if (isEmailVerified) {
+                            setIsEmailVerified(false);
+                            setOtpSent(false);
+                          }
+                          const err = validateEmailValue(val, 'Player Email Address');
                           setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
                         }}
                         placeholder="e.g. saravanan@example.com"
@@ -1659,7 +1734,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         value={coachEmail}
                         onChangeText={(val) => {
                           setCoachEmail(val);
-                          const err = validateEmailValue(val);
+                          if (isEmailVerified) {
+                            setIsEmailVerified(false);
+                            setOtpSent(false);
+                          }
+                          const err = validateEmailValue(val, 'Coach Official Email Address');
                           setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
                         }}
                         placeholder="e.g. coach@strikerscc.org"
@@ -1740,7 +1819,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                           value={squadPlayerEmail}
                           onChangeText={(val) => {
                             setSquadPlayerEmail(val);
-                            const err = validateEmailValue(val);
+                            const err = validateEmailValue(val, 'Squad Player Email');
                             setFieldErrors((prev) => ({ ...prev, squadPlayerEmail: err || undefined }));
                           }}
                           placeholder="Player Email Address"
@@ -1898,7 +1977,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         value={sEmail}
                         onChangeText={(val) => {
                           setSEmail(val);
-                          const err = validateEmailValue(val);
+                          if (isEmailVerified) {
+                            setIsEmailVerified(false);
+                            setOtpSent(false);
+                          }
+                          const err = validateEmailValue(val, 'Official Scorer Email');
                           setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
                         }}
                         placeholder="e.g. ramesh.scorer@cfvd.org"
@@ -2058,7 +2141,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         value={uEmail}
                         onChangeText={(val) => {
                           setUEmail(val);
-                          const err = validateEmailValue(val);
+                          if (isEmailVerified) {
+                            setIsEmailVerified(false);
+                            setOtpSent(false);
+                          }
+                          const err = validateEmailValue(val, 'Official Umpire Email');
                           setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
                         }}
                         placeholder="e.g. sundararajan.umpire@cfvd.org"

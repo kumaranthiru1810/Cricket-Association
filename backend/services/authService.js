@@ -43,7 +43,7 @@ class AuthService {
         try {
           await userModel.deleteById(existing.id);
           await db.models.User.deleteOne({ email: cleanEmail });
-        } catch (_e) {}
+        } catch (_e) { }
       } else {
         throw {
           status: 409,
@@ -237,7 +237,7 @@ class AuthService {
         otp_expires_at: expiresAt,
         otp_attempts: 0
       });
-    } catch (_e) {}
+    } catch (_e) { }
 
     // 3. Send Email via Nodemailer
     await sendOtpEmail({
@@ -354,14 +354,14 @@ class AuthService {
     let userUpdated = false;
     const userRes = await db.models.User.updateMany(
       { email: cleanEmail },
-      { 
-        $set: { 
-          password_hash: passwordHash, 
-          otp_hash: null, 
+      {
+        $set: {
+          password_hash: passwordHash,
+          otp_hash: null,
           otp_expires_at: null,
           otp_verified_at: new Date(),
           updated_at: new Date()
-        } 
+        }
       }
     );
     if (userRes && (userRes.matchedCount > 0 || userRes.modifiedCount > 0)) {
@@ -374,7 +374,7 @@ class AuthService {
         { coach_email: cleanEmail },
         { $set: { password_hash: passwordHash, updated_at: new Date() } }
       );
-    } catch (_e) {}
+    } catch (_e) { }
 
     // 3. Clear memory OTP
     forgotPasswordOtpMap.delete(cleanEmail);
@@ -460,7 +460,7 @@ class AuthService {
         otp_expires_at: expiresAt,
         otp_attempts: 0
       });
-    } catch (e) {}
+    } catch (e) { }
 
     await sendOtpEmail({
       toEmail: user.email,
@@ -515,7 +515,7 @@ class AuthService {
     const isExpired = user.otp_expires_at && new Date() > new Date(user.otp_expires_at);
     if (isExpired) {
       await userModel.clearOtp(user.id || cleanEmail);
-      try { await scorerModel.clearOtp(user.id || cleanEmail); } catch (e) {}
+      try { await scorerModel.clearOtp(user.id || cleanEmail); } catch (e) { }
       throw { status: 400, message: 'OTP has expired. Please request a new OTP.' };
     }
 
@@ -525,12 +525,12 @@ class AuthService {
         const User = db.models.User;
         await User.updateOne({ email: cleanEmail }, { $inc: { otp_attempts: 1 } });
         await scorerModel.incrementOtpAttempts(user.id || cleanEmail);
-      } catch (e) {}
+      } catch (e) { }
       throw { status: 400, message: 'Invalid OTP code. Please enter the correct code.' };
     }
 
     await userModel.clearOtp(user.id || cleanEmail);
-    try { await scorerModel.clearOtp(user.id || cleanEmail); } catch (e) {}
+    try { await scorerModel.clearOtp(user.id || cleanEmail); } catch (e) { }
 
     const certLevel = user.certificationLevel || user.scorer_details?.certification_level || 'District Certified';
 
@@ -626,10 +626,10 @@ class AuthService {
     if (!user && ADMIN_OR_DEV_EMAILS.includes(cleanEmail)) {
       user = await userModel.create({
         id: `ADM-${Date.now()}`,
-        name: cleanEmail.includes('athilingam') 
-          ? 'Athilingam (Admin & Scorer)' 
-          : (cleanEmail.includes('ramana') || cleanEmail.includes('ponramanan') 
-            ? 'Mathan / Ramana (Admin & Scorer)' 
+        name: cleanEmail.includes('athilingam')
+          ? 'Athilingam (Admin & Scorer)'
+          : (cleanEmail.includes('ramana') || cleanEmail.includes('ponramanan')
+            ? 'Mathan / Ramana (Admin & Scorer)'
             : 'Association Admin'),
         email: cleanEmail,
         role: 'ADMIN',
@@ -853,7 +853,7 @@ class AuthService {
         result: 'SUCCESS',
         details: `Administrator logged into management console.`
       });
-    } catch (e) {}
+    } catch (e) { }
 
     return {
       success: true,
@@ -977,7 +977,7 @@ class AuthService {
         try {
           const bcrypt = require('bcryptjs');
           isPasswordValid = await bcrypt.compare(cleanCredential, user.password_hash);
-        } catch (_e) {}
+        } catch (_e) { }
       }
     }
 
@@ -1063,7 +1063,7 @@ class AuthService {
       const regCoachName = (reg?.coach_name || team?.coach_name || '').toLowerCase();
       const inputCoachName = coachName.trim().toLowerCase();
       const isNameMatch = !regCoachName || regCoachName.includes(inputCoachName) || inputCoachName.includes(regCoachName) ||
-                          regCoachName.split(' ').some(w => inputCoachName.includes(w));
+        regCoachName.split(' ').some(w => inputCoachName.includes(w));
       if (!isNameMatch) {
         throw {
           status: 401,
@@ -1315,7 +1315,7 @@ class AuthService {
       try {
         const bcrypt = require('bcryptjs');
         passwordHash = await bcrypt.hash(passwordHash, 10);
-      } catch (_e) {}
+      } catch (_e) { }
     }
 
     const userId = `SCR-${Math.floor(100 + Math.random() * 900)}`;
@@ -1345,7 +1345,7 @@ class AuthService {
         association: association || 'Virudhunagar District Cricket Association',
         status: 'PENDING'
       });
-    } catch (e) {}
+    } catch (e) { }
 
     await notificationModel.create({
       type: 'SCORER_REGISTRATION',
@@ -1519,7 +1519,7 @@ class AuthService {
     try {
       const bcrypt = require('bcryptjs');
       passwordHash = await bcrypt.hash(passwordHash, 10);
-    } catch (_e) {}
+    } catch (_e) { }
 
     const userId = `UMP-${Math.floor(100 + Math.random() * 900)}`;
     const user = await userModel.create({
@@ -1619,7 +1619,7 @@ class AuthService {
       try {
         const bcrypt = require('bcryptjs');
         passwordHash = await bcrypt.hash(passwordHash, 10);
-      } catch (_e) {}
+      } catch (_e) { }
     }
 
     const playerId = `PLY-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
@@ -1770,7 +1770,7 @@ class AuthService {
       try {
         const bcrypt = require('bcryptjs');
         passwordHash = await bcrypt.hash(passwordHash, 10);
-      } catch (_e) {}
+      } catch (_e) { }
     }
 
     const createdTeam = await teamRegistrationModel.create({
@@ -2028,12 +2028,12 @@ class AuthService {
     // Individual User approval (PLAYER, SCORER, CONTENT_CREATOR)
     const cleanId = String(id || '').trim();
     const cleanEmail = cleanId.toLowerCase();
-    const query = { 
+    const query = {
       $or: [
-        { id: cleanId }, 
+        { id: cleanId },
         { email: cleanEmail },
         { email: cleanId }
-      ] 
+      ]
     };
     if (mongoose.Types.ObjectId.isValid(cleanId)) {
       query.$or.push({ _id: cleanId });
