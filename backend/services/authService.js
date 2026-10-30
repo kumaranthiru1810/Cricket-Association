@@ -955,6 +955,7 @@ class AuthService {
     const DEV_PASSWORDS = [
       '1234',
       '123456',
+      'test1234',
       'admin123',
       'admin',
       'CFVD@Admin2026',

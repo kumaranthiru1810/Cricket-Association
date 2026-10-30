@@ -115,6 +115,51 @@ const SAMPLE_15_SQUAD: Array<{ name: string; email: string; role: string }> = [
   { name: 'D. Rajesh', email: 'rajesh.d@strikerscc.org', role: 'Wicket Keeper' }
 ];
 
+export const REGISTRATION_ROLES: { key: RegistrationRole; label: string; icon: string; desc: string }[] = [
+  { key: 'PLAYER', label: 'Player', icon: '🏏', desc: 'District player profile & trial enrollment' },
+  { key: 'TEAM', label: 'Team & Coach', icon: '🛡️', desc: 'Club & institution team squad registration' },
+  { key: 'SCORER', label: 'Scorer', icon: '📋', desc: 'Certified match scorer accreditation' },
+  { key: 'UMPIRE', label: 'Umpire', icon: '⚖️', desc: 'Official umpire panel accreditation' }
+];
+
+const PickerContext = React.createContext<((title: string, options: string[], selectedValue: string, onSelect: (val: string) => void) => void) | null>(null);
+
+const DropdownField = React.memo(({
+  label,
+  value,
+  options,
+  onSelect,
+  style
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onSelect: (val: string) => void;
+  style?: any;
+}) => {
+  const openPicker = React.useContext(PickerContext);
+  return (
+    <View style={[{ flex: 1 }, style]}>
+      <Text style={styles.label}>{label}</Text>
+      <TouchableOpacity
+        style={styles.dropdownBox}
+        activeOpacity={0.7}
+        onPress={() => {
+          if (openPicker) {
+            openPicker(`Select ${label.replace(' *', '')}`, options, value, onSelect);
+          }
+        }}
+      >
+        <Text style={styles.dropdownText} numberOfLines={1}>
+          {value || 'Select...'}
+        </Text>
+        <Text style={styles.dropdownChevron}>▾</Text>
+      </TouchableOpacity>
+    </View>
+  );
+});
+DropdownField.displayName = 'DropdownField';
+
 interface RegistrationScreenProps {
   onExit?: () => void;
 }
@@ -132,9 +177,20 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   };
 
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
-  const isDesktop = windowWidth >= 640;
+  const isDesktop = windowWidth >= 768;
 
   const [activeRole, setActiveRole] = useState<RegistrationRole>(getInitialRole());
+  const activeRoleObj = REGISTRATION_ROLES.find((r) => r.key === activeRole) || REGISTRATION_ROLES[0];
+
+  const openPicker = (title: string, options: string[], selectedValue: string, onSelect: (val: string) => void) => {
+    setPickerState({
+      visible: true,
+      title,
+      options,
+      selectedValue,
+      onSelect
+    });
+  };
 
   // Global loading and status
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -363,6 +419,72 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     setConfirmPassword('');
     setStatusMessage(null);
     setStatusType(null);
+  };
+
+  // Quick fill helper for demo/testing registration across all 4 roles
+  const handleDemoFill = () => {
+    setFieldErrors({});
+    setStatusMessage(null);
+    setStatusType(null);
+
+    const demoPass = 'test1234'; // ggignore
+    setPassword(demoPass);
+    setConfirmPassword(demoPass);
+    setIsEmailVerified(true);
+    setOtpCode('1234');
+
+    if (activeRole === 'PLAYER') {
+      setPName('R. Saravanan');
+      setPEmail('saravanan.r@strikerscc.org');
+      setPMobile('9876543210');
+      setPRole('Batsman');
+      setPCategory('Senior Men');
+      setPTaluk('Virudhunagar');
+      setPBattingStyle('Right-Handed Batsman');
+      setPClub('Virudhunagar Strikers CC');
+      setPAgreed(true);
+      setStatusMessage('⚡ Demo Player details filled! Scroll down to inspect or click Submit.');
+      setStatusType('success');
+    } else if (activeRole === 'TEAM') {
+      setTeamName('Virudhunagar Super Strikers CC');
+      setCoachName('Coach S. Murugan');
+      setCoachEmail('coach.murugan@strikerscc.org');
+      setTeamTaluk('Virudhunagar');
+      const squad: SquadPlayer[] = SAMPLE_15_SQUAD.map((item, idx) => ({
+        id: `sample-${idx + 1}-${Date.now()}`,
+        name: item.name,
+        email: item.email,
+        role: item.role
+      }));
+      setPlayers(squad);
+      setTeamAgreed(true);
+      setStatusMessage('⚡ Demo Team & 15 Squad Players filled! Scroll down to inspect or click Submit.');
+      setStatusType('success');
+    } else if (activeRole === 'SCORER') {
+      setSName('K. Ramesh Kumar');
+      setSEmail('ramesh.scorer@cfvd.org');
+      setSMobile('9876543211');
+      setSTaluk('Virudhunagar');
+      setSLevel('District Certified');
+      setSAgreed(true);
+      setStatusMessage('⚡ Demo Official Scorer filled! Scroll down to inspect or click Submit.');
+      setStatusType('success');
+    } else if (activeRole === 'UMPIRE') {
+      setUName('Thiru. K. Sundaram');
+      setUEmail('sundaram.umpire@cfvd.org');
+      setUMobile('9876543212');
+      setUDob('1985-05-15');
+      setUGender('Male');
+      setUExperience('10 years officiating senior district & TNCA league tournaments');
+      setUYearsOfExperience('10');
+      setUQualification('District Certified Umpire');
+      setUDistrict('Virudhunagar');
+      setUState('Tamil Nadu');
+      setUSpecialization('On-field Umpire');
+      setUAgreed(true);
+      setStatusMessage('⚡ Demo Official Umpire filled! Scroll down to inspect or click Submit.');
+      setStatusType('success');
+    }
   };
 
   // Step 1: Send Email Verification OTP
@@ -718,8 +840,15 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setStatusMessage(resp?.message || teamNotice);
       setStatusType('success');
 
-      await showSuccess('Registration Request Submitted!', teamNotice, 3500);
-      navigate('Login', { initialRole: 'TEAM' });
+      await showSuccess('Registration Request Submitted!', teamNotice, 2500);
+      setPendingApprovalData({
+        name: `${teamName.trim()} (Coach: ${coachName.trim()})`,
+        email: coachEmail.trim().toLowerCase(),
+        role: 'Club & Institution Team',
+        certificationLevel: `${players.length} Squad Players`,
+        taluk: targetTaluk
+      });
+      setShowApprovalPendingModal(true);
     } catch (err: any) {
       setIsLoading(false);
       setStatusMessage(err?.message || 'Team registration failed. Please try again.');
@@ -898,42 +1027,6 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     }
   };
 
-  // Reusable Dropdown Component
-  const DropdownField = ({
-    label,
-    value,
-    options,
-    onSelect,
-    style
-  }: {
-    label: string;
-    value: string;
-    options: string[];
-    onSelect: (val: string) => void;
-    style?: any;
-  }) => (
-    <View style={[{ flex: 1 }, style]}>
-      <Text style={styles.label}>{label}</Text>
-      <TouchableOpacity
-        style={styles.dropdownBox}
-        activeOpacity={0.7}
-        onPress={() =>
-          setPickerState({
-            visible: true,
-            title: `Select ${label.replace(' *', '')}`,
-            options,
-            selectedValue: value,
-            onSelect
-          })
-        }
-      >
-        <Text style={styles.dropdownText} numberOfLines={1}>
-          {value || 'Select...'}
-        </Text>
-        <Text style={styles.dropdownChevron}>▾</Text>
-      </TouchableOpacity>
-    </View>
-  );
 
   // Render Verification and Password Box (in light theme)
   const renderVerificationAndPasswordBlock = () => {
@@ -1058,7 +1151,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   const isWicketKeeper = pRole === 'Wicket Keeper';
 
   return (
-    <View style={[styles.container, Platform.OS === 'web' && isDesktop && ({ height: '100vh', maxHeight: '100vh', overflow: 'hidden' } as any)]}>
+    <PickerContext.Provider value={openPicker}>
+      <View style={styles.container}>
         {/* Sleek Minimal Corner Exit Action */}
         <TouchableOpacity
           onPress={() => (onExit ? onExit() : navigate('Home'))}
@@ -1069,70 +1163,141 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
         </TouchableOpacity>
 
         <ScrollView
-          contentContainerStyle={[styles.scroll, isDesktop && { flex: 1, justifyContent: 'center' }]}
-          scrollEnabled={!isDesktop}
-          showsVerticalScrollIndicator={false}
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={true}
           keyboardShouldPersistTaps="handled"
+          scrollEnabled={true}
+          nestedScrollEnabled={true}
+          bounces={true}
+          alwaysBounceVertical={true}
         >
-          <View style={styles.cardContainer}>
-            {/* Federation Logo & Title */}
-            <View style={styles.logoContainer}>
-              <Image
-                source={require('../../../assets/logo_transparent.png')}
-                style={styles.logo}
-                resizeMode="contain"
-              />
-              <Text style={styles.mainTitle}>CRICKET FEDERATION OF</Text>
-              <Text style={styles.mainSubtitle}>VIRUDHUNAGAR DISTRICT</Text>
-            </View>
+          {/* Main Layout Split Wrapper: Left Branding (Second Image) + Right Registration Form */}
+          <View style={[styles.layoutSplitWrapper, isDesktop ? styles.layoutSplitDesktop : styles.layoutSplitMobile]}>
 
-            <View style={styles.card}>
-              {/* Compact Card Header: Title + Role Tabs */}
-              <View style={styles.cardTopRow}>
-                <View>
-                  <Text style={styles.title}>Register Here</Text>
-                  <Text style={styles.subtitle}>District player, team, scorer and umpire enrollment</Text>
-                </View>
+            {/* LEFT SECTION (Second Image Content: Crest + Federation Title + Association Portal Info) */}
+            {isDesktop ? (
+              <View style={styles.leftBrandingSection}>
+                <View style={styles.leftBrandingCard}>
+                  {/* Federation Crest Logo & Title matching Second Image */}
+                  <View style={styles.leftLogoContainer}>
+                    <Image
+                      source={require('../../../assets/logo_transparent.png')}
+                      style={styles.leftLogoImage}
+                      resizeMode="contain"
+                    />
+                    <Text style={styles.leftMainTitle}>CRICKET FEDERATION OF</Text>
+                    <Text style={styles.leftMainSubtitle}>VIRUDHUNAGAR DISTRICT</Text>
+                  </View>
 
-                {/* Role Selection Tabs */}
-                <View style={styles.roleTabsContainer}>
-                  <TouchableOpacity
-                    style={[styles.roleTab, activeRole === 'PLAYER' && styles.roleTabActive]}
-                    onPress={() => switchRole('PLAYER')}
-                  >
-                    <Text style={[styles.roleTabText, activeRole === 'PLAYER' && styles.roleTabTextActive]}>
-                      🏏 Player
+                  <View style={styles.leftAffiliationPill}>
+                    <Text style={styles.leftAffiliationText}>AFFILIATED TO TNCA</Text>
+                  </View>
+
+                  <View style={styles.leftDivider} />
+
+                  <View style={styles.leftInfoBlock}>
+                    <Text style={styles.leftInfoHeading}>Official Enrollment Portal</Text>
+                    <Text style={styles.leftInfoDescription}>
+                      Centralized association register for players, clubs, scorers, and certified umpire panels across Virudhunagar District.
                     </Text>
-                  </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={[styles.roleTab, activeRole === 'TEAM' && styles.roleTabActive]}
-                    onPress={() => switchRole('TEAM')}
-                  >
-                    <Text style={[styles.roleTabText, activeRole === 'TEAM' && styles.roleTabTextActive]}>
-                      🛡️ Team & Coach
-                    </Text>
-                  </TouchableOpacity>
+                    <View style={styles.leftFeatureList}>
+                      <View style={styles.leftFeatureItem}>
+                        <Text style={styles.leftFeatureIcon}>🏏</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.leftFeatureTitle}>Official District ID</Text>
+                          <Text style={styles.leftFeatureSub}>TNCA league eligibility & player card</Text>
+                        </View>
+                      </View>
 
-                  <TouchableOpacity
-                    style={[styles.roleTab, activeRole === 'SCORER' && styles.roleTabActive]}
-                    onPress={() => switchRole('SCORER')}
-                  >
-                    <Text style={[styles.roleTabText, activeRole === 'SCORER' && styles.roleTabTextActive]}>
-                      📋 Scorer
-                    </Text>
-                  </TouchableOpacity>
+                      <View style={styles.leftFeatureItem}>
+                        <Text style={styles.leftFeatureIcon}>📊</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.leftFeatureTitle}>Live Career Analytics</Text>
+                          <Text style={styles.leftFeatureSub}>Ball-by-ball certified match archives</Text>
+                        </View>
+                      </View>
 
-                  <TouchableOpacity
-                    style={[styles.roleTab, activeRole === 'UMPIRE' && styles.roleTabActive]}
-                    onPress={() => switchRole('UMPIRE')}
-                  >
-                    <Text style={[styles.roleTabText, activeRole === 'UMPIRE' && styles.roleTabTextActive]}>
-                      ⚖️ Umpire
-                    </Text>
-                  </TouchableOpacity>
+                      <View style={styles.leftFeatureItem}>
+                        <Text style={styles.leftFeatureIcon}>🛡️</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.leftFeatureTitle}>Verified Accreditation</Text>
+                          <Text style={styles.leftFeatureSub}>Direct Apex Executive validation</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.leftContactBadge}>
+                      <Text style={styles.leftContactLabel}>District Registration Helpdesk</Text>
+                      <Text style={styles.leftContactVal}>support@cfvd.org • Official Match Centre</Text>
+                    </View>
+                  </View>
                 </View>
               </View>
+            ) : (
+              <View style={styles.mobileTopLogoContainer}>
+                <Image
+                  source={require('../../../assets/logo_transparent.png')}
+                  style={styles.logo}
+                  resizeMode="contain"
+                />
+                <Text style={styles.mainTitle}>CRICKET FEDERATION OF</Text>
+                <Text style={styles.mainSubtitle}>VIRUDHUNAGAR DISTRICT</Text>
+              </View>
+            )}
+
+            {/* RIGHT SECTION: Registration Fields Card */}
+            <View style={styles.rightFormSection}>
+              <View style={styles.card}>
+                {/* Header: Title + Role Dropdown Box (replacing separate tabs) */}
+                <View style={styles.cardTopRow}>
+                  <View style={styles.cardTitleBlock}>
+                    <Text style={styles.title}>Register Here</Text>
+                    <Text style={styles.subtitle}>District player, team, scorer and umpire enrollment</Text>
+                  </View>
+
+                  <View style={styles.headerRightActions}>
+                    <TouchableOpacity
+                      style={styles.demoFillBtn}
+                      activeOpacity={0.8}
+                      onPress={handleDemoFill}
+                    >
+                      <Text style={styles.demoFillBtnText}>⚡ Demo Fill</Text>
+                    </TouchableOpacity>
+
+                    {/* Dropdown Box for Selecting Role */}
+                    <View style={styles.roleDropdownWrapper}>
+                      <Text style={styles.roleDropdownLabel}>Registration Category *</Text>
+                      <TouchableOpacity
+                        style={styles.roleDropdownBtn}
+                        activeOpacity={0.7}
+                        onPress={() =>
+                          setPickerState({
+                            visible: true,
+                            title: 'Select Registration Category',
+                            options: REGISTRATION_ROLES.map((r) => `${r.icon} ${r.label}`),
+                            selectedValue: `${activeRoleObj.icon} ${activeRoleObj.label}`,
+                            onSelect: (selectedStr) => {
+                              const match = REGISTRATION_ROLES.find(
+                                (r) => `${r.icon} ${r.label}` === selectedStr
+                              );
+                              if (match) switchRole(match.key);
+                            }
+                          })
+                        }
+                      >
+                        <View style={styles.roleDropdownSelected}>
+                          <Text style={styles.roleDropdownSelectedIcon}>{activeRoleObj.icon}</Text>
+                          <Text style={styles.roleDropdownSelectedText} numberOfLines={1}>
+                            {activeRoleObj.label}
+                          </Text>
+                        </View>
+                        <Text style={styles.roleDropdownChevron}>▾</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
 
               {/* Status Banner */}
               {statusMessage && (
@@ -1163,7 +1328,12 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
               {activeRole === 'PLAYER' && (
                 <>
                   <View style={styles.sectionHeaderBox}>
-                    <Text style={styles.sectionHeaderText}>🏏 PLAYER PERSONAL & CRICKETING PROFILE</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.sectionHeaderText}>🏏 PLAYER PERSONAL & CRICKETING PROFILE</Text>
+                      <TouchableOpacity onPress={handleDemoFill}>
+                        <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
                   {/* Row 1: Player Full Name (left) & Mobile Number (right) */}
@@ -1434,7 +1604,12 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
               {activeRole === 'TEAM' && (
                 <>
                   <View style={styles.sectionHeaderBox}>
-                    <Text style={styles.sectionHeaderText}>🛡️ TEAM CLUB & COACH PROFILE</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.sectionHeaderText}>🛡️ TEAM CLUB & COACH PROFILE</Text>
+                      <TouchableOpacity onPress={handleDemoFill}>
+                        <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
                   {/* Row 1: Team Name (left) & Coach Name (right) */}
@@ -1665,7 +1840,12 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
               {activeRole === 'SCORER' && (
                 <>
                   <View style={styles.sectionHeaderBox}>
-                    <Text style={styles.sectionHeaderText}>📋 OFFICIAL SCORER ENROLLMENT</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.sectionHeaderText}>📋 OFFICIAL SCORER ENROLLMENT</Text>
+                      <TouchableOpacity onPress={handleDemoFill}>
+                        <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
                   {/* Row 1: Scorer Full Name (left) & Mobile Number (right) */}
@@ -1820,7 +2000,12 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
               {activeRole === 'UMPIRE' && (
                 <>
                   <View style={styles.sectionHeaderBox}>
-                    <Text style={styles.sectionHeaderText}>⚖️ OFFICIAL UMPIRE REGISTRATION & ACCREDITATION</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.sectionHeaderText}>⚖️ OFFICIAL UMPIRE REGISTRATION & ACCREDITATION</Text>
+                      <TouchableOpacity onPress={handleDemoFill}>
+                        <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
                   {/* Row 1: Umpire Full Name (left) & Mobile Number (right) */}
@@ -2093,7 +2278,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
             </View>
           </View>
-        </ScrollView>
+        </View>
+      </ScrollView>
 
         {/* Global Reusable Dropdown Modal */}
         {pickerState && (
@@ -2521,7 +2707,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                             </View>
                             <Text style={styles.flowStepNum}>STEP 1</Text>
                             <Text style={styles.flowStepLabel}>
-                              {pendingApprovalData?.role?.includes('Umpire') ? 'Umpire Registration' : 'Scorer Registration'}
+                              {pendingApprovalData?.role?.includes('Umpire')
+                                ? 'Umpire Registration'
+                                : pendingApprovalData?.role?.includes('Team')
+                                ? 'Team Registration'
+                                : 'Scorer Registration'}
                             </Text>
                             <Text style={styles.flowStepStatusGreen}>Submitted</Text>
                           </View>
@@ -2569,7 +2759,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                             <Text style={styles.flowStepNum}>STEP 4</Text>
                             <Text style={styles.flowStepLabel}>Portal Login</Text>
                             <Text style={styles.flowStepStatusMuted}>
-                              {pendingApprovalData?.role?.includes('Umpire') ? 'Access Umpire' : 'Access Scorer'}
+                              {pendingApprovalData?.role?.includes('Umpire')
+                                ? 'Access Umpire'
+                                : pendingApprovalData?.role?.includes('Team')
+                                ? 'Access Team'
+                                : 'Access Scorer'}
                             </Text>
                           </View>
                         </View>
@@ -2715,7 +2909,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                           </View>
                           <Text style={styles.flowStepNum}>STEP 1</Text>
                           <Text style={styles.flowStepLabel}>
-                            {pendingApprovalData?.role?.includes('Umpire') ? 'Umpire Registration' : 'Scorer Registration'}
+                            {pendingApprovalData?.role?.includes('Umpire')
+                              ? 'Umpire Registration'
+                              : pendingApprovalData?.role?.includes('Team')
+                              ? 'Team Registration'
+                              : 'Scorer Registration'}
                           </Text>
                           <Text style={styles.flowStepStatusGreen}>Submitted</Text>
                         </View>
@@ -2763,7 +2961,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                           <Text style={styles.flowStepNum}>STEP 4</Text>
                           <Text style={styles.flowStepLabel}>Portal Login</Text>
                           <Text style={styles.flowStepStatusMuted}>
-                            {pendingApprovalData?.role?.includes('Umpire') ? 'Access Umpire' : 'Access Scorer'}
+                            {pendingApprovalData?.role?.includes('Umpire')
+                              ? 'Access Umpire'
+                              : pendingApprovalData?.role?.includes('Team')
+                              ? 'Access Team'
+                              : 'Access Scorer'}
                           </Text>
                         </View>
                       </View>
@@ -2839,11 +3041,26 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
           </View>
         </Modal>
       </View>
-    );
+    </PickerContext.Provider>
+  );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc', width: '100%', position: 'relative' },
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    width: '100%',
+    height: '100%',
+    minHeight: '100%',
+    position: 'relative',
+    ...(Platform.OS === 'web' ? { overflow: 'hidden' as any } : {})
+  },
+  scrollView: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    ...(Platform.OS === 'web' ? { overflowY: 'auto' as any } : {})
+  },
   cornerExitBtn: {
     position: 'absolute',
     top: 14,
@@ -2869,11 +3086,252 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.3
   },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+    flexWrap: 'wrap'
+  },
+  demoFillBtn: {
+    backgroundColor: '#fef08a',
+    borderColor: '#eab308',
+    borderWidth: 1.5,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2
+  },
+  demoFillBtnText: {
+    color: '#854d0e',
+    fontWeight: '800',
+    fontSize: 12,
+    letterSpacing: 0.3
+  },
+  demoFillLink: {
+    color: '#b45309',
+    fontWeight: '800',
+    fontSize: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2
+  },
   logoContainer: { alignItems: 'center', marginBottom: 8, marginTop: 4 },
   logo: { width: 44, height: 44, marginBottom: 2 },
   mainTitle: { color: '#1e293b', fontSize: 12, fontWeight: '800', letterSpacing: 1 },
   mainSubtitle: { color: '#b45309', fontSize: 15, fontWeight: '900', letterSpacing: 1 },
-  scroll: { flexGrow: 1, width: '100%', justifyContent: 'center' },
+  scroll: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    ...(Platform.OS === 'web' ? { overflowY: 'auto' as any } : {})
+  },
+  scrollContent: {
+    flexGrow: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingVertical: 24,
+    paddingHorizontal: 14,
+    paddingBottom: 120
+  },
+  layoutSplitWrapper: {
+    width: '100%',
+    maxWidth: 1140,
+    alignItems: 'center'
+  },
+  layoutSplitDesktop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    gap: 22
+  },
+  layoutSplitMobile: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 12
+  },
+  leftBrandingSection: {
+    width: 320,
+    flexShrink: 0
+  },
+  leftBrandingCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+    alignItems: 'center'
+  },
+  leftLogoContainer: {
+    alignItems: 'center',
+    marginBottom: 8
+  },
+  leftLogoImage: {
+    width: 64,
+    height: 64,
+    marginBottom: 8
+  },
+  leftMainTitle: {
+    color: '#1e293b',
+    fontSize: 12.5,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+    textAlign: 'center'
+  },
+  leftMainSubtitle: {
+    color: '#b45309',
+    fontSize: 15.5,
+    fontWeight: '900',
+    letterSpacing: 1.1,
+    textAlign: 'center',
+    marginTop: 2
+  },
+  leftAffiliationPill: {
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    marginTop: 6,
+    marginBottom: 10
+  },
+  leftAffiliationText: {
+    color: '#92400e',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5
+  },
+  leftDivider: {
+    height: 1,
+    backgroundColor: '#f1f5f9',
+    width: '100%',
+    marginVertical: 10
+  },
+  leftInfoBlock: {
+    width: '100%'
+  },
+  leftInfoHeading: {
+    color: '#0f172a',
+    fontSize: 13.5,
+    fontWeight: '800',
+    marginBottom: 6,
+    textAlign: 'center'
+  },
+  leftInfoDescription: {
+    color: '#64748b',
+    fontSize: 11,
+    lineHeight: 16,
+    textAlign: 'center',
+    marginBottom: 14
+  },
+  leftFeatureList: {
+    gap: 8,
+    marginBottom: 14
+  },
+  leftFeatureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 10
+  },
+  leftFeatureIcon: {
+    fontSize: 16
+  },
+  leftFeatureTitle: {
+    color: '#1e293b',
+    fontSize: 11.5,
+    fontWeight: '700'
+  },
+  leftFeatureSub: {
+    color: '#64748b',
+    fontSize: 10
+  },
+  leftContactBadge: {
+    backgroundColor: '#eff6ff',
+    borderRadius: 8,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    alignItems: 'center'
+  },
+  leftContactLabel: {
+    color: '#1e40af',
+    fontSize: 10,
+    fontWeight: '700'
+  },
+  leftContactVal: {
+    color: '#3b82f6',
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 2
+  },
+  mobileTopLogoContainer: {
+    alignItems: 'center',
+    marginBottom: 10,
+    marginTop: 4
+  },
+  rightFormSection: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 720
+  },
+  cardTitleBlock: {
+    flex: 1,
+    minWidth: 180,
+    marginRight: 10
+  },
+  roleDropdownWrapper: {
+    minWidth: 180,
+    maxWidth: 220
+  },
+  roleDropdownLabel: {
+    color: '#475569',
+    fontSize: 10.5,
+    fontWeight: '700',
+    marginBottom: 3
+  },
+  roleDropdownBtn: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    height: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  roleDropdownSelected: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1
+  },
+  roleDropdownSelectedIcon: {
+    fontSize: 14
+  },
+  roleDropdownSelectedText: {
+    color: '#0f172a',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  roleDropdownChevron: {
+    color: '#b45309',
+    fontSize: 13,
+    fontWeight: 'bold',
+    marginLeft: 6
+  },
   cardContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -2889,7 +3347,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
     width: '100%',
-    maxWidth: 680,
+    maxWidth: 720,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
@@ -3154,8 +3612,8 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
   playerListContainer: {
-    marginBottom: 6,
-    maxHeight: 120
+    marginBottom: 8,
+    width: '100%'
   },
   playerItemRow: {
     flexDirection: 'row',

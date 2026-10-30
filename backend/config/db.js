@@ -1660,6 +1660,37 @@ async function mongoQuery(sqlOrModel, params = []) {
     return [memoryDb.districts];
   }
 
+  // 16. SELECT / INSERT / UPDATE / DELETE from notifications
+  if (lower.includes('from notifications') || lower.includes('into notifications') || lower.startsWith('update notifications') || lower.startsWith('delete from notifications')) {
+    if (lower.startsWith('select')) {
+      const notifs = await Notification.find({}).sort({ created_at: -1 }).limit(100).lean();
+      return [notifs];
+    }
+    if (lower.startsWith('insert into notifications')) {
+      const [id, title, message, type, targetRole] = params;
+      const n = await Notification.create({
+        id: id || `NOTIF-${Date.now()}`,
+        title: title || 'Notice',
+        message: message || '',
+        type: type || 'ANNOUNCEMENT',
+        reference_id: targetRole || null,
+        status: 'UNREAD',
+        created_at: new Date()
+      });
+      return [{ insertId: n.id, affectedRows: 1 }];
+    }
+    if (lower.startsWith('update notifications')) {
+      if (lower.includes('where id = ?')) {
+        await Notification.updateOne({ id: params[0] }, { $set: { status: 'READ' } });
+        return [{ affectedRows: 1 }];
+      }
+    }
+    if (lower.startsWith('delete from notifications')) {
+      await Notification.deleteOne({ id: params[0] });
+      return [{ affectedRows: 1 }];
+    }
+  }
+
   // Default fallback for unhandled queries
   return [[]];
 }
