@@ -208,7 +208,7 @@ const PlayerSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true, index: true },
   team_id: { type: String, required: true, index: true },
   name: { type: String, required: true },
-  email: { type: String, required: true, lowercase: true, trim: true, index: true },
+  email: { type: String, default: null, lowercase: true, trim: true },
   password_hash: { type: String, default: null },
   role: { type: String, enum: ['BATTER', 'BOWLER', 'ALL_ROUNDER', 'WICKET_KEEPER'], default: 'BATTER' },
   jersey_number: { type: Number, default: 0 },
@@ -936,7 +936,7 @@ async function seedDefaultData() {
     // Seed Players
     const playerCount = await Player.countDocuments();
     if (playerCount === 0) {
-      await Player.insertMany([
+      const rawPlayers = [
         // Team 1 (TM-01) - 15 Genuine Players
         { id: 'P301', team_id: 'TM-01', name: 'Suresh Kumar', email: 'suresh@spartans.com', role: 'BATTER', jersey_number: 7, batting_style: 'Right Hand Bat', stats: { runs: 284, balls: 195, fours: 32, sixes: 10, highest_score: 88, wickets: 0, overs: 0, runs_conceded: 0, catches: 4, stumpings: 0 } },
         { id: 'P302', team_id: 'TM-01', name: 'Muthu Raj', email: 'muthuraj@spartans.com', role: 'ALL_ROUNDER', jersey_number: 18, batting_style: 'Right Hand Bat', bowling_style: 'Right Arm Medium', stats: { runs: 165, balls: 110, fours: 15, sixes: 6, highest_score: 54, wickets: 8, overs: 18, runs_conceded: 124, catches: 3, stumpings: 0 } },
@@ -1004,7 +1004,12 @@ async function seedDefaultData() {
         { id: 'P613', team_id: 'TM-04', name: 'K. Marimuthu', role: 'ALL_ROUNDER', jersey_number: 45 },
         { id: 'P614', team_id: 'TM-04', name: 'M. Ramachandran', role: 'BOWLER', jersey_number: 55 },
         { id: 'P615', team_id: 'TM-04', name: 'R. Ravichandran', role: 'BATTER', jersey_number: 66 }
-      ]);
+      ];
+      const playersToInsert = rawPlayers.map(p => ({
+        ...p,
+        email: p.email || (p.id.toLowerCase() + '@cricket.local')
+      }));
+      await Player.insertMany(playersToInsert);
     }
 
     // Seed Matches

@@ -165,7 +165,15 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <MaterialCommunityIcons name="cricket" size={16} color="#f5c43d" style={{ marginRight: 6 }} />
               <Text style={styles.navDropdownText}>Match Centre</Text>
-              {/* <Ionicons name="chevron-down" size={12} color="#c0d1eb" style={{ marginLeft: 4 }} /> */}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.navLinkDropdown}
+              onPress={() => handleScrollToSection('tournaments')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="trophy-outline" size={15} color="#f5c43d" style={{ marginRight: 6 }} />
+              <Text style={styles.navDropdownText}>Tournaments</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -173,9 +181,17 @@ export const Header: React.FC<HeaderProps> = ({
               onPress={() => handleScrollToSection('pointsTable')}
               activeOpacity={0.7}
             >
-              <Ionicons name="trophy-outline" size={15} color="#f5c43d" style={{ marginRight: 6 }} />
+              <Ionicons name="podium-outline" size={15} color="#f5c43d" style={{ marginRight: 6 }} />
               <Text style={styles.navDropdownText}>Standings</Text>
-              {/* <Ionicons name="chevron-down" size={12} color="#c0d1eb" style={{ marginLeft: 4 }} /> */}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.navLinkDropdown}
+              onPress={() => handleScrollToSection('stats')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="stats-chart-outline" size={15} color="#f5c43d" style={{ marginRight: 6 }} />
+              <Text style={styles.navDropdownText}>Stats</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -487,7 +503,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5c43d',
     paddingHorizontal: 18,
     paddingVertical: 7.5,
-    borderRadius: 6,
+    borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center'
   },
@@ -542,7 +558,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 6,
+    borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center'
   },

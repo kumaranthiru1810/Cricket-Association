@@ -199,7 +199,7 @@ export const TeamsPage: React.FC = () => {
               backgroundColor: '#FFFFFF',
               color: '#334155',
               cursor: 'pointer',
-              outline: 'none'
+              outlineStyle: 'none'
             }}
           >
             <option value="ALL">All Statuses</option>

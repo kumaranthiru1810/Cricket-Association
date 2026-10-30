@@ -282,9 +282,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#fdfbf7',
     borderWidth: 1,
     borderColor: 'rgba(212, 175, 55, 0.4)',
-    borderRadius: 7,
+    borderRadius: 8,
     paddingHorizontal: 10,
-    paddingVertical: 7
+    height: 36,
+    justifyContent: 'center'
   },
   publicBtnText: {
     fontSize: 12,
@@ -324,8 +325,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingVertical: 4,
     paddingHorizontal: 8,
+    height: 36,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#e2e8f0',

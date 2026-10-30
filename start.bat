@@ -22,14 +22,14 @@ timeout /t 2 /nobreak >nul
 :: Step 2 - Start Backend
 echo.
 echo  [2/3] Starting Backend Server (port 5000)...
-start "🏏 Cricket Backend" cmd /k "cd /d C:\Users\HP\OneDrive\Desktop\cricket\cricket1\backend && node server.js"
+start "🏏 Cricket Backend" cmd /k "cd /d "%~dp0backend" && node server.js"
 
 timeout /t 3 /nobreak >nul
 
 :: Step 3 - Start Frontend
 echo.
 echo  [3/3] Starting Expo Web App (port 8081)...
-start "🌐 Cricket Frontend" cmd /k "cd /d C:\Users\HP\OneDrive\Desktop\cricket\cricket1\mobile_frontend && npm run web"
+start "🌐 Cricket Frontend" cmd /k "cd /d "%~dp0mobile_frontend" && npm run web"
 
 timeout /t 5 /nobreak >nul
 

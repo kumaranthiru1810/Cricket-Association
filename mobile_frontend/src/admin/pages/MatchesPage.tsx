@@ -284,7 +284,7 @@ export const MatchesPage: React.FC = () => {
                       backgroundColor: '#FFFFFF',
                       color: '#1E293B',
                       width: '100%',
-                      outline: 'none'
+                      outlineStyle: 'none'
                     }}
                   >
                     {tournaments.map((t) => (
@@ -309,7 +309,7 @@ export const MatchesPage: React.FC = () => {
                         backgroundColor: '#FFFFFF',
                         color: '#1E293B',
                         width: '100%',
-                        outline: 'none'
+                        outlineStyle: 'none'
                       }}
                     >
                       {teams.map((t) => (
@@ -333,7 +333,7 @@ export const MatchesPage: React.FC = () => {
                         backgroundColor: '#FFFFFF',
                         color: '#1E293B',
                         width: '100%',
-                        outline: 'none'
+                        outlineStyle: 'none'
                       }}
                     >
                       {teams.map((t) => (
@@ -371,7 +371,7 @@ export const MatchesPage: React.FC = () => {
                         backgroundColor: '#FFFFFF',
                         color: '#1E293B',
                         width: '100%',
-                        outline: 'none',
+                        outlineStyle: 'none',
                         boxSizing: 'border-box'
                       }}
                     />
@@ -450,7 +450,7 @@ export const MatchesPage: React.FC = () => {
                       backgroundColor: '#FFFFFF',
                       color: '#1E293B',
                       width: '100%',
-                      outline: 'none'
+                      outlineStyle: 'none'
                     }}
                   >
                     <option value="SCHEDULED">Scheduled</option>

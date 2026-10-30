@@ -288,7 +288,7 @@ export const TournamentsPage: React.FC = () => {
                         backgroundColor: '#FFFFFF',
                         color: '#1E293B',
                         width: '100%',
-                        outline: 'none'
+                        outlineStyle: 'none'
                       }}
                     >
                       <option value="T20">T20 (20 Overs)</option>
@@ -324,7 +324,7 @@ export const TournamentsPage: React.FC = () => {
                         backgroundColor: '#FFFFFF',
                         color: '#1E293B',
                         width: '100%',
-                        outline: 'none',
+                        outlineStyle: 'none',
                         boxSizing: 'border-box'
                       }}
                     />
@@ -343,7 +343,7 @@ export const TournamentsPage: React.FC = () => {
                         backgroundColor: '#FFFFFF',
                         color: '#1E293B',
                         width: '100%',
-                        outline: 'none',
+                        outlineStyle: 'none',
                         boxSizing: 'border-box'
                       }}
                     />
@@ -364,7 +364,7 @@ export const TournamentsPage: React.FC = () => {
                         backgroundColor: '#FFFFFF',
                         color: '#1E293B',
                         width: '100%',
-                        outline: 'none'
+                        outlineStyle: 'none'
                       }}
                     >
                       <option value="ACTIVE">Active</option>

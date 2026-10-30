@@ -82,7 +82,8 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
     flex: 1,
-    minWidth: 200
+    minWidth: 200,
+    justifyContent: 'space-between'
   },
   topRow: {
     flexDirection: 'row',

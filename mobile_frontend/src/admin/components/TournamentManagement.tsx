@@ -2862,12 +2862,18 @@ const styles: any = StyleSheet.create({
   },
   tourCard: {
     width: Platform.OS === 'web' ? 'calc(50% - 8px)' : '100%',
-    minWidth: 320,
+    minWidth: 280,
+    maxWidth: '100%',
     backgroundColor: '#ffffff',
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     padding: 16,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
     boxShadow: '0 4px 16px rgba(0,0,0,0.05)'
   },
   tourCardOngoing: {
@@ -3169,7 +3175,7 @@ const styles: any = StyleSheet.create({
     border: '1px solid #cbd5e1',
     backgroundColor: '#ffffff',
     color: '#0f172a',
-    outline: 'none'
+    outlineStyle: 'none'
   },
   selectWrap: {
     width: '100%'
@@ -3182,7 +3188,7 @@ const styles: any = StyleSheet.create({
     border: '1px solid #cbd5e1',
     backgroundColor: '#ffffff',
     color: '#0f172a',
-    outline: 'none',
+    outlineStyle: 'none',
     boxSizing: 'border-box'
   },
 

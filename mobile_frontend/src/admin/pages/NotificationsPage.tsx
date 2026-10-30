@@ -262,7 +262,7 @@ export const NotificationsPage: React.FC = () => {
                         backgroundColor: '#FFFFFF',
                         color: '#1E293B',
                         width: '100%',
-                        outline: 'none'
+                        outlineStyle: 'none'
                       }}
                     >
                       <option value="ANNOUNCEMENT">Announcement</option>
@@ -284,7 +284,7 @@ export const NotificationsPage: React.FC = () => {
                         backgroundColor: '#FFFFFF',
                         color: '#1E293B',
                         width: '100%',
-                        outline: 'none'
+                        outlineStyle: 'none'
                       }}
                     >
                       <option value="ALL">All Association Members</option>

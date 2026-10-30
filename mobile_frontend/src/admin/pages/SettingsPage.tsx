@@ -215,7 +215,7 @@ export const SettingsPage: React.FC = () => {
                     backgroundColor: '#FFFFFF',
                     color: '#1E293B',
                     width: '100%',
-                    outline: 'none'
+                    outlineStyle: 'none'
                   }}
                 >
                   <option value="T20">Twenty20 (T20)</option>
@@ -248,7 +248,7 @@ export const SettingsPage: React.FC = () => {
                   backgroundColor: '#FFFFFF',
                   color: '#1E293B',
                   width: '100%',
-                  outline: 'none'
+                  outlineStyle: 'none'
                 }}
               >
                 <option value="WHITE_LEATHER">White Leather (Regulation Match Ball)</option>

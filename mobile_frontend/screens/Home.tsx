@@ -789,9 +789,9 @@ export default function HomeScreen() {
                   backgroundColor: 'rgba(254, 252, 246, 0.78)',
                   ...(Platform.OS === 'web'
                     ? ({
-                        backdropFilter: 'blur(3px)',
-                        WebkitBackdropFilter: 'blur(3px)',
-                      } as any)
+                      backdropFilter: 'blur(3px)',
+                      WebkitBackdropFilter: 'blur(3px)',
+                    } as any)
                     : {}),
                 }
               ]}
@@ -1132,7 +1132,7 @@ export default function HomeScreen() {
               return null;
             })()}
 
-{/* Matches Grid */}
+            {/* Matches Grid */}
             {!isLoadingMatches && (
               <View style={styles.grid2Col}>
                 {publicMatches
@@ -1481,7 +1481,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        
+
         {/* ─── 6. POINTS TABLE / STANDINGS ───────────────────────────────── */}
         <View
           style={styles.section}
@@ -1530,10 +1530,10 @@ export default function HomeScreen() {
                   <Text style={[styles.tableTh, { width: 45, textAlign: 'center' }]}>P</Text>
                   <Text style={[styles.tableTh, { width: 45, textAlign: 'center' }]}>W</Text>
                   <Text style={[styles.tableTh, { width: 45, textAlign: 'center' }]}>L</Text>
-                  <Text style={[styles.tableTh, { width: 45, textAlign: 'center', color: '#fed966' }]}>NR</Text>
+                  <Text style={[styles.tableTh, { width: 45, textAlign: 'center', color: '#b45309' }]}>NR</Text>
                   <Text style={[styles.tableTh, { width: 60, textAlign: 'center' }]}>Bonus</Text>
                   <Text style={[styles.tableTh, { width: 75, textAlign: 'center' }]}>NRR</Text>
-                  <Text style={[styles.tableTh, { width: 55, textAlign: 'center', color: '#f5c43d' }]}>PTS</Text>
+                  <Text style={[styles.tableTh, { width: 55, textAlign: 'center', color: '#b45309', fontWeight: '800' }]}>PTS</Text>
                   <Text style={[styles.tableTh, { width: 130, textAlign: 'center' }]}>Recent Form</Text>
                 </View>
 
@@ -1578,12 +1578,12 @@ export default function HomeScreen() {
                       <Text style={[styles.tableTd, { width: 45, textAlign: 'center' }]}>{pPlayed}</Text>
                       <Text style={[styles.tableTd, { width: 45, textAlign: 'center', fontWeight: '700' }]}>{pWon}</Text>
                       <Text style={[styles.tableTd, { width: 45, textAlign: 'center' }]}>{pLost}</Text>
-                      <Text style={[styles.tableTd, { width: 45, textAlign: 'center', color: '#fed966', fontWeight: '700' }]}>
+                      <Text style={[styles.tableTd, { width: 45, textAlign: 'center', color: '#b45309', fontWeight: '700' }]}>
                         {pNr}
                       </Text>
                       <Text style={[styles.tableTd, { width: 60, textAlign: 'center' }]}>{pBonus}</Text>
                       <Text style={[styles.tableTd, { width: 75, textAlign: 'center' }]}>{pNrr}</Text>
-                      <Text style={[styles.tableTd, { width: 55, textAlign: 'center', color: '#f5c43d', fontWeight: '800' }]}>
+                      <Text style={[styles.tableTd, { width: 55, textAlign: 'center', color: '#b45309', fontWeight: '800' }]}>
                         {pPts}
                       </Text>
                       <View style={{ width: 130, flexDirection: 'row', justifyContent: 'center', gap: 4 }}>
@@ -2751,7 +2751,7 @@ export default function HomeScreen() {
 }
 
 // ─── STYLESHEET ───────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
+const styles: any = StyleSheet.create({
   rootContainer: {
     flex: 1,
     backgroundColor: '#020612'
@@ -4181,7 +4181,6 @@ const styles = StyleSheet.create({
   matchCard: {
     flex: 1,
     minWidth: 290,
-    maxWidth: 620,
     backgroundColor: '#ffffff',
     borderColor: '#e2e8f0',
     borderWidth: 1,

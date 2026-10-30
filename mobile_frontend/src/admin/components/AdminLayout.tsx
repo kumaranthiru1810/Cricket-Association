@@ -4,7 +4,7 @@
  */
 
 import React, { useState, createContext, useContext } from 'react';
-import { View, StyleSheet, Dimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, Platform } from 'react-native';
 import AdminSidebar, { AdminRouteKey } from './AdminSidebar';
 import AdminTopbar from './AdminTopbar';
 
@@ -141,9 +141,9 @@ export const AdminLayout: React.FC<Props> = ({
                 ]}
               />
               <View style={styles.toastContent}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                <Text style={styles.toastMessageText}>
                   {toast.message}
-                </span>
+                </Text>
               </View>
             </View>
           )}
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
     overflow: (Platform.OS === 'web' ? 'auto' : 'scroll') as any
   },
   contentContainer: {
-    padding: 24,
+    padding: Platform.OS === 'web' && Dimensions.get('window').width < 768 ? 14 : 24,
     maxWidth: 1400,
     width: '100%',
     alignSelf: 'center'
@@ -219,6 +219,11 @@ const styles = StyleSheet.create({
   },
   toastContent: {
     flex: 1
+  },
+  toastMessageText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a'
   }
 });
 

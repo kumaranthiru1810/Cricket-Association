@@ -276,7 +276,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 38,
-    minWidth: 220
+    minWidth: 180,
+    maxWidth: 360,
+    flex: 1
   },
   searchInput: {
     flex: 1,

@@ -300,7 +300,7 @@ export const ContentPage: React.FC = () => {
                         backgroundColor: '#FFFFFF',
                         color: '#1E293B',
                         width: '100%',
-                        outline: 'none'
+                        outlineStyle: 'none'
                       }}
                     >
                       <option value="NEWS">News</option>
@@ -323,7 +323,7 @@ export const ContentPage: React.FC = () => {
                         backgroundColor: '#FFFFFF',
                         color: '#1E293B',
                         width: '100%',
-                        outline: 'none'
+                        outlineStyle: 'none'
                       }}
                     >
                       <option value="PUBLISHED">Published</option>
