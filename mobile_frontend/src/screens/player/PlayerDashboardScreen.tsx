@@ -182,6 +182,57 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
     loadPlayerData();
   }, [onExit]);
 
+  // Periodic Live Match Polling (auto-updates score every 3 seconds for active matches)
+  useEffect(() => {
+    const hasLiveMatch = matches.some((m: any) => m.status === 'LIVE' || m.status === 'INNINGS_BREAK');
+    if (!hasLiveMatch && !selectedScorecardMatchId) return;
+
+    const timer = setInterval(() => {
+      PlayerApi.getMatches()
+        .then((res: any) => {
+          if (res?.matches) setMatches(res.matches);
+        })
+        .catch(() => {});
+
+      if (selectedScorecardMatchId) {
+        PlayerApi.getScorecard(selectedScorecardMatchId)
+          .then((res: any) => {
+            const raw = res?.scorecard || res?.data || res;
+            if (raw) {
+              const norm = {
+                ...raw,
+                tournamentName: raw.tournament || raw.tournamentName || raw.match?.tournament || 'District Match',
+                teamA: { name: raw.teamA?.name || raw.teamA || raw.match?.teamA || 'Team A' },
+                teamB: { name: raw.teamB?.name || raw.teamB || raw.match?.teamB || 'Team B' },
+                venue: raw.venue || raw.match?.venue || 'District Stadium',
+                result: raw.result || raw.match?.result,
+                innings: (raw.innings || []).map((inn: any) => ({
+                  ...inn,
+                  teamName: inn.teamName || inn.battingTeam || (inn.inningsNumber === 1 ? '1st Innings' : '2nd Innings'),
+                  totalRuns: inn.totalRuns ?? inn.runs ?? 0,
+                  totalWickets: inn.totalWickets ?? inn.wickets ?? 0,
+                  overs: inn.overs ?? '0.0',
+                  batting: (inn.batters || inn.batting || []).map((b: any) => ({
+                    batterName: b.batterName || b.name || 'Batter',
+                    runs: b.runs ?? 0,
+                    balls: b.balls ?? 0,
+                    fours: b.fours ?? 0,
+                    sixes: b.sixes ?? 0,
+                    strikeRate: b.strikeRate ? (typeof b.strikeRate === 'number' ? b.strikeRate.toFixed(1) : b.strikeRate) : ((b.runs / (b.balls || 1)) * 100).toFixed(1),
+                    dismissal: b.dismissal || b.dismissalText || (b.isOut ? 'out' : 'not out')
+                  }))
+                }))
+              };
+              setScorecardData(norm);
+            }
+          })
+          .catch(() => {});
+      }
+    }, 3000);
+
+    return () => clearInterval(timer);
+  }, [matches, selectedScorecardMatchId]);
+
   const handleSaveProfile = async () => {
     setProfileFeedback(null);
     setIsSavingProfile(true);

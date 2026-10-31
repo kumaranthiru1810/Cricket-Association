@@ -317,6 +317,16 @@ router.post('/matches/:matchId/breaks', verifyMatchPermission, async (req, res) 
   }
 });
 
+// Resume play / End active break
+router.post('/matches/:matchId/end-break', verifyMatchPermission, async (req, res) => {
+  try {
+    const result = await scoringEngine.endBreak(req.params.matchId);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
 // Slide Menu: Sessions (Add / End Session)
 router.post('/matches/:matchId/sessions', verifyMatchPermission, async (req, res) => {
   try {

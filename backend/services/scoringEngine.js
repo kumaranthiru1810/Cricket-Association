@@ -146,6 +146,13 @@ class ScoringEngine {
       throw { status: 400, message: 'Match has been ABANDONED. Scoring is disabled.' };
     }
 
+    // Auto-resume play if match was on break
+    if (match.current_break) {
+      match.current_break = null;
+      match.status_comment = '';
+      await match.save();
+    }
+
     // 2. Fetch Active Innings
     let innings = await db.models.Innings.findOne({ match_id: matchId, is_completed: { $ne: true }, status: { $ne: "COMPLETED" } }).sort({ innings_number: -1 });
     if (!innings) {
@@ -1523,8 +1530,7 @@ class ScoringEngine {
     const match = await db.models.Match.findOne({ id: matchId });
     if (!match) throw { status: 404, message: 'Match not found.' };
 
-    if (!Array.isArray(match.breaks)) match.breaks = [];
-    match.breaks.push({
+    const newBreak = {
       type: breakData.type || 'Drinks',
       startTime: breakData.startTime || new Date().toLocaleTimeString(),
       endTime: breakData.endTime || '',
@@ -1532,17 +1538,49 @@ class ScoringEngine {
       comments: breakData.comments || '',
       excludeBatsmanTime: Boolean(breakData.excludeBatsmanTime),
       created_at: new Date()
-    });
+    };
+
+    if (!Array.isArray(match.breaks)) match.breaks = [];
+    match.breaks.push(newBreak);
+    match.current_break = newBreak;
+    match.status_comment = `${newBreak.type} in progress`;
+    match.markModified('breaks');
+    match.markModified('current_break');
     await match.save();
 
     try {
-      broadcastScoreUpdate(matchId, { action: 'BREAK_ADDED', breaks: match.breaks });
+      broadcastScoreUpdate(matchId, { action: 'BREAK_ADDED', breaks: match.breaks, currentBreak: newBreak });
     } catch (_) {}
 
     return {
       success: true,
       message: 'Break successfully recorded.',
-      data: match.breaks
+      data: match.breaks,
+      currentBreak: newBreak
+    };
+  }
+
+  /**
+   * End active break and resume match
+   */
+  async endBreak(matchId) {
+    await db.initDb();
+    const match = await db.models.Match.findOne({ id: matchId });
+    if (!match) throw { status: 404, message: 'Match not found.' };
+
+    match.current_break = null;
+    match.status_comment = '';
+    match.markModified('current_break');
+    await match.save();
+
+    try {
+      broadcastScoreUpdate(matchId, { action: 'BREAK_ENDED', currentBreak: null });
+    } catch (_) {}
+
+    return {
+      success: true,
+      message: 'Break ended, play resumed.',
+      data: match
     };
   }
 

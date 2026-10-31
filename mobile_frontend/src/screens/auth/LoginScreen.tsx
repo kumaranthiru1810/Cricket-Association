@@ -167,9 +167,7 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
       );
 
       setIsLoading(false);
-      if (activeRole === 'PLAYER') {
-        navigate('Player', { user: res?.user, playerName: input });
-      } else if (activeRole === 'TEAM') {
+      if (activeRole === 'TEAM') {
         navigate('Team', { user: res?.user, teamName: res?.user?.teamName || input });
       } else if (activeRole === 'SCORER') {
         navigate('Scorer', { user: res?.user });

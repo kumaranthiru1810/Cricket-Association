@@ -263,6 +263,31 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
     loadTeamData();
   }, [onExit]);
 
+  // Periodic Live Match Polling (auto-updates score every 3 seconds for active matches)
+  useEffect(() => {
+    const hasLiveMatch = matches.some((m: any) => m.status === 'LIVE' || m.status === 'INNINGS_BREAK');
+    if (!hasLiveMatch && !selectedScorecardMatchId) return;
+
+    const timer = setInterval(() => {
+      TeamApi.getMatches()
+        .then((res: any) => {
+          if (res?.matches) setMatches(res.matches);
+        })
+        .catch(() => {});
+
+      if (selectedScorecardMatchId) {
+        TeamApi.getScorecard(selectedScorecardMatchId)
+          .then((res: any) => {
+            const raw = res?.scorecard || res?.data || res;
+            if (raw) setScorecardData(raw);
+          })
+          .catch(() => {});
+      }
+    }, 3000);
+
+    return () => clearInterval(timer);
+  }, [matches, selectedScorecardMatchId]);
+
   // Save Profile Updates (Safe fields only)
   const handleSaveProfile = async () => {
     setProfileFeedback(null);

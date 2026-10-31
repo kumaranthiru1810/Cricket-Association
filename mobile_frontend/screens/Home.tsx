@@ -1159,9 +1159,11 @@ export default function HomeScreen() {
                       <View key={m.id} style={[styles.matchCard, isLive && styles.matchCardLive]}>
                         <View style={styles.matchCardTop}>
                           {isLive ? (
-                            <View style={styles.liveIndicatorPill}>
+                            <View style={[styles.liveIndicatorPill, m.currentBreak && styles.liveBreakIndicatorPill]}>
                               <Animated.View style={[styles.pulseRedDot, { opacity: pulseAnim }]} />
-                              <Text style={styles.liveIndicatorText}>LIVE</Text>
+                              <Text style={styles.liveIndicatorText}>
+                                {m.currentBreak ? `LIVE • ${m.currentBreak.type?.toUpperCase() || 'BREAK'}` : 'LIVE'}
+                              </Text>
                             </View>
                           ) : isUpcoming ? (
                             <View style={styles.upcomingIndicatorPill}>
@@ -1237,6 +1239,15 @@ export default function HomeScreen() {
                             </View>
                           </View>
 
+                          {/* IPL-Style VS Clash Badge Divider */}
+                          <View style={styles.iplVsDivider}>
+                            <View style={styles.iplVsLine} />
+                            <View style={styles.iplVsBadge}>
+                              <Text style={styles.iplVsText}>VS</Text>
+                            </View>
+                            <View style={styles.iplVsLine} />
+                          </View>
+
                           <View style={styles.matchTeamRow}>
                             <View style={styles.teamMeta}>
                               <View
@@ -1265,9 +1276,30 @@ export default function HomeScreen() {
                         {m.result ? (
                           <Text style={styles.matchStatusNoteGold}>🏆 {m.result}</Text>
                         ) : isLive ? (
-                          <Text style={styles.matchStatusNoteGold}>
-                            ⏰ Live Inning in Progress ({m.overs || 20} Overs)
-                          </Text>
+                          m.currentBreak ? (
+                            <View style={styles.cardBreakBanner}>
+                              <Text style={styles.cardBreakEmoji}>
+                                {m.currentBreak.type?.toLowerCase().includes('tea')
+                                  ? '☕'
+                                  : m.currentBreak.type?.toLowerCase().includes('lunch')
+                                  ? '🍽️'
+                                  : m.currentBreak.type?.toLowerCase().includes('drinks')
+                                  ? '🥤'
+                                  : m.currentBreak.type?.toLowerCase().includes('rain')
+                                  ? '🌧️'
+                                  : '⏸️'}
+                              </Text>
+                              <Text style={styles.cardBreakText} numberOfLines={1}>
+                                {m.currentBreak.type?.toUpperCase()} IN PROGRESS
+                                {m.currentBreak.duration ? ` (${m.currentBreak.duration} MINS)` : ''}
+                                {m.currentBreak.startTime && m.currentBreak.endTime ? ` • ${m.currentBreak.startTime} - ${m.currentBreak.endTime}` : ''}
+                              </Text>
+                            </View>
+                          ) : (
+                            <Text style={styles.matchStatusNoteGold}>
+                              ⏰ Live Inning in Progress ({m.overs || 20} Overs)
+                            </Text>
+                          )
                         ) : isUpcoming ? (
                           <Text style={styles.matchStatusNote}>
                             📅 Match Scheduled: {m.date || m.match_date}
@@ -2467,52 +2499,154 @@ export default function HomeScreen() {
                 </View>
               )}
 
-              {/* Real Inning 1 if available in MongoDB */}
-              {realScorecardData?.innings && realScorecardData.innings.length > 0 ? (
-                realScorecardData.innings.map((inn: any, idx: number) => (
-                  <View key={inn.id || idx} style={{ marginBottom: 16 }}>
-                    <View style={styles.inningsHeaderRow}>
-                      <Text style={[styles.inningsTitle, idx > 0 && { marginTop: 14 }]}>
-                        {inn.inningsNumber}st Innings: {inn.battingTeam}
-                      </Text>
-                      <Text style={styles.inningsScoreBadge}>
-                        {inn.score || `${inn.totalRuns || 0}/${inn.wickets || 0} (${inn.overs || 0} Ov)`}
-                      </Text>
-                    </View>
-                    {inn.batters && inn.batters.length > 0 ? (
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tableScrollWrapper}>
-                        <View style={styles.scoreTable}>
-                          <View style={styles.scoreTableHeader}>
-                            <Text style={[styles.scoreTh, { width: 140 }]}>Batter</Text>
-                            <Text style={[styles.scoreTh, { width: 130 }]}>Dismissal</Text>
-                            <Text style={[styles.scoreTh, { width: 40, textAlign: 'center' }]}>R</Text>
-                            <Text style={[styles.scoreTh, { width: 40, textAlign: 'center' }]}>B</Text>
-                            <Text style={[styles.scoreTh, { width: 35, textAlign: 'center' }]}>4s</Text>
-                            <Text style={[styles.scoreTh, { width: 35, textAlign: 'center' }]}>6s</Text>
-                            <Text style={[styles.scoreTh, { width: 55, textAlign: 'right' }]}>SR</Text>
-                          </View>
-                          {inn.batters.map((b: any, bIdx: number) => (
-                            <View key={b.id || bIdx} style={[styles.scoreTableRow, bIdx % 2 === 1 && styles.scoreTableRowAlt]}>
-                              <Text style={[styles.scoreTd, { width: 140, fontWeight: '700', color: '#0f172a' }]}>{b.name}</Text>
-                              <Text style={[styles.scoreTd, { width: 130, color: '#64748b' }]}>{b.dismissalText || (b.isOut ? 'out' : 'not out')}</Text>
-                              <Text style={[styles.scoreTd, { width: 40, textAlign: 'center', fontWeight: '800', color: '#b45309' }]}>
-                                {b.runs}
-                              </Text>
-                              <Text style={[styles.scoreTd, { width: 40, textAlign: 'center', color: '#334155' }]}>{b.balls}</Text>
-                              <Text style={[styles.scoreTd, { width: 35, textAlign: 'center', color: '#334155' }]}>{b.fours || 0}</Text>
-                              <Text style={[styles.scoreTd, { width: 35, textAlign: 'center', color: '#334155' }]}>{b.sixes || 0}</Text>
-                              <Text style={[styles.scoreTd, { width: 55, textAlign: 'right', fontWeight: '600', color: '#0f172a' }]}>{b.strikeRate || '0.0'}</Text>
-                            </View>
-                          ))}
-                        </View>
-                      </ScrollView>
-                    ) : (
-                      <View style={{ padding: 12, backgroundColor: '#f8fafc', borderRadius: 6 }}>
-                        <Text style={{ color: '#475569', fontSize: 12 }}>Score: {inn.score || 'Innings in preparation'}</Text>
-                      </View>
-                    )}
+              {/* Active Break Banner in Scorecard */}
+              {activeScorecardMatchData?.currentBreak && (
+                <View style={[
+                  styles.cardBreakBanner,
+                  activeScorecardMatchData.currentBreak.type?.toLowerCase().includes('rain') && styles.cardRainBanner,
+                  { marginBottom: 14 }
+                ]}>
+                  <Text style={styles.cardBreakEmoji}>
+                    {activeScorecardMatchData.currentBreak.type?.toLowerCase().includes('rain') ? '🌧️' : '☕'}
+                  </Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[
+                      styles.cardBreakText,
+                      activeScorecardMatchData.currentBreak.type?.toLowerCase().includes('rain') && styles.cardRainText
+                    ]}>
+                      {activeScorecardMatchData.currentBreak.type?.toLowerCase().includes('rain')
+                        ? '🌧️ MATCH DELAYED DUE TO RAIN'
+                        : `${activeScorecardMatchData.currentBreak.type?.toUpperCase()} IN PROGRESS`}
+                      {activeScorecardMatchData.currentBreak.duration ? ` (${activeScorecardMatchData.currentBreak.duration} MINS)` : ''}
+                    </Text>
+                    <Text style={styles.cardBreakSubText}>
+                      {activeScorecardMatchData.currentBreak.startTime && activeScorecardMatchData.currentBreak.endTime
+                        ? `${activeScorecardMatchData.currentBreak.startTime} - ${activeScorecardMatchData.currentBreak.endTime}`
+                        : ''}
+                      {activeScorecardMatchData.currentBreak.comments ? ` • ${activeScorecardMatchData.currentBreak.comments}` : ''}
+                    </Text>
                   </View>
-                ))
+                </View>
+              )}
+
+              {/* Real Inning if available in MongoDB */}
+              {realScorecardData?.innings && realScorecardData.innings.length > 0 ? (
+                realScorecardData.innings.map((inn: any, idx: number) => {
+                  const runsVal = inn.totalRuns ?? inn.runs ?? 0;
+                  const oversVal = parseFloat(inn.overs || '0');
+                  const crrVal = oversVal > 0 ? (runsVal / oversVal).toFixed(2) : '0.00';
+
+                  return (
+                    <View key={inn.id || idx} style={{ marginBottom: 20 }}>
+                      <View style={styles.inningsHeaderRow}>
+                        <Text style={[styles.inningsTitle, idx > 0 && { marginTop: 14 }]}>
+                          {inn.inningsNumber === 1 ? '1st Innings' : '2nd Innings'}: {inn.battingTeam}
+                        </Text>
+                        <Text style={styles.inningsScoreBadge}>
+                          {inn.score || `${inn.totalRuns || 0}/${inn.wickets || 0} (${inn.overs || '0.0'} Ov)`}
+                        </Text>
+                      </View>
+
+                      {/* Batters Table */}
+                      {inn.batters && inn.batters.length > 0 ? (
+                        <View>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tableScrollWrapper}>
+                            <View style={styles.scoreTable}>
+                              <View style={styles.scoreTableHeader}>
+                                <Text style={[styles.scoreTh, { width: 140 }]}>Batter</Text>
+                                <Text style={[styles.scoreTh, { width: 130 }]}>Dismissal</Text>
+                                <Text style={[styles.scoreTh, { width: 40, textAlign: 'center' }]}>R</Text>
+                                <Text style={[styles.scoreTh, { width: 40, textAlign: 'center' }]}>B</Text>
+                                <Text style={[styles.scoreTh, { width: 35, textAlign: 'center' }]}>4s</Text>
+                                <Text style={[styles.scoreTh, { width: 35, textAlign: 'center' }]}>6s</Text>
+                                <Text style={[styles.scoreTh, { width: 55, textAlign: 'right' }]}>SR</Text>
+                              </View>
+                              {inn.batters.map((b: any, bIdx: number) => (
+                                <View key={b.id || bIdx} style={[styles.scoreTableRow, bIdx % 2 === 1 && styles.scoreTableRowAlt]}>
+                                  <Text style={[styles.scoreTd, { width: 140, fontWeight: '700', color: '#0f172a' }]}>{b.name}</Text>
+                                  <Text style={[styles.scoreTd, { width: 130, color: '#64748b' }]}>{b.dismissalText || (b.isOut ? 'out' : 'not out')}</Text>
+                                  <Text style={[styles.scoreTd, { width: 40, textAlign: 'center', fontWeight: '800', color: '#b45309' }]}>
+                                    {b.runs}
+                                  </Text>
+                                  <Text style={[styles.scoreTd, { width: 40, textAlign: 'center', color: '#334155' }]}>{b.balls}</Text>
+                                  <Text style={[styles.scoreTd, { width: 35, textAlign: 'center', color: '#334155' }]}>{b.fours || 0}</Text>
+                                  <Text style={[styles.scoreTd, { width: 35, textAlign: 'center', color: '#334155' }]}>{b.sixes || 0}</Text>
+                                  <Text style={[styles.scoreTd, { width: 55, textAlign: 'right', fontWeight: '600', color: '#0f172a' }]}>{b.strikeRate || '0.0'}</Text>
+                                </View>
+                              ))}
+                            </View>
+                          </ScrollView>
+
+                          {/* Extras & Total Summary Bar */}
+                          <View style={styles.scorecardSummaryBox}>
+                            <View style={styles.scorecardSummaryRow}>
+                              <Text style={styles.scorecardSummaryLabel}>Extras</Text>
+                              <Text style={styles.scorecardSummaryVal}>
+                                {inn.extras?.total || 0} ({inn.extras?.breakdown || 'wd 0, nb 0, b 0, lb 0'})
+                              </Text>
+                            </View>
+                            <View style={[styles.scorecardSummaryRow, { borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 6, marginTop: 4 }]}>
+                              <Text style={[styles.scorecardSummaryLabel, { fontWeight: '900', color: '#0f172a' }]}>TOTAL</Text>
+                              <Text style={[styles.scorecardSummaryVal, { fontWeight: '900', color: '#b45309', fontSize: 13 }]}>
+                                {inn.totalRuns || inn.score}/{inn.wickets || 0} ({inn.overs || '0.0'} Ov, CRR: {crrVal})
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      ) : (
+                        <View style={{ padding: 12, backgroundColor: '#f8fafc', borderRadius: 6 }}>
+                          <Text style={{ color: '#475569', fontSize: 12 }}>Score: {inn.score || 'Innings in preparation'}</Text>
+                        </View>
+                      )}
+
+                      {/* Bowling Figures Table */}
+                      {inn.bowlers && inn.bowlers.length > 0 && (
+                        <View style={{ marginTop: 14 }}>
+                          <Text style={styles.scorecardTableSubtitle}>🎯 BOWLING FIGURES</Text>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tableScrollWrapper}>
+                            <View style={styles.scoreTable}>
+                              <View style={styles.scoreTableHeader}>
+                                <Text style={[styles.scoreTh, { width: 140 }]}>Bowler</Text>
+                                <Text style={[styles.scoreTh, { width: 45, textAlign: 'center' }]}>O</Text>
+                                <Text style={[styles.scoreTh, { width: 40, textAlign: 'center' }]}>M</Text>
+                                <Text style={[styles.scoreTh, { width: 45, textAlign: 'center' }]}>R</Text>
+                                <Text style={[styles.scoreTh, { width: 45, textAlign: 'center' }]}>W</Text>
+                                <Text style={[styles.scoreTh, { width: 60, textAlign: 'right' }]}>ECON</Text>
+                              </View>
+                              {inn.bowlers.map((bw: any, bwIdx: number) => (
+                                <View key={bw.id || bwIdx} style={[styles.scoreTableRow, bwIdx % 2 === 1 && styles.scoreTableRowAlt]}>
+                                  <Text style={[styles.scoreTd, { width: 140, fontWeight: '700', color: '#0f172a' }]}>{bw.name}</Text>
+                                  <Text style={[styles.scoreTd, { width: 45, textAlign: 'center', color: '#334155' }]}>{bw.overs}</Text>
+                                  <Text style={[styles.scoreTd, { width: 40, textAlign: 'center', color: '#334155' }]}>{bw.maidens || 0}</Text>
+                                  <Text style={[styles.scoreTd, { width: 45, textAlign: 'center', color: '#334155' }]}>{bw.runs}</Text>
+                                  <Text style={[styles.scoreTd, { width: 45, textAlign: 'center', fontWeight: '800', color: '#dc2626' }]}>{bw.wickets}</Text>
+                                  <Text style={[styles.scoreTd, { width: 60, textAlign: 'right', fontWeight: '600', color: '#0f172a' }]}>
+                                    {typeof bw.economy === 'number' ? bw.economy.toFixed(2) : bw.economy}
+                                  </Text>
+                                </View>
+                              ))}
+                            </View>
+                          </ScrollView>
+                        </View>
+                      )}
+
+                      {/* Fall of Wickets */}
+                      {Array.isArray(inn.fallOfWickets) && inn.fallOfWickets.length > 0 && (
+                        <View style={{ marginTop: 14 }}>
+                          <Text style={styles.scorecardTableSubtitle}>⚡ FALL OF WICKETS</Text>
+                          <View style={styles.scorecardFowWrapper}>
+                            {inn.fallOfWickets.map((f: any, fIdx: number) => (
+                              <View key={fIdx} style={styles.scorecardFowChip}>
+                                <Text style={styles.scorecardFowScore}>{f.score || '0'}/{f.wicket || (fIdx + 1)}</Text>
+                                <Text style={styles.scorecardFowBatter}>({f.batter || 'Batter'}, {f.over || '0.0'} ov)</Text>
+                              </View>
+                            ))}
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })
               ) : (
                 <>
                   {/* Innings 1: SSK */}
@@ -4371,7 +4505,136 @@ const styles = StyleSheet.create({
   // Teams Box
   matchTeamsBox: {
     marginBottom: 10,
+    gap: 4
+  },
+  iplVsDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 2,
+    position: 'relative'
+  },
+  iplVsLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#cbd5e1'
+  },
+  iplVsBadge: {
+    backgroundColor: '#0f172a',
+    paddingHorizontal: 11,
+    paddingVertical: 2.5,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#d97706',
+    marginHorizontal: 8,
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 3,
+    elevation: 3
+  },
+  iplVsText: {
+    fontSize: 10.5,
+    fontWeight: '900',
+    color: '#fbbf24',
+    letterSpacing: 1.5,
+    fontStyle: 'italic'
+  },
+  liveBreakIndicatorPill: {
+    backgroundColor: '#d97706',
+    borderColor: '#b45309'
+  },
+  cardBreakBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef3c7',
+    borderColor: '#fde68a',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    marginTop: 6,
+    marginBottom: 2
+  },
+  cardBreakEmoji: {
+    fontSize: 13,
+    marginRight: 6
+  },
+  cardBreakText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#92400e',
+    flexShrink: 1
+  },
+  cardBreakSubText: {
+    fontSize: 10,
+    color: '#78350f',
+    marginTop: 1
+  },
+  cardRainBanner: {
+    backgroundColor: '#e0f2fe',
+    borderColor: '#7dd3fc',
+    borderWidth: 1.5
+  },
+  cardRainText: {
+    color: '#0369a1',
+    fontWeight: '800'
+  },
+  liveRainIndicatorPill: {
+    backgroundColor: '#0284c7'
+  },
+  scorecardSummaryBox: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 10,
+    marginTop: 8
+  },
+  scorecardSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  scorecardSummaryLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569'
+  },
+  scorecardSummaryVal: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155'
+  },
+  scorecardTableSubtitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0f2452',
+    letterSpacing: 0.5,
+    marginBottom: 6
+  },
+  scorecardFowWrapper: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 6
+  },
+  scorecardFowChip: {
+    backgroundColor: '#f1f5f9',
+    borderColor: '#cbd5e1',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4
+  },
+  scorecardFowScore: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#b45309'
+  },
+  scorecardFowBatter: {
+    fontSize: 9,
+    color: '#64748b',
+    marginTop: 1
   },
   matchTeamRow: {
     flexDirection: 'row',

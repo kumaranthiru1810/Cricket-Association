@@ -941,6 +941,12 @@ export const ScorerApi = {
     });
   },
 
+  endBreak: async (matchId: string) => {
+    return request(`/scorer/matches/${matchId}/end-break`, {
+      method: 'POST'
+    });
+  },
+
   addSession: async (matchId: string, payload: any) => {
     return request(`/scorer/matches/${matchId}/sessions`, {
       method: 'POST',

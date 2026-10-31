@@ -208,7 +208,7 @@ const PlayerSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true, index: true },
   team_id: { type: String, required: true, index: true },
   name: { type: String, required: true },
-  email: { type: String, required: true, lowercase: true, trim: true, index: true },
+  email: { type: String, default: null, lowercase: true, trim: true, index: true },
   password_hash: { type: String, default: null },
   role: { type: String, enum: ['BATTER', 'BOWLER', 'ALL_ROUNDER', 'WICKET_KEEPER'], default: 'BATTER' },
   jersey_number: { type: Number, default: 0 },
@@ -294,6 +294,8 @@ const MatchSchema = new mongoose.Schema({
   is_super_over: { type: Boolean, default: false },
   match_start_time: { type: String, default: null },
   match_end_time: { type: String, default: null },
+  status_comment: { type: String, default: '' },
+  current_break: { type: mongoose.Schema.Types.Mixed, default: null },
   breaks: [{
     type: { type: String },
     startTime: { type: String },
@@ -934,8 +936,8 @@ async function seedDefaultData() {
     }
 
     // Seed Players
-    const playerCount = await Player.countDocuments();
-    if (playerCount === 0) {
+    const defaultPlayer = await Player.findOne({ id: 'P301' });
+    if (!defaultPlayer) {
       await Player.insertMany([
         // Team 1 (TM-01) - 15 Genuine Players
         { id: 'P301', team_id: 'TM-01', name: 'Suresh Kumar', email: 'suresh@spartans.com', role: 'BATTER', jersey_number: 7, batting_style: 'Right Hand Bat', stats: { runs: 284, balls: 195, fours: 32, sixes: 10, highest_score: 88, wickets: 0, overs: 0, runs_conceded: 0, catches: 4, stumpings: 0 } },
@@ -1202,8 +1204,8 @@ async function seedDefaultData() {
     }
 
     // Seed Team Registrations
-    const regCount = await TeamRegistration.countDocuments();
-    if (regCount === 0) {
+    const defaultReg = await TeamRegistration.findOne({ id: 'TEAM-VRD-101' });
+    if (!defaultReg) {
       await TeamRegistration.insertMany([
         {
           id: 'TEAM-VRD-101',
