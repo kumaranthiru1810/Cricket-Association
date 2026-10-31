@@ -996,20 +996,20 @@ class AdminDashboardController {
         };
 
         const activeBatters = (batters || []).slice(0, 2).map(b => ({
-          name: playerMap[b.player_id] || 'Suresh Kumar',
-          runs: b.runs,
-          balls: b.balls,
-          fours: b.fours,
-          sixes: b.sixes,
-          isStriker: b.is_striker
+          name: (b?.player_id && playerMap[b.player_id]) || 'Suresh Kumar',
+          runs: b?.runs || 0,
+          balls: b?.balls || 0,
+          fours: b?.fours || 0,
+          sixes: b?.sixes || 0,
+          isStriker: b?.is_striker || false
         }));
 
         const activeBowler = (bowlers && bowlers[0]) ? {
-          name: playerMap[bowlers[0].player_id] || 'Karthik N',
-          overs: bowlers[0].overs,
-          maidens: bowlers[0].maidens,
-          runs: bowlers[0].runs_conceded,
-          wickets: bowlers[0].wickets
+          name: (bowlers[0]?.player_id && playerMap[bowlers[0].player_id]) || 'Karthik N',
+          overs: bowlers[0]?.overs || 0,
+          maidens: bowlers[0]?.maidens || 0,
+          runs: bowlers[0]?.runs_conceded || 0,
+          wickets: bowlers[0]?.wickets || 0
         } : { name: 'Karthik N', overs: 3.2, maidens: 0, runs: 28, wickets: 2 };
 
         return {

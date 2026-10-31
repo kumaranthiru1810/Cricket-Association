@@ -928,6 +928,58 @@ class AuthService {
       }
     }
 
+    // Auto-resolve recognized Team accounts (Virudhunagar Spartans / Rajapalayam Royals)
+    if (!user && (roleRequired === 'COACH' || roleRequired === 'TEAM' || !roleRequired)) {
+      if (cleanEmail === 'spartans@gmail.com' || cleanEmail.includes('spartan') || cleanEmail === 'coach@cfvd.org') {
+        user = await userModel.findByEmail('spartans@gmail.com');
+        if (!user) {
+          user = await userModel.create({
+            id: 'COACH-TM-01',
+            name: 'Virudhunagar Spartans Official',
+            email: 'spartans@gmail.com',
+            role: 'TEAM',
+            status: 'APPROVED',
+            team_id: 'TM-01',
+            password_hash: '1234'
+          });
+        }
+      } else if (cleanEmail === 'royals@gmail.com' || cleanEmail.includes('royal') || cleanEmail === 'coach.royals@gmail.com') {
+        user = await userModel.findByEmail('royals@gmail.com');
+        if (!user) {
+          user = await userModel.create({
+            id: 'COACH-TM-03',
+            name: 'Rajapalayam Royals Official',
+            email: 'royals@gmail.com',
+            role: 'TEAM',
+            status: 'APPROVED',
+            team_id: 'TM-03',
+            password_hash: '1234'
+          });
+        }
+      }
+    }
+
+    // Auto-resolve registered Players from MongoDB Player collection
+    if (!user && (roleRequired === 'PLAYER' || !roleRequired)) {
+      const playerDoc = await db.models.Player.findOne({
+        $or: [
+          { email: cleanEmail },
+          { name: { $regex: new RegExp(`^${cleanId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } }
+        ]
+      }).lean();
+      if (playerDoc) {
+        user = await userModel.create({
+          id: playerDoc.id,
+          name: playerDoc.name,
+          email: playerDoc.email || cleanEmail,
+          role: 'PLAYER',
+          status: 'ACTIVE',
+          team_id: playerDoc.team_id,
+          password_hash: '1234'
+        });
+      }
+    }
+
     // Auto-create recognized demo Umpire accounts
     const recognizedUmpires = ['sundaram.umpire@cfvd.org', 'umpire@cfvd.org', 'ramanathan.umpire@cfvd.org'];
     if (!user && (recognizedUmpires.includes(cleanEmail) || (cleanEmail.includes('umpire') && (roleRequired === 'UMPIRE' || !roleRequired)))) {
@@ -1013,7 +1065,9 @@ class AuthService {
       'Striker@2026#',
       'Coach@2026#',
       'Scorer@2026#',
-      'Umpire@2026#'
+      'Umpire@2026#',
+      'Team@2026#',
+      'Player@2026#'
     ];
     if (DEV_PASSWORDS.includes(cleanCredential)) {
       isPasswordValid = true;
@@ -1051,6 +1105,9 @@ class AuthService {
       user.status = 'ACTIVE';
     }
 
+    const teamId = user.team_id || user.teamId || user.player_details?.team_id || (user.id && user.id.startsWith('COACH-') ? user.id.replace('COACH-', '') : undefined);
+    const resolvedTeamName = user.team_name || user.teamName || user.player_details?.team_name || user.name;
+
     // 5. Generate JWT Token
     const token = jwt.sign(
       {
@@ -1059,8 +1116,8 @@ class AuthService {
         email: user.email,
         role: user.role,
         certificationLevel: user.certificationLevel || user.scorer_details?.certification_level || 'Level 1 (District Official)',
-        ...(user.player_details?.team_name ? { teamName: user.player_details.team_name } : {}),
-        ...(user.player_details?.team_id ? { teamId: user.player_details.team_id } : {})
+        ...(resolvedTeamName ? { teamName: resolvedTeamName } : {}),
+        ...(teamId ? { teamId, team_id: teamId } : {})
       },
       JWT_SECRET,
       { expiresIn: '7d' }
@@ -1075,6 +1132,9 @@ class AuthService {
         email: user.email,
         role: user.role,
         status: user.status,
+        team_id: teamId,
+        teamId: teamId,
+        teamName: resolvedTeamName,
         certificationLevel: user.certificationLevel || user.scorer_details?.certification_level || 'Level 1 (District Official)',
         player_details: user.player_details,
         scorer_details: user.scorer_details,

@@ -289,12 +289,13 @@ async function requireTeamAuth(req, res, next) {
       const reg = await teamRegistrationModel.findByCoachEmail(user.email);
       const teamDoc = await db.models.Team.findOne({
         $or: [
+          { id: user.team_id },
           { coach_email: user.email },
           { id: reg?.id }
-        ]
+        ].filter(Boolean)
       }).lean();
 
-      const teamStatus = reg ? reg.status : (teamDoc ? teamDoc.status : user.status);
+      const teamStatus = reg ? reg.status : (teamDoc ? teamDoc.status : (user.status || 'APPROVED'));
 
       if (teamStatus === 'PENDING') {
         return res.status(403).json({
@@ -311,8 +312,8 @@ async function requireTeamAuth(req, res, next) {
       }
 
       req.team = {
-        id: reg?.id || teamDoc?.id || 'TM-01',
-        name: reg?.team_name || teamDoc?.name || 'Team',
+        id: teamDoc?.id || user.team_id || reg?.id || 'TM-01',
+        name: teamDoc?.name || reg?.team_name || user.teamName || 'Team',
         coachName: user.name,
         coachEmail: user.email,
         status: teamStatus

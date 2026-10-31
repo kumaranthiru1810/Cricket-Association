@@ -16,6 +16,7 @@ import {
 import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
 import SharedFooter from '../../components/scorer/SharedFooter';
 import { ScorerApi, getCurrentUser } from '../../services/api';
+import { ClockPickerModal, calculateDurationMinutes } from '../../components/common/ClockPickerModal';
 
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
 const IMG_CHAMPIONS = require('../../../assets/cricket_champions.png');
@@ -215,6 +216,7 @@ export default function LiveScoringScreen() {
 
   // 1. Breaks Modal State
   const [showBreaksModal, setShowBreaksModal] = useState<boolean>(false);
+  const [currentBreak, setCurrentBreak] = useState<any>(null);
   const [breaksList, setBreaksList] = useState<any[]>([]);
   const [breakType, setBreakType] = useState<string>('Tea break');
   const [isBreakTypeDropdownOpen, setIsBreakTypeDropdownOpen] = useState<boolean>(false);
@@ -222,8 +224,92 @@ export default function LiveScoringScreen() {
   const [breakStartTime, setBreakStartTime] = useState<string>('11:35 am');
   const [breakEndTime, setBreakEndTime] = useState<string>('11:40 am');
   const [breakDuration, setBreakDuration] = useState<string>('5');
+  const [isDurationAutoCalculated, setIsDurationAutoCalculated] = useState<boolean>(true);
   const [excludeBatsmanTime, setExcludeBatsmanTime] = useState<boolean>(false);
   const [isSubmittingBreak, setIsSubmittingBreak] = useState<boolean>(false);
+  const [showResumeConfirmModal, setShowResumeConfirmModal] = useState<boolean>(false);
+
+  // Resume play from active break
+  const handleResumePlay = async () => {
+    try {
+      await ScorerApi.endBreak(matchId);
+      setCurrentBreak(null);
+      await loadLiveState(false);
+      const msg = 'Play resumed successfully.';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Play Resumed', msg);
+    } catch (err: any) {
+      const msg = err.message || 'Failed to resume play.';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
+    }
+  };
+
+  // Clock Picker Modal State
+  const [clockPickerVisible, setClockPickerVisible] = useState<boolean>(false);
+  const [clockPickerTarget, setClockPickerTarget] = useState<'BREAK_START' | 'BREAK_END' | 'SESSION_START' | 'SESSION_END'>('BREAK_START');
+
+  // Open Breaks modal with current time and default duration
+  const handleOpenBreaksModal = () => {
+    const now = new Date();
+    let h = now.getHours();
+    const m = now.getMinutes();
+    const p = h >= 12 ? 'pm' : 'am';
+    h = h % 12 || 12;
+    const startFormatted = `${h}:${String(m).padStart(2, '0')} ${p}`;
+
+    const endTotal = ((h % 12 + (p === 'pm' ? 12 : 0)) * 60 + m + 15) % 1440;
+    let endH = Math.floor(endTotal / 60);
+    const endM = endTotal % 60;
+    const endP = endH >= 12 ? 'pm' : 'am';
+    endH = endH % 12 || 12;
+    const endFormatted = `${endH}:${String(endM).padStart(2, '0')} ${endP}`;
+
+    setBreakStartTime(startFormatted);
+    setBreakEndTime(endFormatted);
+    setBreakDuration('15');
+    setIsDurationAutoCalculated(true);
+    setShowBreaksModal(true);
+  };
+
+  const handleBreakStartTimeChange = (val: string) => {
+    setBreakStartTime(val);
+    const mins = calculateDurationMinutes(val, breakEndTime);
+    if (mins !== null) {
+      setBreakDuration(String(mins));
+      setIsDurationAutoCalculated(true);
+    }
+  };
+
+  const handleBreakEndTimeChange = (val: string) => {
+    setBreakEndTime(val);
+    const mins = calculateDurationMinutes(breakStartTime, val);
+    if (mins !== null) {
+      setBreakDuration(String(mins));
+      setIsDurationAutoCalculated(true);
+    }
+  };
+
+  const handleClockPickerSelect = (formattedTime: string) => {
+    if (clockPickerTarget === 'BREAK_START') {
+      setBreakStartTime(formattedTime);
+      const mins = calculateDurationMinutes(formattedTime, breakEndTime);
+      if (mins !== null) {
+        setBreakDuration(String(mins));
+        setIsDurationAutoCalculated(true);
+      }
+    } else if (clockPickerTarget === 'BREAK_END') {
+      setBreakEndTime(formattedTime);
+      const mins = calculateDurationMinutes(breakStartTime, formattedTime);
+      if (mins !== null) {
+        setBreakDuration(String(mins));
+        setIsDurationAutoCalculated(true);
+      }
+    } else if (clockPickerTarget === 'SESSION_START') {
+      setSessionStartTime(formattedTime);
+    } else if (clockPickerTarget === 'SESSION_END') {
+      setSessionEndTime(formattedTime);
+    }
+    setClockPickerVisible(false);
+  };
 
   // 2. Sessions Modal State
   const [showSessionsModal, setShowSessionsModal] = useState<boolean>(false);
@@ -500,6 +586,9 @@ export default function LiveScoringScreen() {
       const curMatchStatus = d.match?.status || 'LIVE';
       setMatchStatus(curMatchStatus);
 
+      const curBreak = d.match?.currentBreak || null;
+      setCurrentBreak(curBreak);
+
       const isBreak = curMatchStatus === 'INNINGS_BREAK';
       const isCompleted = curMatchStatus === 'COMPLETED';
       setIsInningsBreak(isBreak);
@@ -682,6 +771,13 @@ export default function LiveScoringScreen() {
       ? run
       : 0;
 
+    const finalFieldingPos =
+      customOpts.wagonSector && customOpts.wagonSector !== 'Unspecified'
+        ? customOpts.wagonSector
+        : customOpts.wagonSector === 'Unspecified'
+        ? undefined
+        : (selectedWagonSector || selectedFieldPosition);
+
     const payload = {
       strikerId: striker?.id,
       nonStrikerId: nonStriker?.id,
@@ -690,7 +786,7 @@ export default function LiveScoringScreen() {
       runsExtras,
       extraType: extraTypeMap[type] || 'NONE',
       wicket: false,
-      fieldingPosition: customOpts.wagonSector || selectedWagonSector || selectedFieldPosition,
+      fieldingPosition: finalFieldingPos,
       shotType: selectedShotType,
       ballType: selectedBallType,
       bowlingMode,
@@ -734,6 +830,15 @@ export default function LiveScoringScreen() {
       const r = pendingBoundaryRun;
       setPendingBoundaryRun(null);
       await handleScore(r, 'normal', { wagonSector: sector });
+    }
+  };
+
+  const handleWagonWheelSkip = async () => {
+    setShowWagonWheelModal(false);
+    if (pendingBoundaryRun !== null) {
+      const r = pendingBoundaryRun;
+      setPendingBoundaryRun(null);
+      await handleScore(r, 'normal', { wagonSector: 'Unspecified' });
     }
   };
 
@@ -1370,14 +1475,16 @@ export default function LiveScoringScreen() {
     setIsSubmittingBreak(true);
     try {
       const finalBreakType = customBreakTypeInput.trim() || breakType || 'Tea break';
-      await ScorerApi.addBreak(matchId, {
+      const breakPayload = {
         type: finalBreakType,
         startTime: breakStartTime || new Date().toLocaleTimeString(),
         endTime: breakEndTime || '',
         duration: breakDuration || '5',
         comments: finalBreakType,
         excludeBatsmanTime
-      });
+      };
+      await ScorerApi.addBreak(matchId, breakPayload);
+      setCurrentBreak(breakPayload);
       setShowBreaksModal(false);
       await loadLiveState(false);
       const msg = `Break (${finalBreakType}) recorded successfully.`;
@@ -1829,28 +1936,10 @@ export default function LiveScoringScreen() {
                 <Text style={styles.drawerMenuChevron}>›</Text>
               </TouchableOpacity>
 
-              {/* 0c. Wagon Wheel */}
-              <TouchableOpacity
-                style={styles.drawerMenuItem}
-                onPress={() => {
-                  setShowSideDrawer(false);
-                  setShowWagonWheelModal(true);
-                }}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.drawerMenuIconBox, { backgroundColor: '#dcfce7', borderColor: '#86efac' }]}>
-                  <Text style={styles.drawerMenuIconText}>🎯</Text>
-                </View>
-                <View style={styles.drawerMenuTextBox}>
-                  <Text style={styles.drawerMenuLabel}>Wagon Wheel</Text>
-                  <Text style={styles.drawerMenuDesc}>Shot angles & ground distribution</Text>
-                </View>
-                <Text style={styles.drawerMenuChevron}>›</Text>
-              </TouchableOpacity>
               {/* 1. Breaks */}
               <TouchableOpacity
                 style={styles.drawerMenuItem}
-                onPress={() => { setShowSideDrawer(false); setShowBreaksModal(true); }}
+                onPress={() => { setShowSideDrawer(false); handleOpenBreaksModal(); }}
                 activeOpacity={0.7}
               >
                 <View style={[styles.drawerMenuIconBox, { backgroundColor: '#fef3c7', borderColor: '#fde68a' }]}>
@@ -2053,6 +2142,77 @@ export default function LiveScoringScreen() {
         </View>
       </Modal>
 
+      {/* RESUME PLAY CONFIRMATION MODAL */}
+      <Modal
+        visible={showResumeConfirmModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowResumeConfirmModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxWidth: 440, padding: 20 }]}>
+            <View style={{ alignItems: 'center', marginBottom: 12 }}>
+              <View style={{
+                width: 56,
+                height: 56,
+                borderRadius: 28,
+                backgroundColor: currentBreak?.type?.toLowerCase().includes('rain') ? '#e0f2fe' : '#dcfce7',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 8
+              }}>
+                <Text style={{ fontSize: 28 }}>
+                  {currentBreak?.type?.toLowerCase().includes('rain') ? '🌤️' : '▶️'}
+                </Text>
+              </View>
+              <Text style={{ fontSize: 18, fontWeight: '900', color: '#0f172a', textAlign: 'center' }}>
+                {currentBreak?.type?.toLowerCase().includes('rain') ? 'Rain Stopped & Restart Match?' : 'Resume Match Play?'}
+              </Text>
+              <Text style={{ fontSize: 12.5, color: '#64748b', textAlign: 'center', marginTop: 4, lineHeight: 18 }}>
+                {currentBreak?.type?.toLowerCase().includes('rain')
+                  ? 'Have ground covers been removed and umpires called players back onto the field to resume play?'
+                  : `Are both teams and officials ready to conclude the ${currentBreak?.type || 'break'} and resume live scoring?`}
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  paddingVertical: 11,
+                  borderRadius: 8,
+                  backgroundColor: '#f1f5f9',
+                  alignItems: 'center'
+                }}
+                onPress={() => setShowResumeConfirmModal(false)}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>
+                  {currentBreak?.type?.toLowerCase().includes('rain') ? 'Still Raining / Wait' : 'Stay on Break'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  paddingVertical: 11,
+                  borderRadius: 8,
+                  backgroundColor: '#16a34a',
+                  alignItems: 'center'
+                }}
+                onPress={async () => {
+                  setShowResumeConfirmModal(false);
+                  await handleResumePlay();
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '800', color: '#ffffff' }}>
+                  ▶ Restart Match Now
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* 2. BREAKS MODAL (Matches Manual Image 3) */}
       <Modal
         visible={showBreaksModal}
@@ -2182,35 +2342,71 @@ export default function LiveScoringScreen() {
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.fieldSubLabel}>STARTS AT:</Text>
-                <TextInput
-                  style={styles.customNameInput}
-                  placeholder="e.g. 11:35 am"
-                  placeholderTextColor="#94a3b8"
-                  value={breakStartTime}
-                  onChangeText={setBreakStartTime}
-                />
+                <View style={styles.timeInputContainer}>
+                  <TextInput
+                    style={[styles.customNameInput, { paddingRight: 74 }]}
+                    placeholder="e.g. 11:35 am"
+                    placeholderTextColor="#94a3b8"
+                    value={breakStartTime}
+                    onChangeText={handleBreakStartTimeChange}
+                  />
+                  <TouchableOpacity
+                    style={styles.fieldClockBtn}
+                    onPress={() => {
+                      setClockPickerTarget('BREAK_START');
+                      setClockPickerVisible(true);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ fontSize: 13 }}>🕒</Text>
+                    <Text style={styles.fieldClockBtnText}>Clock</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.fieldSubLabel}>ENDS AT:</Text>
-                <TextInput
-                  style={styles.customNameInput}
-                  placeholder="e.g. 11:40 am"
-                  placeholderTextColor="#94a3b8"
-                  value={breakEndTime}
-                  onChangeText={setBreakEndTime}
-                />
+                <View style={styles.timeInputContainer}>
+                  <TextInput
+                    style={[styles.customNameInput, { paddingRight: 74 }]}
+                    placeholder="e.g. 11:40 am"
+                    placeholderTextColor="#94a3b8"
+                    value={breakEndTime}
+                    onChangeText={handleBreakEndTimeChange}
+                  />
+                  <TouchableOpacity
+                    style={styles.fieldClockBtn}
+                    onPress={() => {
+                      setClockPickerTarget('BREAK_END');
+                      setClockPickerVisible(true);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ fontSize: 13 }}>🕒</Text>
+                    <Text style={styles.fieldClockBtnText}>Clock</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
 
             <View style={{ marginTop: 8 }}>
-              <Text style={styles.fieldSubLabel}>DURATION (IN MINS):</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                <Text style={styles.fieldSubLabel}>DURATION (IN MINS):</Text>
+                {isDurationAutoCalculated && Boolean(breakDuration) ? (
+                  <View style={styles.autoCalcBadge}>
+                    <Text style={styles.autoCalcBadgeText}>⚡ AUTO-CALCULATED ({breakDuration} MINS)</Text>
+                  </View>
+                ) : null}
+              </View>
               <TextInput
                 style={styles.customNameInput}
                 keyboardType="numeric"
                 placeholder="e.g. 5"
                 placeholderTextColor="#94a3b8"
                 value={breakDuration}
-                onChangeText={setBreakDuration}
+                onChangeText={(val) => {
+                  setBreakDuration(val);
+                  setIsDurationAutoCalculated(false);
+                }}
               />
             </View>
 
@@ -2415,19 +2611,45 @@ export default function LiveScoringScreen() {
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, marginBottom: 14 }}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.fieldSubLabel}>STARTS AT:</Text>
-                <TextInput
-                  style={styles.customNameInput}
-                  value={sessionStartTime}
-                  onChangeText={setSessionStartTime}
-                />
+                <View style={styles.timeInputContainer}>
+                  <TextInput
+                    style={[styles.customNameInput, { paddingRight: 74 }]}
+                    value={sessionStartTime}
+                    onChangeText={setSessionStartTime}
+                  />
+                  <TouchableOpacity
+                    style={styles.fieldClockBtn}
+                    onPress={() => {
+                      setClockPickerTarget('SESSION_START');
+                      setClockPickerVisible(true);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ fontSize: 13 }}>🕒</Text>
+                    <Text style={styles.fieldClockBtnText}>Clock</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.fieldSubLabel}>ENDS AT:</Text>
-                <TextInput
-                  style={styles.customNameInput}
-                  value={sessionEndTime}
-                  onChangeText={setSessionEndTime}
-                />
+                <View style={styles.timeInputContainer}>
+                  <TextInput
+                    style={[styles.customNameInput, { paddingRight: 74 }]}
+                    value={sessionEndTime}
+                    onChangeText={setSessionEndTime}
+                  />
+                  <TouchableOpacity
+                    style={styles.fieldClockBtn}
+                    onPress={() => {
+                      setClockPickerTarget('SESSION_END');
+                      setClockPickerVisible(true);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ fontSize: 13 }}>🕒</Text>
+                    <Text style={styles.fieldClockBtnText}>Clock</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
 
@@ -2452,6 +2674,32 @@ export default function LiveScoringScreen() {
           </View>
         </ScrollView>
       </Modal>
+
+      {/* CLOCK PICKER MODAL (For Breaks & Sessions) */}
+      <ClockPickerModal
+        visible={clockPickerVisible}
+        title={
+          clockPickerTarget === 'BREAK_START'
+            ? 'Select Break Start Time'
+            : clockPickerTarget === 'BREAK_END'
+            ? 'Select Break End Time'
+            : clockPickerTarget === 'SESSION_START'
+            ? 'Select Session Start Time'
+            : 'Select Session End Time'
+        }
+        initialTime={
+          clockPickerTarget === 'BREAK_START'
+            ? breakStartTime
+            : clockPickerTarget === 'BREAK_END'
+            ? breakEndTime
+            : clockPickerTarget === 'SESSION_START'
+            ? sessionStartTime
+            : sessionEndTime
+        }
+        referenceStartTime={clockPickerTarget === 'BREAK_END' ? breakStartTime : undefined}
+        onClose={() => setClockPickerVisible(false)}
+        onSelectTime={handleClockPickerSelect}
+      />
 
       {/* 4. END DAY MODAL (Matches Manual Image 2) */}
       <Modal
@@ -4284,93 +4532,138 @@ export default function LiveScoringScreen() {
         </View>
       </Modal>
 
-      {/* 19. WAGON WHEEL MODAL (Image 2 Slide 4) */}
+      {/* 19. WAGON WHEEL MODAL - Triggered automatically on 4 or 6 */}
       <Modal
         visible={showWagonWheelModal}
         transparent
         animationType="fade"
-        onRequestClose={() => {
-          setShowWagonWheelModal(false);
-          setPendingBoundaryRun(null);
-        }}
+        onRequestClose={handleWagonWheelSkip}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxWidth: 460 }]}>
+          <View style={[styles.modalContent, { maxWidth: 480, paddingHorizontal: 18, paddingVertical: 16 }]}>
             <View style={styles.revisedModalHeader}>
               <View>
-                <Text style={styles.revisedModalTitle}>WAGON WHEEL</Text>
-                {pendingBoundaryRun && (
-                  <Text style={{ fontSize: 11, color: '#059669', fontWeight: 'bold' }}>
-                    {pendingBoundaryRun === 4 ? 'BOUNDARY FOUR (4 RUNS)' : 'MAXIMUM SIX (6 RUNS)'}
-                  </Text>
-                )}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.revisedModalTitle}>🎯 WAGON WHEEL</Text>
+                  <View style={[
+                    styles.boundaryBadgePill,
+                    pendingBoundaryRun === 6 ? styles.boundaryBadgeSix : styles.boundaryBadgeFour
+                  ]}>
+                    <Text style={styles.boundaryBadgePillText}>
+                      {pendingBoundaryRun === 6 ? '🚀 6 RUNS' : '⚡ 4 RUNS'}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 11, color: '#64748b', fontWeight: '600', marginTop: 2 }}>
+                  {pendingBoundaryRun === 6
+                    ? 'Maximum! Select where the SIX landed on the field:'
+                    : 'Boundary Four! Select where the FOUR was hit:'}
+                </Text>
               </View>
               <TouchableOpacity
                 style={styles.redCloseBtn}
-                onPress={() => {
-                  setShowWagonWheelModal(false);
-                  if (pendingBoundaryRun !== null) {
-                    const r = pendingBoundaryRun;
-                    setPendingBoundaryRun(null);
-                    handleScore(r, 'normal');
-                  }
-                }}
+                onPress={handleWagonWheelSkip}
               >
                 <Text style={styles.redCloseBtnText}>✕</Text>
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.revisedModalInfo}>
-              Tap the region / sector on the ground where the shot was hit:
-            </Text>
-
             {/* Circular Cricket Ground Graphic */}
             <View style={styles.wagonWheelContainer}>
               <View style={styles.wagonGroundCircle}>
+                {/* 30-yard Circle */}
                 <View style={styles.wagonInnerCircle} />
+
+                {/* Field Orientation Axes */}
+                <View style={{ position: 'absolute', width: '100%', height: 1, backgroundColor: 'rgba(255,255,255,0.2)' }} />
+                <View style={{ position: 'absolute', height: '100%', width: 1, backgroundColor: 'rgba(255,255,255,0.2)' }} />
+
+                {/* Boundary Cardinal Indicators */}
+                <Text style={{ position: 'absolute', top: 6, fontSize: 8, fontWeight: '800', color: '#fef08a' }}>STRAIGHT</Text>
+                <Text style={{ position: 'absolute', bottom: 6, fontSize: 8, fontWeight: '800', color: '#fef08a' }}>FINE LEG</Text>
+                <Text style={{ position: 'absolute', left: 6, fontSize: 8, fontWeight: '800', color: '#fef08a' }}>POINT</Text>
+                <Text style={{ position: 'absolute', right: 6, fontSize: 8, fontWeight: '800', color: '#fef08a' }}>SQ LEG</Text>
+
+                {/* Pitch */}
                 <View style={styles.wagonPitchBox}>
-                  <Text style={{ fontSize: 8, color: '#fef3c7', fontWeight: 'bold' }}>PITCH</Text>
+                  <Text style={{ fontSize: 7, color: '#92400e', fontWeight: '900' }}>PITCH</Text>
+                </View>
+
+                {/* Current Selected Indicator */}
+                {selectedWagonSector ? (
+                  <View style={styles.wagonSelectedBadge}>
+                    <Text style={styles.wagonSelectedBadgeText}>📍 {selectedWagonSector}</Text>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+
+            {/* Sectors Selection: Off Side vs Leg Side */}
+            <View style={{ width: '100%', marginTop: 4 }}>
+              {/* Off Side */}
+              <View style={{ marginBottom: 8 }}>
+                <Text style={{ fontSize: 10, fontWeight: '800', color: '#0369a1', letterSpacing: 0.5, marginBottom: 4 }}>
+                  🏏 OFF SIDE
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                  {['Third Man', 'Point', 'Cover', 'Extra Cover', 'Long Off'].map((sector) => (
+                    <TouchableOpacity
+                      key={sector}
+                      style={[
+                        styles.wagonSectorChip,
+                        selectedWagonSector === sector && styles.wagonSectorChipActive
+                      ]}
+                      onPress={() => handleWagonWheelSelect(sector)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[
+                        styles.wagonSectorChipText,
+                        selectedWagonSector === sector && styles.wagonSectorChipTextActive
+                      ]}>
+                        {sector}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Leg Side & Straight */}
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: 10, fontWeight: '800', color: '#b45309', letterSpacing: 0.5, marginBottom: 4 }}>
+                  🏏 LEG SIDE & STRAIGHT
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                  {['Straight', 'Long On', 'Mid Wicket', 'Square Leg', 'Fine Leg'].map((sector) => (
+                    <TouchableOpacity
+                      key={sector}
+                      style={[
+                        styles.wagonSectorChip,
+                        selectedWagonSector === sector && styles.wagonSectorChipActive
+                      ]}
+                      onPress={() => handleWagonWheelSelect(sector)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[
+                        styles.wagonSectorChipText,
+                        selectedWagonSector === sector && styles.wagonSectorChipTextActive
+                      ]}>
+                        {sector}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
               </View>
             </View>
 
-            {/* Sectors Grid Selection */}
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center', marginTop: 10 }}>
-              {[
-                'Straight',
-                'Long Off',
-                'Cover',
-                'Extra Cover',
-                'Point',
-                'Third Man',
-                'Fine Leg',
-                'Square Leg',
-                'Mid Wicket',
-                'Long On'
-              ].map((sector) => (
-                <TouchableOpacity
-                  key={sector}
-                  style={[
-                    styles.wagonSectorChip,
-                    selectedWagonSector === sector && styles.wagonSectorChipActive
-                  ]}
-                  onPress={() => handleWagonWheelSelect(sector)}
-                >
-                  <Text style={[
-                    styles.wagonSectorChipText,
-                    selectedWagonSector === sector && styles.wagonSectorChipTextActive
-                  ]}>
-                    📍 {sector}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
+            {/* Skip Direction button */}
             <TouchableOpacity
-              style={[styles.modalConfirmBtn, { backgroundColor: '#059669', marginTop: 14, width: '100%' }]}
-              onPress={() => handleWagonWheelSelect(selectedWagonSector)}
+              style={styles.wagonSkipBtn}
+              onPress={handleWagonWheelSkip}
+              activeOpacity={0.8}
             >
-              <Text style={[styles.modalConfirmText, { textAlign: 'center' }]}>Confirm Direction ({selectedWagonSector})</Text>
+              <Text style={styles.wagonSkipBtnText}>
+                ⏭️ Skip Direction (Record {pendingBoundaryRun || 4} Runs Directly)
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -4585,20 +4878,10 @@ export default function LiveScoringScreen() {
                 )}
               </TouchableOpacity>
 
-              {/* 3. Wagon Wheel */}
-              <TouchableOpacity
-                style={[styles.sidebarNavItem, isSidebarCollapsed && styles.sidebarNavItemCollapsed]}
-                onPress={() => setShowWagonWheelModal(true)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.sidebarNavIcon}>🎯</Text>
-                {!isSidebarCollapsed && <Text style={styles.sidebarNavText}>Wagon Wheel</Text>}
-              </TouchableOpacity>
-
               {/* 4. Breaks */}
               <TouchableOpacity
                 style={[styles.sidebarNavItem, isSidebarCollapsed && styles.sidebarNavItemCollapsed]}
-                onPress={() => setShowBreaksModal(true)}
+                onPress={() => handleOpenBreaksModal()}
                 activeOpacity={0.7}
               >
                 <Text style={styles.sidebarNavIcon}>☕</Text>
@@ -4749,6 +5032,72 @@ export default function LiveScoringScreen() {
         {/* Main Content Area (Wide, Yellow/Gold Stadium Theme) */}
         <ScrollView style={styles.mainContentScroll} contentContainerStyle={styles.scroll}>
         <View style={styles.mainLayout}>
+          {/* Active Break Banner (Tea / Lunch / Drinks / Rain Break) */}
+          {currentBreak && !isInningsBreak && !isMatchEnded && (() => {
+            const isRain = currentBreak.type?.toLowerCase().includes('rain') || currentBreak.comments?.toLowerCase().includes('rain');
+            return (
+              <View style={[
+                styles.activeBreakBanner,
+                isRain && styles.activeRainBanner
+              ]}>
+                <View style={[
+                  styles.activeBreakIconBox,
+                  isRain && { backgroundColor: '#e0f2fe', borderColor: '#7dd3fc' }
+                ]}>
+                  <Text style={styles.activeBreakEmoji}>
+                    {isRain
+                      ? '🌧️'
+                      : currentBreak.type?.toLowerCase().includes('tea')
+                      ? '☕'
+                      : currentBreak.type?.toLowerCase().includes('lunch')
+                      ? '🍽️'
+                      : currentBreak.type?.toLowerCase().includes('drinks')
+                      ? '🥤'
+                      : '⏸️'}
+                  </Text>
+                </View>
+                <View style={{ flex: 1, paddingHorizontal: 6 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={[
+                      styles.activeBreakTitle,
+                      isRain && { color: '#0369a1' }
+                    ]}>
+                      {isRain ? '🌧️ MATCH DELAYED DUE TO RAIN' : `${currentBreak.type?.toUpperCase()} IN PROGRESS`}
+                    </Text>
+                    <View style={[
+                      styles.activeBreakLiveTag,
+                      isRain && { backgroundColor: '#0284c7' }
+                    ]}>
+                      <Text style={styles.activeBreakLiveTagText}>
+                        {isRain ? 'RAIN DELAY' : 'ON BREAK'}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[
+                    styles.activeBreakDetails,
+                    isRain && { color: '#075985' }
+                  ]}>
+                    {currentBreak.duration ? `Duration: ${currentBreak.duration} mins` : ''}
+                    {currentBreak.startTime && currentBreak.endTime ? ` • ${currentBreak.startTime} - ${currentBreak.endTime}` : ''}
+                    {isRain ? ' • Covers on the ground' : (currentBreak.comments && currentBreak.comments !== currentBreak.type ? ` (${currentBreak.comments})` : '')}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.resumePlayBtn,
+                    isRain && { backgroundColor: '#0284c7', borderColor: '#0369a1' }
+                  ]}
+                  onPress={() => setShowResumeConfirmModal(true)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.resumePlayBtnText}>
+                    {isRain ? '▶ Rain Stopped (Resume)' : '▶ Resume Play'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })()}
+
           {/* Innings Break Banner */}
           {isInningsBreak && (() => {
             const currentBattingTeam = (matchInfo?.currentInningsNumber === 2)
@@ -5070,213 +5419,7 @@ export default function LiveScoringScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* 2. Mode & Shot Row (Matches Screenshot: MODE: AROUND/OVER THE WICKET, SHOT: DEFENSIVE) */}
-              <View style={styles.engineModeRow}>
-                <View style={styles.engineModeBox}>
-                  <Text style={styles.engineBarLabel}>MODE:</Text>
-                  <TouchableOpacity
-                    style={[
-                      styles.engineModeToggleBtn,
-                      bowlingMode === 'OVER_THE_WICKET' && styles.engineModeToggleBtnActive
-                    ]}
-                    onPress={() => setBowlingMode('OVER_THE_WICKET')}
-                  >
-                    <Text style={[
-                      styles.engineModeToggleText,
-                      bowlingMode === 'OVER_THE_WICKET' && styles.engineModeToggleTextActive
-                    ]}>
-                      OVER WICKET
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.engineModeToggleBtn,
-                      bowlingMode === 'AROUND_THE_WICKET' && styles.engineModeToggleBtnActive
-                    ]}
-                    onPress={() => setBowlingMode('AROUND_THE_WICKET')}
-                  >
-                    <Text style={[
-                      styles.engineModeToggleText,
-                      bowlingMode === 'AROUND_THE_WICKET' && styles.engineModeToggleTextActive
-                    ]}>
-                      AROUND WICKET
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.engineShotBox, isShotTypeDropdownOpen && styles.engineShotBoxActive]}
-                  onPress={() => {
-                    setIsShotTypeDropdownOpen(!isShotTypeDropdownOpen);
-                    setIsBallTypeDropdownOpen(false);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.engineBarLabel}>SHOT:</Text>
-                  <Text style={styles.engineShotValue} numberOfLines={1}>
-                    {selectedShotType.toUpperCase()} {isShotTypeDropdownOpen ? '▴' : '▾'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* 3. Ball Type & Shot Type Dropdowns */}
-              <View style={[styles.engineTypeRow, { zIndex: 100 }]}>
-                {/* BALL TYPE DROPDOWN */}
-                <View style={{ flex: 1, position: 'relative', zIndex: isBallTypeDropdownOpen ? 101 : 1 }}>
-                  <TouchableOpacity
-                    style={[styles.engineTypeBtn, isBallTypeDropdownOpen && styles.engineTypeBtnActive]}
-                    onPress={() => {
-                      setIsBallTypeDropdownOpen(!isBallTypeDropdownOpen);
-                      setIsShotTypeDropdownOpen(false);
-                    }}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={styles.engineTypeBtnLabel}>BALL TYPE:</Text>
-                    <Text style={styles.engineTypeBtnVal} numberOfLines={1}>
-                      {selectedBallType} {isBallTypeDropdownOpen ? '▴' : '▾'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {isBallTypeDropdownOpen && (
-                    <View style={styles.engineDropdownMenu}>
-                      <View style={styles.engineDropdownHeader}>
-                        <Text style={styles.engineDropdownHeaderText}>SELECT BALL TYPE</Text>
-                        <TouchableOpacity onPress={() => setIsBallTypeDropdownOpen(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                          <Text style={styles.engineDropdownCloseText}>✕</Text>
-                        </TouchableOpacity>
-                      </View>
-                      <ScrollView
-                        style={{ maxHeight: 220 }}
-                        nestedScrollEnabled
-                        showsVerticalScrollIndicator={true}
-                      >
-                        {BALL_TYPE_OPTIONS.map((bt) => {
-                          const isSelected = selectedBallType === bt;
-                          return (
-                            <TouchableOpacity
-                              key={bt}
-                              style={[styles.engineDropdownItem, isSelected && styles.engineDropdownItemActive]}
-                              onPress={() => {
-                                setSelectedBallType(bt);
-                                setIsBallTypeDropdownOpen(false);
-                              }}
-                              activeOpacity={0.7}
-                            >
-                              <Text style={[styles.engineDropdownItemText, isSelected && styles.engineDropdownItemTextActive]}>
-                                {bt}
-                              </Text>
-                              {isSelected && <Text style={styles.engineDropdownCheck}>✓</Text>}
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </ScrollView>
-                    </View>
-                  )}
-                </View>
-
-                {/* SHOT TYPE DROPDOWN */}
-                <View style={{ flex: 1, position: 'relative', zIndex: isShotTypeDropdownOpen ? 101 : 1 }}>
-                  <TouchableOpacity
-                    style={[styles.engineTypeBtn, isShotTypeDropdownOpen && styles.engineTypeBtnActive]}
-                    onPress={() => {
-                      setIsShotTypeDropdownOpen(!isShotTypeDropdownOpen);
-                      setIsBallTypeDropdownOpen(false);
-                    }}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={styles.engineTypeBtnLabel}>SHOT TYPE:</Text>
-                    <Text style={styles.engineTypeBtnVal} numberOfLines={1}>
-                      {selectedShotType} {isShotTypeDropdownOpen ? '▴' : '▾'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {isShotTypeDropdownOpen && (
-                    <View style={styles.engineDropdownMenu}>
-                      <View style={styles.engineDropdownHeader}>
-                        <Text style={styles.engineDropdownHeaderText}>SELECT SHOT TYPE</Text>
-                        <TouchableOpacity onPress={() => setIsShotTypeDropdownOpen(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                          <Text style={styles.engineDropdownCloseText}>✕</Text>
-                        </TouchableOpacity>
-                      </View>
-                      <ScrollView
-                        style={{ maxHeight: 220 }}
-                        nestedScrollEnabled
-                        showsVerticalScrollIndicator={true}
-                      >
-                        {SHOT_TYPE_OPTIONS.map((st) => {
-                          const isSelected = selectedShotType === st;
-                          return (
-                            <TouchableOpacity
-                              key={st}
-                              style={[styles.engineDropdownItem, isSelected && styles.engineDropdownItemActive]}
-                              onPress={() => {
-                                setSelectedShotType(st);
-                                setIsShotTypeDropdownOpen(false);
-                              }}
-                              activeOpacity={0.7}
-                            >
-                              <Text style={[styles.engineDropdownItemText, isSelected && styles.engineDropdownItemTextActive]}>
-                                {st}
-                              </Text>
-                              {isSelected && <Text style={styles.engineDropdownCheck}>✓</Text>}
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </ScrollView>
-                    </View>
-                  )}
-                </View>
-              </View>
-
-              {/* 4. Auxiliary Action Buttons (Mark for Edit, Remarks, Pitch Map, Wagon Wheel) */}
-              <View style={styles.engineAuxRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.engineAuxBtn,
-                    isMarkedForEdit && styles.engineAuxBtnActive
-                  ]}
-                  onPress={() => setIsMarkedForEdit(!isMarkedForEdit)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[
-                    styles.engineAuxBtnText,
-                    isMarkedForEdit && styles.engineAuxBtnTextActive
-                  ]}>
-                    {isMarkedForEdit ? '✓ MARKED FOR EDIT' : 'MARK FOR EDIT'}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.engineAuxBtn}
-                  onPress={() => setShowRemarksModal(true)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.engineAuxBtnText}>
-                    {deliveryRemarks ? '📝 REMARKS ✓' : 'REMARKS'}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.engineAuxBtn}
-                  onPress={() => setShowPitchMapModal(true)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.engineAuxBtnText}>PITCH MAP</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.engineAuxBtn, { borderColor: '#10b981' }]}
-                  onPress={() => {
-                    setPendingBoundaryRun(null);
-                    setShowWagonWheelModal(true);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.engineAuxBtnText, { color: '#34d399' }]}>WAGON WHEEL</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* 5. Main Scoring Keypad Grid (Matches Image 1 Slide 3 & 4) */}
+              {/* Main Scoring Keypad Grid */}
               <View style={styles.engineKeypadContainer}>
                 {/* Row 1: 0, 1, 2 */}
                 <View style={styles.engineKeypadRow}>
@@ -5377,7 +5520,7 @@ export default function LiveScoringScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {/* Row 4: WICKET, FIELDING, WAGON WHEEL */}
+                {/* Row 4: WICKET & FIELDING */}
                 <View style={styles.engineKeypadRow}>
                   <TouchableOpacity
                     disabled={
@@ -5391,31 +5534,21 @@ export default function LiveScoringScreen() {
                     style={[
                       styles.engineKeypadBtn,
                       styles.wicketBtn,
+                      { flex: 2 },
                       (isOverComplete || isSubmittingDelivery || matchStatus !== 'LIVE' || isInningsBreak || isMatchEnded) && styles.btnDisabled
                     ]}
                     onPress={handleWicketClick}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.engineKeypadText, styles.wicketBtnText]}>WICKET</Text>
+                    <Text style={[styles.engineKeypadText, styles.wicketBtnText]}>🛑 WICKET</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.engineKeypadBtn, { backgroundColor: '#005960', borderColor: '#0d9488' }]}
+                    style={[styles.engineKeypadBtn, { flex: 1, backgroundColor: '#005960', borderColor: '#0d9488' }]}
                     onPress={() => setShowFieldingModal(true)}
                     activeOpacity={0.7}
                   >
                     <Text style={[styles.engineAuxKeypadText, { color: '#fef3c7' }]}>FIELDING</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.engineKeypadBtn, { backgroundColor: '#047857', borderColor: '#10b981' }]}
-                    onPress={() => {
-                      setPendingBoundaryRun(null);
-                      setShowWagonWheelModal(true);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.engineAuxKeypadText, { color: '#ffffff' }]}>WAGON WHEEL</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -9631,5 +9764,159 @@ const getStyles = (isDesktop: boolean) =>
     wagonSectorChipTextActive: {
       color: '#fff',
       fontWeight: 'bold'
+    },
+    boundaryBadgePill: {
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 12
+    },
+    boundaryBadgeFour: {
+      backgroundColor: '#0284c7'
+    },
+    boundaryBadgeSix: {
+      backgroundColor: '#7c3aed'
+    },
+    boundaryBadgePillText: {
+      fontSize: 10,
+      fontWeight: '900',
+      color: '#ffffff',
+      letterSpacing: 0.5
+    },
+    wagonSelectedBadge: {
+      position: 'absolute',
+      top: 24,
+      backgroundColor: 'rgba(15, 23, 42, 0.85)',
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: '#38bdf8'
+    },
+    wagonSelectedBadgeText: {
+      fontSize: 9,
+      fontWeight: '800',
+      color: '#38bdf8'
+    },
+    wagonSkipBtn: {
+      backgroundColor: '#475569',
+      paddingVertical: 10,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 4,
+      width: '100%'
+    },
+    wagonSkipBtnText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: '#f8fafc'
+    },
+    timeInputContainer: {
+      position: 'relative',
+      justifyContent: 'center'
+    },
+    fieldClockBtn: {
+      position: 'absolute',
+      right: 5,
+      top: 5,
+      bottom: 5,
+      backgroundColor: '#fef3c7',
+      borderColor: '#fde68a',
+      borderWidth: 1,
+      borderRadius: 6,
+      paddingHorizontal: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4
+    },
+    fieldClockBtnText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: '#b45309'
+    },
+    autoCalcBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#dcfce7',
+      borderColor: '#bbf7d0',
+      borderWidth: 1,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 4
+    },
+    autoCalcBadgeText: {
+      fontSize: 10,
+      color: '#15803d',
+      fontWeight: '800'
+    },
+    activeBreakBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#fffbeb',
+      borderColor: '#f59e0b',
+      borderWidth: 1.5,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 12,
+      shadowColor: '#d97706',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.15,
+      shadowRadius: 6,
+      elevation: 3
+    },
+    activeRainBanner: {
+      backgroundColor: '#f0f9ff',
+      borderColor: '#38bdf8',
+      shadowColor: '#0284c7'
+    },
+    activeBreakIconBox: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: '#fef3c7',
+      borderWidth: 1,
+      borderColor: '#fde68a',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 8
+    },
+    activeBreakEmoji: {
+      fontSize: 22
+    },
+    activeBreakTitle: {
+      fontSize: 14,
+      fontWeight: '800',
+      color: '#92400e'
+    },
+    activeBreakLiveTag: {
+      backgroundColor: '#dc2626',
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: 4
+    },
+    activeBreakLiveTagText: {
+      fontSize: 9,
+      fontWeight: '900',
+      color: '#ffffff',
+      letterSpacing: 0.5
+    },
+    activeBreakDetails: {
+      fontSize: 12,
+      color: '#78350f',
+      marginTop: 2,
+      fontWeight: '600'
+    },
+    resumePlayBtn: {
+      backgroundColor: '#16a34a',
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: '#15803d'
+    },
+    resumePlayBtnText: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: '#ffffff'
     }
   });

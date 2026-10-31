@@ -309,105 +309,6 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
           </View>
 
           {/* ─────────────────────────────────────────────────────────────
-              DYNAMIC STATISTICAL VISUALIZATION: SCORING & BOUNDARY CHART
-              ───────────────────────────────────────────────────────────── */}
-          {inningsStats && (
-            <View style={styles.statsCard}>
-              <View style={styles.statsHeader}>
-                <Text style={{ fontSize: 18, marginRight: 8 }}>📊</Text>
-                <View>
-                  <Text style={styles.statsCardTitle}>Innings Scoring Distribution & Boundaries</Text>
-                  <Text style={styles.statsCardSubtitle}>Visual breakdown of runs scored from boundaries vs running</Text>
-                </View>
-              </View>
-
-              {/* DONUT & HERO STAT METRICS ROW */}
-              <View style={[styles.statsRow, { flexDirection: isDesktop ? 'row' : 'column' }]}>
-                {/* Visual Donut / Radial Ring */}
-                <View style={styles.chartCol}>
-                  <View
-                    style={[
-                      styles.donutOuterRing,
-                      Platform.OS === 'web'
-                        ? ({
-                            background: `conic-gradient(#10b981 0% ${inningsStats.boundaryPct}%, #3b82f6 ${inningsStats.boundaryPct}% ${inningsStats.boundaryPct + inningsStats.runningPct}%, #f59e0b ${inningsStats.boundaryPct + inningsStats.runningPct}% 100%)`,
-                            backgroundImage: `conic-gradient(#10b981 0% ${inningsStats.boundaryPct}%, #3b82f6 ${inningsStats.boundaryPct}% ${inningsStats.boundaryPct + inningsStats.runningPct}%, #f59e0b ${inningsStats.boundaryPct + inningsStats.runningPct}% 100%)`
-                          } as any)
-                        : {
-                            borderWidth: 10,
-                            borderColor: '#10b981',
-                            borderTopColor: '#10b981',
-                            borderRightColor: '#3b82f6',
-                            borderBottomColor: '#f59e0b',
-                            borderLeftColor: '#10b981',
-                            backgroundColor: '#0a1432'
-                          }
-                    ]}
-                  >
-                    <View style={styles.donutHole}>
-                      <Text style={styles.donutNumber}>{inningsStats.boundaryPct}%</Text>
-                      <Text style={styles.donutUnitLabel}>BOUNDARIES</Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* 3 Metric Pills */}
-                <View style={styles.metricsCol}>
-                  <View style={[styles.metricPill, { borderLeftColor: '#10b981' }]}>
-                    <View>
-                      <Text style={styles.metricLabel}>Boundary Runs (4s & 6s)</Text>
-                      <Text style={styles.metricSub}>{inningsStats.total4s} fours • {inningsStats.total6s} sixes</Text>
-                    </View>
-                    <Text style={[styles.metricValue, { color: '#10b981' }]}>{inningsStats.boundaryRuns} r</Text>
-                  </View>
-
-                  <View style={[styles.metricPill, { borderLeftColor: '#3b82f6' }]}>
-                    <View>
-                      <Text style={styles.metricLabel}>Running Between Wickets</Text>
-                      <Text style={styles.metricSub}>Singles, doubles & triples</Text>
-                    </View>
-                    <Text style={[styles.metricValue, { color: '#3b82f6' }]}>{inningsStats.runningRuns} r</Text>
-                  </View>
-
-                  <View style={[styles.metricPill, { borderLeftColor: '#f59e0b' }]}>
-                    <View>
-                      <Text style={styles.metricLabel}>Extras Conceded</Text>
-                      <Text style={styles.metricSub}>{currentInnings.extras?.breakdown || 'Wides, no-balls & byes'}</Text>
-                    </View>
-                    <Text style={[styles.metricValue, { color: '#f59e0b' }]}>{inningsStats.extrasRuns} r</Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Dynamic Proportional Distribution Bar */}
-              <View style={styles.distributionBarWrapper}>
-                <View style={styles.distributionBarTrack}>
-                  {inningsStats.boundaryPct > 0 && (
-                    <View style={[styles.distributionBarSegment, { width: `${inningsStats.boundaryPct}%`, backgroundColor: '#10b981' }]} />
-                  )}
-                  {inningsStats.runningPct > 0 && (
-                    <View style={[styles.distributionBarSegment, { width: `${inningsStats.runningPct}%`, backgroundColor: '#3b82f6' }]} />
-                  )}
-                  {inningsStats.extrasPct > 0 && (
-                    <View style={[styles.distributionBarSegment, { width: `${inningsStats.extrasPct}%`, backgroundColor: '#f59e0b' }]} />
-                  )}
-                </View>
-                <View style={styles.distributionPctRow}>
-                  <Text style={[styles.distributionPctText, { color: '#10b981' }]}>
-                    {inningsStats.boundaryPct}% Boundaries
-                  </Text>
-                  <Text style={[styles.distributionPctText, { color: '#3b82f6' }]}>
-                    {inningsStats.runningPct}% Running
-                  </Text>
-                  <Text style={[styles.distributionPctText, { color: '#f59e0b' }]}>
-                    {inningsStats.extrasPct}% Extras
-                  </Text>
-                </View>
-              </View>
-            </View>
-          )}
-
-          {/* ─────────────────────────────────────────────────────────────
               BATTING SCORECARD TABLE
               ───────────────────────────────────────────────────────────── */}
           <View style={styles.sectionHeaderRow}>
@@ -565,6 +466,105 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                     </View>
                   );
                 })}
+              </View>
+            </View>
+          )}
+
+          {/* ─────────────────────────────────────────────────────────────
+              DYNAMIC STATISTICAL VISUALIZATION: SCORING & BOUNDARY CHART
+              ───────────────────────────────────────────────────────────── */}
+          {inningsStats && (
+            <View style={styles.statsCard}>
+              <View style={styles.statsHeader}>
+                <Text style={{ fontSize: 18, marginRight: 8 }}>📊</Text>
+                <View>
+                  <Text style={styles.statsCardTitle}>Innings Scoring Distribution & Boundaries</Text>
+                  <Text style={styles.statsCardSubtitle}>Visual breakdown of runs scored from boundaries vs running</Text>
+                </View>
+              </View>
+
+              {/* DONUT & HERO STAT METRICS ROW */}
+              <View style={[styles.statsRow, { flexDirection: isDesktop ? 'row' : 'column' }]}>
+                {/* Visual Donut / Radial Ring */}
+                <View style={styles.chartCol}>
+                  <View
+                    style={[
+                      styles.donutOuterRing,
+                      Platform.OS === 'web'
+                        ? ({
+                            background: `conic-gradient(#10b981 0% ${inningsStats.boundaryPct}%, #3b82f6 ${inningsStats.boundaryPct}% ${inningsStats.boundaryPct + inningsStats.runningPct}%, #f59e0b ${inningsStats.boundaryPct + inningsStats.runningPct}% 100%)`,
+                            backgroundImage: `conic-gradient(#10b981 0% ${inningsStats.boundaryPct}%, #3b82f6 ${inningsStats.boundaryPct}% ${inningsStats.boundaryPct + inningsStats.runningPct}%, #f59e0b ${inningsStats.boundaryPct + inningsStats.runningPct}% 100%)`
+                          } as any)
+                        : {
+                            borderWidth: 10,
+                            borderColor: '#10b981',
+                            borderTopColor: '#10b981',
+                            borderRightColor: '#3b82f6',
+                            borderBottomColor: '#f59e0b',
+                            borderLeftColor: '#10b981',
+                            backgroundColor: '#0a1432'
+                          }
+                    ]}
+                  >
+                    <View style={styles.donutHole}>
+                      <Text style={styles.donutNumber}>{inningsStats.boundaryPct}%</Text>
+                      <Text style={styles.donutUnitLabel}>BOUNDARIES</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* 3 Metric Pills */}
+                <View style={styles.metricsCol}>
+                  <View style={[styles.metricPill, { borderLeftColor: '#10b981' }]}>
+                    <View>
+                      <Text style={styles.metricLabel}>Boundary Runs (4s & 6s)</Text>
+                      <Text style={styles.metricSub}>{inningsStats.total4s} fours • {inningsStats.total6s} sixes</Text>
+                    </View>
+                    <Text style={[styles.metricValue, { color: '#10b981' }]}>{inningsStats.boundaryRuns} r</Text>
+                  </View>
+
+                  <View style={[styles.metricPill, { borderLeftColor: '#3b82f6' }]}>
+                    <View>
+                      <Text style={styles.metricLabel}>Running Between Wickets</Text>
+                      <Text style={styles.metricSub}>Singles, doubles & triples</Text>
+                    </View>
+                    <Text style={[styles.metricValue, { color: '#3b82f6' }]}>{inningsStats.runningRuns} r</Text>
+                  </View>
+
+                  <View style={[styles.metricPill, { borderLeftColor: '#f59e0b' }]}>
+                    <View>
+                      <Text style={styles.metricLabel}>Extras Conceded</Text>
+                      <Text style={styles.metricSub}>{currentInnings.extras?.breakdown || 'Wides, no-balls & byes'}</Text>
+                    </View>
+                    <Text style={[styles.metricValue, { color: '#f59e0b' }]}>{inningsStats.extrasRuns} r</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Dynamic Proportional Distribution Bar */}
+              <View style={styles.distributionBarWrapper}>
+                <View style={styles.distributionBarTrack}>
+                  {inningsStats.boundaryPct > 0 && (
+                    <View style={[styles.distributionBarSegment, { width: `${inningsStats.boundaryPct}%`, backgroundColor: '#10b981' }]} />
+                  )}
+                  {inningsStats.runningPct > 0 && (
+                    <View style={[styles.distributionBarSegment, { width: `${inningsStats.runningPct}%`, backgroundColor: '#3b82f6' }]} />
+                  )}
+                  {inningsStats.extrasPct > 0 && (
+                    <View style={[styles.distributionBarSegment, { width: `${inningsStats.extrasPct}%`, backgroundColor: '#f59e0b' }]} />
+                  )}
+                </View>
+                <View style={styles.distributionPctRow}>
+                  <Text style={[styles.distributionPctText, { color: '#10b981' }]}>
+                    {inningsStats.boundaryPct}% Boundaries
+                  </Text>
+                  <Text style={[styles.distributionPctText, { color: '#3b82f6' }]}>
+                    {inningsStats.runningPct}% Running
+                  </Text>
+                  <Text style={[styles.distributionPctText, { color: '#f59e0b' }]}>
+                    {inningsStats.extrasPct}% Extras
+                  </Text>
+                </View>
               </View>
             </View>
           )}
