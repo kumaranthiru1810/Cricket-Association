@@ -102,12 +102,31 @@ async function getAuditLogs(limit = 100) {
  */
 async function getOfficials() {
   await db.initDb();
-  return db.models.Official.find({}).sort({ name: 1 }).lean();
+  const [officials, users] = await Promise.all([
+    db.models.Official.find({}).sort({ name: 1 }).lean(),
+    db.models.User.find({ role: { $in: ['UMPIRE', 'SCORER'] } }).sort({ name: 1 }).lean()
+  ]);
+
+  const list = [...officials];
+  const seenIds = new Set(officials.map(o => o.id));
+
+  (users || []).forEach(u => {
+    if (!seenIds.has(u.id)) {
+      seenIds.add(u.id);
+      list.push({
+        id: u.id,
+        name: u.name,
+        role: u.role,
+        email: u.email,
+        phone: u.mobile || '—',
+        status: u.status || 'ACTIVE'
+      });
+    }
+  });
+
+  return list;
 }
 
-/**
- * Add or update an official
- */
 async function saveOfficial({ id, name, role, email, phone, status = 'ACTIVE' }, adminEmail) {
   await db.initDb();
   const offId = id || `OFF-${Date.now()}`;
@@ -193,7 +212,10 @@ async function scheduleMatch(fixtureData, adminEmail) {
     tournament_name,
     team_a_id,
     team_b_id,
+    team_a_name,
+    team_b_name,
     venue,
+    venue_maps_url,
     match_date,
     match_time,
     match_type,
@@ -270,6 +292,28 @@ async function scheduleMatch(fixtureData, adminEmail) {
     if (tour) finalTourName = tour.name;
   }
 
+  // Resolve dynamic team names if not provided
+  let resolvedTeamAName = (team_a_name && String(team_a_name).trim()) || null;
+  let resolvedTeamBName = (team_b_name && String(team_b_name).trim()) || null;
+
+  if (!resolvedTeamAName || resolvedTeamAName.startsWith('TEAM-VRD-') || resolvedTeamAName.startsWith('TM-')) {
+    const regA = await db.models.TeamRegistration.findOne({ id: team_a_id }).lean();
+    if (regA && regA.team_name) resolvedTeamAName = regA.team_name;
+    else {
+      const tmA = await db.models.Team.findOne({ $or: [{ id: team_a_id }, { team_id: team_a_id }] }).lean();
+      if (tmA && tmA.name) resolvedTeamAName = tmA.name;
+    }
+  }
+
+  if (!resolvedTeamBName || resolvedTeamBName.startsWith('TEAM-VRD-') || resolvedTeamBName.startsWith('TM-')) {
+    const regB = await db.models.TeamRegistration.findOne({ id: team_b_id }).lean();
+    if (regB && regB.team_name) resolvedTeamBName = regB.team_name;
+    else {
+      const tmB = await db.models.Team.findOne({ $or: [{ id: team_b_id }, { team_id: team_b_id }] }).lean();
+      if (tmB && tmB.name) resolvedTeamBName = tmB.name;
+    }
+  }
+
   const matchId = fixtureData.id || `M-${Date.now()}`;
   const match = await db.models.Match.create({
     id: matchId,
@@ -277,7 +321,10 @@ async function scheduleMatch(fixtureData, adminEmail) {
     tournament_name: finalTourName || 'Virudhunagar Premier League 2026',
     team_a_id,
     team_b_id,
+    team_a_name: resolvedTeamAName || team_a_name || team_a_id,
+    team_b_name: resolvedTeamBName || team_b_name || team_b_id,
     venue: venue || 'Kamarajar District Stadium',
+    venue_maps_url: venue_maps_url || (venue ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue)}` : ''),
     match_date: cleanDate,
     match_time: cleanTime,
     match_type: match_type || 'T20',
@@ -339,7 +386,10 @@ async function updateMatch(matchId, fixtureData, adminEmail) {
   if (finalTourName) match.tournament_name = finalTourName;
   if (!isLive && fixtureData.team_a_id) match.team_a_id = fixtureData.team_a_id;
   if (!isLive && fixtureData.team_b_id) match.team_b_id = fixtureData.team_b_id;
+  if (fixtureData.team_a_name) match.team_a_name = fixtureData.team_a_name;
+  if (fixtureData.team_b_name) match.team_b_name = fixtureData.team_b_name;
   if (fixtureData.venue) match.venue = fixtureData.venue;
+  if (fixtureData.venue_maps_url !== undefined) match.venue_maps_url = fixtureData.venue_maps_url;
   if (fixtureData.match_date) match.match_date = fixtureData.match_date;
   if (fixtureData.match_time) match.match_time = fixtureData.match_time;
   if (fixtureData.match_type) match.match_type = fixtureData.match_type;
@@ -549,35 +599,61 @@ async function verifyAddTargetAdminOtp({ requestId, otp, newAdminEmail }) {
 
 async function getMatches() {
   await db.initDb();
-  const [matches, teams, officials, tournaments] = await Promise.all([
+  const [matches, teams, registrations, officials, users, tournaments] = await Promise.all([
     db.models.Match.find({}).sort({ match_date: -1 }).lean(),
     db.models.Team.find({}).lean(),
+    db.models.TeamRegistration.find({}).lean(),
     db.models.Official.find({}).lean(),
+    db.models.User.find({ role: { $in: ['UMPIRE', 'SCORER'] } }).lean(),
     db.models.Tournament.find({}).lean()
   ]);
 
   const teamMap = {};
-  (teams || []).forEach(t => { teamMap[t.id] = t; });
+  (registrations || []).forEach(r => {
+    const tObj = { id: r.id, team_id: r.id, name: r.team_name, short_name: (r.team_name || '').slice(0, 4).toUpperCase() };
+    teamMap[r.id] = tObj;
+    if (r.team_name) teamMap[r.team_name] = tObj;
+  });
+  (teams || []).forEach(t => {
+    teamMap[t.id] = t;
+    if (t.team_id) teamMap[t.team_id] = t;
+    if (t.name) teamMap[t.name] = t;
+    if (t.team_name) teamMap[t.team_name] = t;
+  });
 
   const officialMap = {};
   (officials || []).forEach(o => { officialMap[o.id] = o; officialMap[o.email] = o; });
+  (users || []).forEach(u => { officialMap[u.id] = u; officialMap[u.email] = u; });
 
   const tournamentMap = {};
   (tournaments || []).forEach(t => { tournamentMap[t.id] = t; });
 
   return matches.map(m => {
-    const teamA = teamMap[m.team_a_id] || { name: m.team_a_id, short_name: m.team_a_id };
-    const teamB = teamMap[m.team_b_id] || { name: m.team_b_id, short_name: m.team_b_id };
+    let teamAName = m.team_a_name;
+    if (!teamAName || teamAName.startsWith('TEAM-VRD-') || teamAName.startsWith('TM-')) {
+      teamAName = teamMap[m.team_a_name]?.name || teamMap[m.team_a_name]?.team_name || teamMap[m.team_a_id]?.name || teamMap[m.team_a_id]?.team_name || m.team_a_name || m.team_a_id;
+    }
+
+    let teamBName = m.team_b_name;
+    if (!teamBName || teamBName.startsWith('TEAM-VRD-') || teamBName.startsWith('TM-')) {
+      teamBName = teamMap[m.team_b_name]?.name || teamMap[m.team_b_name]?.team_name || teamMap[m.team_b_id]?.name || teamMap[m.team_b_id]?.team_name || m.team_b_name || m.team_b_id;
+    }
+
     const scorer = officialMap[m.assigned_scorer_id] || { name: m.assigned_scorer_id || 'Unassigned' };
     const tour = tournamentMap[m.tournament_id];
+    const u1 = m.umpire1_name || officialMap[m.umpire1_id]?.name || officialMap[m.umpire1_id]?.full_name || '';
+    const u2 = m.umpire2_name || officialMap[m.umpire2_id]?.name || officialMap[m.umpire2_id]?.full_name || '';
 
     return {
       ...m,
-      team_a_name: teamA.name || m.team_a_id,
-      team_a_short: teamA.short_name || teamA.name || m.team_a_id,
-      team_b_name: teamB.name || m.team_b_id,
-      team_b_short: teamB.short_name || teamB.name || m.team_b_id,
-      scorer_name: scorer.name || m.assigned_scorer_id || 'Unassigned',
+      team_a_name: teamAName,
+      team_a_short: (teamAName || '').slice(0, 4).toUpperCase(),
+      team_b_name: teamBName,
+      team_b_short: (teamBName || '').slice(0, 4).toUpperCase(),
+      scorer_name: scorer.name || scorer.full_name || m.assigned_scorer_id || 'Unassigned',
+      umpire1_name: u1,
+      umpire2_name: u2,
+      venue_maps_url: m.venue_maps_url || (m.venue ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.venue)}` : ''),
       tournament_display_name: m.tournament_name || tour?.name || 'District Championship'
     };
   });
@@ -590,7 +666,40 @@ async function getTournaments() {
 
 async function getTeams() {
   await db.initDb();
-  return db.models.Team.find({}).sort({ name: 1 }).lean();
+  const [teams, regs] = await Promise.all([
+    db.models.Team.find({}).sort({ name: 1 }).lean(),
+    db.models.TeamRegistration.find({}).sort({ created_at: -1 }).lean()
+  ]);
+
+  const list = [];
+  const seenNames = new Set();
+
+  (regs || []).forEach(r => {
+    const name = r.team_name || r.name;
+    if (name && !seenNames.has(name.toLowerCase())) {
+      seenNames.add(name.toLowerCase());
+      list.push({
+        id: r.id,
+        team_id: r.id,
+        name: name,
+        team_name: name,
+        taluk: r.taluk || r.city || 'Virudhunagar',
+        coach_name: r.coach_name || 'Coach',
+        coach_email: r.coach_email || '',
+        status: r.status || 'ACTIVE'
+      });
+    }
+  });
+
+  (teams || []).forEach(t => {
+    const name = t.name || t.team_name;
+    if (name && !seenNames.has(name.toLowerCase())) {
+      seenNames.add(name.toLowerCase());
+      list.push(t);
+    }
+  });
+
+  return list;
 }
 
 async function saveTeam(teamData, adminEmail) {
