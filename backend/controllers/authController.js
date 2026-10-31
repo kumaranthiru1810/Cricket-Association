@@ -110,8 +110,8 @@ class AuthController {
   // Unified Password-Based Login (Sets JWT Cookie)
   async login(req, res) {
     try {
-      const { email, emailOrPhone, name, username, password, otp, role, teamName } = req.body;
-      const identifier = email || emailOrPhone || username || name;
+      const { email, emailOrPhone, name, username, password, otp, role, teamName, identifier: bodyId } = req.body;
+      const identifier = email || emailOrPhone || username || name || bodyId;
       const credential = password || otp;
       const result = await authService.login(identifier, credential, role, teamName);
       if (result.token) {

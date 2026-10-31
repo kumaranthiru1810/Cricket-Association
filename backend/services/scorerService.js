@@ -230,7 +230,7 @@ class ScorerService {
         scoreB: scoreB || (isLive ? 'Yet to bat' : null),
         result: m.result_summary,
         assigned_scorer_id: m.assigned_scorer_id,
-        currentBreak: m.current_break || (m.breaks && m.breaks.length > 0 ? m.breaks[m.breaks.length - 1] : null),
+        currentBreak: m.current_break || null,
         statusComment: m.status_comment || '',
         breaks: m.breaks || []
       };
@@ -452,7 +452,7 @@ class ScorerService {
         teamB: teamB.name || match.team_b_id,
         teamAPlayingXI: match.team_a_playing_xi || [],
         teamBPlayingXI: match.team_b_playing_xi || [],
-        currentBreak: match.current_break || (match.breaks && match.breaks.length > 0 ? match.breaks[match.breaks.length - 1] : null),
+        currentBreak: match.current_break || null,
         statusComment: match.status_comment || '',
         breaks: match.breaks || []
       },

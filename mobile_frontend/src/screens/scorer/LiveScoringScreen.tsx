@@ -511,6 +511,11 @@ export default function LiveScoringScreen() {
           setShowBowlerModal(true);
         }
       }
+      if (payload?.action === 'BREAK_ENDED' || payload?.currentBreak === null) {
+        setCurrentBreak(null);
+      } else if (payload?.action === 'BREAK_ADDED' && payload?.currentBreak) {
+        setCurrentBreak(payload.currentBreak);
+      }
     });
 
     return () => {
@@ -803,6 +808,9 @@ export default function LiveScoringScreen() {
       setIsBallInProgress(false);
       if (res.commentary) {
         setAiCommentary(res.commentary);
+      }
+      if (currentBreak) {
+        setCurrentBreak(null);
       }
 
       // Seamless background update without full page refresh

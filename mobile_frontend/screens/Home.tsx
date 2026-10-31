@@ -21,7 +21,8 @@ import {
   Animated,
   StatusBar,
   ActivityIndicator,
-  Alert
+  Alert,
+  useWindowDimensions
 } from 'react-native';
 import { io } from 'socket.io-client';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -364,16 +365,17 @@ export default function HomeScreen() {
     }
   };
 
-  // Screen Width for responsive layouts
-  const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
+  // Dynamic Responsive Breakpoints (Updates automatically on all devices & orientations)
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isMobile = windowWidth < 768;
+  const isTablet = windowWidth >= 768 && windowWidth < 1024;
+  const isDesktop = windowWidth >= 1024;
+  const isSmallMobile = windowWidth < 480;
+  const isTinyMobile = windowWidth < 380;
 
-  useEffect(() => {
-    const sub = Dimensions.addEventListener('change', ({ window }) => {
-      setWindowWidth(window.width);
-    });
-    return () => sub?.remove();
-  }, []);
+  const containerResponsiveStyle = {
+    paddingHorizontal: isTinyMobile ? 10 : (isSmallMobile ? 12 : (isMobile ? 16 : 32))
+  };
 
   // Animations
   const pulseAnim = useRef(new Animated.Value(0.4)).current;
@@ -485,7 +487,7 @@ export default function HomeScreen() {
     const timer = setInterval(() => {
       loadPublicMatches();
       loadPortalData();
-    }, 8000);
+    }, 3000);
 
     return () => {
       clearInterval(timer);
@@ -1004,12 +1006,12 @@ export default function HomeScreen() {
             setSectionPositions(prev => ({ ...prev, matchCentre: layout.y }));
           }}
         >
-          <View style={styles.container}>
+          <View style={[styles.container, containerResponsiveStyle]}>
             <View style={styles.sectionHead}>
               <View style={styles.sectionTagBadge}>
                 <Text style={styles.sectionTagBadgeText}>🏏 OFFICIAL MATCH CENTRE</Text>
               </View>
-              <Text style={styles.sectionTitle}>Official Matches, Fixtures & Results</Text>
+              <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>Official Matches, Fixtures & Results</Text>
               <Text style={styles.sectionSubtitle}>
                 Real-time coverage displaying complete logistics: Match Date, Time, Venues & Assigned Officials
               </Text>
@@ -1036,20 +1038,30 @@ export default function HomeScreen() {
               }).length;
 
               return (
-                <View style={styles.filterTabsRow}>
+                <View style={[styles.filterTabsRow, isSmallMobile && { gap: 6, marginBottom: 14 }]}>
                   {[
-                    { id: 'all', label: `All Matches (${publicMatches.length})` },
-                    { id: 'live', label: `🔴 Live Matches (${liveCount})` },
-                    { id: 'upcoming', label: `📅 Upcoming Fixtures (${upcomingCount})` },
-                    { id: 'results', label: `🏁 Recent Results (${resultsCount})` }
+                    { id: 'all', short: `All (${publicMatches.length})`, full: `All Matches (${publicMatches.length})` },
+                    { id: 'live', short: `🔴 Live (${liveCount})`, full: `🔴 Live Matches (${liveCount})` },
+                    { id: 'upcoming', short: `📅 Upcoming (${upcomingCount})`, full: `📅 Upcoming Fixtures (${upcomingCount})` },
+                    { id: 'results', short: `🏁 Results (${resultsCount})`, full: `🏁 Recent Results (${resultsCount})` }
                   ].map(f => (
                     <TouchableOpacity
                       key={f.id}
-                      style={[styles.filterTabBtn, matchFilter === f.id && styles.filterTabBtnActive]}
+                      style={[
+                        styles.filterTabBtn,
+                        matchFilter === f.id && styles.filterTabBtnActive,
+                        isSmallMobile && { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18 }
+                      ]}
                       onPress={() => setMatchFilter(f.id as any)}
                     >
-                      <Text style={[styles.filterTabBtnText, matchFilter === f.id && styles.filterTabBtnTextActive]}>
-                        {f.label}
+                      <Text
+                        style={[
+                          styles.filterTabBtnText,
+                          matchFilter === f.id && styles.filterTabBtnTextActive,
+                          isSmallMobile && { fontSize: 11 }
+                        ]}
+                      >
+                        {isSmallMobile ? f.short : f.full}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -1134,7 +1146,7 @@ export default function HomeScreen() {
 
 {/* Matches Grid */}
             {!isLoadingMatches && (
-              <View style={styles.grid2Col}>
+              <View style={[styles.grid2Col, isMobile && { flexDirection: 'column' }]}>
                 {publicMatches
                   .filter(m => {
                     const s = (m.status || '').toLowerCase();
@@ -1155,172 +1167,214 @@ export default function HomeScreen() {
                     const teamAShort = m.teamAShort || (m.teamA ? m.teamA.slice(0, 3).toUpperCase() : 'TMA');
                     const teamBShort = m.teamBShort || (m.teamB ? m.teamB.slice(0, 3).toUpperCase() : 'TMB');
 
+                    const isRain = m.currentBreak && (m.currentBreak.type || '').toLowerCase().includes('rain');
+                    const isBreak = !!m.currentBreak;
+
+                    // Clean logistics without redundant labels
+                    const rawDate = m.date || m.match_date || 'TBD';
+                    const cleanDate = rawDate.replace(/\s+\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?/i, '').trim();
+                    const cleanTime = m.match_time || (rawDate.match(/\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)/i) ? rawDate.match(/\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)/i)[0] : '');
+                    const cleanVenue = (m.venue || 'District Sports Complex, Virudhunagar').replace(/^Venue:\s*/i, '').trim();
+                    const cleanOfficials = m.assigned_scorer_id ? `${m.assigned_scorer_id} • Federation Umpires` : 'Assigned District Panel Officials';
+
                     return (
-                      <View key={m.id} style={[styles.matchCard, isLive && styles.matchCardLive]}>
+                      <View
+                        key={m.id}
+                        style={[
+                          styles.matchCard,
+                          isLive && styles.matchCardLive,
+                          isUpcoming && styles.matchCardUpcoming,
+                          isCompleted && styles.matchCardResult,
+                          isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' },
+                          isSmallMobile && { padding: 12, borderRadius: 14 }
+                        ]}
+                      >
+                        {/* 1. Top Header Row: Live / Status & Tournament on Left, Rain Delay & Format on Right */}
                         <View style={styles.matchCardTop}>
-                          {isLive ? (
-                            <View style={[styles.liveIndicatorPill, m.currentBreak && styles.liveBreakIndicatorPill]}>
-                              <Animated.View style={[styles.pulseRedDot, { opacity: pulseAnim }]} />
-                              <Text style={styles.liveIndicatorText}>
-                                {m.currentBreak ? `LIVE • ${m.currentBreak.type?.toUpperCase() || 'BREAK'}` : 'LIVE'}
-                              </Text>
-                            </View>
-                          ) : isUpcoming ? (
-                            <View style={styles.upcomingIndicatorPill}>
-                              <Text style={styles.upcomingIndicatorText}>⏰ UPCOMING</Text>
-                            </View>
-                          ) : isCompleted ? (
-                            <View style={styles.resultIndicatorPill}>
-                              <Text style={styles.resultIndicatorText}>🏁 RESULT</Text>
-                            </View>
-                          ) : (
+                          <View style={styles.cardHeaderLeftGroup}>
+                            {isLive ? (
+                              <View style={[styles.liveIndicatorPill, isSmallMobile && { paddingHorizontal: 7, paddingVertical: 2.5 }]}>
+                                <Animated.View style={[styles.pulseRedDot, { opacity: pulseAnim }]} />
+                                <Text style={[styles.liveIndicatorText, isSmallMobile && { fontSize: 9.5 }]}>LIVE</Text>
+                              </View>
+                            ) : isUpcoming ? (
+                              <View style={[styles.upcomingIndicatorPill, isSmallMobile && { paddingHorizontal: 7, paddingVertical: 2.5 }]}>
+                                <Text style={[styles.upcomingIndicatorText, isSmallMobile && { fontSize: 9.5 }]}>⏰ UPCOMING</Text>
+                              </View>
+                            ) : isCompleted ? (
+                              <View style={[styles.resultIndicatorPill, isSmallMobile && { paddingHorizontal: 7, paddingVertical: 2.5 }]}>
+                                <Text style={[styles.resultIndicatorText, isSmallMobile && { fontSize: 9.5 }]}>🏁 RESULT</Text>
+                              </View>
+                            ) : (
+                              <View
+                                style={[
+                                  styles.upcomingIndicatorPill,
+                                  { backgroundColor: '#f1f5f9', borderColor: '#cbd5e1' },
+                                  isSmallMobile && { paddingHorizontal: 7, paddingVertical: 2.5 }
+                                ]}
+                              >
+                                <Text style={[styles.upcomingIndicatorText, { color: '#64748b' }, isSmallMobile && { fontSize: 9.5 }]}>🚫 CANCELLED</Text>
+                              </View>
+                            )}
+                            <Text style={[styles.matchTournament, isSmallMobile && { fontSize: 11.5 }]} numberOfLines={1}>
+                              {m.tournament || m.tournament_name || 'District Match'}
+                            </Text>
+                          </View>
+
+                          <View style={styles.cardHeaderRightGroup}>
+                            {isRain ? (
+                              <View style={[styles.topRightRainPill, isSmallMobile && { paddingHorizontal: 6, paddingVertical: 2 }]}>
+                                <Text style={[styles.topRightRainPillText, isSmallMobile && { fontSize: 9 }]}>
+                                  🌧️ RAIN DELAY{m.currentBreak?.duration ? ` (${m.currentBreak.duration}m)` : ''}
+                                </Text>
+                              </View>
+                            ) : isBreak ? (
+                              <View style={[styles.topRightBreakPill, isSmallMobile && { paddingHorizontal: 6, paddingVertical: 2 }]}>
+                                <Text style={[styles.topRightBreakPillText, isSmallMobile && { fontSize: 9 }]}>
+                                  ☕ {m.currentBreak?.type?.toUpperCase()}
+                                </Text>
+                              </View>
+                            ) : null}
+
                             <View
                               style={[
-                                styles.upcomingIndicatorPill,
-                                { backgroundColor: '#f1f5f9', borderColor: '#cbd5e1' }
+                                m.format === '3-DAY'
+                                  ? styles.formatBadgeMulti
+                                  : m.format === 'ODI' || m.format === '50-OVERS'
+                                    ? styles.formatBadgeOneDay
+                                    : styles.formatBadgeT20,
+                                isSmallMobile && { paddingHorizontal: 6, paddingVertical: 2 }
                               ]}
                             >
-                              <Text style={[styles.upcomingIndicatorText, { color: '#64748b' }]}>🚫 CANCELLED</Text>
+                              <Text style={[styles.formatBadgeText, isSmallMobile && { fontSize: 9 }]}>{m.format || 'T20'}</Text>
                             </View>
-                          )}
-                          <Text style={styles.matchTournament} numberOfLines={1}>
-                            {m.tournament || m.tournament_name || 'District Match'}
-                          </Text>
-                          <View
-                            style={
-                              m.format === '3-DAY'
-                                ? styles.formatBadgeMulti
-                                : m.format === 'ODI' || m.format === '50-OVERS'
-                                  ? styles.formatBadgeOneDay
-                                  : styles.formatBadgeT20
-                            }
-                          >
-                            <Text style={styles.formatBadgeText}>{m.format || 'T20'}</Text>
                           </View>
                         </View>
 
-                        {/* Logistics Box */}
-                        <View style={styles.logisticsBox}>
-                          <Text style={styles.logisticsItem}>
-                            📅 Date: {m.date || m.match_date || 'TBD'}
-                            {m.match_time ? ` | ⏰ Time: ${m.match_time}` : ''}
-                          </Text>
-                          <Text style={styles.logisticsItem} numberOfLines={1}>
-                            📍 Venue: {m.venue || 'District Sports Complex, Virudhunagar'}
-                          </Text>
-                          <Text style={styles.logisticsItem} numberOfLines={1}>
-                            ⚖️ Officials: {m.assigned_scorer_id ? `Assigned Scorer: ${m.assigned_scorer_id} • Federation Umpires` : 'Assigned District Panel Officials'}
-                          </Text>
-                        </View>
-
-                        {/* Teams & Scores */}
-                        <View style={styles.matchTeamsBox}>
-                          <View style={[styles.matchTeamRow, isLive && styles.battingNowRow]}>
-                            <View style={styles.teamMeta}>
+                        {/* 2. Teams & Scores in a Single Professional Row (Team 1 VS Team 2) */}
+                        <View
+                          style={[
+                            styles.matchTeamsSingleRow,
+                            isSmallMobile && { paddingHorizontal: 8, paddingVertical: 10, borderRadius: 12, marginVertical: 6 }
+                          ]}
+                        >
+                          {/* Team A (Left) */}
+                          <View style={[styles.teamColLeft, isSmallMobile && { minWidth: 0 }]}>
+                            <View style={styles.teamCrestNameRow}>
                               <View
                                 style={[
                                   styles.teamMiniCrest,
-                                  { backgroundColor: getTeamBadgeColor(teamAShort, 0) }
+                                  { backgroundColor: getTeamBadgeColor(teamAShort, 0) },
+                                  isSmallMobile && { width: 24, height: 24, borderRadius: 12 }
                                 ]}
                               >
-                                <Text style={styles.teamMiniCrestText}>{teamAShort}</Text>
+                                <Text style={[styles.teamMiniCrestText, isSmallMobile && { fontSize: 9 }]}>{teamAShort}</Text>
                               </View>
-                              <Text style={styles.teamNameText} numberOfLines={1}>
+                              <Text style={[styles.teamNameTextSingleRow, isSmallMobile && { fontSize: 12 }]} numberOfLines={1}>
                                 {m.teamA}
                               </Text>
-                              {isLive && <Text style={styles.battingIcon}>🏏</Text>}
+                              {isLive && <Text style={[styles.battingIcon, isSmallMobile && { fontSize: 10 }]}>🏏</Text>}
                             </View>
-                            <View style={styles.teamScores}>
-                              {m.scoreA ? (
-                                <Text style={styles.runsText}>{m.scoreA}</Text>
-                              ) : (
-                                <Text style={styles.yetToBatText}>{isUpcoming ? 'Upcoming' : '-'}</Text>
-                              )}
+                            <Text style={[m.scoreA ? styles.teamScoreSingleRow : styles.teamYetToBatSingleRow, isSmallMobile && { fontSize: isTinyMobile ? 13 : 14.5 }]}>
+                              {m.scoreA || (isUpcoming ? 'Upcoming' : 'Yet to bat')}
+                            </Text>
+                          </View>
+
+                          {/* Center VS Badge */}
+                          <View style={[styles.iplVsCenterBox, isSmallMobile && { paddingHorizontal: 4 }]}>
+                            <View style={[styles.iplVsCircle, isSmallMobile && { width: 26, height: 26, borderRadius: 13 }]}>
+                              <Text style={[styles.iplVsCircleText, isSmallMobile && { fontSize: 8.5 }]}>VS</Text>
                             </View>
                           </View>
 
-                          {/* IPL-Style VS Clash Badge Divider */}
-                          <View style={styles.iplVsDivider}>
-                            <View style={styles.iplVsLine} />
-                            <View style={styles.iplVsBadge}>
-                              <Text style={styles.iplVsText}>VS</Text>
-                            </View>
-                            <View style={styles.iplVsLine} />
-                          </View>
-
-                          <View style={styles.matchTeamRow}>
-                            <View style={styles.teamMeta}>
+                          {/* Team B (Right) */}
+                          <View style={[styles.teamColRight, isSmallMobile && { minWidth: 0 }]}>
+                            <View style={[styles.teamCrestNameRow, { justifyContent: 'flex-end' }]}>
+                              <Text style={[styles.teamNameTextSingleRow, { textAlign: 'right' }, isSmallMobile && { fontSize: 12 }]} numberOfLines={1}>
+                                {m.teamB}
+                              </Text>
                               <View
                                 style={[
                                   styles.teamMiniCrest,
-                                  { backgroundColor: getTeamBadgeColor(teamBShort, 1) }
+                                  { backgroundColor: getTeamBadgeColor(teamBShort, 1) },
+                                  isSmallMobile && { width: 24, height: 24, borderRadius: 12 }
                                 ]}
                               >
-                                <Text style={styles.teamMiniCrestText}>{teamBShort}</Text>
+                                <Text style={[styles.teamMiniCrestText, isSmallMobile && { fontSize: 9 }]}>{teamBShort}</Text>
                               </View>
-                              <Text style={styles.teamNameText} numberOfLines={1}>
-                                {m.teamB}
-                              </Text>
                             </View>
-                            <View style={styles.teamScores}>
-                              {m.scoreB ? (
-                                <Text style={styles.runsText}>{m.scoreB}</Text>
-                              ) : (
-                                <Text style={styles.yetToBatText}>{isUpcoming ? 'Upcoming' : '-'}</Text>
-                              )}
-                            </View>
+                            <Text style={[m.scoreB ? styles.teamScoreSingleRow : styles.teamYetToBatSingleRow, { textAlign: 'right' }, isSmallMobile && { fontSize: isTinyMobile ? 13 : 14.5 }]}>
+                              {m.scoreB || (isUpcoming ? 'Upcoming' : 'Yet to bat')}
+                            </Text>
                           </View>
                         </View>
 
-                        {/* Status / Result Summary Note */}
+                        {/* 3. Status Note / Active Rain Delay Notice */}
                         {m.result ? (
-                          <Text style={styles.matchStatusNoteGold}>🏆 {m.result}</Text>
-                        ) : isLive ? (
-                          m.currentBreak ? (
-                            <View style={styles.cardBreakBanner}>
-                              <Text style={styles.cardBreakEmoji}>
-                                {m.currentBreak.type?.toLowerCase().includes('tea')
-                                  ? '☕'
-                                  : m.currentBreak.type?.toLowerCase().includes('lunch')
-                                  ? '🍽️'
-                                  : m.currentBreak.type?.toLowerCase().includes('drinks')
-                                  ? '🥤'
-                                  : m.currentBreak.type?.toLowerCase().includes('rain')
-                                  ? '🌧️'
-                                  : '⏸️'}
-                              </Text>
-                              <Text style={styles.cardBreakText} numberOfLines={1}>
-                                {m.currentBreak.type?.toUpperCase()} IN PROGRESS
-                                {m.currentBreak.duration ? ` (${m.currentBreak.duration} MINS)` : ''}
-                                {m.currentBreak.startTime && m.currentBreak.endTime ? ` • ${m.currentBreak.startTime} - ${m.currentBreak.endTime}` : ''}
-                              </Text>
-                            </View>
-                          ) : (
-                            <Text style={styles.matchStatusNoteGold}>
-                              ⏰ Live Inning in Progress ({m.overs || 20} Overs)
+                          <Text style={[styles.matchStatusNoteGold, isSmallMobile && { fontSize: 11 }]}>🏆 {m.result}</Text>
+                        ) : isRain ? (
+                          <View style={[styles.cardRainBanner, isSmallMobile && { paddingVertical: 6, paddingHorizontal: 8 }]}>
+                            <Text style={[styles.cardRainText, isSmallMobile && { fontSize: 10.5 }]} numberOfLines={1}>
+                              🌧️ MATCH DELAYED DUE TO RAIN • Covers on pitch{m.currentBreak.startTime && m.currentBreak.endTime ? ` (${m.currentBreak.startTime} - ${m.currentBreak.endTime})` : ''}
                             </Text>
-                          )
+                          </View>
+                        ) : isBreak ? (
+                          <View style={[styles.cardBreakBanner, isSmallMobile && { paddingVertical: 6, paddingHorizontal: 8 }]}>
+                            <Text style={[styles.cardBreakText, isSmallMobile && { fontSize: 10.5 }]} numberOfLines={1}>
+                              ☕ {m.currentBreak.type?.toUpperCase()} IN PROGRESS{m.currentBreak.duration ? ` (${m.currentBreak.duration} MINS)` : ''}{m.currentBreak.startTime && m.currentBreak.endTime ? ` • ${m.currentBreak.startTime} - ${m.currentBreak.endTime}` : ''}
+                            </Text>
+                          </View>
+                        ) : isLive ? (
+                          <Text style={[styles.matchStatusNoteGold, isSmallMobile && { fontSize: 11 }]}>
+                            ⏰ Live Inning in Progress ({m.overs || 20} Overs)
+                          </Text>
                         ) : isUpcoming ? (
-                          <Text style={styles.matchStatusNote}>
-                            📅 Match Scheduled: {m.date || m.match_date}
+                          <Text style={[styles.matchStatusNote, isSmallMobile && { fontSize: 11 }]}>
+                            📅 Match Scheduled: {cleanDate} {cleanTime}
                           </Text>
                         ) : isCancelled ? (
-                          <Text style={[styles.matchStatusNote, { color: '#ef4444' }]}>
+                          <Text style={[styles.matchStatusNote, { color: '#ef4444' }, isSmallMobile && { fontSize: 11 }]}>
                             🚫 Match Cancelled: {m.result || 'Cancelled by Federation Admin'}
                           </Text>
                         ) : (
-                          <Text style={styles.matchStatusNote}>ℹ️ Status: {m.status}</Text>
+                          <Text style={[styles.matchStatusNote, isSmallMobile && { fontSize: 11 }]}>ℹ️ Status: {m.status}</Text>
                         )}
 
-                        {/* Action CTA */}
+                        {/* 4. Bottom Logistics Box (Clean Alignment, Only Emojis, No Redundant English) */}
+                        <View style={[styles.cardLogisticsBottomBar, isSmallMobile && { paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8 }]}>
+                          <View style={[styles.logisticsChipRow, isSmallMobile && { gap: 6, marginBottom: 4 }]}>
+                            <View style={styles.logisticsChip}>
+                              <Text style={styles.logisticsEmoji}>📅</Text>
+                              <Text style={[styles.logisticsValueText, isSmallMobile && { fontSize: 10 }]}>{cleanDate}</Text>
+                            </View>
+                            {cleanTime ? (
+                              <View style={styles.logisticsChip}>
+                                <Text style={styles.logisticsEmoji}>⏰</Text>
+                                <Text style={[styles.logisticsValueText, isSmallMobile && { fontSize: 10 }]}>{cleanTime}</Text>
+                              </View>
+                            ) : null}
+                            <View style={[styles.logisticsChip, { flex: 1, minWidth: isSmallMobile ? '100%' : 'auto' }]}>
+                              <Text style={styles.logisticsEmoji}>📍</Text>
+                              <Text style={[styles.logisticsValueText, isSmallMobile && { fontSize: 10 }]} numberOfLines={1}>{cleanVenue}</Text>
+                            </View>
+                          </View>
+                          <View style={styles.logisticsOfficialsBottomRow}>
+                            <Text style={styles.logisticsEmoji}>⚖️</Text>
+                            <Text style={[styles.logisticsOfficialsCleanText, isSmallMobile && { fontSize: 9.5 }]} numberOfLines={1}>
+                              {cleanOfficials}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* 5. Action CTA */}
                         <TouchableOpacity
-                          style={styles.btnOutlineGoldBlock}
+                          style={[styles.btnOutlineGoldBlock, isSmallMobile && { paddingVertical: 8 }]}
                           onPress={() => {
                             if (isLive || isCompleted) {
                               handleOpenScorecard(m);
                             } else if (isUpcoming) {
                               alert(
-                                `Fixture Logistics:\n• Tournament: ${m.tournament || 'CFVD'}\n• Teams: ${m.teamA} vs ${m.teamB}\n• Date: ${m.date || m.match_date}\n• Venue: ${m.venue}\n• Format: ${m.format}`
+                                `Fixture Logistics:\n• Tournament: ${m.tournament || 'CFVD'}\n• Teams: ${m.teamA} vs ${m.teamB}\n• Date: ${cleanDate} ${cleanTime}\n• Venue: ${cleanVenue}\n• Format: ${m.format}`
                               );
                             } else {
                               alert(
@@ -1329,7 +1383,7 @@ export default function HomeScreen() {
                             }
                           }}
                         >
-                          <Text style={styles.btnOutlineGoldBlockText}>
+                          <Text style={[styles.btnOutlineGoldBlockText, isSmallMobile && { fontSize: 11 }]}>
                             {isLive
                               ? '👁️ View Live Scorecard & Toss'
                               : isCompleted
@@ -1355,20 +1409,20 @@ export default function HomeScreen() {
             setSectionPositions(prev => ({ ...prev, tournaments: layout.y }));
           }}
         >
-          <View style={styles.container}>
+          <View style={[styles.container, containerResponsiveStyle]}>
             <View style={styles.sectionHead}>
               <View style={styles.sectionTagBadge}>
                 <Text style={styles.sectionTagBadgeText}>🏆 LEAGUE STRUCTURE</Text>
               </View>
-              <Text style={styles.sectionTitle}>Official Sanctioned Tournaments</Text>
+              <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>Official Sanctioned Tournaments</Text>
               <Text style={styles.sectionSubtitle}>
                 Promoting multi-day red-ball traditional cricket and modern white-ball collegiate and district leagues
               </Text>
             </View>
 
-            <View style={styles.grid2Col}>
+            <View style={[styles.grid2Col, isMobile && { flexDirection: 'column' }]}>
               {/* Tourney 1 */}
-              <View style={styles.tournamentCard}>
+              <View style={[styles.tournamentCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }, isSmallMobile && { padding: 12 }]}>
                 <View style={styles.tBadgeWrap}>
                   <Text style={styles.badgeGoldPill}>Premier Division</Text>
                   <Text style={styles.badgeBluePill}>Multi-Day</Text>
@@ -1405,7 +1459,7 @@ export default function HomeScreen() {
               </View>
 
               {/* Tourney 2 */}
-              <View style={styles.tournamentCard}>
+              <View style={[styles.tournamentCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }, isSmallMobile && { padding: 12 }]}>
                 <View style={styles.tBadgeWrap}>
                   <Text style={styles.badgeRedPill}>White Ball</Text>
                   <Text style={styles.badgeGoldPill}>T20 Trophy</Text>
@@ -1444,7 +1498,7 @@ export default function HomeScreen() {
               </View>
 
               {/* Tourney 3 */}
-              <View style={styles.tournamentCard}>
+              <View style={[styles.tournamentCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }, isSmallMobile && { padding: 12 }]}>
                 <View style={styles.tBadgeWrap}>
                   <Text style={styles.badgeBluePill}>Collegiate</Text>
                   <Text style={styles.badgeGoldPill}>Inter-College Cup</Text>
@@ -1478,7 +1532,7 @@ export default function HomeScreen() {
               </View>
 
               {/* Tourney 4 */}
-              <View style={styles.tournamentCard}>
+              <View style={[styles.tournamentCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }, isSmallMobile && { padding: 12 }]}>
                 <View style={styles.tBadgeWrap}>
                   <Text style={styles.badgeGreenPill}>Under-16 / U-19</Text>
                   <Text style={styles.badgeBluePill}>Junior Talent</Text>
@@ -1522,12 +1576,12 @@ export default function HomeScreen() {
             setSectionPositions(prev => ({ ...prev, pointsTable: layout.y }));
           }}
         >
-          <View style={styles.container}>
+          <View style={[styles.container, containerResponsiveStyle]}>
             <View style={styles.sectionHead}>
               <View style={styles.sectionTagBadge}>
                 <Text style={styles.sectionTagBadgeText}>📊 LEAGUE STANDINGS</Text>
               </View>
-              <Text style={styles.sectionTitle}>Official League Points Table 2026-27</Text>
+              <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>Official League Points Table 2026-27</Text>
               <Text style={styles.sectionSubtitle}>
                 Updated in accordance with official District Federation League points calculation rules
               </Text>
@@ -1554,7 +1608,12 @@ export default function HomeScreen() {
             </ScrollView>
 
             {/* Standings Table */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {isMobile && (
+              <Text style={{ fontSize: 11, color: '#b45309', fontWeight: '700', marginBottom: 8, textAlign: 'center' }}>
+                👉 Swipe horizontally to view full table (P, W, L, NR, NRR, PTS, Form)
+              </Text>
+            )}
+            <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{ width: '100%' }}>
               <View style={styles.tableBox}>
                 <View style={styles.tableHeaderRow}>
                   <Text style={[styles.tableTh, { width: 50, textAlign: 'center' }]}>Stand</Text>
@@ -1651,38 +1710,51 @@ export default function HomeScreen() {
             setSectionPositions(prev => ({ ...prev, stats: layout.y }));
           }}
         >
-          <View style={styles.container}>
+          <View style={[styles.container, containerResponsiveStyle]}>
             <View style={styles.sectionHead}>
               <View style={styles.sectionTagBadge}>
                 <Text style={styles.sectionTagBadgeText}>📈 PERFORMANCE RECORDS</Text>
               </View>
-              <Text style={styles.sectionTitle}>Season 2026-27 Player Performance</Text>
+              <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>Season 2026-27 Player Performance</Text>
               <Text style={styles.sectionSubtitle}>
                 Batting (50s/100s, Role: Batter), Bowling (Runs, 3w/5w counts), and Fielding Stats across official competitions
               </Text>
             </View>
 
             {/* Performance Tabs */}
-            <View style={styles.perfTabsRow}>
+            <View style={[styles.perfTabsRow, isSmallMobile && { gap: 6, marginBottom: 14 }]}>
               {[
-                { id: 'batting', label: '🏏 Batting Stats (Runs, 50/100s)' },
-                { id: 'bowling', label: '🎯 Bowling Stats (Runs, 3w/5w)' },
-                { id: 'fielding', label: '🧤 Fielding Stats (Catches, Stumpings)' }
+                { id: 'batting', short: '🏏 Batting', label: '🏏 Batting Stats (Runs, 50/100s)' },
+                { id: 'bowling', short: '🎯 Bowling', label: '🎯 Bowling Stats (Runs, 3w/5w)' },
+                { id: 'fielding', short: '🧤 Fielding', label: '🧤 Fielding Stats (Catches, Stumpings)' }
               ].map(t => (
                 <TouchableOpacity
                   key={t.id}
-                  style={[styles.perfTabBtn, perfTab === t.id && styles.perfTabBtnActive]}
+                  style={[
+                    styles.perfTabBtn,
+                    perfTab === t.id && styles.perfTabBtnActive,
+                    isSmallMobile && { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18 }
+                  ]}
                   onPress={() => setPerfTab(t.id as any)}
                 >
-                  <Text style={[styles.perfTabBtnText, perfTab === t.id && styles.perfTabBtnTextActive]}>
-                    {t.label}
+                  <Text style={[
+                    styles.perfTabBtnText,
+                    perfTab === t.id && styles.perfTabBtnTextActive,
+                    isSmallMobile && { fontSize: 11 }
+                  ]}>
+                    {isSmallMobile ? t.short : t.label}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
             {/* Dynamic Performance Table */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {isMobile && (
+              <Text style={{ fontSize: 11, color: '#b45309', fontWeight: '700', marginBottom: 8, textAlign: 'center' }}>
+                👉 Swipe horizontally to view full performance records
+              </Text>
+            )}
+            <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{ width: '100%' }}>
               <View style={styles.tableBox}>
                 {perfTab === 'batting' && (
                   <View>
@@ -1826,12 +1898,12 @@ export default function HomeScreen() {
             setSectionPositions(prev => ({ ...prev, players: layout.y }));
           }}
         >
-          <View style={styles.container}>
+          <View style={[styles.container, containerResponsiveStyle]}>
             <View style={styles.sectionHead}>
               <View style={styles.sectionTagBadge}>
                 <Text style={styles.sectionTagBadgeText}>👥 DISTRICT TALENT & SQUAD ROSTER</Text>
               </View>
-              <Text style={styles.sectionTitle}>Official District Players Directory & Profiles</Text>
+              <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>Official District Players Directory & Profiles</Text>
               <Text style={styles.sectionSubtitle}>
                 Verified district cricketers across Senior Men, Women's Championship, U-23/U-25 Colts, and Premier League clubs
               </Text>
@@ -1877,9 +1949,9 @@ export default function HomeScreen() {
             </ScrollView>
 
             {/* Players Grid */}
-            <View style={styles.grid2Col}>
+            <View style={[styles.grid2Col, isMobile && { flexDirection: 'column' }]}>
               {filteredPlayers.map(p => (
-                <View key={p.id} style={styles.playerCard}>
+                <View key={p.id} style={[styles.playerCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }, isSmallMobile && { padding: 12 }]}>
                   <View style={styles.playerCardHeader}>
                     <LinearGradient colors={p.avatarColor || ['#1e3a8a', '#3b82f6']} style={styles.playerAvatar}>
                       <Text style={styles.playerAvatarText}>
@@ -1959,16 +2031,16 @@ export default function HomeScreen() {
             setSectionPositions(prev => ({ ...prev, about: layout.y }));
           }}
         >
-          <View style={styles.container}>
+          <View style={[styles.container, containerResponsiveStyle]}>
             <View style={styles.sectionHead}>
               <View style={styles.sectionTagBadge}>
                 <Text style={styles.sectionTagBadgeText}>🏛️ GOVERNING CRICKET BODY</Text>
               </View>
-              <Text style={styles.sectionTitle}>The Heritage of Cricket in Virudhunagar</Text>
+              <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>The Heritage of Cricket in Virudhunagar</Text>
             </View>
 
-            <View style={styles.aboutGrid}>
-              <View style={styles.aboutTextCol}>
+            <View style={[styles.aboutGrid, isMobile && { flexDirection: 'column' }]}>
+              <View style={[styles.aboutTextCol, isMobile && { width: '100%', minWidth: '100%' }]}>
                 <Text style={styles.aboutLead}>
                   The <Text style={{ color: '#b45309', fontWeight: '800' }}>Cricket Federation of Virudhunagar District (CFVD)</Text> is
                   the official recognized governing body for the sport of cricket within Virudhunagar revenue district.
@@ -2011,7 +2083,7 @@ export default function HomeScreen() {
               </View>
 
               {/* Crest Card */}
-              <View style={styles.aboutCrestCard}>
+              <View style={[styles.aboutCrestCard, isMobile && { width: '100%', minWidth: '100%' }]}>
                 <Image source={IMG_LOGO} style={styles.aboutCrestImg} resizeMode="contain" />
                 <Text style={styles.aboutCrestTitle}>CRICKET FEDERATION OF VIRUDHUNAGAR DISTRICT</Text>
                 <Text style={styles.aboutCrestMotto}>"Enjoy the game and chase your dreams"</Text>
@@ -2033,19 +2105,19 @@ export default function HomeScreen() {
             setSectionPositions(prev => ({ ...prev, grounds: layout.y }));
           }}
         >
-          <View style={styles.container}>
+          <View style={[styles.container, containerResponsiveStyle]}>
             <View style={styles.sectionHead}>
               <View style={styles.sectionTagBadge}>
                 <Text style={styles.sectionTagBadgeText}>🏟️ PLAYING VENUES</Text>
               </View>
-              <Text style={styles.sectionTitle}>District Cricket Facilities & Grounds</Text>
+              <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>District Cricket Facilities & Grounds</Text>
               <Text style={styles.sectionSubtitle}>
                 First-class tournament grade turf wickets, indoor practice nets, and floodlit grounds adhering to professional match standards
               </Text>
             </View>
 
-            <View style={styles.grid3Col}>
-              <View style={styles.groundCard}>
+            <View style={[styles.grid3Col, isMobile && { flexDirection: 'column' }]}>
+              <View style={[styles.groundCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }]}>
                 <Image source={IMG_STADIUM} style={styles.groundImg} resizeMode="cover" />
                 <View style={styles.groundBadge}>
                   <Text style={styles.groundBadgeText}>Headquarters</Text>
@@ -2065,7 +2137,7 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <View style={styles.groundCard}>
+              <View style={[styles.groundCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }]}>
                 <Image source={IMG_BATSMAN} style={styles.groundImg} resizeMode="cover" />
                 <View style={styles.groundBadge}>
                   <Text style={styles.groundBadgeText}>Match Venue</Text>
@@ -2084,7 +2156,7 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <View style={styles.groundCard}>
+              <View style={[styles.groundCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }]}>
                 <Image source={IMG_CHAMPIONS} style={styles.groundImg} resizeMode="cover" />
                 <View style={styles.groundBadge}>
                   <Text style={styles.groundBadgeText}>Academy Centre</Text>
@@ -2108,7 +2180,7 @@ export default function HomeScreen() {
 
         {/* ─── 11. DISTRICT CRICKET ACADEMY ──────────────────────────────── */}
         <View style={styles.section}>
-          <View style={styles.container}>
+          <View style={[styles.container, containerResponsiveStyle]}>
             <LinearGradient colors={['#fffdf5', '#fef3c7']} style={styles.academyBanner}>
               <Text style={styles.badgeGoldText}>CFVD HIGH PERFORMANCE</Text>
               <Text style={styles.academyTitle}>Virudhunagar District Cricket Academy</Text>
@@ -2145,16 +2217,16 @@ export default function HomeScreen() {
 
         {/* ─── 12. MEDIA & PRESS NOTICES ─────────────────────────────────── */}
         <View style={styles.section}>
-          <View style={styles.container}>
+          <View style={[styles.container, containerResponsiveStyle]}>
             <View style={styles.sectionHead}>
               <View style={styles.sectionTagBadge}>
                 <Text style={styles.sectionTagBadgeText}>📰 MEDIA & NOTICES</Text>
               </View>
-              <Text style={styles.sectionTitle}>Federation Press Releases & Circulars</Text>
+              <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>Federation Press Releases & Circulars</Text>
             </View>
 
-            <View style={styles.grid3Col}>
-              <View style={styles.newsCard}>
+            <View style={[styles.grid3Col, isMobile && { flexDirection: 'column' }]}>
+              <View style={[styles.newsCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }]}>
                 <Image source={IMG_BATSMAN} style={styles.newsImg} resizeMode="cover" />
                 <View style={styles.newsBody}>
                   <Text style={styles.newsDate}>Oct 05, 2026</Text>
@@ -2179,7 +2251,7 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <View style={styles.newsCard}>
+              <View style={[styles.newsCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }]}>
                 <Image source={IMG_CHAMPIONS} style={styles.newsImg} resizeMode="cover" />
                 <View style={styles.newsBody}>
                   <Text style={styles.newsDate}>Sep 24, 2026</Text>
@@ -2204,7 +2276,7 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <View style={styles.newsCard}>
+              <View style={[styles.newsCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }]}>
                 <Image source={IMG_STADIUM} style={styles.newsImg} resizeMode="cover" />
                 <View style={styles.newsBody}>
                   <Text style={styles.newsDate}>Sep 18, 2026</Text>
@@ -2234,12 +2306,12 @@ export default function HomeScreen() {
 
         {/* ─── 13. VISUAL ARCHIVES GALLERY ───────────────────────────────── */}
         <View style={styles.section}>
-          <View style={styles.container}>
+          <View style={[styles.container, containerResponsiveStyle]}>
             <View style={styles.sectionHead}>
               <View style={styles.sectionTagBadge}>
                 <Text style={styles.sectionTagBadgeText}>📸 VISUAL ARCHIVES</Text>
               </View>
-              <Text style={styles.sectionTitle}>Official Match Day Moments</Text>
+              <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>Official Match Day Moments</Text>
             </View>
 
             <View style={styles.grid3Col}>
@@ -2278,16 +2350,16 @@ export default function HomeScreen() {
 
         {/* ─── 14. CONTACT SECRETARIAT ───────────────────────────────────── */}
         <View style={styles.section}>
-          <View style={styles.container}>
+          <View style={[styles.container, containerResponsiveStyle]}>
             <View style={styles.sectionHead}>
               <View style={styles.sectionTagBadge}>
                 <Text style={styles.sectionTagBadgeText}>📮 SECRETARIAT</Text>
               </View>
-              <Text style={styles.sectionTitle}>Get in Touch with CFVD</Text>
+              <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>Get in Touch with CFVD</Text>
             </View>
 
-            <View style={styles.grid2Col}>
-              <View style={styles.contactInfoCard}>
+            <View style={[styles.grid2Col, isMobile && { flexDirection: 'column' }]}>
+              <View style={[styles.contactInfoCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }, isSmallMobile && { padding: 12 }]}>
                 <Text style={styles.contactCardTitle}>Administrative Office</Text>
                 <Text style={styles.contactLine}>
                   📍 District Sports Complex Stadium, Collectorate Road, Virudhunagar – 626002, Tamil Nadu
@@ -2296,7 +2368,7 @@ export default function HomeScreen() {
                 <Text style={styles.contactLine}>✉️ info@cfvd-cricket.org / secretary@cfvd-cricket.org</Text>
               </View>
 
-              <View style={styles.contactFormCard}>
+              <View style={[styles.contactFormCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }, isSmallMobile && { padding: 12 }]}>
                 <Text style={styles.contactCardTitle}>Send Communication</Text>
                 <View style={styles.formField}>
                   <Text style={styles.formLabel}>Full Name *</Text>
@@ -2332,9 +2404,9 @@ export default function HomeScreen() {
 
         {/* ─── 15. MAIN FOOTER ───────────────────────────────────────────── */}
         <View style={styles.footer}>
-          <View style={styles.container}>
-            <View style={styles.footerGrid}>
-              <View style={styles.footerColBrand}>
+          <View style={[styles.container, containerResponsiveStyle]}>
+            <View style={[styles.footerGrid, isMobile && { flexDirection: 'column', gap: 18 }]}>
+              <View style={[styles.footerColBrand, isMobile && { width: '100%', minWidth: '100%' }]}>
                 <View style={styles.footerBrandRow}>
                   <Image source={IMG_LOGO} style={styles.footerLogo} resizeMode="contain" />
                   <View style={{ flex: 1, marginLeft: 10 }}>
@@ -2454,17 +2526,17 @@ export default function HomeScreen() {
         animationType="fade"
         onRequestClose={() => setScorecardModalVisible(false)}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.scorecardModalBox}>
+        <View style={[styles.modalBackdrop, isSmallMobile && { padding: 8 }]}>
+          <View style={[styles.scorecardModalBox, isMobile && { width: '98%', maxWidth: '100%', padding: isSmallMobile ? 12 : 16, maxHeight: '95%' }]}>
             <View style={styles.modalHeaderRow}>
               <View style={{ flex: 1, marginRight: 10 }}>
                 <Text style={styles.badgeGoldText}>OFFICIAL MATCH SCORECARD</Text>
-                <Text style={styles.modalTitle}>
+                <Text style={[styles.modalTitle, isSmallMobile && { fontSize: 16 }]} numberOfLines={2}>
                   {activeScorecardMatchData
                     ? `${activeScorecardMatchData.teamA} vs ${activeScorecardMatchData.teamB}`
                     : 'Virudhunagar Strikers vs Sivakasi Super Kings'}
                 </Text>
-                <Text style={styles.modalSub}>
+                <Text style={[styles.modalSub, isSmallMobile && { fontSize: 11 }]}>
                   {activeScorecardMatchData
                     ? `${activeScorecardMatchData.tournament || 'CFVD'} • ${activeScorecardMatchData.venue}`
                     : 'Virudhunagar Premier League Final • DSC Ground'}
@@ -2478,7 +2550,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 500 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight: isSmallMobile ? 420 : 520 }} showsVerticalScrollIndicator={false}>
               {/* Toss & Match Summary Banner */}
               <View style={styles.scorecardTossBanner}>
                 <Text style={styles.scorecardTossText}>
@@ -2900,7 +2972,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 1540,
     alignSelf: 'center',
-    paddingHorizontal: Dimensions.get('window').width < 768 ? 16 : (Platform.OS === 'web' ? 32 : 16)
+    paddingHorizontal: 16
   },
 
   // Atmospheric Background
@@ -4466,6 +4538,171 @@ const styles = StyleSheet.create({
     color: '#334155',
     fontSize: 10,
     fontWeight: '800'
+  },
+
+  cardHeaderLeftGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1
+  },
+  cardHeaderRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6
+  },
+  topRightRainPill: {
+    backgroundColor: '#e0f2fe',
+    borderColor: '#38bdf8',
+    borderWidth: 1.5,
+    borderRadius: 20,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    shadowColor: '#0284c7',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2
+  },
+  topRightRainPillText: {
+    color: '#0284c7',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.4
+  },
+  topRightBreakPill: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b',
+    borderWidth: 1.5,
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 3
+  },
+  topRightBreakPillText: {
+    color: '#b45309',
+    fontSize: 10,
+    fontWeight: '900'
+  },
+  matchTeamsSingleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    borderColor: '#e2e8f0',
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginVertical: 8,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1
+  },
+  teamColLeft: {
+    flex: 1,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    minWidth: 110
+  },
+  teamColRight: {
+    flex: 1,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    minWidth: 110
+  },
+  teamCrestNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+    maxWidth: '100%'
+  },
+  teamNameTextSingleRow: {
+    color: '#0f172a',
+    fontSize: 13,
+    fontWeight: '800',
+    flexShrink: 1
+  },
+  teamScoreSingleRow: {
+    fontSize: 16.5,
+    fontWeight: '900',
+    color: '#0f172a',
+    letterSpacing: 0.3
+  },
+  teamYetToBatSingleRow: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+    fontStyle: 'italic'
+  },
+  iplVsCenterBox: {
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  iplVsCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#0f172a',
+    borderWidth: 1.5,
+    borderColor: '#d97706',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 3,
+    elevation: 3
+  },
+  iplVsCircleText: {
+    fontSize: 10.5,
+    fontWeight: '900',
+    color: '#fbbf24',
+    fontStyle: 'italic',
+    letterSpacing: 1.2
+  },
+  cardLogisticsBottomBar: {
+    backgroundColor: '#f8fafc',
+    borderColor: '#e2e8f0',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginTop: 8,
+    marginBottom: 10
+  },
+  logisticsChipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 5,
+    flexWrap: 'wrap'
+  },
+  logisticsChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4
+  },
+  logisticsEmoji: {
+    fontSize: 12
+  },
+  logisticsValueText: {
+    color: '#334155',
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  logisticsOfficialsBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4
+  },
+  logisticsOfficialsCleanText: {
+    color: '#64748b',
+    fontSize: 10.5,
+    fontWeight: '600'
   },
 
   // Logistics Box: Spaced out, clean white/slate card

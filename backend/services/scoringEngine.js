@@ -6,6 +6,7 @@
 
 const db = require('../config/db');
 const socketService = require('./socketService');
+const broadcastScoreUpdate = (matchId, payload) => socketService.broadcastScoreUpdate(matchId, payload);
 
 let deliverySequence = 10000;
 
@@ -150,7 +151,17 @@ class ScoringEngine {
     if (match.current_break) {
       match.current_break = null;
       match.status_comment = '';
+      match.markModified('current_break');
+      match.markModified('status_comment');
       await match.save();
+      try {
+        broadcastScoreUpdate(matchId, {
+          action: 'BREAK_ENDED',
+          matchId,
+          currentBreak: null,
+          statusComment: ''
+        });
+      } catch (_) {}
     }
 
     // 2. Fetch Active Innings
@@ -598,6 +609,8 @@ class ScoringEngine {
         score: `${innings.total_runs}/${innings.wickets}`,
         overs: `${innings.overs}.${innings.balls}`,
         isOverComplete: isOverFinished,
+        currentBreak: match.current_break || null,
+        statusComment: match.status_comment || '',
         lastDelivery: {
           ball: `${overNumber}.${ballNumber}`,
           runs: Number(runsBatter),
@@ -1574,7 +1587,7 @@ class ScoringEngine {
     await match.save();
 
     try {
-      broadcastScoreUpdate(matchId, { action: 'BREAK_ENDED', currentBreak: null });
+      broadcastScoreUpdate(matchId, { action: 'BREAK_ENDED', matchId, currentBreak: null, statusComment: '' });
     } catch (_) {}
 
     return {
