@@ -313,6 +313,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   const [squadPlayerEmail, setSquadPlayerEmail] = useState<string>('');
   const [squadPlayerRole, setSquadPlayerRole] = useState<string>('Batter');
   const [players, setPlayers] = useState<SquadPlayer[]>([]);
+  const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
   const [teamAgreed, setTeamAgreed] = useState<boolean>(true);
 
   // 3. SCORER REGISTRATION STATE
@@ -735,7 +736,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     if (coachEmail.trim() && email === coachEmail.trim().toLowerCase()) {
       errs.squadPlayerEmail = `Player email cannot be identical to Coach Email.`;
     }
-    if (players.some((p) => p.email.toLowerCase() === email)) {
+    // When editing, skip duplicate check for the same player
+    if (!editingPlayerId && players.some((p) => p.email.toLowerCase() === email)) {
+      errs.squadPlayerEmail = `Player with email "${email}" already added to squad.`;
+    }
+    if (editingPlayerId && players.some((p) => p.email.toLowerCase() === email && p.id !== editingPlayerId)) {
       errs.squadPlayerEmail = `Player with email "${email}" already added to squad.`;
     }
 
@@ -746,24 +751,47 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       return;
     }
 
-    const newPlayer: SquadPlayer = {
-      id: Date.now().toString() + Math.random().toString(36).substring(2, 6),
-      name,
-      email,
-      role
-    };
+    if (editingPlayerId) {
+      // Update existing player
+      setPlayers((prev) => prev.map((p) => p.id === editingPlayerId ? { ...p, name, email, role } : p));
+      setEditingPlayerId(null);
+      setStatusMessage(`✓ Updated ${name} (${role}) in squad!`);
+    } else {
+      const newPlayer: SquadPlayer = {
+        id: Date.now().toString() + Math.random().toString(36).substring(2, 6),
+        name,
+        email,
+        role
+      };
+      setPlayers((prev) => [...prev, newPlayer]);
+      setStatusMessage(`✓ Added ${name} (${role}) to squad! (${players.length + 1} players in squad)`);
+    }
 
-    setPlayers((prev) => [...prev, newPlayer]);
     setSquadPlayerName('');
     setSquadPlayerEmail('');
+    setSquadPlayerRole('Batter');
     setFieldErrors((prev) => ({ ...prev, squad: undefined, squadPlayerName: undefined, squadPlayerEmail: undefined }));
-
-    const newCount = players.length + 1;
-    setStatusMessage(`✓ Added ${name} (${role}) to squad! (${newCount} players in squad)`);
     setStatusType('info');
   };
 
+  const handleEditPlayer = (player: SquadPlayer) => {
+    setEditingPlayerId(player.id);
+    setSquadPlayerName(player.name);
+    setSquadPlayerEmail(player.email);
+    setSquadPlayerRole(player.role);
+    setFieldErrors((prev) => ({ ...prev, squadPlayerName: undefined, squadPlayerEmail: undefined }));
+  };
+
+  const handleCancelEdit = () => {
+    setEditingPlayerId(null);
+    setSquadPlayerName('');
+    setSquadPlayerEmail('');
+    setSquadPlayerRole('Batter');
+    setFieldErrors((prev) => ({ ...prev, squadPlayerName: undefined, squadPlayerEmail: undefined }));
+  };
+
   const handleRemovePlayer = (id: string) => {
+    if (editingPlayerId === id) handleCancelEdit();
     setPlayers((prev) => prev.filter((p) => p.id !== id));
   };
 
@@ -1796,6 +1824,14 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                   </View>
 
                   <View style={styles.addPlayerContainer}>
+                    {editingPlayerId && (
+                      <View style={{ backgroundColor: '#fef3c7', borderRadius: 5, padding: 6, marginBottom: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ color: '#92400e', fontSize: 11, fontWeight: '700' }}>✏️ Editing player — make changes and click Update</Text>
+                        <TouchableOpacity onPress={handleCancelEdit}>
+                          <Text style={{ color: '#dc2626', fontSize: 11, fontWeight: '800' }}>✕ Cancel</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                     <View style={styles.formRow}>
                       <View style={{ flex: 1 }}>
                         <TextInput
@@ -1840,8 +1876,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         onSelect={setSquadPlayerRole}
                       />
                       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-                        <TouchableOpacity style={styles.addPlayerBtn} onPress={handleAddPlayer}>
-                          <Text style={styles.addPlayerBtnText}>+ Add to Squad</Text>
+                        <TouchableOpacity style={[styles.addPlayerBtn, editingPlayerId && { backgroundColor: '#0284c7' }]} onPress={handleAddPlayer}>
+                          <Text style={styles.addPlayerBtnText}>{editingPlayerId ? '✓ Update Player' : '+ Add to Squad'}</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -1863,6 +1899,9 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                             </View>
                             <Text style={styles.playerItemEmail}>{p.email}</Text>
                           </View>
+                          <TouchableOpacity onPress={() => handleEditPlayer(p)} style={[styles.editBtn, editingPlayerId === p.id && styles.editBtnActive]}>
+                            <Text style={styles.editBtnText}>✏️</Text>
+                          </TouchableOpacity>
                           <TouchableOpacity onPress={() => handleRemovePlayer(p.id)} style={styles.removeBtn}>
                             <Text style={styles.removeBtnText}>✕</Text>
                           </TouchableOpacity>
@@ -3766,6 +3805,24 @@ const styles = StyleSheet.create({
     color: '#ef4444',
     fontSize: 10,
     fontWeight: '900'
+  },
+  editBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#eff6ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
+    borderWidth: 1,
+    borderColor: '#bfdbfe'
+  },
+  editBtnActive: {
+    backgroundColor: '#dbeafe',
+    borderColor: '#3b82f6'
+  },
+  editBtnText: {
+    fontSize: 11
   },
 
   checkboxRow: {

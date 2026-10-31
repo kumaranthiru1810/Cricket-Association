@@ -331,13 +331,17 @@ class TeamRegistrationModel {
         const existingUser = await userModel.findByEmail(p.email);
         if (!existingUser) {
           await userModel.create({
+            id: playerId,
             name: p.name,
             email: p.email,
             role: 'PLAYER',
             status: 'ACTIVE'
           });
         } else {
-          await userModel.updateStatus(existingUser.id, 'ACTIVE');
+          await db.models.User.updateOne(
+            { email: p.email },
+            { $set: { status: 'ACTIVE', role: 'PLAYER', updated_at: new Date() } }
+          );
         }
       }
     }

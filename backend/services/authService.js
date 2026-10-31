@@ -765,7 +765,25 @@ class AuthService {
 
     // Verify user is not pending or rejected
     if (user.status === 'PENDING') {
-      throw { status: 403, message: 'Your registration is PENDING admin approval. You can only log in once an administrator approves your account.' };
+      // Check if player belongs to a pending team
+      let pendingTeamName = null;
+      if ((user.role || '').toUpperCase() === 'PLAYER') {
+        try {
+          const regs = await db.models.TeamRegistration.find({}).lean();
+          for (const reg of regs) {
+            const found = (reg.players || []).find(p => p.email?.toLowerCase() === cleanEmail);
+            if (found) { pendingTeamName = reg.team_name; break; }
+          }
+        } catch (_e) {}
+      }
+      throw {
+        status: 403,
+        pendingApproval: true,
+        teamName: pendingTeamName,
+        message: pendingTeamName
+          ? `⏳ Team "${pendingTeamName}" is pending admin approval. Players can only login after the admin approves the team.`
+          : 'Your registration is PENDING admin approval. You can only log in once an administrator approves your account.'
+      };
     }
     if (user.status === 'REJECTED' || user.status === 'SUSPENDED') {
       throw { status: 403, message: `Your account was ${user.status} by the administrator.` };
@@ -868,8 +886,20 @@ class AuthService {
     };
   }
 
-  async login(identifier, passwordOrOtp, roleRequired = null) {
-    if (!identifier || !passwordOrOtp) {
+  async login(identifier, passwordOrOtp, roleRequired = null, teamName = null) {
+    if (!identifier) {
+      throw { status: 400, message: 'Email or name and password/OTP are required.' };
+    }
+
+    // PLAYER login: team name + email (no password needed)
+    if (roleRequired === 'PLAYER') {
+      if (!teamName || !teamName.trim()) {
+        throw { status: 400, message: 'Team name is required for player login.' };
+      }
+      return this._playerLoginByTeamAndEmail(identifier, teamName);
+    }
+
+    if (!passwordOrOtp ) {
       throw { status: 400, message: 'Email or name and password/OTP are required.' };
     }
     const cleanId = String(identifier).trim();
@@ -939,12 +969,32 @@ class AuthService {
     if (user.status === 'REJECTED' || user.status === 'SUSPENDED') {
       throw { status: 403, message: `Your account is ${user.status} by the administrator.` };
     }
-    if ((userRole === 'SCORER' || userRole === 'COACH' || userRole === 'TEAM' || userRole === 'UMPIRE') && user.status === 'PENDING') {
+    if ((userRole === 'SCORER' || userRole === 'COACH' || userRole === 'TEAM' || userRole === 'UMPIRE' || userRole === 'PLAYER') && user.status === 'PENDING') {
+      // For COACH/TEAM/PLAYER: fetch team name for a better error message
+      let pendingTeamName = null;
+      if (userRole === 'COACH' || userRole === 'TEAM') {
+        try {
+          const reg = await teamRegistrationModel.findByCoachEmail(cleanEmail);
+          if (reg) pendingTeamName = reg.team_name;
+        } catch (_e) {}
+      } else if (userRole === 'PLAYER') {
+        try {
+          const regs = await db.models.TeamRegistration.find({}).lean();
+          for (const reg of regs) {
+            const found = (reg.players || []).find(p => p.email?.toLowerCase() === cleanEmail);
+            if (found) { pendingTeamName = reg.team_name; break; }
+          }
+        } catch (_e) {}
+      }
       throw {
         status: 403,
+        pendingApproval: true,
+        teamName: pendingTeamName,
         scorerStatus: 'PENDING',
         statusBlocked: 'PENDING',
-        message: 'Your registration is pending admin approval. You can only log in once an administrator approves your account.'
+        message: pendingTeamName
+          ? `⏳ Team "${pendingTeamName}" is pending admin approval. Coach and Players can only login after the admin approves the team.`
+          : 'Your registration is pending admin approval. You can only log in once an administrator approves your account.'
       };
     }
 
@@ -1155,6 +1205,96 @@ class AuthService {
       team: {
         teamId,
         teamName
+      },
+      token
+    };
+  }
+
+  /**
+   * Player Login by Team Name + Email (no password)
+   */
+  async _playerLoginByTeamAndEmail(email, teamName) {
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanTeam = teamName.trim().toLowerCase();
+
+    await db.initDb();
+
+    // Find player in team registrations
+    const registrations = await db.models.TeamRegistration.find({}).lean();
+    let playerInfo = null;
+    let teamReg = null;
+
+    for (const reg of registrations) {
+      const regTeamName = (reg.team_name || '').toLowerCase();
+      const isTeamMatch = regTeamName === cleanTeam || regTeamName.includes(cleanTeam) || cleanTeam.includes(regTeamName);
+      if (!isTeamMatch) continue;
+
+      const player = (reg.players || []).find(p => p.email?.toLowerCase() === cleanEmail);
+      if (player) {
+        playerInfo = player;
+        teamReg = reg;
+        break;
+      }
+    }
+
+    if (!playerInfo || !teamReg) {
+      throw {
+        status: 401,
+        message: 'Player email not found in the specified team. Please check your team name and email.'
+      };
+    }
+
+    const teamStatus = (teamReg.status || 'PENDING').toUpperCase();
+    if (teamStatus === 'PENDING') {
+      throw {
+        status: 403,
+        pendingApproval: true,
+        teamName: teamReg.team_name,
+        message: `⏳ Team "${teamReg.team_name}" is pending admin approval. Players can only login after the admin approves the team.`
+      };
+    }
+    if (teamStatus === 'REJECTED') {
+      throw {
+        status: 403,
+        message: `❌ Team "${teamReg.team_name}" registration was rejected by the administrator.`
+      };
+    }
+
+    // Ensure user account exists
+    let user = await userModel.findByEmail(cleanEmail);
+    if (!user) {
+      user = await userModel.create({
+        id: `PLY-${Date.now()}`,
+        name: playerInfo.name,
+        email: cleanEmail,
+        role: 'PLAYER',
+        status: 'ACTIVE'
+      });
+    }
+
+    const token = jwt.sign(
+      {
+        id: user.id || cleanEmail,
+        name: playerInfo.name,
+        email: cleanEmail,
+        role: 'PLAYER',
+        teamName: teamReg.team_name,
+        teamId: teamReg.id
+      },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    return {
+      success: true,
+      message: `Welcome, ${playerInfo.name}!`,
+      user: {
+        id: user.id,
+        name: playerInfo.name,
+        email: cleanEmail,
+        role: 'PLAYER',
+        teamName: teamReg.team_name,
+        teamId: teamReg.id
       },
       token
     };
@@ -1782,7 +1922,7 @@ class AuthService {
       players
     });
 
-    // Ensure coach user account exists with password_hash and role COACH
+    // Ensure coach user account exists with password_hash and role COACH — status PENDING until admin approves
     let coachUser = await userModel.findByEmail(cleanCoachEmail);
     if (!coachUser) {
       await userModel.create({
@@ -1791,21 +1931,21 @@ class AuthService {
         email: cleanCoachEmail,
         role: 'COACH',
         password_hash: passwordHash,
-        status: 'ACTIVE'
+        status: 'PENDING'
       });
     } else {
       await db.models.User.updateOne(
         { email: cleanCoachEmail },
-        { $set: { ...(passwordHash ? { password_hash: passwordHash } : {}), role: 'COACH', status: 'ACTIVE' } }
+        { $set: { ...(passwordHash ? { password_hash: passwordHash } : {}), role: 'COACH', status: 'PENDING' } }
       );
     }
 
-    console.log(`\n🏏 [TEAM REGISTERED] ID: ${createdTeam.id} | Team: "${createdTeam.team_name}" | Coach: ${cleanCoachEmail} | Status: ACTIVE\n`);
+    console.log(`\n🏏 [TEAM REGISTERED] ID: ${createdTeam.id} | Team: "${createdTeam.team_name}" | Coach: ${cleanCoachEmail} | Status: PENDING\n`);
 
     return {
       success: true,
-      status: 'ACTIVE',
-      message: `Team "${createdTeam.team_name}" and Coach account registered successfully!`,
+      status: 'PENDING',
+      message: `Team "${createdTeam.team_name}" registration submitted! Awaiting admin approval before Coach and Players can log in.`,
       team: createdTeam
     };
   }
