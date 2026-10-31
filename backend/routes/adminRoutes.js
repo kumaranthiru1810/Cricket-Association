@@ -423,6 +423,82 @@ router.delete('/content/:id', async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CRICKET LAWS MANAGEMENT (MCC 2017 Code – Fourth Edition 2026)
+// All routes protected by requireAdminAuth (already applied at top of this router)
+// ─────────────────────────────────────────────────────────────────────────────
+const cricketLawsCtrl = require('../controllers/cricketLawsController');
+
+/**
+ * GET /api/admin/cricket-laws – List all laws (same as public but with admin context)
+ */
+router.get('/cricket-laws', cricketLawsCtrl.getAllLaws);
+
+/**
+ * GET /api/admin/cricket-laws/stats – Dashboard statistics
+ */
+router.get('/cricket-laws/stats', cricketLawsCtrl.getLawStats);
+
+/**
+ * GET /api/admin/cricket-laws/audit-logs – View change history
+ */
+router.get('/cricket-laws/audit-logs', cricketLawsCtrl.getAuditLogs);
+
+/**
+ * GET /api/admin/cricket-laws/categories – Category list
+ */
+router.get('/cricket-laws/categories', cricketLawsCtrl.getLawCategories);
+
+/**
+ * GET /api/admin/cricket-laws/search – Keyword search
+ */
+router.get('/cricket-laws/search', cricketLawsCtrl.searchLaws);
+
+/**
+ * GET /api/admin/cricket-laws/:id – Single law with sections
+ */
+router.get('/cricket-laws/:id', cricketLawsCtrl.getLawById);
+
+/**
+ * POST /api/admin/cricket-laws – Create a new law
+ */
+router.post('/cricket-laws', cricketLawsCtrl.createLaw);
+
+/**
+ * PUT /api/admin/cricket-laws/:id – Update law
+ */
+router.put('/cricket-laws/:id', cricketLawsCtrl.updateLaw);
+
+/**
+ * POST /api/admin/cricket-laws/:id/sections – Add section to law
+ */
+router.post('/cricket-laws/:id/sections', cricketLawsCtrl.addSection);
+
+/**
+ * POST /api/admin/cricket-laws/:id/publish – Publish/verify law
+ */
+router.post('/cricket-laws/:id/publish', cricketLawsCtrl.publishLaw);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TOURNAMENT CALCULATION SETTINGS (DLS / VJD)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/admin/tournaments/:tournamentId/calculation-settings
+ * Get DLS/VJD setting for a specific tournament
+ */
+router.get('/tournaments/:tournamentId/calculation-settings', cricketLawsCtrl.getCalculationSettings);
+
+/**
+ * PUT /api/admin/tournaments/:tournamentId/calculation-settings
+ * Update DLS/VJD method for a specific tournament
+ */
+router.put('/tournaments/:tournamentId/calculation-settings', cricketLawsCtrl.updateCalculationSettings);
+
+/**
+ * POST /api/admin/calculate-prediction – Live DLS/VJD calculation
+ */
+router.post('/calculate-prediction', cricketLawsCtrl.calculatePrediction);
 /**
  * --------------------------------------------------------------------------
  * Admin Panel Dedicated Endpoints (powering mobile_frontend/src/admin)
@@ -454,3 +530,4 @@ router.get('/settings', (req, res) => adminDashboardController.getSettings(req, 
 router.put('/settings', (req, res) => adminDashboardController.updateSettings(req, res));
 
 module.exports = router;
+

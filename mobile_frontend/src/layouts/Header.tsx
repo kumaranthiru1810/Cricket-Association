@@ -428,7 +428,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
-    gap: 14
+    gap: 12,
+    marginHorizontal: 16
   },
   navHomePill: {
     backgroundColor: 'rgba(255, 255, 255, 0.12)',
@@ -436,9 +437,10 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.42)',
     borderRadius: 20,
     paddingHorizontal: 16,
-    paddingVertical: 6.5,
+    height: 36,
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   navHomePillText: {
     color: '#ffffff',
@@ -446,10 +448,12 @@ const styles = StyleSheet.create({
     fontWeight: '800'
   },
   navLinkDropdown: {
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+    height: 36,
+    paddingHorizontal: 10,
+    borderRadius: 6,
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   navDropdownText: {
     color: '#ffffff',
@@ -457,8 +461,10 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
   navLink: {
-    paddingVertical: 6,
-    paddingHorizontal: 8
+    height: 36,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   navLinkActive: {
     borderBottomWidth: 2,
@@ -485,15 +491,16 @@ const styles = StyleSheet.create({
   },
   headerLoginBtn: {
     backgroundColor: '#f5c43d',
-    paddingHorizontal: 18,
-    paddingVertical: 7.5,
+    paddingHorizontal: 16,
+    height: 36,
     borderRadius: 6,
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   headerLoginBtnMobile: {
     paddingHorizontal: 10,
-    paddingVertical: 7,
+    height: 32,
     borderRadius: 6,
   },
   headerLoginBtnText: {
@@ -506,15 +513,16 @@ const styles = StyleSheet.create({
     borderColor: '#d4af37',
     borderWidth: 1.2,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    height: 36,
+    borderRadius: 6,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6
   },
   headerUserPillMobile: {
     paddingHorizontal: 8,
-    paddingVertical: 6,
+    height: 32,
     borderRadius: 20,
     gap: 0,
   },
@@ -541,14 +549,15 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(239, 68, 68, 0.5)',
     borderWidth: 1,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    height: 36,
     borderRadius: 6,
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   headerLogoutBtnMobile: {
     paddingHorizontal: 7,
-    paddingVertical: 6,
+    height: 32,
     borderRadius: 20,
   },
   headerLogoutBtnText: {

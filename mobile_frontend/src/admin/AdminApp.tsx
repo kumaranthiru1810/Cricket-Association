@@ -23,6 +23,8 @@ import { StatisticsPage } from './pages/StatisticsPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { ContentPage } from './pages/ContentPage';
 import { SettingsPage } from './pages/SettingsPage';
+import CricketLawsManagement from './components/CricketLawsManagement';
+import CalculationSettingsManagement from './components/CalculationSettingsManagement';
 
 export interface AdminAppProps {
   initialPath?: string;
@@ -92,6 +94,10 @@ const AdminRoutingShell: React.FC<{ onExitAdmin?: () => void }> = ({ onExitAdmin
         return <NotificationsPage />;
       case '/admin/content':
         return <ContentPage />;
+      case '/admin/laws':
+        return <CricketLawsManagement />;
+      case '/admin/calculations':
+        return <CalculationSettingsManagement />;
       case '/admin/settings':
         return <SettingsPage />;
       default:

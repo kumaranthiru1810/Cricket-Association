@@ -80,4 +80,12 @@ router.post('/:id/generate-matches', requireAdminAuth, (req, res) => tournamentC
 // PATCH /api/tournaments/:id/status - Update tournament status
 router.patch('/:id/status', requireAdminAuth, (req, res) => tournamentController.updateStatus(req, res));
 
+// ── Calculation Settings (DLS/VJD) – Read for Scorer, Write for Admin ──────
+
+const cricketLawsCtrl = require('../controllers/cricketLawsController');
+
+// GET /api/tournaments/:id/calculation-settings – public read (scorer uses this)
+router.get('/:id/calculation-settings', (req, res) => cricketLawsCtrl.getCalculationSettings({ ...req, params: { ...req.params, tournamentId: req.params.id } }, res));
+
 module.exports = router;
+

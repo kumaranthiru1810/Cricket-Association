@@ -3034,7 +3034,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(184, 134, 11, 0.25)',
-    paddingVertical: 6,
+    paddingVertical: 2,
     zIndex: 90
   },
   liveTickerInner: {
@@ -3042,7 +3042,7 @@ const styles = StyleSheet.create({
     maxWidth: 1540,
     alignSelf: 'center',
     paddingHorizontal: Platform.OS === 'web' ? 32 : 16,
-    paddingVertical: 8,
+    paddingVertical: 6,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between'
@@ -3305,11 +3305,12 @@ const styles = StyleSheet.create({
   heroBtnNavy: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#f59e0b',
     borderColor: '#d97706',
     borderWidth: 1.5,
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    height: 48,
     borderRadius: 8,
     shadowColor: '#d97706',
     shadowOffset: { width: 0, height: 2 },
@@ -3333,7 +3334,9 @@ const styles = StyleSheet.create({
     borderColor: '#b8860b',
     borderWidth: 1.5,
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
     borderRadius: 8
   },
   heroBtnGoldText: {
@@ -3343,14 +3346,17 @@ const styles = StyleSheet.create({
   },
   heroBtnWhite: {
     backgroundColor: '#ffffff',
-    borderColor: 'rgba(184, 134, 11, 0.35)',
-    borderWidth: 1,
+    borderColor: 'rgba(184, 134, 11, 0.45)',
+    borderWidth: 1.5,
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    height: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 8,
-    shadowColor: 'rgba(0, 0, 0, 0.1)',
+    shadowColor: 'rgba(0, 0, 0, 0.08)',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.12,
     elevation: 2
   },
   heroBtnWhiteText: {
@@ -3719,10 +3725,12 @@ const styles = StyleSheet.create({
   btnPrimarySm: {
     backgroundColor: '#f59e0b',
     borderColor: '#d97706',
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    borderWidth: 1.5,
+    paddingHorizontal: 12,
+    height: 32,
     borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#d97706',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
@@ -3730,7 +3738,7 @@ const styles = StyleSheet.create({
   },
   btnPrimarySmText: {
     color: '#ffffff',
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '800'
   },
   subTabsRow: {
@@ -4232,8 +4240,8 @@ const styles = StyleSheet.create({
     borderColor: '#fca5a5',
     borderWidth: 1,
     borderRadius: 20,
-    paddingHorizontal: 8,
-    paddingVertical: 3
+    paddingHorizontal: 9,
+    paddingVertical: 3.5
   },
   pulseRedDot: {
     width: 7,
@@ -4253,12 +4261,12 @@ const styles = StyleSheet.create({
     borderColor: '#bfdbfe',
     borderWidth: 1,
     borderRadius: 20,
-    paddingHorizontal: 8,
-    paddingVertical: 3
+    paddingHorizontal: 9,
+    paddingVertical: 3.5
   },
   upcomingIndicatorText: {
     color: '#1d4ed8',
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: '800'
   },
   resultIndicatorPill: {
@@ -4266,12 +4274,12 @@ const styles = StyleSheet.create({
     borderColor: '#a7f3d0',
     borderWidth: 1,
     borderRadius: 20,
-    paddingHorizontal: 8,
-    paddingVertical: 3
+    paddingHorizontal: 9,
+    paddingVertical: 3.5
   },
   resultIndicatorText: {
     color: '#059669',
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: '800'
   },
   matchTournament: {
@@ -4683,16 +4691,20 @@ const styles = StyleSheet.create({
   tourneyFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     gap: 8,
-    marginTop: 'auto'
+    marginTop: 'auto',
+    paddingTop: 10
   },
   btnOutlineGoldSm: {
     backgroundColor: '#ffffff',
     borderColor: '#f59e0b',
     borderWidth: 1.5,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6
+    height: 32,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   btnOutlineGoldSmText: {
     color: '#b45309',

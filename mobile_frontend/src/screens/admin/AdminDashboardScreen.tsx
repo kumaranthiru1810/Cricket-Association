@@ -37,6 +37,8 @@ import {
 import { ScorerApi, getCurrentUser, getAuthToken, setAuthToken, setCurrentUser } from '../../services/api';
 import { showSuccess, showError, showWarning, showConfirm, showInfo, swal } from '../../utils/sweetalert';
 import TournamentManagement from '../../admin/components/TournamentManagement';
+import CricketLawsManagement from '../../admin/components/CricketLawsManagement';
+import CalculationSettingsManagement from '../../admin/components/CalculationSettingsManagement';
 
 // Asset references
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
@@ -48,7 +50,7 @@ export interface AdminDashboardProps {
   initialParams?: any;
 }
 
-type AdminTab = 'overview' | 'teams' | 'scorers' | 'umpires' | 'content' | 'schedules' | 'tournaments';
+type AdminTab = 'overview' | 'teams' | 'scorers' | 'umpires' | 'content' | 'schedules' | 'tournaments' | 'laws' | 'calculations';
 type FilterStatus = 'all' | 'Pending' | 'Approved' | 'Rejected';
 type MatchFilterStatus = 'all' | 'SCHEDULED' | 'LIVE' | 'COMPLETED' | 'CANCELLED';
 
@@ -56,7 +58,7 @@ type MatchFilterStatus = 'all' | 'SCHEDULED' | 'LIVE' | 'COMPLETED' | 'CANCELLED
 const INITIAL_SCORERS_DATA = [
   {
     scorerId: 'SCORER-101',
-    scorerName: 'Thiru. ',
+    scorerName: 'Thiru. K. Sundararajan',
     email: 'sundararajan@cfvd.org',
     phone: '+91 94431 12345',
     grade: 'BCCI Level 1 Digital Scorer',
@@ -1860,6 +1862,58 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               </View>
             )}
           </TouchableOpacity>
+
+          {/* MCC Cricket Laws */}
+          <TouchableOpacity
+            style={[
+              styles.sidebarNavItem,
+              activeTab === 'laws' && styles.sidebarNavItemLawsActive,
+              isCollapsed && styles.sidebarNavItemCollapsed
+            ]}
+            onPress={() => {
+              setActiveTab('laws');
+              if (isMobileDrawer) setMobileSidebarOpen(false);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.sidebarNavIcon, activeTab === 'laws' && styles.sidebarNavIconActive]}>📜</Text>
+            {!isCollapsed && (
+              <Text style={[styles.sidebarNavLabel, activeTab === 'laws' && styles.sidebarNavLabelActive]}>
+                Cricket Laws
+              </Text>
+            )}
+            {!isCollapsed && (
+              <View style={styles.sidebarBadgeEmerald}>
+                <Text style={[styles.sidebarBadgeText, { color: '#065f46' }]}>42</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* DLS & VJD Live Chasing Predictor */}
+          <TouchableOpacity
+            style={[
+              styles.sidebarNavItem,
+              activeTab === 'calculations' && styles.sidebarNavItemCalculationsActive,
+              isCollapsed && styles.sidebarNavItemCollapsed
+            ]}
+            onPress={() => {
+              setActiveTab('calculations');
+              if (isMobileDrawer) setMobileSidebarOpen(false);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.sidebarNavIcon, activeTab === 'calculations' && styles.sidebarNavIconActive]}>🧮</Text>
+            {!isCollapsed && (
+              <Text style={[styles.sidebarNavLabel, activeTab === 'calculations' && styles.sidebarNavLabelActive]}>
+                DLS & VJD Predictor
+              </Text>
+            )}
+            {!isCollapsed && (
+              <View style={styles.sidebarBadgeCyan}>
+                <Text style={[styles.sidebarBadgeText, { color: '#0e7490' }]}>Live</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </ScrollView>
 
         {/* Sidebar Footer */}
@@ -2005,6 +2059,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     {activeTab === 'schedules' && '⚡ Match Schedules'}
                     {activeTab === 'tournaments' && '🏆 Tournament Management & Approvals'}
                     {activeTab === 'content' && '📰 News & Content'}
+                    {activeTab === 'laws' && '📜 MCC Cricket Laws (2026 Code)'}
+                    {activeTab === 'calculations' && '🧮 DLS & VJD Live Chasing Predictor'}
                   </Text>
                   {activeTab === 'overview' && (
                     <View style={[styles.pageThemeBadge, { backgroundColor: '#0f172a', borderColor: '#d4af37' }]}>
@@ -2039,6 +2095,16 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   {activeTab === 'tournaments' && (
                     <View style={[styles.pageThemeBadge, { backgroundColor: '#fffbeb', borderColor: '#f59e0b' }]}>
                       <Text style={[styles.pageThemeBadgeText, { color: '#b45309' }]}>🏆 GOLDEN CHAMPIONSHIP</Text>
+                    </View>
+                  )}
+                  {activeTab === 'laws' && (
+                    <View style={[styles.pageThemeBadge, { backgroundColor: '#ecfdf5', borderColor: '#059669' }]}>
+                      <Text style={[styles.pageThemeBadgeText, { color: '#065f46' }]}>📜 MCC 2026 CODE</Text>
+                    </View>
+                  )}
+                  {activeTab === 'calculations' && (
+                    <View style={[styles.pageThemeBadge, { backgroundColor: '#ecfeff', borderColor: '#0891b2' }]}>
+                      <Text style={[styles.pageThemeBadgeText, { color: '#0e7490' }]}>🧮 DLS & VJD ENGINE</Text>
                     </View>
                   )}
                 </View>
@@ -4065,6 +4131,20 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           {activeTab === 'tournaments' && (
             <TournamentManagement />
           )}
+
+          {/* ─────────────────────────────────────────────────────────────
+              10. TAB CONTENT: MCC CRICKET LAWS MANAGEMENT SYSTEM
+              ───────────────────────────────────────────────────────────── */}
+          {activeTab === 'laws' && (
+            <CricketLawsManagement />
+          )}
+
+          {/* ─────────────────────────────────────────────────────────────
+              11. TAB CONTENT: DLS & VJD LIVE CHASING PREDICTOR
+              ───────────────────────────────────────────────────────────── */}
+          {activeTab === 'calculations' && (
+            <CalculationSettingsManagement />
+          )}
         </View>
       </ScrollView>
     </View>
@@ -5858,6 +5938,32 @@ const styles: any = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 2
+  },
+  sidebarBadgeEmerald: {
+    backgroundColor: '#d1fae5',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2
+  },
+  sidebarBadgeCyan: {
+    backgroundColor: '#cffafe',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2
+  },
+  sidebarNavItemLawsActive: {
+    backgroundColor: '#059669',
+    borderWidth: 1.5,
+    borderColor: '#34d399',
+    boxShadow: '0 4px 14px rgba(5, 150, 105, 0.4)',
+    elevation: 3
+  },
+  sidebarNavItemCalculationsActive: {
+    backgroundColor: '#0891b2',
+    borderWidth: 1.5,
+    borderColor: '#22d3ee',
+    boxShadow: '0 4px 14px rgba(8, 145, 178, 0.4)',
+    elevation: 3
   },
   sidebarBadgeText: {
     fontSize: 10.5,
