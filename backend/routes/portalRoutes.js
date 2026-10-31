@@ -32,7 +32,9 @@ router.get('/home', async (req, res) => {
     const liveMatches = matches.filter(m => m.status === 'LIVE').map(m => ({
       ...m,
       teamA: teamMap[m.team_a_id]?.name || 'Team A',
-      teamB: teamMap[m.team_b_id]?.name || 'Team B'
+      teamB: teamMap[m.team_b_id]?.name || 'Team B',
+      currentBreak: m.current_break || (m.breaks && m.breaks.length > 0 ? m.breaks[m.breaks.length - 1] : null),
+      statusComment: m.status_comment || ''
     }));
 
     const upcomingMatches = matches.filter(m => m.status === 'SCHEDULED').map(m => ({

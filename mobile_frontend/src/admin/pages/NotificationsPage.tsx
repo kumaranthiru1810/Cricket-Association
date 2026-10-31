@@ -78,7 +78,8 @@ export const NotificationsPage: React.FC = () => {
 
   const handleMarkRead = async (item: any) => {
     try {
-      await adminApi.markNotificationRead(item.id);
+      const targetId = item.id || item._id;
+      await adminApi.markNotificationRead(targetId);
       showToast('Notification marked as read.', 'success');
       loadNotifications();
     } catch (e: any) {
@@ -89,7 +90,8 @@ export const NotificationsPage: React.FC = () => {
   const handleConfirmDelete = async () => {
     if (!deleteDialog.item) return;
     try {
-      await adminApi.deleteNotification(deleteDialog.item.id);
+      const targetId = deleteDialog.item.id || deleteDialog.item._id;
+      await adminApi.deleteNotification(targetId);
       showToast('Notification deleted.', 'success');
       setDeleteDialog({ visible: false, item: null });
       loadNotifications();
@@ -101,16 +103,19 @@ export const NotificationsPage: React.FC = () => {
   const columns: ColumnDef<any>[] = [
     {
       header: 'Announcement / Title',
-      accessor: (n) => (
-        <View style={styles.titleCell}>
-          <Text style={[styles.itemTitle, !n.is_read && styles.itemTitleUnread]}>
-            {n.title}
-          </Text>
-          <Text style={styles.itemMessage} numberOfLines={2}>
-            {n.message}
-          </Text>
-        </View>
-      )
+      accessor: (n) => {
+        const isRead = n.is_read === true || n.status === 'READ';
+        return (
+          <View style={styles.titleCell}>
+            <Text style={[styles.itemTitle, !isRead && styles.itemTitleUnread]}>
+              {n.title}
+            </Text>
+            <Text style={styles.itemMessage} numberOfLines={2}>
+              {n.message}
+            </Text>
+          </View>
+        );
+      }
     },
     {
       header: 'Target Audience',
@@ -126,37 +131,46 @@ export const NotificationsPage: React.FC = () => {
             color: '#334155'
           }}
         >
-          {n.target_audience || 'ALL'}
+          {n.target_audience || n.reference_id || 'ALL'}
         </span>
       )
     },
     {
       header: 'Dispatch Type',
-      accessor: (n) => (
-        <span
-          style={{
-            display: 'inline-block',
-            padding: '3px 8px',
-            borderRadius: 4,
-            fontSize: 11,
-            fontWeight: 700,
-            backgroundColor:
-              n.type === 'ALERT'
-                ? '#FEF2F2'
-                : n.type === 'SYSTEM'
-                ? '#EFF6FF'
-                : '#ECFDF5',
-            color:
-              n.type === 'ALERT'
-                ? '#DC2626'
-                : n.type === 'SYSTEM'
-                ? '#1D4ED8'
-                : '#059669'
-          }}
-        >
-          {n.type || 'NOTICE'}
-        </span>
-      )
+      accessor: (n) => {
+        const isAlert = n.type === 'ALERT';
+        const isSystemOrApproval = n.type === 'SYSTEM' || n.type === 'APPROVAL_UPDATE';
+        const isRegistration = typeof n.type === 'string' && n.type.includes('REGISTRATION');
+        return (
+          <span
+            style={{
+              display: 'inline-block',
+              padding: '3px 8px',
+              borderRadius: 4,
+              fontSize: 11,
+              fontWeight: 700,
+              backgroundColor:
+                isAlert
+                  ? '#FEF2F2'
+                  : isSystemOrApproval
+                  ? '#EFF6FF'
+                  : isRegistration
+                  ? '#FEF3C7'
+                  : '#ECFDF5',
+              color:
+                isAlert
+                  ? '#DC2626'
+                  : isSystemOrApproval
+                  ? '#1D4ED8'
+                  : isRegistration
+                  ? '#B45309'
+                  : '#059669'
+            }}
+          >
+            {n.type || 'NOTICE'}
+          </span>
+        );
+      }
     },
     {
       header: 'Date Published',
@@ -168,26 +182,29 @@ export const NotificationsPage: React.FC = () => {
     },
     {
       header: 'Actions',
-      accessor: (n) => (
-        <View style={styles.actionRow}>
-          {!n.is_read && (
+      accessor: (n) => {
+        const isRead = n.is_read === true || n.status === 'READ';
+        return (
+          <View style={styles.actionRow}>
+            {!isRead && (
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => handleMarkRead(n)}
+                accessibilityLabel="Mark as Read"
+              >
+                <CheckIcon size={14} color="#059669" />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
-              style={styles.actionBtn}
-              onPress={() => handleMarkRead(n)}
-              accessibilityLabel="Mark as Read"
+              style={[styles.actionBtn, styles.deleteBtn]}
+              onPress={() => setDeleteDialog({ visible: true, item: n })}
+              accessibilityLabel="Delete Announcement"
             >
-              <CheckIcon size={14} color="#059669" />
+              <TrashIcon size={14} color="#DC2626" />
             </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.deleteBtn]}
-            onPress={() => setDeleteDialog({ visible: true, item: n })}
-            accessibilityLabel="Delete Announcement"
-          >
-            <TrashIcon size={14} color="#DC2626" />
-          </TouchableOpacity>
-        </View>
-      )
+          </View>
+        );
+      }
     }
   ];
 
@@ -215,7 +232,7 @@ export const NotificationsPage: React.FC = () => {
       <DataTable
         columns={columns}
         data={notifications}
-        keyExtractor={(n) => String(n.id)}
+        keyExtractor={(n) => String(n.id || n._id || Math.random())}
         searchable
         searchPlaceholder="Search notifications by title or text..."
         filterKey={(n) => `${n.title} ${n.message} ${n.type}`}

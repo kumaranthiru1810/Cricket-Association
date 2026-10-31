@@ -19,13 +19,13 @@ export interface ValidationResult {
  * Validates an email address.
  * Checks for required presence, '@' symbol, domain '.', and standard format.
  */
-export function validateEmail(email: string): ValidationResult {
+export function validateEmail(email: string, customEmptyMessage?: string): ValidationResult {
   const clean = (email || '').trim();
 
   if (!clean) {
     return {
       isValid: false,
-      error: 'Please enter your registered email address.'
+      error: customEmptyMessage || 'Please enter your registered email address.'
     };
   }
 

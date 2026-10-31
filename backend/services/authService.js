@@ -43,7 +43,7 @@ class AuthService {
         try {
           await userModel.deleteById(existing.id);
           await db.models.User.deleteOne({ email: cleanEmail });
-        } catch (_e) {}
+        } catch (_e) { }
       } else {
         throw {
           status: 409,
@@ -237,7 +237,7 @@ class AuthService {
         otp_expires_at: expiresAt,
         otp_attempts: 0
       });
-    } catch (_e) {}
+    } catch (_e) { }
 
     // 3. Send Email via Nodemailer
     await sendOtpEmail({
@@ -354,14 +354,14 @@ class AuthService {
     let userUpdated = false;
     const userRes = await db.models.User.updateMany(
       { email: cleanEmail },
-      { 
-        $set: { 
-          password_hash: passwordHash, 
-          otp_hash: null, 
+      {
+        $set: {
+          password_hash: passwordHash,
+          otp_hash: null,
           otp_expires_at: null,
           otp_verified_at: new Date(),
           updated_at: new Date()
-        } 
+        }
       }
     );
     if (userRes && (userRes.matchedCount > 0 || userRes.modifiedCount > 0)) {
@@ -374,7 +374,7 @@ class AuthService {
         { coach_email: cleanEmail },
         { $set: { password_hash: passwordHash, updated_at: new Date() } }
       );
-    } catch (_e) {}
+    } catch (_e) { }
 
     // 3. Clear memory OTP
     forgotPasswordOtpMap.delete(cleanEmail);
@@ -460,7 +460,7 @@ class AuthService {
         otp_expires_at: expiresAt,
         otp_attempts: 0
       });
-    } catch (e) {}
+    } catch (e) { }
 
     await sendOtpEmail({
       toEmail: user.email,
@@ -515,7 +515,7 @@ class AuthService {
     const isExpired = user.otp_expires_at && new Date() > new Date(user.otp_expires_at);
     if (isExpired) {
       await userModel.clearOtp(user.id || cleanEmail);
-      try { await scorerModel.clearOtp(user.id || cleanEmail); } catch (e) {}
+      try { await scorerModel.clearOtp(user.id || cleanEmail); } catch (e) { }
       throw { status: 400, message: 'OTP has expired. Please request a new OTP.' };
     }
 
@@ -525,12 +525,12 @@ class AuthService {
         const User = db.models.User;
         await User.updateOne({ email: cleanEmail }, { $inc: { otp_attempts: 1 } });
         await scorerModel.incrementOtpAttempts(user.id || cleanEmail);
-      } catch (e) {}
+      } catch (e) { }
       throw { status: 400, message: 'Invalid OTP code. Please enter the correct code.' };
     }
 
     await userModel.clearOtp(user.id || cleanEmail);
-    try { await scorerModel.clearOtp(user.id || cleanEmail); } catch (e) {}
+    try { await scorerModel.clearOtp(user.id || cleanEmail); } catch (e) { }
 
     const certLevel = user.certificationLevel || user.scorer_details?.certification_level || 'District Certified';
 
@@ -626,10 +626,10 @@ class AuthService {
     if (!user && ADMIN_OR_DEV_EMAILS.includes(cleanEmail)) {
       user = await userModel.create({
         id: `ADM-${Date.now()}`,
-        name: cleanEmail.includes('athilingam') 
-          ? 'Athilingam (Admin & Scorer)' 
-          : (cleanEmail.includes('ramana') || cleanEmail.includes('ponramanan') 
-            ? 'Mathan / Ramana (Admin & Scorer)' 
+        name: cleanEmail.includes('athilingam')
+          ? 'Athilingam (Admin & Scorer)'
+          : (cleanEmail.includes('ramana') || cleanEmail.includes('ponramanan')
+            ? 'Mathan / Ramana (Admin & Scorer)'
             : 'Association Admin'),
         email: cleanEmail,
         role: 'ADMIN',
@@ -765,7 +765,25 @@ class AuthService {
 
     // Verify user is not pending or rejected
     if (user.status === 'PENDING') {
-      throw { status: 403, message: 'Your registration is PENDING admin approval. You can only log in once an administrator approves your account.' };
+      // Check if player belongs to a pending team
+      let pendingTeamName = null;
+      if ((user.role || '').toUpperCase() === 'PLAYER') {
+        try {
+          const regs = await db.models.TeamRegistration.find({}).lean();
+          for (const reg of regs) {
+            const found = (reg.players || []).find(p => p.email?.toLowerCase() === cleanEmail);
+            if (found) { pendingTeamName = reg.team_name; break; }
+          }
+        } catch (_e) {}
+      }
+      throw {
+        status: 403,
+        pendingApproval: true,
+        teamName: pendingTeamName,
+        message: pendingTeamName
+          ? `⏳ Team "${pendingTeamName}" is pending admin approval. Players can only login after the admin approves the team.`
+          : 'Your registration is PENDING admin approval. You can only log in once an administrator approves your account.'
+      };
     }
     if (user.status === 'REJECTED' || user.status === 'SUSPENDED') {
       throw { status: 403, message: `Your account was ${user.status} by the administrator.` };
@@ -853,7 +871,7 @@ class AuthService {
         result: 'SUCCESS',
         details: `Administrator logged into management console.`
       });
-    } catch (e) {}
+    } catch (e) { }
 
     return {
       success: true,
@@ -868,8 +886,20 @@ class AuthService {
     };
   }
 
-  async login(identifier, passwordOrOtp, roleRequired = null) {
-    if (!identifier || !passwordOrOtp) {
+  async login(identifier, passwordOrOtp, roleRequired = null, teamName = null) {
+    if (!identifier) {
+      throw { status: 400, message: 'Email or name and password/OTP are required.' };
+    }
+
+    // PLAYER login: team name + email (no password needed)
+    if (roleRequired === 'PLAYER') {
+      if (!teamName || !teamName.trim()) {
+        throw { status: 400, message: 'Team name is required for player login.' };
+      }
+      return this._playerLoginByTeamAndEmail(identifier, teamName);
+    }
+
+    if (!passwordOrOtp ) {
       throw { status: 400, message: 'Email or name and password/OTP are required.' };
     }
     const cleanId = String(identifier).trim();
@@ -899,6 +929,59 @@ class AuthService {
     }
 
     // Auto-create recognized demo accounts (Umpire, Player, Coach, Scorer)
+    // Auto-resolve recognized Team accounts (Virudhunagar Spartans / Rajapalayam Royals)
+    if (!user && (roleRequired === 'COACH' || roleRequired === 'TEAM' || !roleRequired)) {
+      if (cleanEmail === 'spartans@gmail.com' || cleanEmail.includes('spartan') || cleanEmail === 'coach@cfvd.org') {
+        user = await userModel.findByEmail('spartans@gmail.com');
+        if (!user) {
+          user = await userModel.create({
+            id: 'COACH-TM-01',
+            name: 'Virudhunagar Spartans Official',
+            email: 'spartans@gmail.com',
+            role: 'TEAM',
+            status: 'APPROVED',
+            team_id: 'TM-01',
+            password_hash: '1234'
+          });
+        }
+      } else if (cleanEmail === 'royals@gmail.com' || cleanEmail.includes('royal') || cleanEmail === 'coach.royals@gmail.com') {
+        user = await userModel.findByEmail('royals@gmail.com');
+        if (!user) {
+          user = await userModel.create({
+            id: 'COACH-TM-03',
+            name: 'Rajapalayam Royals Official',
+            email: 'royals@gmail.com',
+            role: 'TEAM',
+            status: 'APPROVED',
+            team_id: 'TM-03',
+            password_hash: '1234'
+          });
+        }
+      }
+    }
+
+    // Auto-resolve registered Players from MongoDB Player collection
+    if (!user && (roleRequired === 'PLAYER' || !roleRequired)) {
+      const playerDoc = await db.models.Player.findOne({
+        $or: [
+          { email: cleanEmail },
+          { name: { $regex: new RegExp(`^${cleanId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } }
+        ]
+      }).lean();
+      if (playerDoc) {
+        user = await userModel.create({
+          id: playerDoc.id,
+          name: playerDoc.name,
+          email: playerDoc.email || cleanEmail,
+          role: 'PLAYER',
+          status: 'ACTIVE',
+          team_id: playerDoc.team_id,
+          password_hash: '1234'
+        });
+      }
+    }
+
+    // Auto-create recognized demo Umpire accounts
     const recognizedUmpires = ['sundaram.umpire@cfvd.org', 'umpire@cfvd.org', 'ramanathan.umpire@cfvd.org'];
     if (!user && (recognizedUmpires.includes(cleanEmail) || (cleanEmail.includes('umpire') && (roleRequired === 'UMPIRE' || !roleRequired)))) {
       user = await userModel.create({
@@ -979,12 +1062,32 @@ class AuthService {
     if (user.status === 'REJECTED' || user.status === 'SUSPENDED') {
       throw { status: 403, message: `Your account is ${user.status} by the administrator.` };
     }
-    if ((userRole === 'SCORER' || userRole === 'COACH' || userRole === 'TEAM' || userRole === 'UMPIRE') && user.status === 'PENDING') {
+    if ((userRole === 'SCORER' || userRole === 'COACH' || userRole === 'TEAM' || userRole === 'UMPIRE' || userRole === 'PLAYER') && user.status === 'PENDING') {
+      // For COACH/TEAM/PLAYER: fetch team name for a better error message
+      let pendingTeamName = null;
+      if (userRole === 'COACH' || userRole === 'TEAM') {
+        try {
+          const reg = await teamRegistrationModel.findByCoachEmail(cleanEmail);
+          if (reg) pendingTeamName = reg.team_name;
+        } catch (_e) {}
+      } else if (userRole === 'PLAYER') {
+        try {
+          const regs = await db.models.TeamRegistration.find({}).lean();
+          for (const reg of regs) {
+            const found = (reg.players || []).find(p => p.email?.toLowerCase() === cleanEmail);
+            if (found) { pendingTeamName = reg.team_name; break; }
+          }
+        } catch (_e) {}
+      }
       throw {
         status: 403,
+        pendingApproval: true,
+        teamName: pendingTeamName,
         scorerStatus: 'PENDING',
         statusBlocked: 'PENDING',
-        message: 'Your registration is pending admin approval. You can only log in once an administrator approves your account.'
+        message: pendingTeamName
+          ? `⏳ Team "${pendingTeamName}" is pending admin approval. Coach and Players can only login after the admin approves the team.`
+          : 'Your registration is pending admin approval. You can only log in once an administrator approves your account.'
       };
     }
 
@@ -995,6 +1098,7 @@ class AuthService {
     const DEV_PASSWORDS = [
       '1234',
       '123456',
+      'test1234',
       'admin123',
       'admin',
       'CFVD@Admin2026',
@@ -1002,7 +1106,9 @@ class AuthService {
       'Striker@2026#',
       'Coach@2026#',
       'Scorer@2026#',
-      'Umpire@2026#'
+      'Umpire@2026#',
+      'Team@2026#',
+      'Player@2026#'
     ];
     if (DEV_PASSWORDS.includes(cleanCredential)) {
       isPasswordValid = true;
@@ -1016,7 +1122,7 @@ class AuthService {
         try {
           const bcrypt = require('bcryptjs');
           isPasswordValid = await bcrypt.compare(cleanCredential, user.password_hash);
-        } catch (_e) {}
+        } catch (_e) { }
       }
     }
 
@@ -1040,6 +1146,9 @@ class AuthService {
       user.status = 'ACTIVE';
     }
 
+    const teamId = user.team_id || user.teamId || user.player_details?.team_id || (user.id && user.id.startsWith('COACH-') ? user.id.replace('COACH-', '') : undefined);
+    const resolvedTeamName = user.team_name || user.teamName || user.player_details?.team_name || user.name;
+
     // 5. Generate JWT Token
     const token = jwt.sign(
       {
@@ -1048,8 +1157,8 @@ class AuthService {
         email: user.email,
         role: user.role,
         certificationLevel: user.certificationLevel || user.scorer_details?.certification_level || 'Level 1 (District Official)',
-        ...(user.player_details?.team_name ? { teamName: user.player_details.team_name } : {}),
-        ...(user.player_details?.team_id ? { teamId: user.player_details.team_id } : {})
+        ...(resolvedTeamName ? { teamName: resolvedTeamName } : {}),
+        ...(teamId ? { teamId, team_id: teamId } : {})
       },
       JWT_SECRET,
       { expiresIn: '7d' }
@@ -1064,6 +1173,9 @@ class AuthService {
         email: user.email,
         role: user.role,
         status: user.status,
+        team_id: teamId,
+        teamId: teamId,
+        teamName: resolvedTeamName,
         certificationLevel: user.certificationLevel || user.scorer_details?.certification_level || 'Level 1 (District Official)',
         player_details: user.player_details,
         scorer_details: user.scorer_details,
@@ -1102,7 +1214,7 @@ class AuthService {
       const regCoachName = (reg?.coach_name || team?.coach_name || '').toLowerCase();
       const inputCoachName = coachName.trim().toLowerCase();
       const isNameMatch = !regCoachName || regCoachName.includes(inputCoachName) || inputCoachName.includes(regCoachName) ||
-                          regCoachName.split(' ').some(w => inputCoachName.includes(w));
+        regCoachName.split(' ').some(w => inputCoachName.includes(w));
       if (!isNameMatch) {
         throw {
           status: 401,
@@ -1194,6 +1306,96 @@ class AuthService {
       team: {
         teamId,
         teamName
+      },
+      token
+    };
+  }
+
+  /**
+   * Player Login by Team Name + Email (no password)
+   */
+  async _playerLoginByTeamAndEmail(email, teamName) {
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanTeam = teamName.trim().toLowerCase();
+
+    await db.initDb();
+
+    // Find player in team registrations
+    const registrations = await db.models.TeamRegistration.find({}).lean();
+    let playerInfo = null;
+    let teamReg = null;
+
+    for (const reg of registrations) {
+      const regTeamName = (reg.team_name || '').toLowerCase();
+      const isTeamMatch = regTeamName === cleanTeam || regTeamName.includes(cleanTeam) || cleanTeam.includes(regTeamName);
+      if (!isTeamMatch) continue;
+
+      const player = (reg.players || []).find(p => p.email?.toLowerCase() === cleanEmail);
+      if (player) {
+        playerInfo = player;
+        teamReg = reg;
+        break;
+      }
+    }
+
+    if (!playerInfo || !teamReg) {
+      throw {
+        status: 401,
+        message: 'Player email not found in the specified team. Please check your team name and email.'
+      };
+    }
+
+    const teamStatus = (teamReg.status || 'PENDING').toUpperCase();
+    if (teamStatus === 'PENDING') {
+      throw {
+        status: 403,
+        pendingApproval: true,
+        teamName: teamReg.team_name,
+        message: `⏳ Team "${teamReg.team_name}" is pending admin approval. Players can only login after the admin approves the team.`
+      };
+    }
+    if (teamStatus === 'REJECTED') {
+      throw {
+        status: 403,
+        message: `❌ Team "${teamReg.team_name}" registration was rejected by the administrator.`
+      };
+    }
+
+    // Ensure user account exists
+    let user = await userModel.findByEmail(cleanEmail);
+    if (!user) {
+      user = await userModel.create({
+        id: `PLY-${Date.now()}`,
+        name: playerInfo.name,
+        email: cleanEmail,
+        role: 'PLAYER',
+        status: 'ACTIVE'
+      });
+    }
+
+    const token = jwt.sign(
+      {
+        id: user.id || cleanEmail,
+        name: playerInfo.name,
+        email: cleanEmail,
+        role: 'PLAYER',
+        teamName: teamReg.team_name,
+        teamId: teamReg.id
+      },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    return {
+      success: true,
+      message: `Welcome, ${playerInfo.name}!`,
+      user: {
+        id: user.id,
+        name: playerInfo.name,
+        email: cleanEmail,
+        role: 'PLAYER',
+        teamName: teamReg.team_name,
+        teamId: teamReg.id
       },
       token
     };
@@ -1354,7 +1556,7 @@ class AuthService {
       try {
         const bcrypt = require('bcryptjs');
         passwordHash = await bcrypt.hash(passwordHash, 10);
-      } catch (_e) {}
+      } catch (_e) { }
     }
 
     const userId = `SCR-${Math.floor(100 + Math.random() * 900)}`;
@@ -1384,7 +1586,7 @@ class AuthService {
         association: association || 'Virudhunagar District Cricket Association',
         status: 'PENDING'
       });
-    } catch (e) {}
+    } catch (e) { }
 
     await notificationModel.create({
       type: 'SCORER_REGISTRATION',
@@ -1558,7 +1760,7 @@ class AuthService {
     try {
       const bcrypt = require('bcryptjs');
       passwordHash = await bcrypt.hash(passwordHash, 10);
-    } catch (_e) {}
+    } catch (_e) { }
 
     const userId = `UMP-${Math.floor(100 + Math.random() * 900)}`;
     const user = await userModel.create({
@@ -1658,7 +1860,7 @@ class AuthService {
       try {
         const bcrypt = require('bcryptjs');
         passwordHash = await bcrypt.hash(passwordHash, 10);
-      } catch (_e) {}
+      } catch (_e) { }
     }
 
     const playerId = `PLY-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
@@ -1809,7 +2011,7 @@ class AuthService {
       try {
         const bcrypt = require('bcryptjs');
         passwordHash = await bcrypt.hash(passwordHash, 10);
-      } catch (_e) {}
+      } catch (_e) { }
     }
 
     const createdTeam = await teamRegistrationModel.create({
@@ -1821,7 +2023,7 @@ class AuthService {
       players
     });
 
-    // Ensure coach user account exists with password_hash and role COACH
+    // Ensure coach user account exists with password_hash and role COACH — status PENDING until admin approves
     let coachUser = await userModel.findByEmail(cleanCoachEmail);
     if (!coachUser) {
       await userModel.create({
@@ -1830,21 +2032,21 @@ class AuthService {
         email: cleanCoachEmail,
         role: 'COACH',
         password_hash: passwordHash,
-        status: 'ACTIVE'
+        status: 'PENDING'
       });
     } else {
       await db.models.User.updateOne(
         { email: cleanCoachEmail },
-        { $set: { ...(passwordHash ? { password_hash: passwordHash } : {}), role: 'COACH', status: 'ACTIVE' } }
+        { $set: { ...(passwordHash ? { password_hash: passwordHash } : {}), role: 'COACH', status: 'PENDING' } }
       );
     }
 
-    console.log(`\n🏏 [TEAM REGISTERED] ID: ${createdTeam.id} | Team: "${createdTeam.team_name}" | Coach: ${cleanCoachEmail} | Status: ACTIVE\n`);
+    console.log(`\n🏏 [TEAM REGISTERED] ID: ${createdTeam.id} | Team: "${createdTeam.team_name}" | Coach: ${cleanCoachEmail} | Status: PENDING\n`);
 
     return {
       success: true,
-      status: 'ACTIVE',
-      message: `Team "${createdTeam.team_name}" and Coach account registered successfully!`,
+      status: 'PENDING',
+      message: `Team "${createdTeam.team_name}" registration submitted! Awaiting admin approval before Coach and Players can log in.`,
       team: createdTeam
     };
   }
@@ -2067,12 +2269,12 @@ class AuthService {
     // Individual User approval (PLAYER, SCORER, CONTENT_CREATOR)
     const cleanId = String(id || '').trim();
     const cleanEmail = cleanId.toLowerCase();
-    const query = { 
+    const query = {
       $or: [
-        { id: cleanId }, 
+        { id: cleanId },
         { email: cleanEmail },
         { email: cleanId }
-      ] 
+      ]
     };
     if (mongoose.Types.ObjectId.isValid(cleanId)) {
       query.$or.push({ _id: cleanId });

@@ -168,10 +168,71 @@ class AdminDashboardController {
       const upcomingMatches = (matches || []).filter(m => (m.status || '').toUpperCase() === 'SCHEDULED').length;
       const liveMatches = (matches || []).filter(m => (m.status || '').toUpperCase() === 'LIVE').length;
 
-      // 6. Pending Approvals count (Scorers + Teams + Players)
-      const [scorers] = await db.query('SELECT * FROM scorers WHERE status = "PENDING"');
-      const pendingTeams = (teams || []).filter(t => (t.status || '').toUpperCase() === 'PENDING').length;
-      const pendingApprovals = (scorers || []).length + pendingTeams;
+      // 6. Pending Approvals count (Scorers + Teams + Umpires + Players)
+      const pendingList = [];
+
+      try {
+        const pScorers = await db.models.User.find({ role: 'SCORER', status: 'PENDING' }).sort({ created_at: -1 }).lean();
+        (pScorers || []).forEach(s => {
+          pendingList.push({
+            id: s.id,
+            name: s.name,
+            type: 'Official Scorer',
+            email: s.email,
+            association: s.scorer_details?.taluk ? `${s.scorer_details.taluk} Scorer` : 'District Certified Scorer',
+            date: s.created_at,
+            status: 'PENDING'
+          });
+        });
+      } catch (e) {}
+
+      try {
+        const teamRegistrationModel = require('../models/teamRegistrationModel');
+        const pTeams = await teamRegistrationModel.getAll('PENDING');
+        (pTeams || []).forEach(t => {
+          pendingList.push({
+            id: t.id,
+            name: t.team_name,
+            type: 'Team / Club',
+            email: t.coach_email || 'N/A',
+            association: `${t.taluk || t.city || 'District'} Club (${(t.players || []).length} Players)`,
+            date: t.created_at,
+            status: 'PENDING'
+          });
+        });
+      } catch (e) {}
+
+      try {
+        const pUmpires = await db.models.User.find({ role: 'UMPIRE', status: 'PENDING' }).sort({ created_at: -1 }).lean();
+        (pUmpires || []).forEach(u => {
+          pendingList.push({
+            id: u.id,
+            name: u.name,
+            type: 'Official Umpire',
+            email: u.email,
+            association: `${u.umpire_details?.district || 'District'} Umpire Panel`,
+            date: u.created_at,
+            status: 'PENDING'
+          });
+        });
+      } catch (e) {}
+
+      try {
+        const pPlayers = await db.models.User.find({ role: 'PLAYER', status: 'PENDING' }).sort({ created_at: -1 }).lean();
+        (pPlayers || []).forEach(p => {
+          pendingList.push({
+            id: p.id,
+            name: p.name,
+            type: 'Player',
+            email: p.email,
+            association: `Player (${p.player_details?.taluk || 'Virudhunagar'})`,
+            date: p.created_at,
+            status: 'PENDING'
+          });
+        });
+      } catch (e) {}
+
+      const pendingApprovals = pendingList.length;
 
       // Section A: Recent Registrations
       const recentUsers = (users || []).slice(0, 6).map(u => ({
@@ -182,31 +243,6 @@ class AdminDashboardController {
         status: u.status,
         date: u.created_at || new Date().toISOString()
       }));
-
-      // Section B: Pending Approvals items
-      const pendingList = [];
-      (scorers || []).forEach(s => {
-        pendingList.push({
-          id: s.id,
-          name: s.full_name,
-          type: 'Official Scorer',
-          email: s.email,
-          association: s.association || 'District Cricket Body',
-          date: s.created_at,
-          status: 'PENDING'
-        });
-      });
-      (teams || []).filter(t => (t.status || '').toUpperCase() === 'PENDING').forEach(t => {
-        pendingList.push({
-          id: t.id,
-          name: t.name || t.team_name,
-          type: 'Team / Club',
-          email: t.coach_email || 'N/A',
-          association: t.city || 'District Team',
-          date: t.created_at,
-          status: 'PENDING'
-        });
-      });
 
       // Section C: Upcoming and Live Matches
       const teamMap = {};
@@ -710,41 +746,110 @@ class AdminDashboardController {
    */
   async getApprovals(req, res) {
     try {
-      const [scorers] = await db.query('SELECT * FROM scorers ORDER BY created_at DESC');
-      const [teams] = await db.query('SELECT * FROM teams ORDER BY created_at DESC');
-
+      await db.initDb();
       const items = [];
 
-      (scorers || []).forEach(s => {
-        items.push({
-          id: s.id,
-          applicantName: s.full_name,
-          type: 'SCORER',
-          contact: s.email,
-          phone: s.mobile,
-          association: s.association,
-          date: s.created_at,
-          status: s.status,
-          rejectionReason: s.rejection_reason
+      // 1. Scorers (from User and Scorer models)
+      try {
+        const scorers = await db.models.User.find({ role: 'SCORER' }).sort({ created_at: -1 }).lean();
+        scorers.forEach(s => {
+          items.push({
+            id: s.id,
+            applicantName: s.name,
+            type: 'SCORER',
+            contact: s.email,
+            phone: s.mobile || '-',
+            association: s.scorer_details?.taluk ? `${s.scorer_details.taluk} District Scorer` : (s.association || 'District Certified Scorer'),
+            date: s.created_at,
+            status: (s.status === 'ACTIVE' || s.status === 'APPROVED') ? 'APPROVED' : (s.status || 'PENDING'),
+            certificationLevel: s.scorer_details?.certification_level || s.certificationLevel || 'District Certified',
+            details: s.scorer_details,
+            rejectionReason: s.rejection_reason || null
+          });
         });
-      });
+      } catch (e) {
+        console.warn('Scorers fetch error in getApprovals:', e.message);
+      }
 
-      (teams || []).forEach(t => {
-        items.push({
-          id: t.id,
-          applicantName: t.name || t.team_name,
-          type: 'TEAM',
-          contact: t.coach_email || 'N/A',
-          phone: t.city || 'Virudhunagar',
-          association: `Club in ${t.city || 'Virudhunagar'}`,
-          date: t.created_at,
-          status: t.status || 'APPROVED',
-          rejectionReason: null
+      // 2. Teams (from TeamRegistration model)
+      try {
+        const teamRegistrationModel = require('../models/teamRegistrationModel');
+        const teamRegs = await teamRegistrationModel.getAll();
+        (teamRegs || []).forEach(t => {
+          items.push({
+            id: t.id,
+            applicantName: `${t.team_name} (Coach: ${t.coach_name})`,
+            type: 'TEAM',
+            contact: t.coach_email,
+            phone: t.city || t.taluk || 'Virudhunagar',
+            association: `${t.taluk || t.city || 'District'} Club (${(t.players || []).length} Players)`,
+            date: t.created_at,
+            status: t.status || 'PENDING',
+            players: t.players || [],
+            details: {
+              teamName: t.team_name,
+              coachName: t.coach_name,
+              coachEmail: t.coach_email,
+              taluk: t.taluk,
+              squadCount: (t.players || []).length
+            },
+            rejectionReason: t.rejection_reason || null
+          });
         });
-      });
+      } catch (e) {
+        console.warn('Teams fetch error in getApprovals:', e.message);
+      }
+
+      // 3. Umpires (from User model role: UMPIRE)
+      try {
+        const umpires = await db.models.User.find({ role: 'UMPIRE' }).sort({ created_at: -1 }).lean();
+        umpires.forEach(u => {
+          items.push({
+            id: u.id,
+            applicantName: u.name,
+            type: 'UMPIRE',
+            contact: u.email,
+            phone: u.mobile || '-',
+            association: `${u.umpire_details?.district || 'District'} Official Umpire Panel`,
+            date: u.created_at,
+            status: (u.status === 'ACTIVE' || u.status === 'APPROVED') ? 'APPROVED' : (u.status || 'PENDING'),
+            qualification: u.umpire_details?.certification_level || u.umpire_details?.qualification || 'District Certified Umpire',
+            experience: u.umpire_details?.experience || `${u.umpire_details?.experience_years || 0} years`,
+            details: u.umpire_details,
+            rejectionReason: u.rejection_reason || null
+          });
+        });
+      } catch (e) {
+        console.warn('Umpires fetch error in getApprovals:', e.message);
+      }
+
+      // 4. Players (from User model role: PLAYER)
+      try {
+        const players = await db.models.User.find({ role: 'PLAYER' }).sort({ created_at: -1 }).limit(50).lean();
+        players.forEach(p => {
+          items.push({
+            id: p.id,
+            applicantName: p.name,
+            type: 'PLAYER',
+            contact: p.email,
+            phone: p.mobile || '-',
+            association: `Player • ${p.player_details?.taluk || 'Virudhunagar'} (${p.player_details?.category || 'Senior'})`,
+            date: p.created_at,
+            status: (p.status === 'ACTIVE' || p.status === 'APPROVED') ? 'APPROVED' : (p.status || 'PENDING'),
+            details: p.player_details,
+            rejectionReason: p.rejection_reason || null
+          });
+        });
+      } catch (e) {
+        console.warn('Players fetch error in getApprovals:', e.message);
+      }
+
+      // Sort all items newest first
+      items.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
 
       return res.status(200).json({ success: true, approvals: items });
     } catch (err) {
+      console.error('getApprovals error:', err);
       return res.status(500).json({ success: false, message: err.message });
     }
   }
@@ -754,44 +859,115 @@ class AdminDashboardController {
    */
   async handleApproval(req, res) {
     try {
+      await db.initDb();
+      const mongoose = require('mongoose');
       const { type, id } = req.params;
       const { action, reason } = req.body; // action: 'approve' | 'reject'
       const isApprove = action === 'approve';
+      const cleanType = (type || '').toUpperCase();
+      const notificationModel = require('../models/notificationModel');
+      const authService = require('../services/authService');
+      const teamRegistrationModel = require('../models/teamRegistrationModel');
 
-      if (type.toLowerCase() === 'scorer') {
-        const newStatus = isApprove ? 'APPROVED' : 'REJECTED';
-        await db.query(
-          `UPDATE scorers SET status = ?, approved_at = ?, rejected_at = ?, rejection_reason = ? WHERE id = ?`,
-          [newStatus, isApprove ? new Date() : null, isApprove ? null : new Date(), reason || null, id]
-        );
-      } else if (type.toLowerCase() === 'team') {
-        const newStatus = isApprove ? 'APPROVED' : 'REJECTED';
-        await db.query('UPDATE teams SET status = ?, updated_at = NOW() WHERE id = ? OR team_id = ?', [newStatus, id, id]);
-      } else if (type.toLowerCase() === 'player') {
-        const newStatus = isApprove ? 'ACTIVE' : 'REJECTED';
-        await db.query('UPDATE players SET status = ?, updated_at = NOW() WHERE id = ?', [newStatus, id]);
+      const isMongoId = mongoose.Types.ObjectId.isValid(id);
+      const queryId = isMongoId ? { $or: [{ id }, { _id: id }] } : { id };
+
+      let applicantName = id;
+
+      if (cleanType === 'SCORER') {
+        const u = await db.models.User.findOneAndUpdate(
+          queryId,
+          { $set: { status: isApprove ? 'ACTIVE' : 'REJECTED', updated_at: new Date() } },
+          { returnDocument: 'after' }
+        ).lean();
+        applicantName = u?.name || id;
+
+        try {
+          await db.models.Scorer.updateOne(
+            queryId,
+            { $set: { status: isApprove ? 'APPROVED' : 'REJECTED', approved_at: isApprove ? new Date() : null, rejected_at: isApprove ? null : new Date(), rejection_reason: reason || null, updated_at: new Date() } }
+          );
+        } catch (e) {}
+
+        await notificationModel.create({
+          type: 'APPROVAL_UPDATE',
+          title: `Official Scorer ${isApprove ? 'Approved' : 'Rejected'}: ${applicantName}`,
+          message: `Official Scorer application for "${applicantName}" (${id}) was ${isApprove ? 'APPROVED' : 'REJECTED'} by Administrator${reason ? `. Reason: ${reason}` : '. The scorer can now log in.'}`,
+          reference_id: id
+        });
+      } else if (cleanType === 'TEAM') {
+        if (isApprove) {
+          const resApprove = await authService.approveTeam(id, req.adminUser ? req.adminUser.email : 'ADMIN');
+          applicantName = resApprove?.team?.team_name || id;
+        } else {
+          await teamRegistrationModel.rejectRegistration(id, reason);
+          const t = await teamRegistrationModel.findById(id);
+          applicantName = t?.team_name || id;
+          if (t && t.coach_email) {
+            await db.models.User.updateOne({ email: t.coach_email }, { $set: { status: 'REJECTED' } });
+          }
+        }
+
+        await notificationModel.create({
+          type: 'APPROVAL_UPDATE',
+          title: `Team & Club ${isApprove ? 'Approved' : 'Rejected'}: ${applicantName}`,
+          message: `Team registration for "${applicantName}" was ${isApprove ? 'APPROVED' : 'REJECTED'} by Administrator${reason ? `. Reason: ${reason}` : '. Team squad and coach can now log in.'}`,
+          reference_id: id
+        });
+      } else if (cleanType === 'UMPIRE') {
+        const u = await db.models.User.findOneAndUpdate(
+          queryId,
+          { $set: { status: isApprove ? 'ACTIVE' : 'REJECTED', updated_at: new Date() } },
+          { returnDocument: 'after' }
+        ).lean();
+        applicantName = u?.name || id;
+
+        await notificationModel.create({
+          type: 'APPROVAL_UPDATE',
+          title: `Official Umpire ${isApprove ? 'Approved' : 'Rejected'}: ${applicantName}`,
+          message: `Umpire accreditation for "${applicantName}" (${id}) was ${isApprove ? 'APPROVED' : 'REJECTED'} by Administrator${reason ? `. Reason: ${reason}` : '. Umpire can now log in with credentials.'}`,
+          reference_id: id
+        });
+      } else if (cleanType === 'PLAYER') {
+        const u = await db.models.User.findOneAndUpdate(
+          queryId,
+          { $set: { status: isApprove ? 'ACTIVE' : 'REJECTED', updated_at: new Date() } },
+          { returnDocument: 'after' }
+        ).lean();
+        applicantName = u?.name || id;
+
+        try {
+          await db.models.Player.updateOne(
+            queryId,
+            { $set: { status: isApprove ? 'ACTIVE' : 'REJECTED', updated_at: new Date() } }
+          );
+        } catch (e) {}
+
+        await notificationModel.create({
+          type: 'APPROVAL_UPDATE',
+          title: `Player Registration ${isApprove ? 'Approved' : 'Rejected'}: ${applicantName}`,
+          message: `Player enrollment for "${applicantName}" (${id}) was ${isApprove ? 'APPROVED' : 'REJECTED'} by Administrator${reason ? `. Reason: ${reason}` : '.'}`,
+          reference_id: id
+        });
       }
 
       // Record audit log
       try {
-        await db.query(
-          `INSERT INTO audit_logs (id, action, initiated_by, details, timestamp, ip_address)
-           VALUES (?, ?, ?, ?, NOW(), ?)`,
-          [
-            'LOG-' + Date.now(),
-            `${type.toUpperCase()}_${isApprove ? 'APPROVED' : 'REJECTED'}`,
-            req.adminUser ? req.adminUser.email : 'admin@cfvd.org',
-            `${type} ${id} ${isApprove ? 'approved' : 'rejected'}: ${reason || 'Approved by administrator'}`,
-            req.ip || '127.0.0.1'
-          ]
-        );
+        await db.models.AuditLog.create({
+          id: 'LOG-' + Date.now(),
+          action: `${cleanType}_${isApprove ? 'APPROVED' : 'REJECTED'}`,
+          initiated_by: req.adminUser ? req.adminUser.email : 'admin@cfvd.org',
+          details: `${cleanType} ${id} ${isApprove ? 'approved' : 'rejected'}: ${reason || 'Processed by administrator'}`,
+          ip_address: req.ip || '127.0.0.1'
+        });
       } catch (e) {}
 
       return res.status(200).json({
         success: true,
-        message: `${type} request ${isApprove ? 'approved' : 'rejected'} successfully.`
+        message: `${cleanType} request "${applicantName}" ${isApprove ? 'approved' : 'rejected'} successfully.`
       });
     } catch (err) {
+      console.error('handleApproval error:', err);
       return res.status(500).json({ success: false, message: err.message });
     }
   }
@@ -820,20 +996,20 @@ class AdminDashboardController {
         };
 
         const activeBatters = (batters || []).slice(0, 2).map(b => ({
-          name: playerMap[b.player_id] || 'Suresh Kumar',
-          runs: b.runs,
-          balls: b.balls,
-          fours: b.fours,
-          sixes: b.sixes,
-          isStriker: b.is_striker
+          name: (b?.player_id && playerMap[b.player_id]) || 'Suresh Kumar',
+          runs: b?.runs || 0,
+          balls: b?.balls || 0,
+          fours: b?.fours || 0,
+          sixes: b?.sixes || 0,
+          isStriker: b?.is_striker || false
         }));
 
         const activeBowler = (bowlers && bowlers[0]) ? {
-          name: playerMap[bowlers[0].player_id] || 'Karthik N',
-          overs: bowlers[0].overs,
-          maidens: bowlers[0].maidens,
-          runs: bowlers[0].runs_conceded,
-          wickets: bowlers[0].wickets
+          name: (bowlers[0]?.player_id && playerMap[bowlers[0].player_id]) || 'Karthik N',
+          overs: bowlers[0]?.overs || 0,
+          maidens: bowlers[0]?.maidens || 0,
+          runs: bowlers[0]?.runs_conceded || 0,
+          wickets: bowlers[0]?.wickets || 0
         } : { name: 'Karthik N', overs: 3.2, maidens: 0, runs: 28, wickets: 2 };
 
         return {
@@ -913,8 +1089,14 @@ class AdminDashboardController {
    */
   async getNotifications(req, res) {
     try {
-      const [rows] = await db.query('SELECT * FROM notifications ORDER BY created_at DESC');
-      return res.status(200).json({ success: true, notifications: rows || [] });
+      const notificationModel = require('../models/notificationModel');
+      const rows = await notificationModel.getAll({ limit: 100 });
+      const formatted = (rows || []).map(r => ({
+        ...r,
+        is_read: r.status === 'READ',
+        target_audience: r.reference_id || 'ALL'
+      }));
+      return res.status(200).json({ success: true, notifications: formatted });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -925,19 +1107,20 @@ class AdminDashboardController {
    */
   async createNotification(req, res) {
     try {
-      const { title, message, type, targetRole } = req.body;
+      const { title, message, type, targetAudience, targetRole } = req.body;
       if (!title || !message) {
         return res.status(400).json({ success: false, message: 'Title and Message are required.' });
       }
 
-      const id = 'NOTIF-' + Date.now();
-      await db.query(
-        `INSERT INTO notifications (id, title, message, type, target_role, is_read, created_at)
-         VALUES (?, ?, ?, ?, ?, false, NOW())`,
-        [id, title, message, type || 'ANNOUNCEMENT', targetRole || 'ALL']
-      );
+      const notificationModel = require('../models/notificationModel');
+      const notif = await notificationModel.create({
+        type: type || 'ANNOUNCEMENT',
+        title: title.trim(),
+        message: message.trim(),
+        reference_id: targetAudience || targetRole || null
+      });
 
-      return res.status(201).json({ success: true, message: 'Announcement sent successfully.' });
+      return res.status(201).json({ success: true, message: 'Notification published successfully.', notification: notif });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -948,9 +1131,9 @@ class AdminDashboardController {
    */
   async markNotificationRead(req, res) {
     try {
-      const { id } = req.params;
-      await db.query('UPDATE notifications SET is_read = true WHERE id = ?', [id]);
-      return res.status(200).json({ success: true, message: 'Notification marked as read.' });
+      const notificationModel = require('../models/notificationModel');
+      const updated = await notificationModel.markAsRead(req.params.id);
+      return res.status(200).json({ success: true, message: 'Notification marked as read.', notification: updated });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -961,8 +1144,11 @@ class AdminDashboardController {
    */
   async deleteNotification(req, res) {
     try {
-      const { id } = req.params;
-      await db.query('DELETE FROM notifications WHERE id = ?', [id]);
+      await db.initDb();
+      const mongoose = require('mongoose');
+      const isMongoId = mongoose.Types.ObjectId.isValid(req.params.id);
+      const queryId = isMongoId ? { $or: [{ id: req.params.id }, { _id: req.params.id }] } : { id: req.params.id };
+      await db.models.Notification.deleteOne(queryId);
       return res.status(200).json({ success: true, message: 'Notification deleted.' });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });

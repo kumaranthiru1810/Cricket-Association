@@ -14,6 +14,7 @@ import {
   Modal,
   useWindowDimensions,
 } from 'react-native';
+import { validateEmail, validatePassword } from '../../utils/validation';
 import { useAppNavigation } from '../../navigation/AppNavigator';
 import { ScorerApi } from '../../services/api';
 import { showSuccess, showError, showWarning, showInfo } from '../../utils/sweetalert';
@@ -115,6 +116,51 @@ const SAMPLE_15_SQUAD: Array<{ name: string; email: string; role: string }> = [
   { name: 'D. Rajesh', email: 'rajesh.d@strikerscc.org', role: 'Wicket Keeper' }
 ];
 
+export const REGISTRATION_ROLES: { key: RegistrationRole; label: string; icon: string; desc: string }[] = [
+  { key: 'PLAYER', label: 'Player', icon: '🏏', desc: 'District player profile & trial enrollment' },
+  { key: 'TEAM', label: 'Team & Coach', icon: '🛡️', desc: 'Club & institution team squad registration' },
+  { key: 'SCORER', label: 'Scorer', icon: '📋', desc: 'Certified match scorer accreditation' },
+  { key: 'UMPIRE', label: 'Umpire', icon: '⚖️', desc: 'Official umpire panel accreditation' }
+];
+
+const PickerContext = React.createContext<((title: string, options: string[], selectedValue: string, onSelect: (val: string) => void) => void) | null>(null);
+
+const DropdownField = React.memo(({
+  label,
+  value,
+  options,
+  onSelect,
+  style
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onSelect: (val: string) => void;
+  style?: any;
+}) => {
+  const openPicker = React.useContext(PickerContext);
+  return (
+    <View style={[{ flex: 1 }, style]}>
+      <Text style={styles.label}>{label}</Text>
+      <TouchableOpacity
+        style={styles.dropdownBox}
+        activeOpacity={0.7}
+        onPress={() => {
+          if (openPicker) {
+            openPicker(`Select ${label.replace(' *', '')}`, options, value, onSelect);
+          }
+        }}
+      >
+        <Text style={styles.dropdownText} numberOfLines={1}>
+          {value || 'Select...'}
+        </Text>
+        <Text style={styles.dropdownChevron}>▾</Text>
+      </TouchableOpacity>
+    </View>
+  );
+});
+DropdownField.displayName = 'DropdownField';
+
 interface RegistrationScreenProps {
   onExit?: () => void;
 }
@@ -132,9 +178,20 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   };
 
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
-  const isDesktop = windowWidth >= 640;
+  const isDesktop = windowWidth >= 768;
 
   const [activeRole, setActiveRole] = useState<RegistrationRole>(getInitialRole());
+  const activeRoleObj = REGISTRATION_ROLES.find((r) => r.key === activeRole) || REGISTRATION_ROLES[0];
+
+  const openPicker = (title: string, options: string[], selectedValue: string, onSelect: (val: string) => void) => {
+    setPickerState({
+      visible: true,
+      title,
+      options,
+      selectedValue,
+      onSelect
+    });
+  };
 
   // Global loading and status
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -256,6 +313,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   const [squadPlayerEmail, setSquadPlayerEmail] = useState<string>('');
   const [squadPlayerRole, setSquadPlayerRole] = useState<string>('Batter');
   const [players, setPlayers] = useState<SquadPlayer[]>([]);
+  const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
   const [teamAgreed, setTeamAgreed] = useState<boolean>(true);
 
   // 3. SCORER REGISTRATION STATE
@@ -299,14 +357,21 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | undefined>>({});
 
-  const validateEmailValue = (val: string): string | null => {
+  const validateEmailValue = (val: string, label: string = 'Email address'): string | null => {
     const clean = (val || '').trim();
-    if (!clean) return 'Official email address is required.';
-    const atMatches = clean.match(/@/g);
-    if (!atMatches || atMatches.length === 0) return 'Email must contain "@" (e.g. name@gmail.com).';
-    if (atMatches.length > 1) return 'Invalid email: multiple "@" symbols detected.';
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(clean)) return 'Invalid email format (e.g. name@gmail.com).';
+    if (!clean) return `${label} is required.`;
+    const res = validateEmail(clean, `${label} is required.`);
+    if (!res.isValid) {
+      return res.error || 'Please enter a valid email address format with "@" and domain (e.g. name@domain.com).';
+    }
+    return null;
+  };
+
+  const validatePasswordValue = (val: string): string | null => {
+    const res = validatePassword(val);
+    if (!res.isValid) {
+      return res.error || 'Password must be at least 8 characters, with 1 uppercase letter and 2 special characters.';
+    }
     return null;
   };
 
@@ -322,10 +387,6 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     if (!clean) return 'Mobile number is required.';
     if (clean.length !== 10) return 'Mobile number must be exactly 10 digits.';
     return null;
-  };
-
-  const validateEmail = (val: string): boolean => {
-    return validateEmailValue(val) === null;
   };
 
   const getTargetEmail = (): string => {
@@ -365,6 +426,72 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     setStatusType(null);
   };
 
+  // Quick fill helper for demo/testing registration across all 4 roles
+  const handleDemoFill = () => {
+    setFieldErrors({});
+    setStatusMessage(null);
+    setStatusType(null);
+
+    const demoPass = 'test1234'; // ggignore
+    setPassword(demoPass);
+    setConfirmPassword(demoPass);
+    setIsEmailVerified(true);
+    setOtpCode('1234');
+
+    if (activeRole === 'PLAYER') {
+      setPName('R. Saravanan');
+      setPEmail('saravanan.r@strikerscc.org');
+      setPMobile('9876543210');
+      setPRole('Batsman');
+      setPCategory('Senior Men');
+      setPTaluk('Virudhunagar');
+      setPBattingStyle('Right-Handed Batsman');
+      setPClub('Virudhunagar Strikers CC');
+      setPAgreed(true);
+      setStatusMessage('⚡ Demo Player details filled! Scroll down to inspect or click Submit.');
+      setStatusType('success');
+    } else if (activeRole === 'TEAM') {
+      setTeamName('Virudhunagar Super Strikers CC');
+      setCoachName('Coach S. Murugan');
+      setCoachEmail('coach.murugan@strikerscc.org');
+      setTeamTaluk('Virudhunagar');
+      const squad: SquadPlayer[] = SAMPLE_15_SQUAD.map((item, idx) => ({
+        id: `sample-${idx + 1}-${Date.now()}`,
+        name: item.name,
+        email: item.email,
+        role: item.role
+      }));
+      setPlayers(squad);
+      setTeamAgreed(true);
+      setStatusMessage('⚡ Demo Team & 15 Squad Players filled! Scroll down to inspect or click Submit.');
+      setStatusType('success');
+    } else if (activeRole === 'SCORER') {
+      setSName('K. Ramesh Kumar');
+      setSEmail('ramesh.scorer@cfvd.org');
+      setSMobile('9876543211');
+      setSTaluk('Virudhunagar');
+      setSLevel('District Certified');
+      setSAgreed(true);
+      setStatusMessage('⚡ Demo Official Scorer filled! Scroll down to inspect or click Submit.');
+      setStatusType('success');
+    } else if (activeRole === 'UMPIRE') {
+      setUName('Thiru. K. Sundaram');
+      setUEmail('sundaram.umpire@cfvd.org');
+      setUMobile('9876543212');
+      setUDob('1985-05-15');
+      setUGender('Male');
+      setUExperience('10 years officiating senior district & TNCA league tournaments');
+      setUYearsOfExperience('10');
+      setUQualification('District Certified Umpire');
+      setUDistrict('Virudhunagar');
+      setUState('Tamil Nadu');
+      setUSpecialization('On-field Umpire');
+      setUAgreed(true);
+      setStatusMessage('⚡ Demo Official Umpire filled! Scroll down to inspect or click Submit.');
+      setStatusType('success');
+    }
+  };
+
   // Step 1: Send Email Verification OTP
   const handleSendEmailOtp = async (customEmail?: string, customName?: string) => {
     setStatusMessage(null);
@@ -376,7 +503,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const name = (customName || getTargetName()).trim();
 
     const nameErr = validateNameValue(name, activeRole === 'TEAM' ? 'Coach Name' : 'Full Name');
-    const emailErr = validateEmailValue(email);
+    const emailErr = validateEmailValue(email, activeRole === 'TEAM' ? 'Coach Official Email Address' : 'Email Address');
 
     const errs: Record<string, string> = {};
     if (nameErr) errs.name = nameErr;
@@ -388,6 +515,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setStatusMessage(firstErr || 'Please correct the errors before proceeding.');
       setStatusType('error');
       setOtpModalError(firstErr || null);
+      showWarning('Validation Error', firstErr || 'Please correct the highlighted validation errors.');
       return;
     }
 
@@ -411,6 +539,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setStatusMessage(errMsg);
       setStatusType('error');
       setOtpModalError(errMsg);
+      showError('OTP Request Failed', errMsg);
     } finally {
       setIsSendingOtp(false);
     }
@@ -422,7 +551,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const name = getTargetName();
 
     const nameErr = validateNameValue(name, activeRole === 'TEAM' ? 'Coach Name' : 'Full Name');
-    const emailErr = validateEmailValue(email);
+    const emailErr = validateEmailValue(email, activeRole === 'TEAM' ? 'Coach Official Email Address' : 'Email Address');
 
     const errs: Record<string, string> = {};
     if (nameErr) errs.name = nameErr;
@@ -430,6 +559,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
     if (Object.keys(errs).length > 0) {
       setFieldErrors((prev) => ({ ...prev, ...errs }));
+      const firstErr = nameErr || emailErr || 'Please correct errors before verifying email.';
+      showWarning('Validation Error', firstErr);
       return;
     }
 
@@ -493,7 +624,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const targetTaluk = pTaluk === 'Other' ? pCustomTaluk.trim() : pTaluk;
 
     const nameErr = validateNameValue(name, 'Player Full Name');
-    const emailErr = validateEmailValue(email);
+    const emailErr = validateEmailValue(email, 'Player Email Address');
     const mobileErr = validateMobileValue(mobile);
     let talukErr: string | null = null;
     if (pTaluk === 'Other' && !targetTaluk) talukErr = 'Please enter your Taluk name.';
@@ -506,24 +637,31 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
     if (Object.keys(errs).length > 0) {
       setFieldErrors((prev) => ({ ...prev, ...errs }));
+      const firstErr = Object.values(errs)[0];
+      showWarning('Validation Error', firstErr || 'Please correct the highlighted validation errors.');
       return;
     }
 
     if (!isEmailVerified) {
+      showWarning('Email Verification Required', 'Please verify your email address with OTP before submitting registration.');
       openOtpModal(true);
       return;
     }
 
-    if (!password || password.length < 4) {
-      setFieldErrors((prev) => ({ ...prev, password: 'Password must be at least 4 characters.' }));
+    const passResult = validatePassword(password);
+    if (!passResult.isValid) {
+      setFieldErrors((prev) => ({ ...prev, password: passResult.error }));
+      showWarning('Password Error', passResult.error || 'Please enter a valid password.');
       return;
     }
     if (password !== confirmPassword) {
       setFieldErrors((prev) => ({ ...prev, confirmPassword: 'Passwords do not match.' }));
+      showWarning('Password Error', 'Passwords do not match. Please verify your confirm password.');
       return;
     }
     if (!pAgreed) {
       setFieldErrors((prev) => ({ ...prev, agree: 'Please accept the declaration to submit player registration.' }));
+      showWarning('Declaration Required', 'Please accept the declaration to submit player registration.');
       return;
     }
 
@@ -590,7 +728,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const role = squadPlayerRole.trim() || 'Batter';
 
     const nameErr = validateNameValue(name, 'Squad Player Name');
-    const emailErr = validateEmailValue(email);
+    const emailErr = validateEmailValue(email, 'Squad Player Email');
     const errs: Record<string, string> = {};
     if (nameErr) errs.squadPlayerName = nameErr;
     if (emailErr) errs.squadPlayerEmail = emailErr;
@@ -598,33 +736,62 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     if (coachEmail.trim() && email === coachEmail.trim().toLowerCase()) {
       errs.squadPlayerEmail = `Player email cannot be identical to Coach Email.`;
     }
-    if (players.some((p) => p.email.toLowerCase() === email)) {
+    // When editing, skip duplicate check for the same player
+    if (!editingPlayerId && players.some((p) => p.email.toLowerCase() === email)) {
+      errs.squadPlayerEmail = `Player with email "${email}" already added to squad.`;
+    }
+    if (editingPlayerId && players.some((p) => p.email.toLowerCase() === email && p.id !== editingPlayerId)) {
       errs.squadPlayerEmail = `Player with email "${email}" already added to squad.`;
     }
 
     if (Object.keys(errs).length > 0) {
       setFieldErrors((prev) => ({ ...prev, ...errs }));
+      const firstErr = Object.values(errs)[0];
+      showWarning('Squad Player Error', firstErr || 'Please check squad player details.');
       return;
     }
 
-    const newPlayer: SquadPlayer = {
-      id: Date.now().toString() + Math.random().toString(36).substring(2, 6),
-      name,
-      email,
-      role
-    };
+    if (editingPlayerId) {
+      // Update existing player
+      setPlayers((prev) => prev.map((p) => p.id === editingPlayerId ? { ...p, name, email, role } : p));
+      setEditingPlayerId(null);
+      setStatusMessage(`✓ Updated ${name} (${role}) in squad!`);
+    } else {
+      const newPlayer: SquadPlayer = {
+        id: Date.now().toString() + Math.random().toString(36).substring(2, 6),
+        name,
+        email,
+        role
+      };
+      setPlayers((prev) => [...prev, newPlayer]);
+      setStatusMessage(`✓ Added ${name} (${role}) to squad! (${players.length + 1} players in squad)`);
+    }
 
-    setPlayers((prev) => [...prev, newPlayer]);
     setSquadPlayerName('');
     setSquadPlayerEmail('');
+    setSquadPlayerRole('Batter');
     setFieldErrors((prev) => ({ ...prev, squad: undefined, squadPlayerName: undefined, squadPlayerEmail: undefined }));
-
-    const newCount = players.length + 1;
-    setStatusMessage(`✓ Added ${name} (${role}) to squad! (${newCount} players in squad)`);
     setStatusType('info');
   };
 
+  const handleEditPlayer = (player: SquadPlayer) => {
+    setEditingPlayerId(player.id);
+    setSquadPlayerName(player.name);
+    setSquadPlayerEmail(player.email);
+    setSquadPlayerRole(player.role);
+    setFieldErrors((prev) => ({ ...prev, squadPlayerName: undefined, squadPlayerEmail: undefined }));
+  };
+
+  const handleCancelEdit = () => {
+    setEditingPlayerId(null);
+    setSquadPlayerName('');
+    setSquadPlayerEmail('');
+    setSquadPlayerRole('Batter');
+    setFieldErrors((prev) => ({ ...prev, squadPlayerName: undefined, squadPlayerEmail: undefined }));
+  };
+
   const handleRemovePlayer = (id: string) => {
+    if (editingPlayerId === id) handleCancelEdit();
     setPlayers((prev) => prev.filter((p) => p.id !== id));
   };
 
@@ -653,7 +820,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
     const teamNameErr = validateNameValue(teamName, 'Team Name');
     const coachNameErr = validateNameValue(coachName, 'Coach Name');
-    const coachEmailErr = validateEmailValue(coachEmail);
+    const coachEmailErr = validateEmailValue(coachEmail, 'Coach Official Email Address');
     let talukErr: string | null = null;
     if (teamTaluk === 'Other' && !targetTaluk) talukErr = 'Please enter your team Taluk name.';
 
@@ -665,30 +832,38 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
     if (Object.keys(errs).length > 0) {
       setFieldErrors((prev) => ({ ...prev, ...errs }));
+      const firstErr = Object.values(errs)[0];
+      showWarning('Validation Error', firstErr || 'Please correct the highlighted validation errors.');
       return;
     }
 
     if (!isEmailVerified) {
+      showWarning('Email Verification Required', 'Please verify Coach email with OTP before submitting registration.');
       openOtpModal(true);
       return;
     }
 
-    if (!password || password.length < 4) {
-      setFieldErrors((prev) => ({ ...prev, password: 'Password must be at least 4 characters.' }));
+    const passResult = validatePassword(password);
+    if (!passResult.isValid) {
+      setFieldErrors((prev) => ({ ...prev, password: passResult.error }));
+      showWarning('Password Error', passResult.error || 'Please enter a valid password.');
       return;
     }
     if (password !== confirmPassword) {
       setFieldErrors((prev) => ({ ...prev, confirmPassword: 'Passwords do not match.' }));
+      showWarning('Password Error', 'Passwords do not match. Please verify your confirm password.');
       return;
     }
     if (players.length === 0) {
       setFieldErrors((prev) => ({ ...prev, squad: 'Please add at least one squad player to your team.' }));
       setStatusMessage('Please add at least one squad player to your team.');
       setStatusType('error');
+      showWarning('Squad Required', 'Please add at least one squad player to your team.');
       return;
     }
     if (!teamAgreed) {
       setFieldErrors((prev) => ({ ...prev, agree: 'Please accept the team declaration.' }));
+      showWarning('Declaration Required', 'Please accept the team declaration.');
       return;
     }
 
@@ -718,8 +893,15 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setStatusMessage(resp?.message || teamNotice);
       setStatusType('success');
 
-      await showSuccess('Registration Request Submitted!', teamNotice, 3500);
-      navigate('Login', { initialRole: 'TEAM' });
+      await showSuccess('Registration Request Submitted!', teamNotice, 2500);
+      setPendingApprovalData({
+        name: `${teamName.trim()} (Coach: ${coachName.trim()})`,
+        email: coachEmail.trim().toLowerCase(),
+        role: 'Club & Institution Team',
+        certificationLevel: `${players.length} Squad Players`,
+        taluk: targetTaluk
+      });
+      setShowApprovalPendingModal(true);
     } catch (err: any) {
       setIsLoading(false);
       setStatusMessage(err?.message || 'Team registration failed. Please try again.');
@@ -738,7 +920,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const targetTaluk = sTaluk === 'Other' ? sCustomTaluk.trim() : sTaluk;
 
     const nameErr = validateNameValue(name, 'Scorer Full Name');
-    const emailErr = validateEmailValue(email);
+    const emailErr = validateEmailValue(email, 'Official Scorer Email');
     const mobileErr = validateMobileValue(mobile);
     let talukErr: string | null = null;
     if (sTaluk === 'Other' && !targetTaluk) talukErr = 'Please enter your Taluk name.';
@@ -751,24 +933,31 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
     if (Object.keys(errs).length > 0) {
       setFieldErrors((prev) => ({ ...prev, ...errs }));
+      const firstErr = Object.values(errs)[0];
+      showWarning('Validation Error', firstErr || 'Please correct the highlighted validation errors.');
       return;
     }
 
     if (!isEmailVerified) {
+      showWarning('Email Verification Required', 'Please verify your official email with OTP before submitting registration.');
       openOtpModal(true);
       return;
     }
 
-    if (!password || password.length < 4) {
-      setFieldErrors((prev) => ({ ...prev, password: 'Password must be at least 4 characters.' }));
+    const passResult = validatePassword(password);
+    if (!passResult.isValid) {
+      setFieldErrors((prev) => ({ ...prev, password: passResult.error }));
+      showWarning('Password Error', passResult.error || 'Please enter a valid password.');
       return;
     }
     if (password !== confirmPassword) {
       setFieldErrors((prev) => ({ ...prev, confirmPassword: 'Passwords do not match.' }));
+      showWarning('Password Error', 'Passwords do not match. Please verify your confirm password.');
       return;
     }
     if (!sAgreed) {
       setFieldErrors((prev) => ({ ...prev, agree: 'Please accept the declaration to proceed.' }));
+      showWarning('Declaration Required', 'Please accept the declaration to proceed.');
       return;
     }
 
@@ -817,7 +1006,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const targetDistrict = uDistrict === 'Other' ? uCustomDistrict.trim() : uDistrict;
 
     const nameErr = validateNameValue(name, 'Umpire Full Name');
-    const emailErr = validateEmailValue(email);
+    const emailErr = validateEmailValue(email, 'Official Umpire Email');
     const mobileErr = validateMobileValue(uMobile);
     let expErr: string | null = null;
     if (!uExperience.trim()) expErr = 'Please enter Umpire Experience.';
@@ -833,24 +1022,31 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
     if (Object.keys(errs).length > 0) {
       setFieldErrors((prev) => ({ ...prev, ...errs }));
+      const firstErr = Object.values(errs)[0];
+      showWarning('Validation Error', firstErr || 'Please correct the highlighted validation errors.');
       return;
     }
 
     if (!isEmailVerified) {
+      showWarning('Email Verification Required', 'Please verify your official email with OTP before submitting registration.');
       openOtpModal(true);
       return;
     }
 
-    if (!password || password.length < 4) {
-      setFieldErrors((prev) => ({ ...prev, password: 'Password must be at least 4 characters.' }));
+    const passResult = validatePassword(password);
+    if (!passResult.isValid) {
+      setFieldErrors((prev) => ({ ...prev, password: passResult.error }));
+      showWarning('Password Error', passResult.error || 'Please enter a valid password.');
       return;
     }
     if (password !== confirmPassword) {
       setFieldErrors((prev) => ({ ...prev, confirmPassword: 'Passwords do not match.' }));
+      showWarning('Password Error', 'Passwords do not match. Please verify your confirm password.');
       return;
     }
     if (!uAgreed) {
       setFieldErrors((prev) => ({ ...prev, agree: 'Please accept the declaration to proceed.' }));
+      showWarning('Declaration Required', 'Please accept the declaration to proceed.');
       return;
     }
 
@@ -898,42 +1094,6 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     }
   };
 
-  // Reusable Dropdown Component
-  const DropdownField = ({
-    label,
-    value,
-    options,
-    onSelect,
-    style
-  }: {
-    label: string;
-    value: string;
-    options: string[];
-    onSelect: (val: string) => void;
-    style?: any;
-  }) => (
-    <View style={[{ flex: 1 }, style]}>
-      <Text style={styles.label}>{label}</Text>
-      <TouchableOpacity
-        style={styles.dropdownBox}
-        activeOpacity={0.7}
-        onPress={() =>
-          setPickerState({
-            visible: true,
-            title: `Select ${label.replace(' *', '')}`,
-            options,
-            selectedValue: value,
-            onSelect
-          })
-        }
-      >
-        <Text style={styles.dropdownText} numberOfLines={1}>
-          {value || 'Select...'}
-        </Text>
-        <Text style={styles.dropdownChevron}>▾</Text>
-      </TouchableOpacity>
-    </View>
-  );
 
   // Render Verification and Password Box (in light theme)
   const renderVerificationAndPasswordBlock = () => {
@@ -1006,17 +1166,22 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
           <View style={{ marginTop: 6 }}>
             <View style={styles.formRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Password (min 4 chars) *</Text>
+                <Text style={styles.label}>Account Password *</Text>
                 <View style={[styles.passwordContainer, fieldErrors.password && styles.inputError]}>
                   <TextInput
                     style={styles.passwordInput}
                     value={password}
                     onChangeText={(val) => {
                       setPassword(val);
-                      setFieldErrors((prev) => ({ ...prev, password: val.length >= 4 ? undefined : 'Password must be at least 4 characters.' }));
+                      const res = validatePassword(val);
+                      setFieldErrors((prev) => ({
+                        ...prev,
+                        password: res.isValid ? undefined : res.error,
+                        confirmPassword: confirmPassword && val !== confirmPassword ? 'Passwords do not match.' : (val === confirmPassword ? undefined : prev.confirmPassword)
+                      }));
                     }}
                     secureTextEntry={!showPassword}
-                    placeholder="Enter password"
+                    placeholder="Enter password (e.g. User@2026#)"
                     placeholderTextColor="#94a3b8"
                   />
                   <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
@@ -1035,7 +1200,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                   value={confirmPassword}
                   onChangeText={(val) => {
                     setConfirmPassword(val);
-                    setFieldErrors((prev) => ({ ...prev, confirmPassword: val === password ? undefined : 'Passwords do not match.' }));
+                    setFieldErrors((prev) => ({
+                      ...prev,
+                      confirmPassword: val === password ? undefined : 'Passwords do not match.'
+                    }));
                   }}
                   secureTextEntry={!showPassword}
                   placeholder="Re-enter password"
@@ -1046,6 +1214,30 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                 )}
               </View>
             </View>
+
+            {/* Password Validation Requirements Pill Box */}
+            {/* <View style={{ marginTop: 8, padding: 8, backgroundColor: '#f8fafc', borderRadius: 6, borderWidth: 1, borderColor: '#e2e8f0' }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155', marginBottom: 4 }}>
+                🔒 Password Rules (Required for Login & Register):
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: password.length >= 8 ? '#dcfce7' : '#ffffff', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: password.length >= 8 ? '#86efac' : '#cbd5e1' }}>
+                  <Text style={{ fontSize: 10.5, fontWeight: '700', color: password.length >= 8 ? '#15803d' : '#64748b' }}>
+                    {password.length >= 8 ? '✓' : '○'} Min 8 Characters
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: /[A-Z]/.test(password) ? '#dcfce7' : '#ffffff', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: /[A-Z]/.test(password) ? '#86efac' : '#cbd5e1' }}>
+                  <Text style={{ fontSize: 10.5, fontWeight: '700', color: /[A-Z]/.test(password) ? '#15803d' : '#64748b' }}>
+                    {/[A-Z]/.test(password) ? '✓' : '○'} 1 Uppercase (A-Z)
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: ((password.match(/[^A-Za-z0-9\s]/g) || []).length >= 2) ? '#dcfce7' : '#ffffff', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: ((password.match(/[^A-Za-z0-9\s]/g) || []).length >= 2) ? '#86efac' : '#cbd5e1' }}>
+                  <Text style={{ fontSize: 10.5, fontWeight: '700', color: ((password.match(/[^A-Za-z0-9\s]/g) || []).length >= 2) ? '#15803d' : '#64748b' }}>
+                    {((password.match(/[^A-Za-z0-9\s]/g) || []).length >= 2) ? '✓' : '○'} 2 Special Chars (e.g. !@#$)
+                  </Text>
+                </View>
+              </View>
+            </View> */}
           </View>
         )}
       </View>
@@ -1058,7 +1250,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   const isWicketKeeper = pRole === 'Wicket Keeper';
 
   return (
-    <View style={[styles.container, Platform.OS === 'web' && isDesktop && ({ height: '100vh', maxHeight: '100vh', overflow: 'hidden' } as any)]}>
+    <PickerContext.Provider value={openPicker}>
+      <View style={styles.container}>
         {/* Sleek Minimal Corner Exit Action */}
         <TouchableOpacity
           onPress={() => (onExit ? onExit() : navigate('Home'))}
@@ -1069,70 +1262,141 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
         </TouchableOpacity>
 
         <ScrollView
-          contentContainerStyle={[styles.scroll, isDesktop && { flex: 1, justifyContent: 'center' }]}
-          scrollEnabled={!isDesktop}
-          showsVerticalScrollIndicator={false}
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={true}
           keyboardShouldPersistTaps="handled"
+          scrollEnabled={true}
+          nestedScrollEnabled={true}
+          bounces={true}
+          alwaysBounceVertical={true}
         >
-          <View style={styles.cardContainer}>
-            {/* Federation Logo & Title */}
-            <View style={styles.logoContainer}>
-              <Image
-                source={require('../../../assets/logo_transparent.png')}
-                style={styles.logo}
-                resizeMode="contain"
-              />
-              <Text style={styles.mainTitle}>CRICKET FEDERATION OF</Text>
-              <Text style={styles.mainSubtitle}>VIRUDHUNAGAR DISTRICT</Text>
-            </View>
+          {/* Main Layout Split Wrapper: Left Branding (Second Image) + Right Registration Form */}
+          <View style={[styles.layoutSplitWrapper, isDesktop ? styles.layoutSplitDesktop : styles.layoutSplitMobile]}>
 
-            <View style={styles.card}>
-              {/* Compact Card Header: Title + Role Tabs */}
-              <View style={styles.cardTopRow}>
-                <View>
-                  <Text style={styles.title}>Register Here</Text>
-                  <Text style={styles.subtitle}>District player, team, scorer and umpire enrollment</Text>
-                </View>
+            {/* LEFT SECTION (Second Image Content: Crest + Federation Title + Association Portal Info) */}
+            {isDesktop ? (
+              <View style={styles.leftBrandingSection}>
+                <View style={styles.leftBrandingCard}>
+                  {/* Federation Crest Logo & Title matching Second Image */}
+                  <View style={styles.leftLogoContainer}>
+                    <Image
+                      source={require('../../../assets/logo_transparent.png')}
+                      style={styles.leftLogoImage}
+                      resizeMode="contain"
+                    />
+                    <Text style={styles.leftMainTitle}>CRICKET FEDERATION OF</Text>
+                    <Text style={styles.leftMainSubtitle}>VIRUDHUNAGAR DISTRICT</Text>
+                  </View>
 
-                {/* Role Selection Tabs */}
-                <View style={styles.roleTabsContainer}>
-                  <TouchableOpacity
-                    style={[styles.roleTab, activeRole === 'PLAYER' && styles.roleTabActive]}
-                    onPress={() => switchRole('PLAYER')}
-                  >
-                    <Text style={[styles.roleTabText, activeRole === 'PLAYER' && styles.roleTabTextActive]}>
-                      🏏 Player
+                  <View style={styles.leftAffiliationPill}>
+                    <Text style={styles.leftAffiliationText}>AFFILIATED TO TNCA</Text>
+                  </View>
+
+                  <View style={styles.leftDivider} />
+
+                  <View style={styles.leftInfoBlock}>
+                    <Text style={styles.leftInfoHeading}>Official Enrollment Portal</Text>
+                    <Text style={styles.leftInfoDescription}>
+                      Centralized association register for players, clubs, scorers, and certified umpire panels across Virudhunagar District.
                     </Text>
-                  </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={[styles.roleTab, activeRole === 'TEAM' && styles.roleTabActive]}
-                    onPress={() => switchRole('TEAM')}
-                  >
-                    <Text style={[styles.roleTabText, activeRole === 'TEAM' && styles.roleTabTextActive]}>
-                      🛡️ Team & Coach
-                    </Text>
-                  </TouchableOpacity>
+                    <View style={styles.leftFeatureList}>
+                      <View style={styles.leftFeatureItem}>
+                        <Text style={styles.leftFeatureIcon}>🏏</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.leftFeatureTitle}>Official District ID</Text>
+                          <Text style={styles.leftFeatureSub}>TNCA league eligibility & player card</Text>
+                        </View>
+                      </View>
 
-                  <TouchableOpacity
-                    style={[styles.roleTab, activeRole === 'SCORER' && styles.roleTabActive]}
-                    onPress={() => switchRole('SCORER')}
-                  >
-                    <Text style={[styles.roleTabText, activeRole === 'SCORER' && styles.roleTabTextActive]}>
-                      📋 Scorer
-                    </Text>
-                  </TouchableOpacity>
+                      <View style={styles.leftFeatureItem}>
+                        <Text style={styles.leftFeatureIcon}>📊</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.leftFeatureTitle}>Live Career Analytics</Text>
+                          <Text style={styles.leftFeatureSub}>Ball-by-ball certified match archives</Text>
+                        </View>
+                      </View>
 
-                  <TouchableOpacity
-                    style={[styles.roleTab, activeRole === 'UMPIRE' && styles.roleTabActive]}
-                    onPress={() => switchRole('UMPIRE')}
-                  >
-                    <Text style={[styles.roleTabText, activeRole === 'UMPIRE' && styles.roleTabTextActive]}>
-                      ⚖️ Umpire
-                    </Text>
-                  </TouchableOpacity>
+                      <View style={styles.leftFeatureItem}>
+                        <Text style={styles.leftFeatureIcon}>🛡️</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.leftFeatureTitle}>Verified Accreditation</Text>
+                          <Text style={styles.leftFeatureSub}>Direct Apex Executive validation</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.leftContactBadge}>
+                      <Text style={styles.leftContactLabel}>District Registration Helpdesk</Text>
+                      <Text style={styles.leftContactVal}>support@cfvd.org • Official Match Centre</Text>
+                    </View>
+                  </View>
                 </View>
               </View>
+            ) : (
+              <View style={styles.mobileTopLogoContainer}>
+                <Image
+                  source={require('../../../assets/logo_transparent.png')}
+                  style={styles.logo}
+                  resizeMode="contain"
+                />
+                <Text style={styles.mainTitle}>CRICKET FEDERATION OF</Text>
+                <Text style={styles.mainSubtitle}>VIRUDHUNAGAR DISTRICT</Text>
+              </View>
+            )}
+
+            {/* RIGHT SECTION: Registration Fields Card */}
+            <View style={styles.rightFormSection}>
+              <View style={styles.card}>
+                {/* Header: Title + Role Dropdown Box (replacing separate tabs) */}
+                <View style={styles.cardTopRow}>
+                  <View style={styles.cardTitleBlock}>
+                    <Text style={styles.title}>Register Here</Text>
+                    <Text style={styles.subtitle}>District player, team, scorer and umpire enrollment</Text>
+                  </View>
+
+                  <View style={styles.headerRightActions}>
+                    <TouchableOpacity
+                      style={styles.demoFillBtn}
+                      activeOpacity={0.8}
+                      onPress={handleDemoFill}
+                    >
+                      <Text style={styles.demoFillBtnText}>⚡ Demo Fill</Text>
+                    </TouchableOpacity>
+
+                    {/* Dropdown Box for Selecting Role */}
+                    <View style={styles.roleDropdownWrapper}>
+                      <Text style={styles.roleDropdownLabel}>Registration Category *</Text>
+                      <TouchableOpacity
+                        style={styles.roleDropdownBtn}
+                        activeOpacity={0.7}
+                        onPress={() =>
+                          setPickerState({
+                            visible: true,
+                            title: 'Select Registration Category',
+                            options: REGISTRATION_ROLES.map((r) => `${r.icon} ${r.label}`),
+                            selectedValue: `${activeRoleObj.icon} ${activeRoleObj.label}`,
+                            onSelect: (selectedStr) => {
+                              const match = REGISTRATION_ROLES.find(
+                                (r) => `${r.icon} ${r.label}` === selectedStr
+                              );
+                              if (match) switchRole(match.key);
+                            }
+                          })
+                        }
+                      >
+                        <View style={styles.roleDropdownSelected}>
+                          <Text style={styles.roleDropdownSelectedIcon}>{activeRoleObj.icon}</Text>
+                          <Text style={styles.roleDropdownSelectedText} numberOfLines={1}>
+                            {activeRoleObj.label}
+                          </Text>
+                        </View>
+                        <Text style={styles.roleDropdownChevron}>▾</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
 
               {/* Status Banner */}
               {statusMessage && (
@@ -1163,7 +1427,12 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
               {activeRole === 'PLAYER' && (
                 <>
                   <View style={styles.sectionHeaderBox}>
-                    <Text style={styles.sectionHeaderText}>🏏 PLAYER PERSONAL & CRICKETING PROFILE</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.sectionHeaderText}>🏏 PLAYER PERSONAL & CRICKETING PROFILE</Text>
+                      <TouchableOpacity onPress={handleDemoFill}>
+                        <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
                   {/* Row 1: Player Full Name (left) & Mobile Number (right) */}
@@ -1216,7 +1485,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         value={pEmail}
                         onChangeText={(val) => {
                           setPEmail(val);
-                          const err = validateEmailValue(val);
+                          if (isEmailVerified) {
+                            setIsEmailVerified(false);
+                            setOtpSent(false);
+                          }
+                          const err = validateEmailValue(val, 'Player Email Address');
                           setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
                         }}
                         placeholder="e.g. saravanan@example.com"
@@ -1434,7 +1707,12 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
               {activeRole === 'TEAM' && (
                 <>
                   <View style={styles.sectionHeaderBox}>
-                    <Text style={styles.sectionHeaderText}>🛡️ TEAM CLUB & COACH PROFILE</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.sectionHeaderText}>🛡️ TEAM CLUB & COACH PROFILE</Text>
+                      <TouchableOpacity onPress={handleDemoFill}>
+                        <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
                   {/* Row 1: Team Name (left) & Coach Name (right) */}
@@ -1484,7 +1762,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         value={coachEmail}
                         onChangeText={(val) => {
                           setCoachEmail(val);
-                          const err = validateEmailValue(val);
+                          if (isEmailVerified) {
+                            setIsEmailVerified(false);
+                            setOtpSent(false);
+                          }
+                          const err = validateEmailValue(val, 'Coach Official Email Address');
                           setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
                         }}
                         placeholder="e.g. coach@strikerscc.org"
@@ -1542,6 +1824,14 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                   </View>
 
                   <View style={styles.addPlayerContainer}>
+                    {editingPlayerId && (
+                      <View style={{ backgroundColor: '#fef3c7', borderRadius: 5, padding: 6, marginBottom: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ color: '#92400e', fontSize: 11, fontWeight: '700' }}>✏️ Editing player — make changes and click Update</Text>
+                        <TouchableOpacity onPress={handleCancelEdit}>
+                          <Text style={{ color: '#dc2626', fontSize: 11, fontWeight: '800' }}>✕ Cancel</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                     <View style={styles.formRow}>
                       <View style={{ flex: 1 }}>
                         <TextInput
@@ -1565,7 +1855,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                           value={squadPlayerEmail}
                           onChangeText={(val) => {
                             setSquadPlayerEmail(val);
-                            const err = validateEmailValue(val);
+                            const err = validateEmailValue(val, 'Squad Player Email');
                             setFieldErrors((prev) => ({ ...prev, squadPlayerEmail: err || undefined }));
                           }}
                           placeholder="Player Email Address"
@@ -1586,8 +1876,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         onSelect={setSquadPlayerRole}
                       />
                       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-                        <TouchableOpacity style={styles.addPlayerBtn} onPress={handleAddPlayer}>
-                          <Text style={styles.addPlayerBtnText}>+ Add to Squad</Text>
+                        <TouchableOpacity style={[styles.addPlayerBtn, editingPlayerId && { backgroundColor: '#0284c7' }]} onPress={handleAddPlayer}>
+                          <Text style={styles.addPlayerBtnText}>{editingPlayerId ? '✓ Update Player' : '+ Add to Squad'}</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -1609,6 +1899,9 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                             </View>
                             <Text style={styles.playerItemEmail}>{p.email}</Text>
                           </View>
+                          <TouchableOpacity onPress={() => handleEditPlayer(p)} style={[styles.editBtn, editingPlayerId === p.id && styles.editBtnActive]}>
+                            <Text style={styles.editBtnText}>✏️</Text>
+                          </TouchableOpacity>
                           <TouchableOpacity onPress={() => handleRemovePlayer(p.id)} style={styles.removeBtn}>
                             <Text style={styles.removeBtnText}>✕</Text>
                           </TouchableOpacity>
@@ -1665,7 +1958,12 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
               {activeRole === 'SCORER' && (
                 <>
                   <View style={styles.sectionHeaderBox}>
-                    <Text style={styles.sectionHeaderText}>📋 OFFICIAL SCORER ENROLLMENT</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.sectionHeaderText}>📋 OFFICIAL SCORER ENROLLMENT</Text>
+                      <TouchableOpacity onPress={handleDemoFill}>
+                        <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
                   {/* Row 1: Scorer Full Name (left) & Mobile Number (right) */}
@@ -1718,7 +2016,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         value={sEmail}
                         onChangeText={(val) => {
                           setSEmail(val);
-                          const err = validateEmailValue(val);
+                          if (isEmailVerified) {
+                            setIsEmailVerified(false);
+                            setOtpSent(false);
+                          }
+                          const err = validateEmailValue(val, 'Official Scorer Email');
                           setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
                         }}
                         placeholder="e.g. ramesh.scorer@cfvd.org"
@@ -1820,7 +2122,12 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
               {activeRole === 'UMPIRE' && (
                 <>
                   <View style={styles.sectionHeaderBox}>
-                    <Text style={styles.sectionHeaderText}>⚖️ OFFICIAL UMPIRE REGISTRATION & ACCREDITATION</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.sectionHeaderText}>⚖️ OFFICIAL UMPIRE REGISTRATION & ACCREDITATION</Text>
+                      <TouchableOpacity onPress={handleDemoFill}>
+                        <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
                   {/* Row 1: Umpire Full Name (left) & Mobile Number (right) */}
@@ -1873,7 +2180,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         value={uEmail}
                         onChangeText={(val) => {
                           setUEmail(val);
-                          const err = validateEmailValue(val);
+                          if (isEmailVerified) {
+                            setIsEmailVerified(false);
+                            setOtpSent(false);
+                          }
+                          const err = validateEmailValue(val, 'Official Umpire Email');
                           setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
                         }}
                         placeholder="e.g. sundararajan.umpire@cfvd.org"
@@ -2093,7 +2404,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
             </View>
           </View>
-        </ScrollView>
+        </View>
+      </ScrollView>
 
         {/* Global Reusable Dropdown Modal */}
         {pickerState && (
@@ -2521,7 +2833,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                             </View>
                             <Text style={styles.flowStepNum}>STEP 1</Text>
                             <Text style={styles.flowStepLabel}>
-                              {pendingApprovalData?.role?.includes('Umpire') ? 'Umpire Registration' : 'Scorer Registration'}
+                              {pendingApprovalData?.role?.includes('Umpire')
+                                ? 'Umpire Registration'
+                                : pendingApprovalData?.role?.includes('Team')
+                                ? 'Team Registration'
+                                : 'Scorer Registration'}
                             </Text>
                             <Text style={styles.flowStepStatusGreen}>Submitted</Text>
                           </View>
@@ -2569,7 +2885,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                             <Text style={styles.flowStepNum}>STEP 4</Text>
                             <Text style={styles.flowStepLabel}>Portal Login</Text>
                             <Text style={styles.flowStepStatusMuted}>
-                              {pendingApprovalData?.role?.includes('Umpire') ? 'Access Umpire' : 'Access Scorer'}
+                              {pendingApprovalData?.role?.includes('Umpire')
+                                ? 'Access Umpire'
+                                : pendingApprovalData?.role?.includes('Team')
+                                ? 'Access Team'
+                                : 'Access Scorer'}
                             </Text>
                           </View>
                         </View>
@@ -2715,7 +3035,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                           </View>
                           <Text style={styles.flowStepNum}>STEP 1</Text>
                           <Text style={styles.flowStepLabel}>
-                            {pendingApprovalData?.role?.includes('Umpire') ? 'Umpire Registration' : 'Scorer Registration'}
+                            {pendingApprovalData?.role?.includes('Umpire')
+                              ? 'Umpire Registration'
+                              : pendingApprovalData?.role?.includes('Team')
+                              ? 'Team Registration'
+                              : 'Scorer Registration'}
                           </Text>
                           <Text style={styles.flowStepStatusGreen}>Submitted</Text>
                         </View>
@@ -2763,7 +3087,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                           <Text style={styles.flowStepNum}>STEP 4</Text>
                           <Text style={styles.flowStepLabel}>Portal Login</Text>
                           <Text style={styles.flowStepStatusMuted}>
-                            {pendingApprovalData?.role?.includes('Umpire') ? 'Access Umpire' : 'Access Scorer'}
+                            {pendingApprovalData?.role?.includes('Umpire')
+                              ? 'Access Umpire'
+                              : pendingApprovalData?.role?.includes('Team')
+                              ? 'Access Team'
+                              : 'Access Scorer'}
                           </Text>
                         </View>
                       </View>
@@ -2839,11 +3167,26 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
           </View>
         </Modal>
       </View>
-    );
+    </PickerContext.Provider>
+  );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc', width: '100%', position: 'relative' },
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    width: '100%',
+    height: '100%',
+    minHeight: '100%',
+    position: 'relative',
+    ...(Platform.OS === 'web' ? { overflow: 'hidden' as any } : {})
+  },
+  scrollView: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    ...(Platform.OS === 'web' ? { overflowY: 'auto' as any } : {})
+  },
   cornerExitBtn: {
     position: 'absolute',
     top: 14,
@@ -2869,11 +3212,252 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.3
   },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+    flexWrap: 'wrap'
+  },
+  demoFillBtn: {
+    backgroundColor: '#fef08a',
+    borderColor: '#eab308',
+    borderWidth: 1.5,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2
+  },
+  demoFillBtnText: {
+    color: '#854d0e',
+    fontWeight: '800',
+    fontSize: 12,
+    letterSpacing: 0.3
+  },
+  demoFillLink: {
+    color: '#b45309',
+    fontWeight: '800',
+    fontSize: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2
+  },
   logoContainer: { alignItems: 'center', marginBottom: 8, marginTop: 4 },
   logo: { width: 44, height: 44, marginBottom: 2 },
   mainTitle: { color: '#1e293b', fontSize: 12, fontWeight: '800', letterSpacing: 1 },
   mainSubtitle: { color: '#b45309', fontSize: 15, fontWeight: '900', letterSpacing: 1 },
-  scroll: { flexGrow: 1, width: '100%', justifyContent: 'center' },
+  scroll: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    ...(Platform.OS === 'web' ? { overflowY: 'auto' as any } : {})
+  },
+  scrollContent: {
+    flexGrow: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingVertical: 24,
+    paddingHorizontal: 14,
+    paddingBottom: 120
+  },
+  layoutSplitWrapper: {
+    width: '100%',
+    maxWidth: 1140,
+    alignItems: 'center'
+  },
+  layoutSplitDesktop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    gap: 22
+  },
+  layoutSplitMobile: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 12
+  },
+  leftBrandingSection: {
+    width: 320,
+    flexShrink: 0
+  },
+  leftBrandingCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+    alignItems: 'center'
+  },
+  leftLogoContainer: {
+    alignItems: 'center',
+    marginBottom: 8
+  },
+  leftLogoImage: {
+    width: 64,
+    height: 64,
+    marginBottom: 8
+  },
+  leftMainTitle: {
+    color: '#1e293b',
+    fontSize: 12.5,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+    textAlign: 'center'
+  },
+  leftMainSubtitle: {
+    color: '#b45309',
+    fontSize: 15.5,
+    fontWeight: '900',
+    letterSpacing: 1.1,
+    textAlign: 'center',
+    marginTop: 2
+  },
+  leftAffiliationPill: {
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    marginTop: 6,
+    marginBottom: 10
+  },
+  leftAffiliationText: {
+    color: '#92400e',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5
+  },
+  leftDivider: {
+    height: 1,
+    backgroundColor: '#f1f5f9',
+    width: '100%',
+    marginVertical: 10
+  },
+  leftInfoBlock: {
+    width: '100%'
+  },
+  leftInfoHeading: {
+    color: '#0f172a',
+    fontSize: 13.5,
+    fontWeight: '800',
+    marginBottom: 6,
+    textAlign: 'center'
+  },
+  leftInfoDescription: {
+    color: '#64748b',
+    fontSize: 11,
+    lineHeight: 16,
+    textAlign: 'center',
+    marginBottom: 14
+  },
+  leftFeatureList: {
+    gap: 8,
+    marginBottom: 14
+  },
+  leftFeatureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 10
+  },
+  leftFeatureIcon: {
+    fontSize: 16
+  },
+  leftFeatureTitle: {
+    color: '#1e293b',
+    fontSize: 11.5,
+    fontWeight: '700'
+  },
+  leftFeatureSub: {
+    color: '#64748b',
+    fontSize: 10
+  },
+  leftContactBadge: {
+    backgroundColor: '#eff6ff',
+    borderRadius: 8,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    alignItems: 'center'
+  },
+  leftContactLabel: {
+    color: '#1e40af',
+    fontSize: 10,
+    fontWeight: '700'
+  },
+  leftContactVal: {
+    color: '#3b82f6',
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 2
+  },
+  mobileTopLogoContainer: {
+    alignItems: 'center',
+    marginBottom: 10,
+    marginTop: 4
+  },
+  rightFormSection: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 720
+  },
+  cardTitleBlock: {
+    flex: 1,
+    minWidth: 180,
+    marginRight: 10
+  },
+  roleDropdownWrapper: {
+    minWidth: 180,
+    maxWidth: 220
+  },
+  roleDropdownLabel: {
+    color: '#475569',
+    fontSize: 10.5,
+    fontWeight: '700',
+    marginBottom: 3
+  },
+  roleDropdownBtn: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    height: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  roleDropdownSelected: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1
+  },
+  roleDropdownSelectedIcon: {
+    fontSize: 14
+  },
+  roleDropdownSelectedText: {
+    color: '#0f172a',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  roleDropdownChevron: {
+    color: '#b45309',
+    fontSize: 13,
+    fontWeight: 'bold',
+    marginLeft: 6
+  },
   cardContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -2889,7 +3473,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
     width: '100%',
-    maxWidth: 680,
+    maxWidth: 720,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
@@ -3154,8 +3738,8 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
   playerListContainer: {
-    marginBottom: 6,
-    maxHeight: 120
+    marginBottom: 8,
+    width: '100%'
   },
   playerItemRow: {
     flexDirection: 'row',
@@ -3221,6 +3805,24 @@ const styles = StyleSheet.create({
     color: '#ef4444',
     fontSize: 10,
     fontWeight: '900'
+  },
+  editBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#eff6ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
+    borderWidth: 1,
+    borderColor: '#bfdbfe'
+  },
+  editBtnActive: {
+    backgroundColor: '#dbeafe',
+    borderColor: '#3b82f6'
+  },
+  editBtnText: {
+    fontSize: 11
   },
 
   checkboxRow: {

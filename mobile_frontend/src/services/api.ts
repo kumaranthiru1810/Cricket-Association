@@ -250,10 +250,10 @@ export const ScorerApi = {
     });
   },
 
-  loginWithPassword: async (email: string, password: string, role?: string) => {
+  loginWithPassword: async (email: string, password: string, role?: string, teamName?: string) => {
     const res = await request('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password, role })
+      body: JSON.stringify({ email, password, role, teamName })
     });
     if (res.token) {
       setAuthToken(res.token);
@@ -938,6 +938,12 @@ export const ScorerApi = {
     return request(`/scorer/matches/${matchId}/breaks`, {
       method: 'POST',
       body: JSON.stringify(payload)
+    });
+  },
+
+  endBreak: async (matchId: string) => {
+    return request(`/scorer/matches/${matchId}/end-break`, {
+      method: 'POST'
     });
   },
 

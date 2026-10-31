@@ -229,7 +229,10 @@ class ScorerService {
         scoreA,
         scoreB: scoreB || (isLive ? 'Yet to bat' : null),
         result: m.result_summary,
-        assigned_scorer_id: m.assigned_scorer_id
+        assigned_scorer_id: m.assigned_scorer_id,
+        currentBreak: m.current_break || (m.breaks && m.breaks.length > 0 ? m.breaks[m.breaks.length - 1] : null),
+        statusComment: m.status_comment || '',
+        breaks: m.breaks || []
       };
     }));
 
@@ -359,9 +362,9 @@ class ScorerService {
     }
 
     let currentBowler = activeBowlerId ? bowlerStatsMap[activeBowlerId] : null;
-    if (!currentBowler && activeBowlerId) {
+    if (!currentBowler) {
       currentBowler = {
-        player_id: activeBowlerId,
+        player_id: activeBowlerId || null,
         overs: 0, balls: 0, maidens: 0, runs_conceded: 0, wickets: 0, economy: 0
       };
     }
@@ -378,9 +381,9 @@ class ScorerService {
     const lastDismissal = lastWicketDel ? {
       ball: `${lastWicketDel.over_number}.${lastWicketDel.ball_number}`,
       batterId: lastWicketDel.dismissed_player_id,
-      batterName: (playerMap[lastWicketDel.dismissed_player_id] && playerMap[lastWicketDel.dismissed_player_id].name) || 'Batter',
-      bowlerName: (playerMap[lastWicketDel.bowler_id] && playerMap[lastWicketDel.bowler_id].name) || 'Bowler',
-      fielderName: lastWicketDel.fielder_name || (playerMap[lastWicketDel.fielder_id] && playerMap[lastWicketDel.fielder_id].name),
+      batterName: (lastWicketDel.dismissed_player_id && playerMap[lastWicketDel.dismissed_player_id]?.name) || 'Batter',
+      bowlerName: (lastWicketDel.bowler_id && playerMap[lastWicketDel.bowler_id]?.name) || 'Bowler',
+      fielderName: lastWicketDel.fielder_name || (lastWicketDel.fielder_id && playerMap[lastWicketDel.fielder_id]?.name),
       dismissalType: lastWicketDel.wicket_type,
       dismissalText: lastWicketDel.dismissal_text || lastWicketDel.commentary
     } : null;
@@ -407,25 +410,28 @@ class ScorerService {
       };
     });
 
-    let bowlerName = (playerMap[currentBowler.player_id] && playerMap[currentBowler.player_id].name);
-    if (!bowlerName || bowlerName === 'Bowler') {
+    let bowlerName = (currentBowler?.player_id && playerMap[currentBowler.player_id]?.name) || '';
+    if ((!bowlerName || bowlerName === 'Bowler') && currentBowler?.player_id) {
       const pDoc = await db.models.Player.findOne({ id: currentBowler.player_id }).lean();
       if (pDoc && pDoc.name) {
         bowlerName = pDoc.name;
       }
     }
+    if (!bowlerName) bowlerName = 'Bowler';
 
-    let strikerName = striker ? (playerMap[striker.player_id] && playerMap[striker.player_id].name) : '';
-    if (!strikerName && striker && striker.player_id) {
+    let strikerName = (striker?.player_id && playerMap[striker.player_id]?.name) || '';
+    if (!strikerName && striker?.player_id) {
       const p = await db.models.Player.findOne({ id: striker.player_id }).lean();
       if (p && p.name) strikerName = p.name;
     }
+    if (!strikerName) strikerName = 'Striker';
 
-    let nonStrikerName = nonStriker ? (playerMap[nonStriker.player_id] && playerMap[nonStriker.player_id].name) : '';
-    if (!nonStrikerName && nonStriker && nonStriker.player_id) {
+    let nonStrikerName = (nonStriker?.player_id && playerMap[nonStriker.player_id]?.name) || '';
+    if (!nonStrikerName && nonStriker?.player_id) {
       const p = await db.models.Player.findOne({ id: nonStriker.player_id }).lean();
       if (p && p.name) nonStrikerName = p.name;
     }
+    if (!nonStrikerName) nonStrikerName = 'Non-Striker';
 
     return {
       match: {
@@ -445,7 +451,10 @@ class ScorerService {
         teamA: teamA.name || match.team_a_id,
         teamB: teamB.name || match.team_b_id,
         teamAPlayingXI: match.team_a_playing_xi || [],
-        teamBPlayingXI: match.team_b_playing_xi || []
+        teamBPlayingXI: match.team_b_playing_xi || [],
+        currentBreak: match.current_break || (match.breaks && match.breaks.length > 0 ? match.breaks[match.breaks.length - 1] : null),
+        statusComment: match.status_comment || '',
+        breaks: match.breaks || []
       },
       innings: {
         id: currentInnings.id,
@@ -486,7 +495,7 @@ class ScorerService {
       bowler: {
         id: currentBowler ? currentBowler.player_id : null,
         name: bowlerName || 'Bowler',
-        overs: currentBowler ? `${currentBowler.overs}.${currentBowler.balls}` : '0.0',
+        overs: currentBowler ? `${currentBowler.overs || 0}.${currentBowler.balls || 0}` : '0.0',
         maidens: currentBowler ? currentBowler.maidens || 0 : 0,
         runs: currentBowler ? currentBowler.runs_conceded || 0 : 0,
         wickets: currentBowler ? currentBowler.wickets || 0 : 0,
@@ -574,14 +583,14 @@ class ScorerService {
         }
         return {
           id: b.id,
-          playerId: b.player_id,
-          name: (playerMap[b.player_id] && playerMap[b.player_id].name) || 'Batter',
-          runs: b.runs,
-          balls: b.balls,
-          fours: b.fours,
-          sixes: b.sixes,
-          strikeRate: b.strike_rate,
-          isOut: b.is_out,
+          playerId: b?.player_id || null,
+          name: (b?.player_id && playerMap[b.player_id]?.name) || 'Batter',
+          runs: b?.runs || 0,
+          balls: b?.balls || 0,
+          fours: b?.fours || 0,
+          sixes: b?.sixes || 0,
+          strikeRate: b?.strike_rate || 0,
+          isOut: b?.is_out || false,
           dismissal: dismissalText
         };
       });
@@ -590,13 +599,13 @@ class ScorerService {
       const bowlers = await db.models.InningsBowler.find({ innings_id: inn.id }).lean();
       const bowlingCard = (bowlers || []).map(bw => ({
         id: bw.id,
-        playerId: bw.player_id,
-        name: (playerMap[bw.player_id] && playerMap[bw.player_id].name) || 'Bowler',
-        overs: `${bw.overs}.${bw.balls}`,
-        maidens: bw.maidens,
-        runs: bw.runs_conceded,
-        wickets: bw.wickets,
-        economy: bw.economy
+        playerId: bw?.player_id || null,
+        name: (bw?.player_id && playerMap[bw.player_id]?.name) || 'Bowler',
+        overs: `${bw?.overs || 0}.${bw?.balls || 0}`,
+        maidens: bw?.maidens || 0,
+        runs: bw?.runs_conceded || 0,
+        wickets: bw?.wickets || 0,
+        economy: bw?.economy || 0
       }));
 
       // Deliveries for fall of wickets, extras, and wagon wheel
