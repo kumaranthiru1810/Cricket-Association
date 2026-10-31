@@ -162,9 +162,12 @@ router.get('/notifications', async (req, res) => {
 router.put('/notifications/:id/read', async (req, res) => {
   try {
     const db = require('../config/db');
+    const mongoose = require('mongoose');
     await db.initDb();
+    const isMongoId = mongoose.Types.ObjectId.isValid(req.params.id);
+    const query = isMongoId ? { $or: [{ id: req.params.id }, { _id: req.params.id }] } : { id: req.params.id };
     await db.models.Notification.findOneAndUpdate(
-      { $or: [{ id: req.params.id }, { _id: req.params.id }] },
+      query,
       { $set: { status: 'READ' } }
     );
     res.json({ success: true, message: 'Notification marked as read.' });

@@ -3163,27 +3163,30 @@ const styles: any = StyleSheet.create({
   },
   nativeSelect: {
     width: '100%',
-    padding: '8px 12px',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     fontSize: 13,
     borderRadius: 6,
-    border: '1px solid #cbd5e1',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
     backgroundColor: '#ffffff',
     color: '#0f172a',
-    outline: 'none'
+    outlineStyle: 'none'
   },
   selectWrap: {
     width: '100%'
   },
   nativeDateInput: {
     width: '100%',
-    padding: '7px 10px',
+    paddingVertical: 7,
+    paddingHorizontal: 10,
     fontSize: 13,
     borderRadius: 6,
-    border: '1px solid #cbd5e1',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
     backgroundColor: '#ffffff',
     color: '#0f172a',
-    outline: 'none',
-    boxSizing: 'border-box'
+    outlineStyle: 'none'
   },
 
   // Points Config Box
