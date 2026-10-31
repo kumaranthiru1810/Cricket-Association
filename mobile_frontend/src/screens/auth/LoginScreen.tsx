@@ -30,6 +30,7 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
 
   // Input States
   const [emailOrUser, setEmailOrUser] = useState('');
+  const [teamName, setTeamName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
@@ -46,6 +47,7 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
     setStatusType(null);
     setFieldErrors({});
     setEmailOrUser('');
+    setTeamName('');
     setPassword('');
   };
 
@@ -53,8 +55,8 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
   const handleDemoFill = () => {
     setFieldErrors({});
     if (activeRole === 'PLAYER') {
+      setTeamName('Strikers Cricket Club');
       setEmailOrUser('saravanan.r@strikerscc.org');
-      setPassword('Striker@2026#');
     } else if (activeRole === 'TEAM') {
       setEmailOrUser('kannan.coach@strikerscc.org');
       setPassword('Coach@2026#');
@@ -76,7 +78,52 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
     const input = emailOrUser.trim();
     const pass = password.trim();
 
-    const newErrors: { identifier?: string; password?: string } = {};
+    const newErrors: { identifier?: string; password?: string; teamName?: string } = {};
+
+    // PLAYER login: team name + email (no password)
+    if (activeRole === 'PLAYER') {
+      if (!teamName.trim()) {
+        newErrors.teamName = 'Please enter your team name.';
+      }
+      const emailResult = validateEmail(input);
+      if (!emailResult.isValid) {
+        newErrors.identifier = emailResult.error;
+      }
+      if (Object.keys(newErrors).length > 0) {
+        setFieldErrors(newErrors);
+        showWarning('Validation Error', newErrors.teamName || newErrors.identifier || 'Please fill all fields.');
+        return;
+      }
+
+      setIsLoading(true);
+      setStatusMessage('Verifying player credentials...');
+      setStatusType('info');
+      try {
+        const res = await ScorerApi.loginWithPassword(input, '', 'PLAYER', teamName.trim());
+        if (res?.token) {
+          setAuthToken(res.token);
+          if (res.user) setCurrentUser(res.user);
+        }
+        setStatusMessage(res?.message || 'Login successful!');
+        setStatusType('success');
+        await showSuccess('Login Successful!', res?.message || 'Welcome to Player Portal!', 1500);
+        setIsLoading(false);
+        navigate('Player', { user: res?.user, playerName: input });
+      } catch (err: any) {
+        setIsLoading(false);
+        const rawMsg = err?.message || 'Login failed. Please check your team name and email.';
+        const isPending = err?.pendingApproval || rawMsg.toLowerCase().includes('pending');
+        if (isPending) {
+          setStatusMessage(rawMsg);
+          setStatusType('error');
+          showError('Pending Admin Approval', rawMsg);
+        } else {
+          setFieldErrors({ identifier: rawMsg });
+          showError('Authentication Failed', rawMsg);
+        }
+      }
+      return;
+    }
 
     // 1. Email validation: Must contain '@', '.', and valid email structure
     const emailResult = validateEmail(input);
@@ -130,16 +177,22 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
         navigate('Umpire', { user: res?.user });
       }
     } catch (err: any) {
-      setIsLoading(false);
-      const rawMsg = err?.message || 'Login failed. Please check your credentials.';
-      const lower = rawMsg.toLowerCase();
-      if (lower.includes('user') || lower.includes('not found') || lower.includes('account') || lower.includes('email')) {
-        setFieldErrors({ identifier: rawMsg });
-      } else {
-        setFieldErrors({ password: rawMsg });
+        setIsLoading(false);
+        const rawMsg = err?.message || 'Login failed. Please check your credentials.';
+        const lower = rawMsg.toLowerCase();
+        const isPending = err?.pendingApproval || lower.includes('pending') || lower.includes('approval');
+        if (isPending) {
+          setStatusMessage(rawMsg);
+          setStatusType('error');
+          showError('Pending Admin Approval', rawMsg);
+        } else if (lower.includes('user') || lower.includes('not found') || lower.includes('account') || lower.includes('email') || lower.includes('team')) {
+          setFieldErrors({ identifier: rawMsg });
+          showError('Authentication Failed', rawMsg);
+        } else {
+          setFieldErrors({ password: rawMsg });
+          showError('Authentication Failed', rawMsg);
+        }
       }
-      showError('Authentication Failed', rawMsg);
-    }
   };
 
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -182,11 +235,12 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
                 Login Here with your registered account credentials and password
               </Text>
 
-              {/* Status Banner (Only for success and info, not error banner) */}
-              {statusMessage && statusType !== 'error' && (
+              {/* Status Banner - show for all types including error for pending approval */}
+              {statusMessage && (
                 <View
                   style={[
                     styles.statusBanner,
+                    statusType === 'error' && styles.statusError,
                     statusType === 'success' && styles.statusSuccess,
                     statusType === 'info' && styles.statusInfo
                   ]}
@@ -194,6 +248,7 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
                   <Text
                     style={[
                       styles.statusText,
+                      statusType === 'error' && styles.statusTextError,
                       statusType === 'success' && styles.statusTextSuccess,
                       statusType === 'info' && styles.statusTextInfo
                     ]}
@@ -257,9 +312,36 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
                 </View>
               </View>
 
+              {/* Team Name Field - PLAYER only */}
+              {activeRole === 'PLAYER' && (
+                <>
+                  <Text style={styles.label}>Team Name *</Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      (fieldErrors as any).teamName && styles.inputError,
+                      (fieldErrors as any).teamName && { marginBottom: 4 }
+                    ]}
+                    value={teamName}
+                    onChangeText={(text) => {
+                      setTeamName(text);
+                      if ((fieldErrors as any).teamName) {
+                        setFieldErrors((prev) => ({ ...prev, teamName: undefined }));
+                      }
+                    }}
+                    placeholder="e.g. Strikers Cricket Club"
+                    placeholderTextColor="#94a3b8"
+                    autoCapitalize="words"
+                  />
+                  {(fieldErrors as any).teamName ? (
+                    <Text style={styles.fieldErrorText}>{(fieldErrors as any).teamName}</Text>
+                  ) : null}
+                </>
+              )}
+
               {/* Identifier Field */}
               <Text style={styles.label}>
-                {activeRole === 'PLAYER' && 'Registered Player Email or Full Name *'}
+                {activeRole === 'PLAYER' && 'Registered Player Email *'}
                 {activeRole === 'TEAM' && 'Registered Coach Email or Club Name *'}
                 {activeRole === 'SCORER' && 'Official Scorer Email Address *'}
                 {activeRole === 'UMPIRE' && 'Official Umpire Email Address *'}
@@ -294,41 +376,55 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
                 <Text style={styles.fieldErrorText}>{fieldErrors.identifier}</Text>
               ) : null}
 
-              {/* Password Field Header with Inline Forgot Password Link */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <Text style={[styles.label, { marginBottom: 0 }]}>Account Password *</Text>
-                <TouchableOpacity onPress={() => setShowForgotPassword(true)} activeOpacity={0.7}>
-                  <Text style={{ color: '#d97706', fontSize: 13, fontWeight: '700' }}>Forgot Password?</Text>
-                </TouchableOpacity>
-              </View>
+              {/* Player Login Info Note */}
+              {activeRole === 'PLAYER' && (
+                <View style={{ backgroundColor: '#eff6ff', borderRadius: 6, padding: 8, marginBottom: 10, borderLeftWidth: 3, borderLeftColor: '#3b82f6' }}>
+                  <Text style={{ color: '#1d4ed8', fontSize: 11.5, fontWeight: '600' }}>
+                    💡 Enter your Team Name and registered Email to login. No password required.
+                  </Text>
+                </View>
+              )}
 
-              <View
-                style={[
-                  styles.passwordContainer,
-                  fieldErrors.password && styles.inputError,
-                  fieldErrors.password && { marginBottom: 4 }
-                ]}
-              >
-                <TextInput
-                  style={styles.passwordInput}
-                  value={password}
-                  onChangeText={(text) => {
-                    setPassword(text);
-                    if (fieldErrors.password) {
-                      setFieldErrors((prev) => ({ ...prev, password: undefined }));
-                    }
-                  }}
-                  secureTextEntry={!showPassword}
-                  placeholder="Enter your password"
-                  placeholderTextColor="#94a3b8"
-                />
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                  <Text style={styles.toggleText}>{showPassword ? '👁️' : '🔒'}</Text>
-                </TouchableOpacity>
-              </View>
-              {fieldErrors.password ? (
-                <Text style={styles.fieldErrorText}>{fieldErrors.password}</Text>
-              ) : null}
+              {/* Password Field - Hidden for PLAYER role */}
+              {activeRole !== 'PLAYER' && (
+                <>
+                  {/* Password Field Header with Inline Forgot Password Link */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <Text style={[styles.label, { marginBottom: 0 }]}>Account Password *</Text>
+                    <TouchableOpacity onPress={() => setShowForgotPassword(true)} activeOpacity={0.7}>
+                      <Text style={{ color: '#d97706', fontSize: 13, fontWeight: '700' }}>Forgot Password?</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.passwordContainer,
+                      fieldErrors.password && styles.inputError,
+                      fieldErrors.password && { marginBottom: 4 }
+                    ]}
+                  >
+                    <TextInput
+                      style={styles.passwordInput}
+                      value={password}
+                      onChangeText={(text) => {
+                        setPassword(text);
+                        if (fieldErrors.password) {
+                          setFieldErrors((prev) => ({ ...prev, password: undefined }));
+                        }
+                      }}
+                      secureTextEntry={!showPassword}
+                      placeholder="Enter your password"
+                      placeholderTextColor="#94a3b8"
+                    />
+                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                      <Text style={styles.toggleText}>{showPassword ? '👁️' : '🔒'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {fieldErrors.password ? (
+                    <Text style={styles.fieldErrorText}>{fieldErrors.password}</Text>
+                  ) : null}
+                </>
+              )}
 
               {/* Action Button */}
               <TouchableOpacity
