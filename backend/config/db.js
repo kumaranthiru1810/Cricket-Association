@@ -115,7 +115,10 @@ const TournamentSchema = new mongoose.Schema({
   format: { type: String, default: 'T20' }, // Legacy compatibility
   overs_per_match: { type: Number, default: 20 },
   season: { type: String, default: '2026' },
+  team_a_name: { type: String, default: '' },
+  team_b_name: { type: String, default: '' },
   venue: { type: String, default: 'Kamarajar District Stadium' },
+  venue_maps_url: { type: String, default: '' },
   start_date: { type: String },
   end_date: { type: String },
   registration_start_date: { type: String, default: null },
@@ -265,7 +268,10 @@ const MatchSchema = new mongoose.Schema({
   tournament_name: { type: String, default: 'Virudhunagar Premier League 2026' },
   team_a_id: { type: String, required: true },
   team_b_id: { type: String, required: true },
+  team_a_name: { type: String, default: '' },
+  team_b_name: { type: String, default: '' },
   venue: { type: String, default: 'Kamarajar District Stadium' },
+  venue_maps_url: { type: String, default: '' },
   match_date: { type: String, default: '2026-10-06' },
   match_time: { type: String, default: '09:30 AM' },
   match_type: { type: String, default: 'T20' },
@@ -871,6 +877,46 @@ async function seedDefaultData() {
             certification_level: 'Senior Panel',
             taluk: 'Sivakasi'
           }
+        }
+      },
+      { upsert: true }
+    );
+
+    // Ensure default Player and Coach demo accounts exist
+    await User.findOneAndUpdate(
+      { email: 'saravanan.r@strikerscc.org' },
+      {
+        $setOnInsert: {
+          id: 'PLY-101',
+          name: 'R. Saravanan (Player)',
+          email: 'saravanan.r@strikerscc.org',
+          mobile: '9876543216',
+          role: 'PLAYER',
+          status: 'ACTIVE',
+          password_hash: defaultPasswordHash,
+          player_details: {
+            batting_style: 'Right Hand Bat',
+            bowling_style: 'Right Arm Fast/Medium',
+            taluk: 'Virudhunagar',
+            category: 'Senior Men',
+            club_choice: 'Sivakasi Strikers'
+          }
+        }
+      },
+      { upsert: true }
+    );
+
+    await User.findOneAndUpdate(
+      { email: 'kannan.coach@strikerscc.org' },
+      {
+        $setOnInsert: {
+          id: 'COACH-101',
+          name: 'R. Kannan (Coach)',
+          email: 'kannan.coach@strikerscc.org',
+          mobile: '9876543215',
+          role: 'COACH',
+          status: 'ACTIVE',
+          password_hash: defaultPasswordHash
         }
       },
       { upsert: true }

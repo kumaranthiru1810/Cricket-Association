@@ -898,7 +898,7 @@ class AuthService {
       }
     }
 
-    // Auto-create recognized demo Umpire accounts
+    // Auto-create recognized demo accounts (Umpire, Player, Coach, Scorer)
     const recognizedUmpires = ['sundaram.umpire@cfvd.org', 'umpire@cfvd.org', 'ramanathan.umpire@cfvd.org'];
     if (!user && (recognizedUmpires.includes(cleanEmail) || (cleanEmail.includes('umpire') && (roleRequired === 'UMPIRE' || !roleRequired)))) {
       user = await userModel.create({
@@ -912,6 +912,46 @@ class AuthService {
           certification_level: 'Panel A - Senior',
           taluk: 'Virudhunagar'
         }
+      });
+    }
+
+    if (!user && (cleanEmail === 'saravanan.r@strikerscc.org' || (cleanEmail.includes('player') && (roleRequired === 'PLAYER' || !roleRequired)))) {
+      user = await userModel.create({
+        id: 'PLY-101',
+        name: 'R. Saravanan (Player)',
+        email: cleanEmail === 'saravanan.r@strikerscc.org' ? cleanEmail : 'player@example.com',
+        role: 'PLAYER',
+        status: 'ACTIVE',
+        password_hash: '1234',
+        player_details: {
+          batting_style: 'Right Hand Bat',
+          bowling_style: 'Right Arm Fast/Medium',
+          taluk: 'Virudhunagar',
+          category: 'Senior Men',
+          club_choice: 'Sivakasi Strikers'
+        }
+      });
+    }
+
+    if (!user && (cleanEmail === 'kannan.coach@strikerscc.org' || (cleanEmail.includes('coach') && (roleRequired === 'COACH' || roleRequired === 'TEAM' || !roleRequired)))) {
+      user = await userModel.create({
+        id: 'COACH-101',
+        name: 'R. Kannan (Coach)',
+        email: cleanEmail === 'kannan.coach@strikerscc.org' ? cleanEmail : 'coach@cfvd.org',
+        role: 'COACH',
+        status: 'ACTIVE',
+        password_hash: '1234'
+      });
+    }
+
+    if (!user && (cleanEmail === 'ramesh@gmail.com' && (roleRequired === 'SCORER' || !roleRequired))) {
+      user = await userModel.create({
+        id: 'SCR-101',
+        name: 'S. Ramesh',
+        email: 'ramesh@gmail.com',
+        role: 'SCORER',
+        status: 'ACTIVE',
+        password_hash: '1234'
       });
     }
 
