@@ -471,6 +471,12 @@ export default function LiveScoringScreen() {
   const [isChangeBowlerDropdownOpen, setIsChangeBowlerDropdownOpen] = useState<boolean>(false);
   const [changeBowlerSearch, setChangeBowlerSearch] = useState<string>('');
   const [isUpdatingBowler, setIsUpdatingBowler] = useState<boolean>(false);
+  const [changeBowlerReason, setChangeBowlerReason] = useState<'INJURY' | 'TACTICAL' | 'NO_BALL_SUSPENSION'>('TACTICAL');
+  const [isSuspendingCurrentBowler, setIsSuspendingCurrentBowler] = useState<boolean>(false);
+
+  // 2 No-Balls Dangerous Bowling Alert (MCC Law 41.7)
+  const [noBallAlert, setNoBallAlert] = useState<{ bowlerId: string; bowlerName: string; count: number } | null>(null);
+  const [dismissedNoBallBowlers, setDismissedNoBallBowlers] = useState<string[]>([]);
 
   // AI Commentary & Fielding
   const [selectedFieldPosition, setSelectedFieldPosition] = useState<string>('Cover');
@@ -515,6 +521,13 @@ export default function LiveScoringScreen() {
         setCurrentBreak(null);
       } else if (payload?.action === 'BREAK_ADDED' && payload?.currentBreak) {
         setCurrentBreak(payload.currentBreak);
+      }
+      if (payload?.noBallWarning && !dismissedNoBallBowlers.includes(payload.noBallWarning.bowlerId)) {
+        setNoBallAlert({
+          bowlerId: payload.noBallWarning.bowlerId,
+          bowlerName: payload.noBallWarning.bowlerName || bowler?.name || 'Current Bowler',
+          count: payload.noBallWarning.noBallCount || 2
+        });
       }
     });
 
@@ -815,6 +828,16 @@ export default function LiveScoringScreen() {
 
       // Seamless background update without full page refresh
       await loadLiveState(false);
+
+      // Check for 2 No-Balls dangerous bowling warning (MCC Law 41.7)
+      const nbWarn = res?.noBallWarning || res?.data?.noBallWarning;
+      if (nbWarn && !dismissedNoBallBowlers.includes(nbWarn.bowlerId)) {
+        setNoBallAlert({
+          bowlerId: nbWarn.bowlerId,
+          bowlerName: nbWarn.bowlerName || bowler?.name || 'Current Bowler',
+          count: nbWarn.noBallCount || 2
+        });
+      }
 
       // Trigger automatic Next Bowler popup after 6 legal deliveries (only if match is still LIVE)
       if (res.isOverComplete || res.data?.isOverComplete) {
@@ -1168,6 +1191,16 @@ export default function LiveScoringScreen() {
 
       // Seamless background update without full page refresh
       await loadLiveState(false);
+
+      // Check for 2 No-Balls dangerous bowling warning (MCC Law 41.7)
+      const nbWarn = res?.noBallWarning || res?.data?.noBallWarning;
+      if (nbWarn && !dismissedNoBallBowlers.includes(nbWarn.bowlerId)) {
+        setNoBallAlert({
+          bowlerId: nbWarn.bowlerId,
+          bowlerName: nbWarn.bowlerName || bowler?.name || 'Current Bowler',
+          count: nbWarn.noBallCount || 2
+        });
+      }
     } catch (err: any) {
       console.error('confirmNextBowler error:', err);
       setBowlerErrorMessage(err.message || 'Server rejected bowler selection.');
@@ -1264,6 +1297,18 @@ export default function LiveScoringScreen() {
     setCustomChangeBowlerName('');
     setIsChangeBowlerDropdownOpen(false);
     setChangeBowlerSearch('');
+    setChangeBowlerReason('TACTICAL');
+    setIsSuspendingCurrentBowler(false);
+    setShowChangeBowlerModal(true);
+  };
+
+  const handleOpenInjuryBowlerChange = () => {
+    setSelectedChangeBowlerId('');
+    setCustomChangeBowlerName('');
+    setIsChangeBowlerDropdownOpen(false);
+    setChangeBowlerSearch('');
+    setChangeBowlerReason('INJURY');
+    setIsSuspendingCurrentBowler(false);
     setShowChangeBowlerModal(true);
   };
 
@@ -1287,7 +1332,9 @@ export default function LiveScoringScreen() {
     try {
       const res = await ScorerApi.changeBowler(matchId, {
         newBowlerId: bwlId,
-        newBowlerName: bwlName
+        newBowlerName: bwlName,
+        reason: changeBowlerReason,
+        suspendCurrentBowler: isSuspendingCurrentBowler
       });
       if (res && res.bowler) {
         setBowler(res.bowler);
@@ -1296,7 +1343,10 @@ export default function LiveScoringScreen() {
       }
       setShowChangeBowlerModal(false);
       await loadLiveState(false);
-      const succMsg = `Bowler updated to ${bwlName || 'new bowler'}.`;
+      const ballsInCurrentOver = balls % 6;
+      const succMsg = ballsInCurrentOver > 0
+        ? `Bowler substituted! ${bwlName || 'New bowler'} will bowl the remaining ${6 - ballsInCurrentOver} ball(s) of this over (Law 21.9).`
+        : (res?.message || `Bowler updated to ${bwlName || 'new bowler'}.`);
       Platform.OS === 'web' ? window.alert(succMsg) : Alert.alert('Bowler Changed', succMsg);
     } catch (err: any) {
       const msg = err.message || 'Failed to change bowler.';
@@ -4787,23 +4837,27 @@ export default function LiveScoringScreen() {
           )}
 
           <Image source={IMG_LOGO} style={styles.headerLogo} resizeMode="contain" />
-          <View style={{ marginLeft: 10 }}>
+          <View style={{ marginLeft: 8, flex: 1, minWidth: 0 }}>
             <Text style={styles.headerTitleMain} numberOfLines={1}>
               {isDesktop ? 'CRICKET FEDERATION OF VIRUDHUNAGAR DISTRICT' : 'CRICKET ASSOCIATION'}
             </Text>
-            <Text style={styles.headerTitleSub} numberOfLines={1}>
-              {matchInfo ? `${matchInfo.teamA} vs ${matchInfo.teamB} • Official Scorer Portal` : 'Official Scorer Portal • Career & Match Operations'}
-            </Text>
+            {isDesktop && (
+              <Text style={styles.headerTitleSub} numberOfLines={1}>
+                {matchInfo ? `${matchInfo.teamA} vs ${matchInfo.teamB} • Official Scorer Portal` : 'Official Scorer Portal • Career & Match Operations'}
+              </Text>
+            )}
           </View>
         </View>
 
         <View style={styles.headerRight}>
-          {/* User Email Pill (Matches Image 1 & 2) */}
-          <View style={styles.userBadgePill}>
-            <Text style={styles.userBadgePillText} numberOfLines={1}>
-              👤 {scorerEmail}
-            </Text>
-          </View>
+          {/* User Email Pill: Shown on desktop only (hidden on mobile to prevent overlapping) */}
+          {isDesktop && (
+            <View style={styles.userBadgePill}>
+              <Text style={styles.userBadgePillText} numberOfLines={1}>
+                👤 {scorerEmail}
+              </Text>
+            </View>
+          )}
 
           {/* Wi-Fi Indicator (Desktop only) */}
           {isDesktop && (
@@ -4816,14 +4870,14 @@ export default function LiveScoringScreen() {
             </View>
           )}
 
-          {/* Exit Scorer Button Pill (Red, Matches Image 1 & 2) */}
+          {/* Exit Scorer Button Pill (Red) */}
           <TouchableOpacity
             style={styles.headerExitBtn}
             onPress={() => setShowExitModal(true)}
             activeOpacity={0.8}
             accessibilityLabel="Exit Scorer Portal"
           >
-            <Text style={styles.headerExitBtnText}>← Exit Scorer</Text>
+            <Text style={styles.headerExitBtnText}>{isDesktop ? '← Exit Scorer' : 'Exit'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -5038,7 +5092,13 @@ export default function LiveScoringScreen() {
         )}
 
         {/* Main Content Area (Wide, Yellow/Gold Stadium Theme) */}
-        <ScrollView style={styles.mainContentScroll} contentContainerStyle={styles.scroll}>
+        <ScrollView
+          style={styles.mainContentScroll}
+          contentContainerStyle={styles.scroll}
+          scrollEnabled={isDesktop}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
         <View style={styles.mainLayout}>
           {/* Active Break Banner (Tea / Lunch / Drinks / Rain Break) */}
           {currentBreak && !isInningsBreak && !isMatchEnded && (() => {
@@ -5355,13 +5415,20 @@ export default function LiveScoringScreen() {
               <View style={styles.playerCard}>
                 <View style={styles.battersCardHeader}>
                   <Text style={styles.playerRole}>CURRENT BOWLER</Text>
+                  <TouchableOpacity
+                    style={styles.injurySubPill}
+                    onPress={handleOpenInjuryBowlerChange}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.injurySubPillText}>🩹 Injury Sub</Text>
+                  </TouchableOpacity>
                 </View>
                 <TouchableOpacity
                   style={[styles.playerRow, styles.playerRowTappable]}
                   onPress={handleOpenChangeBowler}
                   activeOpacity={0.7}
                 >
-                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 }}>
                     <Text style={styles.playerName} numberOfLines={1}>
                       🎳 {bowler ? bowler.name : 'Bowler TBA'}
                     </Text>
@@ -5599,7 +5666,7 @@ export default function LiveScoringScreen() {
           </View>
         </View>
 
-        <SharedFooter />
+        {isDesktop && <SharedFooter />}
       </ScrollView>
       </View>
 
@@ -6082,6 +6149,50 @@ export default function LiveScoringScreen() {
               </View>
             )}
 
+            {/* Mid-Over Notice if active over */}
+            {balls % 6 > 0 && (
+              <View style={styles.midOverNoticeBox}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                  <Text style={{ fontSize: 13 }}>🩹</Text>
+                  <Text style={styles.midOverNoticeTitle}>
+                    MID-OVER SUBSTITUTION (MCC LAW 21.9)
+                  </Text>
+                </View>
+                <Text style={styles.midOverNoticeText}>
+                  Current over is in progress ({balls % 6} balls bowled). The substitute bowler will complete the remaining {6 - (balls % 6)} ball(s) of this over.
+                </Text>
+              </View>
+            )}
+
+            {/* Substitution Reason Selector */}
+            <View style={styles.reasonPillsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.reasonPill,
+                  changeBowlerReason === 'INJURY' && styles.reasonPillActive
+                ]}
+                onPress={() => setChangeBowlerReason('INJURY')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.reasonPillText, changeBowlerReason === 'INJURY' && styles.reasonPillTextActive]}>
+                  🩹 Injured / Law 21.9
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.reasonPill,
+                  changeBowlerReason === 'TACTICAL' && styles.reasonPillActive
+                ]}
+                onPress={() => setChangeBowlerReason('TACTICAL')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.reasonPillText, changeBowlerReason === 'TACTICAL' && styles.reasonPillTextActive]}>
+                  🔄 Regular / Tactical
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             {/* Dropdown trigger */}
             <Text style={styles.selectLabel}>CHOOSE FROM BOWLING SQUAD:</Text>
             <TouchableOpacity
@@ -6226,7 +6337,78 @@ export default function LiveScoringScreen() {
         </View>
       </Modal>
 
-      {/* COMPREHENSIVE WICKET FALL & DISMISSAL MODAL (2-STEP FLOW) */}
+      {/* 2 NO-BALLS DANGEROUS BOWLING ALERT MODAL (MCC LAW 41.7) */}
+      <Modal
+        visible={noBallAlert !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setNoBallAlert(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxWidth: 440 }]}>
+            <View style={styles.wicketModalHeader}>
+              <View style={styles.modalTopHeaderRow}>
+                <View style={[styles.wicketBadgeTag, { backgroundColor: '#fee2e2', borderColor: '#fca5a5' }]}>
+                  <Text style={[styles.wicketBadgeTagText, { color: '#b91c1c' }]}>
+                    ⚠️ 2 NO-BALLS DANGEROUS BOWLING ALERT
+                  </Text>
+                </View>
+              </View>
+              <Text style={[styles.wicketModalTitle, { color: '#991b1b', marginTop: 6 }]}>
+                MCC Law 41.7 Violation
+              </Text>
+              <Text style={[styles.wicketModalSub, { color: '#475569', marginTop: 4 }]}>
+                Bowler <Text style={{ fontWeight: 'bold', color: '#0f172a' }}>{noBallAlert?.bowlerName}</Text> has bowled 2 No-Balls in this innings. Under cricket rules, the umpire directs the captain to take the bowler off immediately.
+              </Text>
+            </View>
+
+            <View style={{ backgroundColor: '#fff1f2', borderRadius: 8, padding: 12, marginVertical: 14, borderWidth: 1, borderColor: '#fecdd3' }}>
+              <Text style={{ fontSize: 12, color: '#9f1239', fontWeight: '700' }}>
+                ⚖️ Umpire Directive:
+              </Text>
+              <Text style={{ fontSize: 11.5, color: '#be123c', marginTop: 2, lineHeight: 16 }}>
+                Under Law 41.7, the bowler should be suspended from bowling for the remainder of the innings. Another bowler must complete this over.
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'column', gap: 10 }}>
+              {/* Option 1: Suspend & Replace Bowler */}
+              <TouchableOpacity
+                style={[styles.modalConfirmBtn, { backgroundColor: '#dc2626', width: '100%', height: 44 }]}
+                onPress={() => {
+                  setNoBallAlert(null);
+                  setSelectedChangeBowlerId('');
+                  setCustomChangeBowlerName('');
+                  setIsChangeBowlerDropdownOpen(false);
+                  setChangeBowlerSearch('');
+                  setChangeBowlerReason('NO_BALL_SUSPENSION');
+                  setIsSuspendingCurrentBowler(true);
+                  setShowChangeBowlerModal(true);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalConfirmText}>🛑 Suspend & Replace Bowler</Text>
+              </TouchableOpacity>
+
+              {/* Option 2: Allow Bowler to Continue (Skip Warning) */}
+              <TouchableOpacity
+                style={[styles.modalCancelBtn, { width: '100%', height: 40, backgroundColor: '#f1f5f9', borderColor: '#cbd5e1', borderWidth: 1 }]}
+                onPress={() => {
+                  if (noBallAlert?.bowlerId) {
+                    setDismissedNoBallBowlers(prev => [...prev, noBallAlert.bowlerId]);
+                  }
+                  setNoBallAlert(null);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.modalCancelText, { color: '#334155', fontWeight: '700' }]}>
+                  ▶️ Allow Bowler to Continue (Skip Warning)
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
       <Modal
         visible={showWicketModal}
         transparent
@@ -6817,8 +6999,8 @@ const getStyles = (isDesktop: boolean) =>
     },
 
     header: {
-      paddingVertical: 10,
-      paddingHorizontal: isDesktop ? 20 : 12,
+      paddingVertical: isDesktop ? 10 : 6,
+      paddingHorizontal: isDesktop ? 20 : 8,
       backgroundColor: '#071026',
       borderBottomWidth: 2,
       borderBottomColor: '#d97706',
@@ -6829,16 +7011,19 @@ const getStyles = (isDesktop: boolean) =>
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.2,
       shadowRadius: 4,
-      elevation: 4
+      elevation: 4,
+      minHeight: isDesktop ? 54 : 42
     },
     headerLeft: {
       flexDirection: 'row',
       alignItems: 'center',
-      flex: 1
+      flex: 1,
+      minWidth: 0,
+      marginRight: 6
     },
     headerLogo: {
-      width: 36,
-      height: 36
+      width: isDesktop ? 36 : 26,
+      height: isDesktop ? 36 : 26
     },
     headerTitleMain: {
       color: '#ffffff',
@@ -6853,20 +7038,20 @@ const getStyles = (isDesktop: boolean) =>
       fontWeight: '600'
     },
     hamburgerBtn: {
-      padding: 6,
-      marginRight: 8,
+      padding: isDesktop ? 6 : 4,
+      marginRight: 6,
       backgroundColor: 'rgba(255, 255, 255, 0.12)',
       borderRadius: 6
     },
     hamburgerIcon: {
       color: '#f59e0b',
-      fontSize: 18,
+      fontSize: isDesktop ? 18 : 16,
       fontWeight: 'bold'
     },
     headerRight: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8
+      gap: 6
     },
     userBadgePill: {
       backgroundColor: 'rgba(255, 255, 255, 0.08)',
@@ -6884,14 +7069,14 @@ const getStyles = (isDesktop: boolean) =>
     },
     headerExitBtn: {
       backgroundColor: '#dc2626',
-      paddingHorizontal: 12,
-      paddingVertical: 6,
+      paddingHorizontal: isDesktop ? 12 : 8,
+      paddingVertical: isDesktop ? 6 : 3,
       borderRadius: 20,
       marginLeft: 4
     },
     headerExitBtnText: {
       color: '#ffffff',
-      fontSize: 11,
+      fontSize: isDesktop ? 11 : 10,
       fontWeight: '700'
     },
     backBtn: {
@@ -7139,7 +7324,7 @@ const getStyles = (isDesktop: boolean) =>
     mainLayout: {
       flex: 1,
       width: '100%',
-      padding: isDesktop ? 22 : 10,
+      padding: isDesktop ? 22 : 6,
       justifyContent: 'space-between'
     },
 
@@ -7413,21 +7598,21 @@ const getStyles = (isDesktop: boolean) =>
     // TOP SECTION
     topSection: {
       flexDirection: isDesktop ? 'row' : 'column',
-      gap: 16,
-      marginBottom: 16
+      gap: isDesktop ? 16 : 4,
+      marginBottom: isDesktop ? 16 : 4
     },
     previousInningsBanner: {
       backgroundColor: '#fef3c7',
       borderColor: '#fde68a',
       borderWidth: 1,
       borderRadius: 6,
-      paddingVertical: 3,
-      paddingHorizontal: 8,
-      marginBottom: 8,
+      paddingVertical: 2,
+      paddingHorizontal: 6,
+      marginBottom: isDesktop ? 8 : 2,
       alignSelf: 'center'
     },
     previousInningsText: {
-      fontSize: 12,
+      fontSize: isDesktop ? 12 : 10.5,
       color: '#92400e',
       fontWeight: '600'
     },
@@ -7438,8 +7623,8 @@ const getStyles = (isDesktop: boolean) =>
     scoreBoardCard: {
       flex: isDesktop ? 1 : undefined,
       backgroundColor: '#ffffff',
-      padding: 20,
-      borderRadius: 12,
+      padding: isDesktop ? 20 : 6,
+      borderRadius: isDesktop ? 12 : 8,
       borderWidth: 1.5,
       borderColor: '#fde68a',
       alignItems: 'center',
@@ -7452,33 +7637,33 @@ const getStyles = (isDesktop: boolean) =>
     },
     battingTeam: {
       color: '#005960',
-      fontSize: 13,
+      fontSize: isDesktop ? 13 : 10.5,
       fontWeight: 'bold',
-      marginBottom: 6,
+      marginBottom: isDesktop ? 6 : 2,
       textTransform: 'uppercase'
     },
     scoreRow: { flexDirection: 'row', alignItems: 'baseline' },
-    scoreText: { color: '#0f172a', fontSize: 48, fontWeight: 'bold' },
+    scoreText: { color: '#0f172a', fontSize: isDesktop ? 48 : 26, fontWeight: 'bold' },
     oversText: {
       color: '#64748b',
-      fontSize: 20,
-      marginLeft: 10,
+      fontSize: isDesktop ? 20 : 15,
+      marginLeft: 6,
       fontWeight: '600'
     },
-    rrText: { color: '#475569', fontSize: 13, marginTop: 6, fontWeight: '600' },
+    rrText: { color: '#475569', fontSize: isDesktop ? 13 : 10, marginTop: isDesktop ? 6 : 1, fontWeight: '600' },
 
     playersContainer: {
       flex: isDesktop ? 1.5 : undefined,
-      gap: 16,
+      gap: isDesktop ? 16 : 4,
       justifyContent: 'space-between'
     },
     playerCard: {
       backgroundColor: '#ffffff',
-      padding: 16,
-      borderRadius: 12,
+      padding: isDesktop ? 16 : 6,
+      borderRadius: isDesktop ? 12 : 8,
       borderWidth: 1.5,
       borderColor: '#fde68a',
-      flex: 1,
+      flex: isDesktop ? 1 : undefined,
       justifyContent: 'center',
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
@@ -7488,30 +7673,89 @@ const getStyles = (isDesktop: boolean) =>
     },
     playerRole: {
       color: '#64748b',
-      fontSize: 11,
+      fontSize: isDesktop ? 11 : 9.5,
       fontWeight: 'bold',
-      marginBottom: 10,
+      marginBottom: isDesktop ? 10 : 2,
       letterSpacing: 1
     },
     playerRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      marginBottom: 6
+      marginBottom: isDesktop ? 6 : 2
     },
-    playerName: { color: '#1e293b', fontSize: 14, fontWeight: '600' },
+    playerName: { color: '#1e293b', fontSize: isDesktop ? 14 : 11.5, fontWeight: '600' },
     striker: { fontWeight: 'bold', color: '#b45309' },
-    playerStats: { color: '#1e293b', fontSize: 14, fontWeight: 'bold' },
+    playerStats: { color: '#1e293b', fontSize: isDesktop ? 14 : 11.5, fontWeight: 'bold' },
     changeBowlerHeaderBtn: {
       backgroundColor: '#e6f4f1',
       borderWidth: 1,
       borderColor: '#005960',
       borderRadius: 14,
-      paddingHorizontal: 10,
-      paddingVertical: 3
+      paddingHorizontal: 8,
+      paddingVertical: 2
     },
     changeBowlerHeaderBtnText: {
       color: '#005960',
-      fontSize: 10,
+      fontSize: 9.5,
+      fontWeight: '800'
+    },
+    injurySubPill: {
+      backgroundColor: '#fef2f2',
+      borderWidth: 1,
+      borderColor: '#fca5a5',
+      borderRadius: 12,
+      paddingHorizontal: 7,
+      paddingVertical: 2
+    },
+    injurySubPillText: {
+      color: '#b91c1c',
+      fontSize: 9.5,
+      fontWeight: '800'
+    },
+    midOverNoticeBox: {
+      backgroundColor: '#eff6ff',
+      borderRadius: 8,
+      padding: 8,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: '#bfdbfe'
+    },
+    midOverNoticeTitle: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: '#1e40af'
+    },
+    midOverNoticeText: {
+      fontSize: 10.5,
+      color: '#1d4ed8',
+      lineHeight: 14
+    },
+    reasonPillsRow: {
+      flexDirection: 'row',
+      gap: 6,
+      marginBottom: 10
+    },
+    reasonPill: {
+      flex: 1,
+      paddingVertical: 6,
+      paddingHorizontal: 6,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: '#cbd5e1',
+      backgroundColor: '#f8fafc',
+      alignItems: 'center'
+    },
+    reasonPillActive: {
+      backgroundColor: '#fef3c7',
+      borderColor: '#d97706'
+    },
+    reasonPillText: {
+      fontSize: 10.5,
+      fontWeight: '700',
+      color: '#475569'
+    },
+    reasonPillTextActive: {
+      color: '#b45309',
       fontWeight: '800'
     },
 
@@ -7561,8 +7805,8 @@ const getStyles = (isDesktop: boolean) =>
     controlsSection: {
       flex: 1,
       backgroundColor: '#ffffff',
-      borderRadius: 12,
-      padding: isDesktop ? 20 : 12,
+      borderRadius: isDesktop ? 12 : 8,
+      padding: isDesktop ? 20 : 6,
       borderWidth: 1.5,
       borderColor: '#fde68a',
       justifyContent: 'space-between',
@@ -7694,20 +7938,20 @@ const getStyles = (isDesktop: boolean) =>
 
     actionPanel: {
       flexDirection: 'row',
-      gap: 10,
-      marginTop: 10,
-      flexWrap: 'wrap'
+      gap: isDesktop ? 10 : 5,
+      marginTop: isDesktop ? 10 : 4,
+      flexWrap: isDesktop ? 'wrap' : 'nowrap'
     },
     actionBtn: {
       flex: 1,
-      minWidth: 120,
-      height: 44,
+      minWidth: isDesktop ? 120 : 0,
+      height: isDesktop ? 44 : 32,
       borderRadius: 6,
       alignItems: 'center',
       justifyContent: 'center'
     },
     undoBtn: { backgroundColor: '#475569' },
-    actionBtnText: { fontSize: 13, fontWeight: 'bold' },
+    actionBtnText: { fontSize: isDesktop ? 13 : 10.5, fontWeight: 'bold' },
     scorecardBtn: {
       backgroundColor: '#f8fafc',
       borderWidth: 1,
@@ -9418,13 +9662,13 @@ const getStyles = (isDesktop: boolean) =>
     // --- PRIMARY ENGINE ACTION BAR & CONTROLS ---
     primaryEngineActionBar: {
       flexDirection: 'row',
-      gap: 10,
-      marginBottom: 10
+      gap: isDesktop ? 10 : 5,
+      marginBottom: isDesktop ? 10 : 3
     },
     enginePrimaryBtn: {
       flex: 1,
-      paddingVertical: 12,
-      borderRadius: 8,
+      paddingVertical: isDesktop ? 12 : 6,
+      borderRadius: isDesktop ? 8 : 6,
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: 1.5,
@@ -9448,7 +9692,7 @@ const getStyles = (isDesktop: boolean) =>
     },
     enginePrimaryBtnText: {
       color: '#fff',
-      fontSize: 13,
+      fontSize: isDesktop ? 13 : 11,
       fontWeight: '900',
       letterSpacing: 0.8
     },
@@ -9651,17 +9895,17 @@ const getStyles = (isDesktop: boolean) =>
 
     // Engine Keypad Grid
     engineKeypadContainer: {
-      gap: 8,
-      marginTop: 4
+      gap: isDesktop ? 8 : 4,
+      marginTop: isDesktop ? 4 : 2
     },
     engineKeypadRow: {
       flexDirection: 'row',
-      gap: 8
+      gap: isDesktop ? 8 : 4
     },
     engineKeypadBtn: {
       flex: 1,
-      height: 54,
-      borderRadius: 10,
+      height: isDesktop ? 54 : 36,
+      borderRadius: isDesktop ? 10 : 6,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: '#ffffff',
@@ -9674,16 +9918,17 @@ const getStyles = (isDesktop: boolean) =>
       elevation: 2
     },
     engineKeypadText: {
-      fontSize: 22,
+      fontSize: isDesktop ? 22 : 18,
       fontWeight: '900',
       color: '#0f172a'
     },
     engineAuxKeypadBtn: {
       backgroundColor: '#005960',
-      borderColor: '#0d9488'
+      borderColor: '#0d9488',
+      height: isDesktop ? 54 : 32
     },
     engineAuxKeypadText: {
-      fontSize: 12,
+      fontSize: isDesktop ? 12 : 10,
       fontWeight: '800',
       color: '#ffffff',
       textAlign: 'center'

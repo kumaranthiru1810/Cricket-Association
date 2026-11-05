@@ -32,8 +32,33 @@ export const getBackendHost = () => {
   return '10.34.20.112';
 };
 
-const getBaseUrl = () => `http://${getBackendHost()}:5000/api`;
-const getSocketUrl = () => `http://${getBackendHost()}:5000`;
+const PROD_BACKEND_URL = 'https://cricket-backend-dqdm.onrender.com';
+
+const getBaseUrl = () => {
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (host && host !== 'localhost' && host !== '127.0.0.1' && !host.startsWith('192.168.') && !host.startsWith('10.')) {
+      return `${PROD_BACKEND_URL}/api`;
+    }
+  }
+  return `http://${getBackendHost()}:5000/api`;
+};
+
+const getSocketUrl = () => {
+  if (process.env.EXPO_PUBLIC_SOCKET_URL) {
+    return process.env.EXPO_PUBLIC_SOCKET_URL;
+  }
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (host && host !== 'localhost' && host !== '127.0.0.1' && !host.startsWith('192.168.') && !host.startsWith('10.')) {
+      return PROD_BACKEND_URL;
+    }
+  }
+  return `http://${getBackendHost()}:5000`;
+};
 
 export const API_URL = getBaseUrl();
 export const SOCKET_URL = getSocketUrl();
@@ -867,7 +892,7 @@ export const ScorerApi = {
     });
   },
 
-  changeBowler: async (matchId: string, payload: { newBowlerId?: string; newBowlerName?: string }) => {
+  changeBowler: async (matchId: string, payload: { newBowlerId?: string; newBowlerName?: string; reason?: string; suspendCurrentBowler?: boolean }) => {
     return request(`/scorer/matches/${matchId}/change-bowler`, {
       method: 'POST',
       body: JSON.stringify(payload)

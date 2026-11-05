@@ -603,6 +603,25 @@ class ScoringEngine {
     }
 
     // 9. Real-time Socket.IO Broadcast
+    let noBallWarning = null;
+    if (extraType === 'NO_BALL') {
+      try {
+        const bowlerNoBalls = await db.models.Delivery.countDocuments({
+          innings_id: innings.id,
+          bowler_id: activeBowlerId,
+          extra_type: 'NO_BALL'
+        });
+        if (bowlerNoBalls >= 2) {
+          noBallWarning = {
+            bowlerId: activeBowlerId,
+            bowlerName,
+            noBallCount: bowlerNoBalls,
+            message: `Bowler ${bowlerName} has bowled ${bowlerNoBalls} No-Balls in this innings (MCC Law 41.7 - Dangerous / Unfair Bowling).`
+          };
+        }
+      } catch (_e) {}
+    }
+
     try {
       socketService.emitScoreUpdate(matchId, {
         matchId,
@@ -611,6 +630,7 @@ class ScoringEngine {
         isOverComplete: isOverFinished,
         currentBreak: match.current_break || null,
         statusComment: match.status_comment || '',
+        noBallWarning,
         lastDelivery: {
           ball: `${overNumber}.${ballNumber}`,
           runs: Number(runsBatter),
@@ -631,6 +651,7 @@ class ScoringEngine {
       strikerId: nextStriker,
       nonStrikerId: nextNonStriker,
       bowlerId: activeBowlerId,
+      noBallWarning,
       data: {
         deliveryId,
         score: `${innings.total_runs}/${innings.wickets}`,
@@ -642,6 +663,7 @@ class ScoringEngine {
         bowlerId: activeBowlerId,
         isOverComplete: isOverFinished,
         isMatchCompleted,
+        noBallWarning,
         lastDelivery: {
           id: deliveryId,
           runsBatter: Number(runsBatter),
@@ -1232,9 +1254,9 @@ class ScoringEngine {
   }
 
   /**
-   * Change / Substitute Active Bowler
+   * Change / Substitute Active Bowler (Supports Mid-Over Injury & Law 41.7 Suspension)
    */
-  async changeBowler(matchId, { newBowlerId, newBowlerName } = {}) {
+  async changeBowler(matchId, { newBowlerId, newBowlerName, reason, suspendCurrentBowler } = {}) {
     await db.initDb();
     let innings = await db.models.Innings.findOne({ match_id: matchId, is_completed: { $ne: true }, status: { $ne: "COMPLETED" } }).sort({ innings_number: -1 });
     if (!innings) {
@@ -1275,6 +1297,19 @@ class ScoringEngine {
 
     if (!resolvedId) throw { status: 400, message: 'Bowler ID or name required.' };
 
+    // Prevent suspended bowlers from bowling again
+    if (innings.suspended_bowler_ids && innings.suspended_bowler_ids.includes(resolvedId)) {
+      throw { status: 400, message: 'This bowler is suspended from bowling for 2 dangerous no-balls (MCC Law 41.7).' };
+    }
+
+    const oldBowlerId = innings.current_bowler_id;
+    if (suspendCurrentBowler && oldBowlerId) {
+      if (!innings.suspended_bowler_ids) innings.suspended_bowler_ids = [];
+      if (!innings.suspended_bowler_ids.includes(oldBowlerId)) {
+        innings.suspended_bowler_ids.push(oldBowlerId);
+      }
+    }
+
     // Initialize InningsBowler record if not present
     let bowlerStats = await db.models.InningsBowler.findOne({ innings_id: innings.id, player_id: resolvedId });
     if (!bowlerStats) {
@@ -1296,20 +1331,35 @@ class ScoringEngine {
     innings.is_over_complete = false;
     await innings.save();
 
+    const ballsInOver = innings.balls || 0;
+    const remainingBalls = (6 - ballsInOver) % 6;
+    const isMidOver = ballsInOver > 0 && ballsInOver < 6;
+    let changeMessage = `Bowler changed to ${finalBowlerName || resolvedId}`;
+    if (isMidOver) {
+      changeMessage = `${finalBowlerName || resolvedId} will complete the remaining ${remainingBalls} ball(s) of this over (Law 21.9).`;
+    }
+
     // Socket.IO update
     try {
       socketService.emitScoreUpdate(matchId, {
         matchId,
         event: 'BOWLER_CHANGED',
         bowlerId: resolvedId,
-        bowlerName: finalBowlerName || resolvedId
+        bowlerName: finalBowlerName || resolvedId,
+        isMidOver,
+        ballsInOver,
+        remainingBalls,
+        reason: reason || (isMidOver ? 'INJURY_SUBSTITUTION' : 'REGULAR')
       });
     } catch (e) {}
 
     return {
       success: true,
-      message: `Bowler changed to ${finalBowlerName || resolvedId}`,
+      message: changeMessage,
       currentBowlerId: innings.current_bowler_id,
+      isMidOver,
+      ballsInOver,
+      remainingBalls,
       bowler: {
         id: resolvedId,
         name: finalBowlerName || bowlerStats?.name || resolvedId,
