@@ -1308,6 +1308,7 @@ class ScoringEngine {
       if (!innings.suspended_bowler_ids.includes(oldBowlerId)) {
         innings.suspended_bowler_ids.push(oldBowlerId);
       }
+      innings.markModified('suspended_bowler_ids');
     }
 
     // Initialize InningsBowler record if not present
@@ -1327,13 +1328,33 @@ class ScoringEngine {
       await bowlerStats.save();
     }
 
-    innings.current_bowler_id = resolvedId;
-    innings.is_over_complete = false;
-    await innings.save();
-
     const ballsInOver = innings.balls || 0;
     const remainingBalls = (6 - ballsInOver) % 6;
     const isMidOver = ballsInOver > 0 && ballsInOver < 6;
+
+    if (!innings.bowler_substitutions) innings.bowler_substitutions = [];
+    if (oldBowlerId && oldBowlerId !== resolvedId) {
+      const oldDoc = await db.models.Player.findOne({ id: oldBowlerId }).lean();
+      innings.bowler_substitutions.push({
+        oldBowlerId,
+        oldBowlerName: oldDoc?.name || oldBowlerId,
+        newBowlerId: resolvedId,
+        newBowlerName: finalBowlerName || resolvedId,
+        isMidOver,
+        ballsInOver,
+        remainingBalls,
+        reason: reason || (isMidOver ? 'INJURY' : 'TACTICAL'),
+        situation: situation || (isMidOver ? 'காயம் (Injured)' : 'கேப்டன் மாற்றம் (Tactical)'),
+        suspended: !!suspendCurrentBowler,
+        overNumber: innings.overs || 0,
+        timestamp: new Date()
+      });
+      innings.markModified('bowler_substitutions');
+    }
+
+    innings.current_bowler_id = resolvedId;
+    innings.is_over_complete = false;
+    await innings.save();
     let changeMessage = `Bowler changed to ${finalBowlerName || resolvedId}`;
     if (isMidOver) {
       changeMessage = situation

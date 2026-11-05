@@ -975,8 +975,8 @@ export default function HomeScreen() {
                   }
                 ]}
                 onPress={() => {
-                  setActiveScorecardMatch('match-1');
-                  setScorecardModalVisible(true);
+                  const targetMatch = publicMatches.find(m => (m.status || '').toLowerCase() === 'live') || publicMatches[0] || { id: 'M001' };
+                  handleOpenScorecard(targetMatch);
                 }}
                 activeOpacity={0.85}
               >
@@ -1477,8 +1477,8 @@ export default function HomeScreen() {
                   <TouchableOpacity
                     style={styles.btnPrimarySm}
                     onPress={() => {
-                      setActiveScorecardMatch('match-1');
-                      setScorecardModalVisible(true);
+                      const targetMatch = publicMatches.find(m => (m.status || '').toLowerCase() === 'completed') || publicMatches[0] || { id: 'M001' };
+                      handleOpenScorecard(targetMatch);
                     }}
                   >
                     <Text style={styles.btnPrimarySmText}>Latest Final</Text>
@@ -2540,6 +2540,21 @@ export default function HomeScreen() {
             </View>
 
             <ScrollView style={{ maxHeight: isSmallMobile ? 420 : 520 }} showsVerticalScrollIndicator={false}>
+              {/* Full Interactive Scorecard & Wagon Wheel CTA */}
+              <TouchableOpacity
+                style={styles.openFullScorecardCta}
+                onPress={() => {
+                  setScorecardModalVisible(false);
+                  const targetMatch = realScorecardData?.match || activeScorecardMatchData || publicMatches[0] || { id: 'M001' };
+                  handleOpenScorecard(targetMatch);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.openFullScorecardCtaText}>
+                  📊 View Full Interactive Wagon Wheel & Pro Scorecard ▶
+                </Text>
+              </TouchableOpacity>
+
               {/* Toss & Match Summary Banner */}
               <View style={styles.scorecardTossBanner}>
                 <Text style={styles.scorecardTossText}>
@@ -2660,32 +2675,134 @@ export default function HomeScreen() {
                         </View>
                       )}
 
+                      {/* Overs Status & Active Bowler Banner in Home Scorecard */}
+                      <View style={styles.homeOversBar}>
+                        <View style={{ flex: 1, minWidth: 110 }}>
+                          <Text style={styles.homeOversLabel}>CURRENT OVER</Text>
+                          <Text style={styles.homeOversValue}>
+                            Over {inn.currentOverNumber || (Math.floor(parseFloat(inn.overs || '0')) + 1)} ({inn.overs || '0.0'} / {inn.totalOvers || 20} Ov)
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1, minWidth: 110 }}>
+                          <Text style={styles.homeOversLabel}>OVERS REMAINING</Text>
+                          <Text style={[styles.homeOversValue, { color: '#b45309' }]}>
+                            {inn.oversRemaining ? `${inn.oversRemaining} Ov Left` : '0.0 Ov'}
+                            {inn.ballsRemaining !== undefined ? ` (${inn.ballsRemaining} balls)` : ''}
+                          </Text>
+                        </View>
+                        {inn.currentBowler && (
+                          <View style={{ flex: 1, minWidth: 110 }}>
+                            <Text style={styles.homeOversLabel}>CURRENT BOWLER</Text>
+                            <Text style={[styles.homeOversValue, { color: '#005960' }]}>
+                              🎳 {inn.currentBowler.name} (Active)
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Suspended Bowlers Warning */}
+                      {Array.isArray(inn.suspendedBowlers) && inn.suspendedBowlers.length > 0 && (
+                        <View style={styles.homeSuspendedBanner}>
+                          <Text style={styles.homeSuspendedText}>
+                            🛑 நடுவர் தடை (2 No-Balls): {inn.suspendedBowlers.map((b: any) => b.name).join(', ')} பந்துவீச தடை செய்யப்பட்டுள்ளார்
+                          </Text>
+                        </View>
+                      )}
+
                       {/* Bowling Figures Table */}
                       {inn.bowlers && inn.bowlers.length > 0 && (
                         <View style={{ marginTop: 14 }}>
-                          <Text style={styles.scorecardTableSubtitle}>🎯 BOWLING FIGURES</Text>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <Text style={styles.scorecardTableSubtitle}>🎯 BOWLING FIGURES</Text>
+                            {inn.currentBowler && (
+                              <View style={styles.homeActiveBowlerPill}>
+                                <Text style={styles.homeActiveBowlerPillText}>🎳 Active: {inn.currentBowler.name}</Text>
+                              </View>
+                            )}
+                          </View>
                           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tableScrollWrapper}>
                             <View style={styles.scoreTable}>
                               <View style={styles.scoreTableHeader}>
-                                <Text style={[styles.scoreTh, { width: 140 }]}>Bowler</Text>
+                                <Text style={[styles.scoreTh, { width: 170 }]}>Bowler</Text>
                                 <Text style={[styles.scoreTh, { width: 45, textAlign: 'center' }]}>O</Text>
                                 <Text style={[styles.scoreTh, { width: 40, textAlign: 'center' }]}>M</Text>
                                 <Text style={[styles.scoreTh, { width: 45, textAlign: 'center' }]}>R</Text>
                                 <Text style={[styles.scoreTh, { width: 45, textAlign: 'center' }]}>W</Text>
                                 <Text style={[styles.scoreTh, { width: 60, textAlign: 'right' }]}>ECON</Text>
                               </View>
-                              {inn.bowlers.map((bw: any, bwIdx: number) => (
-                                <View key={bw.id || bwIdx} style={[styles.scoreTableRow, bwIdx % 2 === 1 && styles.scoreTableRowAlt]}>
-                                  <Text style={[styles.scoreTd, { width: 140, fontWeight: '700', color: '#0f172a' }]}>{bw.name}</Text>
-                                  <Text style={[styles.scoreTd, { width: 45, textAlign: 'center', color: '#334155' }]}>{bw.overs}</Text>
-                                  <Text style={[styles.scoreTd, { width: 40, textAlign: 'center', color: '#334155' }]}>{bw.maidens || 0}</Text>
-                                  <Text style={[styles.scoreTd, { width: 45, textAlign: 'center', color: '#334155' }]}>{bw.runs}</Text>
-                                  <Text style={[styles.scoreTd, { width: 45, textAlign: 'center', fontWeight: '800', color: '#dc2626' }]}>{bw.wickets}</Text>
-                                  <Text style={[styles.scoreTd, { width: 60, textAlign: 'right', fontWeight: '600', color: '#0f172a' }]}>
-                                    {typeof bw.economy === 'number' ? bw.economy.toFixed(2) : bw.economy}
-                                  </Text>
-                                </View>
-                              ))}
+                              {inn.bowlers.map((bw: any, bwIdx: number) => {
+                                const isCurrent = !!(
+                                  bw.isCurrentBowler ||
+                                  (inn.currentBowler && (bw.playerId === inn.currentBowler.id || bw.name === inn.currentBowler.name))
+                                );
+                                const isSuspended = !!(
+                                  bw.isSuspended ||
+                                  (inn.suspendedBowlers || []).some((s: any) => s.id === bw.playerId || s.name === bw.name)
+                                );
+
+                                const subRecord = (inn.substitutions || []).find((s: any) =>
+                                  s.oldBowlerId === bw.playerId || s.oldBowlerName === bw.name ||
+                                  s.newBowlerId === bw.playerId || s.newBowlerName === bw.name
+                                );
+
+                                let badgeText = bw.subNote || '';
+                                if (!badgeText) {
+                                  if (isSuspended) {
+                                    badgeText = '🚫 நடுவர் தடை (2 No-Balls)';
+                                  } else if (subRecord) {
+                                    if (subRecord.oldBowlerName === bw.name || subRecord.oldBowlerId === bw.playerId) {
+                                      badgeText = subRecord.situation ? `🩹 Sub: ${subRecord.situation}` : '🩹 Mid-Over Substituted';
+                                    } else if (subRecord.isMidOver) {
+                                      badgeText = '⚡ Shared Over (Sub In)';
+                                    }
+                                  } else if (bw.overs && !bw.overs.endsWith('.0') && !isCurrent) {
+                                    badgeText = `🩹 Mid-Over Sub (${bw.overs} ov)`;
+                                  }
+                                }
+
+                                return (
+                                  <View
+                                    key={bw.id || bwIdx}
+                                    style={[
+                                      styles.scoreTableRow,
+                                      bwIdx % 2 === 1 && styles.scoreTableRowAlt,
+                                      isCurrent && { backgroundColor: '#f0fdfa' },
+                                      isSuspended && { backgroundColor: '#fff1f2' }
+                                    ]}
+                                  >
+                                    <View style={{ width: 170, paddingRight: 6 }}>
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                                        <Text style={[styles.scoreTd, { fontWeight: '700', color: isCurrent ? '#005960' : '#0f172a' }]}>
+                                          {bw.name}
+                                        </Text>
+                                        {isCurrent && (
+                                          <View style={styles.homeBowlingBadge}>
+                                            <Text style={styles.homeBowlingBadgeText}>🟢 Bowling</Text>
+                                          </View>
+                                        )}
+                                      </View>
+                                      {isSuspended ? (
+                                        <View style={styles.homeSuspendedPill}>
+                                          <Text style={styles.homeSuspendedPillText}>🚫 நடுவர் தடை (2 No-Balls)</Text>
+                                        </View>
+                                      ) : badgeText ? (
+                                        <View style={styles.homeSubPill}>
+                                          <Text style={styles.homeSubPillText}>{badgeText}</Text>
+                                        </View>
+                                      ) : null}
+                                    </View>
+                                    <Text style={[styles.scoreTd, { width: 45, textAlign: 'center', color: isCurrent ? '#005960' : '#334155', fontWeight: isCurrent ? '800' : 'normal' }]}>
+                                      {bw.overs}
+                                    </Text>
+                                    <Text style={[styles.scoreTd, { width: 40, textAlign: 'center', color: '#334155' }]}>{bw.maidens || 0}</Text>
+                                    <Text style={[styles.scoreTd, { width: 45, textAlign: 'center', color: '#334155' }]}>{bw.runs}</Text>
+                                    <Text style={[styles.scoreTd, { width: 45, textAlign: 'center', fontWeight: '800', color: '#dc2626' }]}>{bw.wickets}</Text>
+                                    <Text style={[styles.scoreTd, { width: 60, textAlign: 'right', fontWeight: '600', color: '#0f172a' }]}>
+                                      {typeof bw.economy === 'number' ? bw.economy.toFixed(2) : bw.economy}
+                                    </Text>
+                                  </View>
+                                );
+                              })}
                             </View>
                           </ScrollView>
                         </View>
@@ -4869,6 +4986,110 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: '#64748b',
     marginTop: 1
+  },
+  openFullScorecardCta: {
+    backgroundColor: '#005960',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    marginBottom: 12
+  },
+  openFullScorecardCtaText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800'
+  },
+  homeOversBar: {
+    backgroundColor: '#f8fafc',
+    borderColor: '#e2e8f0',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 8,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'space-between'
+  },
+  homeOversLabel: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#64748b',
+    letterSpacing: 0.5,
+    marginBottom: 2
+  },
+  homeOversValue: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  homeSuspendedBanner: {
+    backgroundColor: '#fff1f2',
+    borderColor: '#fecdd3',
+    borderWidth: 1,
+    borderRadius: 6,
+    padding: 8,
+    marginTop: 8
+  },
+  homeSuspendedText: {
+    color: '#9f1239',
+    fontSize: 10.5,
+    fontWeight: '700'
+  },
+  homeActiveBowlerPill: {
+    backgroundColor: '#dcfce7',
+    borderColor: '#86efac',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 7,
+    paddingVertical: 2
+  },
+  homeActiveBowlerPillText: {
+    color: '#15803d',
+    fontSize: 10,
+    fontWeight: '800'
+  },
+  homeBowlingBadge: {
+    backgroundColor: '#dcfce7',
+    borderColor: '#86efac',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1
+  },
+  homeBowlingBadgeText: {
+    color: '#15803d',
+    fontSize: 9,
+    fontWeight: '800'
+  },
+  homeSuspendedPill: {
+    backgroundColor: '#fee2e2',
+    borderColor: '#fca5a5',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    marginTop: 2
+  },
+  homeSuspendedPillText: {
+    color: '#b91c1c',
+    fontSize: 9,
+    fontWeight: '800'
+  },
+  homeSubPill: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#fde68a',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    marginTop: 2
+  },
+  homeSubPillText: {
+    color: '#b45309',
+    fontSize: 9,
+    fontWeight: '700'
   },
   matchTeamRow: {
     flexDirection: 'row',

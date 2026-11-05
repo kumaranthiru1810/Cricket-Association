@@ -597,16 +597,41 @@ class ScorerService {
 
       // Bowlers
       const bowlers = await db.models.InningsBowler.find({ innings_id: inn.id }).lean();
-      const bowlingCard = (bowlers || []).map(bw => ({
-        id: bw.id,
-        playerId: bw?.player_id || null,
-        name: (bw?.player_id && playerMap[bw.player_id]?.name) || 'Bowler',
-        overs: `${bw?.overs || 0}.${bw?.balls || 0}`,
-        maidens: bw?.maidens || 0,
-        runs: bw?.runs_conceded || 0,
-        wickets: bw?.wickets || 0,
-        economy: bw?.economy || 0
-      }));
+      const bowlingCard = (bowlers || []).map(bw => {
+        const isCurrent = !!(inn.current_bowler_id && bw.player_id === inn.current_bowler_id && !inn.is_completed);
+        const isSuspended = Array.isArray(inn.suspended_bowler_ids) && inn.suspended_bowler_ids.includes(bw.player_id);
+
+        const subRecord = Array.isArray(inn.bowler_substitutions)
+          ? inn.bowler_substitutions.find(s => s.oldBowlerId === bw.player_id || s.newBowlerId === bw.player_id)
+          : null;
+
+        let subNote = '';
+        if (isSuspended) {
+          subNote = '🚫 Suspended (2 No-Balls)';
+        } else if (subRecord) {
+          if (subRecord.oldBowlerId === bw.player_id) {
+            subNote = subRecord.situation ? `🩹 Sub: ${subRecord.situation}` : '🩹 Mid-Over Substituted';
+          } else if (subRecord.newBowlerId === bw.player_id && subRecord.isMidOver) {
+            subNote = '⚡ Shared Over (Sub In)';
+          }
+        } else if (bw.balls > 0 && bw.balls < 6 && !isCurrent) {
+          subNote = '🩹 Mid-Over Sub';
+        }
+
+        return {
+          id: bw.id,
+          playerId: bw?.player_id || null,
+          name: (bw?.player_id && playerMap[bw.player_id]?.name) || 'Bowler',
+          overs: `${bw?.overs || 0}.${bw?.balls || 0}`,
+          maidens: bw?.maidens || 0,
+          runs: bw?.runs_conceded || 0,
+          wickets: bw?.wickets || 0,
+          economy: bw?.economy || 0,
+          isCurrentBowler: isCurrent,
+          isSuspended: isSuspended,
+          subNote: subNote
+        };
+      });
 
       // Deliveries for fall of wickets, extras, and wagon wheel
       const delRows = await db.models.Delivery.find({
@@ -684,6 +709,12 @@ class ScorerService {
         commentary: d.commentary
       }));
 
+      const maxOvers = match.overs_per_side || 20;
+      const bowledBalls = (inn.overs || 0) * 6 + (inn.balls || 0);
+      const remBalls = Math.max(0, maxOvers * 6 - bowledBalls);
+      const remOv = Math.floor(remBalls / 6);
+      const remB = remBalls % 6;
+
       return {
         id: inn.id,
         inningsNumber: inn.innings_number,
@@ -693,6 +724,21 @@ class ScorerService {
         totalRuns: inn.total_runs,
         wickets: inn.wickets,
         overs: `${inn.overs}.${inn.balls}`,
+        balls: inn.balls || 0,
+        oversNum: inn.overs || 0,
+        currentOverNumber: (inn.balls > 0 ? (inn.overs || 0) + 1 : (inn.overs || 0)) || 1,
+        totalOvers: maxOvers,
+        oversRemaining: `${remOv}.${remB}`,
+        ballsRemaining: remBalls,
+        currentBowler: inn.current_bowler_id ? {
+          id: inn.current_bowler_id,
+          name: (playerMap[inn.current_bowler_id] && playerMap[inn.current_bowler_id].name) || inn.current_bowler_id
+        } : null,
+        suspendedBowlers: (inn.suspended_bowler_ids || []).map(id => ({
+          id,
+          name: (playerMap[id] && playerMap[id].name) || id
+        })),
+        substitutions: inn.bowler_substitutions || [],
         extras: {
           total: totalExtras,
           wide: wides,

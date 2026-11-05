@@ -376,6 +376,8 @@ const InningsSchema = new mongoose.Schema({
   current_non_striker_id: { type: String, default: null },
   current_bowler_id: { type: String, default: null },
   previous_bowler_id: { type: String, default: null },
+  suspended_bowler_ids: [{ type: String }],
+  bowler_substitutions: [{ type: mongoose.Schema.Types.Mixed }],
   extras: {
     wides: { type: Number, default: 0 },
     no_balls: { type: Number, default: 0 },

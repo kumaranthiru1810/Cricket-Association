@@ -319,6 +319,44 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
           </View>
 
           {/* ─────────────────────────────────────────────────────────────
+              OVERS & BOWLER LOGISTICS STATUS BAR
+              ───────────────────────────────────────────────────────────── */}
+          <View style={styles.oversLogisticsCard}>
+            <View style={styles.oversLogisticsRow}>
+              <View style={styles.oversLogisticsCol}>
+                <Text style={styles.oversLogisticsLabel}>CURRENT OVER (நடப்பு ஓவர்)</Text>
+                <Text style={styles.oversLogisticsValue}>
+                  Over {currentInnings.currentOverNumber || (Math.floor(parseFloat(currentInnings.overs || '0')) + 1)} ({currentInnings.overs || '0.0'} / {currentInnings.totalOvers || match.overs || 20} Ov)
+                </Text>
+              </View>
+              <View style={styles.oversLogisticsCol}>
+                <Text style={styles.oversLogisticsLabel}>OVERS REMAINING (மீதமுள்ள ஓவர்கள்)</Text>
+                <Text style={[styles.oversLogisticsValue, { color: '#b45309' }]}>
+                  {currentInnings.oversRemaining ? `${currentInnings.oversRemaining} Overs Left` : '0.0 Overs'}
+                  {currentInnings.ballsRemaining !== undefined ? ` (${currentInnings.ballsRemaining} balls)` : ''}
+                </Text>
+              </View>
+              {currentInnings.currentBowler && (
+                <View style={styles.oversLogisticsCol}>
+                  <Text style={styles.oversLogisticsLabel}>CURRENT BOWLER (பந்துவீச்சாளர்)</Text>
+                  <Text style={[styles.oversLogisticsValue, { color: '#005960' }]}>
+                    🎳 {currentInnings.currentBowler.name} (Active)
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Suspended Bowlers Alert (MCC Law 41.7) */}
+            {Array.isArray(currentInnings.suspendedBowlers) && currentInnings.suspendedBowlers.length > 0 && (
+              <View style={styles.suspendedWarningBanner}>
+                <Text style={styles.suspendedWarningText}>
+                  🛑 நடுவர் தடை (MCC Law 41.7): {currentInnings.suspendedBowlers.map((b: any) => b.name).join(', ')} பந்துவீச தடை செய்யப்பட்டுள்ளார் (2 Dangerous No-Balls)
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* ─────────────────────────────────────────────────────────────
               BATTING SCORECARD TABLE
               ───────────────────────────────────────────────────────────── */}
           <View style={styles.sectionHeaderRow}>
@@ -403,8 +441,17 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
               BOWLING SCORECARD TABLE
               ───────────────────────────────────────────────────────────── */}
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionHeaderTitle}>🎯 Bowling Figures</Text>
-            <Text style={styles.sectionHeaderSub}>Attack by {currentInnings.bowlingTeam || 'Opponent'}</Text>
+            <View>
+              <Text style={styles.sectionHeaderTitle}>🎯 Bowling Figures</Text>
+              <Text style={styles.sectionHeaderSub}>Attack by {currentInnings.bowlingTeam || 'Opponent'}</Text>
+            </View>
+            {currentInnings.currentBowler && (
+              <View style={styles.liveBowlerHeaderBadge}>
+                <Text style={styles.liveBowlerHeaderBadgeText}>
+                  🎳 Active: {currentInnings.currentBowler.name}
+                </Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.tableWrapper}>
@@ -419,18 +466,80 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                   <Text style={[styles.cell, styles.colNum, styles.tableHeaderText]}>ECON</Text>
                 </View>
 
-                {(currentInnings.bowlers || []).map((bw: any, bwIdx: number) => (
-                  <View key={bw.id || bwIdx} style={[styles.tableRow, bwIdx % 2 === 1 && styles.tableRowAlt]}>
-                    <Text style={[styles.cell, styles.colName, styles.playerName]}>{bw.name}</Text>
-                    <Text style={[styles.cell, styles.colNum]}>{bw.overs}</Text>
-                    <Text style={[styles.cell, styles.colNum]}>{bw.maidens || 0}</Text>
-                    <Text style={[styles.cell, styles.colNum]}>{bw.runs}</Text>
-                    <Text style={[styles.cell, styles.colNum, styles.wicketsText]}>{bw.wickets}</Text>
-                    <Text style={[styles.cell, styles.colNum, styles.econText]}>
-                      {typeof bw.economy === 'number' ? bw.economy.toFixed(2) : bw.economy}
-                    </Text>
-                  </View>
-                ))}
+                {(currentInnings.bowlers || []).map((bw: any, bwIdx: number) => {
+                  const isCurrent = !!(
+                    bw.isCurrentBowler ||
+                    (currentInnings.currentBowler && (bw.playerId === currentInnings.currentBowler.id || bw.name === currentInnings.currentBowler.name))
+                  );
+                  const isSuspended = !!(
+                    bw.isSuspended ||
+                    (currentInnings.suspendedBowlers || []).some((s: any) => s.id === bw.playerId || s.name === bw.name)
+                  );
+
+                  // Mid-over substitution detection
+                  const subRecord = (currentInnings.substitutions || []).find((s: any) =>
+                    s.oldBowlerId === bw.playerId || s.oldBowlerName === bw.name ||
+                    s.newBowlerId === bw.playerId || s.newBowlerName === bw.name
+                  );
+
+                  let badgeText = bw.subNote || '';
+                  if (!badgeText) {
+                    if (isSuspended) {
+                      badgeText = '🚫 நடுவர் தடை (2 No-Balls)';
+                    } else if (subRecord) {
+                      if (subRecord.oldBowlerName === bw.name || subRecord.oldBowlerId === bw.playerId) {
+                        badgeText = subRecord.situation ? `🩹 Sub: ${subRecord.situation}` : '🩹 Mid-Over Substituted';
+                      } else if (subRecord.isMidOver) {
+                        badgeText = '⚡ Shared Over (Sub In)';
+                      }
+                    } else if (bw.overs && !bw.overs.endsWith('.0') && !isCurrent) {
+                      badgeText = `🩹 Mid-Over Sub (${bw.overs} ov)`;
+                    }
+                  }
+
+                  return (
+                    <View
+                      key={bw.id || bwIdx}
+                      style={[
+                        styles.tableRow,
+                        bwIdx % 2 === 1 && styles.tableRowAlt,
+                        isCurrent && { backgroundColor: '#f0fdfa' },
+                        isSuspended && { backgroundColor: '#fff1f2' }
+                      ]}
+                    >
+                      <View style={[styles.colName, { flexDirection: 'column', alignItems: 'flex-start' }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <Text style={[styles.playerName, isCurrent && { color: '#005960', fontWeight: '800' }]}>
+                            {bw.name}
+                          </Text>
+                          {isCurrent && (
+                            <View style={styles.bowlingBadge}>
+                              <Text style={styles.bowlingBadgeText}>🟢 Bowling</Text>
+                            </View>
+                          )}
+                        </View>
+                        {isSuspended ? (
+                          <View style={styles.suspendedPill}>
+                            <Text style={styles.suspendedPillText}>🚫 நடுவர் தடை (2 No-Balls Suspended)</Text>
+                          </View>
+                        ) : badgeText ? (
+                          <View style={styles.subPill}>
+                            <Text style={styles.subPillText}>{badgeText}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <Text style={[styles.cell, styles.colNum, isCurrent && { fontWeight: '800', color: '#005960' }]}>
+                        {bw.overs}
+                      </Text>
+                      <Text style={[styles.cell, styles.colNum]}>{bw.maidens || 0}</Text>
+                      <Text style={[styles.cell, styles.colNum]}>{bw.runs}</Text>
+                      <Text style={[styles.cell, styles.colNum, styles.wicketsText]}>{bw.wickets}</Text>
+                      <Text style={[styles.cell, styles.colNum, styles.econText]}>
+                        {typeof bw.economy === 'number' ? bw.economy.toFixed(2) : bw.economy}
+                      </Text>
+                    </View>
+                  );
+                })}
               </View>
             </ScrollView>
           </View>
@@ -1075,6 +1184,110 @@ const styles = StyleSheet.create({
     marginTop: 22,
     elevation: 3
   },
-  actionBtnText: { color: '#0a1432', fontWeight: '900', fontSize: 14 }
+  actionBtnText: { color: '#0a1432', fontWeight: '900', fontSize: 14 },
+
+  oversLogisticsCard: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 10,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2
+  },
+  oversLogisticsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'space-between'
+  },
+  oversLogisticsCol: {
+    minWidth: 130,
+    flex: 1
+  },
+  oversLogisticsLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748b',
+    letterSpacing: 0.5,
+    marginBottom: 2
+  },
+  oversLogisticsValue: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  suspendedWarningBanner: {
+    backgroundColor: '#fff1f2',
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    borderRadius: 6,
+    padding: 8,
+    marginTop: 10
+  },
+  suspendedWarningText: {
+    color: '#9f1239',
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  liveBowlerHeaderBadge: {
+    backgroundColor: '#dcfce7',
+    borderWidth: 1,
+    borderColor: '#86efac',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2
+  },
+  liveBowlerHeaderBadgeText: {
+    color: '#15803d',
+    fontSize: 10.5,
+    fontWeight: '800'
+  },
+  bowlingBadge: {
+    backgroundColor: '#dcfce7',
+    borderColor: '#86efac',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5
+  },
+  bowlingBadgeText: {
+    color: '#15803d',
+    fontSize: 9.5,
+    fontWeight: '800'
+  },
+  suspendedPill: {
+    backgroundColor: '#fee2e2',
+    borderColor: '#fca5a5',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    marginTop: 3
+  },
+  suspendedPillText: {
+    color: '#b91c1c',
+    fontSize: 9.5,
+    fontWeight: '800'
+  },
+  subPill: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#fde68a',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    marginTop: 3
+  },
+  subPillText: {
+    color: '#b45309',
+    fontSize: 9.5,
+    fontWeight: '700'
+  }
 });
 
