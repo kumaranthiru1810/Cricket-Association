@@ -2609,8 +2609,11 @@ export default function HomeScreen() {
               {realScorecardData?.innings && realScorecardData.innings.length > 0 ? (
                 realScorecardData.innings.map((inn: any, idx: number) => {
                   const runsVal = inn.totalRuns ?? inn.runs ?? 0;
-                  const oversVal = parseFloat(inn.overs || '0');
-                  const crrVal = oversVal > 0 ? (runsVal / oversVal).toFixed(2) : '0.00';
+                  const oversParts = (inn.overs || '0').toString().split('.');
+                  const ovNum = parseInt(oversParts[0], 10) || 0;
+                  const bNum = parseInt(oversParts[1], 10) || 0;
+                  const oversFloat = ovNum + (bNum / 6);
+                  const crrVal = oversFloat > 0 ? (runsVal / oversFloat).toFixed(2) : '0.00';
 
                   return (
                     <View key={inn.id || idx} style={{ marginBottom: 20 }}>

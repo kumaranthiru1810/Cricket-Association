@@ -99,7 +99,24 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
     const runningPct = totalRuns > 0 ? Math.round((runningRuns / totalRuns) * 100) : 0;
     const extrasPct = totalRuns > 0 ? Math.max(0, 100 - boundaryPct - runningPct) : 0;
 
-    const runRate = totalBalls > 0 ? ((totalRuns / totalBalls) * 6).toFixed(2) : '0.00';
+    // Calculate actual overs bowled from currentInnings.overs (e.g. "20.0" -> 20.0, "16.2" -> 16.333)
+    let oversFloat = 0;
+    if (typeof currentInnings.overs === 'number') {
+      oversFloat = currentInnings.overs;
+    } else if (typeof currentInnings.overs === 'string') {
+      const parts = currentInnings.overs.split('.');
+      const ov = parseInt(parts[0], 10) || 0;
+      const b = parseInt(parts[1], 10) || 0;
+      oversFloat = ov + (b / 6);
+    } else if (currentInnings.oversNum !== undefined) {
+      oversFloat = (currentInnings.oversNum || 0) + ((currentInnings.balls || 0) / 6);
+    }
+
+    const runRate = oversFloat > 0
+      ? (totalRuns / oversFloat).toFixed(2)
+      : totalBalls > 0
+        ? ((totalRuns / totalBalls) * 6).toFixed(2)
+        : '0.00';
 
     return {
       totalRuns,

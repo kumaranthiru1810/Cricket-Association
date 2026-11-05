@@ -1287,9 +1287,29 @@ async function seedDefaultData() {
         { id: 'IBAT-01', innings_id: 'INN-M002-1', player_id: 'P301', batting_position: 1, runs: 64, balls: 42, fours: 8, sixes: 2, strike_rate: 152.38, is_out: false },
         { id: 'IBAT-02', innings_id: 'INN-M002-1', player_id: 'P302', batting_position: 2, runs: 28, balls: 22, fours: 3, sixes: 1, strike_rate: 127.27, is_out: true, dismissal_type: 'CAUGHT', bowler_id: 'P402', fielder_id: 'P401' },
         { id: 'IBAT-03', innings_id: 'INN-M002-1', player_id: 'P303', batting_position: 3, runs: 35, balls: 24, fours: 4, sixes: 1, strike_rate: 145.83, is_out: false },
-        { id: 'IBAT-M003-01', innings_id: 'INN-M003-1', player_id: 'P301', batting_position: 1, runs: 42, balls: 30, fours: 4, sixes: 1, strike_rate: 140.0, is_out: false },
-        { id: 'IBAT-M003-02', innings_id: 'INN-M003-1', player_id: 'P302', batting_position: 2, runs: 12, balls: 10, fours: 1, sixes: 0, strike_rate: 120.0, is_out: true, dismissal_type: 'BOWLED', bowler_id: 'P401' },
-        { id: 'IBAT-M003-03', innings_id: 'INN-M003-1', player_id: 'P303', batting_position: 3, runs: 18, balls: 14, fours: 2, sixes: 0, strike_rate: 128.57, is_out: false }
+        // INN-M003-1 Batters (Virudhunagar Spartans: 160/8)
+        { id: 'IBAT-M003-1-01', innings_id: 'INN-M003-1', player_id: 'P301', batting_position: 1, runs: 42, balls: 30, fours: 4, sixes: 1, strike_rate: 140.0, is_out: true, dismissal_type: 'CAUGHT', bowler_id: 'P403', fielder_id: 'P401', dismissal_text: 'c †Dinesh Karthik b Karthik N' },
+        { id: 'IBAT-M003-1-02', innings_id: 'INN-M003-1', player_id: 'P302', batting_position: 2, runs: 12, balls: 10, fours: 1, sixes: 0, strike_rate: 120.0, is_out: true, dismissal_type: 'BOWLED', bowler_id: 'P403', dismissal_text: 'b Karthik N' },
+        { id: 'IBAT-M003-1-03', innings_id: 'INN-M003-1', player_id: 'P303', batting_position: 3, runs: 18, balls: 14, fours: 2, sixes: 0, strike_rate: 128.57, is_out: true, dismissal_type: 'LBW', bowler_id: 'P404', dismissal_text: 'lbw b Saravanan P' },
+        { id: 'IBAT-M003-1-04', innings_id: 'INN-M003-1', player_id: 'P304', batting_position: 4, runs: 26, balls: 18, fours: 3, sixes: 1, strike_rate: 144.44, is_out: true, dismissal_type: 'CAUGHT', bowler_id: 'P408', fielder_id: 'P402', dismissal_text: 'c R. Ashwin b Murugesan A' },
+        { id: 'IBAT-M003-1-05', innings_id: 'INN-M003-1', player_id: 'P306', batting_position: 5, runs: 24, balls: 16, fours: 2, sixes: 1, strike_rate: 150.0, is_out: true, dismissal_type: 'RUN_OUT', fielder_id: 'P407', dismissal_text: 'run out (Balaji R)' },
+        { id: 'IBAT-M003-1-06', innings_id: 'INN-M003-1', player_id: 'P308', batting_position: 6, runs: 11, balls: 9, fours: 1, sixes: 0, strike_rate: 122.22, is_out: true, dismissal_type: 'CAUGHT', bowler_id: 'P411', fielder_id: 'P405', dismissal_text: 'c Manikandan K b Selvam R' },
+        { id: 'IBAT-M003-1-07', innings_id: 'INN-M003-1', player_id: 'P310', batting_position: 7, runs: 9, balls: 8, fours: 1, sixes: 0, strike_rate: 112.50, is_out: true, dismissal_type: 'CAUGHT_AND_BOWLED', bowler_id: 'P402', dismissal_text: 'c & b R. Ashwin' },
+        { id: 'IBAT-M003-1-08', innings_id: 'INN-M003-1', player_id: 'P305', batting_position: 8, runs: 4, balls: 6, fours: 0, sixes: 0, strike_rate: 66.67, is_out: true, dismissal_type: 'BOWLED', bowler_id: 'P411', dismissal_text: 'b Selvam R' },
+        { id: 'IBAT-M003-1-09', innings_id: 'INN-M003-1', player_id: 'P307', batting_position: 9, runs: 2, balls: 5, fours: 0, sixes: 0, strike_rate: 40.0, is_out: false, dismissal_text: 'not out' },
+        { id: 'IBAT-M003-1-10', innings_id: 'INN-M003-1', player_id: 'P309', batting_position: 10, runs: 1, balls: 4, fours: 0, sixes: 0, strike_rate: 25.0, is_out: false, dismissal_text: 'not out' },
+        // INN-M003-2 Batters (Sivakasi Strikers: 144/9)
+        { id: 'IBAT-M003-2-01', innings_id: 'INN-M003-2', player_id: 'P401', batting_position: 1, runs: 38, balls: 26, fours: 4, sixes: 1, strike_rate: 146.15, is_out: true, dismissal_type: 'CAUGHT', bowler_id: 'P305', fielder_id: 'P301', dismissal_text: 'c Suresh Kumar b R. Vignesh' },
+        { id: 'IBAT-M003-2-02', innings_id: 'INN-M003-2', player_id: 'P405', batting_position: 2, runs: 15, balls: 14, fours: 2, sixes: 0, strike_rate: 107.14, is_out: true, dismissal_type: 'BOWLED', bowler_id: 'P307', dismissal_text: 'b Saravanan' },
+        { id: 'IBAT-M003-2-03', innings_id: 'INN-M003-2', player_id: 'P407', batting_position: 3, runs: 22, balls: 18, fours: 2, sixes: 1, strike_rate: 122.22, is_out: true, dismissal_type: 'CAUGHT', bowler_id: 'P309', fielder_id: 'P303', dismissal_text: 'c Vijay b S. Karthik' },
+        { id: 'IBAT-M003-2-04', innings_id: 'INN-M003-2', player_id: 'P406', batting_position: 4, runs: 19, balls: 15, fours: 2, sixes: 0, strike_rate: 126.67, is_out: true, dismissal_type: 'LBW', bowler_id: 'P311', dismissal_text: 'lbw b P. Murugan' },
+        { id: 'IBAT-M003-2-05', innings_id: 'INN-M003-2', player_id: 'P402', batting_position: 5, runs: 16, balls: 13, fours: 1, sixes: 1, strike_rate: 123.08, is_out: true, dismissal_type: 'CAUGHT', bowler_id: 'P305', fielder_id: 'P304', dismissal_text: 'c †K. Balaji b R. Vignesh' },
+        { id: 'IBAT-M003-2-06', innings_id: 'INN-M003-2', player_id: 'P409', batting_position: 6, runs: 11, balls: 10, fours: 1, sixes: 0, strike_rate: 110.0, is_out: true, dismissal_type: 'RUN_OUT', fielder_id: 'P306', dismissal_text: 'run out (Arun Pandian)' },
+        { id: 'IBAT-M003-2-07', innings_id: 'INN-M003-2', player_id: 'P410', batting_position: 7, runs: 6, balls: 8, fours: 0, sixes: 0, strike_rate: 75.0, is_out: true, dismissal_type: 'BOWLED', bowler_id: 'P307', dismissal_text: 'b Saravanan' },
+        { id: 'IBAT-M003-2-08', innings_id: 'INN-M003-2', player_id: 'P403', batting_position: 8, runs: 4, balls: 6, fours: 0, sixes: 0, strike_rate: 66.67, is_out: true, dismissal_type: 'CAUGHT', bowler_id: 'P309', fielder_id: 'P301', dismissal_text: 'c Suresh Kumar b S. Karthik' },
+        { id: 'IBAT-M003-2-09', innings_id: 'INN-M003-2', player_id: 'P408', batting_position: 9, runs: 2, balls: 5, fours: 0, sixes: 0, strike_rate: 40.0, is_out: true, dismissal_type: 'BOWLED', bowler_id: 'P311', dismissal_text: 'b P. Murugan' },
+        { id: 'IBAT-M003-2-10', innings_id: 'INN-M003-2', player_id: 'P404', batting_position: 10, runs: 1, balls: 3, fours: 0, sixes: 0, strike_rate: 33.33, is_out: false, dismissal_text: 'not out' },
+        { id: 'IBAT-M003-2-11', innings_id: 'INN-M003-2', player_id: 'P411', batting_position: 11, runs: 1, balls: 2, fours: 0, sixes: 0, strike_rate: 50.0, is_out: false, dismissal_text: 'not out' }
       ]);
     }
 
@@ -1298,8 +1318,18 @@ async function seedDefaultData() {
       await InningsBowler.insertMany([
         { id: 'IBOW-01', innings_id: 'INN-M002-1', player_id: 'P401', overs: 3, balls: 2, maidens: 0, runs_conceded: 28, runs: 28, wickets: 1, no_balls: 1, wides: 2, economy: 8.40 },
         { id: 'IBOW-02', innings_id: 'INN-M002-1', player_id: 'P402', overs: 4, balls: 0, maidens: 0, runs_conceded: 32, runs: 32, wickets: 2, no_balls: 0, wides: 1, economy: 8.00 },
-        { id: 'IBOW-M003-01', innings_id: 'INN-M003-1', player_id: 'P401', overs: 4, balls: 0, maidens: 0, runs_conceded: 24, runs: 24, wickets: 2, no_balls: 0, wides: 2, economy: 6.00 },
-        { id: 'IBOW-M003-02', innings_id: 'INN-M003-1', player_id: 'P307', overs: 4, balls: 0, maidens: 0, runs_conceded: 26, runs: 26, wickets: 2, no_balls: 1, wides: 2, economy: 6.50 }
+        // INN-M003-1 Bowlers (Sivakasi Strikers)
+        { id: 'IBOW-M003-1-01', innings_id: 'INN-M003-1', player_id: 'P403', overs: 4, balls: 0, maidens: 0, runs_conceded: 28, runs: 28, wickets: 2, economy: 7.00, no_balls: 0, wides: 1 },
+        { id: 'IBOW-M003-1-02', innings_id: 'INN-M003-1', player_id: 'P404', overs: 4, balls: 0, maidens: 0, runs_conceded: 30, runs: 30, wickets: 1, economy: 7.50, no_balls: 0, wides: 2 },
+        { id: 'IBOW-M003-1-03', innings_id: 'INN-M003-1', player_id: 'P408', overs: 4, balls: 0, maidens: 0, runs_conceded: 34, runs: 34, wickets: 1, economy: 8.50, no_balls: 1, wides: 1 },
+        { id: 'IBOW-M003-1-04', innings_id: 'INN-M003-1', player_id: 'P411', overs: 4, balls: 0, maidens: 0, runs_conceded: 32, runs: 32, wickets: 2, economy: 8.00, no_balls: 0, wides: 1 },
+        { id: 'IBOW-M003-1-05', innings_id: 'INN-M003-1', player_id: 'P402', overs: 4, balls: 0, maidens: 0, runs_conceded: 25, runs: 25, wickets: 1, economy: 6.25, no_balls: 0, wides: 1 },
+        // INN-M003-2 Bowlers (Virudhunagar Spartans)
+        { id: 'IBOW-M003-2-01', innings_id: 'INN-M003-2', player_id: 'P305', overs: 4, balls: 0, maidens: 0, runs_conceded: 26, runs: 26, wickets: 2, economy: 6.50, no_balls: 0, wides: 1 },
+        { id: 'IBOW-M003-2-02', innings_id: 'INN-M003-2', player_id: 'P307', overs: 4, balls: 0, maidens: 0, runs_conceded: 24, runs: 24, wickets: 2, economy: 6.00, no_balls: 0, wides: 1 },
+        { id: 'IBOW-M003-2-03', innings_id: 'INN-M003-2', player_id: 'P309', overs: 4, balls: 0, maidens: 0, runs_conceded: 28, runs: 28, wickets: 2, economy: 7.00, no_balls: 0, wides: 1 },
+        { id: 'IBOW-M003-2-04', innings_id: 'INN-M003-2', player_id: 'P311', overs: 4, balls: 0, maidens: 0, runs_conceded: 30, runs: 30, wickets: 2, economy: 7.50, no_balls: 0, wides: 1 },
+        { id: 'IBOW-M003-2-05', innings_id: 'INN-M003-2', player_id: 'P306', overs: 4, balls: 0, maidens: 0, runs_conceded: 27, runs: 27, wickets: 0, economy: 6.75, no_balls: 0, wides: 1 }
       ]);
     }
 
