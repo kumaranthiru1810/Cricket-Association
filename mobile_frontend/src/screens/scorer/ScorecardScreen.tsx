@@ -148,7 +148,11 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
         <View style={styles.headerTopRow}>
           <TouchableOpacity onPress={handleBack} style={styles.backBtn} activeOpacity={0.8}>
             <Text style={styles.backText}>
-              {match.status === 'Live' || match.status === 'LIVE' ? '← Back to Live Scoring' : '← Back to Matches'}
+              {params?.returnTo === 'Home'
+                ? '← Back to Association Portal'
+                : match.status === 'Live' || match.status === 'LIVE'
+                  ? '← Back to Live Scoring'
+                  : '← Back to Matches'}
             </Text>
           </TouchableOpacity>
           <View style={styles.badgeLive}>
@@ -591,11 +595,11 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
 
             <TouchableOpacity
               style={[styles.actionBtn, { backgroundColor: '#059669', borderColor: '#047857' }]}
-              onPress={() => scorerNav?.navigate ? scorerNav.navigate('Dashboard') : handleBack()}
+              onPress={handleBack}
               activeOpacity={0.8}
             >
               <Text style={styles.actionBtnText}>
-                🏠 Back to Scorer Dashboard (Matches)
+                {params?.returnTo === 'Home' ? '🏠 Back to Association Home Portal' : '🏠 Back to Scorer Dashboard (Matches)'}
               </Text>
             </TouchableOpacity>
           </View>

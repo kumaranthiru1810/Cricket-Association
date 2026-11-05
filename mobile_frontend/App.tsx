@@ -139,7 +139,7 @@ function MainAppShell() {
   }
 
   if (currentScreen === 'Scorecard') {
-    return <ScorecardScreen onExit={() => navigate('Home')} initialMatchId={params?.matchId} />;
+    return <ScorecardScreen onExit={() => navigate('Home')} initialMatchId={params?.matchId} initialParams={params} />;
   }
 
   const currentUser = getCurrentUser();

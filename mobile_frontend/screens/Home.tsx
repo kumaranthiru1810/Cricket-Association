@@ -444,50 +444,53 @@ export default function HomeScreen() {
     }
   };
 
-  const loadPublicMatches = async () => {
-    setIsLoadingMatches(true);
+  const loadPublicMatches = async (isInitial = false) => {
+    // Only show loading spinner on the very first load when no matches are cached yet
+    if (isInitial || publicMatches.length === 0) {
+      setIsLoadingMatches(true);
+    }
     setMatchesError(null);
     try {
       const res = await ScorerApi.getPublicMatches();
-      if (res && res.success && Array.isArray(res.data)) {
-        setPublicMatches(res.data);
-      } else if (Array.isArray(res)) {
-        setPublicMatches(res);
-      } else {
-        setPublicMatches([]);
+      const data = res?.data || res?.matches || (Array.isArray(res) ? res : []);
+      if (Array.isArray(data) && data.length > 0) {
+        setPublicMatches(data);
       }
     } catch (err: any) {
       console.warn('Failed to load public matches from API:', err.message);
-      setMatchesError(err.message || 'Unable to connect to match database');
+      if (publicMatches.length === 0) {
+        setMatchesError(err.message || 'Unable to connect to match database');
+      }
     } finally {
       setIsLoadingMatches(false);
     }
   };
 
   useEffect(() => {
-    loadPublicMatches();
+    loadPublicMatches(true);
     loadPortalData();
 
     // Real-time Socket.IO Live Score Synchronization
     let socket: any = null;
     try {
-      socket = io(SOCKET_URL);
+      socket = io(SOCKET_URL, { timeout: 5000, reconnectionAttempts: 3 });
       socket.on('score:update', () => {
-        loadPublicMatches();
+        loadPublicMatches(false);
         loadPortalData();
       });
       socket.on('connect', () => {
-        loadPublicMatches();
+        loadPublicMatches(false);
         loadPortalData();
       });
     } catch (e) {
       // Fallback to active interval
     }
 
+    // Silent background poll every 10 seconds
     const timer = setInterval(() => {
-      loadPublicMatches();
+      loadPublicMatches(false);
       loadPortalData();
-    }, 3000);
+    }, 10000);
 
     return () => {
       clearInterval(timer);
@@ -495,23 +498,9 @@ export default function HomeScreen() {
     };
   }, []);
 
-  const handleOpenScorecard = async (matchItem: any) => {
-    setActiveScorecardMatch(matchItem.id);
-    setActiveScorecardMatchData(matchItem);
-    setRealScorecardData(null);
-    setScorecardModalVisible(true);
-    setIsLoadingScorecard(true);
-    try {
-      const res = await ScorerApi.getPublicScorecard(matchItem.id);
-      const scorecard = res?.data || res?.scorecard || (res?.innings ? res : null);
-      if (scorecard) {
-        setRealScorecardData(scorecard);
-      }
-    } catch (err) {
-      console.warn('Could not fetch detailed scorecard, falling back to match summary:', err);
-    } finally {
-      setIsLoadingScorecard(false);
-    }
+  const handleOpenScorecard = (matchItem: any) => {
+    if (!matchItem?.id) return;
+    navigate('Scorecard', { matchId: matchItem.id, returnTo: 'Home' });
   };
 
   const getTeamBadgeColor = (short: string, index: number) => {
@@ -1069,8 +1058,8 @@ export default function HomeScreen() {
               );
             })()}
 
-            {/* Loading State */}
-            {isLoadingMatches && (
+            {/* Loading State: Only show spinner if matches haven't loaded yet */}
+            {isLoadingMatches && publicMatches.length === 0 && (
               <View style={{ paddingVertical: 40, alignItems: 'center', justifyContent: 'center' }}>
                 <ActivityIndicator size="large" color="#d4af37" />
                 <Text style={{ marginTop: 12, fontSize: 14, fontWeight: '700', color: '#854d0e' }}>
@@ -1100,7 +1089,7 @@ export default function HomeScreen() {
                 </Text>
                 <TouchableOpacity
                   style={{ backgroundColor: '#dc2626', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}
-                  onPress={loadPublicMatches}
+                  onPress={() => loadPublicMatches(true)}
                 >
                   <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 13 }}>Retry Connection</Text>
                 </TouchableOpacity>
@@ -1385,9 +1374,9 @@ export default function HomeScreen() {
                         >
                           <Text style={[styles.btnOutlineGoldBlockText, isSmallMobile && { fontSize: 11 }]}>
                             {isLive
-                              ? '👁️ View Live Scorecard & Toss'
+                              ? '👁️ View Live Scorecard & Analytics ▶'
                               : isCompleted
-                                ? '📄 View Result Scoresheet'
+                                ? '📊 View Scorecard & Wagon Wheel ▶'
                                 : isUpcoming
                                   ? '🔔 View Fixture Logistics'
                                   : 'ℹ️ View Match Details'}
