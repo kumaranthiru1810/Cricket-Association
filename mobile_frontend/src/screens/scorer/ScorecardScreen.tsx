@@ -17,7 +17,8 @@ interface ScorecardScreenProps {
 
 export default function ScorecardScreen({ onExit, initialMatchId, initialParams }: ScorecardScreenProps = {}) {
   const scorerNav = useScorerNavigation();
-  const matchId = initialMatchId || initialParams?.matchId || scorerNav.params?.matchId || 'M001';
+  const params = initialParams || scorerNav.params;
+  const matchId = initialMatchId || params?.matchId || 'M001';
 
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
@@ -29,7 +30,10 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
   const [selectedWagonBatterId, setSelectedWagonBatterId] = useState<string>('');
 
   const handleBack = () => {
-    if (onExit) {
+    const isLiveMatch = scorecardData?.match?.status === 'LIVE' || scorecardData?.match?.status === 'Live';
+    if (params?.returnTo === 'LiveScoring' && isLiveMatch) {
+      scorerNav?.navigate('LiveScoring', { matchId });
+    } else if (onExit) {
       onExit();
     } else if (scorerNav?.navigate) {
       scorerNav.navigate('Dashboard');
@@ -143,7 +147,9 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
       <View style={[styles.header, { paddingTop: ((styles.header as any)?.paddingTop || 16) + insetsTop }]}>
         <View style={styles.headerTopRow}>
           <TouchableOpacity onPress={handleBack} style={styles.backBtn} activeOpacity={0.8}>
-            <Text style={styles.backText}>← Back</Text>
+            <Text style={styles.backText}>
+              {match.status === 'Live' || match.status === 'LIVE' ? '← Back to Live Scoring' : '← Back to Matches'}
+            </Text>
           </TouchableOpacity>
           <View style={styles.badgeLive}>
             <Text style={styles.badgeLiveText}>
@@ -570,16 +576,29 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
           )}
 
           {/* ACTION BUTTONS */}
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => (scorerNav?.navigate ? scorerNav.navigate('LiveScoring', { matchId }) : handleBack())}
-          >
-            <Text style={styles.actionBtnText}>
-              {match.status === 'Live' || match.status === 'LIVE'
-                ? '⚡ Back to Live Scoring Console'
-                : '← Back to Match Portal'}
-            </Text>
-          </TouchableOpacity>
+          <View style={{ gap: 10, marginTop: 16 }}>
+            {(match.status === 'Live' || match.status === 'LIVE') && (
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => scorerNav?.navigate ? scorerNav.navigate('LiveScoring', { matchId }) : handleBack()}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.actionBtnText}>
+                  ⚡ Return to Live Scoring Console
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: '#059669', borderColor: '#047857' }]}
+              onPress={() => scorerNav?.navigate ? scorerNav.navigate('Dashboard') : handleBack()}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.actionBtnText}>
+                🏠 Back to Scorer Dashboard (Matches)
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <SharedFooter />

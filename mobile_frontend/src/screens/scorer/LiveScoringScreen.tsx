@@ -1957,6 +1957,27 @@ export default function LiveScoringScreen() {
             </View>
 
             <ScrollView style={styles.drawerMenuScroll} showsVerticalScrollIndicator={false}>
+              {/* 0. Return to Matches Dashboard */}
+              <TouchableOpacity
+                style={[styles.drawerMenuItem, { backgroundColor: '#ecfdf5', borderColor: '#10b981' }]}
+                onPress={() => {
+                  setShowSideDrawer(false);
+                  navigate('Dashboard');
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.drawerMenuIconBox, { backgroundColor: '#059669', borderColor: '#047857' }]}>
+                  <Text style={[styles.drawerMenuIconText, { color: '#ffffff' }]}>🏠</Text>
+                </View>
+                <View style={styles.drawerMenuTextBox}>
+                  <Text style={[styles.drawerMenuLabel, { color: '#047857', fontWeight: 'bold' }]}>
+                    All Matches (Dashboard)
+                  </Text>
+                  <Text style={styles.drawerMenuDesc}>Return to Scorer Match Portal</Text>
+                </View>
+                <Text style={[styles.drawerMenuChevron, { color: '#059669' }]}>›</Text>
+              </TouchableOpacity>
+
               {/* 0a. Live Scoring (Active) */}
               <TouchableOpacity
                 style={[styles.drawerMenuItem, { backgroundColor: '#fef3c7', borderColor: '#d97706' }]}
@@ -4836,6 +4857,16 @@ export default function LiveScoringScreen() {
             </TouchableOpacity>
           )}
 
+          {/* Quick Back to Matches Dashboard Button */}
+          <TouchableOpacity
+            onPress={() => navigate('Dashboard')}
+            style={styles.headerMatchesBtn}
+            accessibilityLabel="Back to Matches Dashboard"
+            activeOpacity={0.8}
+          >
+            <Text style={styles.headerMatchesBtnText}>← Matches</Text>
+          </TouchableOpacity>
+
           <Image source={IMG_LOGO} style={styles.headerLogo} resizeMode="contain" />
           <View style={{ marginLeft: 8, flex: 1, minWidth: 0 }}>
             <Text style={styles.headerTitleMain} numberOfLines={1}>
@@ -4912,6 +4943,24 @@ export default function LiveScoringScreen() {
 
             {/* Navigation Items List */}
             <ScrollView style={styles.sidebarNavScroll} showsVerticalScrollIndicator={false}>
+              {/* 0. All Matches (Dashboard) */}
+              <TouchableOpacity
+                style={[
+                  styles.sidebarNavItem,
+                  isSidebarCollapsed && styles.sidebarNavItemCollapsed,
+                  { backgroundColor: '#ecfdf5', borderColor: '#10b981', marginBottom: 6 }
+                ]}
+                onPress={() => navigate('Dashboard')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.sidebarNavIcon}>🏠</Text>
+                {!isSidebarCollapsed && (
+                  <Text style={[styles.sidebarNavText, { color: '#047857', fontWeight: 'bold' }]}>
+                    All Matches
+                  </Text>
+                )}
+              </TouchableOpacity>
+
               {/* 1. Live Scoring (Active Tab - Gold Yellow Background, Image 1 Style) */}
               <TouchableOpacity
                 style={[styles.sidebarNavItem, styles.sidebarNavItemActive, isSidebarCollapsed && styles.sidebarNavItemCollapsed]}
@@ -5274,10 +5323,17 @@ export default function LiveScoringScreen() {
                     <View style={styles.championActionsRow}>
                       <TouchableOpacity
                         style={styles.viewScorecardBtn}
-                        onPress={() => navigate('Scorecard', { matchId })}
+                        onPress={() => navigate('Scorecard', { matchId, returnTo: 'LiveScoring', status: 'COMPLETED' })}
                         activeOpacity={0.85}
                       >
                         <Text style={styles.viewScorecardBtnText}>📊 View Official Scorecard ▶</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.viewScorecardBtn, { backgroundColor: '#059669', shadowColor: '#059669' }]}
+                        onPress={() => navigate('Dashboard')}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.viewScorecardBtnText}>🏠 Back to Scorer Dashboard</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -5631,37 +5687,60 @@ export default function LiveScoringScreen() {
 
             {/* Bottom Actions Bar */}
             <View style={styles.actionPanel}>
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.undoBtn]}
-                onPress={handleUndoLastDelivery}
-                disabled={isUndoingDelivery || balls === 0 || matchStatus !== 'LIVE'}
-              >
-                {isUndoingDelivery ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <Text
-                    style={[
-                      styles.actionBtnText,
-                      { color: balls === 0 || matchStatus !== 'LIVE' ? '#94a3b8' : '#FFF' }
-                    ]}
+              {isMatchEnded ? (
+                <>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, { backgroundColor: '#059669', borderColor: '#047857', flex: 1 }]}
+                    onPress={() => navigate('Dashboard')}
+                    activeOpacity={0.85}
                   >
-                    ↺ Undo Last Ball
-                  </Text>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.scorecardBtn]}
-                onPress={() => navigate('Scorecard', { matchId })}
-              >
-                <Text style={styles.scorecardBtnText}>View Full Scorecard</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.endBtn]}
-                disabled={isInningsBreak || isMatchEnded}
-                onPress={confirmEndInnings}
-              >
-                <Text style={styles.endBtnText}>End Innings</Text>
-              </TouchableOpacity>
+                    <Text style={[styles.actionBtnText, { color: '#ffffff', fontWeight: 'bold' }]}>
+                      🏠 Back to Scorer Dashboard
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.scorecardBtn, { flex: 1 }]}
+                    onPress={() => navigate('Scorecard', { matchId, returnTo: 'LiveScoring', status: 'COMPLETED' })}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.scorecardBtnText}>📊 View Full Scorecard</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.undoBtn]}
+                    onPress={handleUndoLastDelivery}
+                    disabled={isUndoingDelivery || balls === 0 || matchStatus !== 'LIVE'}
+                  >
+                    {isUndoingDelivery ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <Text
+                        style={[
+                          styles.actionBtnText,
+                          { color: balls === 0 || matchStatus !== 'LIVE' ? '#94a3b8' : '#FFF' }
+                        ]}
+                      >
+                        ↺ Undo Last Ball
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.scorecardBtn]}
+                    onPress={() => navigate('Scorecard', { matchId, returnTo: 'LiveScoring', status: matchStatus })}
+                  >
+                    <Text style={styles.scorecardBtnText}>View Full Scorecard</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.endBtn]}
+                    disabled={isInningsBreak || isMatchEnded}
+                    onPress={confirmEndInnings}
+                  >
+                    <Text style={styles.endBtnText}>End Innings</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </View>
         </View>
@@ -7048,6 +7127,20 @@ const getStyles = (isDesktop: boolean) =>
       fontSize: isDesktop ? 18 : 16,
       fontWeight: 'bold'
     },
+    headerMatchesBtn: {
+      backgroundColor: 'rgba(255, 255, 255, 0.15)',
+      paddingHorizontal: isDesktop ? 10 : 8,
+      paddingVertical: isDesktop ? 6 : 4,
+      borderRadius: 6,
+      marginRight: 6,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.25)'
+    },
+    headerMatchesBtnText: {
+      color: '#fef3c7',
+      fontSize: isDesktop ? 12 : 11,
+      fontWeight: '700'
+    },
     headerRight: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -7525,7 +7618,9 @@ const getStyles = (isDesktop: boolean) =>
     },
     championActionsRow: {
       flexDirection: 'row',
-      gap: 10
+      gap: 10,
+      flexWrap: 'wrap',
+      justifyContent: 'center'
     },
     viewScorecardBtn: {
       backgroundColor: '#d97706',

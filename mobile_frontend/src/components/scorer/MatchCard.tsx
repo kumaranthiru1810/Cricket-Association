@@ -34,7 +34,7 @@ export default function MatchCard({ match, variant = 'upcoming' }: Props) {
     } else if (match.status === 'Live') {
       navigate('LiveScoring', { matchId: match.id });
     } else {
-      navigate('Scorecard', { matchId: match.id });
+      navigate('Scorecard', { matchId: match.id, returnTo: 'Dashboard', status: match.status });
     }
   };
 
