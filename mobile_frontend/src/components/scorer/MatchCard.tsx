@@ -81,25 +81,36 @@ export default function MatchCard({ match, variant = 'upcoming' }: Props) {
 
   if (isCompleted) {
     return (
-      <View style={[styles.card, styles.completedCard]}>
-        <Text style={styles.tournamentText}>{match.tournament}</Text>
+      <TouchableOpacity activeOpacity={0.92} onPress={handleAction} style={[styles.card, styles.completedCard]}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+          <Text style={styles.tournamentText}>{match.tournament || 'Association Tournament'}</Text>
+          <View style={[styles.upcomingBadge, { backgroundColor: '#dcfce7', borderColor: '#86efac' }]}>
+            <Text style={[styles.upcomingBadgeText, { color: '#15803d' }]}>COMPLETED</Text>
+          </View>
+        </View>
         
         <View style={styles.compactRow}>
           <Text style={styles.compactTeam}>{match.teamA}</Text>
-          <Text style={styles.compactScore}>{match.scoreA}</Text>
+          <Text style={styles.compactScore}>{match.scoreA || 'N/A'}</Text>
         </View>
         <View style={styles.compactRow}>
           <Text style={styles.compactTeam}>{match.teamB}</Text>
-          <Text style={styles.compactScore}>{match.scoreB}</Text>
+          <Text style={styles.compactScore}>{match.scoreB || 'N/A'}</Text>
         </View>
         
+        {match.date && (
+          <Text style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+            📅 {match.date} {match.venue ? `• ${match.venue}` : ''}
+          </Text>
+        )}
+
         <View style={styles.resultRow}>
-          <Text style={styles.resultText}>{match.result}</Text>
-          <TouchableOpacity style={styles.secondaryBtn} onPress={handleAction}>
-            <Text style={styles.secondaryBtnText}>VIEW SCORECARD</Text>
+          <Text style={styles.resultText}>🏆 {match.result || 'Match Concluded'}</Text>
+          <TouchableOpacity style={styles.secondaryBtn} onPress={handleAction} activeOpacity={0.8}>
+            <Text style={styles.secondaryBtnText}>VIEW FULL SCORECARD ▶</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   }
 
