@@ -473,6 +473,17 @@ export default function LiveScoringScreen() {
   const [isUpdatingBowler, setIsUpdatingBowler] = useState<boolean>(false);
   const [changeBowlerReason, setChangeBowlerReason] = useState<'INJURY' | 'TACTICAL' | 'NO_BALL_SUSPENSION'>('TACTICAL');
   const [isSuspendingCurrentBowler, setIsSuspendingCurrentBowler] = useState<boolean>(false);
+  const [bowlerSituation, setBowlerSituation] = useState<string>('காயம் (Injured)');
+  const [isSituationDropdownOpen, setIsSituationDropdownOpen] = useState<boolean>(false);
+  const BOWLER_SITUATIONS = [
+    { id: 'INJURY', label: '🤕 காயம் (Bowler Injured)', text: 'காயம் (Injured)' },
+    { id: 'CRAMPS', label: '⚠️ தசைப்பிடிப்பு / சோர்வு (Cramps / Fatigue)', text: 'தசைப்பிடிப்பு (Cramps)' },
+    { id: 'SUSPENDED', label: '🚫 2 No-Ball நடுவர் தடை (Umpire Suspended)', text: '2 No-Ball நடுவர் தடை (Suspended)' },
+    { id: 'MEDICAL', label: '🚑 மருத்துவ சிகிச்சை (Medical Treatment)', text: 'மருத்துவ சிகிச்சை (Medical)' },
+    { id: 'TACTICAL', label: '🔄 கேப்டன் மாற்றம் (Tactical / Captain Call)', text: 'கேப்டன் மாற்றம் (Tactical)' },
+    { id: 'ROTATION', label: '⏱️ பந்துவீச்சு சுழற்சி (Bowling Rotation)', text: 'பந்துவீச்சு சுழற்சி (Rotation)' },
+    { id: 'CUSTOM', label: '✏️ வேறு காரணம் (Custom - Type Below)', text: '' }
+  ];
 
   // 2 No-Balls Dangerous Bowling Alert (MCC Law 41.7)
   const [noBallAlert, setNoBallAlert] = useState<{ bowlerId: string; bowlerName: string; count: number } | null>(null);
@@ -1297,7 +1308,10 @@ export default function LiveScoringScreen() {
     setCustomChangeBowlerName('');
     setIsChangeBowlerDropdownOpen(false);
     setChangeBowlerSearch('');
-    setChangeBowlerReason('TACTICAL');
+    const isMid = balls % 6 > 0;
+    setChangeBowlerReason(isMid ? 'INJURY' : 'TACTICAL');
+    setBowlerSituation(isMid ? 'காயம் (Injured)' : 'கேப்டன் மாற்றம் (Tactical)');
+    setIsSituationDropdownOpen(false);
     setIsSuspendingCurrentBowler(false);
     setShowChangeBowlerModal(true);
   };
@@ -1308,6 +1322,8 @@ export default function LiveScoringScreen() {
     setIsChangeBowlerDropdownOpen(false);
     setChangeBowlerSearch('');
     setChangeBowlerReason('INJURY');
+    setBowlerSituation('காயம் (Injured)');
+    setIsSituationDropdownOpen(false);
     setIsSuspendingCurrentBowler(false);
     setShowChangeBowlerModal(true);
   };
@@ -1334,6 +1350,7 @@ export default function LiveScoringScreen() {
         newBowlerId: bwlId,
         newBowlerName: bwlName,
         reason: changeBowlerReason,
+        situation: bowlerSituation.trim() || changeBowlerReason,
         suspendCurrentBowler: isSuspendingCurrentBowler
       });
       if (res && res.bowler) {
@@ -1344,9 +1361,10 @@ export default function LiveScoringScreen() {
       setShowChangeBowlerModal(false);
       await loadLiveState(false);
       const ballsInCurrentOver = balls % 6;
+      const sitTag = bowlerSituation.trim() ? ` [${bowlerSituation.trim()}]` : '';
       const succMsg = ballsInCurrentOver > 0
-        ? `Bowler substituted! ${bwlName || 'New bowler'} will bowl the remaining ${6 - ballsInCurrentOver} ball(s) of this over (Law 21.9).`
-        : (res?.message || `Bowler updated to ${bwlName || 'new bowler'}.`);
+        ? `பந்துவீச்சாளர் மாற்றம் செய்யப்பட்டது! ${bwlName || 'புதிய பந்துவீச்சாளர்'} மீதமுள்ள ${6 - ballsInCurrentOver} பந்துகளை வீசுவார்${sitTag}.`
+        : (res?.message || `Bowler updated to ${bwlName || 'new bowler'}${sitTag}.`);
       Platform.OS === 'web' ? window.alert(succMsg) : Alert.alert('Bowler Changed', succMsg);
     } catch (err: any) {
       const msg = err.message || 'Failed to change bowler.';
@@ -6228,48 +6246,106 @@ export default function LiveScoringScreen() {
               </View>
             )}
 
-            {/* Mid-Over Notice if active over */}
+            {/* Mid-Over Clean Badge - Removed verbose legal text as requested */}
             {balls % 6 > 0 && (
-              <View style={styles.midOverNoticeBox}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                  <Text style={{ fontSize: 13 }}>🩹</Text>
-                  <Text style={styles.midOverNoticeTitle}>
-                    MID-OVER SUBSTITUTION (MCC LAW 21.9)
-                  </Text>
-                </View>
-                <Text style={styles.midOverNoticeText}>
-                  Current over is in progress ({balls % 6} balls bowled). The substitute bowler will complete the remaining {6 - (balls % 6)} ball(s) of this over.
+              <View style={styles.midOverCleanBadge}>
+                <Text style={styles.midOverCleanBadgeIcon}>⚡</Text>
+                <Text style={styles.midOverCleanBadgeText}>
+                  மீதமுள்ள பந்துகள்: <Text style={{ fontWeight: '800', color: '#b45309' }}>{6 - (balls % 6)} Balls Remaining</Text> ({balls % 6} பந்துகள் வீசப்பட்டுள்ளது)
                 </Text>
               </View>
             )}
 
-            {/* Substitution Reason Selector */}
-            <View style={styles.reasonPillsRow}>
+            {/* Substitution Situation / Reason Selector (Dropdown + Custom Typing) */}
+            <View style={{ marginBottom: 12 }}>
+              <Text style={styles.selectLabel}>பந்துவீச்சாளர் நிலை / காரணம் (SITUATION / REASON):</Text>
               <TouchableOpacity
                 style={[
-                  styles.reasonPill,
-                  changeBowlerReason === 'INJURY' && styles.reasonPillActive
+                  styles.situationDropdownTrigger,
+                  isSituationDropdownOpen && styles.situationDropdownTriggerOpen
                 ]}
-                onPress={() => setChangeBowlerReason('INJURY')}
+                onPress={() => {
+                  setIsSituationDropdownOpen(!isSituationDropdownOpen);
+                  setIsChangeBowlerDropdownOpen(false);
+                }}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.reasonPillText, changeBowlerReason === 'INJURY' && styles.reasonPillTextActive]}>
-                  🩹 Injured / Law 21.9
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                  <Text style={{ fontSize: 13, marginRight: 6 }}>📋</Text>
+                  <Text style={styles.situationDropdownTriggerText} numberOfLines={1}>
+                    {bowlerSituation || 'காரணத்தைத் தேர்ந்தெடுக்கவும் (Select Situation)...'}
+                  </Text>
+                </View>
+                <Text style={styles.fielderDropdownArrow}>{isSituationDropdownOpen ? '▲' : '▼'}</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.reasonPill,
-                  changeBowlerReason === 'TACTICAL' && styles.reasonPillActive
-                ]}
-                onPress={() => setChangeBowlerReason('TACTICAL')}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.reasonPillText, changeBowlerReason === 'TACTICAL' && styles.reasonPillTextActive]}>
-                  🔄 Regular / Tactical
-                </Text>
-              </TouchableOpacity>
+              {isSituationDropdownOpen && (
+                <View style={styles.situationDropdownMenu}>
+                  {BOWLER_SITUATIONS.map(sit => {
+                    const isSelected = bowlerSituation === sit.text && sit.text !== '';
+                    return (
+                      <TouchableOpacity
+                        key={sit.id}
+                        style={[
+                          styles.situationDropdownItem,
+                          isSelected && styles.situationDropdownItemSelected
+                        ]}
+                        onPress={() => {
+                          if (sit.text) {
+                            setBowlerSituation(sit.text);
+                          } else {
+                            setBowlerSituation('');
+                          }
+                          setIsSituationDropdownOpen(false);
+
+                          if (sit.id === 'SUSPENDED') {
+                            setChangeBowlerReason('NO_BALL_SUSPENSION');
+                            setIsSuspendingCurrentBowler(true);
+                          } else if (sit.id === 'INJURY' || sit.id === 'CRAMPS' || sit.id === 'MEDICAL') {
+                            setChangeBowlerReason('INJURY');
+                            setIsSuspendingCurrentBowler(false);
+                          } else {
+                            setChangeBowlerReason('TACTICAL');
+                            setIsSuspendingCurrentBowler(false);
+                          }
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[
+                          styles.situationDropdownItemText,
+                          isSelected && styles.situationDropdownItemTextSelected
+                        ]}>
+                          {sit.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+
+              {/* Editable / Custom Situation Input */}
+              <View style={{ marginTop: 6 }}>
+                <TextInput
+                  style={styles.situationCustomInput}
+                  placeholder="அல்லது காரணத்தை இங்கே எழுதவும் (Or write situation)..."
+                  placeholderTextColor="#94a3b8"
+                  value={bowlerSituation}
+                  onChangeText={(txt) => {
+                    setBowlerSituation(txt);
+                    const lower = txt.toLowerCase();
+                    if (lower.includes('no-ball') || lower.includes('beamer') || lower.includes('suspend') || lower.includes('தடை')) {
+                      setChangeBowlerReason('NO_BALL_SUSPENSION');
+                      setIsSuspendingCurrentBowler(true);
+                    } else if (lower.includes('injur') || lower.includes('காயம்') || lower.includes('cramp') || lower.includes('blood') || lower.includes('மருத்துவ')) {
+                      setChangeBowlerReason('INJURY');
+                      setIsSuspendingCurrentBowler(false);
+                    } else {
+                      setChangeBowlerReason('TACTICAL');
+                      setIsSuspendingCurrentBowler(false);
+                    }
+                  }}
+                />
+              </View>
             </View>
 
             {/* Dropdown trigger */}
@@ -6280,7 +6356,10 @@ export default function LiveScoringScreen() {
                 isChangeBowlerDropdownOpen && styles.fielderDropdownTriggerOpen,
                 (selectedChangeBowlerObj || customChangeBowlerName.trim()) && styles.fielderDropdownTriggerCustom
               ]}
-              onPress={() => setIsChangeBowlerDropdownOpen(!isChangeBowlerDropdownOpen)}
+              onPress={() => {
+                setIsChangeBowlerDropdownOpen(!isChangeBowlerDropdownOpen);
+                setIsSituationDropdownOpen(false);
+              }}
               activeOpacity={0.7}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
@@ -6461,6 +6540,8 @@ export default function LiveScoringScreen() {
                   setIsChangeBowlerDropdownOpen(false);
                   setChangeBowlerSearch('');
                   setChangeBowlerReason('NO_BALL_SUSPENSION');
+                  setBowlerSituation('2 No-Ball நடுவர் தடை (Suspended)');
+                  setIsSituationDropdownOpen(false);
                   setIsSuspendingCurrentBowler(true);
                   setShowChangeBowlerModal(true);
                 }}
@@ -7807,51 +7888,87 @@ const getStyles = (isDesktop: boolean) =>
       fontSize: 9.5,
       fontWeight: '800'
     },
-    midOverNoticeBox: {
-      backgroundColor: '#eff6ff',
+    midOverCleanBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#fef3c7',
       borderRadius: 8,
-      padding: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
       marginBottom: 10,
       borderWidth: 1,
-      borderColor: '#bfdbfe'
+      borderColor: '#fde68a'
     },
-    midOverNoticeTitle: {
-      fontSize: 11,
-      fontWeight: '800',
-      color: '#1e40af'
+    midOverCleanBadgeIcon: {
+      fontSize: 14,
+      marginRight: 6
     },
-    midOverNoticeText: {
-      fontSize: 10.5,
-      color: '#1d4ed8',
-      lineHeight: 14
+    midOverCleanBadgeText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: '#92400e'
     },
-    reasonPillsRow: {
+    situationDropdownTrigger: {
       flexDirection: 'row',
-      gap: 6,
-      marginBottom: 10
-    },
-    reasonPill: {
-      flex: 1,
-      paddingVertical: 6,
-      paddingHorizontal: 6,
-      borderRadius: 6,
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: '#f8fafc',
       borderWidth: 1,
       borderColor: '#cbd5e1',
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 9
+    },
+    situationDropdownTriggerOpen: {
+      borderColor: '#005960',
+      backgroundColor: '#f0fdfa'
+    },
+    situationDropdownTriggerText: {
+      fontSize: 12.5,
+      fontWeight: '600',
+      color: '#1e293b'
+    },
+    situationDropdownMenu: {
+      backgroundColor: '#ffffff',
+      borderWidth: 1,
+      borderColor: '#e2e8f0',
+      borderRadius: 8,
+      marginTop: 4,
+      marginBottom: 6,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.1,
+      shadowRadius: 5,
+      elevation: 4,
+      zIndex: 100
+    },
+    situationDropdownItem: {
+      paddingHorizontal: 12,
+      paddingVertical: 9,
+      borderBottomWidth: 1,
+      borderBottomColor: '#f1f5f9'
+    },
+    situationDropdownItemSelected: {
+      backgroundColor: '#f0fdfa'
+    },
+    situationDropdownItemText: {
+      fontSize: 12,
+      color: '#334155',
+      fontWeight: '500'
+    },
+    situationDropdownItemTextSelected: {
+      color: '#005960',
+      fontWeight: '700'
+    },
+    situationCustomInput: {
       backgroundColor: '#f8fafc',
-      alignItems: 'center'
-    },
-    reasonPillActive: {
-      backgroundColor: '#fef3c7',
-      borderColor: '#d97706'
-    },
-    reasonPillText: {
-      fontSize: 10.5,
-      fontWeight: '700',
-      color: '#475569'
-    },
-    reasonPillTextActive: {
-      color: '#b45309',
-      fontWeight: '800'
+      borderWidth: 1,
+      borderColor: '#cbd5e1',
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      fontSize: 12,
+      color: '#0f172a'
     },
 
     // AI COMMENTARY CARD

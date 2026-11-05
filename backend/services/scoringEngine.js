@@ -1256,7 +1256,7 @@ class ScoringEngine {
   /**
    * Change / Substitute Active Bowler (Supports Mid-Over Injury & Law 41.7 Suspension)
    */
-  async changeBowler(matchId, { newBowlerId, newBowlerName, reason, suspendCurrentBowler } = {}) {
+  async changeBowler(matchId, { newBowlerId, newBowlerName, reason, situation, suspendCurrentBowler } = {}) {
     await db.initDb();
     let innings = await db.models.Innings.findOne({ match_id: matchId, is_completed: { $ne: true }, status: { $ne: "COMPLETED" } }).sort({ innings_number: -1 });
     if (!innings) {
@@ -1336,7 +1336,9 @@ class ScoringEngine {
     const isMidOver = ballsInOver > 0 && ballsInOver < 6;
     let changeMessage = `Bowler changed to ${finalBowlerName || resolvedId}`;
     if (isMidOver) {
-      changeMessage = `${finalBowlerName || resolvedId} will complete the remaining ${remainingBalls} ball(s) of this over (Law 21.9).`;
+      changeMessage = situation
+        ? `${finalBowlerName || resolvedId} will complete remaining ${remainingBalls} ball(s) [${situation}]`
+        : `${finalBowlerName || resolvedId} will complete the remaining ${remainingBalls} ball(s) of this over.`;
     }
 
     // Socket.IO update
@@ -1349,7 +1351,8 @@ class ScoringEngine {
         isMidOver,
         ballsInOver,
         remainingBalls,
-        reason: reason || (isMidOver ? 'INJURY_SUBSTITUTION' : 'REGULAR')
+        reason: reason || (isMidOver ? 'INJURY_SUBSTITUTION' : 'REGULAR'),
+        situation: situation || reason
       });
     } catch (e) {}
 
@@ -1360,6 +1363,8 @@ class ScoringEngine {
       isMidOver,
       ballsInOver,
       remainingBalls,
+      reason,
+      situation: situation || reason,
       bowler: {
         id: resolvedId,
         name: finalBowlerName || bowlerStats?.name || resolvedId,

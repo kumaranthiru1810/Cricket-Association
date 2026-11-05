@@ -892,7 +892,7 @@ export const ScorerApi = {
     });
   },
 
-  changeBowler: async (matchId: string, payload: { newBowlerId?: string; newBowlerName?: string; reason?: string; suspendCurrentBowler?: boolean }) => {
+  changeBowler: async (matchId: string, payload: { newBowlerId?: string; newBowlerName?: string; reason?: string; situation?: string; suspendCurrentBowler?: boolean }) => {
     return request(`/scorer/matches/${matchId}/change-bowler`, {
       method: 'POST',
       body: JSON.stringify(payload)
