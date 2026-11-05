@@ -198,18 +198,15 @@ export default function WagonWheel({
     };
   }, [batterDeliveries]);
 
-  // Filtered deliveries based on user selection
+  // Filtered deliveries based on user selection (Only boundaries: 4s & 6s)
   const displayedDeliveries = useMemo(() => {
     return batterDeliveries.filter(d => {
       const runs = Number(d.runsBatter) || 0;
-      if (runFilter !== 'ALL') {
-        if (runFilter === 'DOT' && runs !== 0) return false;
-        if (runFilter === '1' && runs !== 1) return false;
-        if (runFilter === '2' && runs !== 2) return false;
-        if (runFilter === '3' && runs !== 3) return false;
-        if (runFilter === '4' && runs !== 4) return false;
-        if (runFilter === '6' && runs !== 6) return false;
-      }
+      // ONLY SHOW BOUNDARIES (4s and 6s) ON WAGON WHEEL
+      if (runs !== 4 && runs !== 6) return false;
+
+      if (runFilter === '4' && runs !== 4) return false;
+      if (runFilter === '6' && runs !== 6) return false;
 
       if (sectorFilter) {
         const s = SECTORS.find(sec => sec.key === sectorFilter);
@@ -227,18 +224,18 @@ export default function WagonWheel({
     });
   }, [batterDeliveries, runFilter, sectorFilter]);
 
-  // Run counts for badges
+  // Run counts for badges (only boundaries: total, fours, sixes)
   const runCounts = useMemo(() => {
-    const counts = { total: 0, dots: 0, ones: 0, twos: 0, threes: 0, fours: 0, sixes: 0 };
+    const counts = { total: 0, fours: 0, sixes: 0 };
     batterDeliveries.forEach(d => {
-      counts.total++;
       const r = Number(d.runsBatter) || 0;
-      if (r === 0) counts.dots++;
-      else if (r === 1) counts.ones++;
-      else if (r === 2) counts.twos++;
-      else if (r === 3) counts.threes++;
-      else if (r === 4) counts.fours++;
-      else if (r === 6) counts.sixes++;
+      if (r === 4) {
+        counts.fours++;
+        counts.total++;
+      } else if (r === 6) {
+        counts.sixes++;
+        counts.total++;
+      }
     });
     return counts;
   }, [batterDeliveries]);
@@ -265,12 +262,9 @@ export default function WagonWheel({
 
   const getShotColor = (runs: number) => {
     switch (runs) {
-      case 6: return '#ec4899'; // Hot Magenta
-      case 4: return '#10b981'; // Vivid Green
-      case 3: return '#f59e0b'; // Amber
-      case 2: return '#3b82f6'; // Bright Blue
-      case 1: return '#06b6d4'; // Cyan
-      default: return '#94a3b8'; // Grey dot
+      case 6: return '#ec4899'; // Hot Magenta (Sixes)
+      case 4: return '#10b981'; // Vivid Green (Fours)
+      default: return '#10b981';
     }
   };
 
@@ -401,11 +395,11 @@ export default function WagonWheel({
               </Text>
               <View style={[styles.slidePillBadge, activeSlide === 'wheel' && styles.slidePillBadgeActive]}>
                 <Text style={[styles.slidePillBadgeText, activeSlide === 'wheel' && styles.slidePillBadgeTextActive]}>
-                  {displayedDeliveries.length} Shots
+                  {displayedDeliveries.length} Boundaries
                 </Text>
               </View>
             </View>
-            <Text style={styles.slideTabSubtitle}>Trajectories (1, 2, 3, 4, 6, dots) on Ground</Text>
+            <Text style={styles.slideTabSubtitle}>Boundary Trajectories (4s & 6s) on Ground</Text>
           </View>
         </TouchableOpacity>
 
@@ -435,22 +429,24 @@ export default function WagonWheel({
           ───────────────────────────────────────────────────────────── */}
       {activeSlide === 'wheel' && (
         <View style={styles.slideContent}>
-          {/* Run Filter Pills */}
+          {/* Boundary Filter Pills (Removed 3s, 2s, 1s, Dots) */}
           <View style={styles.filterBar}>
-            <Text style={styles.filterLabel}>SHOTS FILTER:</Text>
+            <Text style={styles.filterLabel}>BOUNDARIES FILTER:</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
               <TouchableOpacity
                 style={[styles.filterPill, runFilter === 'ALL' && styles.filterPillActive]}
                 onPress={() => setRunFilter('ALL')}
+                activeOpacity={0.7}
               >
                 <Text style={[styles.filterPillText, runFilter === 'ALL' && styles.filterPillTextActive]}>
-                  All ({runCounts.total})
+                  All Boundaries ({runCounts.total})
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.filterPill, runFilter === '6' && styles.filterPillActiveSix]}
                 onPress={() => setRunFilter(runFilter === '6' ? 'ALL' : '6')}
+                activeOpacity={0.7}
               >
                 <View style={[styles.dotMarker, { backgroundColor: '#ec4899' }]} />
                 <Text style={[styles.filterPillText, runFilter === '6' && styles.filterPillTextActive]}>
@@ -461,50 +457,11 @@ export default function WagonWheel({
               <TouchableOpacity
                 style={[styles.filterPill, runFilter === '4' && styles.filterPillActiveFour]}
                 onPress={() => setRunFilter(runFilter === '4' ? 'ALL' : '4')}
+                activeOpacity={0.7}
               >
                 <View style={[styles.dotMarker, { backgroundColor: '#10b981' }]} />
                 <Text style={[styles.filterPillText, runFilter === '4' && styles.filterPillTextActive]}>
                   4s ({runCounts.fours})
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.filterPill, runFilter === '3' && styles.filterPillActiveThree]}
-                onPress={() => setRunFilter(runFilter === '3' ? 'ALL' : '3')}
-              >
-                <View style={[styles.dotMarker, { backgroundColor: '#f59e0b' }]} />
-                <Text style={[styles.filterPillText, runFilter === '3' && styles.filterPillTextActive]}>
-                  3s ({runCounts.threes})
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.filterPill, runFilter === '2' && styles.filterPillActiveTwo]}
-                onPress={() => setRunFilter(runFilter === '2' ? 'ALL' : '2')}
-              >
-                <View style={[styles.dotMarker, { backgroundColor: '#3b82f6' }]} />
-                <Text style={[styles.filterPillText, runFilter === '2' && styles.filterPillTextActive]}>
-                  2s ({runCounts.twos})
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.filterPill, runFilter === '1' && styles.filterPillActiveOne]}
-                onPress={() => setRunFilter(runFilter === '1' ? 'ALL' : '1')}
-              >
-                <View style={[styles.dotMarker, { backgroundColor: '#06b6d4' }]} />
-                <Text style={[styles.filterPillText, runFilter === '1' && styles.filterPillTextActive]}>
-                  1s ({runCounts.ones})
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.filterPill, runFilter === 'DOT' && styles.filterPillActiveDot]}
-                onPress={() => setRunFilter(runFilter === 'DOT' ? 'ALL' : 'DOT')}
-              >
-                <View style={[styles.dotMarker, { backgroundColor: '#94a3b8' }]} />
-                <Text style={[styles.filterPillText, runFilter === 'DOT' && styles.filterPillTextActive]}>
-                  Dots ({runCounts.dots})
                 </Text>
               </TouchableOpacity>
             </ScrollView>
@@ -564,7 +521,7 @@ export default function WagonWheel({
                 {/* 3. 8 Sector Divider Lines & Sector Labels */}
                 {SECTORS.map(s => {
                   const borderCoord = getCoordinates(s.startAngle, 100);
-                  const labelCoord = getCoordinates((s.startAngle + 22.5) % 360, 84);
+                  const labelCoord = getCoordinates((s.startAngle + 22.5) % 360, 83);
                   const isSelected = sectorFilter === s.key;
 
                   return (
@@ -575,7 +532,7 @@ export default function WagonWheel({
                         y1={cy}
                         x2={borderCoord.x}
                         y2={borderCoord.y}
-                        stroke="rgba(255, 255, 255, 0.12)"
+                        stroke="rgba(255, 255, 255, 0.15)"
                         strokeWidth="1"
                         strokeDasharray="3 3"
                       />
@@ -583,10 +540,11 @@ export default function WagonWheel({
                       <text
                         x={labelCoord.x}
                         y={labelCoord.y}
-                        fill={isSelected ? '#38bdf8' : 'rgba(255, 255, 255, 0.45)'}
-                        fontSize={isDesktop ? 9 : 8}
-                        fontWeight={isSelected ? 'bold' : 'normal'}
+                        fill={isSelected ? '#38bdf8' : 'rgba(255, 255, 255, 0.65)'}
+                        fontSize={isDesktop ? 10 : 9}
+                        fontWeight={isSelected ? 'bold' : '600'}
                         textAnchor="middle"
+                        dominantBaseline="central"
                         style={{ pointerEvents: 'none', userSelect: 'none' }}
                       >
                         {s.name.split(' / ')[0]}
@@ -606,6 +564,59 @@ export default function WagonWheel({
                   strokeDasharray="5 4"
                 />
 
+                {/* Clean Infield Off / Leg Badges (Zero text collision) */}
+                <g transform={`translate(${cx - 52}, ${cy - 8})`}>
+                  <rect
+                    x="-22"
+                    y="-8"
+                    width="44"
+                    height="16"
+                    rx="8"
+                    fill="rgba(14, 116, 144, 0.55)"
+                    stroke="rgba(56, 189, 248, 0.65)"
+                    strokeWidth="1"
+                  />
+                  <text
+                    x="0"
+                    y="1"
+                    fill="#a5f3fc"
+                    fontSize="8.5"
+                    fontWeight="800"
+                    letterSpacing="0.5"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    style={{ pointerEvents: 'none', userSelect: 'none' }}
+                  >
+                    OFF
+                  </text>
+                </g>
+
+                <g transform={`translate(${cx + 52}, ${cy - 8})`}>
+                  <rect
+                    x="-22"
+                    y="-8"
+                    width="44"
+                    height="16"
+                    rx="8"
+                    fill="rgba(180, 83, 9, 0.55)"
+                    stroke="rgba(245, 158, 11, 0.65)"
+                    strokeWidth="1"
+                  />
+                  <text
+                    x="0"
+                    y="1"
+                    fill="#fef08a"
+                    fontSize="8.5"
+                    fontWeight="800"
+                    letterSpacing="0.5"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    style={{ pointerEvents: 'none', userSelect: 'none' }}
+                  >
+                    LEG
+                  </text>
+                </g>
+
                 {/* 5. Central Cricket Pitch */}
                 <rect
                   x={cx - pitchW / 2}
@@ -624,17 +635,18 @@ export default function WagonWheel({
                 {/* Stumps Marker */}
                 <circle cx={cx} cy={cy + pitchH / 2 - 3} r="1.5" fill="#e11d48" />
 
-                {/* 6. Wagon Wheel Shot Trajectory Lines */}
+                {/* 6. Wagon Wheel Boundary Trajectory Lines (4s & 6s Only) */}
                 {displayedDeliveries.map((del, idx) => {
                   const runs = Number(del.runsBatter) || 0;
                   const angle = typeof del.shotAngle === 'number' ? del.shotAngle : 315;
-                  const dist = typeof del.shotDistance === 'number' ? del.shotDistance : (runs === 6 ? 108 : runs === 4 ? 94 : 45);
+                  const dist = typeof del.shotDistance === 'number' ? del.shotDistance : (runs === 6 ? 108 : 95);
                   const end = getCoordinates(angle, dist);
-                  const color = getShotColor(runs);
+                  const color = runs === 6 ? '#ec4899' : '#10b981';
                   const isCurrentActive = activeShot?.id === del.id;
 
-                  const strokeWidth = runs === 6 ? 2.5 : runs === 4 ? 2.0 : 1.3;
-                  const strokeDash = runs === 6 ? '4 2' : runs === 0 ? '2 2' : 'none';
+                  const strokeWidth = runs === 6 ? 2.6 : 2.0;
+                  const strokeDash = runs === 6 ? '5 3' : 'none';
+                  const startY = cy + pitchH / 2 - 5; // From striker crease
 
                   return (
                     <g
@@ -646,45 +658,37 @@ export default function WagonWheel({
                       {isCurrentActive && (
                         <line
                           x1={cx}
-                          y1={cy + 8}
+                          y1={startY}
                           x2={end.x}
                           y2={end.y}
                           stroke="#ffffff"
                           strokeWidth={strokeWidth + 4}
-                          opacity="0.4"
+                          opacity="0.5"
                         />
                       )}
                       {/* The Shot Line */}
                       <line
                         x1={cx}
-                        y1={cy + 8}
+                        y1={startY}
                         x2={end.x}
                         y2={end.y}
                         stroke={color}
                         strokeWidth={isCurrentActive ? strokeWidth + 1.5 : strokeWidth}
                         strokeDasharray={strokeDash}
-                        opacity={isCurrentActive ? 1.0 : 0.85}
+                        opacity={isCurrentActive ? 1.0 : 0.9}
                       />
                       {/* Terminal Marker */}
                       <circle
                         cx={end.x}
                         cy={end.y}
-                        r={runs === 6 ? 4.5 : runs === 4 ? 3.5 : 2.5}
+                        r={runs === 6 ? 4.5 : 3.5}
                         fill={color}
                         stroke="#ffffff"
-                        strokeWidth={isCurrentActive ? 1.5 : 0.75}
+                        strokeWidth={isCurrentActive ? 1.5 : 0.8}
                       />
                     </g>
                   );
                 })}
-
-                {/* Batter Orientations Label (Off / Leg side indicator) */}
-                <text x={cx - radius + 15} y={cy} fill="rgba(56, 189, 248, 0.7)" fontSize="10" fontWeight="bold">
-                  OFF
-                </text>
-                <text x={cx + radius - 35} y={cy} fill="rgba(245, 158, 11, 0.7)" fontSize="10" fontWeight="bold">
-                  LEG
-                </text>
               </svg>
 
               {/* Hovered / Tapped Shot Detail Tooltip Card */}
@@ -713,6 +717,29 @@ export default function WagonWheel({
                   ) : null}
                 </View>
               )}
+            </View>
+
+            {/* Empty Boundaries Notice when no boundaries match */}
+            {displayedDeliveries.length === 0 && (
+              <View style={styles.emptyWagonNotice}>
+                <Text style={styles.emptyWagonText}>
+                  🏏 No {runFilter === '6' ? 'sixes (6s)' : runFilter === '4' ? 'fours (4s)' : 'boundaries'} hit by {currentBatter?.name || 'this batsman'}.
+                </Text>
+              </View>
+            )}
+
+            {/* Boundary Legend (Fours & Sixes) */}
+            <View style={styles.boundaryLegendRow}>
+              <View style={styles.boundaryLegendItem}>
+                <View style={[styles.legendLine, { backgroundColor: '#10b981' }]} />
+                <View style={[styles.legendDot, { backgroundColor: '#10b981' }]} />
+                <Text style={styles.legendText}>4s (Fours) — Solid Green</Text>
+              </View>
+              <View style={styles.boundaryLegendItem}>
+                <View style={[styles.legendLine, { backgroundColor: '#ec4899', borderStyle: 'dashed' }]} />
+                <View style={[styles.legendDot, { backgroundColor: '#ec4899' }]} />
+                <Text style={styles.legendText}>6s (Sixes) — Dashed Pink</Text>
+              </View>
             </View>
 
             {/* Quick Clear Filter if active */}
@@ -888,79 +915,51 @@ export default function WagonWheel({
   );
 }
 
-// Helper: Synthetic mock shot generator for initial display or players without ball-by-ball logs
+// Helper: Synthetic mock shot generator for initial display or players without ball-by-ball logs (Boundaries only)
 function generateSyntheticShots(batter: BatterProfile): ShotDelivery[] {
   const shots: ShotDelivery[] = [];
   const runsTotal = batter.runs || 24;
-  const ballsTotal = batter.balls || 18;
-  const fours = batter.fours || Math.floor(runsTotal / 8);
-  const sixes = batter.sixes || (runsTotal > 30 ? 1 : 0);
+  const fours = batter.fours !== undefined ? batter.fours : Math.max(1, Math.floor(runsTotal / 6));
+  const sixes = batter.sixes !== undefined ? batter.sixes : (runsTotal >= 20 ? 1 : 0);
 
-  // Add sixes
+  // Add sixes (clearing the ropes)
+  const sixPositions = [
+    { angle: 75, pos: 'Midwicket', zone: 'Midwicket / Cow Corner' },
+    { angle: 345, pos: 'Mid-Off', zone: 'Mid-Off / Long Off' },
+    { angle: 25, pos: 'Mid-On', zone: 'Mid-On / Long On' }
+  ];
   for (let i = 0; i < sixes; i++) {
-    const angle = i % 2 === 0 ? 80 : 330; // Cow Corner or Long Off
+    const pos = sixPositions[i % sixPositions.length];
     shots.push({
       strikerId: batter.id,
       runsBatter: 6,
-      shotAngle: angle,
+      shotAngle: pos.angle,
       shotDistance: 108,
-      fieldingPosition: angle === 80 ? 'Midwicket' : 'Mid-Off',
-      shotZone: angle === 80 ? 'Midwicket / Cow Corner' : 'Mid-Off / Long Off',
+      fieldingPosition: pos.pos,
+      shotZone: pos.zone,
       commentary: 'Massive hit clearing the ropes with ease!'
     });
   }
 
-  // Add fours
+  // Add fours (piercing gaps to fence)
   const fourPositions = [
     { angle: 315, pos: 'Cover', zone: 'Cover / Extra Cover' },
     { angle: 270, pos: 'Point', zone: 'Point / Backward Point' },
-    { angle: 60, pos: 'Midwicket', zone: 'Midwicket / Cow Corner' },
+    { angle: 90, pos: 'Midwicket', zone: 'Midwicket / Cow Corner' },
     { angle: 140, pos: 'Fine Leg', zone: 'Fine Leg' },
-    { angle: 220, pos: 'Third Man', zone: 'Third Man / Slips' }
+    { angle: 220, pos: 'Third Man', zone: 'Third Man / Slips' },
+    { angle: 350, pos: 'Mid-Off', zone: 'Mid-Off / Long Off' }
   ];
   for (let i = 0; i < fours; i++) {
     const item = fourPositions[i % fourPositions.length];
     shots.push({
       strikerId: batter.id,
       runsBatter: 4,
-      shotAngle: item.angle + (Math.random() - 0.5) * 6,
-      shotDistance: 94 + Math.random() * 4,
+      shotAngle: item.angle,
+      shotDistance: 95,
       fieldingPosition: item.pos,
       shotZone: item.zone,
       commentary: 'Crisp timing, pierces the gap to the fence!'
-    });
-  }
-
-  // Calculate remaining runs for 1s, 2s, and 3s
-  let currentRuns = sixes * 6 + fours * 4;
-  let remainingBalls = Math.max(0, ballsTotal - sixes - fours);
-
-  while (currentRuns < runsTotal && remainingBalls > 0) {
-    const run = (runsTotal - currentRuns) >= 2 ? 2 : 1;
-    currentRuns += run;
-    remainingBalls--;
-    const angle = Math.floor(Math.random() * 360);
-    shots.push({
-      strikerId: batter.id,
-      runsBatter: run,
-      shotAngle: angle,
-      shotDistance: run === 2 ? 62 : 44,
-      fieldingPosition: 'Infield',
-      commentary: `${run} run taken, neat placement.`
-    });
-  }
-
-  // Remaining balls as dots (0s)
-  while (remainingBalls > 0) {
-    remainingBalls--;
-    const angle = Math.floor(Math.random() * 360);
-    shots.push({
-      strikerId: batter.id,
-      runsBatter: 0,
-      shotAngle: angle,
-      shotDistance: 25 + Math.random() * 10,
-      fieldingPosition: 'Point',
-      commentary: 'Defended gently into the inner circle.'
     });
   }
 
@@ -1367,6 +1366,51 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#dc2626',
     fontWeight: 'bold'
+  },
+  emptyWagonNotice: {
+    marginTop: 10,
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    alignItems: 'center'
+  },
+  emptyWagonText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#92400e',
+    textAlign: 'center'
+  },
+  boundaryLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    marginTop: 10,
+    marginBottom: 6,
+    flexWrap: 'wrap'
+  },
+  boundaryLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6
+  },
+  legendLine: {
+    width: 16,
+    height: 3,
+    borderRadius: 1.5
+  },
+  legendDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5
+  },
+  legendText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569'
   },
   analyticsWrapper: {
     flex: 1,
