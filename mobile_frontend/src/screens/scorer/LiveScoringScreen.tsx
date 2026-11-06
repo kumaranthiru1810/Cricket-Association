@@ -7244,12 +7244,28 @@ export default function LiveScoringScreen() {
       <CricketRulesModal
         visible={showCricketRulesModal}
         activeRule={activeCricketRule}
-        ruleContext={cricketRuleContext}
+        matchId={matchId}
+        ruleContext={{
+          ...cricketRuleContext,
+          bowlerId: bowler?.id,
+          bowlerName: bowler?.name,
+          strikerName: striker?.name,
+          nonStrikerName: nonStriker?.name,
+          oversBowled: bowler ? `${bowler.overs}` : '0.0',
+          maxQuota: 4,
+          overNumber: Math.floor(balls / 6) + 1,
+          totalRuns: runs,
+          wickets: wickets,
+          currentFormat: matchInfo?.overs ? `T20 (${matchInfo.overs}.0 Overs)` : 'T20 (20.0 Overs)'
+        }}
         onClose={() => setShowCricketRulesModal(false)}
-        onApplyRule={(ruleType, payload) => {
-          if (ruleType === 'RUN_OUT_CROSS' && payload?.victim) {
-            setDismissedTarget(payload.victim === 'NON_STRIKER' ? 'nonStriker' : 'striker');
+        onApplyRule={async (ruleType, payload) => {
+          if (ruleType === 'RUN_OUT' || ruleType === 'RUN_OUT_CROSS') {
+            if (payload?.victim) {
+              setDismissedTarget(payload.victim === 'NON_STRIKER' ? 'nonStriker' : 'striker');
+            }
           }
+          await loadLiveState(false);
           setShowCricketRulesModal(false);
         }}
       />

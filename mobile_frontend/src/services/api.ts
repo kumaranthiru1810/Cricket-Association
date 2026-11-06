@@ -1041,6 +1041,17 @@ export const ScorerApi = {
     });
   },
 
+  getUmpireDecisions: async (matchId: string) => {
+    return request(`/scorer/matches/${matchId}/umpire-decisions`);
+  },
+
+  recordUmpireDecision: async (matchId: string, payload: any) => {
+    return request(`/scorer/matches/${matchId}/umpire-decisions`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
   // --- AI FIELDING COMMENTARY ---
   getFieldingCommentary: async (matchId: string, data: { fieldingPosition: string; fielderId?: string; fielderName?: string }) => {
     return request(`/scorer/matches/${matchId}/fielding-commentary`, {

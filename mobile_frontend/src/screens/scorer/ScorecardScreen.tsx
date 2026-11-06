@@ -775,6 +775,12 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
       <CricketRulesModal
         visible={showRulesModal}
         activeRule={activeRule}
+        matchId={matchId}
+        ruleContext={{
+          currentFormat: match ? `${match.tournament} • ${match.overs || 20} Overs` : 'T20 Match',
+          totalRuns: currentInnings?.totalRuns,
+          wickets: currentInnings?.wickets
+        }}
         onClose={() => setShowRulesModal(false)}
       />
     </View>
