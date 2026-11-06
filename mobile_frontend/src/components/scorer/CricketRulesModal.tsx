@@ -1539,6 +1539,529 @@ function renderRuleDiagram(diagramType: string, isMobile: boolean, state: any) {
         </View>
       );
 
+    case 'DANGEROUS':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#15803d" />
+            <Rect x="40" y="25" width="380" height="90" fill="#e2d2b5" />
+            <Circle cx="80" cy="70" r="12" fill="#0369a1" />
+            <Line x1="80" y1="82" x2="80" y2="105" stroke="#0369a1" strokeWidth="4" />
+            <Path d="M 95 65 Q 240 30 365 55" fill="none" stroke="#dc2626" strokeWidth="3.5" strokeDasharray="5,3" />
+            <Circle cx="365" cy="55" r="7" fill="#dc2626" />
+            <Circle cx="385" cy="50" r="10" fill="#f59e0b" />
+            <Line x1="385" y1="60" x2="385" y2="100" stroke="#f59e0b" strokeWidth="4" />
+            <Rect x="145" y="32" width="80" height="26" rx="4" fill="#fef08a" stroke="#ca8a04" strokeWidth="1.5" />
+            <SvgText x="151" y="49" fill="#854d0e" fontSize="9.5" fontWeight="bold">1st: Warning</SvgText>
+            <Rect x="235" y="32" width="90" height="26" rx="4" fill="#fee2e2" stroke="#dc2626" strokeWidth="1.5" />
+            <SvgText x="241" y="49" fill="#991b1b" fontSize="9.5" fontWeight="bold">2nd: Suspension</SvgText>
+            <SvgText x="120" y="105" fill="#7f1d1d" fontSize="10" fontWeight="bold">Repeated High Full Toss or Dangerous Short Balls</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>LAW 41.6 / 41.7: 1ST OFFENSE = OFFICIAL WARNING • 2ND OFFENSE = BOWLER SUSPENDED FOR INNINGS</Text>
+        </View>
+      );
+
+    case 'ACTION':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#0f172a" />
+            <Circle cx="230" cy="90" r="60" fill="none" stroke="#334155" strokeWidth="2" strokeDasharray="4,4" />
+            <Circle cx="230" cy="90" r="8" fill="#38bdf8" />
+            <Path d="M 230 90 L 230 30" stroke="#22c55e" strokeWidth="4" />
+            <Path d="M 230 90 L 245 32" stroke="#22c55e" strokeWidth="3" strokeDasharray="3,3" />
+            <Path d="M 230 90 L 285 45" stroke="#ef4444" strokeWidth="4" />
+            <SvgText x="110" y="35" fill="#22c55e" fontSize="11" fontWeight="bold">✓ ≤ 15° Legal Extension</SvgText>
+            <SvgText x="290" y="45" fill="#ef4444" fontSize="11" fontWeight="bold">✕ &gt; 15° Throw (Chucking)</SvgText>
+            <SvgText x="120" y="118" fill="#94a3b8" fontSize="10">Umpire calls No Ball + reports bowler action to match referee</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>MCC LAW 21.2 & ICC REGULATION: ELBOW EXTENSION MUST NOT EXCEED 15 DEGREES AT RELEASE</Text>
+        </View>
+      );
+
+    case 'QUOTA':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#0f2452" />
+            <SvgText x="130" y="32" fill="#fef08a" fontSize="11" fontWeight="bold">BOWLER QUOTA METER (20-OVER T20: MAX 4.0 OVERS)</SvgText>
+            {[1, 2, 3, 4].map((ov, idx) => (
+              <G key={idx}>
+                <Rect x={65 + idx * 85} y="44" width="75" height="42" rx="6" fill={idx < 3 ? '#22c55e' : '#ef4444'} />
+                <SvgText x={80 + idx * 85} y="64" fill="#ffffff" fontSize="11" fontWeight="bold">Over {ov}</SvgText>
+                <SvgText x={75 + idx * 85} y="78" fill="#ffffff" fontSize="8.5">{idx < 3 ? 'Completed' : 'MAX QUOTA'}</SvgText>
+              </G>
+            ))}
+            <Rect x="65" y="98" width="330" height="22" rx="4" fill="rgba(239, 68, 68, 0.25)" stroke="#ef4444" strokeWidth="1" />
+            <SvgText x="95" y="113" fill="#fca5a5" fontSize="10" fontWeight="bold">⚠️ Over limit reached: Bowler cannot bowl again in this innings</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>ICC T20 CLAUSE 13.8: NO BOWLER MAY BOWL MORE THAN 20% OF TOTAL SCHEDULED INNINGS OVERS</Text>
+        </View>
+      );
+
+    case 'HIT_WICKET':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#15803d" />
+            <Rect x="40" y="25" width="380" height="90" fill="#e2d2b5" />
+            <Line x1="160" y1="45" x2="160" y2="105" stroke="#78350f" strokeWidth="6" />
+            <Line x1="172" y1="45" x2="172" y2="105" stroke="#78350f" strokeWidth="6" />
+            <Line x1="184" y1="45" x2="184" y2="105" stroke="#78350f" strokeWidth="6" />
+            <Line x1="150" y1="35" x2="165" y2="28" stroke="#dc2626" strokeWidth="3" />
+            <Line x1="178" y1="30" x2="195" y2="38" stroke="#dc2626" strokeWidth="3" />
+            <Circle cx="240" cy="50" r="10" fill="#0284c7" />
+            <Line x1="240" y1="60" x2="240" y2="95" stroke="#0284c7" strokeWidth="4" />
+            <Line x1="230" y1="75" x2="175" y2="50" stroke="#d97706" strokeWidth="4" />
+            <Circle cx="175" cy="50" r="6" fill="#ef4444" />
+            <SvgText x="210" y="32" fill="#b91c1c" fontSize="11" fontWeight="bold">Bails Dislodged by Bat / Body in Motion</SvgText>
+            <SvgText x="210" y="112" fill="#0f172a" fontSize="10">Applies while preparing, playing shot, or setting off for first run</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>MCC LAW 29: BATTER IS OUT IF THEIR BAT, PERSON OR GEAR BREAKS THE WICKET DURING DELIVERY STROKE</Text>
+        </View>
+      );
+
+    case 'HIT_TWICE':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#15803d" />
+            <Rect x="40" y="25" width="380" height="90" fill="#e2d2b5" />
+            <Circle cx="170" cy="65" r="12" fill="#22c55e" />
+            <SvgText x="166" y="70" fill="#ffffff" fontSize="11" fontWeight="bold">1</SvgText>
+            <SvgText x="125" y="90" fill="#166534" fontSize="10" fontWeight="bold">1st Strike (Legal)</SvgText>
+            <Path d="M 185 65 Q 255 35 310 65" fill="none" stroke="#ef4444" strokeWidth="3" strokeDasharray="4,3" />
+            <Circle cx="310" cy="65" r="12" fill="#ef4444" />
+            <SvgText x="306" y="70" fill="#ffffff" fontSize="11" fontWeight="bold">2</SvgText>
+            <SvgText x="265" y="90" fill="#b91c1c" fontSize="10" fontWeight="bold">2nd Strike (OUT!)</SvgText>
+            <SvgText x="90" y="35" fill="#0f172a" fontSize="10.5" fontWeight="bold">✕ Illegal 2nd Hit to Score Runs • Only Legal to Defend Stumps</SvgText>
+            <SvgText x="110" y="112" fill="#64748b" fontSize="9.5">Ball becomes Dead immediately upon intentional 2nd strike</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>MCC LAW 34: BATTER CANNOT HIT BALL TWICE EXCEPT STRICTLY TO DEFEND THEIR STUMPS WITHOUT RUNNING</Text>
+        </View>
+      );
+
+    case 'OBSTRUCTING':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#15803d" />
+            <Rect x="40" y="25" width="380" height="90" fill="#e2d2b5" />
+            <Line x1="120" y1="25" x2="120" y2="115" stroke="#ffffff" strokeWidth="3" />
+            <Line x1="360" y1="25" x2="360" y2="115" stroke="#ffffff" strokeWidth="3" />
+            <Circle cx="70" cy="70" r="10" fill="#0369a1" />
+            <Line x1="85" y1="70" x2="220" y2="70" stroke="#f59e0b" strokeWidth="3" strokeDasharray="4,4" />
+            <Circle cx="240" cy="70" r="12" fill="#ef4444" />
+            <Line x1="240" y1="50" x2="240" y2="90" stroke="#ef4444" strokeWidth="4" />
+            <SvgText x="160" y="45" fill="#b91c1c" fontSize="11" fontWeight="bold">🛑 Willful Obstruction of Throw (OUT!)</SvgText>
+            <SvgText x="160" y="105" fill="#0f172a" fontSize="10">Batter deviated path to prevent throw from hitting stumps</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>MCC LAW 37: EITHER BATTER IS OUT IF THEY WILLFULLY OBSTRUCT OR DISTRACT THE FIELDING SIDE</Text>
+        </View>
+      );
+
+    case 'RETIRED_HURT':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#065f46" />
+            <Circle cx="100" cy="70" r="28" fill="#10b981" />
+            <SvgText x="88" y="77" fill="#ffffff" fontSize="22" fontWeight="bold">🩺</SvgText>
+            <Rect x="150" y="32" width="270" height="32" rx="6" fill="#047857" />
+            <SvgText x="160" y="52" fill="#fef08a" fontSize="10.5" fontWeight="bold">RETIRED HURT = NOT OUT (CAN RESUME INNINGS)</SvgText>
+            <Rect x="150" y="70" width="270" height="42" rx="6" fill="rgba(255,255,255,0.15)" />
+            <SvgText x="160" y="86" fill="#ffffff" fontSize="9.5">✓ Wickets count does NOT increment</SvgText>
+            <SvgText x="160" y="102" fill="#ffffff" fontSize="9.5">✓ May return to bat at any fall of wicket</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>MCC LAW 25.4: RETIRED HURT DUE TO ILLNESS/INJURY IS NOT A DISMISSAL; BATTER MAY RESUME INNINGS</Text>
+        </View>
+      );
+
+    case 'RETIRED_OUT':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#450a0a" />
+            <Circle cx="100" cy="70" r="28" fill="#dc2626" />
+            <SvgText x="88" y="78" fill="#ffffff" fontSize="22" fontWeight="bold">🚪</SvgText>
+            <Rect x="150" y="32" width="270" height="32" rx="6" fill="#991b1b" />
+            <SvgText x="165" y="52" fill="#ffffff" fontSize="11" fontWeight="bold">RETIRED OUT = OFFICIAL WICKET FALLEN</SvgText>
+            <Rect x="150" y="70" width="270" height="42" rx="6" fill="rgba(255,255,255,0.15)" />
+            <SvgText x="160" y="86" fill="#fca5a5" fontSize="9.5">✕ Team wickets tally increments (+1)</SvgText>
+            <SvgText x="160" y="102" fill="#fca5a5" fontSize="9.5">✕ Batter CANNOT return to bat in this innings</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>MCC LAW 25.4.3: RETIRING WITHOUT UMPIRE CONSENT OR MEDICAL REASON COUNTS AS A DISMISSAL</Text>
+        </View>
+      );
+
+    case 'STUMPING':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#15803d" />
+            <Rect x="40" y="25" width="380" height="90" fill="#e2d2b5" />
+            <Line x1="280" y1="25" x2="280" y2="115" stroke="#ffffff" strokeWidth="4" />
+            <Line x1="360" y1="50" x2="360" y2="100" stroke="#78350f" strokeWidth="6" />
+            <Circle cx="370" cy="65" r="10" fill="#f59e0b" />
+            <Circle cx="240" cy="65" r="10" fill="#0284c7" />
+            <Rect x="235" y="78" width="35" height="14" rx="4" fill="#ef4444" />
+            <SvgText x="120" y="45" fill="#dc2626" fontSize="10.5" fontWeight="bold">Foot Outside Crease (No Part Grounded Behind)</SvgText>
+            <SvgText x="295" y="40" fill="#78350f" fontSize="9.5" fontWeight="bold">Keeper Breaks Stumps</SvgText>
+            <SvgText x="110" y="110" fill="#0f172a" fontSize="9.5">Valid on legal delivery or Wide (NOT valid on No Ball)</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>MCC LAW 39: BATTER IS STUMPED IF OUT OF CREASE WITHOUT ATTEMPTING A RUN & KEEPER BREAKS WICKET</Text>
+        </View>
+      );
+
+    case 'BOUNDARY':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#15803d" />
+            <Line x1="260" y1="10" x2="260" y2="130" stroke="#ffffff" strokeWidth="6" />
+            <SvgText x="270" y="28" fill="#fef08a" fontSize="11" fontWeight="bold">BOUNDARY ROPE</SvgText>
+            <Circle cx="190" cy="65" r="12" fill="#22c55e" />
+            <SvgText x="150" y="90" fill="#ffffff" fontSize="10" fontWeight="bold">✓ Legal Catch</SvgText>
+            <SvgText x="120" y="104" fill="#fef08a" fontSize="8.5">Last contact grounded inside rope</SvgText>
+            <Circle cx="260" cy="65" r="12" fill="#ef4444" />
+            <SvgText x="280" y="68" fill="#ef4444" fontSize="11" fontWeight="bold">✕ SIX RUNS</SvgText>
+            <SvgText x="280" y="84" fill="#fca5a5" fontSize="8.5">Fielder touching rope with ball in hand</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>MCC LAW 19.5: FIELDER'S LAST GROUND CONTACT BEFORE TOUCHING BALL MUST BE ENTIRELY INSIDE ROPE</Text>
+        </View>
+      );
+
+    case 'ILLEGAL_FIELD':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#1e293b" />
+            <Circle cx="100" cy="70" r="28" fill="#dc2626" />
+            <SvgText x="88" y="78" fill="#ffffff" fontSize="22">🧢</SvgText>
+            <Rect x="150" y="30" width="270" height="32" rx="6" fill="#b91c1c" />
+            <SvgText x="165" y="50" fill="#ffffff" fontSize="11" fontWeight="bold">FIELDING WITH DETACHED GEAR</SvgText>
+            <Rect x="150" y="68" width="270" height="45" rx="6" fill="rgba(255,255,255,0.12)" />
+            <SvgText x="160" y="84" fill="#fde047" fontSize="10" fontWeight="bold">PENALTY: +5 Runs Awarded to Batting Team</SvgText>
+            <SvgText x="160" y="100" fill="#ffffff" fontSize="9">Using cap, hat, sweater or detached gear to field ball</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>MCC LAW 28.2: NO FIELDER SHALL INTENTIONALLY USE CLOTHING OR DETACHED EQUIPMENT TO FIELD BALL</Text>
+        </View>
+      );
+
+    case 'HELMET':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#15803d" />
+            <Rect x="70" y="45" width="65" height="50" rx="10" fill="#334155" stroke="#ffffff" strokeWidth="2" />
+            <SvgText x="88" y="75" fill="#fef08a" fontSize="20">⛑️</SvgText>
+            <Circle cx="140" cy="70" r="9" fill="#dc2626" />
+            <Line x1="210" y1="70" x2="152" y2="70" stroke="#f59e0b" strokeWidth="3" strokeDasharray="4,3" />
+            <Rect x="170" y="30" width="250" height="34" rx="6" fill="#991b1b" />
+            <SvgText x="180" y="52" fill="#ffffff" fontSize="11" fontWeight="bold">BALL STRIKES GROUNDED HELMET</SvgText>
+            <Rect x="170" y="70" width="250" height="42" rx="6" fill="#1e293b" />
+            <SvgText x="180" y="86" fill="#fde047" fontSize="10" fontWeight="bold">1. +5 Penalty Runs Awarded to Batters</SvgText>
+            <SvgText x="180" y="100" fill="#e2e8f0" fontSize="9.5">2. Ball becomes Dead immediately on impact</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>MCC LAW 28.3: IF BALL STRIKES GROUNDED HELMET, +5 PENALTY RUNS AWARDED & BALL BECOMES DEAD</Text>
+        </View>
+      );
+
+    case 'FAKE_FIELD':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#0f172a" />
+            <Circle cx="100" cy="70" r="26" fill="#b45309" />
+            <SvgText x="88" y="77" fill="#ffffff" fontSize="22">🎭</SvgText>
+            <Rect x="150" y="28" width="270" height="32" rx="6" fill="#78350f" />
+            <SvgText x="165" y="48" fill="#fef08a" fontSize="11" fontWeight="bold">DECEPTIVE / FAKE FIELDING (LAW 41.5)</SvgText>
+            <Rect x="150" y="66" width="270" height="50" rx="6" fill="#1e293b" />
+            <SvgText x="160" y="82" fill="#ef4444" fontSize="10" fontWeight="bold">Feigning throw to prevent batters running</SvgText>
+            <SvgText x="160" y="98" fill="#fde047" fontSize="10" fontWeight="bold">PENALTY: +5 Runs to Batting Team + Ball Dead</SvgText>
+            <SvgText x="160" y="110" fill="#94a3b8" fontSize="8.5">Runs completed by batters also stand</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>MCC LAW 41.5: DELIBERATE ATTEMPT TO DECEIVE OR DISTRACT BATTER RESULTS IN 5 PENALTY RUNS</Text>
+        </View>
+      );
+
+    case 'SUBSTITUTE':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#1e293b" />
+            <Rect x="30" y="25" width="180" height="90" rx="6" fill="#065f46" />
+            <SvgText x="45" y="48" fill="#a7f3d0" fontSize="11" fontWeight="bold">PERMITTED POWERS:</SvgText>
+            <SvgText x="45" y="70" fill="#ffffff" fontSize="10">✓ Fielding anywhere on ground</SvgText>
+            <SvgText x="45" y="88" fill="#ffffff" fontSize="10">✓ Taking legal catches</SvgText>
+            <SvgText x="45" y="104" fill="#ffffff" fontSize="10">✓ Executing run outs</SvgText>
+            <Rect x="230" y="25" width="200" height="90" rx="6" fill="#7f1d1d" />
+            <SvgText x="245" y="48" fill="#fca5a5" fontSize="11" fontWeight="bold">RESTRICTED (NOT PERMITTED):</SvgText>
+            <SvgText x="245" y="70" fill="#ffffff" fontSize="10">✕ CANNOT Bowl under any condition</SvgText>
+            <SvgText x="245" y="88" fill="#ffffff" fontSize="10">✕ CANNOT Bat in innings</SvgText>
+            <SvgText x="245" y="104" fill="#ffffff" fontSize="10">✕ CANNOT Act as on-field Captain</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>MCC LAW 24: SUBSTITUTES ARE STRICTLY PERMITTED TO FIELD ONLY; NO BOWLING, BATTING OR CAPTAINCY</Text>
+        </View>
+      );
+
+    case 'KEEPER':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#15803d" />
+            <Rect x="40" y="25" width="380" height="90" fill="#e2d2b5" />
+            <Line x1="260" y1="25" x2="260" y2="115" stroke="#ffffff" strokeWidth="4" />
+            <Line x1="265" y1="45" x2="265" y2="95" stroke="#78350f" strokeWidth="6" />
+            <Rect x="280" y="55" width="40" height="25" rx="5" fill="#22c55e" />
+            <SvgText x="285" y="71" fill="#ffffff" fontSize="9.5" fontWeight="bold">Legal Gloves</SvgText>
+            <Rect x="215" y="55" width="45" height="25" rx="5" fill="#ef4444" stroke="#ffffff" strokeWidth="1" />
+            <SvgText x="220" y="71" fill="#ffffff" fontSize="8.5" fontWeight="bold">Illegal Gloves</SvgText>
+            <SvgText x="70" y="42" fill="#0f172a" fontSize="10.5" fontWeight="bold">Gloves in front before ball passes stumps = NO BALL!</SvgText>
+            <SvgText x="70" y="105" fill="#1e3a8a" fontSize="9.5">Keeper must remain wholly behind stumps at striker's end</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>MCC LAW 27: WICKETKEEPER MUST REMAIN WHOLLY BEHIND STUMPS UNTIL BALL TOUCHES BAT OR PASSES WICKET</Text>
+        </View>
+      );
+
+    case 'DEAD_BALL':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#0f2452" />
+            <Circle cx="100" cy="70" r="28" fill="#3b82f6" />
+            <SvgText x="88" y="78" fill="#ffffff" fontSize="22">🛑</SvgText>
+            <Rect x="150" y="25" width="280" height="32" rx="6" fill="#1d4ed8" />
+            <SvgText x="165" y="46" fill="#ffffff" fontSize="11" fontWeight="bold">UMPIRE CALLS & SIGNALS DEAD BALL</SvgText>
+            <Rect x="150" y="65" width="280" height="52" rx="6" fill="rgba(255,255,255,0.12)" />
+            <SvgText x="160" y="80" fill="#93c5fd" fontSize="9.5">• Delivery DOES NOT COUNT (Re-bowled)</SvgText>
+            <SvgText x="160" y="94" fill="#93c5fd" fontSize="9.5">• No runs scored, no batter can be dismissed</SvgText>
+            <SvgText x="160" y="108" fill="#fef08a" fontSize="9.5">• Ball trapped in gear / bowler aborts run-up</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>MCC LAW 20: DELIVERY BECOMES DEAD WHEN UMPIRE CALLS IT; NO RUNS ACCRUE AND BALL IS RE-BOWLED</Text>
+        </View>
+      );
+
+    case 'PENALTY_RUNS':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#1e293b" />
+            <Rect x="30" y="25" width="185" height="90" rx="8" fill="#065f46" />
+            <SvgText x="40" y="48" fill="#a7f3d0" fontSize="10.5" fontWeight="bold">AWARD TO BATTING (+5)</SvgText>
+            <SvgText x="40" y="68" fill="#ffffff" fontSize="9">• Ball hitting ground helmet</SvgText>
+            <SvgText x="40" y="84" fill="#ffffff" fontSize="9">• Illegal fielding with cap</SvgText>
+            <SvgText x="40" y="100" fill="#ffffff" fontSize="9">• Fake fielding / unfair play</SvgText>
+            <Rect x="230" y="25" width="195" height="90" rx="8" fill="#7f1d1d" />
+            <SvgText x="240" y="48" fill="#fca5a5" fontSize="10.5" fontWeight="bold">AWARD TO FIELDING (+5)</SvgText>
+            <SvgText x="240" y="68" fill="#ffffff" fontSize="9">• Running on pitch danger zone</SvgText>
+            <SvgText x="240" y="84" fill="#ffffff" fontSize="9">• Time wasting by batting side</SvgText>
+            <SvgText x="240" y="100" fill="#ffffff" fontSize="9">• Ball tampering / misconduct</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>MCC LAW 41 & 42: UMPIRE SIGNALS PENALTY RUNS BY TAPPING SHOULDER; 5 RUNS CREDITED TO TEAM EXTRAS</Text>
+        </View>
+      );
+
+    case 'TAMPERING':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#0f172a" />
+            <Circle cx="90" cy="70" r="28" fill="#dc2626" />
+            <SvgText x="78" y="78" fill="#ffffff" fontSize="22">🏏</SvgText>
+            <Rect x="140" y="25" width="290" height="32" rx="6" fill="#991b1b" />
+            <SvgText x="155" y="46" fill="#ffffff" fontSize="11" fontWeight="bold">BALL TAMPERING (UNFAIR CONDITIONING)</SvgText>
+            <Rect x="140" y="65" width="290" height="52" rx="6" fill="#1e293b" />
+            <SvgText x="150" y="80" fill="#ef4444" fontSize="9.5">• 1. Ball replaced immediately by Umpires</SvgText>
+            <SvgText x="150" y="94" fill="#fde047" fontSize="9.5">• 2. +5 Penalty Runs awarded to opposition</SvgText>
+            <SvgText x="150" y="108" fill="#94a3b8" fontSize="9.5">• 3. Disciplinary report filed to Match Referee</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>MCC LAW 41.3: ARTIFICIALLY ALTERING CONDITION OF BALL RESULTS IN 5 PENALTY RUNS & BALL REPLACEMENT</Text>
+        </View>
+      );
+
+    case 'TIME_WASTING':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#1e293b" />
+            <Circle cx="90" cy="70" r="28" fill="#d97706" />
+            <SvgText x="78" y="78" fill="#ffffff" fontSize="22">⏱️</SvgText>
+            <Rect x="140" y="25" width="290" height="30" rx="6" fill="#b45309" />
+            <SvgText x="155" y="45" fill="#ffffff" fontSize="11" fontWeight="bold">DELIBERATE TIME WASTING (LAW 41.9 / 41.10)</SvgText>
+            <Rect x="140" y="62" width="290" height="55" rx="6" fill="rgba(255,255,255,0.12)" />
+            <SvgText x="150" y="78" fill="#fef08a" fontSize="10" fontWeight="bold">Stage 1: Official First & Final Warning to Captain</SvgText>
+            <SvgText x="150" y="94" fill="#ef4444" fontSize="10" fontWeight="bold">Stage 2: +5 Penalty Runs awarded to opposition</SvgText>
+            <SvgText x="150" y="108" fill="#94a3b8" fontSize="8.5">If bowler repeats: suspended from bowling for innings</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>MCC LAW 41.9 & 41.10: WASTING TIME IS UNFAIR; UMPIRES ISSUE FIRST WARNING FOLLOWED BY 5 PENALTY RUNS</Text>
+        </View>
+      );
+
+    case 'MISCONDUCT':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#0f172a" />
+            <G>
+              <Rect x="30" y="30" width="90" height="80" rx="6" fill="#854d0e" />
+              <SvgText x="38" y="50" fill="#fef08a" fontSize="10" fontWeight="bold">LEVEL 1</SvgText>
+              <SvgText x="38" y="68" fill="#ffffff" fontSize="8">Dissent /</SvgText>
+              <SvgText x="38" y="82" fill="#ffffff" fontSize="8">Language</SvgText>
+              <SvgText x="38" y="100" fill="#fde047" fontSize="8" fontWeight="bold">Warning</SvgText>
+            </G>
+            <G>
+              <Rect x="130" y="30" width="90" height="80" rx="6" fill="#b91c1c" />
+              <SvgText x="138" y="50" fill="#fee2e2" fontSize="10" fontWeight="bold">LEVEL 2</SvgText>
+              <SvgText x="138" y="68" fill="#ffffff" fontSize="8">Serious Obscene</SvgText>
+              <SvgText x="138" y="82" fill="#ffffff" fontSize="8">Aggression</SvgText>
+              <SvgText x="138" y="100" fill="#fca5a5" fontSize="8" fontWeight="bold">+5 Penalty</SvgText>
+            </G>
+            <G>
+              <Rect x="230" y="30" width="90" height="80" rx="6" fill="#991b1b" />
+              <SvgText x="238" y="50" fill="#fca5a5" fontSize="10" fontWeight="bold">LEVEL 3</SvgText>
+              <SvgText x="238" y="68" fill="#ffffff" fontSize="8">Intimidation /</SvgText>
+              <SvgText x="238" y="82" fill="#ffffff" fontSize="8">Threat</SvgText>
+              <SvgText x="238" y="100" fill="#ef4444" fontSize="8" fontWeight="bold">Suspended</SvgText>
+            </G>
+            <G>
+              <Rect x="330" y="30" width="90" height="80" rx="6" fill="#450a0a" />
+              <SvgText x="338" y="50" fill="#f87171" fontSize="10" fontWeight="bold">LEVEL 4</SvgText>
+              <SvgText x="338" y="68" fill="#ffffff" fontSize="8">Physical</SvgText>
+              <SvgText x="338" y="82" fill="#ffffff" fontSize="8">Violence</SvgText>
+              <SvgText x="338" y="100" fill="#dc2626" fontSize="8" fontWeight="bold">Ejected</SvgText>
+            </G>
+          </Svg>
+          <Text style={styles.diagramCaption}>MCC LAW 42: PROGRESSIVE 4-TIER DISCIPLINARY SANCTIONS FROM OFFICIAL WARNING TO MATCH REMOVAL</Text>
+        </View>
+      );
+
+    case 'PITCH_DAMAGE':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#15803d" />
+            <Rect x="40" y="25" width="380" height="90" fill="#e2d2b5" />
+            <Line x1="120" y1="25" x2="120" y2="115" stroke="#ffffff" strokeWidth="4" />
+            <Line x1="340" y1="25" x2="340" y2="115" stroke="#ffffff" strokeWidth="4" />
+            <Rect x="160" y="55" width="140" height="30" fill="rgba(220, 38, 38, 0.3)" stroke="#dc2626" strokeWidth="2" strokeDasharray="4,3" />
+            <SvgText x="175" y="74" fill="#991b1b" fontSize="10" fontWeight="bold">PROTECTED DANGER ZONE</SvgText>
+            <SvgText x="60" y="42" fill="#0f172a" fontSize="10" fontWeight="bold">✕ No running down center of pitch</SvgText>
+            <SvgText x="60" y="105" fill="#b45309" fontSize="9">1st: Warning • 2nd: Final Warning • 3rd: +5 Penalty Runs / Suspension</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>MCC LAW 41.14 & 41.15: RUNNING ON PROTECTED AREA OF PITCH IS UNFAIR; SUBJECT TO WARNING AND PENALTIES</Text>
+        </View>
+      );
+
+    case 'FREE_HIT':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#064e3b" />
+            <Circle cx="80" cy="70" r="28" fill="#059669" />
+            <SvgText x="68" y="78" fill="#ffffff" fontSize="22">⚡</SvgText>
+            <Rect x="130" y="25" width="300" height="34" rx="6" fill="#047857" />
+            <SvgText x="150" y="47" fill="#fef08a" fontSize="12" fontWeight="bold">⚡ FREE HIT ACTIVE ON NEXT DELIVERY</SvgText>
+            <Rect x="130" y="66" width="300" height="52" rx="6" fill="#0f172a" />
+            <SvgText x="140" y="82" fill="#a7f3d0" fontSize="9.5">✓ Batter IMMUNE to: Bowled, Caught, LBW, Stumped, Hit Wicket</SvgText>
+            <SvgText x="140" y="96" fill="#f87171" fontSize="9.5">🛑 ONLY DISMISSAL PERMITTED: Run Out</SvgText>
+            <SvgText x="140" y="110" fill="#fef08a" fontSize="8.5">If Free Hit is Wide or No Ball, Free Hit carries over!</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>ICC CLAUSE 21.19: DELIVERY FOLLOWING A NO-BALL IS A FREE HIT; FIELDERS CANNOT CHANGE UNLESS BATTERS CROSSED</Text>
+        </View>
+      );
+
+    case 'OVER_COMPLETION':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#0f172a" />
+            <SvgText x="110" y="32" fill="#38bdf8" fontSize="11" fontWeight="bold">OVER COMPLETION SEQUENCE (6 VALID DELIVERIES)</SvgText>
+            {[1, 2, 3, 4, 5, 6].map((b, idx) => (
+              <G key={idx}>
+                <Circle cx={65 + idx * 56} cy="65" r="20" fill="#0284c7" />
+                <SvgText x={61 + idx * 56} y="72" fill="#ffffff" fontSize="13" fontWeight="bold">{b}</SvgText>
+              </G>
+            ))}
+            <Rect x="40" y="98" width="380" height="22" rx="4" fill="rgba(245, 158, 11, 0.2)" stroke="#f59e0b" strokeWidth="1" />
+            <SvgText x="50" y="113" fill="#fef08a" fontSize="9.5">Wides & No-Balls DO NOT count toward the 6 legal balls and must be re-bowled</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>MCC LAW 17: AN OVER CONSISTS OF 6 VALID DELIVERIES; UMPIRE CALLS OVER AND TEAMS ROTATE ENDS</Text>
+        </View>
+      );
+
+    case 'SLOW_OVER':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#1e293b" />
+            <Circle cx="80" cy="70" r="28" fill="#dc2626" />
+            <SvgText x="68" y="78" fill="#ffffff" fontSize="22">⏳</SvgText>
+            <Rect x="130" y="25" width="300" height="34" rx="6" fill="#991b1b" />
+            <SvgText x="145" y="47" fill="#ffffff" fontSize="11" fontWeight="bold">SLOW OVER RATE PENALTY (IN-MATCH)</SvgText>
+            <Rect x="130" y="66" width="300" height="52" rx="6" fill="#0f172a" />
+            <SvgText x="140" y="82" fill="#fca5a5" fontSize="10" fontWeight="bold">Match cut-off exceeded at scheduled end time:</SvgText>
+            <SvgText x="140" y="96" fill="#fde047" fontSize="9.5">• 1 fewer fielder permitted outside 30-yard circle</SvgText>
+            <SvgText x="140" y="110" fill="#ffffff" fontSize="8.5">• Max 4 fielders outside circle instead of 5 for remaining overs</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>ICC T20 CLAUSE 12.8: IN-MATCH PENALTY REQUIRES ONE EXTRA FIELDER INSIDE CIRCLE FOR ALL INCOMPLETE OVERS</Text>
+        </View>
+      );
+
+    case 'SUPER_OVER':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#0f2452" />
+            <Circle cx="80" cy="70" r="28" fill="#d97706" />
+            <SvgText x="68" y="78" fill="#ffffff" fontSize="22">🏆</SvgText>
+            <Rect x="130" y="25" width="300" height="32" rx="6" fill="#b45309" />
+            <SvgText x="150" y="46" fill="#fef08a" fontSize="11" fontWeight="bold">SUPER OVER TIE-BREAKER PROCEDURE</SvgText>
+            <Rect x="130" y="64" width="300" height="54" rx="6" fill="rgba(255,255,255,0.12)" />
+            <SvgText x="140" y="80" fill="#ffffff" fontSize="9.5">• 1 Over (6 Legal Deliveries) per side</SvgText>
+            <SvgText x="140" y="94" fill="#ffffff" fontSize="9.5">• Max 2 Wickets (Innings concludes upon 2nd wicket)</SvgText>
+            <SvgText x="140" y="108" fill="#a7f3d0" fontSize="9.5">• Team batting second in main match bats first in Super Over</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>ICC APPENDIX F: MATCH TIED ➔ 1-OVER ELIMINATOR DECIDES WINNER; BOUNDARY COUNT NO LONGER APPLIES</Text>
+        </View>
+      );
+
+    case 'DLS':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#0369a1" />
+            <Circle cx="80" cy="70" r="28" fill="#0284c7" />
+            <SvgText x="68" y="78" fill="#ffffff" fontSize="22">🌧️</SvgText>
+            <Rect x="130" y="25" width="300" height="32" rx="6" fill="#075985" />
+            <SvgText x="145" y="46" fill="#fef08a" fontSize="11" fontWeight="bold">DUCKWORTH-LEWIS-STERN (DLS) METHOD</SvgText>
+            <Rect x="130" y="64" width="300" height="54" rx="6" fill="#082f49" />
+            <SvgText x="140" y="80" fill="#bae6fd" fontSize="9.5">Target adjusted according to Resources Lost (Overs & Wickets)</SvgText>
+            <SvgText x="140" y="94" fill="#fde047" fontSize="9.5">Par Score = Team 1 Runs × (Team 2 Res / Team 1 Res)</SvgText>
+            <SvgText x="140" y="108" fill="#ffffff" fontSize="8.5">Minimum 5 overs required in T20 to constitute official match</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>ICC PLAYING CONDITIONS: DLS TARGET REVISION GOVERNED BY OFFICIAL RESOURCE PERCENTAGE TABLES</Text>
+        </View>
+      );
+
+    case 'BREAK':
+      return (
+        <View style={styles.diagramBox}>
+          <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#78350f" />
+            <Circle cx="80" cy="70" r="28" fill="#d97706" />
+            <SvgText x="68" y="78" fill="#ffffff" fontSize="22">☕</SvgText>
+            <Rect x="130" y="25" width="300" height="32" rx="6" fill="#b45309" />
+            <SvgText x="155" y="46" fill="#fef08a" fontSize="11" fontWeight="bold">MATCH INTERVALS & BREAK TIMINGS</SvgText>
+            <Rect x="130" y="64" width="300" height="54" rx="6" fill="#451a03" />
+            <SvgText x="140" y="80" fill="#fde68a" fontSize="9.5">• T20 Innings Break: Exactly 15 Minutes</SvgText>
+            <SvgText x="140" y="94" fill="#fde68a" fontSize="9.5">• Drinks Interval: 2.5 Minutes (Midpoint of Innings)</SvgText>
+            <SvgText x="140" y="108" fill="#ffffff" fontSize="8.5">• Multi-day: Lunch (40 mins), Tea (20 mins)</SvgText>
+          </Svg>
+          <Text style={styles.diagramCaption}>MCC LAW 11: TIMED BREAKS REGULATED BY COMPETITION PLAYING CONDITIONS; TEAMS SWITCH BOWLING ENDS</Text>
+        </View>
+      );
+
     default:
       return (
         <View style={styles.diagramBox}>
