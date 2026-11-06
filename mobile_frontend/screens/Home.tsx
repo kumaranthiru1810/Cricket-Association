@@ -2949,7 +2949,7 @@ export default function HomeScreen() {
                       {Array.isArray(inn.suspendedBowlers) && inn.suspendedBowlers.length > 0 && (
                         <View style={styles.homeSuspendedBanner}>
                           <Text style={styles.homeSuspendedText}>
-                            🛑 நடுவர் தடை (2 No-Balls): {inn.suspendedBowlers.map((b: any) => b.name).join(', ')} பந்துவீச தடை செய்யப்பட்டுள்ளார்
+                            🛑 Umpire Suspension (2 No-Balls): {inn.suspendedBowlers.map((b: any) => b.name).join(', ')} is suspended from bowling
                           </Text>
                         </View>
                       )}
@@ -2993,7 +2993,7 @@ export default function HomeScreen() {
                                 let badgeText = bw.subNote || '';
                                 if (!badgeText) {
                                   if (isSuspended) {
-                                    badgeText = '🚫 நடுவர் தடை (2 No-Balls)';
+                                    badgeText = '🚫 Suspended (2 No-Balls)';
                                   } else if (subRecord) {
                                     if (subRecord.oldBowlerName === bw.name || subRecord.oldBowlerId === bw.playerId) {
                                       badgeText = subRecord.situation ? `🩹 Sub: ${subRecord.situation}` : '🩹 Mid-Over Substituted';
@@ -3028,7 +3028,7 @@ export default function HomeScreen() {
                                       </View>
                                       {isSuspended ? (
                                         <View style={styles.homeSuspendedPill}>
-                                          <Text style={styles.homeSuspendedPillText}>🚫 நடுவர் தடை (2 No-Balls)</Text>
+                                          <Text style={styles.homeSuspendedPillText}>🚫 Suspended (2 No-Balls)</Text>
                                         </View>
                                       ) : badgeText ? (
                                         <View style={styles.homeSubPill}>

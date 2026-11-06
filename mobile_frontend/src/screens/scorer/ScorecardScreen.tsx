@@ -341,13 +341,13 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
           <View style={styles.oversLogisticsCard}>
             <View style={styles.oversLogisticsRow}>
               <View style={styles.oversLogisticsCol}>
-                <Text style={styles.oversLogisticsLabel}>CURRENT OVER (நடப்பு ஓவர்)</Text>
+                <Text style={styles.oversLogisticsLabel}>CURRENT OVER</Text>
                 <Text style={styles.oversLogisticsValue}>
                   Over {currentInnings.currentOverNumber || (Math.floor(parseFloat(currentInnings.overs || '0')) + 1)} ({currentInnings.overs || '0.0'} / {currentInnings.totalOvers || match.overs || 20} Ov)
                 </Text>
               </View>
               <View style={styles.oversLogisticsCol}>
-                <Text style={styles.oversLogisticsLabel}>OVERS REMAINING (மீதமுள்ள ஓவர்கள்)</Text>
+                <Text style={styles.oversLogisticsLabel}>OVERS REMAINING</Text>
                 <Text style={[styles.oversLogisticsValue, { color: '#b45309' }]}>
                   {currentInnings.oversRemaining ? `${currentInnings.oversRemaining} Overs Left` : '0.0 Overs'}
                   {currentInnings.ballsRemaining !== undefined ? ` (${currentInnings.ballsRemaining} balls)` : ''}
@@ -355,7 +355,7 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
               </View>
               {currentInnings.currentBowler && (
                 <View style={styles.oversLogisticsCol}>
-                  <Text style={styles.oversLogisticsLabel}>CURRENT BOWLER (பந்துவீச்சாளர்)</Text>
+                  <Text style={styles.oversLogisticsLabel}>CURRENT BOWLER</Text>
                   <Text style={[styles.oversLogisticsValue, { color: '#005960' }]}>
                     🎳 {currentInnings.currentBowler.name} (Active)
                   </Text>
@@ -367,7 +367,7 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
             {Array.isArray(currentInnings.suspendedBowlers) && currentInnings.suspendedBowlers.length > 0 && (
               <View style={styles.suspendedWarningBanner}>
                 <Text style={styles.suspendedWarningText}>
-                  🛑 நடுவர் தடை (MCC Law 41.7): {currentInnings.suspendedBowlers.map((b: any) => b.name).join(', ')} பந்துவீச தடை செய்யப்பட்டுள்ளார் (2 Dangerous No-Balls)
+                  🛑 UMPIRE SUSPENSION (MCC Law 41.7): {currentInnings.suspendedBowlers.map((b: any) => b.name).join(', ')} is suspended from bowling (2 Dangerous No-Balls)
                 </Text>
               </View>
             )}
@@ -502,7 +502,7 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                   let badgeText = bw.subNote || '';
                   if (!badgeText) {
                     if (isSuspended) {
-                      badgeText = '🚫 நடுவர் தடை (2 No-Balls)';
+                      badgeText = '🚫 Suspended (2 No-Balls)';
                     } else if (subRecord) {
                       if (subRecord.oldBowlerName === bw.name || subRecord.oldBowlerId === bw.playerId) {
                         badgeText = subRecord.situation ? `🩹 Sub: ${subRecord.situation}` : '🩹 Mid-Over Substituted';
@@ -537,7 +537,7 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                         </View>
                         {isSuspended ? (
                           <View style={styles.suspendedPill}>
-                            <Text style={styles.suspendedPillText}>🚫 நடுவர் தடை (2 No-Balls Suspended)</Text>
+                            <Text style={styles.suspendedPillText}>🚫 Suspended (2 No-Balls)</Text>
                           </View>
                         ) : badgeText ? (
                           <View style={styles.subPill}>

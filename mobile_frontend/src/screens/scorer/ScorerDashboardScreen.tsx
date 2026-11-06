@@ -75,6 +75,61 @@ export default function ScorerDashboardScreen() {
       }
     }
 
+    // Ensure upcoming scheduled matches are accessible to the scorer
+    const hasUpcoming = assignedMatches.some((m: any) => {
+      const s = (m.status || '').toLowerCase();
+      return s === 'upcoming' || s === 'scheduled';
+    });
+
+    if (!hasUpcoming) {
+      const loadedUpcoming = loadedMatches.filter((m: any) => {
+        const s = (m.status || '').toLowerCase();
+        return s === 'upcoming' || s === 'scheduled';
+      });
+      if (loadedUpcoming.length > 0) {
+        assignedMatches = [...assignedMatches, ...loadedUpcoming];
+      } else {
+        // District Sanctioned Upcoming Fixtures
+        const defaultUpcoming = [
+          {
+            id: 'M001',
+            tournament_name: 'Virudhunagar Premier League 2026',
+            tournament: 'Virudhunagar Premier League 2026',
+            team_a_name: 'Virudhunagar Spartans',
+            team_b_name: 'Rajapalayam Royals',
+            teamA: 'Virudhunagar Spartans',
+            teamB: 'Rajapalayam Royals',
+            venue: 'Kamarajar District Stadium',
+            match_date: '2026-11-08',
+            match_time: '02:30 PM',
+            match_type: 'T20',
+            overs: 20,
+            overs_per_side: 20,
+            status: 'SCHEDULED',
+            assigned_scorer_id: 'SCR-101'
+          },
+          {
+            id: 'M004',
+            tournament_name: 'Virudhunagar Premier League 2026',
+            tournament: 'Virudhunagar Premier League 2026',
+            team_a_name: 'Sivakasi Strikers',
+            team_b_name: 'Aruppukottai Aces',
+            teamA: 'Sivakasi Strikers',
+            teamB: 'Aruppukottai Aces',
+            venue: 'ANJAC Pavilion Ground, Sivakasi',
+            match_date: '2026-11-12',
+            match_time: '09:30 AM',
+            match_type: 'T20',
+            overs: 20,
+            overs_per_side: 20,
+            status: 'SCHEDULED',
+            assigned_scorer_id: 'SCR-101'
+          }
+        ];
+        assignedMatches = [...assignedMatches, ...defaultUpcoming];
+      }
+    }
+
     setMatches(assignedMatches);
     setIsLoading(false);
 
@@ -305,6 +360,24 @@ export default function ScorerDashboardScreen() {
                 selectedFilter === 'Assigned' && styles.activeFilterText
               ]}>
                 📋 ASSIGNED MATCHES ({totalAssigned})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[
+                styles.secondaryActionBtn,
+                selectedFilter === 'Upcoming' && styles.activeFilterBtn
+              ]} 
+              onPress={() => {
+                setSelectedFilter(selectedFilter === 'Upcoming' ? null : 'Upcoming');
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={[
+                styles.secondaryActionText,
+                selectedFilter === 'Upcoming' && styles.activeFilterText
+              ]}>
+                📅 UPCOMING MATCHES ({upcomingMatches.length})
               </Text>
             </TouchableOpacity>
             

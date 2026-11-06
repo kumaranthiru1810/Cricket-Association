@@ -473,16 +473,16 @@ export default function LiveScoringScreen() {
   const [isUpdatingBowler, setIsUpdatingBowler] = useState<boolean>(false);
   const [changeBowlerReason, setChangeBowlerReason] = useState<'INJURY' | 'TACTICAL' | 'NO_BALL_SUSPENSION'>('TACTICAL');
   const [isSuspendingCurrentBowler, setIsSuspendingCurrentBowler] = useState<boolean>(false);
-  const [bowlerSituation, setBowlerSituation] = useState<string>('காயம் (Injured)');
+  const [bowlerSituation, setBowlerSituation] = useState<string>('Bowler Injured');
   const [isSituationDropdownOpen, setIsSituationDropdownOpen] = useState<boolean>(false);
   const BOWLER_SITUATIONS = [
-    { id: 'INJURY', label: '🤕 காயம் (Bowler Injured)', text: 'காயம் (Injured)' },
-    { id: 'CRAMPS', label: '⚠️ தசைப்பிடிப்பு / சோர்வு (Cramps / Fatigue)', text: 'தசைப்பிடிப்பு (Cramps)' },
-    { id: 'SUSPENDED', label: '🚫 2 No-Ball நடுவர் தடை (Umpire Suspended)', text: '2 No-Ball நடுவர் தடை (Suspended)' },
-    { id: 'MEDICAL', label: '🚑 மருத்துவ சிகிச்சை (Medical Treatment)', text: 'மருத்துவ சிகிச்சை (Medical)' },
-    { id: 'TACTICAL', label: '🔄 கேப்டன் மாற்றம் (Tactical / Captain Call)', text: 'கேப்டன் மாற்றம் (Tactical)' },
-    { id: 'ROTATION', label: '⏱️ பந்துவீச்சு சுழற்சி (Bowling Rotation)', text: 'பந்துவீச்சு சுழற்சி (Rotation)' },
-    { id: 'CUSTOM', label: '✏️ வேறு காரணம் (Custom - Type Below)', text: '' }
+    { id: 'INJURY', label: '🤕 Bowler Injured', text: 'Bowler Injured' },
+    { id: 'CRAMPS', label: '⚠️ Cramps / Fatigue', text: 'Cramps / Fatigue' },
+    { id: 'SUSPENDED', label: '🚫 Umpire Suspended (2 Dangerous No-Balls)', text: 'Umpire Suspended (2 No-Balls)' },
+    { id: 'MEDICAL', label: '🚑 Medical Treatment Required', text: 'Medical Treatment' },
+    { id: 'TACTICAL', label: '🔄 Captain / Tactical Call', text: 'Tactical Change' },
+    { id: 'ROTATION', label: '⏱️ Bowling Rotation / Rest', text: 'Bowling Rotation' },
+    { id: 'CUSTOM', label: '✏️ Other Reason (Type Below)', text: '' }
   ];
 
   // 2 No-Balls Dangerous Bowling Alert (MCC Law 41.7)
@@ -1310,7 +1310,7 @@ export default function LiveScoringScreen() {
     setChangeBowlerSearch('');
     const isMid = balls % 6 > 0;
     setChangeBowlerReason(isMid ? 'INJURY' : 'TACTICAL');
-    setBowlerSituation(isMid ? 'காயம் (Injured)' : 'கேப்டன் மாற்றம் (Tactical)');
+    setBowlerSituation(isMid ? 'Bowler Injured' : 'Tactical Change');
     setIsSituationDropdownOpen(false);
     setIsSuspendingCurrentBowler(false);
     setShowChangeBowlerModal(true);
@@ -1322,7 +1322,7 @@ export default function LiveScoringScreen() {
     setIsChangeBowlerDropdownOpen(false);
     setChangeBowlerSearch('');
     setChangeBowlerReason('INJURY');
-    setBowlerSituation('காயம் (Injured)');
+    setBowlerSituation('Bowler Injured');
     setIsSituationDropdownOpen(false);
     setIsSuspendingCurrentBowler(false);
     setShowChangeBowlerModal(true);
@@ -1363,7 +1363,7 @@ export default function LiveScoringScreen() {
       const ballsInCurrentOver = balls % 6;
       const sitTag = bowlerSituation.trim() ? ` [${bowlerSituation.trim()}]` : '';
       const succMsg = ballsInCurrentOver > 0
-        ? `பந்துவீச்சாளர் மாற்றம் செய்யப்பட்டது! ${bwlName || 'புதிய பந்துவீச்சாளர்'} மீதமுள்ள ${6 - ballsInCurrentOver} பந்துகளை வீசுவார்${sitTag}.`
+        ? `Bowler substituted! ${bwlName || 'New bowler'} will bowl the remaining ${6 - ballsInCurrentOver} ball(s)${sitTag}.`
         : (res?.message || `Bowler updated to ${bwlName || 'new bowler'}${sitTag}.`);
       Platform.OS === 'web' ? window.alert(succMsg) : Alert.alert('Bowler Changed', succMsg);
     } catch (err: any) {
@@ -6246,19 +6246,19 @@ export default function LiveScoringScreen() {
               </View>
             )}
 
-            {/* Mid-Over Clean Badge - Removed verbose legal text as requested */}
+            {/* Mid-Over Clean Badge - Clean English notification */}
             {balls % 6 > 0 && (
               <View style={styles.midOverCleanBadge}>
                 <Text style={styles.midOverCleanBadgeIcon}>⚡</Text>
                 <Text style={styles.midOverCleanBadgeText}>
-                  மீதமுள்ள பந்துகள்: <Text style={{ fontWeight: '800', color: '#b45309' }}>{6 - (balls % 6)} Balls Remaining</Text> ({balls % 6} பந்துகள் வீசப்பட்டுள்ளது)
+                  Balls Remaining: <Text style={{ fontWeight: '800', color: '#b45309' }}>{6 - (balls % 6)} Balls Remaining</Text> ({balls % 6} ball(s) bowled in this over)
                 </Text>
               </View>
             )}
 
             {/* Substitution Situation / Reason Selector (Dropdown + Custom Typing) */}
             <View style={{ marginBottom: 12 }}>
-              <Text style={styles.selectLabel}>பந்துவீச்சாளர் நிலை / காரணம் (SITUATION / REASON):</Text>
+              <Text style={styles.selectLabel}>BOWLER SITUATION / REASON:</Text>
               <TouchableOpacity
                 style={[
                   styles.situationDropdownTrigger,
@@ -6273,7 +6273,7 @@ export default function LiveScoringScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
                   <Text style={{ fontSize: 13, marginRight: 6 }}>📋</Text>
                   <Text style={styles.situationDropdownTriggerText} numberOfLines={1}>
-                    {bowlerSituation || 'காரணத்தைத் தேர்ந்தெடுக்கவும் (Select Situation)...'}
+                    {bowlerSituation || 'Select Situation / Reason...'}
                   </Text>
                 </View>
                 <Text style={styles.fielderDropdownArrow}>{isSituationDropdownOpen ? '▲' : '▼'}</Text>
@@ -6327,16 +6327,16 @@ export default function LiveScoringScreen() {
               <View style={{ marginTop: 6 }}>
                 <TextInput
                   style={styles.situationCustomInput}
-                  placeholder="அல்லது காரணத்தை இங்கே எழுதவும் (Or write situation)..."
+                  placeholder="Or type custom reason here..."
                   placeholderTextColor="#94a3b8"
                   value={bowlerSituation}
                   onChangeText={(txt) => {
                     setBowlerSituation(txt);
                     const lower = txt.toLowerCase();
-                    if (lower.includes('no-ball') || lower.includes('beamer') || lower.includes('suspend') || lower.includes('தடை')) {
+                    if (lower.includes('no-ball') || lower.includes('beamer') || lower.includes('suspend')) {
                       setChangeBowlerReason('NO_BALL_SUSPENSION');
                       setIsSuspendingCurrentBowler(true);
-                    } else if (lower.includes('injur') || lower.includes('காயம்') || lower.includes('cramp') || lower.includes('blood') || lower.includes('மருத்துவ')) {
+                    } else if (lower.includes('injur') || lower.includes('cramp') || lower.includes('blood') || lower.includes('medic')) {
                       setChangeBowlerReason('INJURY');
                       setIsSuspendingCurrentBowler(false);
                     } else {
@@ -6540,7 +6540,7 @@ export default function LiveScoringScreen() {
                   setIsChangeBowlerDropdownOpen(false);
                   setChangeBowlerSearch('');
                   setChangeBowlerReason('NO_BALL_SUSPENSION');
-                  setBowlerSituation('2 No-Ball நடுவர் தடை (Suspended)');
+                  setBowlerSituation('Umpire Suspended (2 No-Balls)');
                   setIsSituationDropdownOpen(false);
                   setIsSuspendingCurrentBowler(true);
                   setShowChangeBowlerModal(true);
