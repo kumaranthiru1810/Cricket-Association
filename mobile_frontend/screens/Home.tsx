@@ -121,11 +121,16 @@ interface DistrictPlayer {
   battingStyle: string;
   bowlingStyle: string;
   team: string;
+  teamShort?: string;
   taluk: string;
   category: string;
   categoryLabel: string;
   verified: boolean;
   avatarColor: [string, string];
+  milestoneType?: 'century' | 'fifty' | 'bowling_haul';
+  milestoneBadge?: string;
+  matchPerformance?: string;
+  matchVs?: string;
   stats: {
     mat: number;
     inns: number;
@@ -154,30 +159,18 @@ const DISTRICT_PLAYERS: DistrictPlayer[] = [
     battingStyle: 'Right Hand Bat',
     bowlingStyle: 'Right Arm Medium',
     team: 'Virudhunagar Strikers',
+    teamShort: 'VNS',
     taluk: 'Virudhunagar',
     category: 'senior_men',
     categoryLabel: "Senior Men's Division",
     verified: true,
-    avatarColor: ['#1e3a8a', '#3b82f6'],
+    avatarColor: ['#b45309', '#f59e0b'],
+    milestoneType: 'century',
+    milestoneBadge: '💯 100 in a Match (Century)',
+    matchPerformance: '112* (62 balls) • 14x4, 4x6',
+    matchVs: 'vs Sattur Super Kings • Virudhunagar League',
     stats: { mat: 8, inns: 8, runs: 445, hs: '112*', avg: '63.57', sr: '149.3', fifties: 3, hundreds: 1, wkts: 0, catches: 8 },
     bio: 'Lead run-scorer in the Virudhunagar Premier League 2026. Renowned for explosive stroke-play inside the powerplay and steadfast match-winning knocks.'
-  },
-  {
-    id: 'CFVD-PLY-102',
-    name: 'K. Praveen Kumar',
-    role: 'bowler',
-    roleLabel: 'Right-Arm Off Spin Bowler',
-    playingRole: 'Bowler',
-    battingStyle: 'Right Hand Bat',
-    bowlingStyle: 'Right Arm Off Break',
-    team: 'Virudhunagar CC (VHNSN Alumni)',
-    taluk: 'Virudhunagar',
-    category: 'senior_men',
-    categoryLabel: "Senior Men's Division",
-    verified: true,
-    avatarColor: ['#065f46', '#10b981'],
-    stats: { mat: 8, inns: 8, runs: 168, hs: '41*', avg: '28.00', sr: '112.5', fifties: 0, hundreds: 0, wkts: 21, best: '5/24', econ: '5.47', catches: 5 },
-    bio: 'Premier district off-spinner with 21 wickets this season. Exceptional flight control, subtle variations, and invaluable lower-order batting resilience.'
   },
   {
     id: 'CFVD-PLY-103',
@@ -188,13 +181,106 @@ const DISTRICT_PLAYERS: DistrictPlayer[] = [
     battingStyle: 'Right Hand Bat',
     bowlingStyle: 'None (Wicketkeeper)',
     team: 'Rajapalayam CC',
+    teamShort: 'RPCC',
     taluk: 'Rajapalayam',
     category: 'senior_men',
     categoryLabel: "Senior Men's Division",
     verified: true,
-    avatarColor: ['#7c2d12', '#ea580c'],
+    avatarColor: ['#b45309', '#ea580c'],
+    milestoneType: 'century',
+    milestoneBadge: '💯 100 in a Match (Century)',
+    matchPerformance: '104 (58 balls) • 11x4, 5x6',
+    matchVs: 'vs Virudhunagar Spartans • Final Match',
     stats: { mat: 7, inns: 7, runs: 375, hs: '104', avg: '53.57', sr: '133.9', fifties: 2, hundreds: 1, wkts: 0, catches: 9, stumpings: 3 },
     bio: 'Dynamic wicketkeeper-batter who anchored Rajapalayam CC to the First Division semi-finals. Exceptional glove-work standing up to spin and pace.'
+  },
+  {
+    id: 'P404',
+    name: 'Dinesh Karthik',
+    role: 'wicketkeeper',
+    roleLabel: 'Wicketkeeper Batter',
+    playingRole: 'Wicketkeeper Batter',
+    battingStyle: 'Right Hand Bat',
+    bowlingStyle: 'Right Arm Medium',
+    team: 'Sivakasi Strikers',
+    teamShort: 'SVS',
+    taluk: 'Sivakasi',
+    category: 'senior_men',
+    categoryLabel: "Senior Men's Division",
+    verified: true,
+    avatarColor: ['#b45309', '#f59e0b'],
+    milestoneType: 'century',
+    milestoneBadge: '💯 100 in a Match (Century)',
+    matchPerformance: '102* (54 balls) • SR: 188.8',
+    matchVs: 'vs Virudhunagar Spartans • Kamarajar Stadium',
+    stats: { mat: 8, inns: 8, runs: 317, hs: '102*', avg: '63.40', sr: '175.2', fifties: 2, hundreds: 1, wkts: 0, catches: 6, stumpings: 2 },
+    bio: 'Explosive match-winning century off 54 balls to single-handedly steer Sivakasi Strikers to victory in high-pressure chase.'
+  },
+  {
+    id: 'P301',
+    name: 'Suresh Kumar',
+    role: 'batter',
+    roleLabel: 'Opening / Top-Order Batter',
+    playingRole: 'Batter',
+    battingStyle: 'Right Hand Bat',
+    bowlingStyle: 'Right Arm Medium',
+    team: 'Virudhunagar Spartans',
+    teamShort: 'VNS',
+    taluk: 'Virudhunagar',
+    category: 'senior_men',
+    categoryLabel: "Senior Men's Division",
+    verified: true,
+    avatarColor: ['#1e3a8a', '#3b82f6'],
+    milestoneType: 'fifty',
+    milestoneBadge: '🎖️ 50 in a Match (Half-Century)',
+    matchPerformance: '88 (45 balls) • 10x4, 4x6',
+    matchVs: 'vs Sivakasi Strikers • Kamarajar Stadium',
+    stats: { mat: 8, inns: 8, runs: 284, hs: '88', avg: '47.33', sr: '145.6', fifties: 2, hundreds: 0, wkts: 0, catches: 4 },
+    bio: 'Leading run scorer for Virudhunagar Spartans with commanding half-centuries (88 and 64) against top district pace attacks.'
+  },
+  {
+    id: 'P401',
+    name: 'Karthik N',
+    role: 'allrounder',
+    roleLabel: 'All-Rounder & Strike Seamer',
+    playingRole: 'Bowler',
+    battingStyle: 'Right Hand Bat',
+    bowlingStyle: 'Right Arm Fast',
+    team: 'Sivakasi Strikers',
+    teamShort: 'SVS',
+    taluk: 'Sivakasi',
+    category: 'senior_men',
+    categoryLabel: "Senior Men's Division",
+    verified: true,
+    avatarColor: ['#047857', '#10b981'],
+    milestoneType: 'fifty',
+    milestoneBadge: '🎖️ 50 & 4W Haul in Match',
+    matchPerformance: '72 (38 balls) & 4/16 (4.0 ov)',
+    matchVs: 'vs Rajapalayam Royals • League Match',
+    stats: { mat: 8, inns: 8, runs: 240, hs: '72', avg: '40.00', sr: '150.0', fifties: 2, hundreds: 0, wkts: 14, best: '4/16', catches: 7 },
+    bio: 'Match-defining all-round performance smashing 72 off 38 balls and bagging 4/16 with fiery seam bowling.'
+  },
+  {
+    id: 'P306',
+    name: 'Arun Pandian',
+    role: 'allrounder',
+    roleLabel: 'Middle-Order Power Batter',
+    playingRole: 'All-Rounder',
+    battingStyle: 'Right Hand Bat',
+    bowlingStyle: 'Right Arm Medium',
+    team: 'Virudhunagar Spartans',
+    teamShort: 'VNS',
+    taluk: 'Virudhunagar',
+    category: 'senior_men',
+    categoryLabel: "Senior Men's Division",
+    verified: true,
+    avatarColor: ['#312e81', '#4f46e5'],
+    milestoneType: 'fifty',
+    milestoneBadge: '🎖️ 50 in a Match (Half-Century)',
+    matchPerformance: '62 (38 balls) • 6x4, 3x6',
+    matchVs: 'vs Aruppukottai Aces • District Cup',
+    stats: { mat: 7, inns: 7, runs: 198, hs: '62', avg: '39.60', sr: '146.7', fifties: 1, hundreds: 0, wkts: 6, best: '2/18', catches: 5 },
+    bio: 'Blistering counter-attacking half-century rescuing the Spartans from early collapse in the District Cup.'
   },
   {
     id: 'CFVD-PLY-104',
@@ -205,30 +291,18 @@ const DISTRICT_PLAYERS: DistrictPlayer[] = [
     battingStyle: 'Right Hand Bat',
     bowlingStyle: 'Right Arm Leg Break',
     team: 'SFRC College for Women',
+    teamShort: 'SFRC',
     taluk: 'Sivakasi',
     category: 'womens',
     categoryLabel: "Women's Senior Championship",
     verified: true,
     avatarColor: ['#831843', '#ec4899'],
+    milestoneType: 'fifty',
+    milestoneBadge: '🎖️ 50 in a Match (Half-Century)',
+    matchPerformance: '84* (52 balls) • 9x4, 2x6',
+    matchVs: "vs Andal District Women's XI",
     stats: { mat: 6, inns: 6, runs: 312, hs: '84*', avg: '62.40', sr: '132.5', fifties: 3, hundreds: 0, wkts: 4, catches: 7 },
-    bio: 'Captained SFRC to the District Inter-College Women’s Trophy. Classical technique against fast bowling and clinical finisher under pressure.'
-  },
-  {
-    id: 'CFVD-PLY-105',
-    name: 'M. Vignesh',
-    role: 'bowler',
-    roleLabel: 'Left-Arm Fast Bowler',
-    playingRole: 'Bowler',
-    battingStyle: 'Right Hand Bat',
-    bowlingStyle: 'Left Arm Fast Medium (135+ km/h)',
-    team: 'Sivakasi Super Kings (ANJAC)',
-    taluk: 'Sivakasi',
-    category: 'senior_men',
-    categoryLabel: 'Under-23 Senior Colts',
-    verified: true,
-    avatarColor: ['#1e1b4b', '#6366f1'],
-    stats: { mat: 8, inns: 8, runs: 62, hs: '22*', avg: '15.50', sr: '124.0', fifties: 0, hundreds: 0, wkts: 18, best: '5/19', econ: '6.19', catches: 4 },
-    bio: 'Fastest bowler in the district circuit with fearsome toe-crushing yorkers and fiery bouncers. Key strike bowler for Sivakasi Super Kings.'
+    bio: 'Captained SFRC to victory with an unbeaten 84* in the District Inter-College Women’s Trophy.'
   },
   {
     id: 'CFVD-PLY-106',
@@ -239,28 +313,104 @@ const DISTRICT_PLAYERS: DistrictPlayer[] = [
     battingStyle: 'Right Hand Bat',
     bowlingStyle: 'Right Arm Off Break',
     team: 'Srivilliputhur Warriors',
+    teamShort: 'SVW',
     taluk: 'Srivilliputhur',
     category: 'senior_men',
     categoryLabel: "Senior Men's Division",
     verified: true,
     avatarColor: ['#312e81', '#4f46e5'],
+    milestoneType: 'fifty',
+    milestoneBadge: '🎖️ 50 in a Match (Half-Century)',
+    matchPerformance: '74* (48 balls) • 8x4, 2x6',
+    matchVs: 'vs Rajapalayam CC • Kamarajar Grounds',
     stats: { mat: 7, inns: 7, runs: 287, hs: '74*', avg: '47.83', sr: '138.6', fifties: 2, hundreds: 0, wkts: 2, catches: 6 },
     bio: 'Reliable crisis-man for Srivilliputhur Warriors. Known for astute strike rotation through the middle overs and piercing gaps against spin.'
   },
   {
+    id: 'CFVD-PLY-102',
+    name: 'K. Praveen Kumar',
+    role: 'bowler',
+    roleLabel: 'Right-Arm Off Spin Bowler',
+    playingRole: 'Bowler',
+    battingStyle: 'Right Hand Bat',
+    bowlingStyle: 'Right Arm Off Break',
+    team: 'Virudhunagar CC (VHNSN Alumni)',
+    teamShort: 'VCC',
+    taluk: 'Virudhunagar',
+    category: 'senior_men',
+    categoryLabel: "Senior Men's Division",
+    verified: true,
+    avatarColor: ['#065f46', '#10b981'],
+    milestoneType: 'bowling_haul',
+    milestoneBadge: '🎯 5-Wicket Match Haul',
+    matchPerformance: '5/24 (4.0 ov) • Econ: 6.00',
+    matchVs: 'vs Rajapalayam CC • First Division',
+    stats: { mat: 8, inns: 8, runs: 168, hs: '41*', avg: '28.00', sr: '112.5', fifties: 0, hundreds: 0, wkts: 21, best: '5/24', econ: '5.47', catches: 5 },
+    bio: 'Premier district off-spinner with 21 wickets this season. Outstanding 5/24 match spell breaking the opposition top-order.'
+  },
+  {
+    id: 'CFVD-PLY-105',
+    name: 'M. Vignesh',
+    role: 'bowler',
+    roleLabel: 'Left-Arm Fast Bowler',
+    playingRole: 'Bowler',
+    battingStyle: 'Right Hand Bat',
+    bowlingStyle: 'Left Arm Fast Medium (135+ km/h)',
+    team: 'Sivakasi Super Kings (ANJAC)',
+    teamShort: 'SSK',
+    taluk: 'Sivakasi',
+    category: 'senior_men',
+    categoryLabel: 'Under-23 Senior Colts',
+    verified: true,
+    avatarColor: ['#1e1b4b', '#6366f1'],
+    milestoneType: 'bowling_haul',
+    milestoneBadge: '🎯 5-Wicket Match Haul',
+    matchPerformance: '5/19 (4.0 ov) • Econ: 4.75',
+    matchVs: 'vs Srivilliputhur Warriors • Colts League',
+    stats: { mat: 8, inns: 8, runs: 62, hs: '22*', avg: '15.50', sr: '124.0', fifties: 0, hundreds: 0, wkts: 18, best: '5/19', econ: '6.19', catches: 4 },
+    bio: 'Fastest bowler in the district circuit with fearsome toe-crushing yorkers and fiery bouncers. Key strike bowler for Sivakasi Super Kings.'
+  },
+  {
+    id: 'P305',
+    name: 'R. Vignesh',
+    role: 'bowler',
+    roleLabel: 'Right-Arm Fast Bowler',
+    playingRole: 'Bowler',
+    battingStyle: 'Right Hand Bat',
+    bowlingStyle: 'Right Arm Fast',
+    team: 'Virudhunagar Spartans',
+    teamShort: 'VNS',
+    taluk: 'Virudhunagar',
+    category: 'senior_men',
+    categoryLabel: "Senior Men's Division",
+    verified: true,
+    avatarColor: ['#581c87', '#9333ea'],
+    milestoneType: 'bowling_haul',
+    milestoneBadge: '🔥 4-Wicket Match Haul',
+    matchPerformance: '4/20 (4.0 ov) • Econ: 5.00',
+    matchVs: 'vs Sivakasi Strikers • Opening Match',
+    stats: { mat: 8, inns: 8, runs: 24, hs: '14', avg: '12.00', sr: '110.0', fifties: 0, hundreds: 0, wkts: 12, best: '4/20', econ: '6.50', catches: 1 },
+    bio: 'Key strike bowler picking 4/20 against tournament favorites Sivakasi Strikers to defend a modest total.'
+  },
+  {
     id: 'CFVD-PLY-107',
     name: 'R. Deepika',
-    role: 'allrounder',
+    role: 'womens',
     roleLabel: 'All-Rounder (RHB & Leg Spin)',
     playingRole: 'All-Rounder',
     battingStyle: 'Right Hand Bat',
     bowlingStyle: 'Right Arm Leg Spin',
     team: "Andal District Women's XI",
+    teamShort: 'ADW',
     taluk: 'Srivilliputhur',
     category: 'womens',
     categoryLabel: "Women's U-23 / U-25",
     verified: true,
     avatarColor: ['#701a75', '#d946ef'],
+    milestoneType: 'fifty',
+    milestoneBadge: '🎖️ 50 in a Match (Half-Century)',
+    matchPerformance: '56 (42 balls) & 4/18 (4.0 ov)',
+    matchVs: "vs SFRC College for Women • Inter-Taluk",
     stats: { mat: 6, inns: 6, runs: 195, hs: '56', avg: '39.00', sr: '121.8', fifties: 1, hundreds: 0, wkts: 11, best: '4/18', econ: '4.85', catches: 5 },
     bio: 'Promising youth all-rounder hailing from Srivilliputhur. Accurate wrist-spin paired with composed batting in the top four order.'
   },
@@ -273,11 +423,16 @@ const DISTRICT_PLAYERS: DistrictPlayer[] = [
     battingStyle: 'Right Hand Bat',
     bowlingStyle: 'Right Arm Medium Fast',
     team: 'Aruppukottai Stars',
+    teamShort: 'AKS',
     taluk: 'Aruppukottai',
     category: 'senior_men',
     categoryLabel: "Senior Men's Division",
     verified: true,
     avatarColor: ['#854d0e', '#eab308'],
+    milestoneType: 'fifty',
+    milestoneBadge: '🎖️ 50 in a Match (Half-Century)',
+    matchPerformance: '68 (39 balls) • 7x4, 3x6',
+    matchVs: 'vs Rajapalayam CC • Death Overs Finish',
     stats: { mat: 6, inns: 6, runs: 260, hs: '68', avg: '43.33', sr: '142.8', fifties: 2, hundreds: 0, wkts: 8, best: '3/32', econ: '6.80', catches: 4 },
     bio: 'Hard-hitting batting all-rounder who powers Aruppukottai Stars in the death overs. Capable seam bowler with handy wicket-taking cutters.'
   }
@@ -579,17 +734,42 @@ export default function HomeScreen() {
     Alert.alert('Toss Decision', `Toss Decision Recorded!\n\n${text}`);
   };
 
-  // Filtered Players
-  const allDisplayPlayers = portalAllPlayers.length > 0 ? portalAllPlayers : DISTRICT_PLAYERS;
+  // Filtered District Special Milestone Players (Centuries 100s, Half-Centuries 50s, 3W+ Hauls)
+  const allDisplayPlayers = (portalAllPlayers.length > 0 ? portalAllPlayers : DISTRICT_PLAYERS).filter(p => {
+    // Strictly exclude any player with 0 runs and 0 wickets (e.g. unplayed roster entries)
+    const runs = p.stats?.runs || 0;
+    const wkts = p.stats?.wkts || 0;
+    const hs = parseInt(p.stats?.hs || '0', 10);
+    const hasMilestone =
+      p.milestoneType ||
+      hs >= 50 ||
+      runs >= 50 ||
+      wkts >= 3 ||
+      (p.stats?.hundreds && p.stats.hundreds > 0) ||
+      (p.stats?.fifties && p.stats.fifties > 0) ||
+      (p.stats?.best && (p.stats.best.startsWith('3/') || p.stats.best.startsWith('4/') || p.stats.best.startsWith('5/')));
+    return !!hasMilestone;
+  });
+
   const filteredPlayers = allDisplayPlayers.filter(p => {
-    const matchesCategory =
-      playerFilter === 'all'
-        ? true
-        : playerFilter === 'womens'
-          ? p.role === 'womens' || p.category === 'womens'
-          : playerFilter === 'allrounder'
-            ? p.role === 'allrounder' || p.role === 'all_rounder'
-            : p.role === playerFilter;
+    const hs = parseInt(p.stats?.hs || '0', 10);
+    const wkts = p.stats?.wkts || 0;
+    const hundreds = p.stats?.hundreds || 0;
+    const fifties = p.stats?.fifties || 0;
+
+    let matchesCategory = true;
+    if (playerFilter === 'century') {
+      matchesCategory = p.milestoneType === 'century' || hundreds > 0 || hs >= 100;
+    } else if (playerFilter === 'fifty') {
+      matchesCategory = p.milestoneType === 'fifty' || (fifties > 0 && hundreds === 0) || (hs >= 50 && hs < 100);
+    } else if (playerFilter === 'bowler') {
+      matchesCategory =
+        p.milestoneType === 'bowling_haul' ||
+        wkts >= 3 ||
+        (p.stats?.best && (p.stats.best.startsWith('3/') || p.stats.best.startsWith('4/') || p.stats.best.startsWith('5/')));
+    } else if (playerFilter === 'womens') {
+      matchesCategory = p.role === 'womens' || p.category === 'womens';
+    }
 
     const q = playerSearchQuery.toLowerCase().trim();
     const matchesSearch =
@@ -598,7 +778,10 @@ export default function HomeScreen() {
       (p.team && p.team.toLowerCase().includes(q)) ||
       (p.taluk && p.taluk.toLowerCase().includes(q)) ||
       (p.roleLabel && p.roleLabel.toLowerCase().includes(q)) ||
-      (p.playingRole && p.playingRole.toLowerCase().includes(q));
+      (p.playingRole && p.playingRole.toLowerCase().includes(q)) ||
+      (p.milestoneBadge && p.milestoneBadge.toLowerCase().includes(q)) ||
+      (p.matchPerformance && p.matchPerformance.toLowerCase().includes(q)) ||
+      (p.matchVs && p.matchVs.toLowerCase().includes(q));
 
     return matchesCategory && matchesSearch;
   });
@@ -1879,7 +2062,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* ─── 8. DISTRICT TALENT & SQUAD ROSTER ─────────────────────────── */}
+        {/* ─── 8. DISTRICT SPECIAL MATCH RECORDS & MILESTONES ───────────── */}
         <View
           style={styles.section}
           onLayout={e => {
@@ -1890,11 +2073,11 @@ export default function HomeScreen() {
           <View style={[styles.container, containerResponsiveStyle]}>
             <View style={styles.sectionHead}>
               <View style={styles.sectionTagBadge}>
-                <Text style={styles.sectionTagBadgeText}>👥 DISTRICT TALENT & SQUAD ROSTER</Text>
+                <Text style={styles.sectionTagBadgeText}>🏆 OFFICIAL DISTRICT SPECIAL MATCH RECORDS</Text>
               </View>
-              <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>Official District Players Directory & Profiles</Text>
+              <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>District Match Record Breakers & Milestone Performers</Text>
               <Text style={styles.sectionSubtitle}>
-                Verified district cricketers across Senior Men, Women's Championship, U-23/U-25 Colts, and Premier League clubs
+                Elite match performances: Centuries (100s), Half-Centuries (50s), and Best Bowling Spells across Virudhunagar District League
               </Text>
             </View>
 
@@ -1903,7 +2086,7 @@ export default function HomeScreen() {
               <Text style={{ fontSize: 16 }}>🔍</Text>
               <TextInput
                 style={styles.playerSearchInput}
-                placeholder="Search player by name, role (Batter, Bowler), team, or taluk..."
+                placeholder="Search milestone player by name, record (100, 50, 5W), team, or taluk..."
                 placeholderTextColor="#62799c"
                 value={playerSearchQuery}
                 onChangeText={setPlayerSearchQuery}
@@ -1918,12 +2101,11 @@ export default function HomeScreen() {
             {/* Category Filter Pills */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subTabsScroll}>
               {[
-                { id: 'all', label: `⭐ All Players (${allDisplayPlayers.length})` },
-                { id: 'batter', label: '🏏 Batters' },
-                { id: 'bowler', label: '🎯 Bowlers' },
-                { id: 'allrounder', label: '⚡ All-Rounders' },
-                { id: 'wicketkeeper', label: '🧤 Wicketkeepers' },
-                { id: 'womens', label: "♀️ Women's Senior & U-23" }
+                { id: 'all', label: `⭐ All Special Records (${filteredPlayers.length})` },
+                { id: 'century', label: '💯 100s (Centuries)' },
+                { id: 'fifty', label: '🎖️ 50s (Half-Centuries)' },
+                { id: 'bowler', label: '🎯 Best Bowling (3W+ / 5W)' },
+                { id: 'womens', label: "♀️ Women's Milestones" }
               ].map(f => (
                 <TouchableOpacity
                   key={f.id}
@@ -1937,77 +2119,137 @@ export default function HomeScreen() {
               ))}
             </ScrollView>
 
+            {/* Empty State */}
+            {filteredPlayers.length === 0 && (
+              <View style={{ padding: 24, alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 12, borderWidth: 1, borderColor: '#fde68a', marginVertical: 14 }}>
+                <Text style={{ fontSize: 28, marginBottom: 8 }}>🏅</Text>
+                <Text style={{ color: '#0f172a', fontWeight: '800', fontSize: 16 }}>No Special Milestone Records Found</Text>
+                <Text style={{ color: '#64748b', fontSize: 13, textAlign: 'center', marginTop: 4, maxWidth: 500 }}>
+                  Only verified 50s (Half-Centuries), 100s (Centuries), and 3W+ Bowling Hauls scored in official matches are recorded in this hall of fame.
+                </Text>
+              </View>
+            )}
+
             {/* Players Grid */}
             <View style={[styles.grid2Col, isMobile && { flexDirection: 'column' }]}>
-              {filteredPlayers.map(p => (
-                <View key={p.id} style={[styles.playerCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }, isSmallMobile && { padding: 12 }]}>
-                  <View style={styles.playerCardHeader}>
-                    <LinearGradient colors={p.avatarColor || ['#1e3a8a', '#3b82f6']} style={styles.playerAvatar}>
-                      <Text style={styles.playerAvatarText}>
-                        {p.name
-                          .split(' ')
-                          .map((w: string) => w[0])
-                          .join('')
-                          .slice(0, 2)}
-                      </Text>
-                    </LinearGradient>
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={styles.playerIdTag}>{p.id}</Text>
-                        <Text style={styles.playerVerifiedTag}>✓ Verified</Text>
-                      </View>
-                      <Text style={styles.playerName}>{p.name}</Text>
-                      <Text style={styles.playerCategoryBadge}>{p.categoryLabel}</Text>
-                    </View>
-                  </View>
+              {filteredPlayers.map(p => {
+                const isCentury = p.milestoneType === 'century' || (p.stats?.hundreds && p.stats.hundreds > 0) || parseInt(p.stats?.hs || '0', 10) >= 100;
+                const isBowlingHaul = p.milestoneType === 'bowling_haul' || (p.stats?.wkts && p.stats.wkts >= 3) || (p.stats?.best && (p.stats.best.startsWith('3/') || p.stats.best.startsWith('4/') || p.stats.best.startsWith('5/')));
 
-                  <View style={styles.playerCardMeta}>
-                    <Text style={styles.playerMetaText}>
-                      <Text style={{ fontWeight: '700' }}>Team: </Text>
-                      {p.team}
-                    </Text>
-                    <Text style={styles.playerMetaText}>
-                      <Text style={{ fontWeight: '700' }}>Taluk: </Text>
-                      {p.taluk} District Center
-                    </Text>
-                    <Text style={styles.playerMetaText}>
-                      <Text style={{ fontWeight: '700' }}>Role: </Text>
-                      {p.roleLabel}
-                    </Text>
-                  </View>
+                const badgeLabel = p.milestoneBadge || (isCentury ? '💯 100 IN A MATCH • CENTURY RECORD' : (isBowlingHaul ? ((p.stats.wkts >= 5 || (p.stats.best && p.stats.best.startsWith('5/'))) ? '🎯 5-WICKET MATCH HAUL' : '🔥 3+ WICKETS IN MATCH') : '🎖️ 50 IN A MATCH • HALF-CENTURY'));
+                const badgeColor = isCentury ? '#b45309' : (isBowlingHaul ? '#7e22ce' : '#c2410c');
+                const badgeBg = isCentury ? '#fef3c7' : (isBowlingHaul ? '#f3e8ff' : '#ffedd5');
+                const badgeBorder = isCentury ? '#fde68a' : (isBowlingHaul ? '#e9d5ff' : '#fed7aa');
 
-                  {/* Player Stats Snippet */}
-                  <View style={styles.playerStatsSnippet}>
-                    <View style={styles.pssCol}>
-                      <Text style={styles.pssVal}>{p.stats.mat}</Text>
-                      <Text style={styles.pssLabel}>Matches</Text>
-                    </View>
-                    <View style={styles.pssCol}>
-                      <Text style={styles.pssVal}>{p.stats.runs}</Text>
-                      <Text style={styles.pssLabel}>Runs</Text>
-                    </View>
-                    <View style={styles.pssCol}>
-                      <Text style={styles.pssVal}>{p.stats.wkts}</Text>
-                      <Text style={styles.pssLabel}>Wickets</Text>
-                    </View>
-                    <View style={styles.pssCol}>
-                      <Text style={styles.pssVal}>{p.stats.avg}</Text>
-                      <Text style={styles.pssLabel}>Avg</Text>
-                    </View>
-                  </View>
-
-                  <Text style={styles.playerBioSnippet} numberOfLines={2}>
-                    {p.bio}
-                  </Text>
-
-                  <TouchableOpacity
-                    style={styles.btnOutlineGoldSm}
-                    onPress={() => setSelectedPlayerModal(p)}
+                return (
+                  <View
+                    key={p.id}
+                    style={[
+                      styles.playerCard,
+                      isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' },
+                      isSmallMobile && { padding: 12 },
+                      { borderTopColor: isCentury ? '#d97706' : (isBowlingHaul ? '#9333ea' : '#ea580c'), borderTopWidth: 4 }
+                    ]}
                   >
-                    <Text style={styles.btnOutlineGoldSmText}>👁️ View Career Profile & Stats</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
+                    {/* Milestone Top Banner */}
+                    <View style={{ backgroundColor: badgeBg, borderColor: badgeBorder, borderWidth: 1, borderRadius: 6, paddingVertical: 5, paddingHorizontal: 9, marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Text style={{ color: badgeColor, fontSize: 11, fontWeight: '900', letterSpacing: 0.4 }}>
+                        {badgeLabel}
+                      </Text>
+                      <View style={{ backgroundColor: badgeColor, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 1.5 }}>
+                        <Text style={{ color: '#ffffff', fontSize: 9.5, fontWeight: '800' }}>
+                          {isCentury ? '100+' : (isBowlingHaul ? 'HAUL' : '50+')}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.playerCardHeader}>
+                      <LinearGradient colors={p.avatarColor || (isCentury ? ['#b45309', '#f59e0b'] : (isBowlingHaul ? ['#581c87', '#9333ea'] : ['#1e3a8a', '#3b82f6']))} style={styles.playerAvatar}>
+                        <Text style={styles.playerAvatarText}>
+                          {p.name
+                            .split(' ')
+                            .map((w: string) => w[0])
+                            .join('')
+                            .slice(0, 2)}
+                        </Text>
+                      </LinearGradient>
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={styles.playerIdTag}>{p.id}</Text>
+                          <Text style={styles.playerVerifiedTag}>✓ Official Record</Text>
+                        </View>
+                        <Text style={styles.playerName}>{p.name}</Text>
+                        <Text style={styles.playerCategoryBadge}>{p.categoryLabel}</Text>
+                      </View>
+                    </View>
+
+                    {/* Special Match Performance Highlight Box */}
+                    <View style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0', borderWidth: 1, borderRadius: 8, padding: 9, marginBottom: 10 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ color: '#0f172a', fontSize: 14, fontWeight: '900' }}>
+                          ⚡ {p.matchPerformance || (isBowlingHaul ? (p.stats.best ? `${p.stats.best} Figures` : `${p.stats.wkts} Wickets Spell`) : `${p.stats.hs} Runs Knock`)}
+                        </Text>
+                        <Text style={{ color: '#64748b', fontSize: 11, fontWeight: '700' }}>
+                          {isBowlingHaul ? `Econ: ${p.stats.econ || '4.50'}` : `SR: ${p.stats.sr || '140.0'}`}
+                        </Text>
+                      </View>
+                      <Text style={{ color: '#475569', fontSize: 11.5, marginTop: 3 }}>
+                        🎯 {p.matchVs || `${p.team} • Virudhunagar League`}
+                      </Text>
+                    </View>
+
+                    <View style={styles.playerCardMeta}>
+                      <Text style={styles.playerMetaText}>
+                        <Text style={{ fontWeight: '700' }}>Team: </Text>
+                        {p.team}
+                      </Text>
+                      <Text style={styles.playerMetaText}>
+                        <Text style={{ fontWeight: '700' }}>Taluk: </Text>
+                        {p.taluk} District Center
+                      </Text>
+                      <Text style={styles.playerMetaText}>
+                        <Text style={{ fontWeight: '700' }}>Role: </Text>
+                        {p.roleLabel}
+                      </Text>
+                    </View>
+
+                    {/* Player Stats Snippet */}
+                    <View style={styles.playerStatsSnippet}>
+                      <View style={styles.pssCol}>
+                        <Text style={styles.pssVal}>{p.stats.mat}</Text>
+                        <Text style={styles.pssLabel}>Matches</Text>
+                      </View>
+                      <View style={styles.pssCol}>
+                        <Text style={styles.pssVal}>{p.stats.runs}</Text>
+                        <Text style={styles.pssLabel}>Runs</Text>
+                      </View>
+                      <View style={styles.pssCol}>
+                        <Text style={styles.pssVal}>{isBowlingHaul ? (p.stats.best || `${p.stats.wkts} W`) : (p.stats.hs || '0')}</Text>
+                        <Text style={styles.pssLabel}>{isBowlingHaul ? 'Best Spell' : 'Highest (HS)'}</Text>
+                      </View>
+                      <View style={styles.pssCol}>
+                        <Text style={styles.pssVal}>{p.stats.wkts}</Text>
+                        <Text style={styles.pssLabel}>Wickets</Text>
+                      </View>
+                      <View style={styles.pssCol}>
+                        <Text style={styles.pssVal}>{isBowlingHaul ? (p.stats.econ || '5.50') : (p.stats.sr || '135.0')}</Text>
+                        <Text style={styles.pssLabel}>{isBowlingHaul ? 'Economy' : 'Strike Rate'}</Text>
+                      </View>
+                    </View>
+
+                    <Text style={styles.playerBioSnippet} numberOfLines={2}>
+                      {p.bio}
+                    </Text>
+
+                    <TouchableOpacity
+                      style={styles.btnOutlineGoldSm}
+                      onPress={() => setSelectedPlayerModal(p)}
+                    >
+                      <Text style={styles.btnOutlineGoldSmText}>👁️ View Match Performance & Stats</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
             </View>
           </View>
         </View>
@@ -2964,6 +3206,23 @@ export default function HomeScreen() {
                 </View>
 
                 <View style={styles.playerModalBioBox}>
+                  {selectedPlayerModal.milestoneBadge && (
+                    <View style={{ backgroundColor: '#fffbeb', borderColor: '#fde68a', borderWidth: 1, borderRadius: 8, padding: 10, marginBottom: 10 }}>
+                      <Text style={{ color: '#92400e', fontWeight: '900', fontSize: 13 }}>
+                        {selectedPlayerModal.milestoneBadge}
+                      </Text>
+                      {selectedPlayerModal.matchPerformance && (
+                        <Text style={{ color: '#0f172a', fontWeight: '800', fontSize: 14, marginTop: 3 }}>
+                          ⚡ {selectedPlayerModal.matchPerformance}
+                        </Text>
+                      )}
+                      {selectedPlayerModal.matchVs && (
+                        <Text style={{ color: '#475569', fontSize: 12, marginTop: 2 }}>
+                          🎯 {selectedPlayerModal.matchVs}
+                        </Text>
+                      )}
+                    </View>
+                  )}
                   <Text style={styles.playerModalBio}>{selectedPlayerModal.bio}</Text>
                 </View>
 
