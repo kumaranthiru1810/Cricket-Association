@@ -340,7 +340,10 @@ class ScoringEngine {
 
     // 4. Update Innings Document in MongoDB
     innings.total_runs += totalRuns;
-    if (wicket) innings.wickets += 1;
+    const isRetiredHurt = wicket && wicketType === 'RETIRED_HURT';
+    if (wicket && !isRetiredHurt) {
+      innings.wickets += 1;
+    }
     innings.overs = overNumber;
     innings.balls = ballNumber;
 
@@ -437,11 +440,13 @@ class ScoringEngine {
     }
     batter.strike_rate = batter.balls > 0 ? parseFloat(((batter.runs / batter.balls) * 100).toFixed(2)) : 0.00;
 
+    const nonBowlerDismissals = ['RUN_OUT', 'RETIRED_OUT', 'RETIRED_HURT', 'OBSTRUCTING_FIELD', 'HIT_BALL_TWICE', 'TIMED_OUT'];
+
     if (wicket && (!dismissedPlayerId || dismissedPlayerId === activeStrikerId)) {
-      batter.is_out = true;
+      batter.is_out = !isRetiredHurt;
       batter.dismissal_type = wicketType || 'BOWLED';
-      batter.dismissal_text = dismissalText || 'out';
-      batter.bowler_id = (wicketType === 'RUN_OUT' || wicketType === 'RETIRED_OUT') ? null : activeBowlerId;
+      batter.dismissal_text = isRetiredHurt ? 'retired hurt (not out)' : (dismissalText || 'out');
+      batter.bowler_id = nonBowlerDismissals.includes(wicketType) ? null : activeBowlerId;
       batter.fielder_id = fielderId || null;
     }
     await batter.save();
@@ -465,10 +470,10 @@ class ScoringEngine {
       }
 
       if (wicket && dismissedPlayerId === activeNonStrikerId) {
-        nonStrikerBatter.is_out = true;
+        nonStrikerBatter.is_out = !isRetiredHurt;
         nonStrikerBatter.dismissal_type = wicketType || 'RUN_OUT';
-        nonStrikerBatter.dismissal_text = dismissalText || 'run out';
-        nonStrikerBatter.bowler_id = (wicketType === 'RUN_OUT' || wicketType === 'RETIRED_OUT') ? null : activeBowlerId;
+        nonStrikerBatter.dismissal_text = isRetiredHurt ? 'retired hurt (not out)' : (dismissalText || 'run out');
+        nonStrikerBatter.bowler_id = nonBowlerDismissals.includes(wicketType) ? null : activeBowlerId;
         nonStrikerBatter.fielder_id = fielderId || null;
       }
       await nonStrikerBatter.save();
@@ -536,7 +541,8 @@ class ScoringEngine {
     }
     const bowlerRuns = Number(runsBatter) + (extraType === 'WIDE' || extraType === 'NO_BALL' ? Number(runsExtras) : 0);
     bowler.runs_conceded += bowlerRuns;
-    if (wicket && wicketType !== 'RUN_OUT' && wicketType !== 'RETIRED_OUT') {
+    const bowlerCreditedDismissals = ['BOWLED', 'CAUGHT', 'CAUGHT_BEHIND', 'CAUGHT_AND_BOWLED', 'LBW', 'STUMPED', 'HIT_WICKET'];
+    if (wicket && bowlerCreditedDismissals.includes(wicketType)) {
       bowler.wickets += 1;
     }
     if (extraType === 'WIDE') bowler.wides += Number(runsExtras);
@@ -621,20 +627,44 @@ class ScoringEngine {
 
     // 9. Real-time Smart Rules Analysis & Socket.IO Broadcast
     let noBallWarning = null;
+    let dangerousBowlingWarning = null;
+    const isDangerousBeamer = deliveryData.noBallReason === 'BEAMER' || deliveryData.isDangerousDelivery || deliveryData.remarks?.toLowerCase().includes('beamer');
+
     if (extraType === 'NO_BALL') {
       try {
-        const bowlerNoBalls = await db.models.Delivery.countDocuments({
-          innings_id: innings.id,
-          bowler_id: activeBowlerId,
-          extra_type: 'NO_BALL'
-        });
-        if (bowlerNoBalls >= 2) {
-          noBallWarning = {
-            bowlerId: activeBowlerId,
-            bowlerName,
-            noBallCount: bowlerNoBalls,
-            message: `Bowler ${bowlerName} has bowled ${bowlerNoBalls} No-Balls in this innings (MCC Law 41.7 - Dangerous / Unfair Bowling).`
-          };
+        if (isDangerousBeamer) {
+          const beamerCount = await db.models.Delivery.countDocuments({
+            innings_id: innings.id,
+            bowler_id: activeBowlerId,
+            extra_type: 'NO_BALL',
+            $or: [{ reason: 'BEAMER' }, { reason: /beamer/i }, { reason: /dangerous/i }]
+          });
+
+          if (beamerCount >= 2) {
+            dangerousBowlingWarning = {
+              level: 'CRITICAL',
+              action: 'SUSPENSION',
+              bowlerId: activeBowlerId,
+              bowlerName,
+              beamerCount,
+              message: `CRITICAL (MCC Law 41.7): Bowler ${bowlerName} has bowled ${beamerCount} dangerous beamers. Bowler is immediately SUSPENDED from bowling for the remainder of this match.`
+            };
+            if (!innings.suspended_bowler_ids) innings.suspended_bowler_ids = [];
+            if (!innings.suspended_bowler_ids.includes(activeBowlerId)) {
+              innings.suspended_bowler_ids.push(activeBowlerId);
+              await innings.save();
+            }
+          } else {
+            dangerousBowlingWarning = {
+              level: 'WARNING',
+              action: 'FIRST_WARNING',
+              bowlerId: activeBowlerId,
+              bowlerName,
+              beamerCount: 1,
+              message: `WARNING (MCC Law 41.7): First dangerous waist-high beamer bowled by ${bowlerName}. A second beamer will result in mandatory bowling suspension.`
+            };
+          }
+          noBallWarning = dangerousBowlingWarning;
         }
       } catch (_e) {}
     }

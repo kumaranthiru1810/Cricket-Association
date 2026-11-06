@@ -965,7 +965,14 @@ export default function LiveScoringScreen() {
     if (extraTypeKey === 'WIDE') {
       await handleScore(0, 'wide');
     } else if (extraTypeKey === 'NO_BALL') {
-      await handleScore(0, 'noball');
+      await handleScore(0, 'noball', { remarks: 'Front-foot crease overstep' });
+    } else if (extraTypeKey === 'NO_BALL_BEAMER') {
+      await handleScore(0, 'noball', { noBallReason: 'BEAMER', isDangerousDelivery: true, remarks: 'Dangerous waist-high full toss (Law 41.7)' });
+    } else if (extraTypeKey === 'NO_BALL_BOUNCER') {
+      await handleScore(0, 'noball', { noBallReason: 'BOUNCER', remarks: 'Bouncer limit exceeded (Law 41.6)' });
+    } else if (extraTypeKey === 'DEAD_BALL') {
+      const msg = 'Dead Ball declared by Umpire (MCC Law 20). This delivery does not count and will be re-bowled.';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Dead Ball (Law 20)', msg);
     } else if (extraTypeKey === 'BYE') {
       await handleScore(1, 'bye');
     } else if (extraTypeKey === 'LEG_BYE') {
@@ -1038,7 +1045,8 @@ export default function LiveScoringScreen() {
     if (isSubmittingDelivery) return;
 
     const outBatter = dismissedTarget === 'striker' ? striker : nonStriker;
-    const isTenthWicket = wickets + 1 >= 10;
+    const isRetiredHurt = wicketType === 'RETIRED_HURT';
+    const isTenthWicket = !isRetiredHurt && wickets + 1 >= 10;
 
     let nextBatterId = selectedNextBatterId;
     let nextBatterName = customBatterName.trim();
@@ -1078,7 +1086,7 @@ export default function LiveScoringScreen() {
     setIsSubmittingDelivery(true);
     setShowWicketModal(false);
 
-    if (outBatter?.id) {
+    if (outBatter?.id && !isRetiredHurt) {
       setDismissedBatters((prev) => [...prev, outBatter.id]);
     }
 
@@ -1089,7 +1097,7 @@ export default function LiveScoringScreen() {
       runsBatter: runsOnWicket,
       runsExtras: 0,
       extraType: 'NONE',
-      wicket: true,
+      wicket: !isRetiredHurt,
       wicketType: wicketType,
       dismissedPlayerId: outBatter?.id,
       replacementBatterId: isTenthWicket ? null : nextBatterId,
@@ -4601,7 +4609,10 @@ export default function LiveScoringScreen() {
             <View style={{ marginTop: 10, gap: 6 }}>
               {[
                 { key: 'WIDE', label: 'Wide', desc: '1 run to batting team, extra delivery' },
-                { key: 'NO_BALL', label: 'No Ball', desc: '1 run + Free hit (next delivery)' },
+                { key: 'NO_BALL', label: 'No Ball (Crease / Overstep)', desc: '1 run + Free hit (next delivery)' },
+                { key: 'NO_BALL_BEAMER', label: 'No Ball (Dangerous Beamer)', desc: 'Waist-high full toss (Law 41.7 Warning/Suspension)' },
+                { key: 'NO_BALL_BOUNCER', label: 'No Ball (Bouncer Exceeded)', desc: '2nd bouncer in over above shoulder (Law 41.6)' },
+                { key: 'DEAD_BALL', label: 'Dead Ball (Cancel & Re-bowl)', desc: 'Umpire stops play (Law 20), ball does not count' },
                 { key: 'BYE', label: 'Bye', desc: 'Runs taken without bat contact' },
                 { key: 'LEG_BYE', label: 'Leg Bye', desc: 'Runs taken off batter pads' },
                 { key: 'NO_BALL_BYE', label: 'No Ball + Bye', desc: '1 NB penalty + Byes' },
@@ -6757,9 +6768,13 @@ export default function LiveScoringScreen() {
                       { key: 'RUN_OUT', label: 'Run Out', desc: 'run out (Fielder)' },
                       { key: 'STUMPED', label: 'Stumped', desc: 'st †Keeper b Bowler' },
                       { key: 'HIT_WICKET', label: 'Hit Wicket', desc: 'hit wicket b Bowler' },
-                      { key: 'RETIRED_OUT', label: 'Retired Out', desc: 'retired out' }
+                      { key: 'RETIRED_HURT', label: 'Retired Hurt', desc: 'temporarily injured (not out)' },
+                      { key: 'RETIRED_OUT', label: 'Retired Out', desc: 'batter retired out' },
+                      { key: 'OBSTRUCTING_FIELD', label: 'Obstructing Field', desc: 'wilful interference (Law 37)' },
+                      { key: 'HIT_BALL_TWICE', label: 'Hit Ball Twice', desc: 'hit ball twice (Law 34)' },
+                      { key: 'TIMED_OUT', label: 'Timed Out', desc: 'exceeded time limit (Law 40)' }
                     ].map((item) => {
-                      const isImmuneOnFreeHit = isFreeHitActive && !['RUN_OUT', 'RETIRED_OUT'].includes(item.key);
+                      const isImmuneOnFreeHit = isFreeHitActive && !['RUN_OUT', 'RETIRED_OUT', 'RETIRED_HURT', 'OBSTRUCTING_FIELD', 'HIT_BALL_TWICE'].includes(item.key);
                       return (
                         <TouchableOpacity
                           key={item.key}
@@ -6767,11 +6782,12 @@ export default function LiveScoringScreen() {
                           style={[
                             styles.dismissalChip,
                             wicketType === item.key && styles.dismissalChipActive,
-                            isImmuneOnFreeHit && { opacity: 0.35, backgroundColor: '#f1f5f9' }
+                            isImmuneOnFreeHit && { opacity: 0.35, backgroundColor: '#f1f5f9' },
+                            item.key === 'RETIRED_HURT' && { borderColor: '#3b82f6' }
                           ]}
                           onPress={() => {
                             if (isImmuneOnFreeHit) {
-                              const msg = 'Batter is immune on Free Hit (MCC Law 21.19). Only Run Out is allowed.';
+                              const msg = 'Batter is immune on Free Hit (MCC Law 21.19). Only Run Out / Obstruction is allowed.';
                               Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Free Hit Immunity', msg);
                               return;
                             }
@@ -6779,7 +6795,7 @@ export default function LiveScoringScreen() {
                             setWicketStep(2);
                           }}
                         >
-                          <Text style={[styles.dismissalChipText, wicketType === item.key && styles.dismissalChipTextActive]}>
+                          <Text style={[styles.dismissalChipText, wicketType === item.key && styles.dismissalChipTextActive, item.key === 'RETIRED_HURT' && { color: '#1d4ed8' }]}>
                             {item.label}
                           </Text>
                           <Text style={[styles.dismissalChipSub, wicketType === item.key && styles.dismissalChipSubActive]}>
@@ -7179,7 +7195,11 @@ export default function LiveScoringScreen() {
                       {wicketType === 'RUN_OUT' && `run out (${customFielderName.trim() || bowlingSquad.find(f => f.id === selectedFielderId)?.name || 'Fielder'})`}
                       {wicketType === 'STUMPED' && `st †${customFielderName.trim() || bowlingSquad.find(f => f.id === selectedFielderId)?.name || 'Keeper'} b ${bowler?.name || 'Bowler'}`}
                       {wicketType === 'HIT_WICKET' && `hit wicket b ${bowler?.name || 'Bowler'}`}
+                      {wicketType === 'RETIRED_HURT' && 'retired hurt (not out)'}
                       {wicketType === 'RETIRED_OUT' && 'retired out'}
+                      {wicketType === 'OBSTRUCTING_FIELD' && 'obstructing the field'}
+                      {wicketType === 'HIT_BALL_TWICE' && 'hit the ball twice'}
+                      {wicketType === 'TIMED_OUT' && 'timed out'}
                     </Text>
                     {wickets + 1 < 10 && (
                       <Text style={styles.previewNextBatterText}>
@@ -7202,13 +7222,15 @@ export default function LiveScoringScreen() {
                     <TouchableOpacity
                       style={[
                         styles.modalConfirmBtn,
-                        { backgroundColor: '#dc2626' },
+                        { backgroundColor: wicketType === 'RETIRED_HURT' ? '#2563eb' : '#dc2626' },
                         (wickets + 1 < 10 && !selectedNextBatterId && !customBatterName.trim()) && styles.btnDisabled
                       ]}
                       disabled={wickets + 1 < 10 && !selectedNextBatterId && !customBatterName.trim()}
                       onPress={confirmNextBatter}
                     >
-                      <Text style={styles.modalConfirmText}>Confirm & Record Wicket</Text>
+                      <Text style={styles.modalConfirmText}>
+                        {wicketType === 'RETIRED_HURT' ? 'Confirm Retired Hurt (Not Out)' : 'Confirm & Record Wicket'}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 </View>
