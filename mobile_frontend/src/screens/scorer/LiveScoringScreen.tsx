@@ -799,15 +799,30 @@ export default function LiveScoringScreen() {
       legbye: 'LEG_BYE'
     };
 
-    const isExtra = type === 'wide' || type === 'noball';
-    const runsBatter = isExtra && type !== 'noball' ? 0 : run;
-    const runsExtras = isExtra
-      ? type === 'wide' || type === 'noball'
-        ? 1 + run
-        : run
-      : type === 'bye' || type === 'legbye'
-      ? run
-      : 0;
+    let runsBatter = 0;
+    let runsExtras = 0;
+
+    if (type === 'normal') {
+      runsBatter = run;
+      runsExtras = 0;
+    } else if (type === 'wide') {
+      runsBatter = 0;
+      runsExtras = 1 + run;
+    } else if (type === 'noball') {
+      if (customOpts.isByeOrLegBye) {
+        runsBatter = 0;
+        runsExtras = 1 + run;
+      } else {
+        runsBatter = run;
+        runsExtras = 1;
+      }
+    } else if (type === 'bye') {
+      runsBatter = 0;
+      runsExtras = run > 0 ? run : 1;
+    } else if (type === 'legbye') {
+      runsBatter = 0;
+      runsExtras = run > 0 ? run : 1;
+    }
 
     const finalFieldingPos =
       customOpts.wagonSector && customOpts.wagonSector !== 'Unspecified'
@@ -978,11 +993,11 @@ export default function LiveScoringScreen() {
     } else if (extraTypeKey === 'LEG_BYE') {
       await handleScore(1, 'legbye');
     } else if (extraTypeKey === 'NO_BALL_BYE') {
-      await handleScore(1, 'noball', { remarks: 'No Ball + Bye' });
+      await handleScore(1, 'noball', { isByeOrLegBye: true, remarks: 'No Ball + 1 Bye (Law 21.18)' });
     } else if (extraTypeKey === 'NO_BALL_LEG_BYE') {
-      await handleScore(1, 'noball', { remarks: 'No Ball + Leg Bye' });
+      await handleScore(1, 'noball', { isByeOrLegBye: true, remarks: 'No Ball + 1 Leg Bye (Law 21.18)' });
     } else if (extraTypeKey === 'NO_BALL_RUNS') {
-      setCustomCategory('noball');
+      setCustomCategory('noball_bat');
       setCustomRunsInput('1');
       setShowCustomModal(true);
     } else if (extraTypeKey === 'PENALTY') {
@@ -1155,12 +1170,12 @@ export default function LiveScoringScreen() {
         extraType: 'WIDE',
         reason: reasonText
       });
-    } else if (customCategory === 'noball_bat') {
+    } else if (customCategory === 'noball' || customCategory === 'noball_bat') {
       await handleCustomDeliveryDirect({
-        runsBatter: Math.max(0, runNum - 1),
+        runsBatter: runNum,
         runsExtras: 1,
         extraType: 'NO_BALL',
-        reason: reasonText
+        reason: reasonText || 'No Ball + Runs (Off Bat)'
       });
     } else if (customCategory === 'noball_extra') {
       await handleCustomDeliveryDirect({
@@ -4596,43 +4611,54 @@ export default function LiveScoringScreen() {
         onRequestClose={() => setShowExtrasModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxWidth: 440 }]}>
+          <View style={[styles.modalContent, { maxWidth: 480, width: '92%', maxHeight: '86%', padding: 18, display: 'flex', flexDirection: 'column' }]}>
             <View style={styles.revisedModalHeader}>
-              <Text style={styles.revisedModalTitle}>EXTRAS</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.revisedModalTitle}>EXTRAS & PENALTY SCORING</Text>
+                <Text style={styles.revisedModalInfo}>
+                  Select extra delivery category to record:
+                </Text>
+              </View>
               <TouchableOpacity style={styles.redCloseBtn} onPress={() => setShowExtrasModal(false)}>
                 <Text style={styles.redCloseBtnText}>✕</Text>
               </TouchableOpacity>
             </View>
-            <Text style={styles.revisedModalInfo}>
-              Select extra delivery category to record:
-            </Text>
-            <View style={{ marginTop: 10, gap: 6 }}>
+            <ScrollView
+              style={{ maxHeight: isDesktop ? 460 : 380, marginTop: 10 }}
+              contentContainerStyle={{ gap: 8, paddingBottom: 12, paddingHorizontal: 2 }}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+            >
               {[
-                { key: 'WIDE', label: 'Wide', desc: '1 run to batting team, extra delivery' },
-                { key: 'NO_BALL', label: 'No Ball (Crease / Overstep)', desc: '1 run + Free hit (next delivery)' },
-                { key: 'NO_BALL_BEAMER', label: 'No Ball (Dangerous Beamer)', desc: 'Waist-high full toss (Law 41.7 Warning/Suspension)' },
-                { key: 'NO_BALL_BOUNCER', label: 'No Ball (Bouncer Exceeded)', desc: '2nd bouncer in over above shoulder (Law 41.6)' },
-                { key: 'DEAD_BALL', label: 'Dead Ball (Cancel & Re-bowl)', desc: 'Umpire stops play (Law 20), ball does not count' },
-                { key: 'BYE', label: 'Bye', desc: 'Runs taken without bat contact' },
-                { key: 'LEG_BYE', label: 'Leg Bye', desc: 'Runs taken off batter pads' },
-                { key: 'NO_BALL_BYE', label: 'No Ball + Bye', desc: '1 NB penalty + Byes' },
-                { key: 'NO_BALL_LEG_BYE', label: 'No Ball + Leg Bye', desc: '1 NB penalty + Leg Byes' },
-                { key: 'NO_BALL_RUNS', label: 'No Ball + Runs (Off Bat)', desc: '1 NB penalty + Batter runs' },
-                { key: 'PENALTY', label: 'Penalty Points (5 Runs)', desc: 'Award 5 penalty runs (Law 41/42)' }
+                { key: 'WIDE', label: 'Wide (WD)', desc: '+1 run to batting team, extra delivery re-bowled', icon: '↔️' },
+                { key: 'NO_BALL', label: 'No Ball (Crease / Overstep)', desc: '+1 penalty run + Free Hit on next delivery', icon: '🦶' },
+                { key: 'NO_BALL_BEAMER', label: 'No Ball (Dangerous Beamer)', desc: 'Waist-high full toss (Law 41.7 Warning/Suspension)', icon: '⚡' },
+                { key: 'NO_BALL_BOUNCER', label: 'No Ball (Bouncer Exceeded)', desc: '2nd bouncer in over above shoulder (Law 41.6)', icon: '🎯' },
+                { key: 'DEAD_BALL', label: 'Dead Ball (Cancel & Re-bowl)', desc: 'Umpire stops play (Law 20); ball does not count', icon: '🛑' },
+                { key: 'BYE', label: 'Bye (B)', desc: 'Runs taken without bat contact (0 bowler runs)', icon: '🏃' },
+                { key: 'LEG_BYE', label: 'Leg Bye (LB)', desc: 'Runs taken off batter pads / body (0 bowler runs)', icon: '🦵' },
+                { key: 'NO_BALL_BYE', label: 'No Ball + Bye', desc: '1 NB penalty + 1 Bye extra (2 team runs, Free Hit)', icon: '⚡' },
+                { key: 'NO_BALL_LEG_BYE', label: 'No Ball + Leg Bye', desc: '1 NB penalty + 1 Leg Bye extra (2 team runs, Free Hit)', icon: '⚡' },
+                { key: 'NO_BALL_RUNS', label: 'No Ball + Runs (Off Bat)', desc: '1 NB penalty + batter runs off bat (Free Hit)', icon: '🏏' },
+                { key: 'PENALTY', label: 'Penalty Points (5 Runs)', desc: 'Award 5 penalty runs to batting or fielding side (Law 41/42)', icon: '⚖️' }
               ].map((item) => (
                 <TouchableOpacity
                   key={item.key}
                   style={styles.extraModalItem}
                   onPress={() => handleExtrasSelect(item.key)}
+                  activeOpacity={0.7}
                 >
-                  <View style={{ flex: 1 }}>
+                  <View style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 18 }}>{item.icon}</Text>
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 10 }}>
                     <Text style={styles.extraModalItemTitle}>{item.label}</Text>
                     <Text style={styles.extraModalItemSub}>{item.desc}</Text>
                   </View>
                   <Text style={styles.drawerMenuChevron}>›</Text>
                 </TouchableOpacity>
               ))}
-            </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
