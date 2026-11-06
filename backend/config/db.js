@@ -378,11 +378,15 @@ const InningsSchema = new mongoose.Schema({
   previous_bowler_id: { type: String, default: null },
   suspended_bowler_ids: [{ type: String }],
   bowler_substitutions: [{ type: mongoose.Schema.Types.Mixed }],
+  is_free_hit: { type: Boolean, default: false },
+  penalty_runs: { type: Number, default: 0 },
+  short_runs: { type: Number, default: 0 },
   extras: {
     wides: { type: Number, default: 0 },
     no_balls: { type: Number, default: 0 },
     byes: { type: Number, default: 0 },
     leg_byes: { type: Number, default: 0 },
+    penalty: { type: Number, default: 0 },
     total: { type: Number, default: 0 }
   }
 }, { timestamps: true });
@@ -443,6 +447,7 @@ const DeliverySchema = new mongoose.Schema({
   dismissed_player_id: { type: String, default: null },
   boundary_type: { type: String, default: null },
   is_legal_delivery: { type: Boolean, default: true },
+  is_free_hit: { type: Boolean, default: false },
   shot_type: { type: String, default: null },
   fielding_position: { type: String, default: null },
   shot_angle: { type: Number, default: null },

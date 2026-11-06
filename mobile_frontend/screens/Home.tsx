@@ -3030,6 +3030,10 @@ export default function HomeScreen() {
                                         <View style={styles.homeSuspendedPill}>
                                           <Text style={styles.homeSuspendedPillText}>🚫 Suspended (2 No-Balls)</Text>
                                         </View>
+                                      ) : (bw.isQuotaFull || parseFloat(bw.overs || '0') >= (bw.maxQuota || 4.0)) ? (
+                                        <View style={styles.homeQuotaPill}>
+                                          <Text style={styles.homeQuotaPillText}>🔋 Quota Full ({bw.overs}/{bw.maxQuota || 4}.0 Ov)</Text>
+                                        </View>
                                       ) : badgeText ? (
                                         <View style={styles.homeSubPill}>
                                           <Text style={styles.homeSubPillText}>{badgeText}</Text>
@@ -5352,6 +5356,20 @@ const styles = StyleSheet.create({
     color: '#b45309',
     fontSize: 9,
     fontWeight: '700'
+  },
+  homeQuotaPill: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    marginTop: 2
+  },
+  homeQuotaPillText: {
+    color: '#b45309',
+    fontSize: 9,
+    fontWeight: '800'
   },
   matchTeamRow: {
     flexDirection: 'row',

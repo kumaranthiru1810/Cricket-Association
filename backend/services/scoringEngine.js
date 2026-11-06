@@ -304,6 +304,7 @@ class ScoringEngine {
 
     // 3. Create Delivery Document in MongoDB
     const deliveryId = 'DEL-' + Date.now() + '-' + String(++deliverySequence).padStart(6, '0');
+    const wasDeliveryFreeHit = !!innings.is_free_hit;
     const deliveryDoc = await db.models.Delivery.create({
       id: deliveryId,
       match_id: matchId,
@@ -318,6 +319,7 @@ class ScoringEngine {
       runs_extras: Number(runsExtras),
       total_runs: totalRuns,
       extra_type: extraType,
+      is_free_hit: wasDeliveryFreeHit,
       wicket: Boolean(wicket),
       wicket_type: wicketType,
       dismissal_type: wicketType,
@@ -389,6 +391,21 @@ class ScoringEngine {
     innings.current_striker_id = nextStriker;
     innings.current_non_striker_id = nextNonStriker;
     innings.current_bowler_id = activeBowlerId;
+
+    // Smart Rules: Free Hit calculation
+    let nextIsFreeHit = false;
+    if (extraType === 'NO_BALL') {
+      nextIsFreeHit = true;
+    } else if (wasDeliveryFreeHit) {
+      if (extraType === 'WIDE') {
+        nextIsFreeHit = true;
+      } else {
+        nextIsFreeHit = false;
+      }
+    } else {
+      nextIsFreeHit = false;
+    }
+    innings.is_free_hit = nextIsFreeHit;
 
     await innings.save();
 
@@ -602,7 +619,7 @@ class ScoringEngine {
       } catch (_err) {}
     }
 
-    // 9. Real-time Socket.IO Broadcast
+    // 9. Real-time Smart Rules Analysis & Socket.IO Broadcast
     let noBallWarning = null;
     if (extraType === 'NO_BALL') {
       try {
@@ -622,15 +639,68 @@ class ScoringEngine {
       } catch (_e) {}
     }
 
+    let consecutiveWidesWarning = null;
+    if (extraType === 'WIDE') {
+      try {
+        const recentOverDeliveries = await db.models.Delivery.find({
+          innings_id: innings.id,
+          over_number: overNumber
+        }).sort({ created_at: -1, delivery_sequence: -1 }).limit(3).lean();
+
+        if (recentOverDeliveries.length >= 2 && recentOverDeliveries[1].extra_type === 'WIDE') {
+          const wideCountInOver = await db.models.Delivery.countDocuments({
+            innings_id: innings.id,
+            over_number: overNumber,
+            extra_type: 'WIDE'
+          });
+          consecutiveWidesWarning = {
+            bowlerId: activeBowlerId,
+            bowlerName,
+            overNumber: overNumber + 1,
+            count: wideCountInOver,
+            message: `Bowler ${bowlerName} has bowled ${wideCountInOver} Wides in Over ${overNumber + 1}. Check wide tramlines (MCC Law 22).`
+          };
+        }
+      } catch (_e) {}
+    }
+
+    const matchTotalOvers = match.overs || 20;
+    const maxQuota = Math.ceil(matchTotalOvers / 5) || 4;
+    let bowlerQuotaWarning = null;
+    if (bowlerStats && bowlerStats.overs >= maxQuota) {
+      bowlerQuotaWarning = {
+        bowlerId: activeBowlerId,
+        bowlerName,
+        overs: bowlerStats.overs,
+        maxQuota,
+        isQuotaFull: true,
+        message: `Bowler ${bowlerName} has completed their maximum bowling quota (${bowlerStats.overs}/${maxQuota} overs).`
+      };
+    }
+
+    const powerplayOvers = Math.round(matchTotalOvers * 0.3) || 6;
+    const currentOverNumber = innings.overs + (innings.balls > 0 ? 1 : 0);
+    const isPowerplay = currentOverNumber <= powerplayOvers;
+    const powerplay = {
+      isPowerplay,
+      powerplayOvers,
+      currentOver: currentOverNumber,
+      maxFieldersOutside: isPowerplay ? 2 : 5
+    };
+
     try {
       socketService.emitScoreUpdate(matchId, {
         matchId,
         score: `${innings.total_runs}/${innings.wickets}`,
         overs: `${innings.overs}.${innings.balls}`,
         isOverComplete: isOverFinished,
+        isFreeHit: nextIsFreeHit,
         currentBreak: match.current_break || null,
         statusComment: match.status_comment || '',
         noBallWarning,
+        consecutiveWidesWarning,
+        bowlerQuotaWarning,
+        powerplay,
         lastDelivery: {
           ball: `${overNumber}.${ballNumber}`,
           runs: Number(runsBatter),
@@ -648,28 +718,37 @@ class ScoringEngine {
       commentary,
       matchStatus: match.status,
       isOverComplete: isOverFinished,
+      isFreeHit: nextIsFreeHit,
       strikerId: nextStriker,
       nonStrikerId: nextNonStriker,
       bowlerId: activeBowlerId,
       noBallWarning,
+      consecutiveWidesWarning,
+      bowlerQuotaWarning,
+      powerplay,
       data: {
         deliveryId,
         score: `${innings.total_runs}/${innings.wickets}`,
         overs: `${innings.overs}.${innings.balls}`,
         totalRuns: innings.total_runs,
         wickets: innings.wickets,
+        isFreeHit: nextIsFreeHit,
         strikerId: nextStriker,
         nonStrikerId: nextNonStriker,
         bowlerId: activeBowlerId,
         isOverComplete: isOverFinished,
         isMatchCompleted,
         noBallWarning,
+        consecutiveWidesWarning,
+        bowlerQuotaWarning,
+        powerplay,
         lastDelivery: {
           id: deliveryId,
           runsBatter: Number(runsBatter),
           runsExtras: Number(runsExtras),
           totalRuns,
           extraType,
+          isFreeHit: wasDeliveryFreeHit,
           boundaryType,
           wicket: Boolean(wicket),
           isLegalDelivery: isLegal,

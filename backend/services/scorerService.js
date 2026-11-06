@@ -396,8 +396,12 @@ class ScorerService {
     const isOverComplete = Boolean(currentInnings.is_over_complete);
 
     // Enriched bowling squad
+    const matchOvers = match.revised_overs || match.overs_per_side || 20;
+    const maxQuota = Math.ceil(matchOvers / 5) || 4;
+
     const enrichedBowlingSquad = bowlingSquad.map(p => {
       const stats = bowlerStatsMap[p.id];
+      const isQuotaFull = stats ? (stats.overs >= maxQuota) : false;
       return {
         id: p.id,
         name: p.name,
@@ -406,7 +410,9 @@ class ScorerService {
         runs: stats ? stats.runs_conceded : 0,
         wickets: stats ? stats.wickets : 0,
         economy: stats ? stats.economy : 0,
-        isPreviousBowler: Boolean(p.id === currentInnings.previous_bowler_id)
+        isPreviousBowler: Boolean(p.id === currentInnings.previous_bowler_id),
+        maxQuota,
+        isQuotaFull
       };
     });
 
@@ -472,6 +478,7 @@ class ScorerService {
         target: match.revised_target || currentInnings.target,
         isOverComplete,
         previousBowlerId: currentInnings.previous_bowler_id || null,
+        isFreeHit: Boolean(currentInnings.is_free_hit),
         isSuperOver: Boolean(currentInnings.is_super_over)
       },
       striker: {
@@ -618,6 +625,10 @@ class ScorerService {
           subNote = '🩹 Mid-Over Sub';
         }
 
+        const matchTotalOvers = match.overs_per_side || 20;
+        const maxQuota = Math.ceil(matchTotalOvers / 5) || 4;
+        const isQuotaFull = (bw?.overs || 0) >= maxQuota;
+
         return {
           id: bw.id,
           playerId: bw?.player_id || null,
@@ -629,7 +640,9 @@ class ScorerService {
           economy: bw?.economy || 0,
           isCurrentBowler: isCurrent,
           isSuspended: isSuspended,
-          subNote: subNote
+          subNote: subNote,
+          maxQuota,
+          isQuotaFull
         };
       });
 
@@ -730,6 +743,9 @@ class ScorerService {
         totalOvers: maxOvers,
         oversRemaining: `${remOv}.${remB}`,
         ballsRemaining: remBalls,
+        isFreeHit: !!inn.is_free_hit,
+        powerplayOvers: Math.round(maxOvers * 0.3) || 6,
+        isPowerplay: (inn.overs || 0) < (Math.round(maxOvers * 0.3) || 6),
         currentBowler: inn.current_bowler_id ? {
           id: inn.current_bowler_id,
           name: (playerMap[inn.current_bowler_id] && playerMap[inn.current_bowler_id].name) || inn.current_bowler_id

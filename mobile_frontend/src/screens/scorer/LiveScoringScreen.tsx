@@ -17,6 +17,7 @@ import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
 import SharedFooter from '../../components/scorer/SharedFooter';
 import { ScorerApi, getCurrentUser } from '../../services/api';
 import { ClockPickerModal, calculateDurationMinutes } from '../../components/common/ClockPickerModal';
+import CricketRulesModal, { CricketRuleType } from '../../components/scorer/CricketRulesModal';
 
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
 const IMG_CHAMPIONS = require('../../../assets/cricket_champions.png');
@@ -203,6 +204,13 @@ export default function LiveScoringScreen() {
 
   // End Innings Modal
   const [showEndModal, setShowEndModal] = useState<boolean>(false);
+
+  // Smart Cricket Rule & Umpire Assistant Modal
+  const [showCricketRulesModal, setShowCricketRulesModal] = useState<boolean>(false);
+  const [activeCricketRule, setActiveCricketRule] = useState<CricketRuleType | null>('FREE_HIT');
+  const [cricketRuleContext, setCricketRuleContext] = useState<any>({});
+  const [isFreeHitActive, setIsFreeHitActive] = useState<boolean>(false);
+  const [consecutiveWidesCount, setConsecutiveWidesCount] = useState<number>(0);
 
   // --- SCORER SIDE OPTIONS & DOCUMENT WORKFLOW STATES ---
   // Live Clock for Slide Menu
@@ -671,6 +679,7 @@ export default function LiveScoringScreen() {
         setWickets(d.innings.wickets ?? 0);
         setBalls(d.innings.ballsTotal ?? 0);
         setTargetRuns(d.innings.target ?? null);
+        setIsFreeHitActive(Boolean(d.innings.isFreeHit || d.innings.is_free_hit));
 
         const overDone = !!d.innings.isOverComplete;
         setIsOverComplete(overDone);
@@ -840,6 +849,62 @@ export default function LiveScoringScreen() {
       // Seamless background update without full page refresh
       await loadLiveState(false);
 
+      // Smart Rules Analysis: Free Hit status
+      if (res.isFreeHit || res.data?.isFreeHit || type === 'noball') {
+        setIsFreeHitActive(true);
+        if (type === 'noball') {
+          setActiveCricketRule('FREE_HIT');
+          setCricketRuleContext({
+            bowlerName: bowler?.name || 'Bowler',
+            strikerName: striker?.name || 'Striker',
+            nonStrikerName: nonStriker?.name || 'Non-Striker'
+          });
+          setShowCricketRulesModal(true);
+        }
+      } else if (isFreeHitActive && type === 'normal') {
+        setIsFreeHitActive(false);
+      }
+
+      // Smart Rules Analysis: Consecutive Wides
+      if (type === 'wide') {
+        const nextWides = consecutiveWidesCount + 1;
+        setConsecutiveWidesCount(nextWides);
+        if (nextWides >= 2) {
+          setActiveCricketRule('CONSECUTIVE_WIDES');
+          setCricketRuleContext({
+            bowlerName: bowler?.name || 'Bowler',
+            count: nextWides,
+            overNumber: Math.floor(balls / 6) + 1
+          });
+          setShowCricketRulesModal(true);
+        }
+      } else if (type === 'normal') {
+        setConsecutiveWidesCount(0);
+      }
+
+      const cwWarn = res?.consecutiveWidesWarning || res?.data?.consecutiveWidesWarning;
+      if (cwWarn) {
+        setActiveCricketRule('CONSECUTIVE_WIDES');
+        setCricketRuleContext({
+          bowlerName: cwWarn.bowlerName || bowler?.name || 'Bowler',
+          count: cwWarn.count || 2,
+          overNumber: cwWarn.overNumber
+        });
+        setShowCricketRulesModal(true);
+      }
+
+      // Smart Rules Analysis: Bowler Quota
+      const bqWarn = res?.bowlerQuotaWarning || res?.data?.bowlerQuotaWarning;
+      if (bqWarn) {
+        setActiveCricketRule('OVER_QUOTA');
+        setCricketRuleContext({
+          bowlerName: bqWarn.bowlerName || bowler?.name || 'Bowler',
+          oversBowled: bqWarn.overs,
+          maxQuota: bqWarn.maxQuota
+        });
+        setShowCricketRulesModal(true);
+      }
+
       // Check for 2 No-Balls dangerous bowling warning (MCC Law 41.7)
       const nbWarn = res?.noBallWarning || res?.data?.noBallWarning;
       if (nbWarn && !dismissedNoBallBowlers.includes(nbWarn.bowlerId)) {
@@ -940,10 +1005,18 @@ export default function LiveScoringScreen() {
       return;
     }
 
+    // Special Cricket Rule: Free Hit Immunity check (MCC Law 21.19)
+    if (isFreeHitActive) {
+      const msg = '⚡ FREE HIT ACTIVE! Batter CANNOT be dismissed Bowled, Caught, LBW, or Stumped (MCC Law 21.19). Only RUN OUT is allowed.';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Free Hit Immunity', msg);
+      setWicketType('RUN_OUT');
+    } else {
+      setWicketType('BOWLED');
+    }
+
     // Initialize rich wicket state
     setWicketStep(1);
     setDismissedTarget('striker');
-    setWicketType('BOWLED');
     setSelectedFielderId('');
     setCustomFielderName('');
     setIsFielderDropdownOpen(false);
@@ -1202,16 +1275,6 @@ export default function LiveScoringScreen() {
 
       // Seamless background update without full page refresh
       await loadLiveState(false);
-
-      // Check for 2 No-Balls dangerous bowling warning (MCC Law 41.7)
-      const nbWarn = res?.noBallWarning || res?.data?.noBallWarning;
-      if (nbWarn && !dismissedNoBallBowlers.includes(nbWarn.bowlerId)) {
-        setNoBallAlert({
-          bowlerId: nbWarn.bowlerId,
-          bowlerName: nbWarn.bowlerName || bowler?.name || 'Current Bowler',
-          count: nbWarn.noBallCount || 2
-        });
-      }
     } catch (err: any) {
       console.error('confirmNextBowler error:', err);
       setBowlerErrorMessage(err.message || 'Server rejected bowler selection.');
@@ -5568,6 +5631,46 @@ export default function LiveScoringScreen() {
                 </TouchableOpacity>
               </View>
 
+              {/* SMART RULES QUICK BAR & FREE HIT LIVE BANNER */}
+              {isFreeHitActive && (
+                <View style={styles.freeHitLiveBanner}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                    <Text style={{ fontSize: 18 }}>⚡</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.freeHitLiveTitle}>FREE HIT IN PROGRESS!</Text>
+                      <Text style={styles.freeHitLiveSub}>Immunity: Bowled, Caught, LBW, Stumped • RUN OUT ONLY</Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.freeHitRulesBtn}
+                    onPress={() => {
+                      setActiveCricketRule('FREE_HIT');
+                      setCricketRuleContext({
+                        bowlerName: bowler?.name || 'Bowler',
+                        strikerName: striker?.name || 'Striker',
+                        nonStrikerName: nonStriker?.name || 'Non-Striker'
+                      });
+                      setShowCricketRulesModal(true);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.freeHitRulesBtnText}>⚖️ View Rule</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Cricket Rules Interactive Assistant Quick Button */}
+              <TouchableOpacity
+                style={styles.smartRulesNavBtn}
+                onPress={() => {
+                  setActiveCricketRule('FREE_HIT');
+                  setShowCricketRulesModal(true);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.smartRulesNavBtnText}>⚖️ Smart Cricket Rules & Visual Diagrams Guide</Text>
+              </TouchableOpacity>
+
               {/* Main Scoring Keypad Grid */}
               <View style={styles.engineKeypadContainer}>
                 {/* Row 1: 0, 1, 2 */}
@@ -6637,6 +6740,13 @@ export default function LiveScoringScreen() {
 
                   {/* 2. DISMISSAL TYPE (HOW OUT) */}
                   <Text style={styles.selectLabel}>2. HOW OUT? (TAP TO SELECT METHOD):</Text>
+                  {isFreeHitActive && (
+                    <View style={styles.freeHitModalNotice}>
+                      <Text style={styles.freeHitModalNoticeText}>
+                        ⚡ FREE HIT IN PROGRESS: Batter is immune to Bowled, Caught, LBW & Stumped. Only RUN OUT can dismiss the batter!
+                      </Text>
+                    </View>
+                  )}
                   <View style={styles.dismissalGrid}>
                     {[
                       { key: 'BOWLED', label: 'Bowled', desc: 'b Bowler' },
@@ -6648,24 +6758,53 @@ export default function LiveScoringScreen() {
                       { key: 'STUMPED', label: 'Stumped', desc: 'st †Keeper b Bowler' },
                       { key: 'HIT_WICKET', label: 'Hit Wicket', desc: 'hit wicket b Bowler' },
                       { key: 'RETIRED_OUT', label: 'Retired Out', desc: 'retired out' }
-                    ].map((item) => (
-                      <TouchableOpacity
-                        key={item.key}
-                        style={[styles.dismissalChip, wicketType === item.key && styles.dismissalChipActive]}
-                        onPress={() => {
-                          setWicketType(item.key);
-                          setWicketStep(2);
-                        }}
-                      >
-                        <Text style={[styles.dismissalChipText, wicketType === item.key && styles.dismissalChipTextActive]}>
-                          {item.label}
-                        </Text>
-                        <Text style={[styles.dismissalChipSub, wicketType === item.key && styles.dismissalChipSubActive]}>
-                          {item.desc}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+                    ].map((item) => {
+                      const isImmuneOnFreeHit = isFreeHitActive && !['RUN_OUT', 'RETIRED_OUT'].includes(item.key);
+                      return (
+                        <TouchableOpacity
+                          key={item.key}
+                          disabled={isImmuneOnFreeHit}
+                          style={[
+                            styles.dismissalChip,
+                            wicketType === item.key && styles.dismissalChipActive,
+                            isImmuneOnFreeHit && { opacity: 0.35, backgroundColor: '#f1f5f9' }
+                          ]}
+                          onPress={() => {
+                            if (isImmuneOnFreeHit) {
+                              const msg = 'Batter is immune on Free Hit (MCC Law 21.19). Only Run Out is allowed.';
+                              Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Free Hit Immunity', msg);
+                              return;
+                            }
+                            setWicketType(item.key);
+                            setWicketStep(2);
+                          }}
+                        >
+                          <Text style={[styles.dismissalChipText, wicketType === item.key && styles.dismissalChipTextActive]}>
+                            {item.label}
+                          </Text>
+                          <Text style={[styles.dismissalChipSub, wicketType === item.key && styles.dismissalChipSubActive]}>
+                            {isImmuneOnFreeHit ? '❌ Immune on Free Hit' : item.desc}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
+
+                  {/* Run Out Crossing Visual Helper Button */}
+                  <TouchableOpacity
+                    style={styles.runOutHelperBtn}
+                    onPress={() => {
+                      setActiveCricketRule('RUN_OUT_CROSS');
+                      setCricketRuleContext({
+                        strikerName: striker?.name || 'Striker',
+                        nonStrikerName: nonStriker?.name || 'Non-Striker'
+                      });
+                      setShowCricketRulesModal(true);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.runOutHelperBtnText}>🏃 Open Run Out Crossing Visual Helper Diagram</Text>
+                  </TouchableOpacity>
 
                   <View style={[styles.modalActions, { marginTop: 14 }]}>
                     <TouchableOpacity
@@ -7078,6 +7217,20 @@ export default function LiveScoringScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Smart Cricket Rule & Umpire Assistant Modal */}
+      <CricketRulesModal
+        visible={showCricketRulesModal}
+        activeRule={activeCricketRule}
+        ruleContext={cricketRuleContext}
+        onClose={() => setShowCricketRulesModal(false)}
+        onApplyRule={(ruleType, payload) => {
+          if (ruleType === 'RUN_OUT_CROSS' && payload?.victim) {
+            setDismissedTarget(payload.victim === 'NON_STRIKER' ? 'nonStriker' : 'striker');
+          }
+          setShowCricketRulesModal(false);
+        }}
+      />
     </View>
   );
 }
@@ -10383,5 +10536,100 @@ const getStyles = (isDesktop: boolean) =>
       fontSize: 12,
       fontWeight: '800',
       color: '#ffffff'
+    },
+    // Smart Rules & Free Hit Styles
+    freeHitLiveBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: '#fef2f2',
+      borderWidth: 1.5,
+      borderColor: '#ef4444',
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      marginVertical: 4
+    },
+    freeHitLiveTitle: {
+      fontSize: 13,
+      fontWeight: '900',
+      color: '#b91c1c'
+    },
+    freeHitLiveSub: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: '#991b1b',
+      marginTop: 1
+    },
+    freeHitRulesBtn: {
+      backgroundColor: '#dc2626',
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 6
+    },
+    freeHitRulesBtnText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: '#ffffff'
+    },
+    smartRulesNavBtn: {
+      backgroundColor: '#ecfdf5',
+      borderWidth: 1,
+      borderColor: '#10b981',
+      borderRadius: 8,
+      paddingVertical: 7,
+      paddingHorizontal: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginVertical: 4
+    },
+    smartRulesNavBtnText: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: '#065f46'
+    },
+    freeHitModalNotice: {
+      backgroundColor: '#fef2f2',
+      borderWidth: 1.5,
+      borderColor: '#f87171',
+      borderRadius: 8,
+      padding: 10,
+      marginBottom: 10
+    },
+    freeHitModalNoticeText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: '#b91c1c',
+      lineHeight: 16
+    },
+    runOutHelperBtn: {
+      backgroundColor: '#eff6ff',
+      borderWidth: 1.5,
+      borderColor: '#3b82f6',
+      borderRadius: 8,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 8,
+      marginBottom: 4
+    },
+    runOutHelperBtnText: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: '#1d4ed8'
+    },
+    quotaFullBadge: {
+      backgroundColor: '#fef3c7',
+      borderColor: '#f59e0b',
+      borderWidth: 1,
+      borderRadius: 4,
+      paddingHorizontal: 6,
+      paddingVertical: 2
+    },
+    quotaFullBadgeText: {
+      fontSize: 10,
+      fontWeight: '800',
+      color: '#b45309'
     }
   });

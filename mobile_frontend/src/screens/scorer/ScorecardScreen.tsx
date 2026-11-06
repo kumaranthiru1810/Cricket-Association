@@ -6,6 +6,7 @@ import SharedFooter from '../../components/scorer/SharedFooter';
 import { ScorerApi } from '../../services/api';
 import WagonWheel from '../../components/analytics/WagonWheel';
 import ErrorBoundary from '../../components/common/ErrorBoundary';
+import CricketRulesModal, { CricketRuleType } from '../../components/scorer/CricketRulesModal';
 
 const IMG_CHAMPIONS = require('../../../assets/cricket_champions.png');
 
@@ -28,6 +29,8 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
   const [scorecardData, setScorecardData] = useState<any>(null);
   const [activeInningsTab, setActiveInningsTab] = useState<number>(0);
   const [selectedWagonBatterId, setSelectedWagonBatterId] = useState<string>('');
+  const [showRulesModal, setShowRulesModal] = useState<boolean>(false);
+  const [activeRule, setActiveRule] = useState<CricketRuleType>('FREE_HIT');
 
   const handleBack = () => {
     const isLiveMatch = scorecardData?.match?.status === 'LIVE' || scorecardData?.match?.status === 'Live';
@@ -371,6 +374,34 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                 </Text>
               </View>
             )}
+
+            {/* Free Hit Active Indicator */}
+            {currentInnings.isFreeHit && (
+              <View style={styles.freeHitScorecardBanner}>
+                <Text style={styles.freeHitScorecardBannerText}>
+                  ⚡ FREE HIT ACTIVE: Batter immune to Bowled, Caught, LBW & Stumped (Run Out Only)
+                </Text>
+              </View>
+            )}
+
+            {/* Powerplay Status & Rules Guide Link */}
+            <View style={styles.rulesBarRow}>
+              <View style={styles.powerplayBadge}>
+                <Text style={styles.powerplayBadgeText}>
+                  ⭕ Powerplay: Overs 1-6 (Max 2 fielders outside 30y ring)
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.rulesGuideBtn}
+                onPress={() => {
+                  setActiveRule('FREE_HIT');
+                  setShowRulesModal(true);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.rulesGuideBtnText}>⚖️ View Cricket Rules Guide & Diagrams</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* ─────────────────────────────────────────────────────────────
@@ -499,6 +530,8 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                     s.newBowlerId === bw.playerId || s.newBowlerName === bw.name
                   );
 
+                  const isQuotaFull = bw.isQuotaFull || parseFloat(bw.overs || '0') >= (bw.maxQuota || 4.0);
+
                   let badgeText = bw.subNote || '';
                   if (!badgeText) {
                     if (isSuspended) {
@@ -538,6 +571,10 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                         {isSuspended ? (
                           <View style={styles.suspendedPill}>
                             <Text style={styles.suspendedPillText}>🚫 Suspended (2 No-Balls)</Text>
+                          </View>
+                        ) : isQuotaFull ? (
+                          <View style={styles.quotaPill}>
+                            <Text style={styles.quotaPillText}>🔋 Quota Full ({bw.overs}/{bw.maxQuota || 4}.0 Ov)</Text>
                           </View>
                         ) : badgeText ? (
                           <View style={styles.subPill}>
@@ -733,6 +770,13 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
 
         <SharedFooter />
       </ScrollView>
+
+      {/* Smart Cricket Rules & Umpire Assistant Modal */}
+      <CricketRulesModal
+        visible={showRulesModal}
+        activeRule={activeRule}
+        onClose={() => setShowRulesModal(false)}
+      />
     </View>
   );
 }
@@ -1305,6 +1349,68 @@ const styles = StyleSheet.create({
     color: '#b45309',
     fontSize: 9.5,
     fontWeight: '700'
+  },
+  // Rules & Quota styles
+  freeHitScorecardBanner: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#ef4444',
+    borderWidth: 1.5,
+    borderRadius: 8,
+    padding: 8,
+    marginTop: 8
+  },
+  freeHitScorecardBannerText: {
+    color: '#b91c1c',
+    fontSize: 11.5,
+    fontWeight: '800'
+  },
+  rulesBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8
+  },
+  powerplayBadge: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#93c5fd',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4
+  },
+  powerplayBadgeText: {
+    color: '#1d4ed8',
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  rulesGuideBtn: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#10b981',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5
+  },
+  rulesGuideBtnText: {
+    color: '#065f46',
+    fontSize: 11,
+    fontWeight: '800'
+  },
+  quotaPill: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    marginTop: 3
+  },
+  quotaPillText: {
+    color: '#b45309',
+    fontSize: 9.5,
+    fontWeight: '800'
   }
 });
 
