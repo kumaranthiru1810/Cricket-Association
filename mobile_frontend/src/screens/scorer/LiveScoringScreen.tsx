@@ -531,6 +531,7 @@ export default function LiveScoringScreen() {
         } else if (modalName === 'injury') {
           setChangeBowlerReason('INJURY');
           setBowlerSituation('Bowler Injured');
+          setIsSituationDropdownOpen(true);
           setShowChangeBowlerModal(true);
         } else if (modalName === 'overthrow') {
           setShowOverThrowModal(true);
