@@ -521,6 +521,39 @@ export default function LiveScoringScreen() {
   useEffect(() => {
     loadLiveState(true);
 
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      (window as any).__OPEN_MODAL__ = (modalName: string, param?: string) => {
+        if (modalName === 'wicket') {
+          setShowWicketModal(true);
+        } else if (modalName === 'bowler') {
+          setChangeBowlerReason('TACTICAL');
+          setShowChangeBowlerModal(true);
+        } else if (modalName === 'injury') {
+          setChangeBowlerReason('INJURY');
+          setBowlerSituation('Bowler Injured');
+          setShowChangeBowlerModal(true);
+        } else if (modalName === 'overthrow') {
+          setShowOverThrowModal(true);
+        } else if (modalName === 'extras') {
+          setShowExtrasModal(true);
+        } else if (modalName === 'umpire') {
+          setShowUmpireModal(true);
+        } else if (modalName === 'edit') {
+          setIsEditMode(true);
+        } else if (modalName === 'rules') {
+          if (param) setActiveCricketRule(param as any);
+          setShowCricketRulesModal(true);
+        } else if (modalName === 'closeAll') {
+          setShowWicketModal(false);
+          setShowChangeBowlerModal(false);
+          setShowOverThrowModal(false);
+          setShowExtrasModal(false);
+          setShowUmpireModal(false);
+          setShowCricketRulesModal(false);
+        }
+      };
+    }
+
     // Socket.IO real-time score updates
     const socket = ScorerApi.connectSocket(matchId, (payload) => {
       if (payload && payload.score) {

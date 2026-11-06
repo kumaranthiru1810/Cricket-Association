@@ -25,8 +25,23 @@ interface Props {
 }
 
 export default function ScorerNavigator({ onExit, initialParams }: Props) {
-  const [currentScreen, setCurrentScreen] = useState<ScreenName>(initialParams?.initialScreen || 'Dashboard');
-  const [params, setParams] = useState<any>(initialParams || null);
+  const resolveInitialRoute = (): { screen: ScreenName; initialParams?: any } => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        const url = new URL(window.location.href);
+        const qScreen = url.searchParams.get('scorerScreen');
+        const qMatchId = url.searchParams.get('matchId');
+        if (qScreen && ['Dashboard', 'MatchSetup', 'LiveScoring', 'Scorecard'].includes(qScreen)) {
+          return { screen: qScreen as ScreenName, initialParams: qMatchId ? { matchId: qMatchId } : initialParams };
+        }
+      } catch (_e) {}
+    }
+    return { screen: initialParams?.initialScreen || 'Dashboard', initialParams };
+  };
+
+  const initialRoute = resolveInitialRoute();
+  const [currentScreen, setCurrentScreen] = useState<ScreenName>(initialRoute.screen);
+  const [params, setParams] = useState<any>(initialRoute.initialParams || null);
 
   useEffect(() => {
     const user = getCurrentUser();

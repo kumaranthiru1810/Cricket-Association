@@ -32,6 +32,12 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
   const [showRulesModal, setShowRulesModal] = useState<boolean>(false);
   const [activeRule, setActiveRule] = useState<CricketRuleType>('FREE_HIT');
 
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      (window as any).__SET_INNINGS_TAB__ = (idx: number) => setActiveInningsTab(idx);
+    }
+  }, []);
+
   const handleBack = () => {
     const isLiveMatch = scorecardData?.match?.status === 'LIVE' || scorecardData?.match?.status === 'Live';
     if (params?.returnTo === 'LiveScoring' && isLiveMatch) {

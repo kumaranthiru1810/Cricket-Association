@@ -1112,6 +1112,14 @@ export default function CricketRulesModal({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [competitionFormat, setCompetitionFormat] = useState<CompetitionFormat>('ICC_T20');
 
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      (window as any).__SELECT_RULE__ = (ruleId: string) => {
+        setSelectedRuleId(ruleId);
+      };
+    }
+  }, []);
+
   // Confirmation Modal for Applying Decisions
   const [pendingActionRule, setPendingActionRule] = useState<CricketRuleDefinition | null>(null);
   const [isApplyingAction, setIsApplyingAction] = useState<boolean>(false);

@@ -697,6 +697,7 @@ class ScoringEngine {
     const matchTotalOvers = match.overs || 20;
     const maxQuota = Math.ceil(matchTotalOvers / 5) || 4;
     let bowlerQuotaWarning = null;
+    const bowlerStats = bowler;
     if (bowlerStats && bowlerStats.overs >= maxQuota) {
       bowlerQuotaWarning = {
         bowlerId: activeBowlerId,
@@ -1239,8 +1240,8 @@ class ScoringEngine {
     if (!match) throw { status: 404, message: 'Match not found.' };
 
     match.status = 'COMPLETED';
-    if (payload.resultText || payload.result) {
-      match.result_summary = payload.resultText || payload.result;
+    if (payload.resultText || payload.result || payload.resultSummary) {
+      match.result_summary = payload.resultText || payload.result || payload.resultSummary;
     }
     if (payload.playerOfMatch) {
       match.player_of_match = payload.playerOfMatch;
