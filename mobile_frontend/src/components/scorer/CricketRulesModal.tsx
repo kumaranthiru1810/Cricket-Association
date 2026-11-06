@@ -34,6 +34,7 @@ export interface CricketRuleDefinition {
   dismissalConsequences: string;
   umpireRequirement: 'AUTOMATIC_DETECTION' | 'UMPIRE_CONFIRMATION_REQUIRED';
   diagramType: string;
+  competitionVariation?: string | null;
   actionPayload?: {
     actionType: string;
     points?: number;
@@ -42,6 +43,278 @@ export interface CricketRuleDefinition {
     description?: string;
   };
 }
+
+export interface CompetitionRuleOverride {
+  law?: string;
+  summary?: string;
+  decisionProcess?: string[];
+  runsExtras?: string;
+  legalBall?: string;
+  dismissalConsequences?: string;
+  variationNotice: string;
+  listTag?: string;
+}
+
+export interface CompetitionFormatConfig {
+  name: string;
+  authority: string;
+  formatTitle: string;
+  bouncerLimit: string;
+  bouncersAllowedPerOver: number | 'SUBJECTIVE';
+  freeHitActive: boolean;
+  bowlerMaxQuota: string;
+  timedOutSeconds: number;
+  badge: string;
+  description: string;
+  rulesModifications: Record<string, CompetitionRuleOverride>;
+}
+
+export const COMPETITION_CONFIGS: Record<CompetitionFormat, CompetitionFormatConfig> = {
+  ICC_T20: {
+    name: 'ICC T20 International',
+    authority: 'International Cricket Council (ICC Men\'s T20I Playing Conditions)',
+    formatTitle: 'ICC T20 International (20.0 Ov)',
+    bouncerLimit: '1 Bouncer / Over',
+    bouncersAllowedPerOver: 1,
+    freeHitActive: true,
+    bowlerMaxQuota: '4.0 Ov (20% Max)',
+    timedOutSeconds: 90,
+    badge: 'ICC Men\'s T20I Regulations Active',
+    description: '1 short-pitched bouncer per over (2nd is No Ball + Free Hit). Max 4.0 overs per bowler. Mandatory Free Hit on all No Balls. Strict 90s incoming batter timer.',
+    rulesModifications: {
+      BOUNCER_LIMIT: {
+        law: 'ICC T20 Clause 41.6.1.1',
+        summary: 'Maximum of ONE short-pitched delivery above shoulder level allowed per over. A second bouncer in the same over is called No Ball + Free Hit + Umpire Warning.',
+        decisionProcess: [
+          '1. Umpire signals 1 bouncer used for the over (one hand tapping shoulder).',
+          '2. If bowler delivers second bouncer in same over: Call & signal No Ball immediately.',
+          '3. Award +1 No Ball penalty run to batting team and signal Free Hit for next delivery.',
+          '4. Standing umpire issues official first caution to the bowler.'
+        ],
+        variationNotice: 'ICC T20 Clause 41.6: Exactly 1 bouncer permitted per over. 2nd bouncer is a No Ball + Free Hit.',
+        listTag: '1 Bouncer'
+      },
+      FREE_HIT: {
+        law: 'ICC T20 Clause 21.19',
+        summary: 'Mandatory Free Hit awarded to batting side for ALL forms of No Ball (front-foot overstep, waist-high full toss, bouncer limit exceed, fielding restriction breach).',
+        variationNotice: 'ICC Clause 21.19: Mandatory Free Hit on all No Balls with dismissal immunity.',
+        listTag: 'Mandatory FH'
+      },
+      BOWLER_OVER_LIMIT: {
+        law: 'ICC T20 Clause 13.8.1',
+        summary: 'In an uninterrupted 20-over match, no bowler may bowl more than 4 overs (20% of total innings overs).',
+        variationNotice: 'ICC T20 Quota: Maximum 4.0 overs per bowler (20% innings limit).',
+        listTag: 'Max 4 Ov'
+      },
+      TIMED_OUT: {
+        law: 'ICC T20 Clause 31.1.1',
+        summary: 'Incoming batter must be in position to take guard or for non-striker to be ready within 90 seconds of the fall of previous wicket.',
+        variationNotice: 'ICC T20 Clock: Strict 90 seconds timer for incoming batter.',
+        listTag: '90s Limit'
+      },
+      SLOW_OVER_RATE: {
+        law: 'ICC T20 Clause 12.8 & Clause 41',
+        summary: 'In-match penalty: If final over not commenced by cut-off time, one additional fielder must be brought inside the 30-yard circle (max 4 outside instead of 5).',
+        variationNotice: 'ICC In-Match Penalty: Additional fielder brought inside 30-yard circle + stop clock rules.',
+        listTag: 'Stop Clock'
+      }
+    }
+  },
+  BCCI_DOMESTIC: {
+    name: 'BCCI Domestic (SMAT)',
+    authority: 'Board of Control for Cricket in India (Syed Mushtaq Ali Trophy)',
+    formatTitle: 'BCCI SMAT Domestic (20.0 Ov)',
+    bouncerLimit: '2 Bouncers / Over',
+    bouncersAllowedPerOver: 2,
+    freeHitActive: true,
+    bowlerMaxQuota: '4.0 Ov (SMAT)',
+    timedOutSeconds: 90,
+    badge: 'BCCI SMAT Regulations: 2 Bouncers Per Over Allowed',
+    description: 'BCCI Clause 41.6 allows TWO short-pitched bouncers per over (3rd is No Ball + Free Hit). Impact Player substitutions permitted. Mandatory Free Hit on No Balls.',
+    rulesModifications: {
+      BOUNCER_LIMIT: {
+        law: 'BCCI Domestic (SMAT) Clause 41.6',
+        summary: 'BCCI Syed Mushtaq Ali Trophy permits TWO short-pitched deliveries per over! Bowlers can deliver 2 bouncers before incurring a penalty. A third bouncer is called No Ball + Free Hit.',
+        decisionProcess: [
+          '1. Umpire signals 1 bouncer used after first short-pitched ball above shoulder (one hand on shoulder).',
+          '2. Umpire signals 2 bouncers used after second short-pitched ball (two fingers on shoulder).',
+          '3. If bowler delivers a third bouncer in same over: Call & signal No Ball immediately.',
+          '4. Award +1 No Ball penalty run, signal Free Hit for next delivery, and caution bowler.'
+        ],
+        variationNotice: '⚡ BCCI SMAT SPECIAL: 2 bouncers per over are legally permitted! Only 3rd bouncer is a No Ball + Free Hit.',
+        listTag: '⚡ 2 Bouncers'
+      },
+      FREE_HIT: {
+        law: 'BCCI Domestic Clause 21.19',
+        summary: 'Mandatory Free Hit on all No Balls. Batter cannot be dismissed except run out, hit the ball twice, or obstructing the field.',
+        variationNotice: 'BCCI Rule: Free Hit active for all No Balls.',
+        listTag: 'Free Hit'
+      },
+      BOWLER_OVER_LIMIT: {
+        law: 'BCCI Domestic Clause 13.8',
+        summary: 'Maximum 4.0 overs per bowler. If an Impact Player is introduced to bowl, they may bowl up to 4 overs provided they have not already bowled.',
+        variationNotice: 'BCCI Rule: Max 4 overs per bowler; Impact Player quota provisions apply.',
+        listTag: 'Impact Quota'
+      },
+      TIMED_OUT: {
+        law: 'BCCI Domestic Clause 31.1',
+        summary: 'Incoming batter has 90 seconds to take guard at the crease.',
+        variationNotice: 'BCCI T20 Clock: 90 seconds limit for incoming batter.',
+        listTag: '90s Limit'
+      },
+      DLS_METHOD: {
+        law: 'BCCI VJD / DLS Playing Conditions',
+        summary: 'BCCI matches may employ the VJD (V. Jayadevan) System or DLS for target recalculation during rain interruptions.',
+        variationNotice: 'BCCI Rain Rule: VJD Method or DLS standard adopted by BCCI match operations.',
+        listTag: 'VJD / DLS'
+      }
+    }
+  },
+  MCC_TRADITIONAL: {
+    name: 'MCC 42 Laws',
+    authority: 'Marylebone Cricket Club (MCC Laws of Cricket - 2017 Code 4th Edition 2026)',
+    formatTitle: 'MCC 42 Laws (Multi-Day / Unlimited Ov)',
+    bouncerLimit: 'Law 41.6 Discretion',
+    bouncersAllowedPerOver: 'SUBJECTIVE',
+    freeHitActive: false,
+    bowlerMaxQuota: 'Unlimited (Law 13)',
+    timedOutSeconds: 180,
+    badge: 'Pure MCC 42 Laws Code (No Limited-Overs Modifications)',
+    description: 'Pure Marylebone Cricket Club Code: Unlimited overs per bowler (Law 13). NO Free Hit (Law 21). Bouncer aggression judged subjectively by umpire under Law 41.6. 180s timed out.',
+    rulesModifications: {
+      BOUNCER_LIMIT: {
+        law: 'MCC Law 41.6 (Dangerous & Unfair Bowling)',
+        summary: 'In pure MCC Laws, there is NO fixed mechanical limit of 1 or 2 bouncers. Bowling of short-pitched deliveries is governed by umpire subjective judgment of safety, intimidation, and repeat aggression.',
+        decisionProcess: [
+          '1. Standing umpire assesses whether repetition of short-pitched deliveries is dangerous and unfair based on relative skill of striker.',
+          '2. If judged dangerous: Umpire calls & signals Dead Ball or No Ball.',
+          '3. Umpire cautions bowler and informs bowling captain.',
+          '4. Second offense: Final warning. Third offense: Suspend bowler from bowling for remainder of innings.'
+        ],
+        runsExtras: '+1 No Ball run (NO Free Hit awarded in pure MCC Laws)',
+        variationNotice: '🏛️ MCC PURE CODE: No mechanical bouncer limit. Governed entirely by standing umpire discretion under Law 41.6. No Free Hit.',
+        listTag: '🏛️ Law 41.6'
+      },
+      FREE_HIT: {
+        law: 'MCC Law 21 (No Ball - Pure Code)',
+        summary: '⚠️ FREE HIT DOES NOT EXIST in the MCC 42 Laws! Free Hit is strictly an ICC / Board limited-overs tournament playing condition. Under pure MCC Law 21, a No Ball incurs a 1-run penalty and must be re-bowled, with normal dismissal laws applying next ball.',
+        runsExtras: '+1 penalty run only (Delivery must be re-bowled)',
+        decisionProcess: [
+          '1. Umpire calls & signals No Ball for front-foot or illegal delivery.',
+          '2. Award +1 extra run to the batting team.',
+          '3. Delivery does NOT count as a legal ball and must be re-bowled.',
+          '4. Standard dismissal rules apply on the next ball (NO Free Hit).'
+        ],
+        dismissalConsequences: 'Standard dismissals apply on subsequent delivery. Free Hit does not exist in MCC Code.',
+        variationNotice: '🚫 PURE MCC LAWS NOTICE: Law 21 does NOT contain Free Hits. Free Hit is a limited-overs tournament condition only.',
+        listTag: '🚫 No Free Hit'
+      },
+      BOWLER_OVER_LIMIT: {
+        law: 'MCC Law 13 (The Over)',
+        summary: 'Under MCC Law 13, there is NO limit to how many overs a bowler may bowl in an innings. The only restriction is Law 13.7: a bowler shall not bowl two consecutive overs, or parts thereof, in the same innings.',
+        decisionProcess: [
+          '1. Bowler may bowl as many overs as captain assigns throughout innings.',
+          '2. Check Law 13.7: Bowler must not bowl two consecutive overs from either end.',
+          '3. Umpire ensures bowler changes ends after an over completes.'
+        ],
+        runsExtras: '0 runs',
+        variationNotice: '🏛️ MCC PURE CODE: Unlimited overs per bowler. Law 13.7 strictly prohibits consecutive overs only.',
+        listTag: '🏛️ Unlimited'
+      },
+      TIMED_OUT: {
+        law: 'MCC Law 31.1 (Timed Out)',
+        summary: 'Incoming batter is allowed 3 minutes (180 seconds) from dismissal of previous wicket to step onto the field and be ready to receive ball.',
+        decisionProcess: [
+          '1. Previous wicket falls or batter retires.',
+          '2. Official 3-minute (180s) timer starts.',
+          '3. If incoming batter fails to take crease ready to receive ball within 3 minutes: Bowler team appeals.',
+          '4. Umpire upholds appeal: Batter dismissed Timed Out.'
+        ],
+        variationNotice: 'MCC Law 31.1: 3 minutes (180 seconds) allowed for incoming batter in multi-day cricket.',
+        listTag: '180s Clock'
+      },
+      POWERPLAY_RESTRICTIONS: {
+        law: 'MCC Law 28 (The Fielder)',
+        summary: 'MCC Law 28 does NOT define a 30-yard fielding circle or powerplays. Only Law 28.4 applies: at the instant of delivery, there shall not be more than 2 fielders on the leg side behind the popping crease.',
+        decisionProcess: [
+          '1. Umpire checks field placement at instant of bowler delivery stride.',
+          '2. Verify no more than 2 fielders behind popping crease on leg side (Law 28.4).',
+          '3. If breached: Call & signal No Ball immediately.'
+        ],
+        variationNotice: '🏛️ MCC PURE CODE: No 30-yard circle or powerplays exist in pure Law 28. Only leg-side 2-fielder limit behind crease.',
+        listTag: '🏛️ Law 28.4'
+      },
+      SUPER_OVER: {
+        law: 'MCC Law 16 (The Result)',
+        summary: 'Under MCC Law 16, a match where scores are equal upon completion of play is officially declared a TIE. Super Overs are tournament playing conditions not part of the fundamental 42 Laws.',
+        variationNotice: '🏛️ MCC PURE CODE: Result is recorded as a Tie or Draw under Law 16.',
+        listTag: '🏛️ Law 16 Tie'
+      },
+      DLS_METHOD: {
+        law: 'MCC Law 16.1 & 16.2',
+        summary: 'Pure MCC laws do not include algorithmic target adjustments like DLS. Rain interruptions are governed by agreed playing hours and intervals.',
+        variationNotice: '🏛️ MCC PURE CODE: Law 16 provides for agreed match duration without algorithmic target recalculation.',
+        listTag: '🏛️ Law 16'
+      }
+    }
+  },
+  TNCA_LEAGUE: {
+    name: 'TNCA League Conditions',
+    authority: 'Tamil Nadu Cricket Association (TNCA League Bylaws & Division Rules)',
+    formatTitle: 'TNCA League Division (20.0 Ov)',
+    bouncerLimit: '1 Bouncer / Over',
+    bouncersAllowedPerOver: 1,
+    freeHitActive: true,
+    bowlerMaxQuota: '4.0 Ov (Division Limit)',
+    timedOutSeconds: 120,
+    badge: 'TNCA League Regulations Active (Strict Conduct Codes)',
+    description: 'TNCA Sanctioned League Rules: 1 short-pitched bouncer per over. Max 4.0 overs per bowler. Mandatory Free Hit. 120s incoming batter limit. Disciplinary violations reported to TNCA Honorary Secretary.',
+    rulesModifications: {
+      BOUNCER_LIMIT: {
+        law: 'TNCA League Clause 41.6',
+        summary: 'In TNCA Sanctioned League matches, maximum of ONE short-pitched delivery above shoulder allowed per over. Second bouncer called No Ball + Free Hit + formal umpire caution.',
+        decisionProcess: [
+          '1. Umpire signals 1 bouncer used for the over (one hand on shoulder).',
+          '2. If second bouncer delivered in same over: Call & signal No Ball.',
+          '3. Award +1 No Ball penalty run and activate Free Hit for next delivery.',
+          '4. Umpires log incident in TNCA Match Operations report.'
+        ],
+        variationNotice: 'TNCA League Rule: Exactly 1 bouncer permitted per over. 2nd is No Ball + Free Hit.',
+        listTag: 'TNCA 1 Bouncer'
+      },
+      FREE_HIT: {
+        law: 'TNCA League Playing Condition 21.19',
+        summary: 'Mandatory Free Hit on all No Balls in TNCA limited-overs league matches. Batter immune from Bowled, Caught, LBW, Stumped, Hit Wicket.',
+        variationNotice: 'TNCA League: Free Hit active for all No Balls.',
+        listTag: 'Free Hit'
+      },
+      BOWLER_OVER_LIMIT: {
+        law: 'TNCA League Bylaw 13.8',
+        summary: 'In 20-over league matches, no bowler may bowl more than 4 overs (in 50-over league matches, quota is 10 overs).',
+        variationNotice: 'TNCA Division Limit: 4.0 overs per bowler in 20-over matches (10.0 in 50-over league).',
+        listTag: 'TNCA 4 Ov'
+      },
+      TIMED_OUT: {
+        law: 'TNCA League Clause 31.1',
+        summary: 'Incoming batter must be ready to take guard within 120 seconds (2 minutes) of previous wicket falling.',
+        decisionProcess: [
+          '1. Previous batter dismissed.',
+          '2. 120-second (2 min) stopwatch countdown begins.',
+          '3. Incoming batter must step onto the pitch and be ready within 120 seconds.',
+          '4. If batter exceeds 120s without umpire permission: Umpire upholds appeal for Timed Out.'
+        ],
+        variationNotice: 'TNCA League Clock: 120 seconds (2 minutes) incoming batter time limit.',
+        listTag: '120s Clock'
+      },
+      PLAYER_MISCONDUCT: {
+        law: 'TNCA Code of Conduct Level 1-4',
+        summary: 'In addition to MCC Law 42 penalty runs, all Level 1-4 breaches must be formally reported on official TNCA disciplinary scoresheets for review by TNCA Disciplinary Committee.',
+        variationNotice: 'TNCA Conduct Rule: Incident report submitted directly to TNCA Disciplinary Board.',
+        listTag: 'TNCA Conduct'
+      }
+    }
+  }
+};
 
 export interface CricketRulesModalProps {
   visible: boolean;
@@ -866,7 +1139,8 @@ export default function CricketRulesModal({
 
   useEffect(() => {
     if (visible && selectedRuleId === 'TIMED_OUT') {
-      setTimedOutSeconds(competitionFormat === 'ICC_T20' ? 90 : 120);
+      const initialSeconds = COMPETITION_CONFIGS[competitionFormat].timedOutSeconds;
+      setTimedOutSeconds(initialSeconds);
       const timer = setInterval(() => {
         setTimedOutSeconds(prev => (prev > 0 ? prev - 1 : 0));
       }, 1000);
@@ -911,8 +1185,26 @@ export default function CricketRulesModal({
   }, [selectedCategory, searchQuery]);
 
   const selectedRule = useMemo(() => {
-    return ALL_RULES_CATALOG.find(r => r.id === selectedRuleId) || ALL_RULES_CATALOG[0];
-  }, [selectedRuleId]);
+    const baseRule = ALL_RULES_CATALOG.find(r => r.id === selectedRuleId) || ALL_RULES_CATALOG[0];
+    const compConfig = COMPETITION_CONFIGS[competitionFormat];
+    const mod = compConfig.rulesModifications?.[baseRule.id];
+    if (!mod) {
+      return {
+        ...baseRule,
+        competitionVariation: null
+      };
+    }
+    return {
+      ...baseRule,
+      law: mod.law || baseRule.law,
+      summary: mod.summary || baseRule.summary,
+      decisionProcess: mod.decisionProcess || baseRule.decisionProcess,
+      runsExtras: mod.runsExtras || baseRule.runsExtras,
+      legalBall: mod.legalBall || baseRule.legalBall,
+      dismissalConsequences: mod.dismissalConsequences || baseRule.dismissalConsequences,
+      competitionVariation: mod.variationNotice
+    };
+  }, [selectedRuleId, competitionFormat]);
 
   // Execute Umpire Decision
   const handleConfirmDecision = async () => {
@@ -1020,24 +1312,75 @@ export default function CricketRulesModal({
               </View>
             </View>
 
+            {/* ACTIVE COMPETITION REGULATIONS SUMMARY BANNER */}
+            <View style={styles.competitionSummaryBar}>
+              <View style={styles.competitionBadgeTag}>
+                <Text style={styles.competitionBadgeTagText}>
+                  {COMPETITION_CONFIGS[competitionFormat].badge}
+                </Text>
+              </View>
+              <Text style={styles.competitionSummaryText}>
+                {COMPETITION_CONFIGS[competitionFormat].description}
+              </Text>
+            </View>
+
             {/* REAL-TIME MATCH CONTEXT STRIP */}
             <View style={styles.liveMatchContextStrip}>
               <View style={styles.contextItem}>
                 <Text style={styles.contextLabel}>FORMAT:</Text>
-                <Text style={styles.contextValue}>{ruleContext.currentFormat || 'T20 (20.0 Overs)'}</Text>
+                <Text style={styles.contextValue}>
+                  {COMPETITION_CONFIGS[competitionFormat].formatTitle}
+                </Text>
               </View>
               {ruleContext.bowlerName && (
                 <View style={styles.contextItem}>
                   <Text style={styles.contextLabel}>BOWLER:</Text>
                   <Text style={styles.contextValue}>
-                    {ruleContext.bowlerName} ({ruleContext.oversBowled || '0.0'}/{ruleContext.maxQuota || 4} Ov)
+                    {ruleContext.bowlerName} ({ruleContext.oversBowled || '0.0'}
+                    {competitionFormat === 'MCC_TRADITIONAL'
+                      ? ' Ov • Unlimited'
+                      : `/${COMPETITION_CONFIGS[competitionFormat].bowlerMaxQuota}`}
+                    )
                   </Text>
                 </View>
               )}
               <View style={styles.contextItem}>
+                <Text style={styles.contextLabel}>BOUNCER LIMIT:</Text>
+                <Text
+                  style={[
+                    styles.contextValue,
+                    {
+                      color:
+                        competitionFormat === 'BCCI_DOMESTIC'
+                          ? '#d97706'
+                          : competitionFormat === 'MCC_TRADITIONAL'
+                          ? '#7c3aed'
+                          : '#0284c7'
+                    }
+                  ]}
+                >
+                  {COMPETITION_CONFIGS[competitionFormat].bouncerLimit}
+                </Text>
+              </View>
+              <View style={styles.contextItem}>
                 <Text style={styles.contextLabel}>FREE HIT:</Text>
-                <Text style={[styles.contextValue, { color: ruleContext.count ? '#dc2626' : '#16a34a' }]}>
-                  {ruleContext.count ? '⚡ Active' : 'Normal'}
+                <Text
+                  style={[
+                    styles.contextValue,
+                    {
+                      color: !COMPETITION_CONFIGS[competitionFormat].freeHitActive
+                        ? '#dc2626'
+                        : ruleContext.count
+                        ? '#dc2626'
+                        : '#16a34a'
+                    }
+                  ]}
+                >
+                  {!COMPETITION_CONFIGS[competitionFormat].freeHitActive
+                    ? '🚫 Inactive (Not in MCC Code)'
+                    : ruleContext.count
+                    ? '⚡ Active'
+                    : 'Normal (Active on NB)'}
                 </Text>
               </View>
               {Array.isArray(ruleContext.suspendedBowlers) && ruleContext.suspendedBowlers.length > 0 && (
@@ -1150,6 +1493,7 @@ export default function CricketRulesModal({
                   <ScrollView showsVerticalScrollIndicator={false}>
                     {filteredRules.map(rule => {
                       const isSelected = selectedRule.id === rule.id;
+                      const compMod = COMPETITION_CONFIGS[competitionFormat]?.rulesModifications?.[rule.id];
                       return (
                         <TouchableOpacity
                           key={rule.id}
@@ -1159,11 +1503,18 @@ export default function CricketRulesModal({
                         >
                           <Text style={{ fontSize: 16 }}>{rule.icon}</Text>
                           <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text style={[styles.ruleListItemName, isSelected && styles.ruleListItemNameActive]} numberOfLines={1}>
-                              {rule.name}
-                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                              <Text style={[styles.ruleListItemName, isSelected && styles.ruleListItemNameActive]} numberOfLines={1}>
+                                {rule.name}
+                              </Text>
+                              {compMod?.listTag && (
+                                <View style={styles.compModTag}>
+                                  <Text style={styles.compModTagText}>{compMod.listTag}</Text>
+                                </View>
+                              )}
+                            </View>
                             <Text style={styles.ruleListItemLaw} numberOfLines={1}>
-                              {rule.law.split('/')[0]}
+                              {compMod?.law ? compMod.law.split('/')[0] : rule.law.split('/')[0]}
                             </Text>
                           </View>
                         </TouchableOpacity>
@@ -1185,8 +1536,8 @@ export default function CricketRulesModal({
                         </View>
                       </View>
 
-                      {/* UMPIRE REQUIREMENT PILL */}
-                      <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      {/* UMPIRE REQUIREMENT PILL & ACTIVE COMPETITION BADGE */}
+                      <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <View
                           style={[
                             styles.requirementBadge,
@@ -1204,7 +1555,25 @@ export default function CricketRulesModal({
                         <View style={styles.categoryBadge}>
                           <Text style={styles.categoryBadgeText}>{selectedRule.category}</Text>
                         </View>
+                        <View style={styles.activeCompBadge}>
+                          <Text style={styles.activeCompBadgeText}>
+                            🏆 {COMPETITION_CONFIGS[competitionFormat].name}
+                          </Text>
+                        </View>
                       </View>
+
+                      {/* COMPETITION VARIATION NOTICE BANNER (if modified) */}
+                      {selectedRule.competitionVariation && (
+                        <View style={styles.compVariationBanner}>
+                          <Text style={styles.compVariationIcon}>⚡</Text>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.compVariationTitle}>
+                              {COMPETITION_CONFIGS[competitionFormat].name.toUpperCase()} RULE ADAPTATION:
+                            </Text>
+                            <Text style={styles.compVariationDesc}>{selectedRule.competitionVariation}</Text>
+                          </View>
+                        </View>
+                      )}
 
                       <Text style={styles.detailSummary}>{selectedRule.summary}</Text>
                     </View>
@@ -1235,6 +1604,7 @@ export default function CricketRulesModal({
                         setDidBattersCross,
                         calculateRunOutVictim,
                         timedOutSeconds,
+                        competitionFormat,
                         ruleContext
                       })}
                     </View>
@@ -1329,7 +1699,7 @@ export default function CricketRulesModal({
 // VISUAL SVG CRICKET FIELD DIAGRAM RENDERER
 // ─────────────────────────────────────────────────────────────────────────────
 function renderRuleDiagram(diagramType: string, isMobile: boolean, state: any) {
-  const { brokenEnd, setBrokenEnd, didBattersCross, setDidBattersCross, calculateRunOutVictim, timedOutSeconds, ruleContext } = state;
+  const { brokenEnd, setBrokenEnd, didBattersCross, setDidBattersCross, calculateRunOutVictim, timedOutSeconds, competitionFormat, ruleContext } = state;
 
   switch (diagramType) {
     case 'FRONT_FOOT':
@@ -1394,11 +1764,13 @@ function renderRuleDiagram(diagramType: string, isMobile: boolean, state: any) {
         </View>
       );
 
-    case 'BOUNCER':
+    case 'BOUNCER': {
+      const isBcci = competitionFormat === 'BCCI_DOMESTIC';
+      const isMcc = competitionFormat === 'MCC_TRADITIONAL';
       return (
         <View style={styles.diagramBox}>
           <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
-            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#15803d" />
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill={isBcci ? '#14532d' : isMcc ? '#312e81' : '#15803d'} />
             <Rect x="40" y="20" width="380" height="100" fill="#e2d2b5" />
             {/* Batter */}
             <Circle cx="370" cy="40" r="10" fill="#0284c7" />
@@ -1406,12 +1778,25 @@ function renderRuleDiagram(diagramType: string, isMobile: boolean, state: any) {
             {/* Shoulder and Head lines */}
             <Line x1="100" y1="52" x2="400" y2="52" stroke="#f59e0b" strokeWidth="2" strokeDasharray="4,4" />
             <Line x1="100" y1="35" x2="400" y2="35" stroke="#ef4444" strokeWidth="2" strokeDasharray="4,4" />
-            <SvgText x="120" y="48" fill="#d97706" fontSize="10" fontWeight="bold">Shoulder Height (Max 1 Bouncer/Over)</SvgText>
-            <SvgText x="120" y="30" fill="#dc2626" fontSize="10" fontWeight="bold">Head Height (Above Head = Wide)</SvgText>
+            <SvgText x="110" y="48" fill="#d97706" fontSize="10" fontWeight="bold">
+              {isBcci
+                ? 'Shoulder Height (BCCI SMAT: Max 2 Bouncers/Over)'
+                : isMcc
+                ? 'Shoulder Height (MCC: Law 41.6 Umpire Discretion)'
+                : 'Shoulder Height (Max 1 Bouncer/Over)'}
+            </SvgText>
+            <SvgText x="110" y="30" fill="#dc2626" fontSize="10" fontWeight="bold">Head Height (Above Head = Wide)</SvgText>
           </Svg>
-          <Text style={styles.diagramCaption}>T20 RULE: 1ST BOUNCER LEGAL • 2ND BOUNCER = NO BALL + FREE HIT</Text>
+          <Text style={styles.diagramCaption}>
+            {isBcci
+              ? 'BCCI SMAT SPECIAL: 2 BOUNCERS LEGAL PER OVER • 3RD BOUNCER = NO BALL + FREE HIT'
+              : isMcc
+              ? 'MCC LAW 41.6: NO MECHANICAL LIMIT • GOVERNED BY UMPIRE DANGER ASSESSMENT'
+              : 'T20 RULE: 1ST BOUNCER LEGAL • 2ND BOUNCER = NO BALL + FREE HIT'}
+          </Text>
         </View>
       );
+    }
 
     case 'LBW':
       return (
@@ -1510,34 +1895,61 @@ function renderRuleDiagram(diagramType: string, isMobile: boolean, state: any) {
         </View>
       );
 
-    case 'POWERPLAY':
+    case 'POWERPLAY': {
+      const isMccPowerplay = competitionFormat === 'MCC_TRADITIONAL';
       return (
         <View style={styles.diagramBox}>
           <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
             {/* Outer Ground */}
             <Rect x="10" y="10" width="440" height="120" rx="12" fill="#15803d" />
             {/* 30-Yard Inner Oval */}
-            <Circle cx="230" cy="70" r="50" fill="#16a34a" stroke="#ffffff" strokeWidth="2.5" strokeDasharray="5,4" />
+            <Circle cx="230" cy="70" r="50" fill="#16a34a" stroke="#ffffff" strokeWidth="2.5" strokeDasharray={isMccPowerplay ? '3,3' : '5,4'} />
             {/* Pitch */}
             <Rect x="215" y="45" width="30" height="50" fill="#e2d2b5" rx="3" />
-            <SvgText x="175" y="65" fill="#ffffff" fontSize="10" fontWeight="bold">30y Oval</SvgText>
-            <SvgText x="35" y="35" fill="#fef08a" fontSize="11" fontWeight="bold">Overs 1–6 (P1): Max 2 Outside</SvgText>
-            <SvgText x="35" y="115" fill="#fef08a" fontSize="11" fontWeight="bold">Overs 7–20: Max 5 Outside</SvgText>
+            {isMccPowerplay ? (
+              <>
+                <SvgText x="90" y="32" fill="#fef08a" fontSize={11} fontWeight="bold">
+                  MCC LAW 28: NO 30-YARD POWERPLAY CIRCLE
+                </SvgText>
+                <SvgText x="50" y="115" fill="#ffffff" fontSize={10} fontWeight="bold">
+                  Pure Law 28.4: Max 2 fielders behind popping crease on leg side at release
+                </SvgText>
+              </>
+            ) : (
+              <>
+                <SvgText x="175" y="65" fill="#ffffff" fontSize={10} fontWeight="bold">30y Oval</SvgText>
+                <SvgText x="35" y="35" fill="#fef08a" fontSize={11} fontWeight="bold">Overs 1–6 (P1): Max 2 Outside</SvgText>
+                <SvgText x="35" y="115" fill="#fef08a" fontSize={11} fontWeight="bold">Overs 7–20: Max 5 Outside</SvgText>
+              </>
+            )}
           </Svg>
-          <Text style={styles.diagramCaption}>VIOLATION AT RELEASE = NO BALL + FREE HIT</Text>
+          <Text style={styles.diagramCaption}>
+            {isMccPowerplay
+              ? 'MCC CODE LAW 28: POWERPLAY IS A LIMITED-OVERS PLAYING CONDITION, NOT IN PURE LAWS'
+              : 'VIOLATION AT RELEASE = NO BALL + FREE HIT'}
+          </Text>
         </View>
       );
+    }
 
-    case 'TIMED_OUT':
+    case 'TIMED_OUT': {
+      const isMcc = competitionFormat === 'MCC_TRADITIONAL';
+      const isTnca = competitionFormat === 'TNCA_LEAGUE';
+      const label = isMcc
+        ? 'OFFICIAL 180-SECOND (3-MIN) COUNTDOWN (MCC LAW 31.1)'
+        : isTnca
+        ? 'OFFICIAL 120-SECOND (2-MIN) COUNTDOWN (TNCA LEAGUE)'
+        : 'OFFICIAL 90-SECOND COUNTDOWN (ICC & BCCI T20 CLAUSE 31.1)';
       return (
         <View style={styles.diagramBox}>
           <View style={styles.stopwatchBox}>
             <Text style={styles.stopwatchTime}>{timedOutSeconds}s</Text>
-            <Text style={styles.stopwatchLabel}>OFFICIAL 90-SECOND COUNTDOWN TO TAKE CREASE</Text>
+            <Text style={styles.stopwatchLabel}>{label}</Text>
           </View>
-          <Text style={styles.diagramCaption}>LAW 40: INCOMING BATTER MUST BE AT CREASE READY FOR DELIVERY BEFORE 0s</Text>
+          <Text style={styles.diagramCaption}>LAW 31: INCOMING BATTER MUST BE AT CREASE READY FOR DELIVERY BEFORE 0s</Text>
         </View>
       );
+    }
 
     case 'DANGEROUS':
       return (
@@ -1579,25 +1991,51 @@ function renderRuleDiagram(diagramType: string, isMobile: boolean, state: any) {
         </View>
       );
 
-    case 'QUOTA':
+    case 'QUOTA': {
+      const isMccQuota = competitionFormat === 'MCC_TRADITIONAL';
       return (
         <View style={styles.diagramBox}>
           <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
-            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#0f2452" />
-            <SvgText x="130" y="32" fill="#fef08a" fontSize="11" fontWeight="bold">BOWLER QUOTA METER (20-OVER T20: MAX 4.0 OVERS)</SvgText>
-            {[1, 2, 3, 4].map((ov, idx) => (
-              <G key={idx}>
-                <Rect x={65 + idx * 85} y="44" width="75" height="42" rx="6" fill={idx < 3 ? '#22c55e' : '#ef4444'} />
-                <SvgText x={80 + idx * 85} y="64" fill="#ffffff" fontSize="11" fontWeight="bold">Over {ov}</SvgText>
-                <SvgText x={75 + idx * 85} y="78" fill="#ffffff" fontSize="8.5">{idx < 3 ? 'Completed' : 'MAX QUOTA'}</SvgText>
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill={isMccQuota ? '#1e1b4b' : '#0f2452'} />
+            <SvgText x={isMccQuota ? 60 : 130} y="32" fill="#fef08a" fontSize={11} fontWeight="bold">
+              {isMccQuota
+                ? 'MCC LAW 13: UNLIMITED BOWLER OVERS (NO QUOTA IN PURE CODE)'
+                : 'BOWLER QUOTA METER (20-OVER T20: MAX 4.0 OVERS)'}
+            </SvgText>
+            {isMccQuota ? (
+              <G>
+                <Rect x="60" y="44" width="340" height="42" rx="6" fill="#312e81" />
+                <SvgText x="85" y="66" fill="#ffffff" fontSize={11} fontWeight="bold">
+                  ✓ Unlimited overs allowed per bowler in multi-day matches
+                </SvgText>
+                <SvgText x="90" y="80" fill="#c7d2fe" fontSize={9.5}>
+                  Law 13.7 restriction: Bowler cannot bowl consecutive overs from either end
+                </SvgText>
               </G>
-            ))}
-            <Rect x="65" y="98" width="330" height="22" rx="4" fill="rgba(239, 68, 68, 0.25)" stroke="#ef4444" strokeWidth="1" />
-            <SvgText x="95" y="113" fill="#fca5a5" fontSize="10" fontWeight="bold">⚠️ Over limit reached: Bowler cannot bowl again in this innings</SvgText>
+            ) : (
+              [1, 2, 3, 4].map((ov, idx) => (
+                <G key={idx}>
+                  <Rect x={65 + idx * 85} y="44" width="75" height="42" rx="6" fill={idx < 3 ? '#22c55e' : '#ef4444'} />
+                  <SvgText x={80 + idx * 85} y="64" fill="#ffffff" fontSize="11" fontWeight="bold">Over {ov}</SvgText>
+                  <SvgText x={75 + idx * 85} y="78" fill="#ffffff" fontSize="8.5">{idx < 3 ? 'Completed' : 'MAX QUOTA'}</SvgText>
+                </G>
+              ))
+            )}
+            <Rect x="60" y="98" width="340" height="22" rx="4" fill={isMccQuota ? 'rgba(99, 102, 241, 0.25)' : 'rgba(239, 68, 68, 0.25)'} stroke={isMccQuota ? '#818cf8' : '#ef4444'} strokeWidth={1} />
+            <SvgText x={isMccQuota ? 75 : 95} y="113" fill={isMccQuota ? '#e0e7ff' : '#fca5a5'} fontSize={10} fontWeight="bold">
+              {isMccQuota
+                ? 'ℹ️ MCC 42 Laws enforce consecutive overs rule (Law 13.7) only'
+                : '⚠️ Over limit reached: Bowler cannot bowl again in this innings'}
+            </SvgText>
           </Svg>
-          <Text style={styles.diagramCaption}>ICC T20 CLAUSE 13.8: NO BOWLER MAY BOWL MORE THAN 20% OF TOTAL SCHEDULED INNINGS OVERS</Text>
+          <Text style={styles.diagramCaption}>
+            {isMccQuota
+              ? 'MCC LAW 13: BOWLER MAY BOWL WITHOUT QUOTA RESTRICTIONS (ONLY CONSECUTIVE RESTRICTED)'
+              : 'ICC T20 CLAUSE 13.8: NO BOWLER MAY BOWL MORE THAN 20% OF TOTAL SCHEDULED INNINGS OVERS'}
+          </Text>
         </View>
       );
+    }
 
     case 'HIT_WICKET':
       return (
@@ -1953,23 +2391,38 @@ function renderRuleDiagram(diagramType: string, isMobile: boolean, state: any) {
         </View>
       );
 
-    case 'FREE_HIT':
+    case 'FREE_HIT': {
+      const isMccFreeHit = competitionFormat === 'MCC_TRADITIONAL';
       return (
         <View style={styles.diagramBox}>
           <Svg width={isMobile ? 300 : 460} height={140} viewBox="0 0 460 140">
-            <Rect x="10" y="10" width="440" height="120" rx="8" fill="#064e3b" />
-            <Circle cx="80" cy="70" r="28" fill="#059669" />
-            <SvgText x="68" y="78" fill="#ffffff" fontSize="22">⚡</SvgText>
-            <Rect x="130" y="25" width="300" height="34" rx="6" fill="#047857" />
-            <SvgText x="150" y="47" fill="#fef08a" fontSize="12" fontWeight="bold">⚡ FREE HIT ACTIVE ON NEXT DELIVERY</SvgText>
+            <Rect x="10" y="10" width="440" height="120" rx="8" fill={isMccFreeHit ? '#7f1d1d' : '#064e3b'} />
+            <Circle cx="80" cy="70" r="28" fill={isMccFreeHit ? '#b91c1c' : '#059669'} />
+            <SvgText x="68" y="78" fill="#ffffff" fontSize={22}>{isMccFreeHit ? '🚫' : '⚡'}</SvgText>
+            <Rect x="130" y="25" width="300" height="34" rx="6" fill={isMccFreeHit ? '#991b1b' : '#047857'} />
+            <SvgText x={isMccFreeHit ? 140 : 150} y="47" fill="#fef08a" fontSize={11} fontWeight="bold">
+              {isMccFreeHit ? '🚫 NO FREE HIT IN MCC 42 LAWS (LAW 21)' : '⚡ FREE HIT ACTIVE ON NEXT DELIVERY'}
+            </SvgText>
             <Rect x="130" y="66" width="300" height="52" rx="6" fill="#0f172a" />
-            <SvgText x="140" y="82" fill="#a7f3d0" fontSize="9.5">✓ Batter IMMUNE to: Bowled, Caught, LBW, Stumped, Hit Wicket</SvgText>
-            <SvgText x="140" y="96" fill="#f87171" fontSize="9.5">🛑 ONLY DISMISSAL PERMITTED: Run Out</SvgText>
-            <SvgText x="140" y="110" fill="#fef08a" fontSize="8.5">If Free Hit is Wide or No Ball, Free Hit carries over!</SvgText>
+            <SvgText x="140" y="84" fill={isMccFreeHit ? '#fca5a5' : '#a7f3d0'} fontSize={9.5}>
+              {isMccFreeHit
+                ? 'Pure MCC Law 21: +1 No Ball penalty run & re-bowl. Normal dismissals apply.'
+                : '✓ Batter IMMUNE to: Bowled, Caught, LBW, Stumped, Hit Wicket'}
+            </SvgText>
+            <SvgText x="140" y="104" fill="#fef08a" fontSize={9.5}>
+              {isMccFreeHit
+                ? 'Free Hit is strictly an ICC / Board Limited-Overs Playing Condition.'
+                : '✓ ONLY Run Out, Hit Ball Twice, Obstructing Field dismissals apply.'}
+            </SvgText>
           </Svg>
-          <Text style={styles.diagramCaption}>ICC CLAUSE 21.19: DELIVERY FOLLOWING A NO-BALL IS A FREE HIT; FIELDERS CANNOT CHANGE UNLESS BATTERS CROSSED</Text>
+          <Text style={styles.diagramCaption}>
+            {isMccFreeHit
+              ? 'MCC CODE LAW 21: FREE HIT IS NOT PART OF TRADITIONAL CRICKET LAWS'
+              : 'ICC & BCCI REGULATION: MANDATORY FREE HIT FOLLOWING ALL NO-BALL DELIVERIES'}
+          </Text>
         </View>
       );
+    }
 
     case 'OVER_COMPLETION':
       return (
@@ -2206,6 +2659,89 @@ const styles = StyleSheet.create({
   },
   compChipTextActive: {
     color: '#ffffff'
+  },
+  competitionSummaryBar: {
+    marginTop: 6,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap'
+  },
+  competitionBadgeTag: {
+    backgroundColor: '#005960',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4
+  },
+  competitionBadgeTagText: {
+    color: '#ffffff',
+    fontSize: 9.5,
+    fontWeight: '800'
+  },
+  competitionSummaryText: {
+    color: '#334155',
+    fontSize: 10,
+    fontWeight: '600',
+    flex: 1
+  },
+  activeCompBadge: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2
+  },
+  activeCompBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#1d4ed8'
+  },
+  compVariationBanner: {
+    marginTop: 8,
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    borderRadius: 6,
+    padding: 8,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8
+  },
+  compVariationIcon: {
+    fontSize: 14
+  },
+  compVariationTitle: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#92400e',
+    letterSpacing: 0.3
+  },
+  compVariationDesc: {
+    fontSize: 10.5,
+    color: '#78350f',
+    marginTop: 2,
+    lineHeight: 14,
+    fontWeight: '600'
+  },
+  compModTag: {
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#fcd34d',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3
+  },
+  compModTagText: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: '#92400e'
   },
   liveMatchContextStrip: {
     flexDirection: 'row',
