@@ -106,6 +106,31 @@ router.get('/profile', requirePlayerAuth, async (req, res) => {
  * Update allowed profile fields (batting style, bowling style, jersey number, mobile, taluk)
  * Modifying role, status, or credentials is strictly blocked.
  */
+
+/**
+ * POST /api/player/upload-photo
+ * Upload or update player profile photo and image path
+ */
+router.post('/upload-photo', requirePlayerAuth, async (req, res) => {
+  try {
+    const photo = req.body.photo || req.body.image || req.body.image_path || req.body.imagePath;
+    const updated = await playerService.updateProfile(req.user.id, req.user.email, { photo });
+    res.status(200).json({
+      success: true,
+      message: 'Profile photo uploaded successfully!',
+      photo: updated.photo,
+      image_path: updated.image_path,
+      profile: updated
+    });
+  } catch (err) {
+    const status = err.status || 400;
+    res.status(status).json({
+      success: false,
+      message: err.message || 'Photo upload failed'
+    });
+  }
+});
+
 router.put('/profile', requirePlayerAuth, async (req, res) => {
   try {
     const updated = await playerService.updateProfile(req.user.id, req.user.email, req.body);

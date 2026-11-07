@@ -106,13 +106,28 @@ currentUser = getCurrentUser();
 
 let currentSocket: Socket | null = null;
 
-export const setAuthToken = (newToken: string | null) => {
+export const setAuthToken = (newToken: string | null, role?: string) => {
   token = newToken;
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     if (newToken) {
       localStorage.setItem('auth_token', newToken);
-      localStorage.setItem('team_token', newToken);
-      localStorage.setItem('cfvd_admin_token', newToken);
+
+      const activeRole = (role || currentUser?.role || '').toUpperCase();
+      if (activeRole === 'ADMIN') {
+        localStorage.setItem('cfvd_admin_token', newToken);
+        localStorage.removeItem('team_token');
+      } else if (activeRole === 'COACH' || activeRole === 'TEAM') {
+        localStorage.setItem('team_token', newToken);
+        localStorage.removeItem('cfvd_admin_token');
+      } else {
+        // PLAYER or other roles: token is created and stored strictly as player auth_token.
+        // Never create or retain admin or team tokens.
+        localStorage.removeItem('team_token');
+        localStorage.removeItem('cfvd_admin_token');
+        try {
+          sessionStorage.removeItem('cfvd_admin_token');
+        } catch (_e) {}
+      }
     } else {
       localStorage.removeItem('auth_token');
       localStorage.removeItem('team_token');
@@ -129,10 +144,18 @@ export const setCurrentUser = (user: any) => {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     if (user) {
       localStorage.setItem('auth_user', JSON.stringify(user));
-      if (user.role === 'ADMIN') {
+      const activeRole = (user.role || '').toUpperCase();
+      if (activeRole === 'ADMIN') {
         localStorage.setItem('cfvd_admin_user', JSON.stringify(user));
+      } else {
+        localStorage.removeItem('cfvd_admin_user');
+        try {
+          sessionStorage.removeItem('cfvd_admin_user');
+        } catch (_e) {}
       }
-      if (user.role === 'COACH' || user.role === 'TEAM' || user.teamId) {
+
+      // ONLY set team_session for coach/team, NEVER for player!
+      if ((activeRole === 'COACH' || activeRole === 'TEAM') && user.teamId) {
         localStorage.setItem(
           'team_session',
           JSON.stringify({
@@ -143,6 +166,8 @@ export const setCurrentUser = (user: any) => {
             loginTime: new Date().toISOString()
           })
         );
+      } else {
+        localStorage.removeItem('team_session');
       }
     } else {
       localStorage.removeItem('auth_user');
@@ -281,7 +306,7 @@ export const ScorerApi = {
       body: JSON.stringify({ email, password, role, teamName })
     });
     if (res.token) {
-      setAuthToken(res.token);
+      setAuthToken(res.token, res.user?.role || role);
       if (res.user) setCurrentUser(res.user);
     }
     return res;
@@ -325,7 +350,7 @@ export const ScorerApi = {
       body: JSON.stringify({ email, otp, role: role || 'SCORER' })
     });
     if (res.token) {
-      setAuthToken(res.token);
+      setAuthToken(res.token, res.user?.role || role);
       if (res.user) setCurrentUser(res.user);
     }
     return res;
@@ -369,7 +394,7 @@ export const ScorerApi = {
       body: JSON.stringify(payload)
     });
     if (res.token) {
-      setAuthToken(res.token);
+      setAuthToken(res.token, res.user?.role || payload?.role);
       if (res.user) setCurrentUser(res.user);
     }
     return res;
@@ -397,7 +422,7 @@ export const ScorerApi = {
       body: JSON.stringify(payload)
     });
     if (res.token) {
-      setAuthToken(res.token);
+      setAuthToken(res.token, 'PLAYER');
       if (res.user) setCurrentUser(res.user);
     }
     return res;
@@ -419,7 +444,7 @@ export const ScorerApi = {
       body: JSON.stringify(payload)
     });
     if (res.token) {
-      setAuthToken(res.token);
+      setAuthToken(res.token, 'SCORER');
       if (res.user) setCurrentUser(res.user);
     }
     return res;
@@ -454,7 +479,7 @@ export const ScorerApi = {
       body: JSON.stringify(payload)
     });
     if (res.token) {
-      setAuthToken(res.token);
+      setAuthToken(res.token, 'UMPIRE');
       if (res.user) setCurrentUser(res.user);
     }
     return res;
@@ -475,7 +500,7 @@ export const ScorerApi = {
       body: JSON.stringify(payload)
     });
     if (res.token) {
-      setAuthToken(res.token);
+      setAuthToken(res.token, 'CONTENT');
       if (res.user) setCurrentUser(res.user);
     }
     return res;
@@ -498,7 +523,7 @@ export const ScorerApi = {
       body: JSON.stringify(payload)
     });
     if (res.token) {
-      setAuthToken(res.token);
+      setAuthToken(res.token, 'TEAM');
       if (res.user) setCurrentUser(res.user);
     }
     return res;
@@ -803,7 +828,7 @@ export const ScorerApi = {
       body: JSON.stringify({ email, password })
     });
     if (res.token) {
-      setAuthToken(res.token);
+      setAuthToken(res.token, 'ADMIN');
       if (res.user) setCurrentUser(res.user);
     }
     return res;
@@ -1133,7 +1158,7 @@ export const PlayerApi = {
       body: JSON.stringify({ nameOrEmail: identifier, otp })
     });
     if (res.token) {
-      setAuthToken(res.token);
+      setAuthToken(res.token, 'PLAYER');
       if (res.user) setCurrentUser(res.user);
     }
     return res;
@@ -1150,10 +1175,19 @@ export const PlayerApi = {
     jerseyNumber?: number;
     mobile?: string;
     taluk?: string;
+    photo?: string | null;
+    image_path?: string | null;
   }) => {
     return request('/player/profile', {
       method: 'PUT',
       body: JSON.stringify(updates)
+    });
+  },
+
+  uploadPhoto: async (photo: string) => {
+    return request('/player/upload-photo', {
+      method: 'POST',
+      body: JSON.stringify({ photo, image_path: photo })
     });
   },
 
@@ -1219,7 +1253,7 @@ export const TeamApi = {
       body: JSON.stringify({ coachEmail, otp })
     });
     if (res.token) {
-      setAuthToken(res.token);
+      setAuthToken(res.token, 'TEAM');
       if (res.user) setCurrentUser(res.user);
     }
     return res;

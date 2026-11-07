@@ -47,8 +47,12 @@ const UserSchema = new mongoose.Schema({
     category: { type: String, default: 'Senior Men' },
     club_choice: { type: String, default: '' },
     team_id: { type: String, default: null },
-    team_name: { type: String, default: null }
+    team_name: { type: String, default: null },
+    photo: { type: String, default: null },
+    image_path: { type: String, default: null }
   },
+  photo: { type: String, default: null },
+  image_path: { type: String, default: null },
   scorer_details: {
     certification_level: { type: String, default: 'District Certified' },
     taluk: { type: String, default: 'Virudhunagar' }
@@ -217,6 +221,8 @@ const PlayerSchema = new mongoose.Schema({
   jersey_number: { type: Number, default: 0 },
   batting_style: { type: String, default: 'Right Hand Bat' },
   bowling_style: { type: String, default: 'Right Arm Medium' },
+  photo: { type: String, default: null },
+  image_path: { type: String, default: null },
   status: { type: String, default: 'ACTIVE' },
   stats: {
     runs: { type: Number, default: 0 },
@@ -257,6 +263,8 @@ const TeamRegistrationSchema = new mongoose.Schema({
     email: { type: String, required: true, lowercase: true, trim: true },
     password_hash: { type: String, default: null },
     role: { type: String, default: 'BATTER' },
+    photo: { type: String, default: null },
+    image_path: { type: String, default: null },
     status: { type: String, default: 'PENDING' }
   }]
 }, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
@@ -489,6 +497,8 @@ const TeamPlayerSchema = new mongoose.Schema({
   player_name: { type: String, required: true },
   player_email: { type: String, required: true, lowercase: true, trim: true },
   player_role: { type: String, default: 'BATTER' },
+  photo: { type: String, default: null },
+  image_path: { type: String, default: null },
   created_at: { type: Date, default: Date.now }
 }, { timestamps: { createdAt: 'created_at' } });
 
