@@ -1,4 +1,4 @@
-/**
+﻿/**
  * src/screens/player/PlayerDashboardScreen.tsx
  *
  * Official Player Management Portal for Cricket Federation of Virudhunagar District (CFVD).
@@ -18,7 +18,8 @@ import {
   Modal,
   Alert,
   Platform,
-  useWindowDimensions
+  useWindowDimensions,
+  PanResponder
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
@@ -88,6 +89,37 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
   const [editPhoto, setEditPhoto] = useState<string | null>(null);
   const [isSavingProfile, setIsSavingProfile] = useState<boolean>(false);
   const [profileFeedback, setProfileFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // Photo Crop Modal State
+  const [isCropModalVisible, setIsCropModalVisible] = useState<boolean>(false);
+  const [rawImageToCrop, setRawImageToCrop] = useState<string | null>(null);
+  const [cropZoom, setCropZoom] = useState<number>(1);
+  const [cropPan, setCropPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [cropRotation, setCropRotation] = useState<number>(0);
+  const [imageNaturalDimensions, setImageNaturalDimensions] = useState<{ width: number; height: number }>({ width: 300, height: 300 });
+  const [isCropping, setIsCropping] = useState<boolean>(false);
+
+  const cropPanRef = React.useRef(cropPan);
+  cropPanRef.current = cropPan;
+  const startPanRef = React.useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const panResponder = React.useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          startPanRef.current = { ...cropPanRef.current };
+        },
+        onPanResponderMove: (_evt, gestureState) => {
+          setCropPan({
+            x: Math.round(startPanRef.current.x + gestureState.dx),
+            y: Math.round(startPanRef.current.y + gestureState.dy)
+          });
+        }
+      }),
+    []
+  );
 
   // Logout modal state
   const [logoutModalOpen, setLogoutModalOpen] = useState<boolean>(false);
@@ -263,25 +295,125 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
     return `${base}${cleanPath}`;
   };
 
-  // Compress & crop image to 300x300 JPEG at 70% quality using canvas (web) or expo-image-picker (mobile)
-  const compressAndCropWeb = (dataUrl: string): Promise<string> =>
-    new Promise((resolve) => {
+  // Open Interactive Photo Crop Modal
+  const openCropModal = (imageUri: string) => {
+    if (!imageUri) return;
+    if (Platform.OS === 'web') {
       const img = new (window as any).Image();
       img.onload = () => {
-        const SIZE = 300;
-        const canvas = document.createElement('canvas');
-        canvas.width = SIZE;
-        canvas.height = SIZE;
-        const ctx = canvas.getContext('2d')!;
-        // Center-crop: pick the largest square from center
-        const side = Math.min(img.width, img.height);
-        const sx = (img.width - side) / 2;
-        const sy = (img.height - side) / 2;
-        ctx.drawImage(img, sx, sy, side, side, 0, 0, SIZE, SIZE);
-        resolve(canvas.toDataURL('image/jpeg', 0.7));
+        setImageNaturalDimensions({
+          width: img.naturalWidth || 300,
+          height: img.naturalHeight || 300
+        });
+        setCropZoom(1);
+        setCropPan({ x: 0, y: 0 });
+        setCropRotation(0);
+        setRawImageToCrop(imageUri);
+        setIsCropModalVisible(true);
       };
-      img.src = dataUrl;
-    });
+      img.src = imageUri;
+    } else {
+      Image.getSize(
+        imageUri,
+        (w, h) => {
+          setImageNaturalDimensions({ width: w, height: h });
+          setCropZoom(1);
+          setCropPan({ x: 0, y: 0 });
+          setCropRotation(0);
+          setRawImageToCrop(imageUri);
+          setIsCropModalVisible(true);
+        },
+        () => {
+          setImageNaturalDimensions({ width: 300, height: 300 });
+          setCropZoom(1);
+          setCropPan({ x: 0, y: 0 });
+          setCropRotation(0);
+          setRawImageToCrop(imageUri);
+          setIsCropModalVisible(true);
+        }
+      );
+    }
+  };
+
+  const handleResetCrop = () => {
+    setCropZoom(1);
+    setCropPan({ x: 0, y: 0 });
+    setCropRotation(0);
+  };
+
+  const handleCloseCropModal = () => {
+    setIsCropModalVisible(false);
+    setRawImageToCrop(null);
+  };
+
+  const handleApplyCrop = async () => {
+    if (!rawImageToCrop) return;
+    setIsCropping(true);
+
+    try {
+      if (Platform.OS === 'web') {
+        const img = new (window as any).Image();
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = rawImageToCrop;
+        });
+
+        const CROP_APERTURE = 240;
+        const OUTPUT_SIZE = 300;
+        const canvas = document.createElement('canvas');
+        canvas.width = OUTPUT_SIZE;
+        canvas.height = OUTPUT_SIZE;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Could not initialize canvas context');
+
+        const ratio = OUTPUT_SIZE / CROP_APERTURE;
+        const baseScale = Math.max(
+          CROP_APERTURE / (img.naturalWidth || 1),
+          CROP_APERTURE / (img.naturalHeight || 1)
+        );
+
+        ctx.clearRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+
+        // Move origin to center of output canvas with pan offset
+        ctx.translate(
+          OUTPUT_SIZE / 2 + cropPan.x * ratio,
+          OUTPUT_SIZE / 2 + cropPan.y * ratio
+        );
+
+        // Apply rotation
+        ctx.rotate((cropRotation * Math.PI) / 180);
+
+        // Apply zoom and draw centered
+        const drawW = img.naturalWidth * baseScale * cropZoom * ratio;
+        const drawH = img.naturalHeight * baseScale * cropZoom * ratio;
+        ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+
+        const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+        setEditPhoto(croppedDataUrl);
+        setIsCropModalVisible(false);
+        setRawImageToCrop(null);
+        setProfileFeedback({
+          message: 'Profile photo cropped successfully! Click "Save Changes" to save.',
+          type: 'success'
+        });
+      } else {
+        // Native fallback
+        setEditPhoto(rawImageToCrop);
+        setIsCropModalVisible(false);
+        setRawImageToCrop(null);
+        setProfileFeedback({
+          message: 'Profile photo selected! Click "Save Changes" to save.',
+          type: 'success'
+        });
+      }
+    } catch (err: any) {
+      console.error('Error cropping image:', err);
+      Alert.alert('Crop Error', 'Failed to crop profile photo. Please try again.');
+    } finally {
+      setIsCropping(false);
+    }
+  };
 
   const handleOpenEditProfile = () => {
     if (profile) {
@@ -302,15 +434,13 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
       input.type = 'file';
       input.accept = 'image/*';
       input.setAttribute('capture', 'environment');
-      input.onchange = async (e: any) => {
+      input.onchange = (e: any) => {
         const file = e.target.files?.[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = async (ev) => {
+        reader.onload = (ev) => {
           const raw = ev.target?.result as string;
-          if (!raw) return;
-          const compressed = await compressAndCropWeb(raw);
-          setEditPhoto(compressed);
+          if (raw) openCropModal(raw);
         };
         reader.readAsDataURL(file);
       };
@@ -323,18 +453,14 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
+      allowsEditing: false,
+      quality: 0.9,
       base64: true
     });
     if (!result.canceled && result.assets?.[0]) {
       const asset = result.assets[0];
-      setEditPhoto(
-        asset.base64
-          ? `data:image/jpeg;base64,${asset.base64}`
-          : asset.uri
-      );
+      const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      openCropModal(uri);
     }
   };
 
@@ -343,22 +469,19 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';
-      input.onchange = async (e: any) => {
+      input.onchange = (e: any) => {
         const file = e.target.files?.[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = async (ev) => {
+        reader.onload = (ev) => {
           const raw = ev.target?.result as string;
-          if (!raw) return;
-          const compressed = await compressAndCropWeb(raw);
-          setEditPhoto(compressed);
+          if (raw) openCropModal(raw);
         };
         reader.readAsDataURL(file);
       };
       input.click();
       return;
     }
-    // Mobile: expo-image-picker handles crop (allowsEditing) + compress (quality)
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permission Required', 'Please allow photo library access to upload a profile photo.');
@@ -366,18 +489,14 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,   // shows crop UI
-      aspect: [1, 1],        // square crop
-      quality: 0.7,          // 70% compression
+      allowsEditing: false,
+      quality: 0.9,
       base64: true
     });
     if (!result.canceled && result.assets?.[0]) {
       const asset = result.assets[0];
-      setEditPhoto(
-        asset.base64
-          ? `data:image/jpeg;base64,${asset.base64}`
-          : asset.uri
-      );
+      const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      openCropModal(uri);
     }
   };
 
@@ -1973,13 +2092,27 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                       </TouchableOpacity>
                     </View>
                     {editPhoto ? (
-                      <TouchableOpacity onPress={() => setEditPhoto(null)} activeOpacity={0.8} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <Ionicons name="trash-outline" size={13} color="#dc2626" />
-                        <Text style={{ color: '#dc2626', fontSize: 12, fontWeight: '700' }}>Remove Photo</Text>
-                      </TouchableOpacity>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                        <TouchableOpacity
+                          onPress={() => openCropModal(editPhoto)}
+                          activeOpacity={0.8}
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                        >
+                          <Ionicons name="crop-outline" size={13} color="#b45309" />
+                          <Text style={{ color: '#b45309', fontSize: 12, fontWeight: '700' }}>Crop / Adjust</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => setEditPhoto(null)}
+                          activeOpacity={0.8}
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                        >
+                          <Ionicons name="trash-outline" size={13} color="#dc2626" />
+                          <Text style={{ color: '#dc2626', fontSize: 12, fontWeight: '700' }}>Remove Photo</Text>
+                        </TouchableOpacity>
+                      </View>
                     ) : (
                       <Text style={{ color: '#64748b', fontSize: 11.5 }}>
-                        Upload photo from gallery or take a picture with camera
+                        Upload photo from gallery or camera to crop &amp; adjust
                       </Text>
                     )}
                   </View>
@@ -2300,6 +2433,192 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                 </TouchableOpacity>
               </View>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Profile Photo Interactive Crop Modal */}
+      <Modal
+        visible={isCropModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCloseCropModal}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCardContainer, { maxWidth: 440, padding: 0, overflow: 'hidden' }]}>
+            {/* Header */}
+            <View style={styles.cropModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={styles.cropIconBadge}>
+                  <Ionicons name="crop-outline" size={17} color="#b45309" />
+                </View>
+                <View>
+                  <Text style={styles.modalMainTitle}>Crop Profile Photo</Text>
+                  <Text style={styles.modalSubTitle}>Pan, zoom &amp; fit photo inside circular frame</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={handleCloseCropModal} style={{ padding: 4 }} activeOpacity={0.7}>
+                <CloseIcon size={18} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Viewport Frame */}
+            <View style={styles.cropViewportWrapper}>
+              <View
+                style={styles.cropContainer}
+                {...panResponder.panHandlers}
+              >
+                {/* Scaled & Positioned Image */}
+                {rawImageToCrop ? (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      left: 130 + cropPan.x,
+                      top: 130 + cropPan.y,
+                      transform: [
+                        { scale: cropZoom },
+                        { rotate: `${cropRotation}deg` }
+                      ]
+                    }}
+                  >
+                    <Image
+                      source={{ uri: rawImageToCrop }}
+                      style={{
+                        width: (imageNaturalDimensions.width || 300) * (240 / Math.max(1, Math.min(imageNaturalDimensions.width || 300, imageNaturalDimensions.height || 300))),
+                        height: (imageNaturalDimensions.height || 300) * (240 / Math.max(1, Math.min(imageNaturalDimensions.width || 300, imageNaturalDimensions.height || 300))),
+                        marginLeft: -((imageNaturalDimensions.width || 300) * (240 / Math.max(1, Math.min(imageNaturalDimensions.width || 300, imageNaturalDimensions.height || 300)))) / 2,
+                        marginTop: -((imageNaturalDimensions.height || 300) * (240 / Math.max(1, Math.min(imageNaturalDimensions.width || 300, imageNaturalDimensions.height || 300)))) / 2
+                      }}
+                      resizeMode="cover"
+                    />
+                  </View>
+                ) : null}
+
+                {/* Dark Outer Cutout Mask */}
+                <View style={styles.cropOverlayDarkCutout} pointerEvents="none" />
+
+                {/* Circular Boundary with Dashed Amber Border & Alignment Grids */}
+                <View style={styles.cropCircleBorder} pointerEvents="none">
+                  <View style={styles.cropGridH1} />
+                  <View style={styles.cropGridH2} />
+                  <View style={styles.cropGridV1} />
+                  <View style={styles.cropGridV2} />
+                </View>
+
+                {/* Drag Hint Badge */}
+                <View style={styles.cropDragHintBadge} pointerEvents="none">
+                  <Ionicons name="move-outline" size={12} color="#ffffff" />
+                  <Text style={styles.cropDragHintText}>Drag photo to adjust position</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Interactive Control Panel */}
+            <View style={styles.cropControlsContainer}>
+              {/* Row 1: Zoom Controls, Rotate & Reset */}
+              <View style={styles.cropControlRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.cropControlLabel}>Zoom</Text>
+                  <View style={styles.cropZoomButtonGroup}>
+                    <TouchableOpacity
+                      style={styles.cropMiniBtn}
+                      onPress={() => setCropZoom(z => Math.max(0.5, parseFloat((z - 0.15).toFixed(2))))}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="remove-outline" size={15} color="#334155" />
+                    </TouchableOpacity>
+                    <Text style={styles.cropZoomValueText}>{Math.round(cropZoom * 100)}%</Text>
+                    <TouchableOpacity
+                      style={styles.cropMiniBtn}
+                      onPress={() => setCropZoom(z => Math.min(3.0, parseFloat((z + 0.15).toFixed(2))))}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="add-outline" size={15} color="#334155" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <TouchableOpacity
+                    style={styles.cropToolBtn}
+                    onPress={() => setCropRotation(r => (r + 90) % 360)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="refresh-outline" size={13} color="#b45309" />
+                    <Text style={styles.cropToolBtnText}>Rotate</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.cropToolBtn}
+                    onPress={handleResetCrop}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.cropToolBtnText}>Reset</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Row 2: Precision Nudge Buttons */}
+              <View style={styles.cropNudgeRow}>
+                <Text style={styles.cropControlLabel}>Nudge</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <TouchableOpacity
+                    style={styles.cropMiniBtn}
+                    onPress={() => setCropPan(p => ({ ...p, x: p.x - 15 }))}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="arrow-back-outline" size={14} color="#334155" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.cropMiniBtn}
+                    onPress={() => setCropPan(p => ({ ...p, y: p.y - 15 }))}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="arrow-up-outline" size={14} color="#334155" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.cropMiniBtn}
+                    onPress={() => setCropPan(p => ({ ...p, y: p.y + 15 }))}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="arrow-down-outline" size={14} color="#334155" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.cropMiniBtn}
+                    onPress={() => setCropPan(p => ({ ...p, x: p.x + 15 }))}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="arrow-forward-outline" size={14} color="#334155" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
+            {/* Bottom Actions */}
+            <View style={styles.cropModalFooter}>
+              <TouchableOpacity
+                style={styles.btnModalCancel}
+                onPress={handleCloseCropModal}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.btnModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.btnCropApply}
+                onPress={handleApplyCrop}
+                disabled={isCropping}
+                activeOpacity={0.85}
+              >
+                {isCropping ? (
+                  <ActivityIndicator size="small" color="#020612" />
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <CheckIcon size={14} color="#020612" />
+                    <Text style={styles.btnCropApplyText}>Apply &amp; Save Photo</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -4014,5 +4333,210 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 13,
     fontWeight: '700'
+  },
+  // Photo Crop Modal Styles
+  cropModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    backgroundColor: '#ffffff'
+  },
+  cropIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#fef3c7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#fde68a'
+  },
+  cropViewportWrapper: {
+    backgroundColor: '#071026',
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  cropContainer: {
+    width: 260,
+    height: 260,
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative'
+  },
+  cropOverlayDarkCutout: {
+    position: 'absolute',
+    left: -90,
+    top: -90,
+    width: 440,
+    height: 440,
+    borderRadius: 220,
+    borderWidth: 100,
+    borderColor: 'rgba(7, 16, 38, 0.72)'
+  },
+  cropCircleBorder: {
+    position: 'absolute',
+    width: 240,
+    height: 240,
+    left: 10,
+    top: 10,
+    borderRadius: 120,
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+    borderStyle: 'dashed'
+  },
+  cropGridH1: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: '33.3%',
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)'
+  },
+  cropGridH2: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: '66.6%',
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)'
+  },
+  cropGridV1: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: '33.3%',
+    width: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)'
+  },
+  cropGridV2: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: '66.6%',
+    width: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)'
+  },
+  cropDragHintBadge: {
+    position: 'absolute',
+    bottom: 8,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)'
+  },
+  cropDragHintText: {
+    color: '#ffffff',
+    fontSize: 10.5,
+    fontWeight: '600'
+  },
+  cropControlsContainer: {
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+    gap: 12
+  },
+  cropControlRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  cropNudgeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f8fafc'
+  },
+  cropControlLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5
+  },
+  cropZoomButtonGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    overflow: 'hidden'
+  },
+  cropZoomValueText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0f172a',
+    paddingHorizontal: 10,
+    minWidth: 46,
+    textAlign: 'center'
+  },
+  cropMiniBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  cropToolBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#fef3c7',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#fde68a'
+  },
+  cropToolBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#b45309'
+  },
+  cropModalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    backgroundColor: '#f8fafc',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0'
+  },
+  btnCropApply: {
+    backgroundColor: '#d4af37',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    shadowColor: '#d4af37',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 2
+  },
+  btnCropApplyText: {
+    color: '#020612',
+    fontSize: 13,
+    fontWeight: '800'
   }
 });
