@@ -901,12 +901,9 @@ class AuthService {
       throw { status: 400, message: 'Email or name and password/OTP are required.' };
     }
 
-    // PLAYER login: team name + email (no password needed)
+    // PLAYER login: team name + email (no password needed; creates token ONLY for player)
     if (roleRequired === 'PLAYER') {
-      if (!teamName || !teamName.trim()) {
-        throw { status: 400, message: 'Team name is required for player login.' };
-      }
-      return this._playerLoginByTeamAndEmail(identifier, teamName);
+      return this._playerLoginByTeamAndEmail(identifier, teamName || '');
     }
 
     if (!passwordOrOtp) {
@@ -1330,21 +1327,33 @@ class AuthService {
 
   /**
    * Player Login by Team Name + Email (no password)
+   * Strictly creates tokens ONLY for players (role: PLAYER)
    */
   async _playerLoginByTeamAndEmail(email, teamName) {
     const cleanEmail = email.trim().toLowerCase();
-    const cleanTeam = teamName.trim().toLowerCase();
+    const cleanTeam = (teamName || '').trim().toLowerCase();
 
     await db.initDb();
 
-    // Find player in team registrations
+    // 1. Role isolation check: If account exists with another role (e.g. COACH, ADMIN, SCORER, UMPIRE), block player login
+    const existingUser = await userModel.findByEmail(cleanEmail);
+    if (existingUser && existingUser.role && existingUser.role.toUpperCase() !== 'PLAYER') {
+      throw {
+        status: 403,
+        message: `This account is registered as ${existingUser.role}. Only players can log in through the Player Portal.`
+      };
+    }
+
+    // 2. Find player in team squad registrations
     const registrations = await db.models.TeamRegistration.find({}).lean();
     let playerInfo = null;
     let teamReg = null;
 
     for (const reg of registrations) {
       const regTeamName = (reg.team_name || '').toLowerCase();
-      const isTeamMatch = regTeamName === cleanTeam || regTeamName.includes(cleanTeam) || cleanTeam.includes(regTeamName);
+      const isTeamMatch = cleanTeam
+        ? (regTeamName === cleanTeam || regTeamName.includes(cleanTeam) || cleanTeam.includes(regTeamName))
+        : true;
       if (!isTeamMatch) continue;
 
       const player = (reg.players || []).find(p => p.email?.toLowerCase() === cleanEmail);
@@ -1355,7 +1364,49 @@ class AuthService {
       }
     }
 
+    // 3. If not in a team squad, check if individually registered player in User model
     if (!playerInfo || !teamReg) {
+      if (existingUser && (existingUser.role || '').toUpperCase() === 'PLAYER') {
+        if (existingUser.status === 'REJECTED' || existingUser.status === 'SUSPENDED') {
+          throw { status: 403, message: `Your player account is ${existingUser.status} by the administrator.` };
+        }
+        if (existingUser.status === 'PENDING') {
+          throw {
+            status: 403,
+            pendingApproval: true,
+            message: '⏳ Your player registration is currently pending administrator approval.'
+          };
+        }
+
+        const resolvedTeamName = teamName ? teamName.trim() : (existingUser.player_details?.club_choice || 'Independent Player');
+        const token = jwt.sign(
+          {
+            id: existingUser.id || cleanEmail,
+            name: existingUser.name,
+            email: cleanEmail,
+            role: 'PLAYER',
+            teamName: resolvedTeamName,
+            teamId: existingUser.team_id || null
+          },
+          JWT_SECRET,
+          { expiresIn: '7d' }
+        );
+
+        return {
+          success: true,
+          message: `Welcome, ${existingUser.name}!`,
+          user: {
+            id: existingUser.id,
+            name: existingUser.name,
+            email: cleanEmail,
+            role: 'PLAYER',
+            teamName: resolvedTeamName,
+            teamId: existingUser.team_id || null
+          },
+          token
+        };
+      }
+
       throw {
         status: 401,
         message: 'Player email not found in the specified team. Please check your team name and email.'
@@ -1378,8 +1429,8 @@ class AuthService {
       };
     }
 
-    // Ensure user account exists
-    let user = await userModel.findByEmail(cleanEmail);
+    // Ensure user account exists strictly as PLAYER
+    let user = existingUser;
     if (!user) {
       user = await userModel.create({
         id: `PLY-${Date.now()}`,
