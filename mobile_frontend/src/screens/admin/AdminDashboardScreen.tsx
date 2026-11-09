@@ -482,104 +482,50 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     });
   };
 
-  // Initial Matches data matching user screenshot
-  const INITIAL_MATCHES = [
-    {
-      id: 'M001',
-      tournament_id: 'T-2026-VPL',
-      tournament_name: 'Virudhunagar Premier League 2026',
-      team_a_name: 'Sattur Spartans',
-      team_b_name: 'Rajapalayam Royals',
-      team_a_id: 'TM-01',
-      team_b_id: 'TM-03',
-      venue: 'Kamarajar District Stadium',
-      match_date: '2026-10-08',
-      match_time: '02:30 PM',
-      match_type: 'T20',
-      overs_per_side: 20,
-      assigned_scorer_id: 'SCR-101',
-      scorer_name: 'SCR-101',
-      status: 'SCHEDULED',
-      result_summary: null
-    },
-    {
-      id: 'M002',
-      tournament_id: 'T-2026-VPL',
-      tournament_name: 'Virudhunagar Premier League 2026',
-      team_a_name: 'Virudhunagar Spartans',
-      team_b_name: 'Sivakasi Strikers',
-      team_a_id: 'TM-01',
-      team_b_id: 'TM-02',
-      venue: 'Kamarajar District Stadium',
-      match_date: '2026-10-06',
-      match_time: '09:30 AM',
-      match_type: 'T20',
-      overs_per_side: 20,
-      assigned_scorer_id: 'SCR-101',
-      scorer_name: 'SCR-101',
-      status: 'LIVE',
-      result_summary: null
-    },
-    {
-      id: 'M003',
-      tournament_id: 'T-2026-VPL',
-      tournament_name: 'Virudhunagar Premier League 2026',
-      team_a_name: 'Virudhunagar Spartans',
-      team_b_name: 'Sivakasi Strikers',
-      team_a_id: 'TM-01',
-      team_b_id: 'TM-02',
-      venue: 'Kamarajar Stadium, Virudhunagar',
-      match_date: '2026-10-04',
-      match_time: '09:30 AM',
-      match_type: 'T20',
-      overs_per_side: 20,
-      assigned_scorer_id: 'SCR-101',
-      scorer_name: 'SCR-101',
-      status: 'COMPLETED',
-      result_summary: 'Virudhunagar Strikers won by 7 wickets'
-    }
-  ];
+  // Matches list initialized clean without fake data
+  const INITIAL_MATCHES: any[] = [];
 
   // Match Schedules State
   const [matchesList, setMatchesList] = useState<any[]>(INITIAL_MATCHES);
   const [matchFilter, setMatchFilter] = useState<MatchFilterStatus>('all');
   const [matchSearchQuery, setMatchSearchQuery] = useState<string>('');
   const [isMatchesLoading, setIsMatchesLoading] = useState<boolean>(false);
-  const [venuesList, setVenuesList] = useState<any[]>([
-    { id: 'VEN-01', name: 'Kamarajar District Stadium' },
-    { id: 'VEN-02', name: 'Sivakasi Cricket Ground' }
-  ]);
-  const [tournamentsList, setTournamentsList] = useState<any[]>([
-    { id: 'T-2026-VPL', name: 'Virudhunagar Premier League 2026' }
-  ]);
-  const [officialsList, setOfficialsList] = useState<any[]>([
-    { id: 'OFF-01', name: 'S. Ramesh' },
-    { id: 'OFF-02', name: 'K. Murugan' }
-  ]);
-  const [allClubsList, setAllClubsList] = useState<any[]>([
-    { id: 'TM-01', name: 'Virudhunagar Spartans' },
-    { id: 'TM-02', name: 'Sivakasi Strikers' }
-  ]);
+  const [venuesList, setVenuesList] = useState<any[]>([]);
+  const [tournamentsList, setTournamentsList] = useState<any[]>([]);
+  const [officialsList, setOfficialsList] = useState<any[]>([]);
+  const [allClubsList, setAllClubsList] = useState<any[]>([]);
 
   // Schedule Modal State & 3-Step Guided Workflow
   const [scheduleModalOpen, setScheduleModalOpen] = useState<boolean>(false);
   const [scheduleStep, setScheduleStep] = useState<1 | 2 | 3>(1);
   const [editingMatch, setEditingMatch] = useState<any | null>(null);
   const initialScheduleFormRef = useRef<any>(null);
-  const [scheduleForm, setScheduleForm] = useState({
-    tournament_id: 'T-2026-VPL',
-    tournament_name: 'Virudhunagar Premier League 2026',
+    const [scheduleForm, setScheduleForm] = useState({
+    tournament_id: '',
+    tournament_name: '',
     team_a_id: '',
+    team_a_name: '',
     team_b_id: '',
-    venue: 'Kamarajar District Stadium',
+    team_b_name: '',
+    venue: '',
+    venue_maps_url: '',
     match_date: new Date().toISOString().split('T')[0],
     match_time: '09:30 AM',
     match_type: 'T20',
     overs: 20,
-    assigned_scorer_id: 'SCR-101',
+    assigned_scorer_id: '',
+    assigned_scorer_name: '',
+    umpire1_id: '',
+    umpire1_name: '',
+    umpire2_id: '',
+    umpire2_name: '',
     show_on_team_home: true,
     match_notes: ''
   });
+  const [umpire1DropdownOpen, setUmpire1DropdownOpen] = useState<boolean>(false);
+  const [umpire2DropdownOpen, setUmpire2DropdownOpen] = useState<boolean>(false);
+  const [googleMapsModalOpen, setGoogleMapsModalOpen] = useState<boolean>(false);
+  const [mapsSearchQuery, setMapsSearchQuery] = useState<string>('');
   const [scheduleFormError, setScheduleFormError] = useState<string | null>(null);
   const [isSubmittingSchedule, setIsSubmittingSchedule] = useState<boolean>(false);
 
@@ -789,19 +735,19 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         ScorerApi.getTeams().catch(() => ({ teams: [] }))
       ]);
 
-      if (matchesRes && Array.isArray(matchesRes.matches) && matchesRes.matches.length > 0) {
+      if (matchesRes && Array.isArray(matchesRes.matches)) {
         setMatchesList(matchesRes.matches);
       }
-      if (venuesRes && Array.isArray(venuesRes.venues) && venuesRes.venues.length > 0) {
+      if (venuesRes && Array.isArray(venuesRes.venues)) {
         setVenuesList(venuesRes.venues);
       }
-      if (toursRes && Array.isArray(toursRes.tournaments) && toursRes.tournaments.length > 0) {
+      if (toursRes && Array.isArray(toursRes.tournaments)) {
         setTournamentsList(toursRes.tournaments);
       }
-      if (offRes && Array.isArray(offRes.officials) && offRes.officials.length > 0) {
+      if (offRes && Array.isArray(offRes.officials)) {
         setOfficialsList(offRes.officials);
       }
-      if (teamsRes && Array.isArray(teamsRes.teams) && teamsRes.teams.length > 0) {
+      if (teamsRes && Array.isArray(teamsRes.teams)) {
         setAllClubsList(teamsRes.teams);
       }
     } catch (e) {
@@ -844,39 +790,18 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       }
     });
 
-    if (list.length === 0) {
-      list.push(
-        { id: 'TM-01', name: 'Virudhunagar Spartans', taluk: 'Virudhunagar', coachName: 'S. Rajendran', coachEmail: 'rajendran@spartans.cfvd.org' },
-        { id: 'TM-02', name: 'Sivakasi Strikers', taluk: 'Sivakasi', coachName: 'M. Venkatesh', coachEmail: 'venkat@strikers.cfvd.org' },
-        { id: 'TM-03', name: 'Rajapalayam Royals', taluk: 'Rajapalayam', coachName: 'K. Balaji', coachEmail: 'balaji@royals.cfvd.org' },
-        { id: 'TM-04', name: 'Aruppukottai Aces', taluk: 'Aruppukottai', coachName: 'R. Vignesh', coachEmail: 'vignesh@aces.cfvd.org' },
-        { id: 'TM-05', name: 'Sattur Super Kings', taluk: 'Sattur', coachName: 'P. Arumugam', coachEmail: 'arumugam@kings.cfvd.org' }
-      );
-    }
+    // No fake teams pushed - uses only actual registered teams
     return list;
   }, [allClubsList, teams]);
 
   // Comprehensive stadiums / venues with detailed metadata
   const availableVenues = useMemo(() => {
-    const defaultVenues = [
-      { id: 'VEN-01', name: 'Kamarajar District Stadium', location: 'Virudhunagar Collectorate Road', capacity: '12,000 Capacity • Turf Pitch' },
-      { id: 'VEN-02', name: 'Sivakasi Cricket Ground', location: 'Sivakasi West Bypass', capacity: '8,000 Capacity • Matting & Turf' },
-      { id: 'VEN-03', name: 'Rajapalayam Turf Ground', location: 'Rajapalayam Sports Enclave', capacity: '6,500 Capacity • Floodlit Turf' },
-      { id: 'VEN-04', name: 'Aruppukottai Sports Complex', location: 'Aruppukottai Ring Road', capacity: '5,000 Capacity • Turf Pitch' },
-      { id: 'VEN-05', name: 'Sattur Municipality Ground', location: 'Sattur Riverbed Arena', capacity: '4,000 Capacity • Standard Pitch' }
-    ];
-
-    if (venuesList && venuesList.length > 0) {
-      const merged = [...defaultVenues];
-      venuesList.forEach((v: any) => {
-        const vName = typeof v === 'string' ? v : v.name;
-        if (vName && !merged.some(m => m.name.toLowerCase() === vName.toLowerCase())) {
-          merged.push({ id: `VEN-${merged.length + 1}`, name: vName, location: 'Virudhunagar District', capacity: 'Official Affiliated Ground' });
-        }
-      });
-      return merged;
-    }
-    return defaultVenues;
+    return (venuesList || []).map((v: any, idx: number) => {
+      const vName = typeof v === 'string' ? v : v.name;
+      const vLoc = typeof v === 'object' ? (v.location || v.address || 'District Ground') : 'Ground';
+      const vCap = typeof v === 'object' ? (v.capacity || '') : '';
+      return { id: v.id || `VEN-${idx + 1}`, name: vName, location: vLoc, capacity: vCap };
+    });
   }, [venuesList]);
 
   // Dynamic Time Delay calculator for Weather / Rain adjustments
@@ -928,20 +853,6 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       });
     }
 
-    const defaultTournaments = [
-      { id: 'T-2026-VPL', name: 'Virudhunagar Premier League 2026', season: 'Season 2026', format: 'T20 Championship', clubsCount: 12, status: 'Active' },
-      { id: 'T-2026-DCT', name: 'CFVD District Championship Trophy 2026', season: '2026-2027', format: '50-Overs One Day', clubsCount: 8, status: 'Upcoming' },
-      { id: 'T-2026-KMTC', name: 'Kamarajar Memorial T20 Cup', season: 'Annual 2026', format: 'Knockout T20', clubsCount: 16, status: 'Active' },
-      { id: 'T-2026-ITSL', name: 'Virudhunagar Inter-Taluk Super League', season: 'Taluk Division 2026', format: 'T20 League', clubsCount: 6, status: 'Active' }
-    ];
-
-    defaultTournaments.forEach(d => {
-      if (!ids.has(d.id) && !list.some(l => l.name.toLowerCase() === d.name.toLowerCase())) {
-        ids.add(d.id);
-        list.push(d);
-      }
-    });
-
     return list;
   }, [tournamentsList]);
 
@@ -966,16 +877,24 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       const tourName = matchToEdit.tournament_name || 'Virudhunagar Premier League 2026';
       setCustomTournamentInput(tourName);
       const formData = {
-        tournament_id: matchToEdit.tournament_id || 'T-2026-VPL',
+        tournament_id: matchToEdit.tournament_id || '',
         tournament_name: tourName,
         team_a_id: matchToEdit.team_a_id || '',
+        team_a_name: matchToEdit.team_a_name || matchToEdit.team_a_id || '',
         team_b_id: matchToEdit.team_b_id || '',
-        venue: matchToEdit.venue || 'Kamarajar District Stadium',
+        team_b_name: matchToEdit.team_b_name || matchToEdit.team_b_id || '',
+        venue: matchToEdit.venue || '',
+        venue_maps_url: matchToEdit.venue_maps_url || (matchToEdit.venue ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(matchToEdit.venue)}` : ''),
         match_date: matchToEdit.match_date || new Date().toISOString().split('T')[0],
         match_time: matchToEdit.match_time || '09:30 AM',
         match_type: matchToEdit.match_type || 'T20',
         overs: matchToEdit.overs_per_side || 20,
-        assigned_scorer_id: matchToEdit.assigned_scorer_id || 'SCR-101',
+        assigned_scorer_id: matchToEdit.assigned_scorer_id || '',
+        assigned_scorer_name: matchToEdit.scorer_name || '',
+        umpire1_id: matchToEdit.umpire1_id || '',
+        umpire1_name: matchToEdit.umpire1_name || '',
+        umpire2_id: matchToEdit.umpire2_id || '',
+        umpire2_name: matchToEdit.umpire2_name || '',
         show_on_team_home: matchToEdit.show_on_team_home !== false,
         match_notes: matchToEdit.notes || matchToEdit.match_notes || ''
       };
@@ -983,25 +902,36 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       initialScheduleFormRef.current = { ...formData };
     } else {
       setEditingMatch(null);
-      const defaultTeamA = availableTeams[0]?.id || 'TM-01';
-      const defaultTeamB = availableTeams[1]?.id || 'TM-02';
-      const defaultVenue = availableVenues[0]?.name || 'Kamarajar District Stadium';
-      const defaultTour = 'Virudhunagar Premier League 2026';
-      const defaultTourId = 'T-2026-VPL';
-      const defaultScorer = officialsList.find(o => o.role === 'SCORER')?.id || 'SCR-101';
+      const firstTeam = availableTeams[0];
+      const secondTeam = availableTeams[1];
+      const defaultTeamAId = firstTeam?.id || '';
+      const defaultTeamAName = firstTeam?.name || '';
+      const defaultTeamBId = secondTeam?.id || '';
+      const defaultTeamBName = secondTeam?.name || '';
+      const defaultTour = tournamentsList[0]?.name || '';
+      const defaultTourId = tournamentsList[0]?.id || '';
+      const defaultScorer = officialsList.find(o => (o.role || '').toUpperCase().includes('SCOR'))?.id || '';
       setCustomTournamentInput(defaultTour);
 
       const formData = {
         tournament_id: defaultTourId,
         tournament_name: defaultTour,
-        team_a_id: defaultTeamA,
-        team_b_id: defaultTeamB,
-        venue: defaultVenue,
+        team_a_id: defaultTeamAId,
+        team_a_name: defaultTeamAName,
+        team_b_id: defaultTeamBId,
+        team_b_name: defaultTeamBName,
+        venue: venuesList[0]?.name || '',
+        venue_maps_url: '',
         match_date: new Date().toISOString().split('T')[0],
         match_time: '09:30 AM',
         match_type: 'T20',
         overs: 20,
         assigned_scorer_id: defaultScorer,
+        assigned_scorer_name: '',
+        umpire1_id: '',
+        umpire1_name: '',
+        umpire2_id: '',
+        umpire2_name: '',
         show_on_team_home: true,
         match_notes: ''
       };
@@ -1066,7 +996,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   // Step 2 -> Step 3 validation (Requirement 3.B)
   const handleProceedToStep3 = async () => {
     setScheduleFormError(null);
-    if (!scheduleForm.team_a_id || !scheduleForm.team_b_id) {
+    const effectiveA = (scheduleForm.team_a_name || scheduleForm.team_a_id || '').trim();
+    const effectiveB = (scheduleForm.team_b_name || scheduleForm.team_b_id || '').trim();
+    if (!effectiveA || !effectiveB) {
       setScheduleFormError('Please select both Home Team and Away Team.');
       await showWarning(
         'Complete Required Fields',
@@ -1074,7 +1006,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       );
       return;
     }
-    if (scheduleForm.team_a_id === scheduleForm.team_b_id) {
+    if (effectiveA.toLowerCase() === effectiveB.toLowerCase()) {
       setScheduleFormError('Home Team and Away Team cannot be the same club.');
       await showWarning(
         'Invalid Team Selection',
@@ -1095,7 +1027,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
   const handleSaveSchedule = async () => {
     setScheduleFormError(null);
-    const { team_a_id, team_b_id, venue, match_date, match_time, match_type, overs, tournament_id, tournament_name, assigned_scorer_id, show_on_team_home, match_notes } = scheduleForm;
+    const { team_a_id, team_b_id, team_a_name, team_b_name, venue, venue_maps_url, match_date, match_time, match_type, overs, tournament_id, tournament_name, assigned_scorer_id, umpire1_id, umpire1_name, umpire2_id, umpire2_name, show_on_team_home, match_notes } = scheduleForm;
 
     // 1. Comprehensive Validation (Requirement 3.B)
     if (!tournament_name || !tournament_name.trim()) {
@@ -4046,10 +3978,22 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                             <Text style={styles.metaLabel}>Match Date & Time</Text>
                             <Text style={styles.metaVal}>📅 {m.match_date} • ⏰ {m.match_time || '09:30 AM'}</Text>
                           </View>
-                          <View style={styles.metaCell}>
+                          <TouchableOpacity
+                            style={styles.metaCell}
+                            onPress={() => {
+                              const v = m.venue || 'Cricket Ground Virudhunagar';
+                              const url = m.venue_maps_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v)}`;
+                              if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                                window.open(url, '_blank');
+                              } else {
+                                Linking.openURL(url).catch(() => {});
+                              }
+                            }}
+                            activeOpacity={0.7}
+                          >
                             <Text style={styles.metaLabel}>Venue / Stadium</Text>
-                            <Text style={styles.metaVal}>📍 {m.venue || 'Kamarajar District Stadium'}</Text>
-                          </View>
+                            <Text style={[styles.metaVal, { color: '#0284c7', textDecorationLine: 'underline' }]} numberOfLines={1}>📍 {m.venue || 'District Stadium'} ↗</Text>
+                          </TouchableOpacity>
                           <View style={styles.metaCell}>
                             <Text style={styles.metaLabel}>Official Scorer</Text>
                             <Text style={styles.metaVal}>👤 {m.scorer_name || m.assigned_scorer_id || 'SCR-101'}</Text>
@@ -4531,11 +4475,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <Text style={styles.modalTitle}>
-                      {editingMatch ? '✏️ Reschedule / Adjust Match Fixture' : '🏏 Schedule New Match Fixture'}
+                      {editingMatch ? '✏️ Edit Match Schedule' : '🏏 Schedule Match'}
                     </Text>
-                    <View style={styles.scheduleModalBadgePill}>
-                      <Text style={styles.scheduleModalBadgePillText}>APEX GOVERNANCE</Text>
-                    </View>
+                    
                   </View>
                   <Text style={styles.modalSubtitle}>
                     {editingMatch
@@ -4670,7 +4612,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                   {/* Searchable Tournament Dropdown / Selector */}
                   <View style={{ marginTop: 14 }}>
-                    <Text style={styles.formFieldLabel}>Championship Tournament *</Text>
+                    <Text style={styles.formFieldLabel}>Tournament Name *</Text>
                     <View style={styles.tournamentInputWrap}>
                       <Text style={styles.inputPrefixIcon}>🏆</Text>
                       <TextInput
@@ -4699,7 +4641,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                   {/* Registered Tournaments Quick Selection Grid */}
                   <View style={{ marginTop: 14 }}>
-                    <Text style={styles.compactSubHeading}>Available District Tournaments</Text>
+                    <Text style={styles.compactSubHeading}>Available Tournaments</Text>
                     <View style={styles.tournamentsGrid}>
                       {availableTournaments.map((t) => {
                         const isSelected = (scheduleForm.tournament_name || '').toLowerCase() === t.name.toLowerCase();
@@ -4786,15 +4728,15 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               )}
 
               {/* ───────────────────────────────────────────────────────
-                  STEP 2: TEAMS AND VENUE (Requirement 2 - Step 2)
+                  STEP 2: TEAMS AND VENUE (Dynamic Teams & Google Maps Picker)
                   ─────────────────────────────────────────────────────── */}
               {scheduleStep === 2 && (
                 <View style={styles.stepSectionContainer}>
                   <View style={styles.stepHeaderCard}>
                     <View style={styles.stepHeaderCardLeft}>
-                      <Text style={styles.stepHeaderTitle}>🏏 Competing Clubs & Venue Selection</Text>
+                      <Text style={styles.stepHeaderTitle}>🏏 Teams & Venue</Text>
                       <Text style={styles.stepHeaderSubtitle}>
-                        Select Home and Away clubs for {scheduleForm.tournament_name || 'this fixture'}, and appoint the official venue stadium.
+                        Select or enter Team 1, Team 2, and the ground venue for this fixture.
                       </Text>
                     </View>
                     <View style={styles.stepTagPill}>
@@ -4802,336 +4744,276 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     </View>
                   </View>
 
-                  {/* Competing Teams Grid (Home vs Away) */}
+                  {/* Competing Teams Grid (Dynamic Custom Name + Registered Selectors) */}
                   <View style={styles.twoColFormGrid}>
-                    {/* Team A (Home / Host Club) */}
+                    {/* Team 1 (Home Club) */}
                     <View style={styles.colFormCard}>
                       <View style={styles.fieldLabelRow}>
-                        <Text style={styles.formFieldLabel}>Team A (Home / Host Club) *</Text>
-                        <Text style={styles.fieldSubBadge}>HOST</Text>
+                        <Text style={styles.formFieldLabel}>Team 1 (Home Club) *</Text>
                       </View>
 
-                      {(() => {
-                        const selectedA = availableTeams.find(tm => tm.id === scheduleForm.team_a_id) || availableTeams[0];
-                        return (
-                          <View style={styles.dropdownContainer}>
-                            <TouchableOpacity
-                              style={[styles.dropdownSelectBoxCompact, teamADropdownOpen && styles.dropdownSelectBoxActive]}
-                              onPress={() => {
-                                setTeamADropdownOpen(!teamADropdownOpen);
-                                setTeamBDropdownOpen(false);
-                                setVenueDropdownOpen(false);
-                              }}
-                              activeOpacity={0.8}
-                            >
-                              <View style={styles.dropdownSelectedLeft}>
-                                <View style={[styles.teamCrestMini, { backgroundColor: '#1e3a8a' }]}>
-                                  <Text style={{ fontSize: 13 }}>🏏</Text>
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                  <Text style={styles.dropdownSelectedTitle} numberOfLines={1}>
-                                    {selectedA?.name || 'Select Home Club'}
-                                  </Text>
-                                  <Text style={styles.dropdownSelectedSub} numberOfLines={1}>
-                                    {selectedA?.id} • {selectedA?.taluk} • Coach: {selectedA?.coachName}
-                                  </Text>
-                                </View>
-                              </View>
-                              <Text style={styles.dropdownArrow}>{teamADropdownOpen ? '▲' : '▼'}</Text>
-                            </TouchableOpacity>
+                      {/* Direct Editable Dynamic Team 1 Name */}
+                      <TextInput
+                        style={styles.formTextInputCompact}
+                        placeholder="Type Team 1 name or select below..."
+                        placeholderTextColor="#94a3b8"
+                        value={scheduleForm.team_a_name || ''}
+                        onChangeText={(val) => {
+                          setScheduleForm(prev => ({
+                            ...prev,
+                            team_a_name: val,
+                            team_a_id: prev.team_a_id && prev.team_a_id.startsWith('TEAM-VRD-') ? prev.team_a_id : (val ? val.trim() : '')
+                          }));
+                          setScheduleFormError(null);
+                        }}
+                      />
 
-                            {teamADropdownOpen && (
-                              <View style={styles.dropdownTablePanelCompact}>
-                                <View style={styles.dropdownSearchWrapCompact}>
-                                  <Text style={{ fontSize: 12, marginRight: 6 }}>🔍</Text>
-                                  <TextInput
-                                    style={styles.dropdownSearchInputCompact}
-                                    placeholder="Search registered clubs..."
-                                    placeholderTextColor="#94a3b8"
-                                    value={teamSearchQueryA}
-                                    onChangeText={setTeamSearchQueryA}
-                                  />
-                                  {teamSearchQueryA ? (
-                                    <TouchableOpacity onPress={() => setTeamSearchQueryA('')}>
-                                      <Text style={{ color: '#94a3b8', fontSize: 12 }}>✕</Text>
-                                    </TouchableOpacity>
-                                  ) : null}
-                                </View>
+                      {/* Quick Dropdown Picker for Registered Clubs */}
+                      <View style={{ marginTop: 6 }}>
+                        <TouchableOpacity
+                          style={styles.dropdownToggleSmall}
+                          onPress={() => {
+                            setTeamADropdownOpen(!teamADropdownOpen);
+                            setTeamBDropdownOpen(false);
+                            setVenueDropdownOpen(false);
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.dropdownToggleSmallText}>
+                            {teamADropdownOpen ? '▲ Hide Registered Clubs' : '▼ Pick from Registered Clubs'}
+                          </Text>
+                        </TouchableOpacity>
 
-                                <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
-                                  {availableTeams
-                                    .filter(tm => !teamSearchQueryA || tm.name.toLowerCase().includes(teamSearchQueryA.toLowerCase()) || tm.taluk.toLowerCase().includes(teamSearchQueryA.toLowerCase()))
-                                    .map(tm => {
-                                      const isChosen = scheduleForm.team_a_id === tm.id;
-                                      const isTeamB = scheduleForm.team_b_id === tm.id;
-                                      return (
-                                        <TouchableOpacity
-                                          key={`dd-a-${tm.id}`}
-                                          style={[
-                                            styles.dropdownTableRowCompact,
-                                            isChosen && styles.dropdownTableRowActive,
-                                            isTeamB && { opacity: 0.55, backgroundColor: '#f8fafc' }
-                                          ]}
-                                          onPress={() => {
-                                            if (isTeamB) {
-                                              setScheduleFormError('Team A cannot be the same as Team B.');
-                                            } else {
-                                              setScheduleFormError(null);
-                                              setScheduleForm({ ...scheduleForm, team_a_id: tm.id });
-                                              setTeamADropdownOpen(false);
-                                            }
-                                          }}
-                                          activeOpacity={0.8}
-                                        >
-                                          <View style={styles.dropdownTableRowLeft}>
-                                            <Text style={{ fontSize: 14 }}>🏏</Text>
-                                            <View style={{ flex: 1 }}>
-                                              <Text style={[styles.dropdownRowTitle, isChosen && styles.dropdownRowTitleActive]}>
-                                                {tm.name} {isTeamB ? '(Already Away Team)' : ''}
-                                              </Text>
-                                              <Text style={styles.dropdownRowMeta}>
-                                                {tm.id} • {tm.taluk} • Coach: {tm.coachName}
-                                              </Text>
-                                            </View>
-                                          </View>
-                                          {isChosen && <Text style={styles.dropdownRowCheck}>✓</Text>}
-                                        </TouchableOpacity>
-                                      );
-                                    })}
-                                </ScrollView>
-                              </View>
-                            )}
+                        {teamADropdownOpen && (
+                          <View style={styles.dropdownTablePanelCompact}>
+                            <View style={styles.dropdownSearchWrapCompact}>
+                              <Text style={{ fontSize: 12, marginRight: 6 }}>🔍</Text>
+                              <TextInput
+                                style={styles.dropdownSearchInputCompact}
+                                placeholder="Search clubs..."
+                                placeholderTextColor="#94a3b8"
+                                value={teamSearchQueryA}
+                                onChangeText={setTeamSearchQueryA}
+                              />
+                            </View>
+
+                            <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
+                              {availableTeams
+                                .filter(tm => !teamSearchQueryA || tm.name.toLowerCase().includes(teamSearchQueryA.toLowerCase()))
+                                .map(tm => (
+                                  <TouchableOpacity
+                                    key={`dd-a-${tm.id}`}
+                                    style={styles.dropdownTableRowCompact}
+                                    onPress={() => {
+                                      setScheduleForm(prev => ({
+                                        ...prev,
+                                        team_a_id: tm.id,
+                                        team_a_name: tm.name
+                                      }));
+                                      setTeamADropdownOpen(false);
+                                      setScheduleFormError(null);
+                                    }}
+                                    activeOpacity={0.8}
+                                  >
+                                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>🏏 {tm.name}</Text>
+                                    <Text style={{ fontSize: 11, color: '#64748b' }}>Coach: {tm.coachName} • {tm.taluk}</Text>
+                                  </TouchableOpacity>
+                                ))}
+                            </ScrollView>
                           </View>
-                        );
-                      })()}
+                        )}
+                      </View>
                     </View>
 
-                    {/* Team B (Away / Opponent Club) */}
+                    {/* Team 2 (Away Club) */}
                     <View style={styles.colFormCard}>
                       <View style={styles.fieldLabelRow}>
-                        <Text style={styles.formFieldLabel}>Team B (Away / Opponent Club) *</Text>
-                        <Text style={[styles.fieldSubBadge, { color: '#d97706', borderColor: '#fde68a', backgroundColor: '#fffbeb' }]}>AWAY</Text>
+                        <Text style={styles.formFieldLabel}>Team 2 (Away Club) *</Text>
                       </View>
 
-                      {(() => {
-                        const selectedB = availableTeams.find(tm => tm.id === scheduleForm.team_b_id) || availableTeams[1];
-                        return (
-                          <View style={styles.dropdownContainer}>
-                            <TouchableOpacity
-                              style={[styles.dropdownSelectBoxCompact, teamBDropdownOpen && styles.dropdownSelectBoxActive]}
-                              onPress={() => {
-                                setTeamBDropdownOpen(!teamBDropdownOpen);
-                                setTeamADropdownOpen(false);
-                                setVenueDropdownOpen(false);
-                              }}
-                              activeOpacity={0.8}
-                            >
-                              <View style={styles.dropdownSelectedLeft}>
-                                <View style={[styles.teamCrestMini, { backgroundColor: '#d97706' }]}>
-                                  <Text style={{ fontSize: 13 }}>🏏</Text>
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                  <Text style={styles.dropdownSelectedTitle} numberOfLines={1}>
-                                    {selectedB?.name || 'Select Away Club'}
-                                  </Text>
-                                  <Text style={styles.dropdownSelectedSub} numberOfLines={1}>
-                                    {selectedB?.id} • {selectedB?.taluk} • Coach: {selectedB?.coachName}
-                                  </Text>
-                                </View>
-                              </View>
-                              <Text style={styles.dropdownArrow}>{teamBDropdownOpen ? '▲' : '▼'}</Text>
-                            </TouchableOpacity>
+                      {/* Direct Editable Dynamic Team 2 Name */}
+                      <TextInput
+                        style={styles.formTextInputCompact}
+                        placeholder="Type Team 2 name or select below..."
+                        placeholderTextColor="#94a3b8"
+                        value={scheduleForm.team_b_name || ''}
+                        onChangeText={(val) => {
+                          setScheduleForm(prev => ({
+                            ...prev,
+                            team_b_name: val,
+                            team_b_id: prev.team_b_id && prev.team_b_id.startsWith('TEAM-VRD-') ? prev.team_b_id : (val ? val.trim() : '')
+                          }));
+                          setScheduleFormError(null);
+                        }}
+                      />
 
-                            {teamBDropdownOpen && (
-                              <View style={styles.dropdownTablePanelCompact}>
-                                <View style={styles.dropdownSearchWrapCompact}>
-                                  <Text style={{ fontSize: 12, marginRight: 6 }}>🔍</Text>
-                                  <TextInput
-                                    style={styles.dropdownSearchInputCompact}
-                                    placeholder="Search registered clubs..."
-                                    placeholderTextColor="#94a3b8"
-                                    value={teamSearchQueryB}
-                                    onChangeText={setTeamSearchQueryB}
-                                  />
-                                  {teamSearchQueryB ? (
-                                    <TouchableOpacity onPress={() => setTeamSearchQueryB('')}>
-                                      <Text style={{ color: '#94a3b8', fontSize: 12 }}>✕</Text>
-                                    </TouchableOpacity>
-                                  ) : null}
-                                </View>
+                      {/* Quick Dropdown Picker for Registered Clubs */}
+                      <View style={{ marginTop: 6 }}>
+                        <TouchableOpacity
+                          style={styles.dropdownToggleSmall}
+                          onPress={() => {
+                            setTeamBDropdownOpen(!teamBDropdownOpen);
+                            setTeamADropdownOpen(false);
+                            setVenueDropdownOpen(false);
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.dropdownToggleSmallText}>
+                            {teamBDropdownOpen ? '▲ Hide Registered Clubs' : '▼ Pick from Registered Clubs'}
+                          </Text>
+                        </TouchableOpacity>
 
-                                <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
-                                  {availableTeams
-                                    .filter(tm => !teamSearchQueryB || tm.name.toLowerCase().includes(teamSearchQueryB.toLowerCase()) || tm.taluk.toLowerCase().includes(teamSearchQueryB.toLowerCase()))
-                                    .map(tm => {
-                                      const isChosen = scheduleForm.team_b_id === tm.id;
-                                      const isTeamA = scheduleForm.team_a_id === tm.id;
-                                      return (
-                                        <TouchableOpacity
-                                          key={`dd-b-${tm.id}`}
-                                          style={[
-                                            styles.dropdownTableRowCompact,
-                                            isChosen && styles.dropdownTableRowActive,
-                                            isTeamA && { opacity: 0.55, backgroundColor: '#f8fafc' }
-                                          ]}
-                                          onPress={() => {
-                                            if (isTeamA) {
-                                              setScheduleFormError('Team B cannot be the same as Team A.');
-                                            } else {
-                                              setScheduleFormError(null);
-                                              setScheduleForm({ ...scheduleForm, team_b_id: tm.id });
-                                              setTeamBDropdownOpen(false);
-                                            }
-                                          }}
-                                          activeOpacity={0.8}
-                                        >
-                                          <View style={styles.dropdownTableRowLeft}>
-                                            <Text style={{ fontSize: 14 }}>🏏</Text>
-                                            <View style={{ flex: 1 }}>
-                                              <Text style={[styles.dropdownRowTitle, isChosen && styles.dropdownRowTitleActive]}>
-                                                {tm.name} {isTeamA ? '(Already Home Team)' : ''}
-                                              </Text>
-                                              <Text style={styles.dropdownRowMeta}>
-                                                {tm.id} • {tm.taluk} • Coach: {tm.coachName}
-                                              </Text>
-                                            </View>
-                                          </View>
-                                          {isChosen && <Text style={styles.dropdownRowCheck}>✓</Text>}
-                                        </TouchableOpacity>
-                                      );
-                                    })}
-                                </ScrollView>
-                              </View>
-                            )}
+                        {teamBDropdownOpen && (
+                          <View style={styles.dropdownTablePanelCompact}>
+                            <View style={styles.dropdownSearchWrapCompact}>
+                              <Text style={{ fontSize: 12, marginRight: 6 }}>🔍</Text>
+                              <TextInput
+                                style={styles.dropdownSearchInputCompact}
+                                placeholder="Search clubs..."
+                                placeholderTextColor="#94a3b8"
+                                value={teamSearchQueryB}
+                                onChangeText={setTeamSearchQueryB}
+                              />
+                            </View>
+
+                            <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
+                              {availableTeams
+                                .filter(tm => !teamSearchQueryB || tm.name.toLowerCase().includes(teamSearchQueryB.toLowerCase()))
+                                .map(tm => (
+                                  <TouchableOpacity
+                                    key={`dd-b-${tm.id}`}
+                                    style={styles.dropdownTableRowCompact}
+                                    onPress={() => {
+                                      setScheduleForm(prev => ({
+                                        ...prev,
+                                        team_b_id: tm.id,
+                                        team_b_name: tm.name
+                                      }));
+                                      setTeamBDropdownOpen(false);
+                                      setScheduleFormError(null);
+                                    }}
+                                    activeOpacity={0.8}
+                                  >
+                                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>🏏 {tm.name}</Text>
+                                    <Text style={{ fontSize: 11, color: '#64748b' }}>Coach: {tm.coachName} • {tm.taluk}</Text>
+                                  </TouchableOpacity>
+                                ))}
+                            </ScrollView>
                           </View>
-                        );
-                      })()}
+                        )}
+                      </View>
                     </View>
                   </View>
 
-                  {/* Venue and Stadium Selection */}
+                  {/* Venue and Stadium Selection with Google Maps Integration */}
                   <View style={[styles.colFormCard, { marginTop: 14 }]}>
                     <View style={styles.fieldLabelRow}>
-                      <Text style={styles.formFieldLabel}>Official Stadium / Venue *</Text>
-                      <Text style={[styles.fieldSubBadge, { color: '#059669', borderColor: '#a7f3d0', backgroundColor: '#ecfdf5' }]}>SANCTIONED</Text>
-                    </View>
-
-                    {(() => {
-                      const selectedVenue = availableVenues.find(v => v.name === scheduleForm.venue) || availableVenues[0];
-                      return (
-                        <View style={styles.dropdownContainer}>
-                          <TouchableOpacity
-                            style={[styles.dropdownSelectBoxCompact, venueDropdownOpen && styles.dropdownSelectBoxActive]}
-                            onPress={() => {
-                              setVenueDropdownOpen(!venueDropdownOpen);
-                              setTeamADropdownOpen(false);
-                              setTeamBDropdownOpen(false);
-                            }}
-                            activeOpacity={0.8}
-                          >
-                            <View style={styles.dropdownSelectedLeft}>
-                              <View style={[styles.teamCrestMini, { backgroundColor: '#059669' }]}>
-                                <Text style={{ fontSize: 13 }}>📍</Text>
-                              </View>
-                              <View style={{ flex: 1 }}>
-                                <Text style={styles.dropdownSelectedTitle} numberOfLines={1}>
-                                  {selectedVenue?.name || scheduleForm.venue}
-                                </Text>
-                                <Text style={styles.dropdownSelectedSub} numberOfLines={1}>
-                                  {selectedVenue?.location} • {selectedVenue?.capacity}
-                                </Text>
-                              </View>
-                            </View>
-                            <Text style={styles.dropdownArrow}>{venueDropdownOpen ? '▲' : '▼'}</Text>
-                          </TouchableOpacity>
-
-                          {venueDropdownOpen && (
-                            <View style={styles.dropdownTablePanelCompact}>
-                              <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
-                                {availableVenues.map(v => {
-                                  const isChosen = scheduleForm.venue === v.name;
-                                  return (
-                                    <TouchableOpacity
-                                      key={v.id}
-                                      style={[styles.dropdownTableRowCompact, isChosen && styles.dropdownTableRowActive]}
-                                      onPress={() => {
-                                        setScheduleForm({ ...scheduleForm, venue: v.name });
-                                        setVenueDropdownOpen(false);
-                                        setScheduleFormError(null);
-                                      }}
-                                      activeOpacity={0.8}
-                                    >
-                                      <View style={styles.dropdownTableRowLeft}>
-                                        <Text style={{ fontSize: 14 }}>📍</Text>
-                                        <View style={{ flex: 1 }}>
-                                          <Text style={[styles.dropdownRowTitle, isChosen && styles.dropdownRowTitleActive]}>
-                                            {v.name}
-                                          </Text>
-                                          <Text style={styles.dropdownRowMeta}>
-                                            {v.location} • {v.capacity}
-                                          </Text>
-                                        </View>
-                                      </View>
-                                      {isChosen && <Text style={styles.dropdownRowCheck}>✓</Text>}
-                                    </TouchableOpacity>
-                                  );
-                                })}
-                              </ScrollView>
-                            </View>
-                          )}
+                      <Text style={styles.formFieldLabel}>Match Venue / Ground *</Text>
+                      {scheduleForm.venue ? (
+                        <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, borderWidth: 1, borderColor: '#a7f3d0' }}>
+                          <Text style={{ fontSize: 11, color: '#059669', fontWeight: '700' }}>✓ Location Set</Text>
                         </View>
-                      );
-                    })()}
-
-                    {/* Dynamic Custom Stadium / Ground Location Input */}
-                    <View style={{ marginTop: 8 }}>
-                      <Text style={[styles.formFieldLabel, { fontSize: 11, color: '#64748b' }]}>
-                        ✏️ Custom Ground Name or Specific Pitch (Optional Override)
-                      </Text>
-                      <TextInput
-                        style={styles.formTextInputCompact}
-                        placeholder="Type ground name or specific turf..."
-                        placeholderTextColor="#94a3b8"
-                        value={scheduleForm.venue}
-                        onChangeText={(val) => setScheduleForm({ ...scheduleForm, venue: val })}
-                      />
+                      ) : null}
                     </View>
 
-                    {/* Google Maps GPS Navigation link */}
-                    {scheduleForm.venue ? (
+                    {/* Editable Ground Name Input */}
+                    <TextInput
+                      style={styles.formTextInputCompact}
+                      placeholder="Type ground name (e.g. The Arasan Turf Court, Sivakasi)..."
+                      placeholderTextColor="#94a3b8"
+                      value={scheduleForm.venue}
+                      onChangeText={(val) => {
+                        setScheduleForm(prev => ({
+                          ...prev,
+                          venue: val,
+                          venue_maps_url: val ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(val)}` : ''
+                        }));
+                        setScheduleFormError(null);
+                      }}
+                    />
+
+                    {/* Google Maps Actions Row */}
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                       <TouchableOpacity
-                        style={styles.venueMapLinkBtnCompact}
+                        style={styles.mapsPickerTriggerBtn}
                         onPress={() => {
-                          const query = encodeURIComponent(`${scheduleForm.venue} Virudhunagar Tamil Nadu`);
-                          const url = `https://www.google.com/maps/search/?api=1&query=${query}`;
-                          if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                            (window as any).open(url, '_blank');
-                          } else {
-                            Alert.alert('Google Maps Navigation', `Open Google Maps navigation for:\n${scheduleForm.venue}?`);
-                          }
+                          setMapsSearchQuery(scheduleForm.venue || '');
+                          setGoogleMapsModalOpen(true);
                         }}
                         activeOpacity={0.8}
                       >
-                        <Text style={{ fontSize: 14 }}>📍</Text>
-                        <Text style={styles.venueMapLinkText} numberOfLines={1}>
-                          Open Ground on Google Maps ↗ (GPS Navigation)
-                        </Text>
+                        <Text style={styles.mapsPickerTriggerBtnText}>📍 Set Location via Google Maps (GPS)</Text>
                       </TouchableOpacity>
-                    ) : null}
+
+                      {scheduleForm.venue ? (
+                        <TouchableOpacity
+                          style={styles.mapsPreviewTriggerBtn}
+                          onPress={() => {
+                            const url = scheduleForm.venue_maps_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(scheduleForm.venue)}`;
+                            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                              window.open(url, '_blank');
+                            } else {
+                              Linking.openURL(url).catch(() => {});
+                            }
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.mapsPreviewTriggerBtnText}>🗺️ View on Google Maps ↗</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+
+                    {/* Dropdown for registered venues if any exist */}
+                    {availableVenues.length > 0 && (
+                      <View style={{ marginTop: 8 }}>
+                        <TouchableOpacity
+                          style={styles.dropdownToggleSmall}
+                          onPress={() => setVenueDropdownOpen(!venueDropdownOpen)}
+                        >
+                          <Text style={styles.dropdownToggleSmallText}>
+                            {venueDropdownOpen ? '▲ Hide Registered Venues' : '▼ Pick from Registered Venues'}
+                          </Text>
+                        </TouchableOpacity>
+                        {venueDropdownOpen && (
+                          <View style={styles.dropdownTablePanelCompact}>
+                            <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
+                              {availableVenues.map(v => (
+                                <TouchableOpacity
+                                  key={v.id}
+                                  style={styles.dropdownTableRowCompact}
+                                  onPress={() => {
+                                    setScheduleForm(prev => ({
+                                      ...prev,
+                                      venue: v.name,
+                                      venue_maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.name + ' ' + (v.location || ''))}`
+                                    }));
+                                    setVenueDropdownOpen(false);
+                                    setScheduleFormError(null);
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>📍 {v.name}</Text>
+                                  <Text style={{ fontSize: 11, color: '#64748b' }}>{v.location} • {v.capacity}</Text>
+                                </TouchableOpacity>
+                              ))}
+                            </ScrollView>
+                          </View>
+                        )}
+                      </View>
+                    )}
                   </View>
                 </View>
               )}
 
               {/* ───────────────────────────────────────────────────────
-                  STEP 3: MATCH DETAILS & CONFIRMATION (Requirement 2 - Step 3)
+                  STEP 3: MATCH DETAILS & OFFICIALS (Scorer & Umpires)
                   ─────────────────────────────────────────────────────── */}
               {scheduleStep === 3 && (
                 <View style={styles.stepSectionContainer}>
                   <View style={styles.stepHeaderCard}>
                     <View style={styles.stepHeaderCardLeft}>
-                      <Text style={styles.stepHeaderTitle}>⚙️ Match Logistics, Format & Officials</Text>
+                      <Text style={styles.stepHeaderTitle}>⚙️ Match Details & Officials</Text>
                       <Text style={styles.stepHeaderSubtitle}>
-                        Configure the fixture date, start timing, match format, overs limit, and assigned officials.
+                        Set fixture date, start time, overs format, scorer and match umpires.
                       </Text>
                     </View>
                     <View style={styles.stepTagPill}>
@@ -5148,13 +5030,13 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                         placeholder="e.g. 2026-10-24"
                         placeholderTextColor="#94a3b8"
                         value={scheduleForm.match_date}
-                        onChangeText={(val) => setScheduleForm({ ...scheduleForm, match_date: val })}
+                        onChangeText={(val) => setScheduleForm(prev => ({ ...prev, match_date: val }))}
                       />
                       {/* Quick Date Presets */}
                       <View style={styles.quickPresetRow}>
                         <TouchableOpacity
                           style={styles.quickDateChip}
-                          onPress={() => setScheduleForm({ ...scheduleForm, match_date: new Date().toISOString().split('T')[0] })}
+                          onPress={() => setScheduleForm(prev => ({ ...prev, match_date: new Date().toISOString().split('T')[0] }))}
                         >
                           <Text style={styles.quickDateChipText}>Today</Text>
                         </TouchableOpacity>
@@ -5163,7 +5045,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           onPress={() => {
                             const d = new Date();
                             d.setDate(d.getDate() + 1);
-                            setScheduleForm({ ...scheduleForm, match_date: d.toISOString().split('T')[0] });
+                            setScheduleForm(prev => ({ ...prev, match_date: d.toISOString().split('T')[0] }));
                           }}
                         >
                           <Text style={styles.quickDateChipText}>Tomorrow</Text>
@@ -5173,7 +5055,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           onPress={() => {
                             const d = new Date();
                             d.setDate(d.getDate() + 3);
-                            setScheduleForm({ ...scheduleForm, match_date: d.toISOString().split('T')[0] });
+                            setScheduleForm(prev => ({ ...prev, match_date: d.toISOString().split('T')[0] }));
                           }}
                         >
                           <Text style={styles.quickDateChipText}>+3 Days</Text>
@@ -5183,7 +5065,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           onPress={() => {
                             const d = new Date();
                             d.setDate(d.getDate() + 7);
-                            setScheduleForm({ ...scheduleForm, match_date: d.toISOString().split('T')[0] });
+                            setScheduleForm(prev => ({ ...prev, match_date: d.toISOString().split('T')[0] }));
                           }}
                         >
                           <Text style={styles.quickDateChipText}>+1 Week</Text>
@@ -5198,7 +5080,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                         placeholder="e.g. 09:30 AM"
                         placeholderTextColor="#94a3b8"
                         value={scheduleForm.match_time}
-                        onChangeText={(val) => setScheduleForm({ ...scheduleForm, match_time: val })}
+                        onChangeText={(val) => setScheduleForm(prev => ({ ...prev, match_time: val }))}
                       />
                       {/* Quick Time Presets */}
                       <View style={styles.quickPresetRow}>
@@ -5206,7 +5088,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           <TouchableOpacity
                             key={tStr}
                             style={[styles.quickDateChip, scheduleForm.match_time === tStr && styles.quickDateChipActive]}
-                            onPress={() => setScheduleForm({ ...scheduleForm, match_time: tStr })}
+                            onPress={() => setScheduleForm(prev => ({ ...prev, match_time: tStr }))}
                           >
                             <Text style={[styles.quickDateChipText, scheduleForm.match_time === tStr && styles.quickDateChipTextActive]}>
                               {tStr}
@@ -5222,9 +5104,6 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     <View style={styles.weatherQuickRowCompact}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                         <Text style={{ fontSize: 12, color: '#dc2626', fontWeight: '800' }}>🌧 Weather / Rain Delay Adjustments</Text>
-                        <View style={styles.rescheduleBadgePill}>
-                          <Text style={styles.rescheduleBadgePillText}>RESCHEDULE MODE</Text>
-                        </View>
                       </View>
                       <View style={styles.dynamicRescheduleGrid}>
                         <TouchableOpacity style={styles.dynamicRescheduleBox} onPress={() => applyDynamicTimeDelay(30)} activeOpacity={0.8}>
@@ -5236,10 +5115,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                         <TouchableOpacity style={styles.dynamicRescheduleBox} onPress={() => applyDynamicTimeDelay(120)} activeOpacity={0.8}>
                           <Text style={styles.dynamicRescheduleBoxTitle}>🌧 +2 Hours Delay</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.dynamicRescheduleBox} onPress={() => setScheduleForm({ ...scheduleForm, match_time: '02:00 PM' })} activeOpacity={0.8}>
+                        <TouchableOpacity style={styles.dynamicRescheduleBox} onPress={() => setScheduleForm(prev => ({ ...prev, match_time: '02:00 PM' }))} activeOpacity={0.8}>
                           <Text style={styles.dynamicRescheduleBoxTitle}>☀️ 02:00 PM</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.dynamicRescheduleBox} onPress={() => setScheduleForm({ ...scheduleForm, match_time: '06:00 PM' })} activeOpacity={0.8}>
+                        <TouchableOpacity style={styles.dynamicRescheduleBox} onPress={() => setScheduleForm(prev => ({ ...prev, match_time: '06:00 PM' }))} activeOpacity={0.8}>
                           <Text style={styles.dynamicRescheduleBoxTitle}>💡 06:00 PM D/N</Text>
                         </TouchableOpacity>
                       </View>
@@ -5251,7 +5130,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     <Text style={styles.formFieldLabel}>Match Format & Overs Limit *</Text>
                     <View style={styles.twoColFormGrid}>
                       <View style={{ flex: 1 }}>
-                        <Text style={[styles.formFieldLabel, { fontSize: 11, color: '#64748b' }]}>Exact Overs per side</Text>
+                        <Text style={[styles.formFieldLabel, { fontSize: 11, color: '#64748b' }]}>Overs per side</Text>
                         <TextInput
                           style={styles.formTextInputCompact}
                           placeholder="20"
@@ -5260,22 +5139,22 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           value={String(scheduleForm.overs || '')}
                           onChangeText={(val) => {
                             const num = parseInt(val, 10) || 0;
-                            setScheduleForm({
-                              ...scheduleForm,
+                            setScheduleForm(prev => ({
+                              ...prev,
                               overs: num,
-                              match_type: num === 50 ? 'One Day' : num === 20 ? 'T20' : num > 0 ? `${num}-Overs` : scheduleForm.match_type
-                            });
+                              match_type: num === 50 ? 'One Day' : num === 20 ? 'T20' : num > 0 ? `${num}-Overs` : prev.match_type
+                            }));
                           }}
                         />
                       </View>
                       <View style={{ flex: 1.4 }}>
-                        <Text style={[styles.formFieldLabel, { fontSize: 11, color: '#64748b' }]}>Format Designation</Text>
+                        <Text style={[styles.formFieldLabel, { fontSize: 11, color: '#64748b' }]}>Format Name</Text>
                         <TextInput
                           style={styles.formTextInputCompact}
                           placeholder="e.g. T20, One Day, 10-Overs..."
                           placeholderTextColor="#94a3b8"
                           value={scheduleForm.match_type}
-                          onChangeText={(val) => setScheduleForm({ ...scheduleForm, match_type: val })}
+                          onChangeText={(val) => setScheduleForm(prev => ({ ...prev, match_type: val }))}
                         />
                       </View>
                     </View>
@@ -5285,13 +5164,13 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       {[
                         { label: 'T20 (20 Overs)', overs: 20, type: 'T20' },
                         { label: 'One Day (50 Overs)', overs: 50, type: 'One Day' },
-                        { label: '10-Overs Knockout', overs: 10, type: '10-Overs' },
-                        { label: '15-Overs League', overs: 15, type: '15-Overs' }
+                        { label: '10-Overs', overs: 10, type: '10-Overs' },
+                        { label: '6-Overs', overs: 6, type: '6-Overs' }
                       ].map((fmt) => (
                         <TouchableOpacity
                           key={fmt.type}
                           style={[styles.quickDateChip, scheduleForm.overs === fmt.overs && styles.quickDateChipActive]}
-                          onPress={() => setScheduleForm({ ...scheduleForm, overs: fmt.overs, match_type: fmt.type })}
+                          onPress={() => setScheduleForm(prev => ({ ...prev, overs: fmt.overs, match_type: fmt.type }))}
                         >
                           <Text style={[styles.quickDateChipText, scheduleForm.overs === fmt.overs && styles.quickDateChipTextActive]}>
                             {fmt.label}
@@ -5301,20 +5180,15 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     </View>
                   </View>
 
-                  {/* Accredited Match Officials (Scorer & Umpires) */}
+                  {/* Scorer & Match Umpires */}
                   <View style={[styles.colFormCard, { marginTop: 14 }]}>
-                    <Text style={styles.formFieldLabel}>Accredited Digital Scorer *</Text>
+                    <Text style={styles.formFieldLabel}>Match Scorer *</Text>
                     {(() => {
-                      const scorerList = officialsList.filter((o: any) => {
-                        const role = (o.role || o.type || o.grade || '').toUpperCase();
-                        return role.includes('SCOR') || o.scorerId || o.id?.toString().startsWith('SCR');
+                      const scorers = officialsList.filter((o: any) => {
+                        const r = (o.role || o.type || '').toUpperCase();
+                        return r.includes('SCOR') || (o.id && String(o.id).startsWith('SCR'));
                       });
-                      const displayScorers = scorerList.length > 0 ? scorerList : [
-                        { id: 'SCR-101', name: 'Thiru. K. Sundararajan', scorerName: 'Thiru. K. Sundararajan', grade: 'BCCI Level 1 Scorer', phone: '+91 98421 11234', taluk: 'Virudhunagar' },
-                        { id: 'SCR-102', name: 'Thiru. M. Venkatesh', scorerName: 'Thiru. M. Venkatesh', grade: 'District Senior Panel', phone: '+91 94432 55678', taluk: 'Sivakasi' },
-                        { id: 'SCR-103', name: 'Thiru. S. Pitchaimuthu', scorerName: 'Thiru. S. Pitchaimuthu', grade: 'Collegiate League Scorer', phone: '+91 81223 44890', taluk: 'Rajapalayam' }
-                      ];
-                      const sel = displayScorers.find((s: any) => s.id === scheduleForm.assigned_scorer_id) || displayScorers[0];
+                      const selScorer = scorers.find(s => s.id === scheduleForm.assigned_scorer_id) || scorers[0];
 
                       return (
                         <View style={styles.dropdownContainer}>
@@ -5329,10 +5203,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               </View>
                               <View style={{ flex: 1 }}>
                                 <Text style={styles.dropdownSelectedTitle} numberOfLines={1}>
-                                  {sel?.scorerName || sel?.name || sel?.id}
+                                  {selScorer?.name || scheduleForm.assigned_scorer_id || 'Select Scorer'}
                                 </Text>
                                 <Text style={styles.dropdownSelectedSub} numberOfLines={1}>
-                                  {sel?.grade || 'District Scorer'} • {sel?.taluk || 'Virudhunagar'} • 📞 {sel?.phone || '—'}
+                                  {selScorer?.phone ? `📞 ${selScorer.phone}` : (selScorer?.email || 'Registered Official Scorer')}
                                 </Text>
                               </View>
                             </View>
@@ -5342,33 +5216,19 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           {scorerDropdownOpen && (
                             <View style={styles.dropdownTablePanelCompact}>
                               <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
-                                {displayScorers.map((sc: any) => {
-                                  const isScActive = scheduleForm.assigned_scorer_id === sc.id;
-                                  return (
-                                    <TouchableOpacity
-                                      key={sc.id}
-                                      style={[styles.dropdownTableRowCompact, isScActive && styles.dropdownTableRowActive]}
-                                      onPress={() => {
-                                        setScheduleForm({ ...scheduleForm, assigned_scorer_id: sc.id });
-                                        setScorerDropdownOpen(false);
-                                      }}
-                                      activeOpacity={0.8}
-                                    >
-                                      <View style={styles.dropdownTableRowLeft}>
-                                        <Text style={{ fontSize: 14 }}>👤</Text>
-                                        <View>
-                                          <Text style={[styles.dropdownRowTitle, isScActive && styles.dropdownRowTitleActive]}>
-                                            {sc.scorerName || sc.name || sc.id}
-                                          </Text>
-                                          <Text style={styles.dropdownRowMeta}>
-                                            {sc.id} • {sc.grade || 'District Scorer'} • {sc.taluk || 'Virudhunagar'}
-                                          </Text>
-                                        </View>
-                                      </View>
-                                      {isScActive && <Text style={styles.dropdownRowCheck}>✓</Text>}
-                                    </TouchableOpacity>
-                                  );
-                                })}
+                                {scorers.map((sc: any) => (
+                                  <TouchableOpacity
+                                    key={sc.id}
+                                    style={styles.dropdownTableRowCompact}
+                                    onPress={() => {
+                                      setScheduleForm(prev => ({ ...prev, assigned_scorer_id: sc.id }));
+                                      setScorerDropdownOpen(false);
+                                    }}
+                                  >
+                                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>👤 {sc.name}</Text>
+                                    <Text style={{ fontSize: 11, color: '#64748b' }}>{sc.id} • {sc.email || sc.phone || 'Official'}</Text>
+                                  </TouchableOpacity>
+                                ))}
                               </ScrollView>
                             </View>
                           )}
@@ -5376,19 +5236,98 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       );
                     })()}
 
-                    {/* Appointed Umpires Display */}
-                    <View style={{ marginTop: 12 }}>
-                      <Text style={[styles.formFieldLabel, { fontSize: 11.5, color: '#475569' }]}>Appointed Match Umpires</Text>
-                      <View style={styles.umpiresCardRowCompact}>
-                        <View style={styles.umpireCardCompact}>
-                          <Text style={styles.umpireRoleTitleCompact}>⚖️ Lead Field Umpire</Text>
-                          <Text style={styles.umpireNameTextCompact}>Thiru. P. Subramaniam</Text>
-                          <Text style={styles.umpireMetaTextCompact}>BCCI Certified Panelist • Virudhunagar</Text>
+                    {/* DYNAMIC UMPIRES SELECTION (Field Umpire 1 & Square Leg Umpire 2) */}
+                    <View style={{ marginTop: 14 }}>
+                      <Text style={styles.formFieldLabel}>Match Umpires (Dynamic Selection)</Text>
+                      <View style={styles.twoColFormGrid}>
+                        {/* Field Umpire 1 */}
+                        <View style={styles.colFormCard}>
+                          <Text style={[styles.formFieldLabel, { fontSize: 11.5, color: '#475569' }]}>⚖️ Field Umpire 1 (Lead)</Text>
+                          <TextInput
+                            style={styles.formTextInputCompact}
+                            placeholder="Type or select Umpire 1..."
+                            placeholderTextColor="#94a3b8"
+                            value={scheduleForm.umpire1_name || ''}
+                            onChangeText={(val) => setScheduleForm(prev => ({ ...prev, umpire1_name: val, umpire1_id: val }))}
+                          />
+                          <TouchableOpacity
+                            style={styles.dropdownToggleSmall}
+                            onPress={() => {
+                              setUmpire1DropdownOpen(!umpire1DropdownOpen);
+                              setUmpire2DropdownOpen(false);
+                            }}
+                          >
+                            <Text style={styles.dropdownToggleSmallText}>
+                              {umpire1DropdownOpen ? '▲ Hide Registered Umpires' : '▼ Select from Umpires'}
+                            </Text>
+                          </TouchableOpacity>
+
+                          {umpire1DropdownOpen && (
+                            <View style={styles.dropdownTablePanelCompact}>
+                              <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
+                                {officialsList
+                                  .filter(o => !o.role || (o.role || '').toUpperCase().includes('UMP') || (o.role || '').toUpperCase().includes('OFFIC'))
+                                  .map(u => (
+                                    <TouchableOpacity
+                                      key={`u1-${u.id}`}
+                                      style={styles.dropdownTableRowCompact}
+                                      onPress={() => {
+                                        setScheduleForm(prev => ({ ...prev, umpire1_id: u.id, umpire1_name: u.name }));
+                                        setUmpire1DropdownOpen(false);
+                                      }}
+                                    >
+                                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>⚖️ {u.name}</Text>
+                                      <Text style={{ fontSize: 11, color: '#64748b' }}>{u.role || 'Official Umpire'} • {u.id}</Text>
+                                    </TouchableOpacity>
+                                  ))}
+                              </ScrollView>
+                            </View>
+                          )}
                         </View>
-                        <View style={styles.umpireCardCompact}>
-                          <Text style={styles.umpireRoleTitleCompact}>⚖️ Square Leg Umpire</Text>
-                          <Text style={styles.umpireNameTextCompact}>Thiru. A. Karthikeyan</Text>
-                          <Text style={styles.umpireMetaTextCompact}>TNCA Senior Panel • Sivakasi</Text>
+
+                        {/* Field Umpire 2 */}
+                        <View style={styles.colFormCard}>
+                          <Text style={[styles.formFieldLabel, { fontSize: 11.5, color: '#475569' }]}>⚖️ Field Umpire 2 (Square Leg)</Text>
+                          <TextInput
+                            style={styles.formTextInputCompact}
+                            placeholder="Type or select Umpire 2..."
+                            placeholderTextColor="#94a3b8"
+                            value={scheduleForm.umpire2_name || ''}
+                            onChangeText={(val) => setScheduleForm(prev => ({ ...prev, umpire2_name: val, umpire2_id: val }))}
+                          />
+                          <TouchableOpacity
+                            style={styles.dropdownToggleSmall}
+                            onPress={() => {
+                              setUmpire2DropdownOpen(!umpire2DropdownOpen);
+                              setUmpire1DropdownOpen(false);
+                            }}
+                          >
+                            <Text style={styles.dropdownToggleSmallText}>
+                              {umpire2DropdownOpen ? '▲ Hide Registered Umpires' : '▼ Select from Umpires'}
+                            </Text>
+                          </TouchableOpacity>
+
+                          {umpire2DropdownOpen && (
+                            <View style={styles.dropdownTablePanelCompact}>
+                              <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
+                                {officialsList
+                                  .filter(o => !o.role || (o.role || '').toUpperCase().includes('UMP') || (o.role || '').toUpperCase().includes('OFFIC'))
+                                  .map(u => (
+                                    <TouchableOpacity
+                                      key={`u2-${u.id}`}
+                                      style={styles.dropdownTableRowCompact}
+                                      onPress={() => {
+                                        setScheduleForm(prev => ({ ...prev, umpire2_id: u.id, umpire2_name: u.name }));
+                                        setUmpire2DropdownOpen(false);
+                                      }}
+                                    >
+                                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>⚖️ {u.name}</Text>
+                                      <Text style={{ fontSize: 11, color: '#64748b' }}>{u.role || 'Official Umpire'} • {u.id}</Text>
+                                    </TouchableOpacity>
+                                  ))}
+                              </ScrollView>
+                            </View>
+                          )}
                         </View>
                       </View>
                     </View>
@@ -5396,18 +5335,18 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                   {/* Optional Match Notes & Preferences */}
                   <View style={[styles.colFormCard, { marginTop: 14 }]}>
-                    <Text style={styles.formFieldLabel}>Match Notes & Ground Logistics (Optional)</Text>
+                    <Text style={styles.formFieldLabel}>Match Notes (Optional)</Text>
                     <TextInput
                       style={styles.formTextAreaCompact}
-                      placeholder="e.g. Pitch report: Dry batting wicket, reserve day scheduled in case of inclement weather..."
+                      placeholder="e.g. Pitch conditions, reserve day info..."
                       placeholderTextColor="#94a3b8"
                       multiline={true}
                       numberOfLines={2}
                       value={scheduleForm.match_notes}
-                      onChangeText={(val) => setScheduleForm({ ...scheduleForm, match_notes: val })}
+                      onChangeText={(val) => setScheduleForm(prev => ({ ...prev, match_notes: val }))}
                     />
 
-                    {/* Dispatch Alert Preference */}
+                    {/* Notification Alert Preference */}
                     <TouchableOpacity
                       style={styles.toggleRow}
                       onPress={() => setNotifyTeamsOnTimeChange(!notifyTeamsOnTimeChange)}
@@ -5417,18 +5356,16 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                         {notifyTeamsOnTimeChange && <Text style={styles.toggleCheckText}>✓</Text>}
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.toggleTitle}>Automated Club Dispatch</Text>
-                        <Text style={styles.toggleSubtitle}>Broadcast automated fixture alerts to competing clubs & officials upon confirmation.</Text>
+                        <Text style={styles.toggleTitle}>Notify Teams</Text>
+                        <Text style={styles.toggleSubtitle}>Send notifications to participating teams and match officials.</Text>
                       </View>
                     </TouchableOpacity>
                   </View>
 
-                  {/* ───────────────────────────────────────────────────────
-                      COMPACT MATCH SUMMARY CARD BEFORE SUBMIT (Requirement 2 & 3)
-                      ─────────────────────────────────────────────────────── */}
+                  {/* Clean Match Summary Card */}
                   <View style={styles.matchSummaryCard}>
                     <View style={styles.summaryCardHeader}>
-                      <Text style={styles.summaryCardHeaderTitle}>📋 Fixture Preview & Pre-Dispatch Summary</Text>
+                      <Text style={styles.summaryCardHeaderTitle}>📋 Match Summary</Text>
                       <View style={styles.summaryCardBadge}>
                         <Text style={styles.summaryCardBadgeText}>{scheduleForm.match_type || 'T20'} • {scheduleForm.overs} OVERS</Text>
                       </View>
@@ -5441,7 +5378,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           <Text style={{ fontSize: 13 }}>🏏</Text>
                         </View>
                         <Text style={styles.summaryTeamName} numberOfLines={1}>
-                          {availableTeams.find(t => t.id === scheduleForm.team_a_id)?.name || 'Home Club'}
+                          {scheduleForm.team_a_name || 'Team 1'}
                         </Text>
                         <Text style={styles.summaryTeamRole}>HOME</Text>
                       </View>
@@ -5455,7 +5392,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           <Text style={{ fontSize: 13 }}>🏏</Text>
                         </View>
                         <Text style={styles.summaryTeamName} numberOfLines={1}>
-                          {availableTeams.find(t => t.id === scheduleForm.team_b_id)?.name || 'Away Club'}
+                          {scheduleForm.team_b_name || 'Team 2'}
                         </Text>
                         <Text style={styles.summaryTeamRole}>AWAY</Text>
                       </View>
@@ -5465,22 +5402,30 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     <View style={styles.summaryDetailsGrid}>
                       <View style={styles.summaryDetailItem}>
                         <Text style={styles.summaryDetailKey}>🏆 Tournament</Text>
-                        <Text style={styles.summaryDetailVal} numberOfLines={1}>{scheduleForm.tournament_name || 'Virudhunagar League'}</Text>
+                        <Text style={styles.summaryDetailVal} numberOfLines={1}>{scheduleForm.tournament_name || 'Tournament'}</Text>
                       </View>
                       <View style={styles.summaryDetailItem}>
                         <Text style={styles.summaryDetailKey}>📅 Date & Time</Text>
                         <Text style={styles.summaryDetailVal}>{scheduleForm.match_date} • {scheduleForm.match_time}</Text>
                       </View>
                       <View style={styles.summaryDetailItem}>
-                        <Text style={styles.summaryDetailKey}>📍 Stadium</Text>
-                        <Text style={styles.summaryDetailVal} numberOfLines={1}>{scheduleForm.venue || 'District Stadium'}</Text>
+                        <Text style={styles.summaryDetailKey}>📍 Venue</Text>
+                        <Text style={styles.summaryDetailVal} numberOfLines={1}>{scheduleForm.venue || 'Ground TBD'}</Text>
                       </View>
                       <View style={styles.summaryDetailItem}>
-                        <Text style={styles.summaryDetailKey}>👤 Digital Scorer</Text>
+                        <Text style={styles.summaryDetailKey}>👤 Scorer</Text>
                         <Text style={styles.summaryDetailVal} numberOfLines={1}>
-                          {officialsList.find(o => o.id === scheduleForm.assigned_scorer_id)?.name || scheduleForm.assigned_scorer_id || 'K. Murugan'}
+                          {officialsList.find(o => o.id === scheduleForm.assigned_scorer_id)?.name || scheduleForm.assigned_scorer_id || 'Assigned'}
                         </Text>
                       </View>
+                      {(scheduleForm.umpire1_name || scheduleForm.umpire2_name) ? (
+                        <View style={[styles.summaryDetailItem, { width: '100%' }]}>
+                          <Text style={styles.summaryDetailKey}>⚖️ Umpires</Text>
+                          <Text style={styles.summaryDetailVal} numberOfLines={1}>
+                            {[scheduleForm.umpire1_name, scheduleForm.umpire2_name].filter(Boolean).join(' • ')}
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
                   </View>
                 </View>
@@ -5548,12 +5493,144 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       </View>
                     ) : (
                       <Text style={styles.btnPrimaryGreenCompactText}>
-                        {editingMatch ? '💾 Save Reschedule & Dispatch Alerts' : '➕ Confirm & Schedule Championship Match'}
+                        {editingMatch ? '💾 Save Changes' : '➕ Schedule Match'}
                       </Text>
                     )}
                   </TouchableOpacity>
                 )}
               </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ─────────────────────────────────────────────────────────────
+          12B. GOOGLE MAPS VENUE LOCATION PICKER MODAL
+          ───────────────────────────────────────────────────────────── */}
+      <Modal
+        visible={googleMapsModalOpen}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setGoogleMapsModalOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.mapsPickerModalDialog}>
+            <View style={styles.mapsModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 20 }}>📍</Text>
+                <View>
+                  <Text style={styles.mapsModalTitle}>Select Match Venue on Google Maps</Text>
+                  <Text style={styles.mapsModalSubtitle}>Search or enter the ground / turf name or paste Google Maps location</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => setGoogleMapsModalOpen(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Text style={styles.modalCloseBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.mapsModalBody}>
+              {/* Search Input */}
+              <Text style={styles.formFieldLabel}>Ground Name / Location / Turf *</Text>
+              <View style={styles.mapsSearchInputWrap}>
+                <Text style={{ fontSize: 16, marginRight: 8 }}>🔍</Text>
+                <TextInput
+                  style={styles.mapsSearchInput}
+                  placeholder="e.g. The Arasan Turf Court, Sivakasi..."
+                  placeholderTextColor="#94a3b8"
+                  value={mapsSearchQuery}
+                  onChangeText={setMapsSearchQuery}
+                />
+              </View>
+
+              {/* Action Buttons: Open Maps & GPS */}
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+                <TouchableOpacity
+                  style={styles.btnOpenMapsExternal}
+                  onPress={() => {
+                    const query = encodeURIComponent(mapsSearchQuery || 'Cricket Ground Virudhunagar');
+                    const url = `https://www.google.com/maps/search/?api=1&query=${query}`;
+                    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                      window.open(url, '_blank');
+                    } else {
+                      Linking.openURL(url).catch(() => {});
+                    }
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.btnOpenMapsExternalText}>🌐 Open in Google Maps ↗ (Search / View)</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.btnGpsLocation}
+                  onPress={() => {
+                    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+                      navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                          const lat = pos.coords.latitude.toFixed(6);
+                          const lng = pos.coords.longitude.toFixed(6);
+                          setMapsSearchQuery(`Ground Location (${lat}, ${lng})`);
+                        },
+                        () => {
+                          showNotification('Could not retrieve GPS. Please type the ground name.');
+                        }
+                      );
+                    } else {
+                      showNotification('GPS not available on this device.');
+                    }
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.btnGpsLocationText}>🎯 Get Current GPS Location</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Selected Location Preview Box */}
+              {mapsSearchQuery ? (
+                <View style={styles.mapsPreviewCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <Text style={{ fontSize: 16 }}>📍</Text>
+                    <Text style={styles.mapsPreviewTitle} numberOfLines={1}>
+                      {mapsSearchQuery}
+                    </Text>
+                  </View>
+                  <Text style={styles.mapsPreviewSubtitle}>
+                    Google Maps URL: https://www.google.com/maps/search/?api=1&query={encodeURIComponent(mapsSearchQuery)}
+                  </Text>
+                  <Text style={styles.mapsPreviewHelp}>
+                    Clicking below will save this ground location and return to match fixture creation. Players and teams can view this on Google Maps anytime.
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.mapsModalFooter}>
+              <TouchableOpacity
+                style={styles.btnSecondaryCompact}
+                onPress={() => setGoogleMapsModalOpen(false)}
+              >
+                <Text style={styles.btnSecondaryCompactText}>Cancel / Exit</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.btnPrimaryGreenCompact, !mapsSearchQuery.trim() && { opacity: 0.5 }]}
+                disabled={!mapsSearchQuery.trim()}
+                onPress={() => {
+                  const vName = mapsSearchQuery.trim();
+                  const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(vName)}`;
+                  setScheduleForm(prev => ({
+                    ...prev,
+                    venue: vName,
+                    venue_maps_url: mapUrl
+                  }));
+                  setGoogleMapsModalOpen(false);
+                  showNotification('✓ Venue location set from Google Maps!');
+                }}
+              >
+                <Text style={styles.btnPrimaryGreenCompactText}>✅ Set Venue & Return to Match</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -5646,8 +5723,31 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 </View>
                 <View style={styles.detailsRow}>
                   <Text style={styles.detailsKey}>📍 Venue / Ground:</Text>
-                  <Text style={styles.detailsVal}>{selectedMatchModal?.venue || 'Kamarajar District Stadium'}</Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      const v = selectedMatchModal?.venue || 'Kamarajar District Stadium';
+                      const url = selectedMatchModal?.venue_maps_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v)}`;
+                      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                        window.open(url, '_blank');
+                      } else {
+                        Linking.openURL(url).catch(() => {});
+                      }
+                    }}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                  >
+                    <Text style={[styles.detailsVal, { color: '#0284c7', textDecorationLine: 'underline', fontWeight: '700' }]}>
+                      {selectedMatchModal?.venue || 'District Stadium'} ↗ (Open in Google Maps)
+                    </Text>
+                  </TouchableOpacity>
                 </View>
+                {(selectedMatchModal?.umpire1_name || selectedMatchModal?.umpire2_name) && (
+                  <View style={styles.detailsRow}>
+                    <Text style={styles.detailsKey}>⚖️ Match Umpires:</Text>
+                    <Text style={styles.detailsVal}>
+                      {[selectedMatchModal?.umpire1_name, selectedMatchModal?.umpire2_name].filter(Boolean).join(' • ')}
+                    </Text>
+                  </View>
+                )}
                 <View style={styles.detailsRow}>
                   <Text style={styles.detailsKey}>📅 Date & Time:</Text>
                   <Text style={styles.detailsVal}>{selectedMatchModal?.match_date} at {selectedMatchModal?.match_time || '09:30 AM'}</Text>
@@ -7165,6 +7265,157 @@ const styles: any = StyleSheet.create({
   tdCell: {
     fontSize: 12.5,
     color: '#334155'
+  },
+  // Google Maps Picker & Dynamic Umpire Styles
+  mapsPickerTriggerBtn: {
+    backgroundColor: '#0284c7',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  mapsPickerTriggerBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  mapsPreviewTriggerBtn: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#86efac',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  mapsPreviewTriggerBtnText: {
+    color: '#15803d',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  dropdownToggleSmall: {
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignSelf: 'flex-start'
+  },
+  dropdownToggleSmallText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569'
+  },
+  mapsPickerModalDialog: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    width: '90%',
+    maxWidth: 620,
+    overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 10
+  },
+  mapsModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    backgroundColor: '#f8fafc'
+  },
+  mapsModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  mapsModalSubtitle: {
+    fontSize: 12,
+    color: '#64748b'
+  },
+  mapsModalBody: {
+    padding: 18
+  },
+  mapsSearchInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    backgroundColor: '#ffffff',
+    height: 42
+  },
+  mapsSearchInput: {
+    flex: 1,
+    fontSize: 13.5,
+    color: '#0f172a',
+    paddingVertical: 6
+  },
+  btnOpenMapsExternal: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 8
+  },
+  btnOpenMapsExternalText: {
+    color: '#ffffff',
+    fontSize: 12.5,
+    fontWeight: '700'
+  },
+  btnGpsLocation: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 8
+  },
+  btnGpsLocationText: {
+    color: '#ffffff',
+    fontSize: 12.5,
+    fontWeight: '700'
+  },
+  mapsPreviewCard: {
+    marginTop: 14,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    borderRadius: 10,
+    padding: 12
+  },
+  mapsPreviewTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#166534',
+    flex: 1
+  },
+  mapsPreviewSubtitle: {
+    fontSize: 11.5,
+    color: '#15803d',
+    marginTop: 2
+  },
+  mapsPreviewHelp: {
+    fontSize: 11,
+    color: '#4b5563',
+    marginTop: 6,
+    lineHeight: 16
+  },
+  mapsModalFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    backgroundColor: '#f8fafc'
   },
   modalFooter: {
     flexDirection: 'row',

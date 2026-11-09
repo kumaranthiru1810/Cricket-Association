@@ -140,6 +140,7 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: {
     color: '#0f172a',
+
     fontWeight: '800',
     fontSize: 13
   },
