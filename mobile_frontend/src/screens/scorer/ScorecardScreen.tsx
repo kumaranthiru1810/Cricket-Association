@@ -6,6 +6,7 @@ import SharedFooter from '../../components/scorer/SharedFooter';
 import { ScorerApi } from '../../services/api';
 import WagonWheel from '../../components/analytics/WagonWheel';
 import ErrorBoundary from '../../components/common/ErrorBoundary';
+import CricketRulesModal, { CricketRuleType } from '../../components/scorer/CricketRulesModal';
 
 const IMG_CHAMPIONS = require('../../../assets/cricket_champions.png');
 
@@ -17,7 +18,8 @@ interface ScorecardScreenProps {
 
 export default function ScorecardScreen({ onExit, initialMatchId, initialParams }: ScorecardScreenProps = {}) {
   const scorerNav = useScorerNavigation();
-  const matchId = initialMatchId || initialParams?.matchId || scorerNav.params?.matchId || 'M001';
+  const params = initialParams || scorerNav.params;
+  const matchId = initialMatchId || params?.matchId || 'M001';
 
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
@@ -27,9 +29,14 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
   const [scorecardData, setScorecardData] = useState<any>(null);
   const [activeInningsTab, setActiveInningsTab] = useState<number>(0);
   const [selectedWagonBatterId, setSelectedWagonBatterId] = useState<string>('');
+  const [showRulesModal, setShowRulesModal] = useState<boolean>(false);
+  const [activeRule, setActiveRule] = useState<CricketRuleType>('FREE_HIT');
 
   const handleBack = () => {
-    if (onExit) {
+    const isLiveMatch = scorecardData?.match?.status === 'LIVE' || scorecardData?.match?.status === 'Live';
+    if (params?.returnTo === 'LiveScoring' && isLiveMatch) {
+      scorerNav?.navigate('LiveScoring', { matchId });
+    } else if (onExit) {
       onExit();
     } else if (scorerNav?.navigate) {
       scorerNav.navigate('Dashboard');
@@ -95,7 +102,24 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
     const runningPct = totalRuns > 0 ? Math.round((runningRuns / totalRuns) * 100) : 0;
     const extrasPct = totalRuns > 0 ? Math.max(0, 100 - boundaryPct - runningPct) : 0;
 
-    const runRate = totalBalls > 0 ? ((totalRuns / totalBalls) * 6).toFixed(2) : '0.00';
+    // Calculate actual overs bowled from currentInnings.overs (e.g. "20.0" -> 20.0, "16.2" -> 16.333)
+    let oversFloat = 0;
+    if (typeof currentInnings.overs === 'number') {
+      oversFloat = currentInnings.overs;
+    } else if (typeof currentInnings.overs === 'string') {
+      const parts = currentInnings.overs.split('.');
+      const ov = parseInt(parts[0], 10) || 0;
+      const b = parseInt(parts[1], 10) || 0;
+      oversFloat = ov + (b / 6);
+    } else if (currentInnings.oversNum !== undefined) {
+      oversFloat = (currentInnings.oversNum || 0) + ((currentInnings.balls || 0) / 6);
+    }
+
+    const runRate = oversFloat > 0
+      ? (totalRuns / oversFloat).toFixed(2)
+      : totalBalls > 0
+        ? ((totalRuns / totalBalls) * 6).toFixed(2)
+        : '0.00';
 
     return {
       totalRuns,
@@ -143,7 +167,13 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
       <View style={[styles.header, { paddingTop: ((styles.header as any)?.paddingTop || 16) + insetsTop }]}>
         <View style={styles.headerTopRow}>
           <TouchableOpacity onPress={handleBack} style={styles.backBtn} activeOpacity={0.8}>
-            <Text style={styles.backText}>← Back</Text>
+            <Text style={styles.backText}>
+              {params?.returnTo === 'Home'
+                ? '← Back to Association Portal'
+                : match.status === 'Live' || match.status === 'LIVE'
+                  ? '← Back to Live Scoring'
+                  : '← Back to Matches'}
+            </Text>
           </TouchableOpacity>
           <View style={styles.badgeLive}>
             <Text style={styles.badgeLiveText}>
@@ -309,6 +339,72 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
           </View>
 
           {/* ─────────────────────────────────────────────────────────────
+              OVERS & BOWLER LOGISTICS STATUS BAR
+              ───────────────────────────────────────────────────────────── */}
+          <View style={styles.oversLogisticsCard}>
+            <View style={styles.oversLogisticsRow}>
+              <View style={styles.oversLogisticsCol}>
+                <Text style={styles.oversLogisticsLabel}>CURRENT OVER</Text>
+                <Text style={styles.oversLogisticsValue}>
+                  Over {currentInnings.currentOverNumber || (Math.floor(parseFloat(currentInnings.overs || '0')) + 1)} ({currentInnings.overs || '0.0'} / {currentInnings.totalOvers || match.overs || 20} Ov)
+                </Text>
+              </View>
+              <View style={styles.oversLogisticsCol}>
+                <Text style={styles.oversLogisticsLabel}>OVERS REMAINING</Text>
+                <Text style={[styles.oversLogisticsValue, { color: '#b45309' }]}>
+                  {currentInnings.oversRemaining ? `${currentInnings.oversRemaining} Overs Left` : '0.0 Overs'}
+                  {currentInnings.ballsRemaining !== undefined ? ` (${currentInnings.ballsRemaining} balls)` : ''}
+                </Text>
+              </View>
+              {currentInnings.currentBowler && (
+                <View style={styles.oversLogisticsCol}>
+                  <Text style={styles.oversLogisticsLabel}>CURRENT BOWLER</Text>
+                  <Text style={[styles.oversLogisticsValue, { color: '#005960' }]}>
+                    🎳 {currentInnings.currentBowler.name} (Active)
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Suspended Bowlers Alert (MCC Law 41.7) */}
+            {Array.isArray(currentInnings.suspendedBowlers) && currentInnings.suspendedBowlers.length > 0 && (
+              <View style={styles.suspendedWarningBanner}>
+                <Text style={styles.suspendedWarningText}>
+                  🛑 UMPIRE SUSPENSION (MCC Law 41.7): {currentInnings.suspendedBowlers.map((b: any) => b.name).join(', ')} is suspended from bowling (2 Dangerous No-Balls)
+                </Text>
+              </View>
+            )}
+
+            {/* Free Hit Active Indicator */}
+            {currentInnings.isFreeHit && (
+              <View style={styles.freeHitScorecardBanner}>
+                <Text style={styles.freeHitScorecardBannerText}>
+                  ⚡ FREE HIT ACTIVE: Batter immune to Bowled, Caught, LBW & Stumped (Run Out Only)
+                </Text>
+              </View>
+            )}
+
+            {/* Powerplay Status & Rules Guide Link */}
+            <View style={styles.rulesBarRow}>
+              <View style={styles.powerplayBadge}>
+                <Text style={styles.powerplayBadgeText}>
+                  ⭕ Powerplay: Overs 1-6 (Max 2 fielders outside 30y ring)
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.rulesGuideBtn}
+                onPress={() => {
+                  setActiveRule('FREE_HIT');
+                  setShowRulesModal(true);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.rulesGuideBtnText}>⚖️ View Cricket Rules Guide & Diagrams</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* ─────────────────────────────────────────────────────────────
               BATTING SCORECARD TABLE
               ───────────────────────────────────────────────────────────── */}
           <View style={styles.sectionHeaderRow}>
@@ -393,8 +489,17 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
               BOWLING SCORECARD TABLE
               ───────────────────────────────────────────────────────────── */}
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionHeaderTitle}>🎯 Bowling Figures</Text>
-            <Text style={styles.sectionHeaderSub}>Attack by {currentInnings.bowlingTeam || 'Opponent'}</Text>
+            <View>
+              <Text style={styles.sectionHeaderTitle}>🎯 Bowling Figures</Text>
+              <Text style={styles.sectionHeaderSub}>Attack by {currentInnings.bowlingTeam || 'Opponent'}</Text>
+            </View>
+            {currentInnings.currentBowler && (
+              <View style={styles.liveBowlerHeaderBadge}>
+                <Text style={styles.liveBowlerHeaderBadgeText}>
+                  🎳 Active: {currentInnings.currentBowler.name}
+                </Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.tableWrapper}>
@@ -409,18 +514,86 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                   <Text style={[styles.cell, styles.colNum, styles.tableHeaderText]}>ECON</Text>
                 </View>
 
-                {(currentInnings.bowlers || []).map((bw: any, bwIdx: number) => (
-                  <View key={bw.id || bwIdx} style={[styles.tableRow, bwIdx % 2 === 1 && styles.tableRowAlt]}>
-                    <Text style={[styles.cell, styles.colName, styles.playerName]}>{bw.name}</Text>
-                    <Text style={[styles.cell, styles.colNum]}>{bw.overs}</Text>
-                    <Text style={[styles.cell, styles.colNum]}>{bw.maidens || 0}</Text>
-                    <Text style={[styles.cell, styles.colNum]}>{bw.runs}</Text>
-                    <Text style={[styles.cell, styles.colNum, styles.wicketsText]}>{bw.wickets}</Text>
-                    <Text style={[styles.cell, styles.colNum, styles.econText]}>
-                      {typeof bw.economy === 'number' ? bw.economy.toFixed(2) : bw.economy}
-                    </Text>
-                  </View>
-                ))}
+                {(currentInnings.bowlers || []).map((bw: any, bwIdx: number) => {
+                  const isCurrent = !!(
+                    bw.isCurrentBowler ||
+                    (currentInnings.currentBowler && (bw.playerId === currentInnings.currentBowler.id || bw.name === currentInnings.currentBowler.name))
+                  );
+                  const isSuspended = !!(
+                    bw.isSuspended ||
+                    (currentInnings.suspendedBowlers || []).some((s: any) => s.id === bw.playerId || s.name === bw.name)
+                  );
+
+                  // Mid-over substitution detection
+                  const subRecord = (currentInnings.substitutions || []).find((s: any) =>
+                    s.oldBowlerId === bw.playerId || s.oldBowlerName === bw.name ||
+                    s.newBowlerId === bw.playerId || s.newBowlerName === bw.name
+                  );
+
+                  const isQuotaFull = bw.isQuotaFull || parseFloat(bw.overs || '0') >= (bw.maxQuota || 4.0);
+
+                  let badgeText = bw.subNote || '';
+                  if (!badgeText) {
+                    if (isSuspended) {
+                      badgeText = '🚫 Suspended (2 No-Balls)';
+                    } else if (subRecord) {
+                      if (subRecord.oldBowlerName === bw.name || subRecord.oldBowlerId === bw.playerId) {
+                        badgeText = subRecord.situation ? `🩹 Sub: ${subRecord.situation}` : '🩹 Mid-Over Substituted';
+                      } else if (subRecord.isMidOver) {
+                        badgeText = '⚡ Shared Over (Sub In)';
+                      }
+                    } else if (bw.overs && !bw.overs.endsWith('.0') && !isCurrent) {
+                      badgeText = `🩹 Mid-Over Sub (${bw.overs} ov)`;
+                    }
+                  }
+
+                  return (
+                    <View
+                      key={bw.id || bwIdx}
+                      style={[
+                        styles.tableRow,
+                        bwIdx % 2 === 1 && styles.tableRowAlt,
+                        isCurrent && { backgroundColor: '#f0fdfa' },
+                        isSuspended && { backgroundColor: '#fff1f2' }
+                      ]}
+                    >
+                      <View style={[styles.colName, { flexDirection: 'column', alignItems: 'flex-start' }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <Text style={[styles.playerName, isCurrent && { color: '#005960', fontWeight: '800' }]}>
+                            {bw.name}
+                          </Text>
+                          {isCurrent && (
+                            <View style={styles.bowlingBadge}>
+                              <Text style={styles.bowlingBadgeText}>🟢 Bowling</Text>
+                            </View>
+                          )}
+                        </View>
+                        {isSuspended ? (
+                          <View style={styles.suspendedPill}>
+                            <Text style={styles.suspendedPillText}>🚫 Suspended (2 No-Balls)</Text>
+                          </View>
+                        ) : isQuotaFull ? (
+                          <View style={styles.quotaPill}>
+                            <Text style={styles.quotaPillText}>🔋 Quota Full ({bw.overs}/{bw.maxQuota || 4}.0 Ov)</Text>
+                          </View>
+                        ) : badgeText ? (
+                          <View style={styles.subPill}>
+                            <Text style={styles.subPillText}>{badgeText}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <Text style={[styles.cell, styles.colNum, isCurrent && { fontWeight: '800', color: '#005960' }]}>
+                        {bw.overs}
+                      </Text>
+                      <Text style={[styles.cell, styles.colNum]}>{bw.maidens || 0}</Text>
+                      <Text style={[styles.cell, styles.colNum]}>{bw.runs}</Text>
+                      <Text style={[styles.cell, styles.colNum, styles.wicketsText]}>{bw.wickets}</Text>
+                      <Text style={[styles.cell, styles.colNum, styles.econText]}>
+                        {typeof bw.economy === 'number' ? bw.economy.toFixed(2) : bw.economy}
+                      </Text>
+                    </View>
+                  );
+                })}
               </View>
             </ScrollView>
           </View>
@@ -570,20 +743,46 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
           )}
 
           {/* ACTION BUTTONS */}
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => (scorerNav?.navigate ? scorerNav.navigate('LiveScoring', { matchId }) : handleBack())}
-          >
-            <Text style={styles.actionBtnText}>
-              {match.status === 'Live' || match.status === 'LIVE'
-                ? '⚡ Back to Live Scoring Console'
-                : '← Back to Match Portal'}
-            </Text>
-          </TouchableOpacity>
+          <View style={{ gap: 10, marginTop: 16 }}>
+            {(match.status === 'Live' || match.status === 'LIVE') && (
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => scorerNav?.navigate ? scorerNav.navigate('LiveScoring', { matchId }) : handleBack()}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.actionBtnText}>
+                  ⚡ Return to Live Scoring Console
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: '#059669', borderColor: '#047857' }]}
+              onPress={handleBack}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.actionBtnText}>
+                {params?.returnTo === 'Home' ? '🏠 Back to Association Home Portal' : '🏠 Back to Scorer Dashboard (Matches)'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <SharedFooter />
       </ScrollView>
+
+      {/* Smart Cricket Rules & Umpire Assistant Modal */}
+      <CricketRulesModal
+        visible={showRulesModal}
+        activeRule={activeRule}
+        matchId={matchId}
+        ruleContext={{
+          currentFormat: match ? `${match.tournament} • ${match.overs || 20} Overs` : 'T20 Match',
+          totalRuns: currentInnings?.totalRuns,
+          wickets: currentInnings?.wickets
+        }}
+        onClose={() => setShowRulesModal(false)}
+      />
     </View>
   );
 }
@@ -1052,6 +1251,172 @@ const styles = StyleSheet.create({
     marginTop: 22,
     elevation: 3
   },
-  actionBtnText: { color: '#0a1432', fontWeight: '900', fontSize: 14 }
+  actionBtnText: { color: '#0a1432', fontWeight: '900', fontSize: 14 },
+
+  oversLogisticsCard: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 10,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2
+  },
+  oversLogisticsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'space-between'
+  },
+  oversLogisticsCol: {
+    minWidth: 130,
+    flex: 1
+  },
+  oversLogisticsLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748b',
+    letterSpacing: 0.5,
+    marginBottom: 2
+  },
+  oversLogisticsValue: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  suspendedWarningBanner: {
+    backgroundColor: '#fff1f2',
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    borderRadius: 6,
+    padding: 8,
+    marginTop: 10
+  },
+  suspendedWarningText: {
+    color: '#9f1239',
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  liveBowlerHeaderBadge: {
+    backgroundColor: '#dcfce7',
+    borderWidth: 1,
+    borderColor: '#86efac',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2
+  },
+  liveBowlerHeaderBadgeText: {
+    color: '#15803d',
+    fontSize: 10.5,
+    fontWeight: '800'
+  },
+  bowlingBadge: {
+    backgroundColor: '#dcfce7',
+    borderColor: '#86efac',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5
+  },
+  bowlingBadgeText: {
+    color: '#15803d',
+    fontSize: 9.5,
+    fontWeight: '800'
+  },
+  suspendedPill: {
+    backgroundColor: '#fee2e2',
+    borderColor: '#fca5a5',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    marginTop: 3
+  },
+  suspendedPillText: {
+    color: '#b91c1c',
+    fontSize: 9.5,
+    fontWeight: '800'
+  },
+  subPill: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#fde68a',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    marginTop: 3
+  },
+  subPillText: {
+    color: '#b45309',
+    fontSize: 9.5,
+    fontWeight: '700'
+  },
+  // Rules & Quota styles
+  freeHitScorecardBanner: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#ef4444',
+    borderWidth: 1.5,
+    borderRadius: 8,
+    padding: 8,
+    marginTop: 8
+  },
+  freeHitScorecardBannerText: {
+    color: '#b91c1c',
+    fontSize: 11.5,
+    fontWeight: '800'
+  },
+  rulesBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8
+  },
+  powerplayBadge: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#93c5fd',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4
+  },
+  powerplayBadgeText: {
+    color: '#1d4ed8',
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  rulesGuideBtn: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#10b981',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5
+  },
+  rulesGuideBtnText: {
+    color: '#065f46',
+    fontSize: 11,
+    fontWeight: '800'
+  },
+  quotaPill: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    marginTop: 3
+  },
+  quotaPillText: {
+    color: '#b45309',
+    fontSize: 9.5,
+    fontWeight: '800'
+  }
 });
 

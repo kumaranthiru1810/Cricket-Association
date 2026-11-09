@@ -1,4 +1,4 @@
-/**
+﻿/**
  * src/screens/player/PlayerDashboardScreen.tsx
  *
  * Official Player Management Portal for Cricket Federation of Virudhunagar District (CFVD).
@@ -18,14 +18,29 @@ import {
   Modal,
   Alert,
   Platform,
-  useWindowDimensions
+  useWindowDimensions,
+  PanResponder
 } from 'react-native';
-import { PlayerApi, ScorerApi, getCurrentUser, setCurrentUser } from '../../services/api';
+import * as ImagePicker from 'expo-image-picker';
+import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
+import { PlayerApi, ScorerApi, getCurrentUser, setCurrentUser, setAuthToken, SOCKET_URL } from '../../services/api';
 import {
   RefreshIcon,
   MenuIcon,
   CloseIcon,
-  LogoutIcon
+  LogoutIcon,
+  SearchIcon,
+  EditIcon,
+  EyeIcon,
+  CheckIcon,
+  BellIcon,
+  AwardIcon,
+  StatisticsIcon,
+  CricketBatIcon,
+  UsersIcon,
+  DashboardIcon,
+  ShieldIcon,
+  ChevronRightIcon
 } from '../../admin/components/Icons';
 import PlayerSidebar, { PlayerTabType as TabType, getPlayerNavItems } from './PlayerSidebar';
 
@@ -71,11 +86,44 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
   const [editJerseyNumber, setEditJerseyNumber] = useState<string>('10');
   const [editMobile, setEditMobile] = useState<string>('');
   const [editTaluk, setEditTaluk] = useState<string>('Virudhunagar');
+  const [editPhoto, setEditPhoto] = useState<string | null>(null);
   const [isSavingProfile, setIsSavingProfile] = useState<boolean>(false);
   const [profileFeedback, setProfileFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
+  // Photo Crop Modal State
+  const [isCropModalVisible, setIsCropModalVisible] = useState<boolean>(false);
+  const [rawImageToCrop, setRawImageToCrop] = useState<string | null>(null);
+  const [cropZoom, setCropZoom] = useState<number>(1);
+  const [cropPan, setCropPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [cropRotation, setCropRotation] = useState<number>(0);
+  const [imageNaturalDimensions, setImageNaturalDimensions] = useState<{ width: number; height: number }>({ width: 300, height: 300 });
+  const [isCropping, setIsCropping] = useState<boolean>(false);
+
+  const cropPanRef = React.useRef(cropPan);
+  cropPanRef.current = cropPan;
+  const startPanRef = React.useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const panResponder = React.useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          startPanRef.current = { ...cropPanRef.current };
+        },
+        onPanResponderMove: (_evt, gestureState) => {
+          setCropPan({
+            x: Math.round(startPanRef.current.x + gestureState.dx),
+            y: Math.round(startPanRef.current.y + gestureState.dy)
+          });
+        }
+      }),
+    []
+  );
+
   // Logout modal state
   const [logoutModalOpen, setLogoutModalOpen] = useState<boolean>(false);
+  const [selectedSquadPlayer, setSelectedSquadPlayer] = useState<any>(null);
 
   // Responsive sidebar & header states
   const { width } = useWindowDimensions();
@@ -109,6 +157,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
         setEditJerseyNumber(String(p.jerseyNumber ?? ''));
         setEditMobile(p.mobile || '');
         setEditTaluk(p.taluk || '');
+        setEditPhoto(p.photo || null);
       } else if (profileRes.status === 'rejected') {
         console.warn('Profile fetch failed:', profileRes.reason?.message);
       }
@@ -201,10 +250,10 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
             if (raw) {
               const norm = {
                 ...raw,
-                tournamentName: raw.tournament || raw.tournamentName || raw.match?.tournament || 'District Match',
+                tournamentName: raw.tournament || raw.tournamentName || raw.match?.tournament || '',
                 teamA: { name: raw.teamA?.name || raw.teamA || raw.match?.teamA || 'Team A' },
                 teamB: { name: raw.teamB?.name || raw.teamB || raw.match?.teamB || 'Team B' },
-                venue: raw.venue || raw.match?.venue || 'District Stadium',
+                venue: raw.venue || raw.match?.venue || '',
                 result: raw.result || raw.match?.result,
                 innings: (raw.innings || []).map((inn: any) => ({
                   ...inn,
@@ -233,6 +282,224 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
     return () => clearInterval(timer);
   }, [matches, selectedScorecardMatchId]);
 
+  // Resolve full URI for profile photo (handles data URLs, absolute URLs, and relative upload paths)
+  const resolvePhotoUrl = (photoUri?: string | null): string | null => {
+    if (!photoUri || typeof photoUri !== 'string') return null;
+    const trimmed = photoUri.trim();
+    if (!trimmed) return null;
+    if (trimmed.startsWith('data:image/') || trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+    const base = SOCKET_URL || 'http://localhost:5000';
+    return `${base}${cleanPath}`;
+  };
+
+  // Open Interactive Photo Crop Modal
+  const openCropModal = (imageUri: string) => {
+    if (!imageUri) return;
+    if (Platform.OS === 'web') {
+      const img = new (window as any).Image();
+      img.onload = () => {
+        setImageNaturalDimensions({
+          width: img.naturalWidth || 300,
+          height: img.naturalHeight || 300
+        });
+        setCropZoom(1);
+        setCropPan({ x: 0, y: 0 });
+        setCropRotation(0);
+        setRawImageToCrop(imageUri);
+        setIsCropModalVisible(true);
+      };
+      img.src = imageUri;
+    } else {
+      Image.getSize(
+        imageUri,
+        (w, h) => {
+          setImageNaturalDimensions({ width: w, height: h });
+          setCropZoom(1);
+          setCropPan({ x: 0, y: 0 });
+          setCropRotation(0);
+          setRawImageToCrop(imageUri);
+          setIsCropModalVisible(true);
+        },
+        () => {
+          setImageNaturalDimensions({ width: 300, height: 300 });
+          setCropZoom(1);
+          setCropPan({ x: 0, y: 0 });
+          setCropRotation(0);
+          setRawImageToCrop(imageUri);
+          setIsCropModalVisible(true);
+        }
+      );
+    }
+  };
+
+  const handleResetCrop = () => {
+    setCropZoom(1);
+    setCropPan({ x: 0, y: 0 });
+    setCropRotation(0);
+  };
+
+  const handleCloseCropModal = () => {
+    setIsCropModalVisible(false);
+    setRawImageToCrop(null);
+  };
+
+  const handleApplyCrop = async () => {
+    if (!rawImageToCrop) return;
+    setIsCropping(true);
+
+    try {
+      if (Platform.OS === 'web') {
+        const img = new (window as any).Image();
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = rawImageToCrop;
+        });
+
+        const CROP_APERTURE = 240;
+        const OUTPUT_SIZE = 300;
+        const canvas = document.createElement('canvas');
+        canvas.width = OUTPUT_SIZE;
+        canvas.height = OUTPUT_SIZE;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Could not initialize canvas context');
+
+        const ratio = OUTPUT_SIZE / CROP_APERTURE;
+        const baseScale = Math.max(
+          CROP_APERTURE / (img.naturalWidth || 1),
+          CROP_APERTURE / (img.naturalHeight || 1)
+        );
+
+        ctx.clearRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+
+        // Move origin to center of output canvas with pan offset
+        ctx.translate(
+          OUTPUT_SIZE / 2 + cropPan.x * ratio,
+          OUTPUT_SIZE / 2 + cropPan.y * ratio
+        );
+
+        // Apply rotation
+        ctx.rotate((cropRotation * Math.PI) / 180);
+
+        // Apply zoom and draw centered
+        const drawW = img.naturalWidth * baseScale * cropZoom * ratio;
+        const drawH = img.naturalHeight * baseScale * cropZoom * ratio;
+        ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+
+        const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+        setEditPhoto(croppedDataUrl);
+        setIsCropModalVisible(false);
+        setRawImageToCrop(null);
+        setProfileFeedback({
+          message: 'Profile photo cropped successfully! Click "Save Changes" to save.',
+          type: 'success'
+        });
+      } else {
+        // Native fallback
+        setEditPhoto(rawImageToCrop);
+        setIsCropModalVisible(false);
+        setRawImageToCrop(null);
+        setProfileFeedback({
+          message: 'Profile photo selected! Click "Save Changes" to save.',
+          type: 'success'
+        });
+      }
+    } catch (err: any) {
+      console.error('Error cropping image:', err);
+      Alert.alert('Crop Error', 'Failed to crop profile photo. Please try again.');
+    } finally {
+      setIsCropping(false);
+    }
+  };
+
+  const handleOpenEditProfile = () => {
+    if (profile) {
+      setEditBattingStyle(profile.battingStyle || '');
+      setEditBowlingStyle(profile.bowlingStyle || '');
+      setEditJerseyNumber(profile.jerseyNumber !== undefined && profile.jerseyNumber !== null ? String(profile.jerseyNumber) : '');
+      setEditMobile(profile.mobile || '');
+      setEditTaluk(profile.taluk || '');
+      setEditPhoto(profile.photo || profile.image_path || null);
+    }
+    setProfileFeedback(null);
+    setIsEditProfileVisible(true);
+  };
+
+  const handleTakePhoto = async () => {
+    if (Platform.OS === 'web') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.setAttribute('capture', 'environment');
+      input.onchange = (e: any) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const raw = ev.target?.result as string;
+          if (raw) openCropModal(raw);
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+      return;
+    }
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Camera Permission Required', 'Please allow camera access to take a profile photo.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: false,
+      quality: 0.9,
+      base64: true
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      const asset = result.assets[0];
+      const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      openCropModal(uri);
+    }
+  };
+
+  const handlePickPhoto = async () => {
+    if (Platform.OS === 'web') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = (e: any) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const raw = ev.target?.result as string;
+          if (raw) openCropModal(raw);
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+      return;
+    }
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Please allow photo library access to upload a profile photo.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 0.9,
+      base64: true
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      const asset = result.assets[0];
+      const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      openCropModal(uri);
+    }
+  };
+
   const handleSaveProfile = async () => {
     setProfileFeedback(null);
     setIsSavingProfile(true);
@@ -242,15 +509,18 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
       const updates = {
         battingStyle: editBattingStyle.trim(),
         bowlingStyle: editBowlingStyle.trim(),
-        jerseyNumber: isNaN(jerseyNum) ? 10 : jerseyNum,
+        jerseyNumber: isNaN(jerseyNum) ? undefined : jerseyNum,
         mobile: editMobile.trim(),
-        taluk: editTaluk.trim()
+        taluk: editTaluk.trim(),
+        photo: editPhoto,
+        image_path: editPhoto
       };
 
       const res = await PlayerApi.updateProfile(updates);
       if (res && res.profile) {
         setProfile(res.profile);
-        setProfileFeedback({ message: 'Profile updated successfully!', type: 'success' });
+        setEditPhoto(res.profile.photo || res.profile.image_path || null);
+        setProfileFeedback({ message: 'Profile and photo updated successfully!', type: 'success' });
         setTimeout(() => {
           setIsEditProfileVisible(false);
           setProfileFeedback(null);
@@ -275,10 +545,10 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
       if (raw) {
         const norm = {
           ...raw,
-          tournamentName: raw.tournament || raw.tournamentName || raw.match?.tournament || 'District Match',
+          tournamentName: raw.tournament || raw.tournamentName || raw.match?.tournament || '',
           teamA: { name: raw.teamA?.name || raw.teamA || raw.match?.teamA || 'Team A' },
           teamB: { name: raw.teamB?.name || raw.teamB || raw.match?.teamB || 'Team B' },
-          venue: raw.venue || raw.match?.venue || 'District Stadium',
+          venue: raw.venue || raw.match?.venue || '',
           result: raw.result || raw.match?.result,
           innings: (raw.innings || []).map((inn: any) => ({
             ...inn,
@@ -310,6 +580,8 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
     try {
       await ScorerApi.logout();
     } catch (_e) {}
+    setAuthToken(null);
+    setCurrentUser(null);
     setLogoutModalOpen(false);
     if (onExit) onExit();
   };
@@ -353,7 +625,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
 
   const donutSegments = useMemo(() => {
     const total = runsScored + (wicketsTaken * 10) + (catchesTaken * 5);
-    if (total === 0) return { runsPct: 60, wktsPct: 25, catchPct: 15 };
+    if (total === 0) return { runsPct: 0, wktsPct: 0, catchPct: 0 };
     const runsPct = Math.round((runsScored / total) * 100);
     const wktsPct = Math.round(((wicketsTaken * 10) / total) * 100);
     const catchPct = 100 - runsPct - wktsPct;
@@ -405,7 +677,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
   const navItems = useMemo(
     () =>
       getPlayerNavItems({
-        squadCount: squad.length || 15,
+        squadCount: squad.length,
         matchesCount: matches.length,
         achievementsCount: unlockedPatchesCount,
         notificationsCount: notifications.length
@@ -423,8 +695,9 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
           onSelectTab={setActiveTab}
           playerName={playerName}
           playerRole={playerRole}
-          jerseyNumber={profile?.jerseyNumber || '10'}
-          squadCount={squad.length || 15}
+          playerPhoto={profile?.photo || profile?.image_path || null}
+          jerseyNumber={profile?.jerseyNumber ?? ''}
+          squadCount={squad.length}
           matchesCount={matches.length}
           achievementsCount={unlockedPatchesCount}
           notificationsCount={notifications.length}
@@ -491,9 +764,9 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                     activeOpacity={0.8}
                     accessibilityLabel="Player Profile"
                   >
-                    {profile?.photo || profile?.avatar ? (
+                    {profile?.photo || profile?.image_path || profile?.avatar ? (
                       <Image
-                        source={{ uri: profile.photo || profile.avatar }}
+                        source={{ uri: profile.photo || profile.image_path || profile.avatar }}
                         style={[styles.headerAvatarCircle, isMobileS && { width: 32, height: 32, borderRadius: 16 }]}
                         resizeMode="cover"
                       />
@@ -508,9 +781,9 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
 
                   <TouchableOpacity
                     style={[styles.exitBtnIconOnly, isMobileS && { width: 32, height: 32, borderRadius: 16 }]}
-                    onPress={onExit}
+                    onPress={() => setLogoutModalOpen(true)}
                     activeOpacity={0.8}
-                    accessibilityLabel="Exit Player Portal"
+                    accessibilityLabel="Logout Player Portal"
                   >
                     <LogoutIcon size={isMobileS ? 15 : 18} color="#ffffff" />
                   </TouchableOpacity>
@@ -523,16 +796,19 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                     activeOpacity={0.8}
                     accessibilityLabel="View Profile"
                   >
-                    <Text style={styles.userBadgePillText} numberOfLines={1}>👤 {playerName || 'Player'}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    <Ionicons name="person-outline" size={12} color="#fde68a" />
+                    <Text style={styles.userBadgePillText} numberOfLines={1}>{playerName || 'Player'}</Text>
+                  </View>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.exitBtnPill}
-                    onPress={onExit}
+                    onPress={() => setLogoutModalOpen(true)}
                     activeOpacity={0.8}
-                    accessibilityLabel="Exit Player Portal"
+                    accessibilityLabel="Logout Player Portal"
                   >
                     <LogoutIcon size={14} color="#ffffff" style={{ marginRight: 6 }} />
-                    <Text style={styles.exitBtnPillText}>Exit Player</Text>
+                    <Text style={styles.exitBtnPillText}>Logout</Text>
                   </TouchableOpacity>
                 </>
               )}
@@ -582,20 +858,19 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
               </TouchableOpacity>
             </View>
 
-          {isLoading && !isRefreshing && (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#d4af37" />
-              <Text style={styles.loadingText}>Connecting to MongoDB & Loading Player Profile...</Text>
-            </View>
-          )}
-
+            {isLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#d4af37" />
+                <Text style={styles.loadingText}>Connecting to MongoDB &amp; Loading Player Profile...</Text>
+              </View>
+            ) : null}
           {!isLoading && activeTab === 'overview' && (
             <View>
               <View style={styles.highlightCardsRow}>
                 <View style={styles.navyStatCard}>
                   <View style={styles.statCardHeader}>
                     <View style={styles.blueIconBox}>
-                      <Text style={{ fontSize: 18 }}>🏏</Text>
+                      <CricketBatIcon size={18} color="#ffffff" />
                     </View>
                     <Text style={styles.statCardTitle}>Player Summary</Text>
                   </View>
@@ -640,7 +915,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
 
                 <View style={[styles.navyStatCard, styles.donutCardAlign]}>
                   <View style={styles.donutHeader}>
-                    <Text style={{ fontSize: 16, marginRight: 6 }}>📊</Text>
+                    <StatisticsIcon size={16} color="#94a3b8" style={{ marginRight: 6 }} />
                     <Text style={styles.statCardTitle}>Status & Distribution</Text>
                   </View>
 
@@ -681,7 +956,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
 
               <View style={styles.toolbarCard}>
                 <View style={styles.searchBox}>
-                  <Text style={styles.searchIcon}>🔍</Text>
+                  <SearchIcon size={14} color="#94a3b8" style={{ marginRight: 6 }} />
                   <TextInput
                     style={styles.searchInput}
                     value={searchQuery}
@@ -734,31 +1009,37 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                     <View style={styles.itemTitleBadgeRow}>
                       <Text style={styles.itemNameText}>Thiru. {playerName}</Text>
                       <View style={styles.badgeConfirmed}>
-                        <Text style={styles.badgeConfirmedText}>✔ {approvalStatus}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <CheckIcon size={11} color="#16a34a" />
+                          <Text style={styles.badgeConfirmedText}>{approvalStatus}</Text>
+                        </View>
                       </View>
                       <View style={styles.tierBadgeGoldSmall}>
-                        <Text style={styles.tierBadgeGoldSmallText}>⭐ {performancePoints} PTS • {playerTierTitle}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                          <Ionicons name="star" size={10} color="#b45309" />
+                          <Text style={styles.tierBadgeGoldSmallText}>{performancePoints} PTS • {playerTierTitle}</Text>
+                        </View>
                       </View>
                     </View>
                     <Text style={styles.itemIdGradeText}>
-                      ID: {playerId} • Grade: Division 1 League Player • Jersey: #{profile?.jerseyNumber || 10}
+                      ID: {playerId || '-'}{profile?.jerseyNumber !== undefined && profile?.jerseyNumber !== null ? ` • Jersey: #${profile.jerseyNumber}` : ''}
                     </Text>
                   </View>
 
                   <View style={styles.actionButtonsRow}>
-                    <TouchableOpacity
-                      style={styles.btnActionView}
-                      onPress={() => setActiveTab('profile')}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.btnActionViewText}>👁 View Profile</Text>
-                    </TouchableOpacity>
+                      <View style={styles.btnActionView}>
+                      <EyeIcon size={12} color="#b45309" style={{ marginRight: 4 }} />
+                      <Text style={styles.btnActionViewText}>View Profile</Text>
+                    </View>
                     <TouchableOpacity
                       style={styles.btnActionEdit}
-                      onPress={() => setIsEditProfileVisible(true)}
+                      onPress={handleOpenEditProfile}
                       activeOpacity={0.8}
                     >
-                      <Text style={styles.btnActionEditText}>✏ Edit Profile</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <EditIcon size={12} color="#b45309" />
+                        <Text style={styles.btnActionEditText}>Edit Profile</Text>
+                      </View>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -766,19 +1047,19 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                 <View style={styles.metaDetailsGrid}>
                   <View style={styles.metaCol}>
                     <Text style={styles.metaLabel}>EMAIL ADDRESS</Text>
-                    <Text style={styles.metaValue} numberOfLines={1}>{playerEmail}</Text>
+                    <Text style={styles.metaValue} numberOfLines={1}>{playerEmail || '-'}</Text>
                   </View>
                   <View style={styles.metaCol}>
                     <Text style={styles.metaLabel}>CONTACT PHONE</Text>
-                    <Text style={styles.metaValue}>{profile?.mobile || '+91 94431 12345'}</Text>
+                    <Text style={styles.metaValue}>{profile?.mobile || '-'}</Text>
                   </View>
                   <View style={styles.metaCol}>
                     <Text style={styles.metaLabel}>TALUK / JURISDICTION</Text>
-                    <Text style={styles.metaValue}>{profile?.taluk || 'Virudhunagar'}</Text>
+                    <Text style={styles.metaValue}>{profile?.taluk || '-'}</Text>
                   </View>
                   <View style={styles.metaCol}>
-                    <Text style={styles.metaLabel}>CLUB & PLAYING STYLE</Text>
-                    <Text style={styles.metaValue}>{playerTeam} ({profile?.battingStyle || 'RHB'})</Text>
+                    <Text style={styles.metaLabel}>CLUB &amp; PLAYING STYLE</Text>
+                    <Text style={styles.metaValue}>{playerTeam || 'No Team Assigned'}{profile?.battingStyle ? ` (${profile.battingStyle})` : ''}</Text>
                   </View>
                 </View>
               </View>
@@ -787,7 +1068,10 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
               <View style={{ marginTop: 14 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={styles.cardHeaderTitle}>🏏 Incoming Matches</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <CricketBatIcon size={16} color="#1e293b" />
+                      <Text style={styles.cardHeaderTitle}>Incoming Matches</Text>
+                    </View>
                     {incomingMatches.length > 0 && (
                       <View style={styles.badgeGold}>
                         <Text style={styles.badgeGoldText}>
@@ -833,11 +1117,11 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                     const teamBName = matchItem.teamB?.name || matchItem.team_b_name || 'Team B';
 
                     const isTeamAUser = Boolean(
-                      (matchItem.teamA?.id && (matchItem.teamA?.id === profile?.teamId || (!profile?.teamId && matchItem.teamA?.id === 'TM-01'))) ||
+                      (matchItem.teamA?.id && profile?.teamId && matchItem.teamA?.id === profile?.teamId) ||
                       (playerTeam && teamAName.toLowerCase().includes(playerTeam.toLowerCase()))
                     );
                     const isTeamBUser = Boolean(
-                      (matchItem.teamB?.id && (matchItem.teamB?.id === profile?.teamId || (!profile?.teamId && matchItem.teamB?.id === 'TM-01'))) ||
+                      (matchItem.teamB?.id && profile?.teamId && matchItem.teamB?.id === profile?.teamId) ||
                       (playerTeam && teamBName.toLowerCase().includes(playerTeam.toLowerCase()))
                     );
 
@@ -862,18 +1146,21 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                         <View style={styles.itemCardHeaderRow}>
                           <View style={styles.itemTitleGroup}>
                             <View style={styles.itemTitleBadgeRow}>
-                              <Text style={styles.itemNameText}>{matchItem.tournament || 'Virudhunagar League 2026'}</Text>
+                              <Text style={styles.itemNameText}>{matchItem.tournament || 'Tournament Fixture'}</Text>
                               <View style={[styles.badgeBase, isLive ? styles.badgeLive : styles.badgeScheduled]}>
                                 <Text style={[styles.badgeBaseText, isLive ? styles.badgeLiveText : styles.badgeScheduledText]}>
                                   {isLive ? '🔴 LIVE NOW' : '📅 SCHEDULED'}
                                 </Text>
                               </View>
                               <View style={styles.badgeGold}>
-                                <Text style={styles.badgeGoldText}>⭐ Your Match</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                                  <Ionicons name="star" size={10} color="#b45309" />
+                                  <Text style={styles.badgeGoldText}>Your Match</Text>
+                                </View>
                               </View>
                             </View>
                             <Text style={styles.itemIdGradeText}>
-                              📍 {matchItem.venue || 'District Stadium'} • 📅 {formattedDate} {matchItem.time ? `• ⏰ ${matchItem.time}` : ''} • Format: {matchItem.format || 'T20'}
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}><Ionicons name="location-outline" size={11} color="#94a3b8" /><Text style={styles.itemIdGradeText}>{matchItem.venue || 'Venue TBA'}</Text><Ionicons name="calendar-outline" size={11} color="#94a3b8" /><Text style={styles.itemIdGradeText}>{formattedDate}{matchItem.time ? ` • ${matchItem.time}` : ''} • {matchItem.format || 'T20'}</Text></View>
                             </Text>
                           </View>
 
@@ -948,7 +1235,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
 
                         {matchItem.result ? (
                           <View style={styles.resultBannerBox}>
-                            <Text style={styles.resultBannerText}>📢 {matchItem.result}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><Ionicons name="megaphone-outline" size={13} color="#b45309" /><Text style={styles.resultBannerText}>{matchItem.result}</Text></View>
                           </View>
                         ) : null}
                       </View>
@@ -989,10 +1276,53 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                   </View>
                   <TouchableOpacity
                     style={styles.btnActionEdit}
-                    onPress={() => setIsEditProfileVisible(true)}
+                    onPress={handleOpenEditProfile}
                   >
-                    <Text style={styles.btnActionEditText}>✏ Edit Profile</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <EditIcon size={12} color="#b45309" />
+                      <Text style={styles.btnActionEditText}>Edit Profile</Text>
+                    </View>
                   </TouchableOpacity>
+                </View>
+
+                {/* Profile Photo & Player Identity Showcase */}
+                <View style={styles.profileAvatarCardRow}>
+                  <View style={styles.profileAvatarLargeFrame}>
+                    {profile?.photo || profile?.image_path ? (
+                      <Image
+                        source={{ uri: profile.photo || profile.image_path }}
+                        style={styles.profileAvatarLargeImg}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={styles.profileAvatarLargePlaceholder}>
+                        <Text style={styles.profileAvatarLargeText}>
+                          {playerName ? playerName.charAt(0).toUpperCase() : 'P'}
+                        </Text>
+                      </View>
+                    )}
+                    <TouchableOpacity
+                      style={styles.avatarEditPillBadge}
+                      onPress={handleOpenEditProfile}
+                      activeOpacity={0.85}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Ionicons name="camera-outline" size={12} color="#ffffff" />
+                        <Text style={styles.avatarEditPillText}>Change</Text>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <Text style={styles.profileAvatarName}>{profile?.name || playerName}</Text>
+                      <View style={styles.jerseyPillBadge}>
+                        <Text style={styles.jerseyPillText}>#{profile?.jerseyNumber ?? '-'}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.profileAvatarSub}>{playerRole || 'Player'}{playerTeam ? ` • ${playerTeam}` : ''}</Text>
+                    <Text style={styles.profileAvatarFedId}>ID: {playerId}</Text>
+                  </View>
                 </View>
 
                 <View style={styles.profileDetailsGrid}>
@@ -1006,7 +1336,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                   </View>
                   <View style={styles.profileRowItem}>
                     <Text style={styles.profileKey}>Contact Mobile</Text>
-                    <Text style={styles.profileVal}>{profile?.mobile || '+91 94431 12345'}</Text>
+                    <Text style={styles.profileVal}>{profile?.mobile || '-'}</Text>
                   </View>
                   <View style={styles.profileRowItem}>
                     <Text style={styles.profileKey}>Federation ID</Text>
@@ -1014,27 +1344,30 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                   </View>
                   <View style={styles.profileRowItem}>
                     <Text style={styles.profileKey}>Registration Status</Text>
-                    <Text style={[styles.profileVal, { color: '#16a34a', fontWeight: '800' }]}>✔ {approvalStatus}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <CheckIcon size={12} color="#16a34a" />
+                      <Text style={[styles.profileVal, { color: '#16a34a', fontWeight: '800' }]}>{approvalStatus}</Text>
+                    </View>
                   </View>
                   <View style={styles.profileRowItem}>
                     <Text style={styles.profileKey}>Club / Team</Text>
-                    <Text style={[styles.profileVal, { color: '#b45309', fontWeight: '800' }]}>{playerTeam}</Text>
+                    <Text style={[styles.profileVal, { color: '#b45309', fontWeight: '800' }]}>{playerTeam || 'Not Assigned'}</Text>
                   </View>
                   <View style={styles.profileRowItem}>
                     <Text style={styles.profileKey}>Jersey Number</Text>
-                    <Text style={styles.profileVal}>#{profile?.jerseyNumber || 10}</Text>
+                    <Text style={styles.profileVal}>#{profile?.jerseyNumber ?? '-'}</Text>
                   </View>
                   <View style={styles.profileRowItem}>
                     <Text style={styles.profileKey}>Batting Style</Text>
-                    <Text style={styles.profileVal}>{profile?.battingStyle || 'Right Hand Bat'}</Text>
+                    <Text style={styles.profileVal}>{profile?.battingStyle || '-'}</Text>
                   </View>
                   <View style={styles.profileRowItem}>
                     <Text style={styles.profileKey}>Bowling Style</Text>
-                    <Text style={styles.profileVal}>{profile?.bowlingStyle || 'Right Arm Medium'}</Text>
+                    <Text style={styles.profileVal}>{profile?.bowlingStyle || '-'}</Text>
                   </View>
                   <View style={styles.profileRowItem}>
                     <Text style={styles.profileKey}>Taluk / Jurisdiction</Text>
-                    <Text style={styles.profileVal}>{profile?.taluk || 'Virudhunagar District'}</Text>
+                    <Text style={styles.profileVal}>{profile?.taluk || '-'}</Text>
                   </View>
                 </View>
               </View>
@@ -1044,9 +1377,15 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                 <View style={styles.patchesCardHeader}>
                   <View style={{ flexShrink: 1, minWidth: 0 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                      <Text style={styles.cardHeaderTitle}>🎖️ Official Achievement Patches</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <AwardIcon size={16} color="#1e293b" />
+                        <Text style={styles.cardHeaderTitle}>Official Achievement Patches</Text>
+                      </View>
                       <View style={styles.tierBadgeGold}>
-                        <Text style={styles.tierBadgeGoldText}>⭐ {performancePoints} PTS • {playerTierTitle}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                          <Ionicons name="star" size={10} color="#b45309" />
+                          <Text style={styles.tierBadgeGoldText}>{performancePoints} PTS • {playerTierTitle}</Text>
+                        </View>
                       </View>
                     </View>
                     <Text style={[styles.cardHeaderSubtitle, { marginTop: 4 }]}>
@@ -1058,7 +1397,10 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                     onPress={() => setActiveTab('achievements')}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.btnActionViewText}>🏆 View All Patches →</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <Ionicons name="trophy-outline" size={13} color="#b45309" />
+                      <Text style={styles.btnActionViewText}>View All Patches →</Text>
+                    </View>
                   </TouchableOpacity>
                 </View>
 
@@ -1066,12 +1408,15 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                 <View style={styles.pointsBanner}>
                   <View style={styles.pointsBannerTopRow}>
                     <View>
-                      <Text style={styles.pointsBigText}>⭐ {performancePoints} PTS</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <Ionicons name="star" size={16} color="#d4af37" />
+                        <Text style={styles.pointsBigText}>{performancePoints} PTS</Text>
+                      </View>
                       <Text style={styles.pointsSubText}>Federation Performance Rating</Text>
                     </View>
                     <View style={styles.tierBadgeGold}>
                       <Text style={styles.tierBadgeGoldText}>
-                        {playerTier === 'DIAMOND' ? '💎' : playerTier === 'GOLD' ? '🥇' : playerTier === 'SILVER' ? '🥈' : '🥉'} {playerTierTitle}
+                          {playerTier === 'DIAMOND' ? <Ionicons name="diamond" size={11} color="#b45309" /> : playerTier === 'GOLD' ? <Ionicons name="medal" size={11} color="#b45309" /> : playerTier === 'SILVER' ? <Ionicons name="ribbon" size={11} color="#94a3b8" /> : <Ionicons name="ribbon-outline" size={11} color="#b08050" />}
                       </Text>
                     </View>
                   </View>
@@ -1095,7 +1440,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
               </View>
 
               <View style={[styles.whiteItemCard, { marginTop: 14 }]}>
-                <Text style={styles.cardHeaderTitle}>🔒 Authentication & Role Clearance</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Ionicons name="lock-closed-outline" size={16} color="#1e293b" /><Text style={styles.cardHeaderTitle}>Authentication &amp; Role Clearance</Text></View>
                 <Text style={styles.securityExplanation}>
                   Your account is protected under CFVD Player Role clearance.
                   As an authenticated Player, you can view your squad roster, fixtures, live scorecards, and performance statistics.
@@ -1110,9 +1455,9 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
               <View style={styles.whiteItemCard}>
                 <View style={styles.itemCardHeaderRow}>
                   <View>
-                    <Text style={styles.cardHeaderTitle}>{teamInfo?.name || playerTeam}</Text>
+                    <Text style={styles.cardHeaderTitle}>{teamInfo?.name || playerTeam || 'No Squad Assigned'}</Text>
                     <Text style={styles.cardHeaderSubtitle}>
-                      Coach: {teamInfo?.coachName || 'S. Rajendran'} ({teamInfo?.coachEmail || 'coach@cfvd.org'})
+                      {teamInfo?.coachName ? `Coach: ${teamInfo.coachName}${teamInfo?.coachEmail ? ` (${teamInfo.coachEmail})` : ''}` : (teamInfo?.name ? 'Official Registered Team' : 'No squad assigned yet')}
                     </Text>
                   </View>
                   <View style={styles.badgeConfirmed}>
@@ -1122,44 +1467,77 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
 
                 <View style={styles.teamStatsRow}>
                   <View style={styles.teamStatBox}>
-                    <Text style={styles.teamStatNum}>{squad.length || 15}</Text>
+                    <Text style={styles.teamStatNum}>{squad.length}</Text>
                     <Text style={styles.teamStatLbl}>Squad Players</Text>
                   </View>
                   <View style={styles.teamStatBox}>
-                    <Text style={styles.teamStatNum}>{teamInfo?.stats?.matches || 5}</Text>
+                    <Text style={styles.teamStatNum}>{teamInfo?.stats?.matches ?? 0}</Text>
                     <Text style={styles.teamStatLbl}>Matches</Text>
                   </View>
                   <View style={styles.teamStatBox}>
-                    <Text style={styles.teamStatNum}>{teamInfo?.stats?.won || 4}</Text>
+                    <Text style={styles.teamStatNum}>{teamInfo?.stats?.won ?? 0}</Text>
                     <Text style={styles.teamStatLbl}>Won</Text>
                   </View>
                   <View style={styles.teamStatBox}>
-                    <Text style={[styles.teamStatNum, { color: '#d97706' }]}>{teamInfo?.stats?.points || 8}</Text>
+                    <Text style={[styles.teamStatNum, { color: '#d97706' }]}>{teamInfo?.stats?.points ?? 0}</Text>
                     <Text style={styles.teamStatLbl}>Points</Text>
                   </View>
                 </View>
               </View>
 
               <View style={[styles.whiteItemCard, { marginTop: 14 }]}>
-                <Text style={styles.cardHeaderTitle}>15-Member Squad Roster</Text>
-                <Text style={styles.cardHeaderSubtitle}>Official roster registered for the Virudhunagar Premier League 2026</Text>
+                <Text style={styles.cardHeaderTitle}>{squad.length > 0 ? `${squad.length}-Member Squad Roster` : 'Squad Roster'}</Text>
+                <Text style={styles.cardHeaderSubtitle}>{teamInfo?.name ? `Official roster for ${teamInfo.name}` : 'Squad roster from database'}</Text>
 
                 <View style={{ marginTop: 12 }}>
-                  {squad.map((pl, idx) => {
+                  {squad.length === 0 ? (
+                    <View style={[styles.emptyCardBox, { paddingVertical: 28 }]}>
+                      <UsersIcon size={32} color="#94a3b8" />
+                      <Text style={[styles.emptyCardTitle, { marginTop: 8 }]}>No Squad Members Found</Text>
+                      <Text style={styles.emptyCardSub}>No team squad members have been registered in the database for your club yet.</Text>
+                    </View>
+                  ) : (
+                    squad.map((pl, idx) => {
                     const isCurrentPlayer =
                       pl.email?.toLowerCase() === playerEmail.toLowerCase() ||
                       pl.name?.toLowerCase() === playerName.toLowerCase();
 
+                    const rawPhoto = isCurrentPlayer
+                      ? (profile?.photo || profile?.image_path || pl.photo || pl.image_path)
+                      : (pl.photo || pl.image_path);
+                    const photoUri = resolvePhotoUrl(rawPhoto);
+
                     return (
-                      <View
+                      <TouchableOpacity
                         key={pl.id || idx}
                         style={[styles.squadRowItem, isCurrentPlayer && styles.squadRowActive]}
+                        onPress={() => setSelectedSquadPlayer({ ...pl, resolvedPhoto: photoUri })}
+                        activeOpacity={0.75}
                       >
-                        <View style={styles.squadJerseyCircle}>
-                          <Text style={styles.squadJerseyNum}>#{pl.jerseyNumber || (idx + 1)}</Text>
+                        {/* Player Avatar Circle (Displays Profile Photo if uploaded) */}
+                        <View style={styles.squadAvatarContainer}>
+                          {photoUri ? (
+                            <Image
+                              source={{ uri: photoUri }}
+                              style={styles.squadPhotoImg}
+                              resizeMode="cover"
+                            />
+                          ) : (
+                            <View style={styles.squadAvatarFallback}>
+                              <Text style={styles.squadAvatarInitial}>
+                                {pl.name ? pl.name.charAt(0).toUpperCase() : 'P'}
+                              </Text>
+                            </View>
+                          )}
+                          <View style={styles.squadJerseyMiniBadge}>
+                            <Text style={styles.squadJerseyMiniText}>
+                              #{pl.jerseyNumber ?? (idx + 1)}
+                            </Text>
+                          </View>
                         </View>
-                        <View style={{ flex: 1, marginLeft: 12 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+
+                        <View style={{ flex: 1, marginLeft: 14 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
                             <Text style={[styles.squadMemberName, isCurrentPlayer && { color: '#b45309' }]}>
                               {pl.name}
                             </Text>
@@ -1170,15 +1548,18 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                             )}
                           </View>
                           <Text style={styles.squadMemberRole}>
-                            {pl.role || 'Batter'} • {pl.battingStyle || 'Right Hand Bat'}
+                            {pl.role || 'Player'}{pl.battingStyle ? ` • ${pl.battingStyle}` : ''}
                           </Text>
                         </View>
                         <View style={styles.verifiedCheckPill}>
-                          <Text style={styles.verifiedCheckText}>✔ Approved</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <CheckIcon size={11} color="#16a34a" />
+                          <Text style={styles.verifiedCheckText}>Approved</Text>
                         </View>
-                      </View>
+                        </View>
+                      </TouchableOpacity>
                     );
-                  })}
+                  }))}
                 </View>
               </View>
             </View>
@@ -1215,7 +1596,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
 
               {filteredMatches.length === 0 ? (
                 <View style={styles.emptyCardBox}>
-                  <Text style={{ fontSize: 28, marginBottom: 8 }}>🏏</Text>
+                  <View style={{ marginBottom: 8 }}><CricketBatIcon size={32} color="#94a3b8" /></View>
                   <Text style={styles.emptyCardTitle}>No Matches Found</Text>
                   <Text style={styles.emptyCardSub}>No tournament fixtures found matching current criteria.</Text>
                 </View>
@@ -1237,8 +1618,8 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                     >
                       <View style={styles.itemCardHeaderRow}>
                         <View>
-                          <Text style={styles.matchCardTournament}>{m.tournament || 'Virudhunagar League 2026'}</Text>
-                          <Text style={styles.matchCardLocation}>📍 {m.venue || 'District Stadium'} • 📅 {m.date || 'Today'} {m.time ? `• ${m.time}` : ''}</Text>
+                          <Text style={styles.matchCardTournament}>{m.tournament || 'Tournament Fixture'}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}><Ionicons name="location-outline" size={11} color="#94a3b8" /><Text style={styles.matchCardLocation}>{m.venue || 'Venue TBA'}</Text><Ionicons name="calendar-outline" size={11} color="#94a3b8" /><Text style={styles.matchCardLocation}>{m.date || 'TBA'}{m.time ? ` • ${m.time}` : ''}</Text></View>
                         </View>
                         <View style={[styles.badgeBase, isLive ? styles.badgeLive : isCompleted ? styles.badgeCompleted : styles.badgeScheduled]}>
                           <Text style={[styles.badgeBaseText, isLive ? styles.badgeLiveText : isCompleted ? styles.badgeCompletedText : styles.badgeScheduledText]}>
@@ -1249,11 +1630,11 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
 
                       {(() => {
                         const isTeamAUser = Boolean(
-                          (m.teamA?.id && (m.teamA?.id === profile?.teamId || (!profile?.teamId && m.teamA?.id === 'TM-01'))) ||
+                          (m.teamA?.id && profile?.teamId && m.teamA?.id === profile?.teamId) ||
                           (playerTeam && (m.teamA?.name || '').toLowerCase().includes(playerTeam.toLowerCase()))
                         );
                         const isTeamBUser = Boolean(
-                          (m.teamB?.id && (m.teamB?.id === profile?.teamId || (!profile?.teamId && m.teamB?.id === 'TM-01'))) ||
+                          (m.teamB?.id && profile?.teamId && m.teamB?.id === profile?.teamId) ||
                           (playerTeam && (m.teamB?.name || '').toLowerCase().includes(playerTeam.toLowerCase()))
                         );
 
@@ -1304,7 +1685,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
 
                       {m.result && (
                         <View style={styles.resultBannerBox}>
-                          <Text style={styles.resultBannerText}>🏆 {m.result}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><Ionicons name="trophy-outline" size={13} color="#b45309" /><Text style={styles.resultBannerText}>{m.result}</Text></View>
                         </View>
                       )}
 
@@ -1325,7 +1706,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
           {!isLoading && activeTab === 'statistics' && (
             <View>
               <View style={styles.whiteItemCard}>
-                <Text style={styles.cardHeaderTitle}>🏏 Batting Record</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><CricketBatIcon size={16} color="#1e293b" /><Text style={styles.cardHeaderTitle}>Batting Record</Text></View>
                 <Text style={styles.cardHeaderSubtitle}>Derived from official scorer match logs</Text>
 
                 <View style={styles.statsGridRow}>
@@ -1373,7 +1754,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
               </View>
 
               <View style={[styles.whiteItemCard, { marginTop: 14 }]}>
-                <Text style={styles.cardHeaderTitle}>🎯 Bowling Record</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Ionicons name="radio-button-on-outline" size={16} color="#1e293b" /><Text style={styles.cardHeaderTitle}>Bowling Record</Text></View>
                 <Text style={styles.cardHeaderSubtitle}>Live over-by-over analysis</Text>
 
                 <View style={styles.statsGridRow}>
@@ -1437,10 +1818,10 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                 <View style={styles.patchesCardHeader}>
                   <View style={{ flexShrink: 1, minWidth: 0 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                      <Text style={styles.cardHeaderTitle}>🏆 Official Player Achievements & Patches</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Ionicons name="trophy-outline" size={16} color="#1e293b" /><Text style={styles.cardHeaderTitle}>Official Player Achievements &amp; Patches</Text></View>
                       <View style={styles.tierBadgeGold}>
                         <Text style={styles.tierBadgeGoldText}>
-                          {playerTier === 'DIAMOND' ? '💎' : playerTier === 'GOLD' ? '🥇' : playerTier === 'SILVER' ? '🥈' : '🥉'} {playerTierTitle}
+                          {playerTier === 'DIAMOND' ? <Ionicons name="diamond" size={11} color="#b45309" /> : playerTier === 'GOLD' ? <Ionicons name="medal" size={11} color="#b45309" /> : playerTier === 'SILVER' ? <Ionicons name="ribbon" size={11} color="#94a3b8" /> : <Ionicons name="ribbon-outline" size={11} color="#b08050" />}
                         </Text>
                       </View>
                     </View>
@@ -1450,7 +1831,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                   </View>
                   <View style={styles.badgeConfirmed}>
                     <Text style={styles.badgeConfirmedText}>
-                      ✔ {unlockedPatchesCount} of {patchesList.length} Unlocked
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><CheckIcon size={11} color="#16a34a" /><Text style={styles.badgeConfirmedText}>{unlockedPatchesCount} of {patchesList.length} Unlocked</Text></View>
                     </Text>
                   </View>
                 </View>
@@ -1459,12 +1840,15 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                 <View style={styles.pointsBanner}>
                   <View style={styles.pointsBannerTopRow}>
                     <View>
-                      <Text style={styles.pointsBigText}>⭐ {performancePoints} PTS</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <Ionicons name="star" size={16} color="#d4af37" />
+                        <Text style={styles.pointsBigText}>{performancePoints} PTS</Text>
+                      </View>
                       <Text style={styles.pointsSubText}>Federation Performance Rating Points</Text>
                     </View>
                     <View style={styles.tierBadgeGold}>
                       <Text style={styles.tierBadgeGoldText}>
-                        {playerTier === 'DIAMOND' ? '💎' : playerTier === 'GOLD' ? '🥇' : playerTier === 'SILVER' ? '🥈' : '🥉'} {playerTierTitle}
+                          {playerTier === 'DIAMOND' ? <Ionicons name="diamond" size={11} color="#b45309" /> : playerTier === 'GOLD' ? <Ionicons name="medal" size={11} color="#b45309" /> : playerTier === 'SILVER' ? <Ionicons name="ribbon" size={11} color="#94a3b8" /> : <Ionicons name="ribbon-outline" size={11} color="#b08050" />}
                       </Text>
                     </View>
                   </View>
@@ -1553,11 +1937,11 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                     >
                       <View style={styles.patchHeaderRow}>
                         <View style={[styles.patchIconBox, isUnlocked && styles.patchIconBoxUnlocked]}>
-                          <Text style={{ fontSize: 20 }}>{patch.icon || '🎖️'}</Text>
+                          {patch.icon ? <Text style={{ fontSize: 20 }}>{patch.icon}</Text> : <AwardIcon size={22} color={isUnlocked ? '#b45309' : '#94a3b8'} />}
                         </View>
                         <View style={[styles.patchBadgePill, isUnlocked ? styles.patchBadgePillUnlocked : styles.patchBadgePillLocked]}>
                           <Text style={isUnlocked ? styles.patchBadgePillUnlockedText : styles.patchBadgePillLockedText}>
-                            {isUnlocked ? '✔ UNLOCKED' : 'IN PROGRESS'}
+                            {isUnlocked ? (<View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}><CheckIcon size={10} color="#065f46" /><Text style={isUnlocked ? styles.patchBadgePillUnlockedText : styles.patchBadgePillLockedText}>UNLOCKED</Text></View>) : <Text style={styles.patchBadgePillLockedText}>IN PROGRESS</Text>}
                           </Text>
                         </View>
                       </View>
@@ -1578,7 +1962,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                       {isUnlocked ? (
                         <View style={styles.achievedBox}>
                           <Text style={styles.achievedBoxText}>
-                            🏆 Milestone Achieved • Record: {patch.current} {patch.category === 'BOWLING' ? 'Wickets' : patch.category === 'FIELDING' ? 'Catches' : patch.category === 'POINTS' ? 'PTS' : 'Runs'}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><Ionicons name="trophy-outline" size={12} color="#b45309" /><Text style={styles.achievedBoxText}>Milestone Achieved • Record: {patch.current} {patch.category === 'BOWLING' ? 'Wickets' : patch.category === 'FIELDING' ? 'Catches' : patch.category === 'POINTS' ? 'PTS' : 'Runs'}</Text></View>
                           </Text>
                         </View>
                       ) : (
@@ -1668,7 +2052,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                 <Text style={styles.modalSubTitle}>Update your equipment style and mobile contact</Text>
               </View>
               <TouchableOpacity onPress={() => setIsEditProfileVisible(false)}>
-                <Text style={{ fontSize: 18, color: '#64748b' }}>✕</Text>
+                  <CloseIcon size={18} color="#64748b" />
               </TouchableOpacity>
             </View>
 
@@ -1679,6 +2063,62 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
             )}
 
             <ScrollView style={{ paddingHorizontal: 18, paddingVertical: 14 }}>
+              {/* Profile Photo Picker */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Player Profile Photo</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                  <View style={styles.photoPreviewCircle}>
+                    {editPhoto ? (
+                      <Image
+                        source={{ uri: editPhoto }}
+                        style={{ width: 68, height: 68, borderRadius: 34 }}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <Text style={styles.photoPreviewInitial}>
+                        {playerName ? playerName.charAt(0).toUpperCase() : 'P'}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={{ flex: 1, gap: 8 }}>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                      <TouchableOpacity style={styles.btnPickPhoto} onPress={handlePickPhoto} activeOpacity={0.8}>
+                        <Ionicons name="images-outline" size={14} color="#1e40af" style={{ marginRight: 5 }} />
+                        <Text style={styles.btnPickPhotoText}>Choose from Gallery</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.btnCameraPhoto} onPress={handleTakePhoto} activeOpacity={0.8}>
+                        <Ionicons name="camera-outline" size={14} color="#065f46" style={{ marginRight: 5 }} />
+                        <Text style={styles.btnCameraPhotoText}>Take Photo</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {editPhoto ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                        <TouchableOpacity
+                          onPress={() => openCropModal(editPhoto)}
+                          activeOpacity={0.8}
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                        >
+                          <Ionicons name="crop-outline" size={13} color="#b45309" />
+                          <Text style={{ color: '#b45309', fontSize: 12, fontWeight: '700' }}>Crop / Adjust</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => setEditPhoto(null)}
+                          activeOpacity={0.8}
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                        >
+                          <Ionicons name="trash-outline" size={13} color="#dc2626" />
+                          <Text style={{ color: '#dc2626', fontSize: 12, fontWeight: '700' }}>Remove Photo</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <Text style={{ color: '#64748b', fontSize: 11.5 }}>
+                        Upload photo from gallery or camera to crop &amp; adjust
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              </View>
+
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Batting Style</Text>
                 <TextInput
@@ -1708,7 +2148,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                   value={editJerseyNumber}
                   onChangeText={setEditJerseyNumber}
                   keyboardType="numeric"
-                  placeholder="10"
+                  placeholder="e.g. 7, 10, 18"
                   placeholderTextColor="#94a3b8"
                 />
               </View>
@@ -1720,7 +2160,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                   value={editMobile}
                   onChangeText={setEditMobile}
                   keyboardType="phone-pad"
-                  placeholder="+91 94431 12345"
+                  placeholder="e.g. 9876543210"
                   placeholderTextColor="#94a3b8"
                 />
               </View>
@@ -1731,7 +2171,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                   style={styles.formInput}
                   value={editTaluk}
                   onChangeText={setEditTaluk}
-                  placeholder="Virudhunagar"
+                  placeholder="e.g. Virudhunagar / Sivakasi"
                   placeholderTextColor="#94a3b8"
                 />
               </View>
@@ -1772,10 +2212,10 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
             <View style={styles.modalHeaderRow}>
               <View>
                 <Text style={styles.modalMainTitle}>Certified Match Scorecard</Text>
-                <Text style={styles.modalSubTitle}>🔒 Official Digital Score Record • Read-Only</Text>
+                <Text style={styles.modalSubTitle}><Ionicons name="lock-closed-outline" size={12} color="#64748b" /> Official Digital Score Record • Read-Only</Text>
               </View>
               <TouchableOpacity onPress={() => setSelectedScorecardMatchId(null)}>
-                <Text style={{ fontSize: 18, color: '#64748b' }}>✕</Text>
+                  <CloseIcon size={18} color="#64748b" />
               </TouchableOpacity>
             </View>
 
@@ -1788,17 +2228,17 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
               <ScrollView style={{ padding: 16 }}>
                 <View style={styles.scorecardMatchBanner}>
                   <Text style={styles.scorecardBannerTournament}>
-                    {scorecardData?.tournamentName || 'Virudhunagar Premier League 2026'}
+                    {scorecardData?.tournamentName || 'Tournament Match'}
                   </Text>
                   <Text style={styles.scorecardBannerTeams}>
-                    {scorecardData?.teamA?.name || 'Spartans CC'} vs {scorecardData?.teamB?.name || 'Kings CC'}
+                    {scorecardData?.teamA?.name || 'Team A'} vs {scorecardData?.teamB?.name || 'Team B'}
                   </Text>
                   <Text style={styles.scorecardBannerVenue}>
-                    📍 {scorecardData?.venue || 'Kamarajar Stadium'}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><Ionicons name="location-outline" size={12} color="#94a3b8" /><Text style={styles.scorecardBannerVenue}>{scorecardData?.venue || 'Venue TBA'}</Text></View>
                   </Text>
                   {scorecardData?.result && (
                     <Text style={styles.scorecardBannerResultText}>
-                      🏆 {scorecardData.result}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><Ionicons name="trophy-outline" size={14} color="#b45309" /><Text style={styles.scorecardBannerResultText}>{scorecardData.result}</Text></View>
                     </Text>
                   )}
                 </View>
@@ -1824,7 +2264,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
 
                 <View style={styles.inningsContentBox}>
                   <Text style={styles.inningsHeaderTitle}>
-                    {scorecardData?.innings?.[activeInningsTab]?.teamName || (activeInningsTab === 0 ? 'Team A' : 'Team B')} - Score: {scorecardData?.innings?.[activeInningsTab]?.totalRuns ?? 145}/{scorecardData?.innings?.[activeInningsTab]?.totalWickets ?? 6} ({scorecardData?.innings?.[activeInningsTab]?.overs ?? '20.0'} Ov)
+                    {scorecardData?.innings?.[activeInningsTab]?.teamName || (activeInningsTab === 0 ? 'Team A' : 'Team B')} - Score: {scorecardData?.innings?.[activeInningsTab]?.totalRuns ?? 0}/{scorecardData?.innings?.[activeInningsTab]?.totalWickets ?? 0} ({scorecardData?.innings?.[activeInningsTab]?.overs ?? '0.0'} Ov)
                   </Text>
 
                   <View style={styles.tableBox}>
@@ -1836,23 +2276,25 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                       <Text style={styles.tableHeadCell}>6s</Text>
                       <Text style={styles.tableHeadCell}>SR</Text>
                     </View>
-                    {(scorecardData?.innings?.[activeInningsTab]?.batting || [
-                      { batterName: playerName, runs: 68, balls: 45, fours: 7, sixes: 3, strikeRate: 151.1, dismissal: 'c & b Bowler' },
-                      { batterName: 'R. Saravanan', runs: 42, balls: 30, fours: 4, sixes: 1, strikeRate: 140.0, dismissal: 'b Bowler' },
-                      { batterName: 'S. Balaji (wk)', runs: 28, balls: 20, fours: 2, sixes: 1, strikeRate: 140.0, dismissal: 'not out' }
-                    ]).map((b: any, idx: number) => (
-                      <View key={idx} style={styles.tableBodyRow}>
-                        <View style={{ flex: 2 }}>
-                          <Text style={styles.batterNameText}>{b.batterName}</Text>
-                          <Text style={styles.dismissalText}>{b.dismissal || 'not out'}</Text>
-                        </View>
-                        <Text style={[styles.tableBodyCell, { fontWeight: '800', color: '#0f172a' }]}>{b.runs}</Text>
-                        <Text style={styles.tableBodyCell}>{b.balls}</Text>
-                        <Text style={styles.tableBodyCell}>{b.fours}</Text>
-                        <Text style={styles.tableBodyCell}>{b.sixes}</Text>
-                        <Text style={styles.tableBodyCell}>{b.strikeRate || ((b.runs / (b.balls || 1)) * 100).toFixed(1)}</Text>
+                    {(!scorecardData?.innings?.[activeInningsTab]?.batting || scorecardData.innings[activeInningsTab].batting.length === 0) ? (
+                      <View style={{ padding: 20, alignItems: 'center' }}>
+                        <Text style={{ color: '#64748b', fontSize: 13 }}>No batting scorecard available for this innings yet.</Text>
                       </View>
-                    ))}
+                    ) : (
+                      scorecardData.innings[activeInningsTab].batting.map((b: any, idx: number) => (
+                        <View key={idx} style={styles.tableBodyRow}>
+                          <View style={{ flex: 2 }}>
+                            <Text style={styles.batterNameText}>{b.batterName}</Text>
+                            <Text style={styles.dismissalText}>{b.dismissal || 'not out'}</Text>
+                          </View>
+                          <Text style={[styles.tableBodyCell, { fontWeight: '800', color: '#0f172a' }]}>{b.runs}</Text>
+                          <Text style={styles.tableBodyCell}>{b.balls}</Text>
+                          <Text style={styles.tableBodyCell}>{b.fours}</Text>
+                          <Text style={styles.tableBodyCell}>{b.sixes}</Text>
+                          <Text style={styles.tableBodyCell}>{b.strikeRate || ((b.runs / (b.balls || 1)) * 100).toFixed(1)}</Text>
+                        </View>
+                      ))
+                    )}
                   </View>
                 </View>
               </ScrollView>
@@ -1882,7 +2324,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalMainTitle}>Confirm Logout</Text>
               <TouchableOpacity onPress={() => setLogoutModalOpen(false)}>
-                <Text style={{ fontSize: 18, color: '#64748b' }}>✕</Text>
+                  <CloseIcon size={18} color="#64748b" />
               </TouchableOpacity>
             </View>
             <View style={{ padding: 18 }}>
@@ -1902,6 +2344,279 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                 onPress={handleLogout}
               >
                 <Text style={[styles.btnModalSaveText, { color: '#ffffff' }]}>Log Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Squad Player Detail Modal with Full Photo Preview */}
+      <Modal
+        visible={!!selectedSquadPlayer}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setSelectedSquadPlayer(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCardContainer, { maxWidth: 420 }]}>
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <Text style={styles.modalMainTitle}>Squad Player Profile</Text>
+                <Text style={styles.modalSubTitle}>{teamInfo?.name || playerTeam}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedSquadPlayer(null)}>
+                  <CloseIcon size={18} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            {selectedSquadPlayer && (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <View style={styles.squadModalAvatarFrame}>
+                  {selectedSquadPlayer.resolvedPhoto ? (
+                    <Image
+                      source={{ uri: selectedSquadPlayer.resolvedPhoto }}
+                      style={styles.squadModalAvatarImg}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.squadModalAvatarPlaceholder}>
+                      <Text style={styles.squadModalAvatarInitial}>
+                        {selectedSquadPlayer.name ? selectedSquadPlayer.name.charAt(0).toUpperCase() : 'P'}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={styles.squadModalJerseyBadge}>
+                    <Text style={styles.squadModalJerseyText}>#{selectedSquadPlayer.jerseyNumber ?? '-'}</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.squadModalPlayerName}>{selectedSquadPlayer.name}</Text>
+                <Text style={styles.squadModalPlayerRole}>
+                  {selectedSquadPlayer.role || 'Player'}{selectedSquadPlayer.battingStyle ? ` • ${selectedSquadPlayer.battingStyle}` : ''}
+                </Text>
+
+                <View style={styles.squadModalDetailsCard}>
+                  <View style={styles.squadModalDetailRow}>
+                    <Text style={styles.squadModalDetailLabel}>Jersey Number</Text>
+                    <Text style={styles.squadModalDetailVal}>#{selectedSquadPlayer.jerseyNumber ?? '-'}</Text>
+                  </View>
+                  <View style={styles.squadModalDetailRow}>
+                    <Text style={styles.squadModalDetailLabel}>Playing Role</Text>
+                    <Text style={styles.squadModalDetailVal}>{selectedSquadPlayer.role || '-'}</Text>
+                  </View>
+                  <View style={styles.squadModalDetailRow}>
+                    <Text style={styles.squadModalDetailLabel}>Batting Style</Text>
+                    <Text style={styles.squadModalDetailVal}>{selectedSquadPlayer.battingStyle || '-'}</Text>
+                  </View>
+                  <View style={styles.squadModalDetailRow}>
+                    <Text style={styles.squadModalDetailLabel}>Bowling Style</Text>
+                    <Text style={styles.squadModalDetailVal}>{selectedSquadPlayer.bowlingStyle || '-'}</Text>
+                  </View>
+                  {selectedSquadPlayer.email ? (
+                    <View style={styles.squadModalDetailRow}>
+                      <Text style={styles.squadModalDetailLabel}>Email</Text>
+                      <Text style={styles.squadModalDetailVal}>{selectedSquadPlayer.email}</Text>
+                    </View>
+                  ) : null}
+                  <View style={[styles.squadModalDetailRow, { borderBottomWidth: 0 }]}>
+                    <Text style={styles.squadModalDetailLabel}>Status</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><CheckIcon size={12} color="#16a34a" /><Text style={[styles.squadModalDetailVal, { color: '#16a34a' }]}>Verified &amp; Approved</Text></View>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.squadModalCloseBtn}
+                  onPress={() => setSelectedSquadPlayer(null)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.squadModalCloseBtnText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Profile Photo Interactive Crop Modal */}
+      <Modal
+        visible={isCropModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCloseCropModal}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCardContainer, { maxWidth: 440, padding: 0, overflow: 'hidden' }]}>
+            {/* Header */}
+            <View style={styles.cropModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={styles.cropIconBadge}>
+                  <Ionicons name="crop-outline" size={17} color="#b45309" />
+                </View>
+                <View>
+                  <Text style={styles.modalMainTitle}>Crop Profile Photo</Text>
+                  <Text style={styles.modalSubTitle}>Pan, zoom &amp; fit photo inside circular frame</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={handleCloseCropModal} style={{ padding: 4 }} activeOpacity={0.7}>
+                <CloseIcon size={18} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Viewport Frame */}
+            <View style={styles.cropViewportWrapper}>
+              <View
+                style={styles.cropContainer}
+                {...panResponder.panHandlers}
+              >
+                {/* Scaled & Positioned Image */}
+                {rawImageToCrop ? (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      left: 130 + cropPan.x,
+                      top: 130 + cropPan.y,
+                      transform: [
+                        { scale: cropZoom },
+                        { rotate: `${cropRotation}deg` }
+                      ]
+                    }}
+                  >
+                    <Image
+                      source={{ uri: rawImageToCrop }}
+                      style={{
+                        width: (imageNaturalDimensions.width || 300) * (240 / Math.max(1, Math.min(imageNaturalDimensions.width || 300, imageNaturalDimensions.height || 300))),
+                        height: (imageNaturalDimensions.height || 300) * (240 / Math.max(1, Math.min(imageNaturalDimensions.width || 300, imageNaturalDimensions.height || 300))),
+                        marginLeft: -((imageNaturalDimensions.width || 300) * (240 / Math.max(1, Math.min(imageNaturalDimensions.width || 300, imageNaturalDimensions.height || 300)))) / 2,
+                        marginTop: -((imageNaturalDimensions.height || 300) * (240 / Math.max(1, Math.min(imageNaturalDimensions.width || 300, imageNaturalDimensions.height || 300)))) / 2
+                      }}
+                      resizeMode="cover"
+                    />
+                  </View>
+                ) : null}
+
+                {/* Dark Outer Cutout Mask */}
+                <View style={styles.cropOverlayDarkCutout} pointerEvents="none" />
+
+                {/* Circular Boundary with Dashed Amber Border & Alignment Grids */}
+                <View style={styles.cropCircleBorder} pointerEvents="none">
+                  <View style={styles.cropGridH1} />
+                  <View style={styles.cropGridH2} />
+                  <View style={styles.cropGridV1} />
+                  <View style={styles.cropGridV2} />
+                </View>
+
+                {/* Drag Hint Badge */}
+                <View style={styles.cropDragHintBadge} pointerEvents="none">
+                  <Ionicons name="move-outline" size={12} color="#ffffff" />
+                  <Text style={styles.cropDragHintText}>Drag photo to adjust position</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Interactive Control Panel */}
+            <View style={styles.cropControlsContainer}>
+              {/* Row 1: Zoom Controls, Rotate & Reset */}
+              <View style={styles.cropControlRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.cropControlLabel}>Zoom</Text>
+                  <View style={styles.cropZoomButtonGroup}>
+                    <TouchableOpacity
+                      style={styles.cropMiniBtn}
+                      onPress={() => setCropZoom(z => Math.max(0.5, parseFloat((z - 0.15).toFixed(2))))}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="remove-outline" size={15} color="#334155" />
+                    </TouchableOpacity>
+                    <Text style={styles.cropZoomValueText}>{Math.round(cropZoom * 100)}%</Text>
+                    <TouchableOpacity
+                      style={styles.cropMiniBtn}
+                      onPress={() => setCropZoom(z => Math.min(3.0, parseFloat((z + 0.15).toFixed(2))))}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="add-outline" size={15} color="#334155" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <TouchableOpacity
+                    style={styles.cropToolBtn}
+                    onPress={() => setCropRotation(r => (r + 90) % 360)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="refresh-outline" size={13} color="#b45309" />
+                    <Text style={styles.cropToolBtnText}>Rotate</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.cropToolBtn}
+                    onPress={handleResetCrop}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.cropToolBtnText}>Reset</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Row 2: Precision Nudge Buttons */}
+              <View style={styles.cropNudgeRow}>
+                <Text style={styles.cropControlLabel}>Nudge</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <TouchableOpacity
+                    style={styles.cropMiniBtn}
+                    onPress={() => setCropPan(p => ({ ...p, x: p.x - 15 }))}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="arrow-back-outline" size={14} color="#334155" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.cropMiniBtn}
+                    onPress={() => setCropPan(p => ({ ...p, y: p.y - 15 }))}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="arrow-up-outline" size={14} color="#334155" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.cropMiniBtn}
+                    onPress={() => setCropPan(p => ({ ...p, y: p.y + 15 }))}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="arrow-down-outline" size={14} color="#334155" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.cropMiniBtn}
+                    onPress={() => setCropPan(p => ({ ...p, x: p.x + 15 }))}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="arrow-forward-outline" size={14} color="#334155" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
+            {/* Bottom Actions */}
+            <View style={styles.cropModalFooter}>
+              <TouchableOpacity
+                style={styles.btnModalCancel}
+                onPress={handleCloseCropModal}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.btnModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.btnCropApply}
+                onPress={handleApplyCrop}
+                disabled={isCropping}
+                activeOpacity={0.85}
+              >
+                {isCropping ? (
+                  <ActivityIndicator size="small" color="#020612" />
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <CheckIcon size={14} color="#020612" />
+                    <Text style={styles.btnCropApplyText}>Apply &amp; Save Photo</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -3324,5 +4039,504 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#f59e0b'
+  },
+  photoPreviewCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#071026',
+    borderWidth: 2,
+    borderColor: '#d4af37',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden'
+  },
+  photoPreviewInitial: {
+    color: '#f59e0b',
+    fontSize: 24,
+    fontWeight: '900'
+  },
+  btnPickPhoto: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  btnPickPhotoText: {
+    color: '#1d4ed8',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  btnCameraPhoto: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#10b981',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  btnCameraPhotoText: {
+    color: '#065f46',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  profileAvatarCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  profileAvatarLargeFrame: {
+    position: 'relative',
+    width: 74,
+    height: 74,
+    borderRadius: 37,
+    backgroundColor: '#071026',
+    borderWidth: 2.5,
+    borderColor: '#d4af37',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible'
+  },
+  profileAvatarLargeImg: {
+    width: 69,
+    height: 69,
+    borderRadius: 34.5
+  },
+  profileAvatarLargePlaceholder: {
+    width: 69,
+    height: 69,
+    borderRadius: 34.5,
+    backgroundColor: '#071026',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  profileAvatarLargeText: {
+    color: '#f59e0b',
+    fontSize: 28,
+    fontWeight: '900'
+  },
+  avatarEditPillBadge: {
+    position: 'absolute',
+    bottom: -6,
+    alignSelf: 'center',
+    backgroundColor: '#020612',
+    borderWidth: 1,
+    borderColor: '#d4af37',
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 2
+  },
+  avatarEditPillText: {
+    color: '#f59e0b',
+    fontSize: 10,
+    fontWeight: '700'
+  },
+  profileAvatarName: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  jerseyPillBadge: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#93c5fd',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12
+  },
+  jerseyPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#1d4ed8'
+  },
+  profileAvatarSub: {
+    fontSize: 13,
+    color: '#475569',
+    marginTop: 2,
+    fontWeight: '600'
+  },
+  profileAvatarFedId: {
+    fontSize: 11.5,
+    color: '#94a3b8',
+    marginTop: 2,
+    fontWeight: '500'
+  },
+  squadAvatarContainer: {
+    position: 'relative',
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  squadPhotoImg: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: '#d4af37',
+    backgroundColor: '#071026'
+  },
+  squadAvatarFallback: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#071026',
+    borderWidth: 1.5,
+    borderColor: '#334155',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  squadAvatarInitial: {
+    color: '#f59e0b',
+    fontSize: 16,
+    fontWeight: '800'
+  },
+  squadJerseyMiniBadge: {
+    position: 'absolute',
+    bottom: -3,
+    right: -4,
+    backgroundColor: '#020612',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    minWidth: 18,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  squadJerseyMiniText: {
+    color: '#f59e0b',
+    fontSize: 9,
+    fontWeight: '900'
+  },
+  hasPhotoIndicatorBadge: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4
+  },
+  hasPhotoIndicatorText: {
+    color: '#059669',
+    fontSize: 9,
+    fontWeight: '800'
+  },
+  squadModalAvatarFrame: {
+    position: 'relative',
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 3,
+    borderColor: '#d4af37',
+    backgroundColor: '#071026',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12
+  },
+  squadModalAvatarImg: {
+    width: 104,
+    height: 104,
+    borderRadius: 52
+  },
+  squadModalAvatarPlaceholder: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    backgroundColor: '#071026',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  squadModalAvatarInitial: {
+    color: '#f59e0b',
+    fontSize: 44,
+    fontWeight: '900'
+  },
+  squadModalJerseyBadge: {
+    position: 'absolute',
+    bottom: -2,
+    alignSelf: 'center',
+    backgroundColor: '#020612',
+    borderWidth: 1.5,
+    borderColor: '#f5c43d',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2
+  },
+  squadModalJerseyText: {
+    color: '#f5c43d',
+    fontSize: 11,
+    fontWeight: '900'
+  },
+  squadModalPlayerName: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 2
+  },
+  squadModalPlayerRole: {
+    fontSize: 13,
+    color: '#64748b',
+    fontWeight: '600',
+    marginBottom: 16
+  },
+  squadModalDetailsCard: {
+    width: '100%',
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginBottom: 16
+  },
+  squadModalDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0'
+  },
+  squadModalDetailLabel: {
+    fontSize: 12.5,
+    color: '#64748b',
+    fontWeight: '600'
+  },
+  squadModalDetailVal: {
+    fontSize: 13,
+    color: '#0f172a',
+    fontWeight: '700'
+  },
+  squadModalCloseBtn: {
+    backgroundColor: '#071026',
+    paddingVertical: 10,
+    paddingHorizontal: 32,
+    borderRadius: 8,
+    width: '100%',
+    alignItems: 'center'
+  },
+  squadModalCloseBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700'
+  },
+  // Photo Crop Modal Styles
+  cropModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    backgroundColor: '#ffffff'
+  },
+  cropIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#fef3c7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#fde68a'
+  },
+  cropViewportWrapper: {
+    backgroundColor: '#071026',
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  cropContainer: {
+    width: 260,
+    height: 260,
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative'
+  },
+  cropOverlayDarkCutout: {
+    position: 'absolute',
+    left: -90,
+    top: -90,
+    width: 440,
+    height: 440,
+    borderRadius: 220,
+    borderWidth: 100,
+    borderColor: 'rgba(7, 16, 38, 0.72)'
+  },
+  cropCircleBorder: {
+    position: 'absolute',
+    width: 240,
+    height: 240,
+    left: 10,
+    top: 10,
+    borderRadius: 120,
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+    borderStyle: 'dashed'
+  },
+  cropGridH1: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: '33.3%',
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)'
+  },
+  cropGridH2: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: '66.6%',
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)'
+  },
+  cropGridV1: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: '33.3%',
+    width: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)'
+  },
+  cropGridV2: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: '66.6%',
+    width: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)'
+  },
+  cropDragHintBadge: {
+    position: 'absolute',
+    bottom: 8,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)'
+  },
+  cropDragHintText: {
+    color: '#ffffff',
+    fontSize: 10.5,
+    fontWeight: '600'
+  },
+  cropControlsContainer: {
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+    gap: 12
+  },
+  cropControlRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  cropNudgeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f8fafc'
+  },
+  cropControlLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5
+  },
+  cropZoomButtonGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    overflow: 'hidden'
+  },
+  cropZoomValueText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0f172a',
+    paddingHorizontal: 10,
+    minWidth: 46,
+    textAlign: 'center'
+  },
+  cropMiniBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  cropToolBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#fef3c7',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#fde68a'
+  },
+  cropToolBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#b45309'
+  },
+  cropModalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    backgroundColor: '#f8fafc',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0'
+  },
+  btnCropApply: {
+    backgroundColor: '#d4af37',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    shadowColor: '#d4af37',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 2
+  },
+  btnCropApplyText: {
+    color: '#020612',
+    fontSize: 13,
+    fontWeight: '800'
   }
 });

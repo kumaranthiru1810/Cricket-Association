@@ -58,7 +58,7 @@ export default function ScorerNavigator({ onExit, initialParams }: Props) {
             initialMatchId={params?.matchId}
             initialParams={params}
             onExit={() => {
-              if (params?.matchId) {
+              if (params?.returnTo === 'LiveScoring' && params?.matchId && params?.status !== 'COMPLETED' && params?.status !== 'Completed') {
                 navigate('LiveScoring', { matchId: params.matchId });
               } else {
                 navigate('Dashboard');

@@ -6,6 +6,7 @@
 
 const db = require('../config/db');
 const socketService = require('./socketService');
+const broadcastScoreUpdate = (matchId, payload) => socketService.broadcastScoreUpdate(matchId, payload);
 
 let deliverySequence = 10000;
 
@@ -150,7 +151,17 @@ class ScoringEngine {
     if (match.current_break) {
       match.current_break = null;
       match.status_comment = '';
+      match.markModified('current_break');
+      match.markModified('status_comment');
       await match.save();
+      try {
+        broadcastScoreUpdate(matchId, {
+          action: 'BREAK_ENDED',
+          matchId,
+          currentBreak: null,
+          statusComment: ''
+        });
+      } catch (_) {}
     }
 
     // 2. Fetch Active Innings
@@ -293,6 +304,7 @@ class ScoringEngine {
 
     // 3. Create Delivery Document in MongoDB
     const deliveryId = 'DEL-' + Date.now() + '-' + String(++deliverySequence).padStart(6, '0');
+    const wasDeliveryFreeHit = !!innings.is_free_hit;
     const deliveryDoc = await db.models.Delivery.create({
       id: deliveryId,
       match_id: matchId,
@@ -307,6 +319,7 @@ class ScoringEngine {
       runs_extras: Number(runsExtras),
       total_runs: totalRuns,
       extra_type: extraType,
+      is_free_hit: wasDeliveryFreeHit,
       wicket: Boolean(wicket),
       wicket_type: wicketType,
       dismissal_type: wicketType,
@@ -327,7 +340,10 @@ class ScoringEngine {
 
     // 4. Update Innings Document in MongoDB
     innings.total_runs += totalRuns;
-    if (wicket) innings.wickets += 1;
+    const isRetiredHurt = wicket && wicketType === 'RETIRED_HURT';
+    if (wicket && !isRetiredHurt) {
+      innings.wickets += 1;
+    }
     innings.overs = overNumber;
     innings.balls = ballNumber;
 
@@ -379,6 +395,21 @@ class ScoringEngine {
     innings.current_non_striker_id = nextNonStriker;
     innings.current_bowler_id = activeBowlerId;
 
+    // Smart Rules: Free Hit calculation
+    let nextIsFreeHit = false;
+    if (extraType === 'NO_BALL') {
+      nextIsFreeHit = true;
+    } else if (wasDeliveryFreeHit) {
+      if (extraType === 'WIDE') {
+        nextIsFreeHit = true;
+      } else {
+        nextIsFreeHit = false;
+      }
+    } else {
+      nextIsFreeHit = false;
+    }
+    innings.is_free_hit = nextIsFreeHit;
+
     await innings.save();
 
     // 6. Update or Create Batter records in MongoDB
@@ -409,11 +440,13 @@ class ScoringEngine {
     }
     batter.strike_rate = batter.balls > 0 ? parseFloat(((batter.runs / batter.balls) * 100).toFixed(2)) : 0.00;
 
+    const nonBowlerDismissals = ['RUN_OUT', 'RETIRED_OUT', 'RETIRED_HURT', 'OBSTRUCTING_FIELD', 'HIT_BALL_TWICE', 'TIMED_OUT'];
+
     if (wicket && (!dismissedPlayerId || dismissedPlayerId === activeStrikerId)) {
-      batter.is_out = true;
+      batter.is_out = !isRetiredHurt;
       batter.dismissal_type = wicketType || 'BOWLED';
-      batter.dismissal_text = dismissalText || 'out';
-      batter.bowler_id = (wicketType === 'RUN_OUT' || wicketType === 'RETIRED_OUT') ? null : activeBowlerId;
+      batter.dismissal_text = isRetiredHurt ? 'retired hurt (not out)' : (dismissalText || 'out');
+      batter.bowler_id = nonBowlerDismissals.includes(wicketType) ? null : activeBowlerId;
       batter.fielder_id = fielderId || null;
     }
     await batter.save();
@@ -437,10 +470,10 @@ class ScoringEngine {
       }
 
       if (wicket && dismissedPlayerId === activeNonStrikerId) {
-        nonStrikerBatter.is_out = true;
+        nonStrikerBatter.is_out = !isRetiredHurt;
         nonStrikerBatter.dismissal_type = wicketType || 'RUN_OUT';
-        nonStrikerBatter.dismissal_text = dismissalText || 'run out';
-        nonStrikerBatter.bowler_id = (wicketType === 'RUN_OUT' || wicketType === 'RETIRED_OUT') ? null : activeBowlerId;
+        nonStrikerBatter.dismissal_text = isRetiredHurt ? 'retired hurt (not out)' : (dismissalText || 'run out');
+        nonStrikerBatter.bowler_id = nonBowlerDismissals.includes(wicketType) ? null : activeBowlerId;
         nonStrikerBatter.fielder_id = fielderId || null;
       }
       await nonStrikerBatter.save();
@@ -508,7 +541,8 @@ class ScoringEngine {
     }
     const bowlerRuns = Number(runsBatter) + (extraType === 'WIDE' || extraType === 'NO_BALL' ? Number(runsExtras) : 0);
     bowler.runs_conceded += bowlerRuns;
-    if (wicket && wicketType !== 'RUN_OUT' && wicketType !== 'RETIRED_OUT') {
+    const bowlerCreditedDismissals = ['BOWLED', 'CAUGHT', 'CAUGHT_BEHIND', 'CAUGHT_AND_BOWLED', 'LBW', 'STUMPED', 'HIT_WICKET'];
+    if (wicket && bowlerCreditedDismissals.includes(wicketType)) {
       bowler.wickets += 1;
     }
     if (extraType === 'WIDE') bowler.wides += Number(runsExtras);
@@ -591,13 +625,112 @@ class ScoringEngine {
       } catch (_err) {}
     }
 
-    // 9. Real-time Socket.IO Broadcast
+    // 9. Real-time Smart Rules Analysis & Socket.IO Broadcast
+    let noBallWarning = null;
+    let dangerousBowlingWarning = null;
+    const isDangerousBeamer = deliveryData.noBallReason === 'BEAMER' || deliveryData.isDangerousDelivery || deliveryData.remarks?.toLowerCase().includes('beamer');
+
+    if (extraType === 'NO_BALL') {
+      try {
+        if (isDangerousBeamer) {
+          const beamerCount = await db.models.Delivery.countDocuments({
+            innings_id: innings.id,
+            bowler_id: activeBowlerId,
+            extra_type: 'NO_BALL',
+            $or: [{ reason: 'BEAMER' }, { reason: /beamer/i }, { reason: /dangerous/i }]
+          });
+
+          if (beamerCount >= 2) {
+            dangerousBowlingWarning = {
+              level: 'CRITICAL',
+              action: 'SUSPENSION',
+              bowlerId: activeBowlerId,
+              bowlerName,
+              beamerCount,
+              message: `CRITICAL (MCC Law 41.7): Bowler ${bowlerName} has bowled ${beamerCount} dangerous beamers. Bowler is immediately SUSPENDED from bowling for the remainder of this match.`
+            };
+            if (!innings.suspended_bowler_ids) innings.suspended_bowler_ids = [];
+            if (!innings.suspended_bowler_ids.includes(activeBowlerId)) {
+              innings.suspended_bowler_ids.push(activeBowlerId);
+              await innings.save();
+            }
+          } else {
+            dangerousBowlingWarning = {
+              level: 'WARNING',
+              action: 'FIRST_WARNING',
+              bowlerId: activeBowlerId,
+              bowlerName,
+              beamerCount: 1,
+              message: `WARNING (MCC Law 41.7): First dangerous waist-high beamer bowled by ${bowlerName}. A second beamer will result in mandatory bowling suspension.`
+            };
+          }
+          noBallWarning = dangerousBowlingWarning;
+        }
+      } catch (_e) {}
+    }
+
+    let consecutiveWidesWarning = null;
+    if (extraType === 'WIDE') {
+      try {
+        const recentOverDeliveries = await db.models.Delivery.find({
+          innings_id: innings.id,
+          over_number: overNumber
+        }).sort({ created_at: -1, delivery_sequence: -1 }).limit(3).lean();
+
+        if (recentOverDeliveries.length >= 2 && recentOverDeliveries[1].extra_type === 'WIDE') {
+          const wideCountInOver = await db.models.Delivery.countDocuments({
+            innings_id: innings.id,
+            over_number: overNumber,
+            extra_type: 'WIDE'
+          });
+          consecutiveWidesWarning = {
+            bowlerId: activeBowlerId,
+            bowlerName,
+            overNumber: overNumber + 1,
+            count: wideCountInOver,
+            message: `Bowler ${bowlerName} has bowled ${wideCountInOver} Wides in Over ${overNumber + 1}. Check wide tramlines (MCC Law 22).`
+          };
+        }
+      } catch (_e) {}
+    }
+
+    const matchTotalOvers = match.overs || 20;
+    const maxQuota = Math.ceil(matchTotalOvers / 5) || 4;
+    let bowlerQuotaWarning = null;
+    if (bowlerStats && bowlerStats.overs >= maxQuota) {
+      bowlerQuotaWarning = {
+        bowlerId: activeBowlerId,
+        bowlerName,
+        overs: bowlerStats.overs,
+        maxQuota,
+        isQuotaFull: true,
+        message: `Bowler ${bowlerName} has completed their maximum bowling quota (${bowlerStats.overs}/${maxQuota} overs).`
+      };
+    }
+
+    const powerplayOvers = Math.round(matchTotalOvers * 0.3) || 6;
+    const currentOverNumber = innings.overs + (innings.balls > 0 ? 1 : 0);
+    const isPowerplay = currentOverNumber <= powerplayOvers;
+    const powerplay = {
+      isPowerplay,
+      powerplayOvers,
+      currentOver: currentOverNumber,
+      maxFieldersOutside: isPowerplay ? 2 : 5
+    };
+
     try {
       socketService.emitScoreUpdate(matchId, {
         matchId,
         score: `${innings.total_runs}/${innings.wickets}`,
         overs: `${innings.overs}.${innings.balls}`,
         isOverComplete: isOverFinished,
+        isFreeHit: nextIsFreeHit,
+        currentBreak: match.current_break || null,
+        statusComment: match.status_comment || '',
+        noBallWarning,
+        consecutiveWidesWarning,
+        bowlerQuotaWarning,
+        powerplay,
         lastDelivery: {
           ball: `${overNumber}.${ballNumber}`,
           runs: Number(runsBatter),
@@ -615,26 +748,37 @@ class ScoringEngine {
       commentary,
       matchStatus: match.status,
       isOverComplete: isOverFinished,
+      isFreeHit: nextIsFreeHit,
       strikerId: nextStriker,
       nonStrikerId: nextNonStriker,
       bowlerId: activeBowlerId,
+      noBallWarning,
+      consecutiveWidesWarning,
+      bowlerQuotaWarning,
+      powerplay,
       data: {
         deliveryId,
         score: `${innings.total_runs}/${innings.wickets}`,
         overs: `${innings.overs}.${innings.balls}`,
         totalRuns: innings.total_runs,
         wickets: innings.wickets,
+        isFreeHit: nextIsFreeHit,
         strikerId: nextStriker,
         nonStrikerId: nextNonStriker,
         bowlerId: activeBowlerId,
         isOverComplete: isOverFinished,
         isMatchCompleted,
+        noBallWarning,
+        consecutiveWidesWarning,
+        bowlerQuotaWarning,
+        powerplay,
         lastDelivery: {
           id: deliveryId,
           runsBatter: Number(runsBatter),
           runsExtras: Number(runsExtras),
           totalRuns,
           extraType,
+          isFreeHit: wasDeliveryFreeHit,
           boundaryType,
           wicket: Boolean(wicket),
           isLegalDelivery: isLegal,
@@ -1219,9 +1363,9 @@ class ScoringEngine {
   }
 
   /**
-   * Change / Substitute Active Bowler
+   * Change / Substitute Active Bowler (Supports Mid-Over Injury & Law 41.7 Suspension)
    */
-  async changeBowler(matchId, { newBowlerId, newBowlerName } = {}) {
+  async changeBowler(matchId, { newBowlerId, newBowlerName, reason, situation, suspendCurrentBowler } = {}) {
     await db.initDb();
     let innings = await db.models.Innings.findOne({ match_id: matchId, is_completed: { $ne: true }, status: { $ne: "COMPLETED" } }).sort({ innings_number: -1 });
     if (!innings) {
@@ -1262,6 +1406,20 @@ class ScoringEngine {
 
     if (!resolvedId) throw { status: 400, message: 'Bowler ID or name required.' };
 
+    // Prevent suspended bowlers from bowling again
+    if (innings.suspended_bowler_ids && innings.suspended_bowler_ids.includes(resolvedId)) {
+      throw { status: 400, message: 'This bowler is suspended from bowling for 2 dangerous no-balls (MCC Law 41.7).' };
+    }
+
+    const oldBowlerId = innings.current_bowler_id;
+    if (suspendCurrentBowler && oldBowlerId) {
+      if (!innings.suspended_bowler_ids) innings.suspended_bowler_ids = [];
+      if (!innings.suspended_bowler_ids.includes(oldBowlerId)) {
+        innings.suspended_bowler_ids.push(oldBowlerId);
+      }
+      innings.markModified('suspended_bowler_ids');
+    }
+
     // Initialize InningsBowler record if not present
     let bowlerStats = await db.models.InningsBowler.findOne({ innings_id: innings.id, player_id: resolvedId });
     if (!bowlerStats) {
@@ -1279,9 +1437,39 @@ class ScoringEngine {
       await bowlerStats.save();
     }
 
+    const ballsInOver = innings.balls || 0;
+    const remainingBalls = (6 - ballsInOver) % 6;
+    const isMidOver = ballsInOver > 0 && ballsInOver < 6;
+
+    if (!innings.bowler_substitutions) innings.bowler_substitutions = [];
+    if (oldBowlerId && oldBowlerId !== resolvedId) {
+      const oldDoc = await db.models.Player.findOne({ id: oldBowlerId }).lean();
+      innings.bowler_substitutions.push({
+        oldBowlerId,
+        oldBowlerName: oldDoc?.name || oldBowlerId,
+        newBowlerId: resolvedId,
+        newBowlerName: finalBowlerName || resolvedId,
+        isMidOver,
+        ballsInOver,
+        remainingBalls,
+        reason: reason || (isMidOver ? 'INJURY' : 'TACTICAL'),
+        situation: situation || (isMidOver ? 'காயம் (Injured)' : 'கேப்டன் மாற்றம் (Tactical)'),
+        suspended: !!suspendCurrentBowler,
+        overNumber: innings.overs || 0,
+        timestamp: new Date()
+      });
+      innings.markModified('bowler_substitutions');
+    }
+
     innings.current_bowler_id = resolvedId;
     innings.is_over_complete = false;
     await innings.save();
+    let changeMessage = `Bowler changed to ${finalBowlerName || resolvedId}`;
+    if (isMidOver) {
+      changeMessage = situation
+        ? `${finalBowlerName || resolvedId} will complete remaining ${remainingBalls} ball(s) [${situation}]`
+        : `${finalBowlerName || resolvedId} will complete the remaining ${remainingBalls} ball(s) of this over.`;
+    }
 
     // Socket.IO update
     try {
@@ -1289,14 +1477,24 @@ class ScoringEngine {
         matchId,
         event: 'BOWLER_CHANGED',
         bowlerId: resolvedId,
-        bowlerName: finalBowlerName || resolvedId
+        bowlerName: finalBowlerName || resolvedId,
+        isMidOver,
+        ballsInOver,
+        remainingBalls,
+        reason: reason || (isMidOver ? 'INJURY_SUBSTITUTION' : 'REGULAR'),
+        situation: situation || reason
       });
     } catch (e) {}
 
     return {
       success: true,
-      message: `Bowler changed to ${finalBowlerName || resolvedId}`,
+      message: changeMessage,
       currentBowlerId: innings.current_bowler_id,
+      isMidOver,
+      ballsInOver,
+      remainingBalls,
+      reason,
+      situation: situation || reason,
       bowler: {
         id: resolvedId,
         name: finalBowlerName || bowlerStats?.name || resolvedId,
@@ -1574,7 +1772,7 @@ class ScoringEngine {
     await match.save();
 
     try {
-      broadcastScoreUpdate(matchId, { action: 'BREAK_ENDED', currentBreak: null });
+      broadcastScoreUpdate(matchId, { action: 'BREAK_ENDED', matchId, currentBreak: null, statusComment: '' });
     } catch (_) {}
 
     return {

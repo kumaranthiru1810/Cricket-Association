@@ -21,7 +21,8 @@ import {
   Animated,
   StatusBar,
   ActivityIndicator,
-  Alert
+  Alert,
+  useWindowDimensions
 } from 'react-native';
 import { io } from 'socket.io-client';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -120,11 +121,16 @@ interface DistrictPlayer {
   battingStyle: string;
   bowlingStyle: string;
   team: string;
+  teamShort?: string;
   taluk: string;
   category: string;
   categoryLabel: string;
   verified: boolean;
   avatarColor: [string, string];
+  milestoneType?: 'century' | 'fifty' | 'bowling_haul';
+  milestoneBadge?: string;
+  matchPerformance?: string;
+  matchVs?: string;
   stats: {
     mat: number;
     inns: number;
@@ -153,30 +159,18 @@ const DISTRICT_PLAYERS: DistrictPlayer[] = [
     battingStyle: 'Right Hand Bat',
     bowlingStyle: 'Right Arm Medium',
     team: 'Virudhunagar Strikers',
+    teamShort: 'VNS',
     taluk: 'Virudhunagar',
     category: 'senior_men',
     categoryLabel: "Senior Men's Division",
     verified: true,
-    avatarColor: ['#1e3a8a', '#3b82f6'],
+    avatarColor: ['#b45309', '#f59e0b'],
+    milestoneType: 'century',
+    milestoneBadge: '💯 100 in a Match (Century)',
+    matchPerformance: '112* (62 balls) • 14x4, 4x6',
+    matchVs: 'vs Sattur Super Kings • Virudhunagar League',
     stats: { mat: 8, inns: 8, runs: 445, hs: '112*', avg: '63.57', sr: '149.3', fifties: 3, hundreds: 1, wkts: 0, catches: 8 },
     bio: 'Lead run-scorer in the Virudhunagar Premier League 2026. Renowned for explosive stroke-play inside the powerplay and steadfast match-winning knocks.'
-  },
-  {
-    id: 'CFVD-PLY-102',
-    name: 'K. Praveen Kumar',
-    role: 'bowler',
-    roleLabel: 'Right-Arm Off Spin Bowler',
-    playingRole: 'Bowler',
-    battingStyle: 'Right Hand Bat',
-    bowlingStyle: 'Right Arm Off Break',
-    team: 'Virudhunagar CC (VHNSN Alumni)',
-    taluk: 'Virudhunagar',
-    category: 'senior_men',
-    categoryLabel: "Senior Men's Division",
-    verified: true,
-    avatarColor: ['#065f46', '#10b981'],
-    stats: { mat: 8, inns: 8, runs: 168, hs: '41*', avg: '28.00', sr: '112.5', fifties: 0, hundreds: 0, wkts: 21, best: '5/24', econ: '5.47', catches: 5 },
-    bio: 'Premier district off-spinner with 21 wickets this season. Exceptional flight control, subtle variations, and invaluable lower-order batting resilience.'
   },
   {
     id: 'CFVD-PLY-103',
@@ -187,13 +181,106 @@ const DISTRICT_PLAYERS: DistrictPlayer[] = [
     battingStyle: 'Right Hand Bat',
     bowlingStyle: 'None (Wicketkeeper)',
     team: 'Rajapalayam CC',
+    teamShort: 'RPCC',
     taluk: 'Rajapalayam',
     category: 'senior_men',
     categoryLabel: "Senior Men's Division",
     verified: true,
-    avatarColor: ['#7c2d12', '#ea580c'],
+    avatarColor: ['#b45309', '#ea580c'],
+    milestoneType: 'century',
+    milestoneBadge: '💯 100 in a Match (Century)',
+    matchPerformance: '104 (58 balls) • 11x4, 5x6',
+    matchVs: 'vs Virudhunagar Spartans • Final Match',
     stats: { mat: 7, inns: 7, runs: 375, hs: '104', avg: '53.57', sr: '133.9', fifties: 2, hundreds: 1, wkts: 0, catches: 9, stumpings: 3 },
     bio: 'Dynamic wicketkeeper-batter who anchored Rajapalayam CC to the First Division semi-finals. Exceptional glove-work standing up to spin and pace.'
+  },
+  {
+    id: 'P404',
+    name: 'Dinesh Karthik',
+    role: 'wicketkeeper',
+    roleLabel: 'Wicketkeeper Batter',
+    playingRole: 'Wicketkeeper Batter',
+    battingStyle: 'Right Hand Bat',
+    bowlingStyle: 'Right Arm Medium',
+    team: 'Sivakasi Strikers',
+    teamShort: 'SVS',
+    taluk: 'Sivakasi',
+    category: 'senior_men',
+    categoryLabel: "Senior Men's Division",
+    verified: true,
+    avatarColor: ['#b45309', '#f59e0b'],
+    milestoneType: 'century',
+    milestoneBadge: '💯 100 in a Match (Century)',
+    matchPerformance: '102* (54 balls) • SR: 188.8',
+    matchVs: 'vs Virudhunagar Spartans • Kamarajar Stadium',
+    stats: { mat: 8, inns: 8, runs: 317, hs: '102*', avg: '63.40', sr: '175.2', fifties: 2, hundreds: 1, wkts: 0, catches: 6, stumpings: 2 },
+    bio: 'Explosive match-winning century off 54 balls to single-handedly steer Sivakasi Strikers to victory in high-pressure chase.'
+  },
+  {
+    id: 'P301',
+    name: 'Suresh Kumar',
+    role: 'batter',
+    roleLabel: 'Opening / Top-Order Batter',
+    playingRole: 'Batter',
+    battingStyle: 'Right Hand Bat',
+    bowlingStyle: 'Right Arm Medium',
+    team: 'Virudhunagar Spartans',
+    teamShort: 'VNS',
+    taluk: 'Virudhunagar',
+    category: 'senior_men',
+    categoryLabel: "Senior Men's Division",
+    verified: true,
+    avatarColor: ['#1e3a8a', '#3b82f6'],
+    milestoneType: 'fifty',
+    milestoneBadge: '🎖️ 50 in a Match (Half-Century)',
+    matchPerformance: '88 (45 balls) • 10x4, 4x6',
+    matchVs: 'vs Sivakasi Strikers • Kamarajar Stadium',
+    stats: { mat: 8, inns: 8, runs: 284, hs: '88', avg: '47.33', sr: '145.6', fifties: 2, hundreds: 0, wkts: 0, catches: 4 },
+    bio: 'Leading run scorer for Virudhunagar Spartans with commanding half-centuries (88 and 64) against top district pace attacks.'
+  },
+  {
+    id: 'P401',
+    name: 'Karthik N',
+    role: 'allrounder',
+    roleLabel: 'All-Rounder & Strike Seamer',
+    playingRole: 'Bowler',
+    battingStyle: 'Right Hand Bat',
+    bowlingStyle: 'Right Arm Fast',
+    team: 'Sivakasi Strikers',
+    teamShort: 'SVS',
+    taluk: 'Sivakasi',
+    category: 'senior_men',
+    categoryLabel: "Senior Men's Division",
+    verified: true,
+    avatarColor: ['#047857', '#10b981'],
+    milestoneType: 'fifty',
+    milestoneBadge: '🎖️ 50 & 4W Haul in Match',
+    matchPerformance: '72 (38 balls) & 4/16 (4.0 ov)',
+    matchVs: 'vs Rajapalayam Royals • League Match',
+    stats: { mat: 8, inns: 8, runs: 240, hs: '72', avg: '40.00', sr: '150.0', fifties: 2, hundreds: 0, wkts: 14, best: '4/16', catches: 7 },
+    bio: 'Match-defining all-round performance smashing 72 off 38 balls and bagging 4/16 with fiery seam bowling.'
+  },
+  {
+    id: 'P306',
+    name: 'Arun Pandian',
+    role: 'allrounder',
+    roleLabel: 'Middle-Order Power Batter',
+    playingRole: 'All-Rounder',
+    battingStyle: 'Right Hand Bat',
+    bowlingStyle: 'Right Arm Medium',
+    team: 'Virudhunagar Spartans',
+    teamShort: 'VNS',
+    taluk: 'Virudhunagar',
+    category: 'senior_men',
+    categoryLabel: "Senior Men's Division",
+    verified: true,
+    avatarColor: ['#312e81', '#4f46e5'],
+    milestoneType: 'fifty',
+    milestoneBadge: '🎖️ 50 in a Match (Half-Century)',
+    matchPerformance: '62 (38 balls) • 6x4, 3x6',
+    matchVs: 'vs Aruppukottai Aces • District Cup',
+    stats: { mat: 7, inns: 7, runs: 198, hs: '62', avg: '39.60', sr: '146.7', fifties: 1, hundreds: 0, wkts: 6, best: '2/18', catches: 5 },
+    bio: 'Blistering counter-attacking half-century rescuing the Spartans from early collapse in the District Cup.'
   },
   {
     id: 'CFVD-PLY-104',
@@ -204,30 +291,18 @@ const DISTRICT_PLAYERS: DistrictPlayer[] = [
     battingStyle: 'Right Hand Bat',
     bowlingStyle: 'Right Arm Leg Break',
     team: 'SFRC College for Women',
+    teamShort: 'SFRC',
     taluk: 'Sivakasi',
     category: 'womens',
     categoryLabel: "Women's Senior Championship",
     verified: true,
     avatarColor: ['#831843', '#ec4899'],
+    milestoneType: 'fifty',
+    milestoneBadge: '🎖️ 50 in a Match (Half-Century)',
+    matchPerformance: '84* (52 balls) • 9x4, 2x6',
+    matchVs: "vs Andal District Women's XI",
     stats: { mat: 6, inns: 6, runs: 312, hs: '84*', avg: '62.40', sr: '132.5', fifties: 3, hundreds: 0, wkts: 4, catches: 7 },
-    bio: 'Captained SFRC to the District Inter-College Women’s Trophy. Classical technique against fast bowling and clinical finisher under pressure.'
-  },
-  {
-    id: 'CFVD-PLY-105',
-    name: 'M. Vignesh',
-    role: 'bowler',
-    roleLabel: 'Left-Arm Fast Bowler',
-    playingRole: 'Bowler',
-    battingStyle: 'Right Hand Bat',
-    bowlingStyle: 'Left Arm Fast Medium (135+ km/h)',
-    team: 'Sivakasi Super Kings (ANJAC)',
-    taluk: 'Sivakasi',
-    category: 'senior_men',
-    categoryLabel: 'Under-23 Senior Colts',
-    verified: true,
-    avatarColor: ['#1e1b4b', '#6366f1'],
-    stats: { mat: 8, inns: 8, runs: 62, hs: '22*', avg: '15.50', sr: '124.0', fifties: 0, hundreds: 0, wkts: 18, best: '5/19', econ: '6.19', catches: 4 },
-    bio: 'Fastest bowler in the district circuit with fearsome toe-crushing yorkers and fiery bouncers. Key strike bowler for Sivakasi Super Kings.'
+    bio: 'Captained SFRC to victory with an unbeaten 84* in the District Inter-College Women’s Trophy.'
   },
   {
     id: 'CFVD-PLY-106',
@@ -238,28 +313,104 @@ const DISTRICT_PLAYERS: DistrictPlayer[] = [
     battingStyle: 'Right Hand Bat',
     bowlingStyle: 'Right Arm Off Break',
     team: 'Srivilliputhur Warriors',
+    teamShort: 'SVW',
     taluk: 'Srivilliputhur',
     category: 'senior_men',
     categoryLabel: "Senior Men's Division",
     verified: true,
     avatarColor: ['#312e81', '#4f46e5'],
+    milestoneType: 'fifty',
+    milestoneBadge: '🎖️ 50 in a Match (Half-Century)',
+    matchPerformance: '74* (48 balls) • 8x4, 2x6',
+    matchVs: 'vs Rajapalayam CC • Kamarajar Grounds',
     stats: { mat: 7, inns: 7, runs: 287, hs: '74*', avg: '47.83', sr: '138.6', fifties: 2, hundreds: 0, wkts: 2, catches: 6 },
     bio: 'Reliable crisis-man for Srivilliputhur Warriors. Known for astute strike rotation through the middle overs and piercing gaps against spin.'
   },
   {
+    id: 'CFVD-PLY-102',
+    name: 'K. Praveen Kumar',
+    role: 'bowler',
+    roleLabel: 'Right-Arm Off Spin Bowler',
+    playingRole: 'Bowler',
+    battingStyle: 'Right Hand Bat',
+    bowlingStyle: 'Right Arm Off Break',
+    team: 'Virudhunagar CC (VHNSN Alumni)',
+    teamShort: 'VCC',
+    taluk: 'Virudhunagar',
+    category: 'senior_men',
+    categoryLabel: "Senior Men's Division",
+    verified: true,
+    avatarColor: ['#065f46', '#10b981'],
+    milestoneType: 'bowling_haul',
+    milestoneBadge: '🎯 5-Wicket Match Haul',
+    matchPerformance: '5/24 (4.0 ov) • Econ: 6.00',
+    matchVs: 'vs Rajapalayam CC • First Division',
+    stats: { mat: 8, inns: 8, runs: 168, hs: '41*', avg: '28.00', sr: '112.5', fifties: 0, hundreds: 0, wkts: 21, best: '5/24', econ: '5.47', catches: 5 },
+    bio: 'Premier district off-spinner with 21 wickets this season. Outstanding 5/24 match spell breaking the opposition top-order.'
+  },
+  {
+    id: 'CFVD-PLY-105',
+    name: 'M. Vignesh',
+    role: 'bowler',
+    roleLabel: 'Left-Arm Fast Bowler',
+    playingRole: 'Bowler',
+    battingStyle: 'Right Hand Bat',
+    bowlingStyle: 'Left Arm Fast Medium (135+ km/h)',
+    team: 'Sivakasi Super Kings (ANJAC)',
+    teamShort: 'SSK',
+    taluk: 'Sivakasi',
+    category: 'senior_men',
+    categoryLabel: 'Under-23 Senior Colts',
+    verified: true,
+    avatarColor: ['#1e1b4b', '#6366f1'],
+    milestoneType: 'bowling_haul',
+    milestoneBadge: '🎯 5-Wicket Match Haul',
+    matchPerformance: '5/19 (4.0 ov) • Econ: 4.75',
+    matchVs: 'vs Srivilliputhur Warriors • Colts League',
+    stats: { mat: 8, inns: 8, runs: 62, hs: '22*', avg: '15.50', sr: '124.0', fifties: 0, hundreds: 0, wkts: 18, best: '5/19', econ: '6.19', catches: 4 },
+    bio: 'Fastest bowler in the district circuit with fearsome toe-crushing yorkers and fiery bouncers. Key strike bowler for Sivakasi Super Kings.'
+  },
+  {
+    id: 'P305',
+    name: 'R. Vignesh',
+    role: 'bowler',
+    roleLabel: 'Right-Arm Fast Bowler',
+    playingRole: 'Bowler',
+    battingStyle: 'Right Hand Bat',
+    bowlingStyle: 'Right Arm Fast',
+    team: 'Virudhunagar Spartans',
+    teamShort: 'VNS',
+    taluk: 'Virudhunagar',
+    category: 'senior_men',
+    categoryLabel: "Senior Men's Division",
+    verified: true,
+    avatarColor: ['#581c87', '#9333ea'],
+    milestoneType: 'bowling_haul',
+    milestoneBadge: '🔥 4-Wicket Match Haul',
+    matchPerformance: '4/20 (4.0 ov) • Econ: 5.00',
+    matchVs: 'vs Sivakasi Strikers • Opening Match',
+    stats: { mat: 8, inns: 8, runs: 24, hs: '14', avg: '12.00', sr: '110.0', fifties: 0, hundreds: 0, wkts: 12, best: '4/20', econ: '6.50', catches: 1 },
+    bio: 'Key strike bowler picking 4/20 against tournament favorites Sivakasi Strikers to defend a modest total.'
+  },
+  {
     id: 'CFVD-PLY-107',
     name: 'R. Deepika',
-    role: 'allrounder',
+    role: 'womens',
     roleLabel: 'All-Rounder (RHB & Leg Spin)',
     playingRole: 'All-Rounder',
     battingStyle: 'Right Hand Bat',
     bowlingStyle: 'Right Arm Leg Spin',
     team: "Andal District Women's XI",
+    teamShort: 'ADW',
     taluk: 'Srivilliputhur',
     category: 'womens',
     categoryLabel: "Women's U-23 / U-25",
     verified: true,
     avatarColor: ['#701a75', '#d946ef'],
+    milestoneType: 'fifty',
+    milestoneBadge: '🎖️ 50 in a Match (Half-Century)',
+    matchPerformance: '56 (42 balls) & 4/18 (4.0 ov)',
+    matchVs: "vs SFRC College for Women • Inter-Taluk",
     stats: { mat: 6, inns: 6, runs: 195, hs: '56', avg: '39.00', sr: '121.8', fifties: 1, hundreds: 0, wkts: 11, best: '4/18', econ: '4.85', catches: 5 },
     bio: 'Promising youth all-rounder hailing from Srivilliputhur. Accurate wrist-spin paired with composed batting in the top four order.'
   },
@@ -272,11 +423,16 @@ const DISTRICT_PLAYERS: DistrictPlayer[] = [
     battingStyle: 'Right Hand Bat',
     bowlingStyle: 'Right Arm Medium Fast',
     team: 'Aruppukottai Stars',
+    teamShort: 'AKS',
     taluk: 'Aruppukottai',
     category: 'senior_men',
     categoryLabel: "Senior Men's Division",
     verified: true,
     avatarColor: ['#854d0e', '#eab308'],
+    milestoneType: 'fifty',
+    milestoneBadge: '🎖️ 50 in a Match (Half-Century)',
+    matchPerformance: '68 (39 balls) • 7x4, 3x6',
+    matchVs: 'vs Rajapalayam CC • Death Overs Finish',
     stats: { mat: 6, inns: 6, runs: 260, hs: '68', avg: '43.33', sr: '142.8', fifties: 2, hundreds: 0, wkts: 8, best: '3/32', econ: '6.80', catches: 4 },
     bio: 'Hard-hitting batting all-rounder who powers Aruppukottai Stars in the death overs. Capable seam bowler with handy wicket-taking cutters.'
   }
@@ -364,16 +520,17 @@ export default function HomeScreen() {
     }
   };
 
-  // Screen Width for responsive layouts
-  const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
+  // Dynamic Responsive Breakpoints (Updates automatically on all devices & orientations)
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isMobile = windowWidth < 768;
+  const isTablet = windowWidth >= 768 && windowWidth < 1024;
+  const isDesktop = windowWidth >= 1024;
+  const isSmallMobile = windowWidth < 480;
+  const isTinyMobile = windowWidth < 380;
 
-  useEffect(() => {
-    const sub = Dimensions.addEventListener('change', ({ window }) => {
-      setWindowWidth(window.width);
-    });
-    return () => sub?.remove();
-  }, []);
+  const containerResponsiveStyle = {
+    paddingHorizontal: isTinyMobile ? 10 : (isSmallMobile ? 12 : (isMobile ? 16 : 32))
+  };
 
   // Animations
   const pulseAnim = useRef(new Animated.Value(0.4)).current;
@@ -442,50 +599,53 @@ export default function HomeScreen() {
     }
   };
 
-  const loadPublicMatches = async () => {
-    setIsLoadingMatches(true);
+  const loadPublicMatches = async (isInitial = false) => {
+    // Only show loading spinner on the very first load when no matches are cached yet
+    if (isInitial || publicMatches.length === 0) {
+      setIsLoadingMatches(true);
+    }
     setMatchesError(null);
     try {
       const res = await ScorerApi.getPublicMatches();
-      if (res && res.success && Array.isArray(res.data)) {
-        setPublicMatches(res.data);
-      } else if (Array.isArray(res)) {
-        setPublicMatches(res);
-      } else {
-        setPublicMatches([]);
+      const data = res?.data || res?.matches || (Array.isArray(res) ? res : []);
+      if (Array.isArray(data) && data.length > 0) {
+        setPublicMatches(data);
       }
     } catch (err: any) {
       console.warn('Failed to load public matches from API:', err.message);
-      setMatchesError(err.message || 'Unable to connect to match database');
+      if (publicMatches.length === 0) {
+        setMatchesError(err.message || 'Unable to connect to match database');
+      }
     } finally {
       setIsLoadingMatches(false);
     }
   };
 
   useEffect(() => {
-    loadPublicMatches();
+    loadPublicMatches(true);
     loadPortalData();
 
     // Real-time Socket.IO Live Score Synchronization
     let socket: any = null;
     try {
-      socket = io(SOCKET_URL);
+      socket = io(SOCKET_URL, { timeout: 5000, reconnectionAttempts: 3 });
       socket.on('score:update', () => {
-        loadPublicMatches();
+        loadPublicMatches(false);
         loadPortalData();
       });
       socket.on('connect', () => {
-        loadPublicMatches();
+        loadPublicMatches(false);
         loadPortalData();
       });
     } catch (e) {
       // Fallback to active interval
     }
 
+    // Silent background poll every 10 seconds
     const timer = setInterval(() => {
-      loadPublicMatches();
+      loadPublicMatches(false);
       loadPortalData();
-    }, 8000);
+    }, 10000);
 
     return () => {
       clearInterval(timer);
@@ -493,23 +653,9 @@ export default function HomeScreen() {
     };
   }, []);
 
-  const handleOpenScorecard = async (matchItem: any) => {
-    setActiveScorecardMatch(matchItem.id);
-    setActiveScorecardMatchData(matchItem);
-    setRealScorecardData(null);
-    setScorecardModalVisible(true);
-    setIsLoadingScorecard(true);
-    try {
-      const res = await ScorerApi.getPublicScorecard(matchItem.id);
-      const scorecard = res?.data || res?.scorecard || (res?.innings ? res : null);
-      if (scorecard) {
-        setRealScorecardData(scorecard);
-      }
-    } catch (err) {
-      console.warn('Could not fetch detailed scorecard, falling back to match summary:', err);
-    } finally {
-      setIsLoadingScorecard(false);
-    }
+  const handleOpenScorecard = (matchItem: any) => {
+    if (!matchItem?.id) return;
+    navigate('Scorecard', { matchId: matchItem.id, returnTo: 'Home' });
   };
 
   const getTeamBadgeColor = (short: string, index: number) => {
@@ -588,17 +734,42 @@ export default function HomeScreen() {
     Alert.alert('Toss Decision', `Toss Decision Recorded!\n\n${text}`);
   };
 
-  // Filtered Players
-  const allDisplayPlayers = portalAllPlayers.length > 0 ? portalAllPlayers : DISTRICT_PLAYERS;
+  // Filtered District Special Milestone Players (Centuries 100s, Half-Centuries 50s, 3W+ Hauls)
+  const allDisplayPlayers = (portalAllPlayers.length > 0 ? portalAllPlayers : DISTRICT_PLAYERS).filter(p => {
+    // Strictly exclude any player with 0 runs and 0 wickets (e.g. unplayed roster entries)
+    const runs = p.stats?.runs || 0;
+    const wkts = p.stats?.wkts || 0;
+    const hs = parseInt(p.stats?.hs || '0', 10);
+    const hasMilestone =
+      p.milestoneType ||
+      hs >= 50 ||
+      runs >= 50 ||
+      wkts >= 3 ||
+      (p.stats?.hundreds && p.stats.hundreds > 0) ||
+      (p.stats?.fifties && p.stats.fifties > 0) ||
+      (p.stats?.best && (p.stats.best.startsWith('3/') || p.stats.best.startsWith('4/') || p.stats.best.startsWith('5/')));
+    return !!hasMilestone;
+  });
+
   const filteredPlayers = allDisplayPlayers.filter(p => {
-    const matchesCategory =
-      playerFilter === 'all'
-        ? true
-        : playerFilter === 'womens'
-          ? p.role === 'womens' || p.category === 'womens'
-          : playerFilter === 'allrounder'
-            ? p.role === 'allrounder' || p.role === 'all_rounder'
-            : p.role === playerFilter;
+    const hs = parseInt(p.stats?.hs || '0', 10);
+    const wkts = p.stats?.wkts || 0;
+    const hundreds = p.stats?.hundreds || 0;
+    const fifties = p.stats?.fifties || 0;
+
+    let matchesCategory = true;
+    if (playerFilter === 'century') {
+      matchesCategory = p.milestoneType === 'century' || hundreds > 0 || hs >= 100;
+    } else if (playerFilter === 'fifty') {
+      matchesCategory = p.milestoneType === 'fifty' || (fifties > 0 && hundreds === 0) || (hs >= 50 && hs < 100);
+    } else if (playerFilter === 'bowler') {
+      matchesCategory =
+        p.milestoneType === 'bowling_haul' ||
+        wkts >= 3 ||
+        (p.stats?.best && (p.stats.best.startsWith('3/') || p.stats.best.startsWith('4/') || p.stats.best.startsWith('5/')));
+    } else if (playerFilter === 'womens') {
+      matchesCategory = p.role === 'womens' || p.category === 'womens';
+    }
 
     const q = playerSearchQuery.toLowerCase().trim();
     const matchesSearch =
@@ -607,7 +778,10 @@ export default function HomeScreen() {
       (p.team && p.team.toLowerCase().includes(q)) ||
       (p.taluk && p.taluk.toLowerCase().includes(q)) ||
       (p.roleLabel && p.roleLabel.toLowerCase().includes(q)) ||
-      (p.playingRole && p.playingRole.toLowerCase().includes(q));
+      (p.playingRole && p.playingRole.toLowerCase().includes(q)) ||
+      (p.milestoneBadge && p.milestoneBadge.toLowerCase().includes(q)) ||
+      (p.matchPerformance && p.matchPerformance.toLowerCase().includes(q)) ||
+      (p.matchVs && p.matchVs.toLowerCase().includes(q));
 
     return matchesCategory && matchesSearch;
   });
@@ -984,8 +1158,8 @@ export default function HomeScreen() {
                   }
                 ]}
                 onPress={() => {
-                  setActiveScorecardMatch('match-1');
-                  setScorecardModalVisible(true);
+                  const targetMatch = publicMatches.find(m => (m.status || '').toLowerCase() === 'live') || publicMatches[0] || { id: 'M001' };
+                  handleOpenScorecard(targetMatch);
                 }}
                 activeOpacity={0.85}
               >
@@ -1004,12 +1178,12 @@ export default function HomeScreen() {
             setSectionPositions(prev => ({ ...prev, matchCentre: layout.y }));
           }}
         >
-          <View style={styles.container}>
+          <View style={[styles.container, containerResponsiveStyle]}>
             <View style={styles.sectionHead}>
               <View style={styles.sectionTagBadge}>
                 <Text style={styles.sectionTagBadgeText}>🏏 OFFICIAL MATCH CENTRE</Text>
               </View>
-              <Text style={styles.sectionTitle}>Official Matches, Fixtures & Results</Text>
+              <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>Official Matches, Fixtures & Results</Text>
               <Text style={styles.sectionSubtitle}>
                 Real-time coverage displaying complete logistics: Match Date, Time, Venues & Assigned Officials
               </Text>
@@ -1036,20 +1210,30 @@ export default function HomeScreen() {
               }).length;
 
               return (
-                <View style={styles.filterTabsRow}>
+                <View style={[styles.filterTabsRow, isSmallMobile && { gap: 6, marginBottom: 14 }]}>
                   {[
-                    { id: 'all', label: `All Matches (${publicMatches.length})` },
-                    { id: 'live', label: `🔴 Live Matches (${liveCount})` },
-                    { id: 'upcoming', label: `📅 Upcoming Fixtures (${upcomingCount})` },
-                    { id: 'results', label: `🏁 Recent Results (${resultsCount})` }
+                    { id: 'all', short: `All (${publicMatches.length})`, full: `All Matches (${publicMatches.length})` },
+                    { id: 'live', short: `🔴 Live (${liveCount})`, full: `🔴 Live Matches (${liveCount})` },
+                    { id: 'upcoming', short: `📅 Upcoming (${upcomingCount})`, full: `📅 Upcoming Fixtures (${upcomingCount})` },
+                    { id: 'results', short: `🏁 Results (${resultsCount})`, full: `🏁 Recent Results (${resultsCount})` }
                   ].map(f => (
                     <TouchableOpacity
                       key={f.id}
-                      style={[styles.filterTabBtn, matchFilter === f.id && styles.filterTabBtnActive]}
+                      style={[
+                        styles.filterTabBtn,
+                        matchFilter === f.id && styles.filterTabBtnActive,
+                        isSmallMobile && { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18 }
+                      ]}
                       onPress={() => setMatchFilter(f.id as any)}
                     >
-                      <Text style={[styles.filterTabBtnText, matchFilter === f.id && styles.filterTabBtnTextActive]}>
-                        {f.label}
+                      <Text
+                        style={[
+                          styles.filterTabBtnText,
+                          matchFilter === f.id && styles.filterTabBtnTextActive,
+                          isSmallMobile && { fontSize: 11 }
+                        ]}
+                      >
+                        {isSmallMobile ? f.short : f.full}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -1057,8 +1241,8 @@ export default function HomeScreen() {
               );
             })()}
 
-            {/* Loading State */}
-            {isLoadingMatches && (
+            {/* Loading State: Only show spinner if matches haven't loaded yet */}
+            {isLoadingMatches && publicMatches.length === 0 && (
               <View style={{ paddingVertical: 40, alignItems: 'center', justifyContent: 'center' }}>
                 <ActivityIndicator size="large" color="#d4af37" />
                 <Text style={{ marginTop: 12, fontSize: 14, fontWeight: '700', color: '#854d0e' }}>
@@ -1088,7 +1272,7 @@ export default function HomeScreen() {
                 </Text>
                 <TouchableOpacity
                   style={{ backgroundColor: '#dc2626', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}
-                  onPress={loadPublicMatches}
+                  onPress={() => loadPublicMatches(true)}
                 >
                   <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 13 }}>Retry Connection</Text>
                 </TouchableOpacity>
@@ -1134,7 +1318,7 @@ export default function HomeScreen() {
 
 {/* Matches Grid */}
             {!isLoadingMatches && (
-              <View style={styles.grid2Col}>
+              <View style={[styles.grid2Col, isMobile && { flexDirection: 'column' }]}>
                 {publicMatches
                   .filter(m => {
                     const s = (m.status || '').toLowerCase();
@@ -1155,172 +1339,214 @@ export default function HomeScreen() {
                     const teamAShort = m.teamAShort || (m.teamA ? m.teamA.slice(0, 3).toUpperCase() : 'TMA');
                     const teamBShort = m.teamBShort || (m.teamB ? m.teamB.slice(0, 3).toUpperCase() : 'TMB');
 
+                    const isRain = m.currentBreak && (m.currentBreak.type || '').toLowerCase().includes('rain');
+                    const isBreak = !!m.currentBreak;
+
+                    // Clean logistics without redundant labels
+                    const rawDate = m.date || m.match_date || 'TBD';
+                    const cleanDate = rawDate.replace(/\s+\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?/i, '').trim();
+                    const cleanTime = m.match_time || (rawDate.match(/\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)/i) ? rawDate.match(/\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)/i)[0] : '');
+                    const cleanVenue = (m.venue || 'District Sports Complex, Virudhunagar').replace(/^Venue:\s*/i, '').trim();
+                    const cleanOfficials = m.assigned_scorer_id ? `${m.assigned_scorer_id} • Federation Umpires` : 'Assigned District Panel Officials';
+
                     return (
-                      <View key={m.id} style={[styles.matchCard, isLive && styles.matchCardLive]}>
+                      <View
+                        key={m.id}
+                        style={[
+                          styles.matchCard,
+                          isLive && styles.matchCardLive,
+                          isUpcoming && styles.matchCardUpcoming,
+                          isCompleted && styles.matchCardResult,
+                          isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' },
+                          isSmallMobile && { padding: 12, borderRadius: 14 }
+                        ]}
+                      >
+                        {/* 1. Top Header Row: Live / Status & Tournament on Left, Rain Delay & Format on Right */}
                         <View style={styles.matchCardTop}>
-                          {isLive ? (
-                            <View style={[styles.liveIndicatorPill, m.currentBreak && styles.liveBreakIndicatorPill]}>
-                              <Animated.View style={[styles.pulseRedDot, { opacity: pulseAnim }]} />
-                              <Text style={styles.liveIndicatorText}>
-                                {m.currentBreak ? `LIVE • ${m.currentBreak.type?.toUpperCase() || 'BREAK'}` : 'LIVE'}
-                              </Text>
-                            </View>
-                          ) : isUpcoming ? (
-                            <View style={styles.upcomingIndicatorPill}>
-                              <Text style={styles.upcomingIndicatorText}>⏰ UPCOMING</Text>
-                            </View>
-                          ) : isCompleted ? (
-                            <View style={styles.resultIndicatorPill}>
-                              <Text style={styles.resultIndicatorText}>🏁 RESULT</Text>
-                            </View>
-                          ) : (
+                          <View style={styles.cardHeaderLeftGroup}>
+                            {isLive ? (
+                              <View style={[styles.liveIndicatorPill, isSmallMobile && { paddingHorizontal: 7, paddingVertical: 2.5 }]}>
+                                <Animated.View style={[styles.pulseRedDot, { opacity: pulseAnim }]} />
+                                <Text style={[styles.liveIndicatorText, isSmallMobile && { fontSize: 9.5 }]}>LIVE</Text>
+                              </View>
+                            ) : isUpcoming ? (
+                              <View style={[styles.upcomingIndicatorPill, isSmallMobile && { paddingHorizontal: 7, paddingVertical: 2.5 }]}>
+                                <Text style={[styles.upcomingIndicatorText, isSmallMobile && { fontSize: 9.5 }]}>⏰ UPCOMING</Text>
+                              </View>
+                            ) : isCompleted ? (
+                              <View style={[styles.resultIndicatorPill, isSmallMobile && { paddingHorizontal: 7, paddingVertical: 2.5 }]}>
+                                <Text style={[styles.resultIndicatorText, isSmallMobile && { fontSize: 9.5 }]}>🏁 RESULT</Text>
+                              </View>
+                            ) : (
+                              <View
+                                style={[
+                                  styles.upcomingIndicatorPill,
+                                  { backgroundColor: '#f1f5f9', borderColor: '#cbd5e1' },
+                                  isSmallMobile && { paddingHorizontal: 7, paddingVertical: 2.5 }
+                                ]}
+                              >
+                                <Text style={[styles.upcomingIndicatorText, { color: '#64748b' }, isSmallMobile && { fontSize: 9.5 }]}>🚫 CANCELLED</Text>
+                              </View>
+                            )}
+                            <Text style={[styles.matchTournament, isSmallMobile && { fontSize: 11.5 }]} numberOfLines={1}>
+                              {m.tournament || m.tournament_name || 'District Match'}
+                            </Text>
+                          </View>
+
+                          <View style={styles.cardHeaderRightGroup}>
+                            {isRain ? (
+                              <View style={[styles.topRightRainPill, isSmallMobile && { paddingHorizontal: 6, paddingVertical: 2 }]}>
+                                <Text style={[styles.topRightRainPillText, isSmallMobile && { fontSize: 9 }]}>
+                                  🌧️ RAIN DELAY{m.currentBreak?.duration ? ` (${m.currentBreak.duration}m)` : ''}
+                                </Text>
+                              </View>
+                            ) : isBreak ? (
+                              <View style={[styles.topRightBreakPill, isSmallMobile && { paddingHorizontal: 6, paddingVertical: 2 }]}>
+                                <Text style={[styles.topRightBreakPillText, isSmallMobile && { fontSize: 9 }]}>
+                                  ☕ {m.currentBreak?.type?.toUpperCase()}
+                                </Text>
+                              </View>
+                            ) : null}
+
                             <View
                               style={[
-                                styles.upcomingIndicatorPill,
-                                { backgroundColor: '#f1f5f9', borderColor: '#cbd5e1' }
+                                m.format === '3-DAY'
+                                  ? styles.formatBadgeMulti
+                                  : m.format === 'ODI' || m.format === '50-OVERS'
+                                    ? styles.formatBadgeOneDay
+                                    : styles.formatBadgeT20,
+                                isSmallMobile && { paddingHorizontal: 6, paddingVertical: 2 }
                               ]}
                             >
-                              <Text style={[styles.upcomingIndicatorText, { color: '#64748b' }]}>🚫 CANCELLED</Text>
+                              <Text style={[styles.formatBadgeText, isSmallMobile && { fontSize: 9 }]}>{m.format || 'T20'}</Text>
                             </View>
-                          )}
-                          <Text style={styles.matchTournament} numberOfLines={1}>
-                            {m.tournament || m.tournament_name || 'District Match'}
-                          </Text>
-                          <View
-                            style={
-                              m.format === '3-DAY'
-                                ? styles.formatBadgeMulti
-                                : m.format === 'ODI' || m.format === '50-OVERS'
-                                  ? styles.formatBadgeOneDay
-                                  : styles.formatBadgeT20
-                            }
-                          >
-                            <Text style={styles.formatBadgeText}>{m.format || 'T20'}</Text>
                           </View>
                         </View>
 
-                        {/* Logistics Box */}
-                        <View style={styles.logisticsBox}>
-                          <Text style={styles.logisticsItem}>
-                            📅 Date: {m.date || m.match_date || 'TBD'}
-                            {m.match_time ? ` | ⏰ Time: ${m.match_time}` : ''}
-                          </Text>
-                          <Text style={styles.logisticsItem} numberOfLines={1}>
-                            📍 Venue: {m.venue || 'District Sports Complex, Virudhunagar'}
-                          </Text>
-                          <Text style={styles.logisticsItem} numberOfLines={1}>
-                            ⚖️ Officials: {m.assigned_scorer_id ? `Assigned Scorer: ${m.assigned_scorer_id} • Federation Umpires` : 'Assigned District Panel Officials'}
-                          </Text>
-                        </View>
-
-                        {/* Teams & Scores */}
-                        <View style={styles.matchTeamsBox}>
-                          <View style={[styles.matchTeamRow, isLive && styles.battingNowRow]}>
-                            <View style={styles.teamMeta}>
+                        {/* 2. Teams & Scores in a Single Professional Row (Team 1 VS Team 2) */}
+                        <View
+                          style={[
+                            styles.matchTeamsSingleRow,
+                            isSmallMobile && { paddingHorizontal: 8, paddingVertical: 10, borderRadius: 12, marginVertical: 6 }
+                          ]}
+                        >
+                          {/* Team A (Left) */}
+                          <View style={[styles.teamColLeft, isSmallMobile && { minWidth: 0 }]}>
+                            <View style={styles.teamCrestNameRow}>
                               <View
                                 style={[
                                   styles.teamMiniCrest,
-                                  { backgroundColor: getTeamBadgeColor(teamAShort, 0) }
+                                  { backgroundColor: getTeamBadgeColor(teamAShort, 0) },
+                                  isSmallMobile && { width: 24, height: 24, borderRadius: 12 }
                                 ]}
                               >
-                                <Text style={styles.teamMiniCrestText}>{teamAShort}</Text>
+                                <Text style={[styles.teamMiniCrestText, isSmallMobile && { fontSize: 9 }]}>{teamAShort}</Text>
                               </View>
-                              <Text style={styles.teamNameText} numberOfLines={1}>
+                              <Text style={[styles.teamNameTextSingleRow, isSmallMobile && { fontSize: 12 }]} numberOfLines={1}>
                                 {m.teamA}
                               </Text>
-                              {isLive && <Text style={styles.battingIcon}>🏏</Text>}
+                              {isLive && <Text style={[styles.battingIcon, isSmallMobile && { fontSize: 10 }]}>🏏</Text>}
                             </View>
-                            <View style={styles.teamScores}>
-                              {m.scoreA ? (
-                                <Text style={styles.runsText}>{m.scoreA}</Text>
-                              ) : (
-                                <Text style={styles.yetToBatText}>{isUpcoming ? 'Upcoming' : '-'}</Text>
-                              )}
+                            <Text style={[m.scoreA ? styles.teamScoreSingleRow : styles.teamYetToBatSingleRow, isSmallMobile && { fontSize: isTinyMobile ? 13 : 14.5 }]}>
+                              {m.scoreA || (isUpcoming ? 'Upcoming' : 'Yet to bat')}
+                            </Text>
+                          </View>
+
+                          {/* Center VS Badge */}
+                          <View style={[styles.iplVsCenterBox, isSmallMobile && { paddingHorizontal: 4 }]}>
+                            <View style={[styles.iplVsCircle, isSmallMobile && { width: 26, height: 26, borderRadius: 13 }]}>
+                              <Text style={[styles.iplVsCircleText, isSmallMobile && { fontSize: 8.5 }]}>VS</Text>
                             </View>
                           </View>
 
-                          {/* IPL-Style VS Clash Badge Divider */}
-                          <View style={styles.iplVsDivider}>
-                            <View style={styles.iplVsLine} />
-                            <View style={styles.iplVsBadge}>
-                              <Text style={styles.iplVsText}>VS</Text>
-                            </View>
-                            <View style={styles.iplVsLine} />
-                          </View>
-
-                          <View style={styles.matchTeamRow}>
-                            <View style={styles.teamMeta}>
+                          {/* Team B (Right) */}
+                          <View style={[styles.teamColRight, isSmallMobile && { minWidth: 0 }]}>
+                            <View style={[styles.teamCrestNameRow, { justifyContent: 'flex-end' }]}>
+                              <Text style={[styles.teamNameTextSingleRow, { textAlign: 'right' }, isSmallMobile && { fontSize: 12 }]} numberOfLines={1}>
+                                {m.teamB}
+                              </Text>
                               <View
                                 style={[
                                   styles.teamMiniCrest,
-                                  { backgroundColor: getTeamBadgeColor(teamBShort, 1) }
+                                  { backgroundColor: getTeamBadgeColor(teamBShort, 1) },
+                                  isSmallMobile && { width: 24, height: 24, borderRadius: 12 }
                                 ]}
                               >
-                                <Text style={styles.teamMiniCrestText}>{teamBShort}</Text>
+                                <Text style={[styles.teamMiniCrestText, isSmallMobile && { fontSize: 9 }]}>{teamBShort}</Text>
                               </View>
-                              <Text style={styles.teamNameText} numberOfLines={1}>
-                                {m.teamB}
-                              </Text>
                             </View>
-                            <View style={styles.teamScores}>
-                              {m.scoreB ? (
-                                <Text style={styles.runsText}>{m.scoreB}</Text>
-                              ) : (
-                                <Text style={styles.yetToBatText}>{isUpcoming ? 'Upcoming' : '-'}</Text>
-                              )}
-                            </View>
+                            <Text style={[m.scoreB ? styles.teamScoreSingleRow : styles.teamYetToBatSingleRow, { textAlign: 'right' }, isSmallMobile && { fontSize: isTinyMobile ? 13 : 14.5 }]}>
+                              {m.scoreB || (isUpcoming ? 'Upcoming' : 'Yet to bat')}
+                            </Text>
                           </View>
                         </View>
 
-                        {/* Status / Result Summary Note */}
+                        {/* 3. Status Note / Active Rain Delay Notice */}
                         {m.result ? (
-                          <Text style={styles.matchStatusNoteGold}>🏆 {m.result}</Text>
-                        ) : isLive ? (
-                          m.currentBreak ? (
-                            <View style={styles.cardBreakBanner}>
-                              <Text style={styles.cardBreakEmoji}>
-                                {m.currentBreak.type?.toLowerCase().includes('tea')
-                                  ? '☕'
-                                  : m.currentBreak.type?.toLowerCase().includes('lunch')
-                                  ? '🍽️'
-                                  : m.currentBreak.type?.toLowerCase().includes('drinks')
-                                  ? '🥤'
-                                  : m.currentBreak.type?.toLowerCase().includes('rain')
-                                  ? '🌧️'
-                                  : '⏸️'}
-                              </Text>
-                              <Text style={styles.cardBreakText} numberOfLines={1}>
-                                {m.currentBreak.type?.toUpperCase()} IN PROGRESS
-                                {m.currentBreak.duration ? ` (${m.currentBreak.duration} MINS)` : ''}
-                                {m.currentBreak.startTime && m.currentBreak.endTime ? ` • ${m.currentBreak.startTime} - ${m.currentBreak.endTime}` : ''}
-                              </Text>
-                            </View>
-                          ) : (
-                            <Text style={styles.matchStatusNoteGold}>
-                              ⏰ Live Inning in Progress ({m.overs || 20} Overs)
+                          <Text style={[styles.matchStatusNoteGold, isSmallMobile && { fontSize: 11 }]}>🏆 {m.result}</Text>
+                        ) : isRain ? (
+                          <View style={[styles.cardRainBanner, isSmallMobile && { paddingVertical: 6, paddingHorizontal: 8 }]}>
+                            <Text style={[styles.cardRainText, isSmallMobile && { fontSize: 10.5 }]} numberOfLines={1}>
+                              🌧️ MATCH DELAYED DUE TO RAIN • Covers on pitch{m.currentBreak.startTime && m.currentBreak.endTime ? ` (${m.currentBreak.startTime} - ${m.currentBreak.endTime})` : ''}
                             </Text>
-                          )
+                          </View>
+                        ) : isBreak ? (
+                          <View style={[styles.cardBreakBanner, isSmallMobile && { paddingVertical: 6, paddingHorizontal: 8 }]}>
+                            <Text style={[styles.cardBreakText, isSmallMobile && { fontSize: 10.5 }]} numberOfLines={1}>
+                              ☕ {m.currentBreak.type?.toUpperCase()} IN PROGRESS{m.currentBreak.duration ? ` (${m.currentBreak.duration} MINS)` : ''}{m.currentBreak.startTime && m.currentBreak.endTime ? ` • ${m.currentBreak.startTime} - ${m.currentBreak.endTime}` : ''}
+                            </Text>
+                          </View>
+                        ) : isLive ? (
+                          <Text style={[styles.matchStatusNoteGold, isSmallMobile && { fontSize: 11 }]}>
+                            ⏰ Live Inning in Progress ({m.overs || 20} Overs)
+                          </Text>
                         ) : isUpcoming ? (
-                          <Text style={styles.matchStatusNote}>
-                            📅 Match Scheduled: {m.date || m.match_date}
+                          <Text style={[styles.matchStatusNote, isSmallMobile && { fontSize: 11 }]}>
+                            📅 Match Scheduled: {cleanDate} {cleanTime}
                           </Text>
                         ) : isCancelled ? (
-                          <Text style={[styles.matchStatusNote, { color: '#ef4444' }]}>
+                          <Text style={[styles.matchStatusNote, { color: '#ef4444' }, isSmallMobile && { fontSize: 11 }]}>
                             🚫 Match Cancelled: {m.result || 'Cancelled by Federation Admin'}
                           </Text>
                         ) : (
-                          <Text style={styles.matchStatusNote}>ℹ️ Status: {m.status}</Text>
+                          <Text style={[styles.matchStatusNote, isSmallMobile && { fontSize: 11 }]}>ℹ️ Status: {m.status}</Text>
                         )}
 
-                        {/* Action CTA */}
+                        {/* 4. Bottom Logistics Box (Clean Alignment, Only Emojis, No Redundant English) */}
+                        <View style={[styles.cardLogisticsBottomBar, isSmallMobile && { paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8 }]}>
+                          <View style={[styles.logisticsChipRow, isSmallMobile && { gap: 6, marginBottom: 4 }]}>
+                            <View style={styles.logisticsChip}>
+                              <Text style={styles.logisticsEmoji}>📅</Text>
+                              <Text style={[styles.logisticsValueText, isSmallMobile && { fontSize: 10 }]}>{cleanDate}</Text>
+                            </View>
+                            {cleanTime ? (
+                              <View style={styles.logisticsChip}>
+                                <Text style={styles.logisticsEmoji}>⏰</Text>
+                                <Text style={[styles.logisticsValueText, isSmallMobile && { fontSize: 10 }]}>{cleanTime}</Text>
+                              </View>
+                            ) : null}
+                            <View style={[styles.logisticsChip, { flex: 1, minWidth: isSmallMobile ? '100%' : 'auto' }]}>
+                              <Text style={styles.logisticsEmoji}>📍</Text>
+                              <Text style={[styles.logisticsValueText, isSmallMobile && { fontSize: 10 }]} numberOfLines={1}>{cleanVenue}</Text>
+                            </View>
+                          </View>
+                          <View style={styles.logisticsOfficialsBottomRow}>
+                            <Text style={styles.logisticsEmoji}>⚖️</Text>
+                            <Text style={[styles.logisticsOfficialsCleanText, isSmallMobile && { fontSize: 9.5 }]} numberOfLines={1}>
+                              {cleanOfficials}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* 5. Action CTA */}
                         <TouchableOpacity
-                          style={styles.btnOutlineGoldBlock}
+                          style={[styles.btnOutlineGoldBlock, isSmallMobile && { paddingVertical: 8 }]}
                           onPress={() => {
                             if (isLive || isCompleted) {
                               handleOpenScorecard(m);
                             } else if (isUpcoming) {
                               alert(
-                                `Fixture Logistics:\n• Tournament: ${m.tournament || 'CFVD'}\n• Teams: ${m.teamA} vs ${m.teamB}\n• Date: ${m.date || m.match_date}\n• Venue: ${m.venue}\n• Format: ${m.format}`
+                                `Fixture Logistics:\n• Tournament: ${m.tournament || 'CFVD'}\n• Teams: ${m.teamA} vs ${m.teamB}\n• Date: ${cleanDate} ${cleanTime}\n• Venue: ${cleanVenue}\n• Format: ${m.format}`
                               );
                             } else {
                               alert(
@@ -1329,11 +1555,11 @@ export default function HomeScreen() {
                             }
                           }}
                         >
-                          <Text style={styles.btnOutlineGoldBlockText}>
+                          <Text style={[styles.btnOutlineGoldBlockText, isSmallMobile && { fontSize: 11 }]}>
                             {isLive
-                              ? '👁️ View Live Scorecard & Toss'
+                              ? '👁️ View Live Scorecard & Analytics ▶'
                               : isCompleted
-                                ? '📄 View Result Scoresheet'
+                                ? '📊 View Scorecard & Wagon Wheel ▶'
                                 : isUpcoming
                                   ? '🔔 View Fixture Logistics'
                                   : 'ℹ️ View Match Details'}
@@ -1355,20 +1581,20 @@ export default function HomeScreen() {
             setSectionPositions(prev => ({ ...prev, tournaments: layout.y }));
           }}
         >
-          <View style={styles.container}>
+          <View style={[styles.container, containerResponsiveStyle]}>
             <View style={styles.sectionHead}>
               <View style={styles.sectionTagBadge}>
                 <Text style={styles.sectionTagBadgeText}>🏆 LEAGUE STRUCTURE</Text>
               </View>
-              <Text style={styles.sectionTitle}>Official Sanctioned Tournaments</Text>
+              <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>Official Sanctioned Tournaments</Text>
               <Text style={styles.sectionSubtitle}>
                 Promoting multi-day red-ball traditional cricket and modern white-ball collegiate and district leagues
               </Text>
             </View>
 
-            <View style={styles.grid2Col}>
+            <View style={[styles.grid2Col, isMobile && { flexDirection: 'column' }]}>
               {/* Tourney 1 */}
-              <View style={styles.tournamentCard}>
+              <View style={[styles.tournamentCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }, isSmallMobile && { padding: 12 }]}>
                 <View style={styles.tBadgeWrap}>
                   <Text style={styles.badgeGoldPill}>Premier Division</Text>
                   <Text style={styles.badgeBluePill}>Multi-Day</Text>
@@ -1405,7 +1631,7 @@ export default function HomeScreen() {
               </View>
 
               {/* Tourney 2 */}
-              <View style={styles.tournamentCard}>
+              <View style={[styles.tournamentCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }, isSmallMobile && { padding: 12 }]}>
                 <View style={styles.tBadgeWrap}>
                   <Text style={styles.badgeRedPill}>White Ball</Text>
                   <Text style={styles.badgeGoldPill}>T20 Trophy</Text>
@@ -1434,8 +1660,8 @@ export default function HomeScreen() {
                   <TouchableOpacity
                     style={styles.btnPrimarySm}
                     onPress={() => {
-                      setActiveScorecardMatch('match-1');
-                      setScorecardModalVisible(true);
+                      const targetMatch = publicMatches.find(m => (m.status || '').toLowerCase() === 'completed') || publicMatches[0] || { id: 'M001' };
+                      handleOpenScorecard(targetMatch);
                     }}
                   >
                     <Text style={styles.btnPrimarySmText}>Latest Final</Text>
@@ -1444,7 +1670,7 @@ export default function HomeScreen() {
               </View>
 
               {/* Tourney 3 */}
-              <View style={styles.tournamentCard}>
+              <View style={[styles.tournamentCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }, isSmallMobile && { padding: 12 }]}>
                 <View style={styles.tBadgeWrap}>
                   <Text style={styles.badgeBluePill}>Collegiate</Text>
                   <Text style={styles.badgeGoldPill}>Inter-College Cup</Text>
@@ -1478,7 +1704,7 @@ export default function HomeScreen() {
               </View>
 
               {/* Tourney 4 */}
-              <View style={styles.tournamentCard}>
+              <View style={[styles.tournamentCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }, isSmallMobile && { padding: 12 }]}>
                 <View style={styles.tBadgeWrap}>
                   <Text style={styles.badgeGreenPill}>Under-16 / U-19</Text>
                   <Text style={styles.badgeBluePill}>Junior Talent</Text>
@@ -1522,12 +1748,12 @@ export default function HomeScreen() {
             setSectionPositions(prev => ({ ...prev, pointsTable: layout.y }));
           }}
         >
-          <View style={styles.container}>
+          <View style={[styles.container, containerResponsiveStyle]}>
             <View style={styles.sectionHead}>
               <View style={styles.sectionTagBadge}>
                 <Text style={styles.sectionTagBadgeText}>📊 LEAGUE STANDINGS</Text>
               </View>
-              <Text style={styles.sectionTitle}>Official League Points Table 2026-27</Text>
+              <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>Official League Points Table 2026-27</Text>
               <Text style={styles.sectionSubtitle}>
                 Updated in accordance with official District Federation League points calculation rules
               </Text>
@@ -1554,7 +1780,12 @@ export default function HomeScreen() {
             </ScrollView>
 
             {/* Standings Table */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {isMobile && (
+              <Text style={{ fontSize: 11, color: '#b45309', fontWeight: '700', marginBottom: 8, textAlign: 'center' }}>
+                👉 Swipe horizontally to view full table (P, W, L, NR, NRR, PTS, Form)
+              </Text>
+            )}
+            <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{ width: '100%' }}>
               <View style={styles.tableBox}>
                 <View style={styles.tableHeaderRow}>
                   <Text style={[styles.tableTh, { width: 50, textAlign: 'center' }]}>Stand</Text>
@@ -1651,38 +1882,51 @@ export default function HomeScreen() {
             setSectionPositions(prev => ({ ...prev, stats: layout.y }));
           }}
         >
-          <View style={styles.container}>
+          <View style={[styles.container, containerResponsiveStyle]}>
             <View style={styles.sectionHead}>
               <View style={styles.sectionTagBadge}>
                 <Text style={styles.sectionTagBadgeText}>📈 PERFORMANCE RECORDS</Text>
               </View>
-              <Text style={styles.sectionTitle}>Season 2026-27 Player Performance</Text>
+              <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>Season 2026-27 Player Performance</Text>
               <Text style={styles.sectionSubtitle}>
                 Batting (50s/100s, Role: Batter), Bowling (Runs, 3w/5w counts), and Fielding Stats across official competitions
               </Text>
             </View>
 
             {/* Performance Tabs */}
-            <View style={styles.perfTabsRow}>
+            <View style={[styles.perfTabsRow, isSmallMobile && { gap: 6, marginBottom: 14 }]}>
               {[
-                { id: 'batting', label: '🏏 Batting Stats (Runs, 50/100s)' },
-                { id: 'bowling', label: '🎯 Bowling Stats (Runs, 3w/5w)' },
-                { id: 'fielding', label: '🧤 Fielding Stats (Catches, Stumpings)' }
+                { id: 'batting', short: '🏏 Batting', label: '🏏 Batting Stats (Runs, 50/100s)' },
+                { id: 'bowling', short: '🎯 Bowling', label: '🎯 Bowling Stats (Runs, 3w/5w)' },
+                { id: 'fielding', short: '🧤 Fielding', label: '🧤 Fielding Stats (Catches, Stumpings)' }
               ].map(t => (
                 <TouchableOpacity
                   key={t.id}
-                  style={[styles.perfTabBtn, perfTab === t.id && styles.perfTabBtnActive]}
+                  style={[
+                    styles.perfTabBtn,
+                    perfTab === t.id && styles.perfTabBtnActive,
+                    isSmallMobile && { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18 }
+                  ]}
                   onPress={() => setPerfTab(t.id as any)}
                 >
-                  <Text style={[styles.perfTabBtnText, perfTab === t.id && styles.perfTabBtnTextActive]}>
-                    {t.label}
+                  <Text style={[
+                    styles.perfTabBtnText,
+                    perfTab === t.id && styles.perfTabBtnTextActive,
+                    isSmallMobile && { fontSize: 11 }
+                  ]}>
+                    {isSmallMobile ? t.short : t.label}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
             {/* Dynamic Performance Table */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {isMobile && (
+              <Text style={{ fontSize: 11, color: '#b45309', fontWeight: '700', marginBottom: 8, textAlign: 'center' }}>
+                👉 Swipe horizontally to view full performance records
+              </Text>
+            )}
+            <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{ width: '100%' }}>
               <View style={styles.tableBox}>
                 {perfTab === 'batting' && (
                   <View>
@@ -1818,7 +2062,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* ─── 8. DISTRICT TALENT & SQUAD ROSTER ─────────────────────────── */}
+        {/* ─── 8. DISTRICT SPECIAL MATCH RECORDS & MILESTONES ───────────── */}
         <View
           style={styles.section}
           onLayout={e => {
@@ -1826,14 +2070,14 @@ export default function HomeScreen() {
             setSectionPositions(prev => ({ ...prev, players: layout.y }));
           }}
         >
-          <View style={styles.container}>
+          <View style={[styles.container, containerResponsiveStyle]}>
             <View style={styles.sectionHead}>
               <View style={styles.sectionTagBadge}>
-                <Text style={styles.sectionTagBadgeText}>👥 DISTRICT TALENT & SQUAD ROSTER</Text>
+                <Text style={styles.sectionTagBadgeText}>🏆 OFFICIAL DISTRICT SPECIAL MATCH RECORDS</Text>
               </View>
-              <Text style={styles.sectionTitle}>Official District Players Directory & Profiles</Text>
+              <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>District Match Record Breakers & Milestone Performers</Text>
               <Text style={styles.sectionSubtitle}>
-                Verified district cricketers across Senior Men, Women's Championship, U-23/U-25 Colts, and Premier League clubs
+                Elite match performances: Centuries (100s), Half-Centuries (50s), and Best Bowling Spells across Virudhunagar District League
               </Text>
             </View>
 
@@ -1842,7 +2086,7 @@ export default function HomeScreen() {
               <Text style={{ fontSize: 16 }}>🔍</Text>
               <TextInput
                 style={styles.playerSearchInput}
-                placeholder="Search player by name, role (Batter, Bowler), team, or taluk..."
+                placeholder="Search milestone player by name, record (100, 50, 5W), team, or taluk..."
                 placeholderTextColor="#62799c"
                 value={playerSearchQuery}
                 onChangeText={setPlayerSearchQuery}
@@ -1857,12 +2101,11 @@ export default function HomeScreen() {
             {/* Category Filter Pills */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subTabsScroll}>
               {[
-                { id: 'all', label: `⭐ All Players (${allDisplayPlayers.length})` },
-                { id: 'batter', label: '🏏 Batters' },
-                { id: 'bowler', label: '🎯 Bowlers' },
-                { id: 'allrounder', label: '⚡ All-Rounders' },
-                { id: 'wicketkeeper', label: '🧤 Wicketkeepers' },
-                { id: 'womens', label: "♀️ Women's Senior & U-23" }
+                { id: 'all', label: `⭐ All Special Records (${filteredPlayers.length})` },
+                { id: 'century', label: '💯 100s (Centuries)' },
+                { id: 'fifty', label: '🎖️ 50s (Half-Centuries)' },
+                { id: 'bowler', label: '🎯 Best Bowling (3W+ / 5W)' },
+                { id: 'womens', label: "♀️ Women's Milestones" }
               ].map(f => (
                 <TouchableOpacity
                   key={f.id}
@@ -1876,77 +2119,137 @@ export default function HomeScreen() {
               ))}
             </ScrollView>
 
+            {/* Empty State */}
+            {filteredPlayers.length === 0 && (
+              <View style={{ padding: 24, alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 12, borderWidth: 1, borderColor: '#fde68a', marginVertical: 14 }}>
+                <Text style={{ fontSize: 28, marginBottom: 8 }}>🏅</Text>
+                <Text style={{ color: '#0f172a', fontWeight: '800', fontSize: 16 }}>No Special Milestone Records Found</Text>
+                <Text style={{ color: '#64748b', fontSize: 13, textAlign: 'center', marginTop: 4, maxWidth: 500 }}>
+                  Only verified 50s (Half-Centuries), 100s (Centuries), and 3W+ Bowling Hauls scored in official matches are recorded in this hall of fame.
+                </Text>
+              </View>
+            )}
+
             {/* Players Grid */}
-            <View style={styles.grid2Col}>
-              {filteredPlayers.map(p => (
-                <View key={p.id} style={styles.playerCard}>
-                  <View style={styles.playerCardHeader}>
-                    <LinearGradient colors={p.avatarColor || ['#1e3a8a', '#3b82f6']} style={styles.playerAvatar}>
-                      <Text style={styles.playerAvatarText}>
-                        {p.name
-                          .split(' ')
-                          .map((w: string) => w[0])
-                          .join('')
-                          .slice(0, 2)}
-                      </Text>
-                    </LinearGradient>
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={styles.playerIdTag}>{p.id}</Text>
-                        <Text style={styles.playerVerifiedTag}>✓ Verified</Text>
-                      </View>
-                      <Text style={styles.playerName}>{p.name}</Text>
-                      <Text style={styles.playerCategoryBadge}>{p.categoryLabel}</Text>
-                    </View>
-                  </View>
+            <View style={[styles.grid2Col, isMobile && { flexDirection: 'column' }]}>
+              {filteredPlayers.map(p => {
+                const isCentury = p.milestoneType === 'century' || (p.stats?.hundreds && p.stats.hundreds > 0) || parseInt(p.stats?.hs || '0', 10) >= 100;
+                const isBowlingHaul = p.milestoneType === 'bowling_haul' || (p.stats?.wkts && p.stats.wkts >= 3) || (p.stats?.best && (p.stats.best.startsWith('3/') || p.stats.best.startsWith('4/') || p.stats.best.startsWith('5/')));
 
-                  <View style={styles.playerCardMeta}>
-                    <Text style={styles.playerMetaText}>
-                      <Text style={{ fontWeight: '700' }}>Team: </Text>
-                      {p.team}
-                    </Text>
-                    <Text style={styles.playerMetaText}>
-                      <Text style={{ fontWeight: '700' }}>Taluk: </Text>
-                      {p.taluk} District Center
-                    </Text>
-                    <Text style={styles.playerMetaText}>
-                      <Text style={{ fontWeight: '700' }}>Role: </Text>
-                      {p.roleLabel}
-                    </Text>
-                  </View>
+                const badgeLabel = p.milestoneBadge || (isCentury ? '💯 100 IN A MATCH • CENTURY RECORD' : (isBowlingHaul ? ((p.stats.wkts >= 5 || (p.stats.best && p.stats.best.startsWith('5/'))) ? '🎯 5-WICKET MATCH HAUL' : '🔥 3+ WICKETS IN MATCH') : '🎖️ 50 IN A MATCH • HALF-CENTURY'));
+                const badgeColor = isCentury ? '#b45309' : (isBowlingHaul ? '#7e22ce' : '#c2410c');
+                const badgeBg = isCentury ? '#fef3c7' : (isBowlingHaul ? '#f3e8ff' : '#ffedd5');
+                const badgeBorder = isCentury ? '#fde68a' : (isBowlingHaul ? '#e9d5ff' : '#fed7aa');
 
-                  {/* Player Stats Snippet */}
-                  <View style={styles.playerStatsSnippet}>
-                    <View style={styles.pssCol}>
-                      <Text style={styles.pssVal}>{p.stats.mat}</Text>
-                      <Text style={styles.pssLabel}>Matches</Text>
-                    </View>
-                    <View style={styles.pssCol}>
-                      <Text style={styles.pssVal}>{p.stats.runs}</Text>
-                      <Text style={styles.pssLabel}>Runs</Text>
-                    </View>
-                    <View style={styles.pssCol}>
-                      <Text style={styles.pssVal}>{p.stats.wkts}</Text>
-                      <Text style={styles.pssLabel}>Wickets</Text>
-                    </View>
-                    <View style={styles.pssCol}>
-                      <Text style={styles.pssVal}>{p.stats.avg}</Text>
-                      <Text style={styles.pssLabel}>Avg</Text>
-                    </View>
-                  </View>
-
-                  <Text style={styles.playerBioSnippet} numberOfLines={2}>
-                    {p.bio}
-                  </Text>
-
-                  <TouchableOpacity
-                    style={styles.btnOutlineGoldSm}
-                    onPress={() => setSelectedPlayerModal(p)}
+                return (
+                  <View
+                    key={p.id}
+                    style={[
+                      styles.playerCard,
+                      isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' },
+                      isSmallMobile && { padding: 12 },
+                      { borderTopColor: isCentury ? '#d97706' : (isBowlingHaul ? '#9333ea' : '#ea580c'), borderTopWidth: 4 }
+                    ]}
                   >
-                    <Text style={styles.btnOutlineGoldSmText}>👁️ View Career Profile & Stats</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
+                    {/* Milestone Top Banner */}
+                    <View style={{ backgroundColor: badgeBg, borderColor: badgeBorder, borderWidth: 1, borderRadius: 6, paddingVertical: 5, paddingHorizontal: 9, marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Text style={{ color: badgeColor, fontSize: 11, fontWeight: '900', letterSpacing: 0.4 }}>
+                        {badgeLabel}
+                      </Text>
+                      <View style={{ backgroundColor: badgeColor, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 1.5 }}>
+                        <Text style={{ color: '#ffffff', fontSize: 9.5, fontWeight: '800' }}>
+                          {isCentury ? '100+' : (isBowlingHaul ? 'HAUL' : '50+')}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.playerCardHeader}>
+                      <LinearGradient colors={p.avatarColor || (isCentury ? ['#b45309', '#f59e0b'] : (isBowlingHaul ? ['#581c87', '#9333ea'] : ['#1e3a8a', '#3b82f6']))} style={styles.playerAvatar}>
+                        <Text style={styles.playerAvatarText}>
+                          {p.name
+                            .split(' ')
+                            .map((w: string) => w[0])
+                            .join('')
+                            .slice(0, 2)}
+                        </Text>
+                      </LinearGradient>
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={styles.playerIdTag}>{p.id}</Text>
+                          <Text style={styles.playerVerifiedTag}>✓ Official Record</Text>
+                        </View>
+                        <Text style={styles.playerName}>{p.name}</Text>
+                        <Text style={styles.playerCategoryBadge}>{p.categoryLabel}</Text>
+                      </View>
+                    </View>
+
+                    {/* Special Match Performance Highlight Box */}
+                    <View style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0', borderWidth: 1, borderRadius: 8, padding: 9, marginBottom: 10 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ color: '#0f172a', fontSize: 14, fontWeight: '900' }}>
+                          ⚡ {p.matchPerformance || (isBowlingHaul ? (p.stats.best ? `${p.stats.best} Figures` : `${p.stats.wkts} Wickets Spell`) : `${p.stats.hs} Runs Knock`)}
+                        </Text>
+                        <Text style={{ color: '#64748b', fontSize: 11, fontWeight: '700' }}>
+                          {isBowlingHaul ? `Econ: ${p.stats.econ || '4.50'}` : `SR: ${p.stats.sr || '140.0'}`}
+                        </Text>
+                      </View>
+                      <Text style={{ color: '#475569', fontSize: 11.5, marginTop: 3 }}>
+                        🎯 {p.matchVs || `${p.team} • Virudhunagar League`}
+                      </Text>
+                    </View>
+
+                    <View style={styles.playerCardMeta}>
+                      <Text style={styles.playerMetaText}>
+                        <Text style={{ fontWeight: '700' }}>Team: </Text>
+                        {p.team}
+                      </Text>
+                      <Text style={styles.playerMetaText}>
+                        <Text style={{ fontWeight: '700' }}>Taluk: </Text>
+                        {p.taluk} District Center
+                      </Text>
+                      <Text style={styles.playerMetaText}>
+                        <Text style={{ fontWeight: '700' }}>Role: </Text>
+                        {p.roleLabel}
+                      </Text>
+                    </View>
+
+                    {/* Player Stats Snippet */}
+                    <View style={styles.playerStatsSnippet}>
+                      <View style={styles.pssCol}>
+                        <Text style={styles.pssVal}>{p.stats.mat}</Text>
+                        <Text style={styles.pssLabel}>Matches</Text>
+                      </View>
+                      <View style={styles.pssCol}>
+                        <Text style={styles.pssVal}>{p.stats.runs}</Text>
+                        <Text style={styles.pssLabel}>Runs</Text>
+                      </View>
+                      <View style={styles.pssCol}>
+                        <Text style={styles.pssVal}>{isBowlingHaul ? (p.stats.best || `${p.stats.wkts} W`) : (p.stats.hs || '0')}</Text>
+                        <Text style={styles.pssLabel}>{isBowlingHaul ? 'Best Spell' : 'Highest (HS)'}</Text>
+                      </View>
+                      <View style={styles.pssCol}>
+                        <Text style={styles.pssVal}>{p.stats.wkts}</Text>
+                        <Text style={styles.pssLabel}>Wickets</Text>
+                      </View>
+                      <View style={styles.pssCol}>
+                        <Text style={styles.pssVal}>{isBowlingHaul ? (p.stats.econ || '5.50') : (p.stats.sr || '135.0')}</Text>
+                        <Text style={styles.pssLabel}>{isBowlingHaul ? 'Economy' : 'Strike Rate'}</Text>
+                      </View>
+                    </View>
+
+                    <Text style={styles.playerBioSnippet} numberOfLines={2}>
+                      {p.bio}
+                    </Text>
+
+                    <TouchableOpacity
+                      style={styles.btnOutlineGoldSm}
+                      onPress={() => setSelectedPlayerModal(p)}
+                    >
+                      <Text style={styles.btnOutlineGoldSmText}>👁️ View Match Performance & Stats</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
             </View>
           </View>
         </View>
@@ -1959,16 +2262,16 @@ export default function HomeScreen() {
             setSectionPositions(prev => ({ ...prev, about: layout.y }));
           }}
         >
-          <View style={styles.container}>
+          <View style={[styles.container, containerResponsiveStyle]}>
             <View style={styles.sectionHead}>
               <View style={styles.sectionTagBadge}>
                 <Text style={styles.sectionTagBadgeText}>🏛️ GOVERNING CRICKET BODY</Text>
               </View>
-              <Text style={styles.sectionTitle}>The Heritage of Cricket in Virudhunagar</Text>
+              <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>The Heritage of Cricket in Virudhunagar</Text>
             </View>
 
-            <View style={styles.aboutGrid}>
-              <View style={styles.aboutTextCol}>
+            <View style={[styles.aboutGrid, isMobile && { flexDirection: 'column' }]}>
+              <View style={[styles.aboutTextCol, isMobile && { width: '100%', minWidth: '100%' }]}>
                 <Text style={styles.aboutLead}>
                   The <Text style={{ color: '#b45309', fontWeight: '800' }}>Cricket Federation of Virudhunagar District (CFVD)</Text> is
                   the official recognized governing body for the sport of cricket within Virudhunagar revenue district.
@@ -2011,7 +2314,7 @@ export default function HomeScreen() {
               </View>
 
               {/* Crest Card */}
-              <View style={styles.aboutCrestCard}>
+              <View style={[styles.aboutCrestCard, isMobile && { width: '100%', minWidth: '100%' }]}>
                 <Image source={IMG_LOGO} style={styles.aboutCrestImg} resizeMode="contain" />
                 <Text style={styles.aboutCrestTitle}>CRICKET FEDERATION OF VIRUDHUNAGAR DISTRICT</Text>
                 <Text style={styles.aboutCrestMotto}>"Enjoy the game and chase your dreams"</Text>
@@ -2033,19 +2336,19 @@ export default function HomeScreen() {
             setSectionPositions(prev => ({ ...prev, grounds: layout.y }));
           }}
         >
-          <View style={styles.container}>
+          <View style={[styles.container, containerResponsiveStyle]}>
             <View style={styles.sectionHead}>
               <View style={styles.sectionTagBadge}>
                 <Text style={styles.sectionTagBadgeText}>🏟️ PLAYING VENUES</Text>
               </View>
-              <Text style={styles.sectionTitle}>District Cricket Facilities & Grounds</Text>
+              <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>District Cricket Facilities & Grounds</Text>
               <Text style={styles.sectionSubtitle}>
                 First-class tournament grade turf wickets, indoor practice nets, and floodlit grounds adhering to professional match standards
               </Text>
             </View>
 
-            <View style={styles.grid3Col}>
-              <View style={styles.groundCard}>
+            <View style={[styles.grid3Col, isMobile && { flexDirection: 'column' }]}>
+              <View style={[styles.groundCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }]}>
                 <Image source={IMG_STADIUM} style={styles.groundImg} resizeMode="cover" />
                 <View style={styles.groundBadge}>
                   <Text style={styles.groundBadgeText}>Headquarters</Text>
@@ -2065,7 +2368,7 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <View style={styles.groundCard}>
+              <View style={[styles.groundCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }]}>
                 <Image source={IMG_BATSMAN} style={styles.groundImg} resizeMode="cover" />
                 <View style={styles.groundBadge}>
                   <Text style={styles.groundBadgeText}>Match Venue</Text>
@@ -2084,7 +2387,7 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <View style={styles.groundCard}>
+              <View style={[styles.groundCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }]}>
                 <Image source={IMG_CHAMPIONS} style={styles.groundImg} resizeMode="cover" />
                 <View style={styles.groundBadge}>
                   <Text style={styles.groundBadgeText}>Academy Centre</Text>
@@ -2108,7 +2411,7 @@ export default function HomeScreen() {
 
         {/* ─── 11. DISTRICT CRICKET ACADEMY ──────────────────────────────── */}
         <View style={styles.section}>
-          <View style={styles.container}>
+          <View style={[styles.container, containerResponsiveStyle]}>
             <LinearGradient colors={['#fffdf5', '#fef3c7']} style={styles.academyBanner}>
               <Text style={styles.badgeGoldText}>CFVD HIGH PERFORMANCE</Text>
               <Text style={styles.academyTitle}>Virudhunagar District Cricket Academy</Text>
@@ -2145,16 +2448,16 @@ export default function HomeScreen() {
 
         {/* ─── 12. MEDIA & PRESS NOTICES ─────────────────────────────────── */}
         <View style={styles.section}>
-          <View style={styles.container}>
+          <View style={[styles.container, containerResponsiveStyle]}>
             <View style={styles.sectionHead}>
               <View style={styles.sectionTagBadge}>
                 <Text style={styles.sectionTagBadgeText}>📰 MEDIA & NOTICES</Text>
               </View>
-              <Text style={styles.sectionTitle}>Federation Press Releases & Circulars</Text>
+              <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>Federation Press Releases & Circulars</Text>
             </View>
 
-            <View style={styles.grid3Col}>
-              <View style={styles.newsCard}>
+            <View style={[styles.grid3Col, isMobile && { flexDirection: 'column' }]}>
+              <View style={[styles.newsCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }]}>
                 <Image source={IMG_BATSMAN} style={styles.newsImg} resizeMode="cover" />
                 <View style={styles.newsBody}>
                   <Text style={styles.newsDate}>Oct 05, 2026</Text>
@@ -2179,7 +2482,7 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <View style={styles.newsCard}>
+              <View style={[styles.newsCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }]}>
                 <Image source={IMG_CHAMPIONS} style={styles.newsImg} resizeMode="cover" />
                 <View style={styles.newsBody}>
                   <Text style={styles.newsDate}>Sep 24, 2026</Text>
@@ -2204,7 +2507,7 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <View style={styles.newsCard}>
+              <View style={[styles.newsCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }]}>
                 <Image source={IMG_STADIUM} style={styles.newsImg} resizeMode="cover" />
                 <View style={styles.newsBody}>
                   <Text style={styles.newsDate}>Sep 18, 2026</Text>
@@ -2234,12 +2537,12 @@ export default function HomeScreen() {
 
         {/* ─── 13. VISUAL ARCHIVES GALLERY ───────────────────────────────── */}
         <View style={styles.section}>
-          <View style={styles.container}>
+          <View style={[styles.container, containerResponsiveStyle]}>
             <View style={styles.sectionHead}>
               <View style={styles.sectionTagBadge}>
                 <Text style={styles.sectionTagBadgeText}>📸 VISUAL ARCHIVES</Text>
               </View>
-              <Text style={styles.sectionTitle}>Official Match Day Moments</Text>
+              <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>Official Match Day Moments</Text>
             </View>
 
             <View style={styles.grid3Col}>
@@ -2278,16 +2581,16 @@ export default function HomeScreen() {
 
         {/* ─── 14. CONTACT SECRETARIAT ───────────────────────────────────── */}
         <View style={styles.section}>
-          <View style={styles.container}>
+          <View style={[styles.container, containerResponsiveStyle]}>
             <View style={styles.sectionHead}>
               <View style={styles.sectionTagBadge}>
                 <Text style={styles.sectionTagBadgeText}>📮 SECRETARIAT</Text>
               </View>
-              <Text style={styles.sectionTitle}>Get in Touch with CFVD</Text>
+              <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>Get in Touch with CFVD</Text>
             </View>
 
-            <View style={styles.grid2Col}>
-              <View style={styles.contactInfoCard}>
+            <View style={[styles.grid2Col, isMobile && { flexDirection: 'column' }]}>
+              <View style={[styles.contactInfoCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }, isSmallMobile && { padding: 12 }]}>
                 <Text style={styles.contactCardTitle}>Administrative Office</Text>
                 <Text style={styles.contactLine}>
                   📍 District Sports Complex Stadium, Collectorate Road, Virudhunagar – 626002, Tamil Nadu
@@ -2296,7 +2599,7 @@ export default function HomeScreen() {
                 <Text style={styles.contactLine}>✉️ info@cfvd-cricket.org / secretary@cfvd-cricket.org</Text>
               </View>
 
-              <View style={styles.contactFormCard}>
+              <View style={[styles.contactFormCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }, isSmallMobile && { padding: 12 }]}>
                 <Text style={styles.contactCardTitle}>Send Communication</Text>
                 <View style={styles.formField}>
                   <Text style={styles.formLabel}>Full Name *</Text>
@@ -2332,9 +2635,9 @@ export default function HomeScreen() {
 
         {/* ─── 15. MAIN FOOTER ───────────────────────────────────────────── */}
         <View style={styles.footer}>
-          <View style={styles.container}>
-            <View style={styles.footerGrid}>
-              <View style={styles.footerColBrand}>
+          <View style={[styles.container, containerResponsiveStyle]}>
+            <View style={[styles.footerGrid, isMobile && { flexDirection: 'column', gap: 18 }]}>
+              <View style={[styles.footerColBrand, isMobile && { width: '100%', minWidth: '100%' }]}>
                 <View style={styles.footerBrandRow}>
                   <Image source={IMG_LOGO} style={styles.footerLogo} resizeMode="contain" />
                   <View style={{ flex: 1, marginLeft: 10 }}>
@@ -2454,17 +2757,17 @@ export default function HomeScreen() {
         animationType="fade"
         onRequestClose={() => setScorecardModalVisible(false)}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.scorecardModalBox}>
+        <View style={[styles.modalBackdrop, isSmallMobile && { padding: 8 }]}>
+          <View style={[styles.scorecardModalBox, isMobile && { width: '98%', maxWidth: '100%', padding: isSmallMobile ? 12 : 16, maxHeight: '95%' }]}>
             <View style={styles.modalHeaderRow}>
               <View style={{ flex: 1, marginRight: 10 }}>
                 <Text style={styles.badgeGoldText}>OFFICIAL MATCH SCORECARD</Text>
-                <Text style={styles.modalTitle}>
+                <Text style={[styles.modalTitle, isSmallMobile && { fontSize: 16 }]} numberOfLines={2}>
                   {activeScorecardMatchData
                     ? `${activeScorecardMatchData.teamA} vs ${activeScorecardMatchData.teamB}`
                     : 'Virudhunagar Strikers vs Sivakasi Super Kings'}
                 </Text>
-                <Text style={styles.modalSub}>
+                <Text style={[styles.modalSub, isSmallMobile && { fontSize: 11 }]}>
                   {activeScorecardMatchData
                     ? `${activeScorecardMatchData.tournament || 'CFVD'} • ${activeScorecardMatchData.venue}`
                     : 'Virudhunagar Premier League Final • DSC Ground'}
@@ -2478,7 +2781,22 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 500 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight: isSmallMobile ? 420 : 520 }} showsVerticalScrollIndicator={false}>
+              {/* Full Interactive Scorecard & Wagon Wheel CTA */}
+              <TouchableOpacity
+                style={styles.openFullScorecardCta}
+                onPress={() => {
+                  setScorecardModalVisible(false);
+                  const targetMatch = realScorecardData?.match || activeScorecardMatchData || publicMatches[0] || { id: 'M001' };
+                  handleOpenScorecard(targetMatch);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.openFullScorecardCtaText}>
+                  📊 View Full Interactive Wagon Wheel & Pro Scorecard ▶
+                </Text>
+              </TouchableOpacity>
+
               {/* Toss & Match Summary Banner */}
               <View style={styles.scorecardTossBanner}>
                 <Text style={styles.scorecardTossText}>
@@ -2533,8 +2851,11 @@ export default function HomeScreen() {
               {realScorecardData?.innings && realScorecardData.innings.length > 0 ? (
                 realScorecardData.innings.map((inn: any, idx: number) => {
                   const runsVal = inn.totalRuns ?? inn.runs ?? 0;
-                  const oversVal = parseFloat(inn.overs || '0');
-                  const crrVal = oversVal > 0 ? (runsVal / oversVal).toFixed(2) : '0.00';
+                  const oversParts = (inn.overs || '0').toString().split('.');
+                  const ovNum = parseInt(oversParts[0], 10) || 0;
+                  const bNum = parseInt(oversParts[1], 10) || 0;
+                  const oversFloat = ovNum + (bNum / 6);
+                  const crrVal = oversFloat > 0 ? (runsVal / oversFloat).toFixed(2) : '0.00';
 
                   return (
                     <View key={inn.id || idx} style={{ marginBottom: 20 }}>
@@ -2599,32 +2920,138 @@ export default function HomeScreen() {
                         </View>
                       )}
 
+                      {/* Overs Status & Active Bowler Banner in Home Scorecard */}
+                      <View style={styles.homeOversBar}>
+                        <View style={{ flex: 1, minWidth: 110 }}>
+                          <Text style={styles.homeOversLabel}>CURRENT OVER</Text>
+                          <Text style={styles.homeOversValue}>
+                            Over {inn.currentOverNumber || (Math.floor(parseFloat(inn.overs || '0')) + 1)} ({inn.overs || '0.0'} / {inn.totalOvers || 20} Ov)
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1, minWidth: 110 }}>
+                          <Text style={styles.homeOversLabel}>OVERS REMAINING</Text>
+                          <Text style={[styles.homeOversValue, { color: '#b45309' }]}>
+                            {inn.oversRemaining ? `${inn.oversRemaining} Ov Left` : '0.0 Ov'}
+                            {inn.ballsRemaining !== undefined ? ` (${inn.ballsRemaining} balls)` : ''}
+                          </Text>
+                        </View>
+                        {inn.currentBowler && (
+                          <View style={{ flex: 1, minWidth: 110 }}>
+                            <Text style={styles.homeOversLabel}>CURRENT BOWLER</Text>
+                            <Text style={[styles.homeOversValue, { color: '#005960' }]}>
+                              🎳 {inn.currentBowler.name} (Active)
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Suspended Bowlers Warning */}
+                      {Array.isArray(inn.suspendedBowlers) && inn.suspendedBowlers.length > 0 && (
+                        <View style={styles.homeSuspendedBanner}>
+                          <Text style={styles.homeSuspendedText}>
+                            🛑 Umpire Suspension (2 No-Balls): {inn.suspendedBowlers.map((b: any) => b.name).join(', ')} is suspended from bowling
+                          </Text>
+                        </View>
+                      )}
+
                       {/* Bowling Figures Table */}
                       {inn.bowlers && inn.bowlers.length > 0 && (
                         <View style={{ marginTop: 14 }}>
-                          <Text style={styles.scorecardTableSubtitle}>🎯 BOWLING FIGURES</Text>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <Text style={styles.scorecardTableSubtitle}>🎯 BOWLING FIGURES</Text>
+                            {inn.currentBowler && (
+                              <View style={styles.homeActiveBowlerPill}>
+                                <Text style={styles.homeActiveBowlerPillText}>🎳 Active: {inn.currentBowler.name}</Text>
+                              </View>
+                            )}
+                          </View>
                           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tableScrollWrapper}>
                             <View style={styles.scoreTable}>
                               <View style={styles.scoreTableHeader}>
-                                <Text style={[styles.scoreTh, { width: 140 }]}>Bowler</Text>
+                                <Text style={[styles.scoreTh, { width: 170 }]}>Bowler</Text>
                                 <Text style={[styles.scoreTh, { width: 45, textAlign: 'center' }]}>O</Text>
                                 <Text style={[styles.scoreTh, { width: 40, textAlign: 'center' }]}>M</Text>
                                 <Text style={[styles.scoreTh, { width: 45, textAlign: 'center' }]}>R</Text>
                                 <Text style={[styles.scoreTh, { width: 45, textAlign: 'center' }]}>W</Text>
                                 <Text style={[styles.scoreTh, { width: 60, textAlign: 'right' }]}>ECON</Text>
                               </View>
-                              {inn.bowlers.map((bw: any, bwIdx: number) => (
-                                <View key={bw.id || bwIdx} style={[styles.scoreTableRow, bwIdx % 2 === 1 && styles.scoreTableRowAlt]}>
-                                  <Text style={[styles.scoreTd, { width: 140, fontWeight: '700', color: '#0f172a' }]}>{bw.name}</Text>
-                                  <Text style={[styles.scoreTd, { width: 45, textAlign: 'center', color: '#334155' }]}>{bw.overs}</Text>
-                                  <Text style={[styles.scoreTd, { width: 40, textAlign: 'center', color: '#334155' }]}>{bw.maidens || 0}</Text>
-                                  <Text style={[styles.scoreTd, { width: 45, textAlign: 'center', color: '#334155' }]}>{bw.runs}</Text>
-                                  <Text style={[styles.scoreTd, { width: 45, textAlign: 'center', fontWeight: '800', color: '#dc2626' }]}>{bw.wickets}</Text>
-                                  <Text style={[styles.scoreTd, { width: 60, textAlign: 'right', fontWeight: '600', color: '#0f172a' }]}>
-                                    {typeof bw.economy === 'number' ? bw.economy.toFixed(2) : bw.economy}
-                                  </Text>
-                                </View>
-                              ))}
+                              {inn.bowlers.map((bw: any, bwIdx: number) => {
+                                const isCurrent = !!(
+                                  bw.isCurrentBowler ||
+                                  (inn.currentBowler && (bw.playerId === inn.currentBowler.id || bw.name === inn.currentBowler.name))
+                                );
+                                const isSuspended = !!(
+                                  bw.isSuspended ||
+                                  (inn.suspendedBowlers || []).some((s: any) => s.id === bw.playerId || s.name === bw.name)
+                                );
+
+                                const subRecord = (inn.substitutions || []).find((s: any) =>
+                                  s.oldBowlerId === bw.playerId || s.oldBowlerName === bw.name ||
+                                  s.newBowlerId === bw.playerId || s.newBowlerName === bw.name
+                                );
+
+                                let badgeText = bw.subNote || '';
+                                if (!badgeText) {
+                                  if (isSuspended) {
+                                    badgeText = '🚫 Suspended (2 No-Balls)';
+                                  } else if (subRecord) {
+                                    if (subRecord.oldBowlerName === bw.name || subRecord.oldBowlerId === bw.playerId) {
+                                      badgeText = subRecord.situation ? `🩹 Sub: ${subRecord.situation}` : '🩹 Mid-Over Substituted';
+                                    } else if (subRecord.isMidOver) {
+                                      badgeText = '⚡ Shared Over (Sub In)';
+                                    }
+                                  } else if (bw.overs && !bw.overs.endsWith('.0') && !isCurrent) {
+                                    badgeText = `🩹 Mid-Over Sub (${bw.overs} ov)`;
+                                  }
+                                }
+
+                                return (
+                                  <View
+                                    key={bw.id || bwIdx}
+                                    style={[
+                                      styles.scoreTableRow,
+                                      bwIdx % 2 === 1 && styles.scoreTableRowAlt,
+                                      isCurrent && { backgroundColor: '#f0fdfa' },
+                                      isSuspended && { backgroundColor: '#fff1f2' }
+                                    ]}
+                                  >
+                                    <View style={{ width: 170, paddingRight: 6 }}>
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                                        <Text style={[styles.scoreTd, { fontWeight: '700', color: isCurrent ? '#005960' : '#0f172a' }]}>
+                                          {bw.name}
+                                        </Text>
+                                        {isCurrent && (
+                                          <View style={styles.homeBowlingBadge}>
+                                            <Text style={styles.homeBowlingBadgeText}>🟢 Bowling</Text>
+                                          </View>
+                                        )}
+                                      </View>
+                                      {isSuspended ? (
+                                        <View style={styles.homeSuspendedPill}>
+                                          <Text style={styles.homeSuspendedPillText}>🚫 Suspended (2 No-Balls)</Text>
+                                        </View>
+                                      ) : (bw.isQuotaFull || parseFloat(bw.overs || '0') >= (bw.maxQuota || 4.0)) ? (
+                                        <View style={styles.homeQuotaPill}>
+                                          <Text style={styles.homeQuotaPillText}>🔋 Quota Full ({bw.overs}/{bw.maxQuota || 4}.0 Ov)</Text>
+                                        </View>
+                                      ) : badgeText ? (
+                                        <View style={styles.homeSubPill}>
+                                          <Text style={styles.homeSubPillText}>{badgeText}</Text>
+                                        </View>
+                                      ) : null}
+                                    </View>
+                                    <Text style={[styles.scoreTd, { width: 45, textAlign: 'center', color: isCurrent ? '#005960' : '#334155', fontWeight: isCurrent ? '800' : 'normal' }]}>
+                                      {bw.overs}
+                                    </Text>
+                                    <Text style={[styles.scoreTd, { width: 40, textAlign: 'center', color: '#334155' }]}>{bw.maidens || 0}</Text>
+                                    <Text style={[styles.scoreTd, { width: 45, textAlign: 'center', color: '#334155' }]}>{bw.runs}</Text>
+                                    <Text style={[styles.scoreTd, { width: 45, textAlign: 'center', fontWeight: '800', color: '#dc2626' }]}>{bw.wickets}</Text>
+                                    <Text style={[styles.scoreTd, { width: 60, textAlign: 'right', fontWeight: '600', color: '#0f172a' }]}>
+                                      {typeof bw.economy === 'number' ? bw.economy.toFixed(2) : bw.economy}
+                                    </Text>
+                                  </View>
+                                );
+                              })}
                             </View>
                           </ScrollView>
                         </View>
@@ -2783,6 +3210,23 @@ export default function HomeScreen() {
                 </View>
 
                 <View style={styles.playerModalBioBox}>
+                  {selectedPlayerModal.milestoneBadge && (
+                    <View style={{ backgroundColor: '#fffbeb', borderColor: '#fde68a', borderWidth: 1, borderRadius: 8, padding: 10, marginBottom: 10 }}>
+                      <Text style={{ color: '#92400e', fontWeight: '900', fontSize: 13 }}>
+                        {selectedPlayerModal.milestoneBadge}
+                      </Text>
+                      {selectedPlayerModal.matchPerformance && (
+                        <Text style={{ color: '#0f172a', fontWeight: '800', fontSize: 14, marginTop: 3 }}>
+                          ⚡ {selectedPlayerModal.matchPerformance}
+                        </Text>
+                      )}
+                      {selectedPlayerModal.matchVs && (
+                        <Text style={{ color: '#475569', fontSize: 12, marginTop: 2 }}>
+                          🎯 {selectedPlayerModal.matchVs}
+                        </Text>
+                      )}
+                    </View>
+                  )}
                   <Text style={styles.playerModalBio}>{selectedPlayerModal.bio}</Text>
                 </View>
 
@@ -2900,7 +3344,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 1540,
     alignSelf: 'center',
-    paddingHorizontal: Dimensions.get('window').width < 768 ? 16 : (Platform.OS === 'web' ? 32 : 16)
+    paddingHorizontal: 16
   },
 
   // Atmospheric Background
@@ -4468,6 +4912,171 @@ const styles = StyleSheet.create({
     fontWeight: '800'
   },
 
+  cardHeaderLeftGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1
+  },
+  cardHeaderRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6
+  },
+  topRightRainPill: {
+    backgroundColor: '#e0f2fe',
+    borderColor: '#38bdf8',
+    borderWidth: 1.5,
+    borderRadius: 20,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    shadowColor: '#0284c7',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2
+  },
+  topRightRainPillText: {
+    color: '#0284c7',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.4
+  },
+  topRightBreakPill: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b',
+    borderWidth: 1.5,
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 3
+  },
+  topRightBreakPillText: {
+    color: '#b45309',
+    fontSize: 10,
+    fontWeight: '900'
+  },
+  matchTeamsSingleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    borderColor: '#e2e8f0',
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginVertical: 8,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1
+  },
+  teamColLeft: {
+    flex: 1,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    minWidth: 110
+  },
+  teamColRight: {
+    flex: 1,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    minWidth: 110
+  },
+  teamCrestNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+    maxWidth: '100%'
+  },
+  teamNameTextSingleRow: {
+    color: '#0f172a',
+    fontSize: 13,
+    fontWeight: '800',
+    flexShrink: 1
+  },
+  teamScoreSingleRow: {
+    fontSize: 16.5,
+    fontWeight: '900',
+    color: '#0f172a',
+    letterSpacing: 0.3
+  },
+  teamYetToBatSingleRow: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+    fontStyle: 'italic'
+  },
+  iplVsCenterBox: {
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  iplVsCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#0f172a',
+    borderWidth: 1.5,
+    borderColor: '#d97706',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 3,
+    elevation: 3
+  },
+  iplVsCircleText: {
+    fontSize: 10.5,
+    fontWeight: '900',
+    color: '#fbbf24',
+    fontStyle: 'italic',
+    letterSpacing: 1.2
+  },
+  cardLogisticsBottomBar: {
+    backgroundColor: '#f8fafc',
+    borderColor: '#e2e8f0',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginTop: 8,
+    marginBottom: 10
+  },
+  logisticsChipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 5,
+    flexWrap: 'wrap'
+  },
+  logisticsChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4
+  },
+  logisticsEmoji: {
+    fontSize: 12
+  },
+  logisticsValueText: {
+    color: '#334155',
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  logisticsOfficialsBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4
+  },
+  logisticsOfficialsCleanText: {
+    color: '#64748b',
+    fontSize: 10.5,
+    fontWeight: '600'
+  },
+
   // Logistics Box: Spaced out, clean white/slate card
   logisticsBox: {
     backgroundColor: '#f8fafc',
@@ -4643,6 +5252,124 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: '#64748b',
     marginTop: 1
+  },
+  openFullScorecardCta: {
+    backgroundColor: '#005960',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    marginBottom: 12
+  },
+  openFullScorecardCtaText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800'
+  },
+  homeOversBar: {
+    backgroundColor: '#f8fafc',
+    borderColor: '#e2e8f0',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 8,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'space-between'
+  },
+  homeOversLabel: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#64748b',
+    letterSpacing: 0.5,
+    marginBottom: 2
+  },
+  homeOversValue: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  homeSuspendedBanner: {
+    backgroundColor: '#fff1f2',
+    borderColor: '#fecdd3',
+    borderWidth: 1,
+    borderRadius: 6,
+    padding: 8,
+    marginTop: 8
+  },
+  homeSuspendedText: {
+    color: '#9f1239',
+    fontSize: 10.5,
+    fontWeight: '700'
+  },
+  homeActiveBowlerPill: {
+    backgroundColor: '#dcfce7',
+    borderColor: '#86efac',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 7,
+    paddingVertical: 2
+  },
+  homeActiveBowlerPillText: {
+    color: '#15803d',
+    fontSize: 10,
+    fontWeight: '800'
+  },
+  homeBowlingBadge: {
+    backgroundColor: '#dcfce7',
+    borderColor: '#86efac',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1
+  },
+  homeBowlingBadgeText: {
+    color: '#15803d',
+    fontSize: 9,
+    fontWeight: '800'
+  },
+  homeSuspendedPill: {
+    backgroundColor: '#fee2e2',
+    borderColor: '#fca5a5',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    marginTop: 2
+  },
+  homeSuspendedPillText: {
+    color: '#b91c1c',
+    fontSize: 9,
+    fontWeight: '800'
+  },
+  homeSubPill: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#fde68a',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    marginTop: 2
+  },
+  homeSubPillText: {
+    color: '#b45309',
+    fontSize: 9,
+    fontWeight: '700'
+  },
+  homeQuotaPill: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    marginTop: 2
+  },
+  homeQuotaPillText: {
+    color: '#b45309',
+    fontSize: 9,
+    fontWeight: '800'
   },
   matchTeamRow: {
     flexDirection: 'row',

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * services/socketService.js
  * Socket.IO real-time scoring broadcaster
  */
@@ -38,5 +38,6 @@ function broadcastScoreUpdate(matchId, payload) {
 module.exports = {
   initSocket,
   broadcastScoreUpdate,
+  emitScoreUpdate: broadcastScoreUpdate,
   getIO: () => io
 };

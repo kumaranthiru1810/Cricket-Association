@@ -101,7 +101,7 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
       try {
         const res = await ScorerApi.loginWithPassword(input, '', 'PLAYER', teamName.trim());
         if (res?.token) {
-          setAuthToken(res.token);
+          setAuthToken(res.token, 'PLAYER');
           if (res.user) setCurrentUser(res.user);
         }
         setStatusMessage(res?.message || 'Login successful!');
@@ -153,7 +153,7 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
       const res = await ScorerApi.loginWithPassword(input, pass, activeRole);
 
       if (res?.token) {
-        setAuthToken(res.token);
+        setAuthToken(res.token, activeRole);
         if (res.user) setCurrentUser(res.user);
       }
 
