@@ -706,6 +706,12 @@ export default function LiveScoringScreen() {
         if (d.match.teamAId && !superOverBattingTeam) {
           setSuperOverBattingTeam(d.match.teamAId);
         }
+        if (d.match.umpire1_name || d.match.umpire1) {
+          setUmpire1Name(d.match.umpire1_name || d.match.umpire1);
+        }
+        if (d.match.umpire2_name || d.match.umpire2) {
+          setUmpire2Name(d.match.umpire2_name || d.match.umpire2);
+        }
       }
 
       if (d.innings) {
