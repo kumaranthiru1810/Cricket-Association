@@ -265,6 +265,11 @@ export const adminApi = {
     return adminRequest(`/admin/tournaments/${tournamentId}/approved-teams`);
   },
 
+  // 6b. Venues & Grounds Management
+  getVenues: async () => {
+    return adminRequest('/admin/venues');
+  },
+
   // 7. Matches Management
   getMatches: async () => {
     return adminRequest('/admin/matches');
@@ -281,6 +286,31 @@ export const adminApi = {
     return adminRequest(`/admin/matches/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data)
+    });
+  },
+
+  postponeMatch: async (id: string, reason: string) => {
+    return adminRequest(`/admin/matches/${id}/postpone`, {
+      method: 'POST',
+      body: JSON.stringify({ reason })
+    });
+  },
+
+  rescheduleMatch: async (id: string, newDate: string, newTime: string, reason?: string) => {
+    return adminRequest(`/admin/matches/${id}/reschedule`, {
+      method: 'POST',
+      body: JSON.stringify({ newDate, newTime, reason })
+    });
+  },
+
+  getPostponementRequests: async () => {
+    return adminRequest('/admin/matches/postponement-requests');
+  },
+
+  reviewPostponementRequest: async (id: string, decision: 'APPROVE' | 'REJECT', reviewNotes?: string) => {
+    return adminRequest(`/admin/matches/${id}/postponement-requests/review`, {
+      method: 'POST',
+      body: JSON.stringify({ decision, reviewNotes })
     });
   },
 

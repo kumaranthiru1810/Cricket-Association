@@ -36,4 +36,7 @@ router.get('/matches/:matchId/decisions', verifyUmpireMatchPermission, (req, res
 // 7. Confirm Match Result API
 router.put('/matches/:matchId/result', verifyUmpireMatchPermission, (req, res) => umpireController.confirmResult(req, res));
 
+// 8. Request Match Postponement API
+router.post('/matches/:matchId/request-postponement', verifyUmpireMatchPermission, (req, res) => umpireController.requestPostponement(req, res));
+
 module.exports = router;

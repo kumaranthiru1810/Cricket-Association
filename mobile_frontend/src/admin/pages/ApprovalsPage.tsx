@@ -19,7 +19,7 @@ export const ApprovalsPage: React.FC = () => {
   const { showToast } = useAdminLayout();
   const [approvals, setApprovals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'ALL' | 'SCORER' | 'TEAM' | 'UMPIRE' | 'PLAYER'>('ALL');
+  const [activeTab, setActiveTab] = useState<'ALL' | 'SCORER' | 'TEAM' | 'UMPIRE' | 'PLAYER' | 'POSTPONEMENT'>('ALL');
 
   // View Modal
   const [activeItem, setActiveItem] = useState<any | null>(null);
@@ -112,6 +112,7 @@ export const ApprovalsPage: React.FC = () => {
         const isScorer = typeNorm === 'SCORER';
         const isTeam = typeNorm === 'TEAM';
         const isUmpire = typeNorm === 'UMPIRE';
+        const isPostponement = typeNorm === 'POSTPONEMENT';
         return (
           <span
             style={{
@@ -127,6 +128,8 @@ export const ApprovalsPage: React.FC = () => {
                 ? '#FDF2F8'
                 : isUmpire
                 ? '#FEF3C7'
+                : isPostponement
+                ? '#FEF2F2'
                 : '#F0FDF4',
               color: isScorer
                 ? '#1D4ED8'
@@ -134,6 +137,8 @@ export const ApprovalsPage: React.FC = () => {
                 ? '#BE185D'
                 : isUmpire
                 ? '#B45309'
+                : isPostponement
+                ? '#DC2626'
                 : '#15803D'
             }}
           >
@@ -143,6 +148,8 @@ export const ApprovalsPage: React.FC = () => {
               ? 'CLUB / TEAM'
               : isUmpire
               ? 'OFFICIAL UMPIRE'
+              : isPostponement
+              ? 'MATCH POSTPONEMENT'
               : 'PLAYER REGISTRATION'}
           </span>
         );
@@ -219,6 +226,7 @@ export const ApprovalsPage: React.FC = () => {
         <View style={styles.tabsRow}>
           {[
             { id: 'ALL', label: 'All Applications' },
+            { id: 'POSTPONEMENT', label: '⏸️ Postponement Requests' },
             { id: 'SCORER', label: 'Official Scorers' },
             { id: 'TEAM', label: 'Clubs / Teams' },
             { id: 'UMPIRE', label: 'Umpires' },
@@ -315,6 +323,23 @@ export const ApprovalsPage: React.FC = () => {
                     </View>
                   )}
                 </View>
+
+                {activeItem.type === 'POSTPONEMENT' && activeItem.details && (
+                  <View style={{ backgroundColor: '#fffbeb', borderColor: '#fcd34d', borderWidth: 1, padding: 12, borderRadius: 6, marginVertical: 10 }}>
+                    <Text style={{ fontWeight: '700', color: '#92400e', fontSize: 13 }}>
+                      Match Fixture: {activeItem.details.teamA || 'Team A'} vs {activeItem.details.teamB || 'Team B'} (Match #{activeItem.details.matchId})
+                    </Text>
+                    <Text style={{ color: '#78350f', fontSize: 12, marginTop: 2 }}>
+                      Scheduled Date: {activeItem.details.matchDate} at {activeItem.details.matchTime || '09:30 AM'} • Venue: {activeItem.details.venue}
+                    </Text>
+                    <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 12, marginTop: 6 }}>
+                      Postponement Reason: {activeItem.details.reason}
+                    </Text>
+                    <Text style={{ color: '#78350f', fontSize: 11, marginTop: 2 }}>
+                      Requested by Umpire: {activeItem.details.umpireName || 'Field Umpire'}
+                    </Text>
+                  </View>
+                )}
 
                 {activeItem.rejectionReason && (
                   <View style={styles.reasonNotice}>

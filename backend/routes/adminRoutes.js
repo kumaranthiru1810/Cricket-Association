@@ -248,25 +248,29 @@ router.get('/matches', async (req, res) => {
   }
 });
 
-router.post('/matches/schedule', async (req, res) => {
+const handleScheduleMatch = async (req, res) => {
   try {
     const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
     const match = await adminService.scheduleMatch(req.body, adminEmail);
     res.json({ success: true, message: 'Match scheduled successfully', match });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    res.status(400).json({ success: false, error: err.message, message: err.message });
   }
-});
+};
+router.post('/matches/schedule', handleScheduleMatch);
+router.post('/matches', handleScheduleMatch);
 
-router.put('/matches/:id', async (req, res) => {
+const handleUpdateMatch = async (req, res) => {
   try {
     const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
     const match = await adminService.updateMatch(req.params.id, req.body, adminEmail);
     res.json({ success: true, message: 'Match updated successfully', match });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    res.status(400).json({ success: false, error: err.message, message: err.message });
   }
-});
+};
+router.put('/matches/:id', handleUpdateMatch);
+router.patch('/matches/:id', handleUpdateMatch);
 
 const handleCancelMatch = async (req, res) => {
   try {
@@ -280,6 +284,54 @@ const handleCancelMatch = async (req, res) => {
 };
 router.patch('/matches/:id/cancel', handleCancelMatch);
 router.post('/matches/:id/cancel', handleCancelMatch);
+
+const handlePostponeMatch = async (req, res) => {
+  try {
+    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const reason = req.body?.reason || req.query?.reason;
+    const match = await adminService.postponeMatch(req.params.id, { reason }, adminEmail);
+    res.json({ success: true, message: 'Match postponed successfully', match });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message, message: err.message });
+  }
+};
+router.post('/matches/:id/postpone', handlePostponeMatch);
+router.patch('/matches/:id/postpone', handlePostponeMatch);
+
+const handleRescheduleMatch = async (req, res) => {
+  try {
+    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const { newDate, newTime, reason } = req.body;
+    const match = await adminService.rescheduleMatch(req.params.id, { newDate, newTime, reason }, adminEmail);
+    res.json({ success: true, message: 'Match rescheduled successfully', match });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message, message: err.message });
+  }
+};
+router.post('/matches/:id/reschedule', handleRescheduleMatch);
+router.put('/matches/:id/reschedule', handleRescheduleMatch);
+
+const handleGetPostponementRequests = async (req, res) => {
+  try {
+    const requests = await adminService.getPostponementRequests();
+    res.json({ success: true, requests });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+router.get('/matches/postponement-requests', handleGetPostponementRequests);
+
+const handleReviewPostponementRequest = async (req, res) => {
+  try {
+    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const { decision, reviewNotes } = req.body;
+    const match = await adminService.reviewUmpirePostponement(req.params.id, { decision, reviewNotes }, adminEmail);
+    res.json({ success: true, message: `Postponement request ${decision}D successfully`, match });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message, message: err.message });
+  }
+};
+router.post('/matches/:id/postponement-requests/review', handleReviewPostponementRequest);
 
 router.delete('/matches/:id', async (req, res) => {
   try {

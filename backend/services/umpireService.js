@@ -203,7 +203,10 @@ class UmpireService {
         umpire2: { id: m.umpire2_id, name: m.umpire2_name || 'Thiru. M. Ramanathan' },
         resultConfirmed: m.umpire_result_confirmed || false,
         confirmedBy: m.umpire_confirmed_by,
-        confirmationNotes: m.umpire_confirmation_notes
+        confirmationNotes: m.umpire_confirmation_notes,
+        postponement: m.postponement,
+        umpirePostponementRequest: m.umpire_postponement_request,
+        postponementHistory: m.postponement_history
       };
     });
 
@@ -223,12 +226,17 @@ class UmpireService {
       m.status === 'COMPLETED' || m.status === 'ABANDONED' || m.status === 'CANCELLED'
     );
 
+    const postponedMatches = formattedMatches.filter(m =>
+      m.status === 'POSTPONED'
+    );
+
     if (filter) {
       const f = filter.toLowerCase();
       if (f === 'today') return todayMatches;
       if (f === 'live') return liveMatches;
       if (f === 'upcoming') return upcomingMatches;
       if (f === 'completed') return completedMatches;
+      if (f === 'postponed') return postponedMatches;
     }
 
     return {
@@ -237,8 +245,93 @@ class UmpireService {
       current: liveMatches.length > 0 ? liveMatches[0] : (todayMatches.length > 0 ? todayMatches[0] : null),
       live: liveMatches,
       upcoming: upcomingMatches,
-      completed: completedMatches
+      completed: completedMatches,
+      postponed: postponedMatches
     };
+  }
+
+  /**
+   * Request match postponement by assigned umpire
+   */
+  async requestPostponement(matchId, { reason, notes }, user) {
+    await db.initDb();
+    if (!reason || !String(reason).trim()) {
+      throw { status: 400, message: 'A mandatory postponement reason is required.' };
+    }
+
+    const cleanReason = String(reason).trim();
+    const match = await db.models.Match.findOne({ id: matchId });
+    if (!match) {
+      throw { status: 404, message: `Match '${matchId}' not found.` };
+    }
+
+    if (match.status === 'COMPLETED') {
+      throw { status: 400, message: 'Cannot request postponement for a completed match.' };
+    }
+    if (match.status === 'CANCELLED') {
+      throw { status: 400, message: 'Cannot request postponement for a cancelled match.' };
+    }
+    if (match.status === 'POSTPONED') {
+      throw { status: 400, message: 'Match is already marked as postponed.' };
+    }
+
+    // Verify umpire assignment
+    const cleanId = (user.id || '').trim();
+    const cleanEmail = (user.email || '').trim().toLowerCase();
+    const isAdmin = user.role === 'ADMIN';
+    const isAssigned = isAdmin ||
+      match.umpire1_id === cleanId || match.umpire2_id === cleanId ||
+      (match.umpire1_id && match.umpire1_id.toLowerCase() === cleanEmail) ||
+      (match.umpire2_id && match.umpire2_id.toLowerCase() === cleanEmail);
+
+    if (!isAssigned) {
+      throw { status: 403, message: 'You are not assigned as an official field umpire for this match.' };
+    }
+
+    match.umpire_postponement_request = {
+      requested: true,
+      umpire_id: user.id || user.email,
+      umpire_name: user.name || 'Official Field Umpire',
+      reason: cleanReason,
+      status: 'PENDING',
+      requested_at: new Date(),
+      review_notes: notes ? String(notes).trim() : ''
+    };
+
+    if (!match.postponement_history) match.postponement_history = [];
+    match.postponement_history.push({
+      action: 'REQUESTED',
+      reason: cleanReason,
+      from_date: match.match_date,
+      from_time: match.match_time,
+      to_date: '',
+      to_time: '',
+      actor_id: user.id || user.email,
+      actor_name: user.name || 'Official Field Umpire',
+      actor_role: 'UMPIRE',
+      timestamp: new Date(),
+      notes: notes || ''
+    });
+
+    match.updated_at = new Date();
+    await match.save();
+
+    // Dispatch Notification to Admins
+    if (db.models.Notification) {
+      try {
+        await db.models.Notification.create({
+          id: `NOTIF-UMP-POST-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          type: 'POSTPONEMENT_REQUEST',
+          recipient_role: 'ADMIN',
+          title: '⚠️ Umpire Match Postponement Request',
+          message: `Official Umpire ${user.name || 'Field Umpire'} requested postponement for Match #${match.id} (${match.team_a_name || 'Team A'} vs ${match.team_b_name || 'Team B'}) on ${match.match_date}. Reason: "${cleanReason}". Pending Admin approval.`,
+          reference_id: match.id,
+          status: 'UNREAD'
+        });
+      } catch (_e) {}
+    }
+
+    return match.toObject();
   }
 
   /**
