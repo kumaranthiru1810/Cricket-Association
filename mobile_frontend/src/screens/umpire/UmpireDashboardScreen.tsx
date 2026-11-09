@@ -34,6 +34,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import SharedBackground from '../../components/scorer/SharedBackground';
 import { UmpireApi, getCurrentUser } from '../../services/api';
 import { showAlert as showSwal, showSuccess, showError } from '../../utils/sweetalert';
+import CricketRulesModal from '../../components/scorer/CricketRulesModal';
 
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
 
@@ -104,6 +105,9 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
   const [pendingDecisionType, setPendingDecisionType] = useState<string>('');
   const [decisionNotes, setDecisionNotes] = useState<string>('');
   const [isSubmittingDecision, setIsSubmittingDecision] = useState<boolean>(false);
+
+  // Cricket Rules Guide & Decision Support Modal
+  const [showRulesModal, setShowRulesModal] = useState<boolean>(false);
 
   // Responsive Layout
   const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
@@ -1042,7 +1046,22 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
             <Text style={styles.navIcon}>👤</Text>
             <Text style={[styles.navText, activeTab === 'profile' && styles.navTextActive]}>Profile</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.navItem, showRulesModal && styles.navItemActive]}
+            onPress={() => setShowRulesModal(true)}
+          >
+            <Text style={styles.navIcon}>📜</Text>
+            <Text style={[styles.navText, showRulesModal && styles.navTextActive]}>Rules Guide</Text>
+          </TouchableOpacity>
         </View>
+
+        {/* OFFICIAL CRICKET UMPIRE DECISION-SUPPORT & RULES MODAL */}
+        <CricketRulesModal
+          visible={showRulesModal}
+          matchId={selectedMatchId || undefined}
+          onClose={() => setShowRulesModal(false)}
+        />
 
         {/* TOSS CONFIRMATION MODAL */}
         <Modal visible={isTossModalVisible} transparent animationType="fade">
@@ -2212,24 +2231,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18
   },
-  // BOTTOM NAVIGATION
+  // BOTTOM NAVIGATION (Fixed sticky footer for web & mobile)
   bottomNav: {
-    position: 'absolute',
+    position: (Platform.OS === 'web' ? 'fixed' : 'absolute') as any,
     bottom: 0,
     left: 0,
     right: 0,
+    zIndex: 9999,
     flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
     paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     justifyContent: 'space-around',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 4
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 8
   },
   navItem: {
     alignItems: 'center',

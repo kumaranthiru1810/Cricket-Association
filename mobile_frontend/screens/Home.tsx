@@ -548,6 +548,15 @@ export default function HomeScreen() {
   const [sectionPositions, setSectionPositions] = useState<Record<string, number>>({});
 
   const scrollToSection = (secName: string) => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const targetId = secName === 'matchCentre' ? 'cfvd-section-match-centre' : (secName === 'pointsTable' ? 'cfvd-section-points-table' : secName);
+      const el = document.getElementById(targetId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setMobileNavOpen(false);
+        return;
+      }
+    }
     const y = sectionPositions[secName] || 0;
     mainScrollRef.current?.scrollTo({ y: Math.max(0, y - 20), animated: true });
     setMobileNavOpen(false);
@@ -1172,6 +1181,8 @@ export default function HomeScreen() {
 
         {/* ─── 4. OFFICIAL MATCH CENTRE ───────────────────────────────────── */}
         <View
+          nativeID="cfvd-section-match-centre"
+          {...({ id: 'cfvd-section-match-centre' } as any)}
           style={styles.section}
           onLayout={e => {
             const layout = e.nativeEvent.layout;
@@ -1742,6 +1753,8 @@ export default function HomeScreen() {
         
         {/* ─── 6. POINTS TABLE / STANDINGS ───────────────────────────────── */}
         <View
+          nativeID="cfvd-section-points-table"
+          {...({ id: 'cfvd-section-points-table' } as any)}
           style={styles.section}
           onLayout={e => {
             const layout = e.nativeEvent.layout;

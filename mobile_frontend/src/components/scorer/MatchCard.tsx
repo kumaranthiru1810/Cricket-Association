@@ -207,7 +207,7 @@ export default function MatchCard({ match, variant = 'upcoming' }: Props) {
   const teamBInit = getTeamInitial(match.teamB, match.teamBShort);
 
   // ══════════════════════════════════════════════════════════════════════════
-  // LIVE VARIANT
+  // LIVE VARIANT (WITH ONGOING DAYS TRACKER)
   // ══════════════════════════════════════════════════════════════════════════
   if (isLive) {
     return (
@@ -216,9 +216,20 @@ export default function MatchCard({ match, variant = 'upcoming' }: Props) {
           <Text style={styles.tournamentText}>
             🏆 {match.tournament || match.tournament_name || 'Association Match'}
           </Text>
-          <View style={styles.liveIndicatorRow}>
-            <View style={styles.redDot} />
-            <Text style={styles.liveBadgeText}>LIVE NOW</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            {timeline.daysDiff > 0 ? (
+              <View style={styles.liveDurationBadge}>
+                <Text style={styles.liveDurationText}>⏳ {timeline.daysDiff} DAYS ONGOING</Text>
+              </View>
+            ) : (
+              <View style={[styles.liveDurationBadge, { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }]}>
+                <Text style={[styles.liveDurationText, { color: '#166534' }]}>🟢 DAY 1 (TODAY)</Text>
+              </View>
+            )}
+            <View style={styles.liveIndicatorRow}>
+              <View style={styles.redDot} />
+              <Text style={styles.liveBadgeText}>LIVE NOW</Text>
+            </View>
           </View>
         </View>
         
@@ -239,7 +250,9 @@ export default function MatchCard({ match, variant = 'upcoming' }: Props) {
         </View>
 
         <View style={styles.metaRow}>
-          <Text style={styles.metaText}>📍 {match.venue} &bull; 🏏 {match.format}</Text>
+          <Text style={styles.metaText}>
+            📍 {match.venue} &bull; 🏏 {match.format || 'T20'} {timeline.formattedDate ? `&bull; 📅 Started ${timeline.formattedDate}` : ''}
+          </Text>
         </View>
 
         {/* Live Match Officials Strip */}
@@ -257,44 +270,56 @@ export default function MatchCard({ match, variant = 'upcoming' }: Props) {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // COMPLETED VARIANT
+  // COMPLETED VARIANT (CLEAN, MODERN, DECLUTTERED)
   // ══════════════════════════════════════════════════════════════════════════
   if (isCompleted) {
     return (
-      <TouchableOpacity activeOpacity={0.92} onPress={handleAction} style={[styles.card, styles.completedCard]}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-          <Text style={styles.tournamentText}>🏆 {match.tournament || match.tournament_name || 'Association Tournament'}</Text>
-          <View style={[styles.upcomingBadge, { backgroundColor: '#dcfce7', borderColor: '#86efac' }]}>
-            <Text style={[styles.upcomingBadgeText, { color: '#15803d' }]}>COMPLETED</Text>
+      <TouchableOpacity activeOpacity={0.92} onPress={handleAction} style={[styles.card, styles.completedCardClean]}>
+        {/* 1. Clean Header: Tournament + Verified Completed Pill */}
+        <View style={styles.completedHeaderRow}>
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <Text style={styles.completedTournamentText} numberOfLines={1}>
+              🏆 {(match.tournament || match.tournament_name || 'Association Championship').toUpperCase()}
+            </Text>
+            <Text style={styles.completedVenueSub} numberOfLines={1}>
+              📍 {match.venue || 'Virudhunagar Cricket Ground'} {match.date ? `• 📅 ${match.date.split(' ')[0]}` : ''}
+            </Text>
+          </View>
+          <View style={styles.completedBadgeGreen}>
+            <Text style={styles.completedBadgeGreenText}>✓ COMPLETED</Text>
           </View>
         </View>
-        
-        <View style={styles.compactRow}>
-          <Text style={styles.compactTeam}>{match.teamA}</Text>
-          <Text style={styles.compactScore}>{match.scoreA || 'N/A'}</Text>
-        </View>
-        <View style={styles.compactRow}>
-          <Text style={styles.compactTeam}>{match.teamB}</Text>
-          <Text style={styles.compactScore}>{match.scoreB || 'N/A'}</Text>
-        </View>
-        
-        {match.date && (
-          <Text style={{ fontSize: 11, color: '#64748b', marginTop: 6 }}>
-            📅 {match.date} {match.venue ? `• 📍 ${match.venue}` : ''}
-          </Text>
-        )}
 
-        {/* Completed Match Officials */}
-        <View style={styles.compactOfficialsStrip}>
-          <Text style={styles.compactOfficialsText}>
-            👔 <Text style={{ fontWeight: '700' }}>Umpires:</Text> {umpire1} &amp; {umpire2} &bull; 📝 <Text style={{ fontWeight: '700' }}>Scorer:</Text> {scorerName} ({scorerId})
-          </Text>
+        {/* 2. Structured Teams & Scores Display */}
+        <View style={styles.completedScoresBox}>
+          <View style={styles.completedTeamScoreRow}>
+            <Text style={styles.completedTeamName} numberOfLines={1}>
+              {match.teamA}
+            </Text>
+            <Text style={styles.completedScoreVal}>{match.scoreA || 'Yet to Bat'}</Text>
+          </View>
+          <View style={[styles.completedTeamScoreRow, { marginTop: 6 }]}>
+            <Text style={styles.completedTeamName} numberOfLines={1}>
+              {match.teamB}
+            </Text>
+            <Text style={styles.completedScoreVal}>{match.scoreB || 'Yet to Bat'}</Text>
+          </View>
         </View>
 
-        <View style={styles.resultRow}>
-          <Text style={styles.resultText}>🏆 {match.result || 'Match Concluded'}</Text>
-          <TouchableOpacity style={styles.secondaryBtn} onPress={handleAction} activeOpacity={0.8}>
-            <Text style={styles.secondaryBtnText}>VIEW FULL SCORECARD ▶</Text>
+        {/* 3. Victory Result Highlight */}
+        <View style={styles.completedResultBanner}>
+          <Text style={styles.completedResultText} numberOfLines={2}>
+            🏆 {match.result || 'Match Concluded'}
+          </Text>
+        </View>
+
+        {/* 4. Sleek Footer: Compact Officials & Scorecard CTA */}
+        <View style={styles.completedFooterRow}>
+          <Text style={styles.completedOfficialsLine} numberOfLines={1}>
+            👔 {umpire1} &amp; {umpire2} &bull; 📝 {scorerName}
+          </Text>
+          <TouchableOpacity style={styles.completedViewBtn} onPress={handleAction} activeOpacity={0.8}>
+            <Text style={styles.completedViewBtnText}>SCORECARD ▶</Text>
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -984,7 +1009,133 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: { color: '#ffffff', fontWeight: '800', fontSize: 12, letterSpacing: 0.5 },
 
-  // COMPLETED STYLES
+  liveDurationBadge: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4
+  },
+  liveDurationText: {
+    color: '#b91c1c',
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 0.5
+  },
+
+  // DECLUTTERED COMPLETED STYLES
+  completedCardClean: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#16a34a',
+    backgroundColor: '#ffffff',
+    padding: 14,
+    marginBottom: 12
+  },
+  completedHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f8fafc',
+    paddingBottom: 6
+  },
+  completedTournamentText: {
+    color: '#b45309',
+    fontSize: 11.5,
+    fontWeight: '800',
+    letterSpacing: 0.5
+  },
+  completedVenueSub: {
+    color: '#64748b',
+    fontSize: 10.5,
+    marginTop: 2
+  },
+  completedBadgeGreen: {
+    backgroundColor: '#dcfce7',
+    borderWidth: 1,
+    borderColor: '#86efac',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 4
+  },
+  completedBadgeGreenText: {
+    color: '#15803d',
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 0.6
+  },
+  completedScoresBox: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    marginBottom: 8
+  },
+  completedTeamScoreRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  completedTeamName: {
+    color: '#1e293b',
+    fontSize: 13,
+    fontWeight: '700',
+    flex: 1
+  },
+  completedScoreVal: {
+    color: '#0f172a',
+    fontSize: 13,
+    fontWeight: '900'
+  },
+  completedResultBanner: {
+    backgroundColor: '#f0fdf4',
+    borderLeftWidth: 3,
+    borderLeftColor: '#22c55e',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+    marginBottom: 8
+  },
+  completedResultText: {
+    color: '#15803d',
+    fontSize: 11.5,
+    fontWeight: '700'
+  },
+  completedFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#f8fafc'
+  },
+  completedOfficialsLine: {
+    color: '#64748b',
+    fontSize: 10,
+    fontWeight: '600',
+    flex: 1,
+    marginRight: 8
+  },
+  completedViewBtn: {
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 4
+  },
+  completedViewBtnText: {
+    color: '#b45309',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5
+  },
+
+  // LEGACY COMPLETED STYLES
   compactRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
   compactTeam: { color: '#0f172a', fontSize: 13, fontWeight: '600' },
   compactScore: { color: '#0f172a', fontSize: 13, fontWeight: '800' },

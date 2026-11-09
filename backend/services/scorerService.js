@@ -378,7 +378,7 @@ class ScorerService {
     // Recent deliveries
     const deliveries = await db.models.Delivery.find({
       $or: [{ match_id: matchId }, { innings_id: currentInnings.id }]
-    }).sort({ timestamp: -1, created_at: -1 }).limit(16).lean();
+    }).sort({ timestamp: -1, created_at: -1 }).limit(24).lean();
 
     const lastDelivery = deliveries && deliveries[0];
 
@@ -529,13 +529,20 @@ class ScorerService {
         fielderName: lastDelivery.fielder_name,
         commentary: lastDelivery.commentary
       } : null,
-      recentDeliveries: (deliveries || []).slice(0, 8).map(d => ({
-        id: d.id,
+      recentDeliveries: (deliveries || []).slice(0, 24).map(d => ({
+        id: d.id || d._id?.toString(),
         ball: `${d.over_number}.${d.ball_number}`,
+        overNumber: d.over_number,
+        ballNumber: d.ball_number,
         runs: d.runs_batter,
+        runsBatter: d.runs_batter,
+        runsExtras: d.runs_extras || 0,
         extra: d.extra_type !== 'NONE' ? d.extra_type : null,
-        wicket: d.wicket,
+        extraType: d.extra_type,
+        wicket: Boolean(d.wicket),
         wicketType: d.wicket_type,
+        strikerId: d.striker_id,
+        bowlerId: d.bowler_id,
         text: d.wicket ? 'W' : (d.extra_type === 'WIDE' ? 'WD' : (d.extra_type === 'NO_BALL' ? 'NB' : d.runs_batter)),
         dismissalText: d.dismissal_text,
         commentary: d.commentary

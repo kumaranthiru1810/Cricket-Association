@@ -878,35 +878,90 @@ class ScoringEngine {
    */
   async editDelivery(matchId, deliveryId, updateData, scorerId) {
     await db.initDb();
-    const delivery = await db.models.Delivery.findOne({ id: deliveryId });
+    const delivery = await db.models.Delivery.findOne({
+      $or: [{ id: deliveryId }, { _id: deliveryId }]
+    });
     if (!delivery) throw { status: 404, message: `Delivery '${deliveryId}' not found.` };
+
+    const oldBatterRuns = delivery.runs_batter || 0;
+    const oldExtrasRuns = delivery.runs_extras || 0;
+    const oldTotalRuns = delivery.total_runs || (oldBatterRuns + oldExtrasRuns);
+    const oldWicket = Boolean(delivery.wicket);
+
+    const newRunsBatter = typeof updateData.runsBatter === 'number' ? updateData.runsBatter : (typeof updateData.runs === 'number' ? updateData.runs : oldBatterRuns);
+    const newRunsExtras = typeof updateData.runsExtras === 'number' ? updateData.runsExtras : oldExtrasRuns;
+    const newTotalRuns = newRunsBatter + newRunsExtras;
+    const newWicket = typeof updateData.wicket === 'boolean' ? updateData.wicket : oldWicket;
+    const newWicketType = updateData.wicketType || delivery.wicket_type;
+    const newExtraType = updateData.extraType || delivery.extra_type;
+
+    const runsDelta = newTotalRuns - oldTotalRuns;
+    const batterRunsDelta = newRunsBatter - oldBatterRuns;
+    const wicketDelta = (newWicket ? 1 : 0) - (oldWicket ? 1 : 0);
 
     const innings = await db.models.Innings.findOne({ id: delivery.innings_id });
     if (innings) {
-      innings.total_runs -= delivery.total_runs;
-      if (delivery.wicket) innings.wickets = Math.max(0, innings.wickets - 1);
-
-      const newRuns = typeof updateData.runsBatter === 'number' ? updateData.runsBatter : delivery.runs_batter;
-      const newExtras = typeof updateData.runsExtras === 'number' ? updateData.runsExtras : delivery.runs_extras;
-      const newTotal = newRuns + newExtras;
-      const newWicket = typeof updateData.wicket === 'boolean' ? updateData.wicket : delivery.wicket;
-
-      delivery.runs_batter = newRuns;
-      delivery.runs_extras = newExtras;
-      delivery.total_runs = newTotal;
-      delivery.wicket = newWicket;
-      await delivery.save();
-
-      innings.total_runs += newTotal;
-      if (newWicket) innings.wickets += 1;
+      innings.total_runs = Math.max(0, (innings.total_runs || 0) + runsDelta);
+      innings.wickets = Math.max(0, (innings.wickets || 0) + wicketDelta);
       await innings.save();
+
+      // Update Batter stats if applicable
+      if (delivery.striker_id && batterRunsDelta !== 0) {
+        await db.models.InningsBatter.updateOne(
+          { innings_id: innings.id, player_id: delivery.striker_id },
+          {
+            $inc: {
+              runs: batterRunsDelta,
+              fours: (newRunsBatter === 4 ? 1 : (oldBatterRuns === 4 ? -1 : 0)),
+              sixes: (newRunsBatter === 6 ? 1 : (oldBatterRuns === 6 ? -1 : 0))
+            }
+          }
+        );
+      }
+
+      // Update Bowler stats if applicable
+      if (delivery.bowler_id) {
+        await db.models.InningsBowler.updateOne(
+          { innings_id: innings.id, player_id: delivery.bowler_id },
+          {
+            $inc: {
+              runs_conceded: runsDelta,
+              wickets: wicketDelta
+            }
+          }
+        );
+      }
     }
+
+    delivery.runs_batter = newRunsBatter;
+    delivery.runs_extras = newRunsExtras;
+    delivery.total_runs = newTotalRuns;
+    delivery.wicket = newWicket;
+    if (newWicketType) delivery.wicket_type = newWicketType;
+    if (newExtraType) delivery.extra_type = newExtraType;
+    await delivery.save();
+
+    try {
+      broadcastScoreUpdate(matchId, {
+        action: 'DELIVERY_EDITED',
+        deliveryId,
+        totalRuns: innings?.total_runs,
+        wickets: innings?.wickets
+      });
+    } catch (_) {}
 
     return {
       success: true,
-      message: 'Delivery edited successfully.',
+      message: `Delivery ${delivery.over_number}.${delivery.ball_number} corrected successfully.`,
       deliveryId,
-      data: { action: 'EDIT_DELIVERY', deliveryId }
+      data: {
+        action: 'EDIT_DELIVERY',
+        deliveryId,
+        runsBatter: newRunsBatter,
+        runsExtras: newRunsExtras,
+        totalRuns: newTotalRuns,
+        wicket: newWicket
+      }
     };
   }
 

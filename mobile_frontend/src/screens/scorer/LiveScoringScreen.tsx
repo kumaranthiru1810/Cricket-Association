@@ -434,8 +434,17 @@ export default function LiveScoringScreen() {
   const [umpireCommentsInput, setUmpireCommentsInput] = useState<string>('Fair match without disputes');
   const [isSubmittingUmpire, setIsSubmittingUmpire] = useState<boolean>(false);
 
-  // 8. Edit Mode Flag
+  // 8. Edit Mode Flag & Retroactive Direct Ball Edit
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
+  const [recentDeliveries, setRecentDeliveries] = useState<any[]>([]);
+  const [editingDelivery, setEditingDelivery] = useState<any | null>(null);
+  const [showEditDeliveryModal, setShowEditDeliveryModal] = useState<boolean>(false);
+  const [editRunsInput, setEditRunsInput] = useState<number>(0);
+  const [editExtraType, setEditExtraType] = useState<'NONE' | 'WIDE' | 'NO_BALL' | 'BYE' | 'LEG_BYE'>('NONE');
+  const [editWicket, setEditWicket] = useState<boolean>(false);
+  const [editWicketType, setEditWicketType] = useState<string>('BOWLED');
+  const [isSubmittingEditDelivery, setIsSubmittingEditDelivery] = useState<boolean>(false);
+  const [offlineQueueCount, setOfflineQueueCount] = useState<number>(0);
 
   // 9. Revised Overs & Revised Target Modal State
   const [showRevisedOversModal, setShowRevisedOversModal] = useState<boolean>(false);
@@ -795,6 +804,12 @@ export default function LiveScoringScreen() {
       }
       if (d.lastDismissal) {
         setLastDismissal(d.lastDismissal);
+      }
+      if (d.recentDeliveries && Array.isArray(d.recentDeliveries)) {
+        setRecentDeliveries(d.recentDeliveries);
+      }
+      if (ScorerApi.getOfflineQueueCount) {
+        setOfflineQueueCount(ScorerApi.getOfflineQueueCount());
       }
     } catch (err: any) {
       console.error('loadLiveState error:', err);
@@ -1955,6 +1970,57 @@ export default function LiveScoringScreen() {
       Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
     } finally {
       setIsUndoingDelivery(false);
+    }
+  };
+
+  // --- RETROACTIVE DIRECT DELIVERY EDIT HANDLERS (Edit Mode) ---
+  const handleOpenEditDelivery = (del: any) => {
+    setEditingDelivery(del);
+    setEditRunsInput(typeof del.runsBatter === 'number' ? del.runsBatter : (typeof del.runs === 'number' ? del.runs : 0));
+    setEditExtraType(del.extraType || (del.extra ? del.extra : 'NONE'));
+    setEditWicket(Boolean(del.wicket));
+    setEditWicketType(del.wicketType || 'BOWLED');
+    setShowEditDeliveryModal(true);
+  };
+
+  const handleSaveDeliveryEdit = async () => {
+    if (!editingDelivery) return;
+    setIsSubmittingEditDelivery(true);
+    try {
+      const extraRuns = (editExtraType === 'WIDE' || editExtraType === 'NO_BALL') ? 1 : 0;
+      const payload = {
+        runsBatter: editRunsInput,
+        runsExtras: extraRuns,
+        extraType: editExtraType,
+        wicket: editWicket,
+        wicketType: editWicket ? editWicketType : null
+      };
+      await ScorerApi.editDelivery(matchId, editingDelivery.id, payload);
+      setShowEditDeliveryModal(false);
+      setEditingDelivery(null);
+      await loadLiveState(false);
+      const msg = `Delivery ${editingDelivery.ball} corrected successfully! Scores and figures updated.`;
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Ball Corrected', msg);
+    } catch (err: any) {
+      const msg = err.message || 'Failed to update delivery.';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
+    } finally {
+      setIsSubmittingEditDelivery(false);
+    }
+  };
+
+  const handleSyncOfflineQueue = async () => {
+    try {
+      const res = await ScorerApi.syncOfflineDeliveries();
+      if (ScorerApi.getOfflineQueueCount) {
+        setOfflineQueueCount(ScorerApi.getOfflineQueueCount());
+      }
+      await loadLiveState(false);
+      const msg = `Synced ${res.synced} deliveries from offline queue! Remaining: ${res.remaining}`;
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Offline Sync', msg);
+    } catch (err: any) {
+      const msg = err.message || 'Error syncing offline deliveries.';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Sync Error', msg);
     }
   };
 
@@ -5059,6 +5125,17 @@ export default function LiveScoringScreen() {
             </View>
           )}
 
+          {/* Offline Sync Queue Pill (When network was dropped or deliveries are queued) */}
+          {offlineQueueCount > 0 && (
+            <TouchableOpacity
+              style={styles.offlineQueuePill}
+              onPress={handleSyncOfflineQueue}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.offlineQueuePillText}>🔄 {offlineQueueCount} Queued • Sync</Text>
+            </TouchableOpacity>
+          )}
+
           {/* Exit Scorer Button Pill (Red) */}
           <TouchableOpacity
             style={styles.headerExitBtn}
@@ -5518,7 +5595,7 @@ export default function LiveScoringScreen() {
               <View style={{ flex: 1, marginRight: 8 }}>
                 <Text style={styles.editModeBannerTitle}>✏️ EDIT MODE ACTIVE</Text>
                 <Text style={styles.editModeBannerSub}>
-                  Scorer correction mode is ON. Tap undo or tap balls below to edit.
+                  Scorer correction mode is ON. Tap 'Undo Ball' or tap any past ball below in "Recent Deliveries" to retroactively edit runs, extras, or wickets!
                 </Text>
               </View>
               <TouchableOpacity
@@ -5658,6 +5735,86 @@ export default function LiveScoringScreen() {
                 </TouchableOpacity>
               </View>
             </View>
+          </View>
+
+          {/* THIS OVER & RECENT DELIVERIES INTERACTIVE STRIP (CricHeroes Retroactive Ball Correction) */}
+          <View style={[styles.recentDeliveriesCard, isEditMode && styles.recentDeliveriesCardEditMode]}>
+            <View style={styles.recentDeliveriesHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <Text style={styles.recentDeliveriesTitle}>
+                  {isEditMode ? '✏️ EDIT BALLS (CLICK ANY BALL TO MODIFY)' : '⚡ THIS OVER / RECENT DELIVERIES'}
+                </Text>
+                {isEditMode ? (
+                  <View style={styles.editModeTagPill}>
+                    <Text style={styles.editModeTagPillText}>DIRECT RETROACTIVE EDIT ON</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.recentDeliveriesSub}>
+                    {recentDeliveries && recentDeliveries.length > 0 ? `(${recentDeliveries.length} balls recorded)` : ''}
+                  </Text>
+                )}
+              </View>
+              {isEditMode && (
+                <Text style={styles.editModeTapHint}>
+                  Tap any ball chip below to directly fix runs, extras or wickets without undoing subsequent balls.
+                </Text>
+              )}
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentDeliveriesScroll}>
+              {recentDeliveries && recentDeliveries.length > 0 ? (
+                recentDeliveries.map((del, idx) => {
+                  const isWicket = Boolean(del.wicket);
+                  const isFour = del.runs === 4 && !del.extra;
+                  const isSix = del.runs === 6 && !del.extra;
+                  const isExtra = Boolean(del.extra);
+                  const isDot = del.runs === 0 && !isExtra && !isWicket;
+
+                  return (
+                    <TouchableOpacity
+                      key={`del-${del.id || idx}`}
+                      style={[
+                        styles.ballChip,
+                        isWicket && styles.ballChipWicket,
+                        isFour && styles.ballChipFour,
+                        isSix && styles.ballChipSix,
+                        isExtra && styles.ballChipExtra,
+                        isDot && styles.ballChipDot,
+                        isEditMode && styles.ballChipEditMode
+                      ]}
+                      onPress={() => {
+                        if (isEditMode) {
+                          handleOpenEditDelivery(del);
+                        } else {
+                          const info = `Ball ${del.ball}: ${del.text} • ${del.commentary || 'Recorded delivery'}\n\nTip: Activate 'Edit Mode' in the sidebar or top banner to modify past deliveries directly.`;
+                          Platform.OS === 'web' ? window.alert(info) : Alert.alert('Delivery Details', info);
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      {isEditMode && <Text style={styles.ballChipPencil}>✏️</Text>}
+                      <Text
+                        style={[
+                          styles.ballChipText,
+                          isWicket && styles.ballChipTextWicket,
+                          isFour && styles.ballChipTextFour,
+                          isSix && styles.ballChipTextSix,
+                          isExtra && styles.ballChipTextExtra,
+                          isDot && styles.ballChipTextDot
+                        ]}
+                      >
+                        {del.text}
+                      </Text>
+                      <Text style={styles.ballChipOverText}>{del.ball}</Text>
+                    </TouchableOpacity>
+                  );
+                })
+              ) : (
+                <View style={styles.emptyRecentBallsBox}>
+                  <Text style={styles.emptyRecentBallsText}>No deliveries recorded in this innings yet</Text>
+                </View>
+              )}
+            </ScrollView>
           </View>
 
           {/* BOTTOM SECTION: SCORING ENGINE CONTROLS & KEYPAD (Matches Manual Image 1 Slide 3 & 4 and Image 2) */}
@@ -7302,6 +7459,174 @@ export default function LiveScoringScreen() {
                 </View>
               )}
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* RETROACTIVE DELIVERY CORRECTION MODAL (Edit Mode Direct Ball Edit) */}
+      <Modal
+        visible={showEditDeliveryModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowEditDeliveryModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.editDeliveryModalContainer}>
+            <View style={styles.editDeliveryModalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.editDeliveryModalTitle}>✏️ Direct Ball Correction</Text>
+                <Text style={styles.editDeliveryModalSub}>
+                  Modify runs, extras, or wicket retroactively
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.redCloseBtn}
+                onPress={() => setShowEditDeliveryModal(false)}
+              >
+                <Text style={styles.redCloseBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {editingDelivery && (
+              <ScrollView style={styles.editDeliveryModalBody}>
+                <View style={styles.editDeliveryInfoBox}>
+                  <Text style={styles.editDeliveryInfoText}>
+                    Ball: <Text style={{ fontWeight: 'bold', color: '#b45309' }}>{editingDelivery.ball}</Text> • Current Recorded: <Text style={{ fontWeight: 'bold' }}>{editingDelivery.text}</Text>
+                  </Text>
+                  {editingDelivery.commentary ? (
+                    <Text style={styles.editDeliveryCommentaryText}>{editingDelivery.commentary}</Text>
+                  ) : null}
+                </View>
+
+                {/* RUNS PICKER */}
+                <Text style={styles.editSectionLabel}>Runs Scored by Batter:</Text>
+                <View style={styles.editRunsRow}>
+                  {[0, 1, 2, 3, 4, 5, 6].map((r) => (
+                    <TouchableOpacity
+                      key={`edit-run-${r}`}
+                      style={[
+                        styles.editRunChip,
+                        editRunsInput === r && styles.editRunChipActive
+                      ]}
+                      onPress={() => setEditRunsInput(r)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.editRunChipText,
+                          editRunsInput === r && styles.editRunChipTextActive
+                        ]}
+                      >
+                        {r}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* EXTRAS PICKER */}
+                <Text style={styles.editSectionLabel}>Extras Classification:</Text>
+                <View style={styles.editExtrasRow}>
+                  {[
+                    { id: 'NONE', label: 'None (Legal Ball)' },
+                    { id: 'WIDE', label: 'Wide (+1)' },
+                    { id: 'NO_BALL', label: 'No Ball (+1)' },
+                    { id: 'BYE', label: 'Bye' },
+                    { id: 'LEG_BYE', label: 'Leg Bye' }
+                  ].map((ext) => (
+                    <TouchableOpacity
+                      key={`edit-extra-${ext.id}`}
+                      style={[
+                        styles.editExtraChip,
+                        editExtraType === ext.id && styles.editExtraChipActive
+                      ]}
+                      onPress={() => setEditExtraType(ext.id as any)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.editExtraChipText,
+                          editExtraType === ext.id && styles.editExtraChipTextActive
+                        ]}
+                      >
+                        {ext.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* WICKET TOGGLE */}
+                <Text style={styles.editSectionLabel}>Wicket / Dismissal Status:</Text>
+                <View style={styles.editWicketToggleRow}>
+                  <TouchableOpacity
+                    style={[styles.editWicketToggleBtn, !editWicket && styles.editWicketToggleBtnActive]}
+                    onPress={() => setEditWicket(false)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.editWicketToggleBtnText, !editWicket && styles.editWicketToggleBtnTextActive]}>
+                      ✓ Not Out (No Wicket)
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.editWicketToggleBtn, editWicket && styles.editWicketToggleBtnWicketActive]}
+                    onPress={() => setEditWicket(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.editWicketToggleBtnText, editWicket && styles.editWicketToggleBtnTextWicketActive]}>
+                      ⚡ Wicket Fallen
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {editWicket && (
+                  <View style={styles.editWicketTypeGrid}>
+                    {['BOWLED', 'CAUGHT', 'LBW', 'RUN_OUT', 'STUMPED', 'HIT_WICKET'].map((wt) => (
+                      <TouchableOpacity
+                        key={`wt-${wt}`}
+                        style={[
+                          styles.editWicketTypeChip,
+                          editWicketType === wt && styles.editWicketTypeChipActive
+                        ]}
+                        onPress={() => setEditWicketType(wt)}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            styles.editWicketTypeChipText,
+                            editWicketType === wt && styles.editWicketTypeChipTextActive
+                          ]}
+                        >
+                          {wt.replace('_', ' ')}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {/* ACTIONS */}
+                <View style={styles.editDeliveryActionRow}>
+                  <TouchableOpacity
+                    style={styles.editDeliveryCancelBtn}
+                    onPress={() => setShowEditDeliveryModal(false)}
+                    disabled={isSubmittingEditDelivery}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.editDeliveryCancelBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.editDeliverySaveBtn}
+                    onPress={handleSaveDeliveryEdit}
+                    disabled={isSubmittingEditDelivery}
+                    activeOpacity={0.8}
+                  >
+                    {isSubmittingEditDelivery ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={styles.editDeliverySaveBtnText}>💾 Save Ball Correction</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            )}
           </View>
         </View>
       </Modal>
@@ -10735,5 +11060,382 @@ const getStyles = (isDesktop: boolean) =>
       fontSize: 10,
       fontWeight: '800',
       color: '#b45309'
+    },
+
+    // Offline Queue Header Pill
+    offlineQueuePill: {
+      backgroundColor: '#fef3c7',
+      borderColor: '#d97706',
+      borderWidth: 1.5,
+      borderRadius: 16,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      marginRight: 6
+    },
+    offlineQueuePillText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: '#b45309'
+    },
+
+    // Recent Deliveries Strip & Edit Mode Styling
+    recentDeliveriesCard: {
+      backgroundColor: '#ffffff',
+      borderRadius: 12,
+      padding: 12,
+      marginVertical: 8,
+      borderWidth: 1,
+      borderColor: '#e2e8f0',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 2,
+      elevation: 2
+    },
+    recentDeliveriesCardEditMode: {
+      borderColor: '#d97706',
+      borderWidth: 2,
+      backgroundColor: '#fffdf5'
+    },
+    recentDeliveriesHeader: {
+      marginBottom: 8
+    },
+    recentDeliveriesTitle: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: '#1e293b',
+      letterSpacing: 0.5,
+      textTransform: 'uppercase'
+    },
+    recentDeliveriesSub: {
+      fontSize: 11,
+      color: '#64748b',
+      fontWeight: '600'
+    },
+    editModeTagPill: {
+      backgroundColor: '#fef3c7',
+      borderColor: '#d97706',
+      borderWidth: 1,
+      borderRadius: 6,
+      paddingHorizontal: 6,
+      paddingVertical: 2
+    },
+    editModeTagPillText: {
+      fontSize: 10,
+      fontWeight: '800',
+      color: '#b45309'
+    },
+    editModeTapHint: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: '#b45309',
+      marginTop: 3
+    },
+    recentDeliveriesScroll: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 4
+    },
+    ballChip: {
+      width: 44,
+      height: 48,
+      borderRadius: 8,
+      backgroundColor: '#f1f5f9',
+      borderWidth: 1.5,
+      borderColor: '#cbd5e1',
+      alignItems: 'center',
+      justifyContent: 'center',
+      position: 'relative'
+    },
+    ballChipDot: {
+      backgroundColor: '#f8fafc',
+      borderColor: '#cbd5e1'
+    },
+    ballChipFour: {
+      backgroundColor: '#ecfdf5',
+      borderColor: '#10b981'
+    },
+    ballChipSix: {
+      backgroundColor: '#eff6ff',
+      borderColor: '#3b82f6'
+    },
+    ballChipWicket: {
+      backgroundColor: '#fef2f2',
+      borderColor: '#ef4444'
+    },
+    ballChipExtra: {
+      backgroundColor: '#fffbeb',
+      borderColor: '#f59e0b'
+    },
+    ballChipEditMode: {
+      borderColor: '#d97706',
+      borderWidth: 2,
+      backgroundColor: '#fef9c3',
+      transform: [{ scale: 1.04 }]
+    },
+    ballChipPencil: {
+      position: 'absolute',
+      top: 1,
+      right: 2,
+      fontSize: 9
+    },
+    ballChipText: {
+      fontSize: 14,
+      fontWeight: '800',
+      color: '#334155'
+    },
+    ballChipTextDot: {
+      color: '#64748b'
+    },
+    ballChipTextFour: {
+      color: '#047857'
+    },
+    ballChipTextSix: {
+      color: '#1d4ed8'
+    },
+    ballChipTextWicket: {
+      color: '#b91c1c'
+    },
+    ballChipTextExtra: {
+      color: '#b45309'
+    },
+    ballChipOverText: {
+      fontSize: 9,
+      color: '#94a3b8',
+      fontWeight: '700',
+      marginTop: 1
+    },
+    emptyRecentBallsBox: {
+      paddingVertical: 10,
+      paddingHorizontal: 8
+    },
+    emptyRecentBallsText: {
+      fontSize: 12,
+      color: '#94a3b8',
+      fontStyle: 'italic'
+    },
+
+    // Direct Delivery Edit Modal Styles
+    editDeliveryModalContainer: {
+      width: '92%',
+      maxWidth: 520,
+      backgroundColor: '#ffffff',
+      borderRadius: 16,
+      overflow: 'hidden',
+      maxHeight: '90%',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.25,
+      shadowRadius: 10,
+      elevation: 8
+    },
+    editDeliveryModalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: '#fffbeb',
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderBottomWidth: 1.5,
+      borderBottomColor: '#fed7aa'
+    },
+    editDeliveryModalTitle: {
+      fontSize: 16,
+      fontWeight: '900',
+      color: '#b45309'
+    },
+    editDeliveryModalSub: {
+      fontSize: 11,
+      color: '#78350f',
+      fontWeight: '600',
+      marginTop: 2
+    },
+    editDeliveryModalBody: {
+      padding: 16
+    },
+    editDeliveryInfoBox: {
+      backgroundColor: '#f8fafc',
+      borderRadius: 8,
+      padding: 10,
+      borderWidth: 1,
+      borderColor: '#e2e8f0',
+      marginBottom: 14
+    },
+    editDeliveryInfoText: {
+      fontSize: 13,
+      color: '#334155'
+    },
+    editDeliveryCommentaryText: {
+      fontSize: 11,
+      color: '#64748b',
+      fontStyle: 'italic',
+      marginTop: 4
+    },
+    editSectionLabel: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: '#475569',
+      textTransform: 'uppercase',
+      letterSpacing: 0.3,
+      marginTop: 8,
+      marginBottom: 6
+    },
+    editRunsRow: {
+      flexDirection: 'row',
+      gap: 8,
+      flexWrap: 'wrap',
+      marginBottom: 10
+    },
+    editRunChip: {
+      width: 44,
+      height: 44,
+      borderRadius: 8,
+      backgroundColor: '#f1f5f9',
+      borderWidth: 1.5,
+      borderColor: '#cbd5e1',
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    editRunChipActive: {
+      backgroundColor: '#d97706',
+      borderColor: '#b45309'
+    },
+    editRunChipText: {
+      fontSize: 16,
+      fontWeight: '800',
+      color: '#334155'
+    },
+    editRunChipTextActive: {
+      color: '#ffffff'
+    },
+    editExtrasRow: {
+      flexDirection: 'row',
+      gap: 6,
+      flexWrap: 'wrap',
+      marginBottom: 10
+    },
+    editExtraChip: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 8,
+      backgroundColor: '#f8fafc',
+      borderWidth: 1.5,
+      borderColor: '#cbd5e1'
+    },
+    editExtraChipActive: {
+      backgroundColor: '#f59e0b',
+      borderColor: '#d97706'
+    },
+    editExtraChipText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: '#475569'
+    },
+    editExtraChipTextActive: {
+      color: '#ffffff',
+      fontWeight: '800'
+    },
+    editWicketToggleRow: {
+      flexDirection: 'row',
+      gap: 10,
+      marginBottom: 10
+    },
+    editWicketToggleBtn: {
+      flex: 1,
+      paddingVertical: 10,
+      borderRadius: 8,
+      backgroundColor: '#f1f5f9',
+      borderWidth: 1.5,
+      borderColor: '#cbd5e1',
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    editWicketToggleBtnActive: {
+      backgroundColor: '#ecfdf5',
+      borderColor: '#10b981'
+    },
+    editWicketToggleBtnWicketActive: {
+      backgroundColor: '#fef2f2',
+      borderColor: '#ef4444'
+    },
+    editWicketToggleBtnText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: '#64748b'
+    },
+    editWicketToggleBtnTextActive: {
+      color: '#065f46',
+      fontWeight: '800'
+    },
+    editWicketToggleBtnTextWicketActive: {
+      color: '#b91c1c',
+      fontWeight: '800'
+    },
+    editWicketTypeGrid: {
+      flexDirection: 'row',
+      gap: 6,
+      flexWrap: 'wrap',
+      marginBottom: 12,
+      backgroundColor: '#fff5f5',
+      padding: 10,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: '#fca5a5'
+    },
+    editWicketTypeChip: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 6,
+      backgroundColor: '#ffffff',
+      borderWidth: 1,
+      borderColor: '#f87171'
+    },
+    editWicketTypeChipActive: {
+      backgroundColor: '#dc2626',
+      borderColor: '#b91c1c'
+    },
+    editWicketTypeChipText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: '#b91c1c'
+    },
+    editWicketTypeChipTextActive: {
+      color: '#ffffff',
+      fontWeight: '800'
+    },
+    editDeliveryActionRow: {
+      flexDirection: 'row',
+      gap: 10,
+      marginTop: 14,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: '#e2e8f0'
+    },
+    editDeliveryCancelBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 8,
+      backgroundColor: '#f1f5f9',
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    editDeliveryCancelBtnText: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: '#64748b'
+    },
+    editDeliverySaveBtn: {
+      flex: 2,
+      paddingVertical: 12,
+      borderRadius: 8,
+      backgroundColor: '#16a34a',
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    editDeliverySaveBtnText: {
+      fontSize: 13,
+      fontWeight: '800',
+      color: '#ffffff'
     }
   });
