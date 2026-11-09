@@ -10,6 +10,7 @@ const db = require('../config/db');
 const otpService = require('./otpService');
 const { sendOtpEmail } = require('../config/mailer');
 const contentModel = require('../models/contentModel');
+const { validateScheduleDateTime } = require('../utils/dateTimeValidation');
 
 /**
  * Creates an audit log entry in MongoDB
@@ -207,27 +208,25 @@ async function saveTournament(tournamentData, adminEmail) {
 async function scheduleMatch(fixtureData, adminEmail) {
   await db.initDb();
 
-  const {
-    tournament_id,
-    tournament_name,
-    team_a_id,
-    team_b_id,
-    team_a_name,
-    team_b_name,
-    venue,
-    venue_maps_url,
-    match_date,
-    match_time,
-    match_type,
-    overs,
-    overs_per_side,
-    assigned_scorer_id,
-    umpire1_id,
-    umpire2_id,
-    umpire1_name,
-    umpire2_name,
-    stage
-  } = fixtureData;
+  const tournament_id = fixtureData.tournament_id || fixtureData.tournamentId;
+  const tournament_name = fixtureData.tournament_name || fixtureData.tournamentName;
+  const team_a_id = fixtureData.team_a_id || fixtureData.teamAId;
+  const team_b_id = fixtureData.team_b_id || fixtureData.teamBId;
+  const team_a_name = fixtureData.team_a_name || fixtureData.teamAName;
+  const team_b_name = fixtureData.team_b_name || fixtureData.teamBName;
+  const venue = fixtureData.venue || fixtureData.venueName;
+  const venue_maps_url = fixtureData.venue_maps_url || fixtureData.venueMapsUrl;
+  const rawDate = fixtureData.match_date !== undefined ? fixtureData.match_date : (fixtureData.date !== undefined ? fixtureData.date : (fixtureData.scheduled_date !== undefined ? fixtureData.scheduled_date : fixtureData.scheduledDate));
+  const rawTime = fixtureData.match_time !== undefined ? fixtureData.match_time : (fixtureData.time !== undefined ? fixtureData.time : (fixtureData.scheduled_time !== undefined ? fixtureData.scheduled_time : fixtureData.scheduledTime));
+  const match_type = fixtureData.match_type || fixtureData.matchType;
+  const overs = fixtureData.overs;
+  const overs_per_side = fixtureData.overs_per_side || fixtureData.overs;
+  const assigned_scorer_id = fixtureData.assigned_scorer_id || fixtureData.assignedScorerId;
+  const umpire1_id = fixtureData.umpire1_id || fixtureData.umpire1Id;
+  const umpire2_id = fixtureData.umpire2_id || fixtureData.umpire2Id;
+  const umpire1_name = fixtureData.umpire1_name || fixtureData.umpire1Name;
+  const umpire2_name = fixtureData.umpire2_name || fixtureData.umpire2Name;
+  const stage = fixtureData.stage;
 
   if (!team_a_id || !team_b_id) {
     throw new Error('Both Team A and Team B are required to schedule a match.');
@@ -237,12 +236,14 @@ async function scheduleMatch(fixtureData, adminEmail) {
     throw new Error('Team A and Team B cannot be the same team.');
   }
 
-  if (!match_date || !String(match_date).trim()) {
-    throw new Error('Match date is required.');
+  // Strict date & time validation (Asia/Kolkata timezone)
+  const dtValidation = validateScheduleDateTime(rawDate, rawTime);
+  if (!dtValidation.isValid) {
+    throw new Error(dtValidation.error);
   }
 
-  const cleanDate = String(match_date).trim();
-  const cleanTime = (match_time && String(match_time).trim()) || '09:30 AM';
+  const cleanDate = dtValidation.cleanDate;
+  const cleanTime = dtValidation.parsedTime.formatted12;
 
   // Prevent duplicate umpire assignment in the same fixture
   if (umpire1_id && umpire2_id && umpire1_id === umpire2_id) {
@@ -390,8 +391,22 @@ async function updateMatch(matchId, fixtureData, adminEmail) {
   if (fixtureData.team_b_name) match.team_b_name = fixtureData.team_b_name;
   if (fixtureData.venue) match.venue = fixtureData.venue;
   if (fixtureData.venue_maps_url !== undefined) match.venue_maps_url = fixtureData.venue_maps_url;
-  if (fixtureData.match_date) match.match_date = fixtureData.match_date;
-  if (fixtureData.match_time) match.match_time = fixtureData.match_time;
+
+  // Validate and update match date / time if provided
+  const rawUpdateDate = fixtureData.match_date !== undefined ? fixtureData.match_date : (fixtureData.date !== undefined ? fixtureData.date : (fixtureData.scheduled_date !== undefined ? fixtureData.scheduled_date : fixtureData.scheduledDate));
+  const rawUpdateTime = fixtureData.match_time !== undefined ? fixtureData.match_time : (fixtureData.time !== undefined ? fixtureData.time : (fixtureData.scheduled_time !== undefined ? fixtureData.scheduled_time : fixtureData.scheduledTime));
+
+  if (rawUpdateDate !== undefined || rawUpdateTime !== undefined) {
+    const targetDate = rawUpdateDate !== undefined ? rawUpdateDate : match.match_date;
+    const targetTime = rawUpdateTime !== undefined ? rawUpdateTime : match.match_time;
+    const dtValidation = validateScheduleDateTime(targetDate, targetTime);
+    if (!dtValidation.isValid) {
+      throw new Error(dtValidation.error);
+    }
+    match.match_date = dtValidation.cleanDate;
+    match.match_time = dtValidation.parsedTime.formatted12;
+  }
+
   if (fixtureData.match_type) match.match_type = fixtureData.match_type;
   if (fixtureData.overs_per_side || fixtureData.overs) match.overs_per_side = Number(fixtureData.overs_per_side || fixtureData.overs);
   if (fixtureData.assigned_scorer_id) match.assigned_scorer_id = fixtureData.assigned_scorer_id;
@@ -418,6 +433,367 @@ async function updateMatch(matchId, fixtureData, adminEmail) {
   });
 
   return match.toObject();
+}
+
+/**
+ * Postpone a match fixture with a mandatory reason
+ */
+async function postponeMatch(matchId, { reason }, adminEmail = 'admin@cfvd.org') {
+  await db.initDb();
+
+  if (!reason || !String(reason).trim()) {
+    throw new Error('A mandatory reason is required to postpone a match fixture.');
+  }
+
+  const cleanReason = String(reason).trim();
+  const match = await db.models.Match.findOne({ id: matchId });
+  if (!match) throw new Error(`Match with ID '${matchId}' not found.`);
+
+  if (match.status === 'COMPLETED') {
+    throw new Error('Cannot postpone a match that has already been completed.');
+  }
+  if (match.status === 'CANCELLED') {
+    throw new Error('Cannot postpone a match that has been cancelled.');
+  }
+
+  const origDate = (match.postponement && match.postponement.original_date) || match.match_date;
+  const origTime = (match.postponement && match.postponement.original_time) || match.match_time;
+
+  match.status = 'POSTPONED';
+  match.status_comment = `Postponed: ${cleanReason}`;
+  match.result_summary = `Postponed: ${cleanReason}`;
+
+  match.postponement = {
+    is_postponed: true,
+    reason: cleanReason,
+    postponed_at: new Date(),
+    postponed_by: {
+      user_id: adminEmail,
+      role: 'ADMIN',
+      name: 'Administrator'
+    },
+    original_date: origDate,
+    original_time: origTime,
+    rescheduled_date: null,
+    rescheduled_time: null,
+    rescheduled_at: null,
+    rescheduled_by: null
+  };
+
+  // If there was an umpire postponement request pending, mark it approved
+  if (match.umpire_postponement_request && match.umpire_postponement_request.status === 'PENDING') {
+    match.umpire_postponement_request.status = 'APPROVED';
+    match.umpire_postponement_request.reviewed_by = adminEmail;
+    match.umpire_postponement_request.reviewed_at = new Date();
+    match.umpire_postponement_request.review_notes = cleanReason;
+  }
+
+  if (!match.postponement_history) match.postponement_history = [];
+  match.postponement_history.push({
+    action: 'POSTPONED',
+    reason: cleanReason,
+    from_date: match.match_date,
+    from_time: match.match_time,
+    to_date: '',
+    to_time: '',
+    actor_id: adminEmail,
+    actor_name: 'Administrator',
+    actor_role: 'ADMIN',
+    timestamp: new Date(),
+    notes: cleanReason
+  });
+
+  match.updated_at = new Date();
+  await match.save();
+
+  await addAuditLog({
+    action: 'POSTPONE_MATCH',
+    initiated_by: adminEmail,
+    target_user: matchId,
+    result: `Match ${matchId} postponed`,
+    details: cleanReason
+  });
+
+  // Dispatch Notifications to Team A, Team B, Scorer, and Umpires
+  if (db.models.Notification) {
+    const notifPayloads = [
+      {
+        recipient_role: 'TEAM',
+        recipient_id: match.team_a_id,
+        title: '⚠️ Fixture Postponed',
+        message: `Your scheduled match vs ${match.team_b_name || match.team_b_id} on ${origDate} at ${origTime} has been postponed. Reason: "${cleanReason}".`
+      },
+      {
+        recipient_role: 'TEAM',
+        recipient_id: match.team_b_id,
+        title: '⚠️ Fixture Postponed',
+        message: `Your scheduled match vs ${match.team_a_name || match.team_a_id} on ${origDate} at ${origTime} has been postponed. Reason: "${cleanReason}".`
+      },
+      {
+        recipient_role: 'SCORER',
+        recipient_id: match.assigned_scorer_id,
+        title: '⏸️ Official Match Postponed',
+        message: `Match fixture #${match.id} (${match.team_a_name} vs ${match.team_b_name}) on ${origDate} has been postponed. Reason: "${cleanReason}".`
+      }
+    ];
+
+    if (match.umpire1_id) {
+      notifPayloads.push({
+        recipient_role: 'UMPIRE',
+        recipient_id: match.umpire1_id,
+        title: '⏸️ Assigned Match Postponed',
+        message: `Assigned match #${match.id} (${match.team_a_name} vs ${match.team_b_name}) has been postponed by Admin. Reason: "${cleanReason}".`
+      });
+    }
+
+    for (const np of notifPayloads) {
+      try {
+        await db.models.Notification.create({
+          id: `NOTIF-POSTPONE-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          type: 'MATCH_POSTPONED',
+          recipient_role: np.recipient_role,
+          recipient_id: np.recipient_id,
+          title: np.title,
+          message: np.message,
+          reference_id: match.id,
+          status: 'UNREAD'
+        });
+      } catch (_e) {
+        // Notification failure shouldn't abort postponement
+      }
+    }
+  }
+
+  return match.toObject();
+}
+
+/**
+ * Reschedule a postponed match with a new valid date and time
+ */
+async function rescheduleMatch(matchId, { newDate, newTime, reason }, adminEmail = 'admin@cfvd.org') {
+  await db.initDb();
+
+  const dtValidation = validateScheduleDateTime(newDate, newTime);
+  if (!dtValidation.isValid) {
+    throw new Error(dtValidation.error || 'Please provide a valid future match date and time in Asia/Kolkata timezone.');
+  }
+
+  const cleanDate = dtValidation.cleanDate;
+  const cleanTime = (dtValidation.parsedTime && dtValidation.parsedTime.formatted12) || String(newTime).trim();
+  const cleanReason = reason ? String(reason).trim() : 'Fixture rescheduled by administrator';
+
+  const match = await db.models.Match.findOne({ id: matchId });
+  if (!match) throw new Error(`Match with ID '${matchId}' not found.`);
+
+  if (match.status === 'COMPLETED') {
+    throw new Error('Cannot reschedule a completed match.');
+  }
+
+  // Check venue availability conflict
+  const venueConflict = await db.models.Match.findOne({
+    id: { $ne: matchId },
+    status: { $nin: ['CANCELLED', 'POSTPONED'] },
+    venue: match.venue,
+    match_date: cleanDate,
+    match_time: cleanTime
+  });
+  if (venueConflict) {
+    throw new Error(`Venue '${match.venue}' is already booked on ${cleanDate} at ${cleanTime} for fixture #${venueConflict.id} (${venueConflict.team_a_name || 'Team A'} vs ${venueConflict.team_b_name || 'Team B'}).`);
+  }
+
+  const prevDate = match.match_date;
+  const prevTime = match.match_time;
+
+  match.match_date = cleanDate;
+  match.match_time = cleanTime;
+  match.status = 'SCHEDULED';
+  match.status_comment = `Rescheduled to ${cleanDate} ${cleanTime}. ${cleanReason}`;
+  match.result_summary = null;
+
+  if (!match.postponement) {
+    match.postponement = {
+      is_postponed: false,
+      reason: cleanReason,
+      original_date: prevDate,
+      original_time: prevTime
+    };
+  } else {
+    match.postponement.is_postponed = false;
+  }
+
+  match.postponement.rescheduled_date = cleanDate;
+  match.postponement.rescheduled_time = cleanTime;
+  match.postponement.rescheduled_at = new Date();
+  match.postponement.rescheduled_by = {
+    user_id: adminEmail,
+    role: 'ADMIN',
+    name: 'Administrator'
+  };
+
+  if (!match.postponement_history) match.postponement_history = [];
+  match.postponement_history.push({
+    action: 'RESCHEDULED',
+    reason: cleanReason,
+    from_date: prevDate,
+    from_time: prevTime,
+    to_date: cleanDate,
+    to_time: cleanTime,
+    actor_id: adminEmail,
+    actor_name: 'Administrator',
+    actor_role: 'ADMIN',
+    timestamp: new Date(),
+    notes: cleanReason
+  });
+
+  match.updated_at = new Date();
+  await match.save();
+
+  await addAuditLog({
+    action: 'RESCHEDULE_MATCH',
+    initiated_by: adminEmail,
+    target_user: matchId,
+    result: `Match ${matchId} rescheduled`,
+    details: `Rescheduled from ${prevDate} ${prevTime} to ${cleanDate} ${cleanTime}. Reason: ${cleanReason}`
+  });
+
+  // Dispatch Notifications to Team A, Team B, Scorer, and Umpires
+  if (db.models.Notification) {
+    const notifs = [
+      {
+        recipient_role: 'TEAM',
+        recipient_id: match.team_a_id,
+        title: '📅 Match Rescheduled',
+        message: `Your fixture vs ${match.team_b_name || match.team_b_id} has been rescheduled to ${cleanDate} at ${cleanTime} at ${match.venue}.`
+      },
+      {
+        recipient_role: 'TEAM',
+        recipient_id: match.team_b_id,
+        title: '📅 Match Rescheduled',
+        message: `Your fixture vs ${match.team_a_name || match.team_a_id} has been rescheduled to ${cleanDate} at ${cleanTime} at ${match.venue}.`
+      },
+      {
+        recipient_role: 'SCORER',
+        recipient_id: match.assigned_scorer_id,
+        title: '📅 Fixture Rescheduled',
+        message: `Match #${match.id} (${match.team_a_name} vs ${match.team_b_name}) has been rescheduled to ${cleanDate} at ${cleanTime}.`
+      }
+    ];
+
+    for (const n of notifs) {
+      try {
+        await db.models.Notification.create({
+          id: `NOTIF-RESCHED-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          type: 'MATCH_RESCHEDULED',
+          recipient_role: n.recipient_role,
+          recipient_id: n.recipient_id,
+          title: n.title,
+          message: n.message,
+          reference_id: match.id,
+          status: 'UNREAD'
+        });
+      } catch (_e) {}
+    }
+  }
+
+  return match.toObject();
+}
+
+/**
+ * Review an umpire postponement request (Approve or Reject)
+ */
+async function reviewUmpirePostponement(matchId, { decision, reviewNotes }, adminEmail = 'admin@cfvd.org') {
+  await db.initDb();
+
+  const match = await db.models.Match.findOne({ id: matchId });
+  if (!match) throw new Error(`Match with ID '${matchId}' not found.`);
+
+  if (!match.umpire_postponement_request || !match.umpire_postponement_request.requested) {
+    throw new Error(`Match #${matchId} does not have an active umpire postponement request.`);
+  }
+
+  const decUpper = String(decision).toUpperCase();
+  if (decUpper === 'APPROVE') {
+    const umpireReason = match.umpire_postponement_request.reason || 'Umpire postponement request approved';
+    const postResult = await postponeMatch(matchId, { reason: umpireReason }, adminEmail);
+
+    // Notify umpire
+    if (db.models.Notification && match.umpire_postponement_request.umpire_id) {
+      await db.models.Notification.create({
+        id: `NOTIF-UMP-APP-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        type: 'POSTPONEMENT_REQUEST_APPROVED',
+        recipient_role: 'UMPIRE',
+        recipient_id: match.umpire_postponement_request.umpire_id,
+        title: '✓ Postponement Request Approved',
+        message: `Your request to postpone Match #${match.id} (${match.team_a_name} vs ${match.team_b_name}) was approved by Admin.`,
+        reference_id: match.id,
+        status: 'UNREAD'
+      });
+    }
+
+    return postResult;
+  } else if (decUpper === 'REJECT') {
+    const notes = reviewNotes ? String(reviewNotes).trim() : 'Postponement request declined by administrator.';
+    match.umpire_postponement_request.status = 'REJECTED';
+    match.umpire_postponement_request.reviewed_by = adminEmail;
+    match.umpire_postponement_request.reviewed_at = new Date();
+    match.umpire_postponement_request.review_notes = notes;
+
+    if (!match.postponement_history) match.postponement_history = [];
+    match.postponement_history.push({
+      action: 'REQUEST_REJECTED',
+      reason: notes,
+      from_date: match.match_date,
+      from_time: match.match_time,
+      to_date: '',
+      to_time: '',
+      actor_id: adminEmail,
+      actor_name: 'Administrator',
+      actor_role: 'ADMIN',
+      timestamp: new Date(),
+      notes
+    });
+
+    match.updated_at = new Date();
+    await match.save();
+
+    await addAuditLog({
+      action: 'REJECT_POSTPONEMENT_REQUEST',
+      initiated_by: adminEmail,
+      target_user: matchId,
+      result: `Umpire postponement request rejected for Match ${matchId}`,
+      details: notes
+    });
+
+    // Notify umpire
+    if (db.models.Notification && match.umpire_postponement_request.umpire_id) {
+      await db.models.Notification.create({
+        id: `NOTIF-UMP-REJ-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        type: 'POSTPONEMENT_REQUEST_REJECTED',
+        recipient_role: 'UMPIRE',
+        recipient_id: match.umpire_postponement_request.umpire_id,
+        title: '✗ Postponement Request Rejected',
+        message: `Your request to postpone Match #${match.id} (${match.team_a_name} vs ${match.team_b_name}) was reviewed and rejected. Note: "${notes}". Match remains scheduled.`,
+        reference_id: match.id,
+        status: 'UNREAD'
+      });
+    }
+
+    return match.toObject();
+  } else {
+    throw new Error(`Invalid decision '${decision}'. Expected 'APPROVE' or 'REJECT'.`);
+  }
+}
+
+/**
+ * Get all matches with pending umpire postponement requests
+ */
+async function getPostponementRequests() {
+  await db.initDb();
+  const requests = await db.models.Match.find({
+    'umpire_postponement_request.status': 'PENDING'
+  }).sort({ 'umpire_postponement_request.requested_at': -1 }).lean();
+
+  return requests;
 }
 
 /**
@@ -819,6 +1195,10 @@ module.exports = {
   getTournaments,
   scheduleMatch,
   updateMatch,
+  postponeMatch,
+  rescheduleMatch,
+  reviewUmpirePostponement,
+  getPostponementRequests,
   cancelMatch,
   deleteMatch,
   initiateAddAdminRequest,

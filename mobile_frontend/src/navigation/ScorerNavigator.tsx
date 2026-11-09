@@ -17,7 +17,8 @@ import {
 
 import ErrorBoundary from '../components/common/ErrorBoundary';
 
-export { ScreenName, ScorerNavigationContext, useScorerNavigation, ScorerNavigationContextType };
+export { ScorerNavigationContext, useScorerNavigation };
+export type { ScreenName, ScorerNavigationContextType };
 
 interface Props {
   onExit: (targetScreen?: any) => void;

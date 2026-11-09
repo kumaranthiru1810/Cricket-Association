@@ -13,6 +13,32 @@
 const db = require('../config/db');
 const scorerService = require('./scorerService');
 const teamRegistrationModel = require('../models/teamRegistrationModel');
+const playerModel = require('../models/playerModel');
+const fs = require('fs');
+const path = require('path');
+
+function savePlayerPhotoToDisk(photoString, identifier) {
+  if (!photoString || typeof photoString !== 'string') return null;
+  if (!photoString.startsWith('data:image/')) return photoString;
+  try {
+    const uploadsDir = path.join(__dirname, '..', 'uploads', 'players');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    const match = photoString.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+    if (!match) return photoString;
+    const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+    const base64Data = match[2];
+    const cleanId = (identifier || 'player').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const filename = `plyr_${cleanId}_${Date.now()}.${ext}`;
+    const filePath = path.join(uploadsDir, filename);
+    fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+    return `/uploads/players/${filename}`;
+  } catch (err) {
+    console.warn('Failed to save player photo to disk:', err.message);
+    return null;
+  }
+}
 
 class PlayerService {
   /**
@@ -65,26 +91,26 @@ class PlayerService {
 
     // Determine team details
     let teamId = playerDoc?.team_id || squadEntry?.team_registration_id || null;
-    let teamName = squadEntry?.team_name || 'Virudhunagar District Association Squad';
-    let coachName = squadEntry?.coach_name || 'Team Coach';
+    let teamName = squadEntry?.team_name || '';
+    let coachName = squadEntry?.coach_name || '';
     let coachEmail = squadEntry?.coach_email || '';
 
     if (teamId && !squadEntry?.team_name) {
       const teamDoc = await db.models.Team.findOne({ id: teamId }).lean();
       if (teamDoc) {
         teamName = teamDoc.name;
-        coachName = teamDoc.coach_name;
-        coachEmail = teamDoc.coach_email;
+        coachName = teamDoc.coach_name || '';
+        coachEmail = teamDoc.coach_email || '';
       }
     }
 
     const name = playerDoc?.name || userDoc?.name || squadEntry?.name || 'Player';
     const email = (playerDoc?.email || userDoc?.email || squadEntry?.email || userEmail || '').toLowerCase();
     const role = playerDoc?.role || squadEntry?.role || userDoc?.role || 'BATTER';
-    const jerseyNumber = playerDoc?.jersey_number ?? squadEntry?.jersey_number ?? 0;
-    const battingStyle = playerDoc?.batting_style || 'Right Hand Bat';
-    const bowlingStyle = playerDoc?.bowling_style || 'Right Arm Medium';
-    const mobile = userDoc?.mobile || '';
+    const jerseyNumber = playerDoc?.jersey_number ?? squadEntry?.jersey_number ?? null;
+    const battingStyle = playerDoc?.batting_style || '';
+    const bowlingStyle = playerDoc?.bowling_style || '';
+    const mobile = userDoc?.mobile || playerDoc?.mobile || '';
     const status = userDoc?.status === 'ACTIVE' ? 'APPROVED' : (userDoc?.status || playerDoc?.status || squadEntry?.status || 'APPROVED');
 
     const baseStats = playerDoc?.stats || {};
@@ -99,8 +125,11 @@ class PlayerService {
       name,
       email,
       mobile,
+      photo: playerDoc?.photo || playerDoc?.image_path || userDoc?.photo || userDoc?.image_path || userDoc?.player_details?.photo || userDoc?.player_details?.image_path || null,
+      image_path: playerDoc?.image_path || playerDoc?.photo || userDoc?.image_path || userDoc?.photo || userDoc?.player_details?.image_path || userDoc?.player_details?.photo || null,
+      imagePath: playerDoc?.image_path || playerDoc?.photo || userDoc?.image_path || userDoc?.photo || userDoc?.player_details?.image_path || userDoc?.player_details?.photo || null,
       role,
-      jerseyNumber: Number(jerseyNumber),
+      jerseyNumber: jerseyNumber !== null ? Number(jerseyNumber) : null,
       battingStyle,
       bowlingStyle,
       teamId,
@@ -108,7 +137,7 @@ class PlayerService {
       coachName,
       coachEmail,
       status: status.toUpperCase(),
-      taluk: 'Virudhunagar',
+      taluk: userDoc?.taluk || playerDoc?.taluk || squadEntry?.taluk || '',
       performancePoints: pointsData.points,
       tier: pointsData.currentTier,
       tierTitle: pointsData.tierTitle,
@@ -147,12 +176,23 @@ class PlayerService {
         safePlayerUpdates.jersey_number = num;
       }
     }
+    const photoInput = updates.photo !== undefined ? updates.photo : (updates.image_path !== undefined ? updates.image_path : updates.imagePath);
+    if (photoInput !== undefined) {
+      if (photoInput) {
+        const diskPath = savePlayerPhotoToDisk(photoInput, cleanEmail);
+        safePlayerUpdates.photo = String(photoInput).trim();
+        safePlayerUpdates.image_path = diskPath || String(photoInput).trim();
+      } else {
+        safePlayerUpdates.photo = null;
+        safePlayerUpdates.image_path = null;
+      }
+    }
 
     // Update in Player collection if exists
     if (playerDoc) {
       await db.models.Player.updateOne(
         { _id: playerDoc._id },
-        { $set: safePlayerUpdates }
+        { $set: { ...safePlayerUpdates, updated_at: new Date() } }
       );
     } else {
       // Create Player record if not yet existing
@@ -165,17 +205,42 @@ class PlayerService {
         jersey_number: safePlayerUpdates.jersey_number || 10,
         batting_style: safePlayerUpdates.batting_style || 'Right Hand Bat',
         bowling_style: safePlayerUpdates.bowling_style || 'Right Arm Medium',
+        photo: safePlayerUpdates.photo || null,
+        image_path: safePlayerUpdates.image_path || safePlayerUpdates.photo || null,
         status: 'ACTIVE'
       });
     }
 
-    // Update mobile in User collection if provided
-    if (updates.mobile !== undefined) {
-      const cleanMobile = String(updates.mobile).trim();
+    // Update mobile, taluk, photo & image_path in User collection
+    const userUpdates = {};
+    if (updates.mobile !== undefined) userUpdates.mobile = String(updates.mobile).trim();
+    if (updates.taluk !== undefined) userUpdates['player_details.taluk'] = String(updates.taluk).trim();
+    if (photoInput !== undefined) {
+      userUpdates.photo = safePlayerUpdates.photo;
+      userUpdates.image_path = safePlayerUpdates.image_path;
+      userUpdates['player_details.photo'] = safePlayerUpdates.photo;
+      userUpdates['player_details.image_path'] = safePlayerUpdates.image_path;
+    }
+    if (Object.keys(userUpdates).length > 0) {
       await db.models.User.updateOne(
         { email: cleanEmail },
-        { $set: { mobile: cleanMobile } }
+        { $set: { ...userUpdates, updated_at: new Date() } }
       );
+    }
+
+    // Also synchronize photo & image_path across playerModel, TeamPlayer & TeamRegistration squads
+    if (photoInput !== undefined) {
+      try {
+        await playerModel.updatePhoto(cleanEmail, safePlayerUpdates.photo);
+        await db.models.TeamPlayer.updateMany(
+          { player_email: cleanEmail },
+          { $set: { photo: safePlayerUpdates.photo, image_path: safePlayerUpdates.image_path } }
+        );
+        await db.models.TeamRegistration.updateMany(
+          { 'players.email': cleanEmail },
+          { $set: { 'players.$.photo': safePlayerUpdates.photo, 'players.$.image_path': safePlayerUpdates.image_path } }
+        );
+      } catch (_e) {}
     }
 
     return this.getProfile(userId, cleanEmail);
@@ -188,6 +253,7 @@ class PlayerService {
     await db.initDb();
     const profile = await this.getProfile(userId, userEmail);
     const teamId = profile.teamId;
+    const cleanEmail = (userEmail || profile?.email || '').toLowerCase().trim();
 
     let teamDoc = null;
     let squadList = [];
@@ -221,6 +287,8 @@ class PlayerService {
             jerseyNumber: p.jersey_number || (idx + 1),
             battingStyle: 'Right Hand Bat',
             bowlingStyle: 'Right Arm Medium',
+            photo: p.photo || p.image_path || null,
+            image_path: p.image_path || p.photo || null,
             status: p.status === 'APPROVED' ? 'Verified' : p.status
           }));
         }
@@ -238,37 +306,94 @@ class PlayerService {
         jerseyNumber: p.jersey_number,
         battingStyle: p.batting_style || 'Right Hand Bat',
         bowlingStyle: p.bowling_style || 'Right Arm Medium',
+        photo: p.photo || p.image_path || null,
+        image_path: p.image_path || p.photo || null,
         status: p.status === 'ACTIVE' ? 'Verified' : p.status
       }));
     }
 
-    // Default fallback if player is not yet assigned to a specific club
-    if (!teamDoc) {
-      teamDoc = {
-        id: 'TM-01',
-        name: 'Virudhunagar District CC',
-        short_name: 'VND',
-        city: 'Virudhunagar',
-        taluk: 'Virudhunagar',
-        coach_name: 'District Coaching Staff',
-        coach_email: 'coach@cfvd.org',
-        captain: 'Suresh Kumar',
-        vice_captain: 'Vijay Anand',
-        status: 'ACTIVE',
-        stats: { matches: 5, won: 4, lost: 1, tied: 0, points: 8, nrr: 1.25 }
-      };
+    // If no teamDoc by ID, search by player email in TeamRegistration
+    if (!teamDoc && cleanEmail) {
+      const teamReg = await db.models.TeamRegistration.findOne({ 'players.email': cleanEmail }).lean();
+      if (teamReg) {
+        teamDoc = {
+          id: teamReg.id,
+          name: teamReg.team_name,
+          short_name: (teamReg.team_name || 'TM').slice(0, 3).toUpperCase(),
+          city: teamReg.city || '',
+          taluk: teamReg.taluk || '',
+          coach_name: teamReg.coach_name || '',
+          coach_email: teamReg.coach_email || '',
+          status: teamReg.status,
+          stats: { matches: 0, won: 0, lost: 0, tied: 0, points: 0, nrr: 0.0 }
+        };
+        squadList = (teamReg.players || []).map((p, idx) => ({
+          id: `PLY-${teamReg.id}-${idx + 1}`,
+          name: p.name,
+          email: p.email,
+          role: p.role || 'BATTER',
+          jerseyNumber: p.jersey_number ?? (idx + 1),
+          battingStyle: p.batting_style || '',
+          bowlingStyle: p.bowling_style || '',
+          photo: p.photo || p.image_path || null,
+          image_path: p.image_path || p.photo || null,
+          status: p.status === 'APPROVED' ? 'Verified' : (p.status || 'Verified')
+        }));
+      }
+    }
 
-      const defaultPlayers = await db.models.Player.find({ team_id: 'TM-01' }).lean();
-      squadList = (defaultPlayers || []).map(p => ({
-        id: p.id,
-        name: p.name,
-        email: p.email,
-        role: p.role,
-        jerseyNumber: p.jersey_number,
-        battingStyle: p.batting_style,
-        bowlingStyle: p.bowling_style,
-        status: 'Verified'
-      }));
+    // If player has no assigned team in DB, return empty team & squad (no dummy data)
+    if (!teamDoc) {
+      return {
+        team: null,
+        squad: []
+      };
+    }
+
+    // Cross-query User and Player collections for all squad player profile photos
+    const squadEmails = squadList.map(s => (s.email || '').toLowerCase().trim()).filter(Boolean);
+    if (squadEmails.length > 0) {
+      try {
+        const [usersWithPhoto, playersWithPhoto] = await Promise.all([
+          db.models.User.find({
+            email: { $in: squadEmails }
+          }).select('email photo image_path player_details').lean(),
+          db.models.Player.find({
+            email: { $in: squadEmails }
+          }).select('email photo image_path').lean()
+        ]);
+
+        const photoMap = {};
+        for (const u of (usersWithPhoto || [])) {
+          const em = (u.email || '').toLowerCase().trim();
+          const p = u.photo || u.image_path || u.player_details?.photo || u.player_details?.image_path;
+          if (p) photoMap[em] = p;
+        }
+        for (const pl of (playersWithPhoto || [])) {
+          const em = (pl.email || '').toLowerCase().trim();
+          const p = pl.photo || pl.image_path;
+          if (p) photoMap[em] = p;
+        }
+
+        squadList = squadList.map(member => {
+          const em = (member.email || '').toLowerCase().trim();
+          const isCurrent = em && em === (userEmail || '').toLowerCase().trim();
+          const foundPhoto =
+            (isCurrent && profile?.photo) ||
+            member.photo ||
+            member.image_path ||
+            photoMap[em] ||
+            null;
+
+          return {
+            ...member,
+            photo: foundPhoto,
+            image_path: foundPhoto
+          };
+        });
+      } catch (err) {
+        console.warn('Failed to populate squad player photos:', err.message);
+      }
     }
 
     return {
@@ -369,16 +494,15 @@ class PlayerService {
         (playerTeamName && (
           (teamA.name && teamA.name.toLowerCase().includes(playerTeamName)) ||
           (teamB.name && teamB.name.toLowerCase().includes(playerTeamName))
-        )) ||
-        (!teamId && (m.team_a_id === 'TM-01' || m.team_b_id === 'TM-01'))
+        ))
       );
 
       return {
         id: m.id,
-        tournament: m.tournament_name || tournamentMap[m.tournament_id]?.name || 'Virudhunagar Premier League 2026',
+        tournament: m.tournament_name || tournamentMap[m.tournament_id]?.name || '',
         teamA: { id: teamA.id, name: teamA.name, shortName: teamA.short_name || teamA.name },
         teamB: { id: teamB.id, name: teamB.name, shortName: teamB.short_name || teamB.name },
-        venue: m.venue || 'Kamarajar District Stadium',
+        venue: m.venue || '',
         date: m.match_date || '',
         time: m.match_time || '',
         format: m.match_type || 'T20',
@@ -409,12 +533,12 @@ class PlayerService {
 
     return {
       id: match.id,
-      tournament: match.tournament_name || 'Virudhunagar Premier League 2026',
-      teamA: (teamMap[match.team_a_id] && teamMap[match.team_a_id].name) || 'Team A',
-      teamB: (teamMap[match.team_b_id] && teamMap[match.team_b_id].name) || 'Team B',
-      venue: match.venue || 'Kamarajar Stadium, Virudhunagar',
-      date: match.match_date || '2026-10-06',
-      time: match.match_time || '09:30 AM',
+      tournament: match.tournament_name || '',
+      teamA: (teamMap[match.team_a_id] && teamMap[match.team_a_id].name) || match.team_a_name || 'Team A',
+      teamB: (teamMap[match.team_b_id] && teamMap[match.team_b_id].name) || match.team_b_name || 'Team B',
+      venue: match.venue || '',
+      date: match.match_date || '',
+      time: match.match_time || '',
       format: match.match_type || 'T20',
       overs: match.overs_per_side || 20,
       status: match.status,
@@ -519,7 +643,7 @@ class PlayerService {
     const totalFours = bFours + (baseStats.fours || 0);
     const totalSixes = bSixes + (baseStats.sixes || 0);
     const highestScore = Math.max(bHighestScore, baseStats.highest_score || 0);
-    const totalDismissals = Math.max(bDismissals, 1);
+    const totalDismissals = bDismissals + (baseStats.dismissals || 0);
 
     const totalWickets = bwWickets + (baseStats.wickets || 0);
     const totalOvers = totalBowlingOvers + (baseStats.overs || 0);
@@ -530,12 +654,14 @@ class PlayerService {
     const totalRunOuts = runOutsCount;
 
     // Derived statistics
-    const battingAvg = totalDismissals > 0 ? (totalRuns / totalDismissals).toFixed(2) : totalRuns.toFixed(2);
+    const battingAvg = totalDismissals > 0
+      ? (totalRuns / totalDismissals).toFixed(2)
+      : (totalRuns > 0 ? totalRuns.toFixed(2) : '0.00');
     const strikeRate = totalBalls > 0 ? ((totalRuns / totalBalls) * 100).toFixed(2) : '0.00';
     const bowlingEconomy = totalOvers > 0 ? (totalRunsConceded / totalOvers).toFixed(2) : '0.00';
     const bestBowlingFigures = bestWickets > 0 ? `${bestWickets}/${bestRuns}` : (totalWickets > 0 ? `${totalWickets}/${totalRunsConceded}` : '-');
 
-    const totalMatches = Math.max(bInnings, bowlerRecords.length, 5);
+    const totalMatches = Math.max(bInnings, bowlerRecords.length, (baseStats.matches || 0));
 
     const pointsData = this._calculatePatchesAndPoints(
       {

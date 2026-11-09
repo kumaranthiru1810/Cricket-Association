@@ -39,6 +39,16 @@ import { showSuccess, showError, showWarning, showConfirm, showInfo, swal } from
 import TournamentManagement from '../../admin/components/TournamentManagement';
 import CricketLawsManagement from '../../admin/components/CricketLawsManagement';
 import CalculationSettingsManagement from '../../admin/components/CalculationSettingsManagement';
+import {
+  getKolkataNow,
+  getTodayKolkata,
+  getFutureDateKolkata,
+  getDefaultScheduleDateTime,
+  parseTimeString,
+  validateScheduleDate,
+  validateScheduleTime,
+  validateScheduleDateTime
+} from '../../utils/dateTimeValidation';
 
 // Asset references
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
@@ -52,7 +62,7 @@ export interface AdminDashboardProps {
 
 type AdminTab = 'overview' | 'teams' | 'scorers' | 'umpires' | 'content' | 'schedules' | 'tournaments' | 'laws' | 'calculations';
 type FilterStatus = 'all' | 'Pending' | 'Approved' | 'Rejected';
-type MatchFilterStatus = 'all' | 'SCHEDULED' | 'LIVE' | 'COMPLETED' | 'CANCELLED';
+type MatchFilterStatus = 'all' | 'SCHEDULED' | 'LIVE' | 'COMPLETED' | 'CANCELLED' | 'POSTPONED' | 'REQUESTS';
 
 // Fallback initial scorers data (matching exact counts: 2 Approved, 2 Pending, 1 Rejected = 5 Total)
 const INITIAL_SCORERS_DATA = [
@@ -533,7 +543,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   const [scheduleStep, setScheduleStep] = useState<1 | 2 | 3>(1);
   const [editingMatch, setEditingMatch] = useState<any | null>(null);
   const initialScheduleFormRef = useRef<any>(null);
-    const [scheduleForm, setScheduleForm] = useState({
+  const initialScheduleSlot = getDefaultScheduleDateTime();
+  const [scheduleForm, setScheduleForm] = useState({
     tournament_id: '',
     tournament_name: '',
     team_a_id: '',
@@ -542,8 +553,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     team_b_name: '',
     venue: '',
     venue_maps_url: '',
-    match_date: new Date().toISOString().split('T')[0],
-    match_time: '09:30 AM',
+    match_date: initialScheduleSlot.date,
+    match_time: initialScheduleSlot.time,
     match_type: 'T20',
     overs: 20,
     assigned_scorer_id: '',
@@ -555,6 +566,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     show_on_team_home: true,
     match_notes: ''
   });
+  const currentDateTimeVal = useMemo(() => {
+    return validateScheduleDateTime(scheduleForm.match_date, scheduleForm.match_time);
+  }, [scheduleForm.match_date, scheduleForm.match_time]);
   const [umpire1DropdownOpen, setUmpire1DropdownOpen] = useState<boolean>(false);
   const [umpire2DropdownOpen, setUmpire2DropdownOpen] = useState<boolean>(false);
   const [googleMapsModalOpen, setGoogleMapsModalOpen] = useState<boolean>(false);
@@ -578,11 +592,22 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   const [customTournamentInput, setCustomTournamentInput] = useState<string>('');
   const [notifyTeamsOnTimeChange, setNotifyTeamsOnTimeChange] = useState<boolean>(true);
 
-  // Match Inspection & Cancel Modals
+  // Match Inspection, Cancel, Postpone & Reschedule Modals
   const [selectedMatchModal, setSelectedMatchModal] = useState<any | null>(null);
   const [cancelMatchModal, setCancelMatchModal] = useState<{ id: string; teamA: string; teamB: string } | null>(null);
   const [cancelReasonInput, setCancelReasonInput] = useState<string>('Inclement weather / ground unplayable');
   const [isCancellingMatch, setIsCancellingMatch] = useState<boolean>(false);
+
+  const [postponeMatchModal, setPostponeMatchModal] = useState<{ id: string; teamA: string; teamB: string; date: string; time: string } | null>(null);
+  const [postponeReasonInput, setPostponeReasonInput] = useState<string>('Inclement weather / ground condition unplayable');
+  const [isPostponingMatch, setIsPostponingMatch] = useState<boolean>(false);
+
+  const [rescheduleModalMatch, setRescheduleModalMatch] = useState<{ id: string; teamA: string; teamB: string; date: string; time: string; venue: string } | null>(null);
+  const [rescheduleDateInput, setRescheduleDateInput] = useState<string>('');
+  const [rescheduleTimeInput, setRescheduleTimeInput] = useState<string>('09:30 AM');
+  const [rescheduleReasonInput, setRescheduleReasonInput] = useState<string>('Rescheduled due to previous postponement');
+  const [rescheduleErrors, setRescheduleErrors] = useState<{ dateError?: string | null; timeError?: string | null; generalError?: string | null }>({});
+  const [isReschedulingMatch, setIsReschedulingMatch] = useState<boolean>(false);
 
   // Modals
   const [selectedSquadModal, setSelectedSquadModal] = useState<any | null>(null);
@@ -774,8 +799,13 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       if (venuesRes && Array.isArray(venuesRes.venues)) {
         setVenuesList(venuesRes.venues);
       }
-      if (toursRes && Array.isArray(toursRes.tournaments)) {
-        setTournamentsList(toursRes.tournaments);
+      const extractedTournaments = Array.isArray(toursRes)
+        ? toursRes
+        : (Array.isArray(toursRes?.tournaments)
+          ? toursRes.tournaments
+          : (Array.isArray(toursRes?.data) ? toursRes.data : []));
+      if (extractedTournaments && extractedTournaments.length > 0) {
+        setTournamentsList(extractedTournaments);
       }
       if (offRes && Array.isArray(offRes.officials)) {
         setOfficialsList(offRes.officials);
@@ -827,14 +857,31 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     return list;
   }, [allClubsList, teams]);
 
-  // Comprehensive stadiums / venues with detailed metadata
+  // Comprehensive stadiums / venues with detailed metadata fetched from database
   const availableVenues = useMemo(() => {
-    return (venuesList || []).map((v: any, idx: number) => {
+    const list = (venuesList || []).map((v: any, idx: number) => {
       const vName = typeof v === 'string' ? v : v.name;
-      const vLoc = typeof v === 'object' ? (v.location || v.address || 'District Ground') : 'Ground';
-      const vCap = typeof v === 'object' ? (v.capacity || '') : '';
-      return { id: v.id || `VEN-${idx + 1}`, name: vName, location: vLoc, capacity: vCap };
+      const vLoc = typeof v === 'object' ? (v.location || v.address || 'Virudhunagar District') : 'Ground';
+      const vCap = typeof v === 'object' ? (v.capacity || '5,000') : '5,000';
+      const vLights = typeof v === 'object' ? (v.floodlights !== false) : true;
+      const vDesc = typeof v === 'object' ? (v.description || '') : '';
+      return {
+        id: v.id || v._id || `VEN-${idx + 1}`,
+        name: vName,
+        location: vLoc,
+        capacity: vCap,
+        floodlights: vLights,
+        description: vDesc
+      };
     });
+
+    if (list.length === 0) {
+      return [
+        { id: 'VEN-01', name: 'Kamarajar District Stadium', location: 'Virudhunagar Central', capacity: 8000, floodlights: true, description: 'Main association championship ground.' },
+        { id: 'VEN-02', name: 'Sivakasi Cricket Ground', location: 'Sivakasi Bypass', capacity: 4000, floodlights: true, description: 'Premium turf pitch facility.' }
+      ];
+    }
+    return list;
   }, [venuesList]);
 
   // Dynamic Time Delay calculator for Weather / Rain adjustments
@@ -886,10 +933,57 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       });
     }
 
+    if (list.length === 0) {
+      return [
+        {
+          id: 'T-2026-VPL',
+          name: 'Virudhunagar Premier League 2026',
+          season: '2026',
+          format: 'T20',
+          clubsCount: 16,
+          status: 'Active'
+        },
+        {
+          id: 'T-2026-U19',
+          name: 'District Under-19 Championship',
+          season: '2026',
+          format: 'ODI',
+          clubsCount: 12,
+          status: 'Active'
+        },
+        {
+          id: 'T-2026-SUPER8',
+          name: 'Kamarajar Memorial Knockout Trophy 2026',
+          season: '2026',
+          format: 'T20',
+          clubsCount: 8,
+          status: 'Active'
+        }
+      ];
+    }
+
     return list;
   }, [tournamentsList]);
 
   const handleOpenScheduleModal = (matchToEdit: any | null = null) => {
+    // Dynamically fetch and refresh latest tournaments from database
+    ScorerApi.getTournaments().then((res: any) => {
+      const list = Array.isArray(res)
+        ? res
+        : (Array.isArray(res?.tournaments)
+          ? res.tournaments
+          : (Array.isArray(res?.data) ? res.data : []));
+      if (list && list.length > 0) {
+        setTournamentsList(list);
+      }
+    }).catch(() => {});
+    ScorerApi.getVenues().then((res: any) => {
+      const vList = Array.isArray(res) ? res : (Array.isArray(res?.venues) ? res.venues : []);
+      if (vList && vList.length > 0) {
+        setVenuesList(vList);
+      }
+    }).catch(() => {});
+
     setScheduleFormError(null);
     setScheduleStep(1);
     setScheduleModalMinimized(false);
@@ -905,6 +999,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     setTeamSearchQueryB('');
     setVenueSearchQuery('');
 
+    const slot = getDefaultScheduleDateTime();
+
     if (matchToEdit) {
       setEditingMatch(matchToEdit);
       const tourName = matchToEdit.tournament_name || 'Virudhunagar Premier League 2026';
@@ -918,8 +1014,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         team_b_name: matchToEdit.team_b_name || matchToEdit.team_b_id || '',
         venue: matchToEdit.venue || '',
         venue_maps_url: matchToEdit.venue_maps_url || (matchToEdit.venue ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(matchToEdit.venue)}` : ''),
-        match_date: matchToEdit.match_date || new Date().toISOString().split('T')[0],
-        match_time: matchToEdit.match_time || '09:30 AM',
+        match_date: matchToEdit.match_date || slot.date,
+        match_time: matchToEdit.match_time || slot.time,
         match_type: matchToEdit.match_type || 'T20',
         overs: matchToEdit.overs_per_side || 20,
         assigned_scorer_id: matchToEdit.assigned_scorer_id || '',
@@ -955,8 +1051,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         team_b_name: defaultTeamBName,
         venue: venuesList[0]?.name || '',
         venue_maps_url: '',
-        match_date: new Date().toISOString().split('T')[0],
-        match_time: '09:30 AM',
+        match_date: slot.date,
+        match_time: slot.time,
         match_type: 'T20',
         overs: 20,
         assigned_scorer_id: defaultScorer,
@@ -1099,18 +1195,16 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       );
       return;
     }
-    if (!match_date || !match_date.trim()) {
-      setScheduleFormError('Please enter a valid match date (YYYY-MM-DD).');
-      await showWarning('Complete Required Fields', 'Please enter a valid match date (YYYY-MM-DD).');
-      return;
-    }
-    if (!match_time || !match_time.trim()) {
-      setScheduleFormError('Please enter match start time.');
-      await showWarning('Complete Required Fields', 'Please enter match start time.');
+    const dtValidation = validateScheduleDateTime(match_date, match_time);
+    if (!dtValidation.isValid) {
+      setScheduleStep(3);
+      setScheduleFormError(dtValidation.error || 'Invalid match schedule date or time.');
+      await showWarning('Invalid Date / Time', dtValidation.error || 'Matches must be scheduled for future dates and times.');
       return;
     }
 
-    const cleanDate = match_date.trim();
+    const cleanDate = dtValidation.cleanDate;
+    const cleanTime = dtValidation.parsedTime?.formatted12 || match_time.trim();
     const normalizeDate = (dStr: string) => (dStr ? dStr.split('T')[0].trim() : '');
     const teamAName = availableTeams.find(t => t.id === team_a_id)?.name || team_a_id;
     const teamBName = availableTeams.find(t => t.id === team_b_id)?.name || team_b_id;
@@ -1314,6 +1408,101 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       await showError('Cancellation Error', err.message || 'Failed to cancel match.');
     } finally {
       setIsCancellingMatch(false);
+    }
+  };
+
+  const handleConfirmPostponeMatch = async () => {
+    if (!postponeMatchModal) return;
+    if (!postponeReasonInput.trim()) {
+      await showError('Postponement Reason Required', 'Please enter a valid reason for postponing the match.');
+      return;
+    }
+    setIsPostponingMatch(true);
+    try {
+      await ScorerApi.postponeMatch(postponeMatchModal.id, postponeReasonInput.trim());
+      showNotification(`✓ Match ${postponeMatchModal.id} has been POSTPONED.`);
+      await showSuccess(
+        'Match Postponed',
+        `Match fixture ${postponeMatchModal.id} has been marked as POSTPONED. Teams, scorers, and umpires have been notified.`
+      );
+      setPostponeMatchModal(null);
+      await loadMatchesAndLogistics();
+    } catch (err: any) {
+      await showError('Postponement Failed', err.message || 'Failed to postpone match.');
+    } finally {
+      setIsPostponingMatch(false);
+    }
+  };
+
+  const handleOpenRescheduleModal = (m: any) => {
+    setRescheduleModalMatch({
+      id: m.id,
+      teamA: m.team_a_name || m.team_a_id,
+      teamB: m.team_b_name || m.team_b_id,
+      date: m.match_date || getFutureDateKolkata(1),
+      time: m.match_time || '09:30 AM',
+      venue: m.venue || 'District Stadium'
+    });
+    setRescheduleDateInput(getFutureDateKolkata(1));
+    setRescheduleTimeInput(m.match_time || '09:30 AM');
+    setRescheduleReasonInput(m.postponement?.reason ? `Rescheduled after: ${m.postponement.reason}` : 'Rescheduled fixture');
+    setRescheduleErrors({});
+  };
+
+  const handleConfirmRescheduleMatch = async () => {
+    if (!rescheduleModalMatch) return;
+    const validation = validateScheduleDateTime(rescheduleDateInput, rescheduleTimeInput);
+    if (!validation.isValid) {
+      setRescheduleErrors({
+        dateError: validation.dateError,
+        timeError: validation.timeError
+      });
+      return;
+    }
+    setRescheduleErrors({});
+    setIsReschedulingMatch(true);
+    try {
+      await ScorerApi.rescheduleMatch(
+        rescheduleModalMatch.id,
+        rescheduleDateInput.trim(),
+        rescheduleTimeInput.trim(),
+        rescheduleReasonInput.trim()
+      );
+      showNotification(`✓ Match ${rescheduleModalMatch.id} rescheduled to ${rescheduleDateInput}.`);
+      await showSuccess(
+        'Match Rescheduled',
+        `Match fixture ${rescheduleModalMatch.id} is now scheduled for ${rescheduleDateInput} at ${rescheduleTimeInput}.`
+      );
+      setRescheduleModalMatch(null);
+      await loadMatchesAndLogistics();
+    } catch (err: any) {
+      setRescheduleErrors({ generalError: err.message || 'Failed to reschedule match.' });
+      await showError('Rescheduling Failed', err.message || 'Failed to reschedule match.');
+    } finally {
+      setIsReschedulingMatch(false);
+    }
+  };
+
+  const handleReviewUmpirePostponement = async (matchId: string, decision: 'APPROVE' | 'REJECT') => {
+    const confirmed = await showConfirm(
+      `${decision === 'APPROVE' ? 'Approve' : 'Reject'} Postponement Request?`,
+      `Are you sure you want to ${decision === 'APPROVE' ? 'approve this postponement request and mark the match as postponed' : 'reject this postponement request'}?`,
+      decision === 'APPROVE' ? 'Yes, Approve' : 'Yes, Reject',
+      'Cancel',
+      decision === 'APPROVE' ? 'info' : 'warning'
+    );
+    if (!confirmed) return;
+    try {
+      await ScorerApi.reviewPostponementRequest(
+        matchId,
+        decision,
+        decision === 'APPROVE' ? 'Approved by Admin' : 'Rejected by Admin'
+      );
+      showNotification(`✓ Postponement request ${decision === 'APPROVE' ? 'APPROVED' : 'REJECTED'}.`);
+      await showSuccess('Review Completed', `The postponement request has been ${decision.toLowerCase()}d.`);
+      await loadMatchesAndLogistics();
+    } catch (err: any) {
+      await showError('Review Failed', err.message || 'Failed to review postponement request.');
     }
   };
 
@@ -1578,6 +1767,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       else if (matchFilter === 'LIVE') matchStatusFilter = statusUpper === 'LIVE' || statusUpper === 'INNINGS_BREAK';
       else if (matchFilter === 'COMPLETED') matchStatusFilter = statusUpper === 'COMPLETED';
       else if (matchFilter === 'CANCELLED') matchStatusFilter = statusUpper === 'CANCELLED' || statusUpper === 'ABANDONED';
+      else if (matchFilter === 'POSTPONED') matchStatusFilter = statusUpper === 'POSTPONED' || !!m.postponement?.is_postponed;
+      else if (matchFilter === 'REQUESTS') matchStatusFilter = m.umpire_postponement_request?.status === 'PENDING';
 
       const q = matchSearchQuery.toLowerCase().trim();
       const matchSearch =
@@ -1607,6 +1798,16 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   const cancelledMatchesCount = useMemo(() => {
     return matchesList.filter(m => ['CANCELLED', 'ABANDONED'].includes((m.status || '').toUpperCase())).length;
   }, [matchesList]);
+
+  const postponedMatchesCount = useMemo(() => {
+    return matchesList.filter(m => (m.status || '').toUpperCase() === 'POSTPONED' || !!m.postponement?.is_postponed).length;
+  }, [matchesList]);
+
+  const pendingPostponementRequests = useMemo(() => {
+    return matchesList.filter(m => m.umpire_postponement_request?.status === 'PENDING');
+  }, [matchesList]);
+
+  const pendingPostponementCount = pendingPostponementRequests.length;
 
   // Helper for Donut Chart conic-gradient percentages
   const getDonutSegments = (approved: number, pending: number, rejected: number, total: number) => {
@@ -1769,11 +1970,15 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 Match Schedules
               </Text>
             )}
-            {!isCollapsed && scheduledMatchesCount > 0 && (
+            {!isCollapsed && pendingPostponementCount > 0 ? (
+              <View style={[styles.sidebarBadgeOrange, { backgroundColor: '#dc2626' }]}>
+                <Text style={styles.sidebarBadgeText}>⚠️ {pendingPostponementCount}</Text>
+              </View>
+            ) : (!isCollapsed && scheduledMatchesCount > 0 && (
               <View style={styles.sidebarBadgeGold}>
                 <Text style={styles.sidebarBadgeText}>{scheduledMatchesCount}</Text>
               </View>
-            )}
+            ))}
           </TouchableOpacity>
 
           {/* Tournaments Management */}
@@ -3284,6 +3489,20 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 {/* Quick Action Launchpad */}
                 <View style={styles.heroLaunchpadRow}>
                   <Text style={styles.heroLaunchpadHeading}>QUICK LAUNCHPAD:</Text>
+                  {pendingPostponementCount > 0 && (
+                    <TouchableOpacity
+                      style={[styles.btnLaunchpadOrange, { backgroundColor: '#dc2626', borderColor: '#b91c1c' }]}
+                      onPress={() => {
+                        setMatchFilter('REQUESTS');
+                        setActiveTab('schedules');
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.btnLaunchpadOrangeText, { color: '#ffffff', fontWeight: '800' }]}>
+                        ⚠️ Review Postponement Requests ({pendingPostponementCount} Pending)
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                   <TouchableOpacity
                     style={styles.btnLaunchpadOrange}
                     onPress={() => {
@@ -3324,6 +3543,73 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   </TouchableOpacity>
                 </View>
               </View>
+
+              {/* URGENT POSTPONEMENT REQUESTS BANNER (OVERVIEW) */}
+              {pendingPostponementCount > 0 && (
+                <View style={{ backgroundColor: '#fff1f2', borderColor: '#f43f5e', borderWidth: 1.5, borderRadius: 12, padding: 18 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#ffe4e6', alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ fontSize: 18 }}>⚠️</Text>
+                      </View>
+                      <View>
+                        <Text style={{ color: '#9f1239', fontWeight: '800', fontSize: 15, letterSpacing: 0.3 }}>
+                          ACTION REQUIRED: {pendingPostponementCount} UMPIRE POSTPONEMENT REQUEST{pendingPostponementCount > 1 ? 'S' : ''} PENDING
+                        </Text>
+                        <Text style={{ color: '#be123c', fontSize: 12, marginTop: 1 }}>
+                          Assigned Umpires have submitted official postponement requests awaiting your approval.
+                        </Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#e11d48', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 6 }}
+                      onPress={() => {
+                        setMatchFilter('REQUESTS');
+                        setActiveTab('schedules');
+                      }}
+                    >
+                      <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>View in Schedules →</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {pendingPostponementRequests.map(m => (
+                    <View key={m.id} style={{ backgroundColor: '#ffffff', borderRadius: 8, padding: 14, marginTop: 8, borderColor: '#fecdd3', borderWidth: 1 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                        <View style={{ flex: 1, minWidth: 220 }}>
+                          <Text style={{ fontWeight: '700', fontSize: 14, color: '#1e293b' }}>
+                            {m.team_a_name || m.team_a_id} vs {m.team_b_name || m.team_b_id} (Match #{m.id})
+                          </Text>
+                          <Text style={{ color: '#64748b', fontSize: 12, marginTop: 2 }}>
+                            📅 {m.match_date} at {m.match_time || '09:30 AM'} • 📍 {m.venue || 'District Stadium'}
+                          </Text>
+                          <Text style={{ color: '#9f1239', fontSize: 12, fontWeight: '600', marginTop: 4 }}>
+                            Requested by: {m.umpire_postponement_request?.umpire_name || 'Assigned Umpire'}
+                          </Text>
+                          <Text style={{ color: '#881337', fontSize: 12, fontStyle: 'italic', marginTop: 1 }}>
+                            Reason: "{m.umpire_postponement_request?.reason}"
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                          <TouchableOpacity
+                            style={{ backgroundColor: '#16a34a', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6 }}
+                            onPress={() => handleReviewUmpirePostponement(m.id, 'APPROVE')}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>✓ Approve & Postpone</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={{ backgroundColor: '#dc2626', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6 }}
+                            onPress={() => handleReviewUmpirePostponement(m.id, 'REJECT')}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>✕ Reject</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
 
               {/* 2. FOUR DISTINCT SECTOR HUB CARDS */}
               <View style={[styles.overviewHubsGrid, { flexDirection: isDesktop ? 'row' : 'column' }]}>
@@ -3854,6 +4140,23 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   ) : null}
                 </View>
 
+                {/* Urgent Pending Postponements Banner in Schedules */}
+                {pendingPostponementCount > 0 && (
+                  <View style={{ backgroundColor: '#fff1f2', borderColor: '#f43f5e', borderWidth: 1.5, borderRadius: 10, padding: 12, marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                      <Text style={{ color: '#9f1239', fontWeight: '800', fontSize: 13 }}>
+                        ⚠️ {pendingPostponementCount} Umpire Postponement Request(s) Awaiting Admin Decision
+                      </Text>
+                      <TouchableOpacity
+                        style={{ backgroundColor: '#e11d48', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 4 }}
+                        onPress={() => setMatchFilter('REQUESTS')}
+                      >
+                        <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 11 }}>Filter Requests</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
                 {/* Status Filter Pills with distinctive colors */}
                 <View style={styles.filterPillsRow}>
                   <TouchableOpacity
@@ -3864,6 +4167,17 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       All ({matchesList.length})
                     </Text>
                   </TouchableOpacity>
+
+                  {pendingPostponementCount > 0 && (
+                    <TouchableOpacity
+                      style={[styles.filterPill, matchFilter === 'REQUESTS' && { backgroundColor: '#fee2e2', borderColor: '#ef4444', borderWidth: 1.5 }]}
+                      onPress={() => setMatchFilter('REQUESTS')}
+                    >
+                      <Text style={[styles.filterPillText, { color: '#b91c1c', fontWeight: '800' }]}>
+                        ⚠️ Requests ({pendingPostponementCount})
+                      </Text>
+                    </TouchableOpacity>
+                  )}
 
                   <TouchableOpacity
                     style={[styles.filterPill, matchFilter === 'SCHEDULED' && styles.filterPillActiveScheduled]}
@@ -3898,6 +4212,15 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   >
                     <Text style={[styles.filterPillText, matchFilter === 'CANCELLED' && styles.filterPillTextActiveCancelled]}>
                       ✕ Cancelled ({cancelledMatchesCount})
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.filterPill, matchFilter === 'POSTPONED' && { backgroundColor: '#fef3c7', borderColor: '#f59e0b', borderWidth: 1 }]}
+                    onPress={() => setMatchFilter('POSTPONED')}
+                  >
+                    <Text style={[styles.filterPillText, matchFilter === 'POSTPONED' && { color: '#b45309', fontWeight: '700' }]}>
+                      ⏸️ Postponed ({postponedMatchesCount})
                     </Text>
                   </TouchableOpacity>
 
@@ -3941,6 +4264,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     const isLive = statusUpper === 'LIVE' || statusUpper === 'INNINGS_BREAK';
                     const isCompleted = statusUpper === 'COMPLETED';
                     const isCancelled = statusUpper === 'CANCELLED' || statusUpper === 'ABANDONED';
+                    const isPostponed = statusUpper === 'POSTPONED' || !!m.postponement?.is_postponed;
 
                     return (
                       <View
@@ -3950,7 +4274,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           isLive && styles.matchCardLive,
                           isScheduled && styles.matchCardScheduled,
                           isCompleted && styles.matchCardCompleted,
-                          isCancelled && styles.matchCardCancelled
+                          isCancelled && styles.matchCardCancelled,
+                          isPostponed && { borderColor: '#f59e0b', backgroundColor: '#fffdf5' }
                         ]}
                       >
                         {/* Top Header Row */}
@@ -3961,9 +4286,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               isLive && { backgroundColor: '#ef4444' },
                               isScheduled && { backgroundColor: '#2563eb' },
                               isCompleted && { backgroundColor: '#10b981' },
-                              isCancelled && { backgroundColor: '#64748b' }
+                              isCancelled && { backgroundColor: '#64748b' },
+                              isPostponed && { backgroundColor: '#f59e0b' }
                             ]}>
-                              <Text style={styles.itemCrestText}>{isLive ? '🔴' : '🏏'}</Text>
+                              <Text style={styles.itemCrestText}>{isLive ? '🔴' : (isPostponed ? '⏸️' : '🏏')}</Text>
                             </View>
                             <View style={styles.itemTitleCol}>
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -3985,6 +4311,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                             {isScheduled && (
                               <View style={[styles.statusBadge, styles.badgeScheduled]}>
                                 <Text style={styles.badgeScheduledText}>📅 SCHEDULED</Text>
+                              </View>
+                            )}
+                            {isPostponed && (
+                              <View style={[styles.statusBadge, { backgroundColor: '#fef3c7', borderColor: '#f59e0b', borderWidth: 1 }]}>
+                                <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 11 }}>⏸️ POSTPONED</Text>
                               </View>
                             )}
                             {isLive && (
@@ -4034,10 +4365,64 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           <View style={styles.metaCell}>
                             <Text style={styles.metaLabel}>Current Status</Text>
                             <Text style={styles.metaVal}>
-                              {isLive ? 'Scorecard Active' : (isCompleted ? 'Finalized' : (isCancelled ? 'Cancelled' : 'Awaiting Toss'))}
+                              {isLive ? 'Scorecard Active' : (isCompleted ? 'Finalized' : (isCancelled ? 'Cancelled' : (isPostponed ? 'Postponed' : 'Awaiting Toss')))}
                             </Text>
                           </View>
                         </View>
+
+                        {/* Postponement Information Banner */}
+                        {isPostponed && (
+                          <View style={{ backgroundColor: '#fffbeb', borderColor: '#fcd34d', borderWidth: 1, borderRadius: 8, padding: 10, marginTop: 10 }}>
+                            <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 12 }}>
+                              ⏸️ Match Postponed: {m.postponement?.reason || 'Reason not specified'}
+                            </Text>
+                            {m.postponement?.original_date && (
+                              <Text style={{ color: '#78350f', fontSize: 11, marginTop: 3 }}>
+                                Original Schedule: {m.postponement.original_date} • {m.postponement.original_time || '09:30 AM'}
+                              </Text>
+                            )}
+                            {m.postponement?.rescheduled_date ? (
+                              <Text style={{ color: '#15803d', fontSize: 11, fontWeight: '700', marginTop: 3 }}>
+                                📅 Rescheduled Date: {m.postponement.rescheduled_date} • {m.postponement.rescheduled_time || '09:30 AM'}
+                              </Text>
+                            ) : (
+                              <Text style={{ color: '#92400e', fontSize: 11, fontStyle: 'italic', marginTop: 3 }}>
+                                ⏳ Pending Reschedule: Please click "Reschedule Match" below to set a new date and time.
+                              </Text>
+                            )}
+                          </View>
+                        )}
+
+                        {/* Umpire Postponement Request Banner */}
+                        {m.umpire_postponement_request?.status === 'PENDING' && (
+                          <View style={{ backgroundColor: '#fef2f2', borderColor: '#fca5a5', borderWidth: 1, borderRadius: 8, padding: 10, marginTop: 10 }}>
+                            <Text style={{ color: '#991b1b', fontWeight: '700', fontSize: 12 }}>
+                              ⚠️ Umpire Postponement Request Pending Review
+                            </Text>
+                            <Text style={{ color: '#7f1d1d', fontSize: 11, marginTop: 3 }}>
+                              Submitted by: <Text style={{ fontWeight: '600' }}>{m.umpire_postponement_request.umpire_name || 'Assigned Umpire'}</Text>
+                            </Text>
+                            <Text style={{ color: '#991b1b', fontSize: 11, marginTop: 2 }}>
+                              Reason: {m.umpire_postponement_request.reason}
+                            </Text>
+                            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                              <TouchableOpacity
+                                style={{ backgroundColor: '#16a34a', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
+                                onPress={() => handleReviewUmpirePostponement(m.id, 'APPROVE')}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>✓ Approve & Postpone</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={{ backgroundColor: '#dc2626', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
+                                onPress={() => handleReviewUmpirePostponement(m.id, 'REJECT')}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>✕ Reject</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        )}
 
                         {/* Result / Score Note if present */}
                         {m.result_summary && (
@@ -4063,7 +4448,24 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 onPress={() => handleOpenScheduleModal(m)}
                                 activeOpacity={0.8}
                               >
-                                <Text style={styles.btnOutlineEditText}>✏️ Edit / Reschedule</Text>
+                                <Text style={styles.btnOutlineEditText}>✏️ Edit</Text>
+                              </TouchableOpacity>
+
+                              <TouchableOpacity
+                                style={[styles.btnOutlineEdit, { borderColor: '#d97706', backgroundColor: '#fffbeb' }]}
+                                onPress={() => {
+                                  setPostponeMatchModal({
+                                    id: m.id,
+                                    teamA: m.team_a_name || m.team_a_id,
+                                    teamB: m.team_b_name || m.team_b_id,
+                                    date: m.match_date,
+                                    time: m.match_time || '09:30 AM'
+                                  });
+                                  setPostponeReasonInput('Inclement weather / ground condition unplayable');
+                                }}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={[styles.btnOutlineEditText, { color: '#d97706', fontWeight: '700' }]}>⏸️ Postpone</Text>
                               </TouchableOpacity>
 
                               <TouchableOpacity
@@ -4071,7 +4473,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 onPress={() => setCancelMatchModal({ id: m.id, teamA: m.team_a_name || m.team_a_id, teamB: m.team_b_name || m.team_b_id })}
                                 activeOpacity={0.8}
                               >
-                                <Text style={styles.btnOutlineDangerText}>🚫 Cancel Match</Text>
+                                <Text style={styles.btnOutlineDangerText}>🚫 Cancel</Text>
                               </TouchableOpacity>
 
                               <TouchableOpacity
@@ -4080,6 +4482,34 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 activeOpacity={0.8}
                               >
                                 <Text style={styles.btnOutlineDeleteText}>🗑 Delete</Text>
+                              </TouchableOpacity>
+                            </>
+                          )}
+
+                          {isPostponed && (
+                            <>
+                              <TouchableOpacity
+                                style={[styles.btnOutlineEdit, { borderColor: '#0284c7', backgroundColor: '#e0f2fe' }]}
+                                onPress={() => handleOpenRescheduleModal(m)}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={[styles.btnOutlineEditText, { color: '#0284c7', fontWeight: '700' }]}>📅 Reschedule Match</Text>
+                              </TouchableOpacity>
+
+                              <TouchableOpacity
+                                style={styles.btnOutlineDanger}
+                                onPress={() => setCancelMatchModal({ id: m.id, teamA: m.team_a_name || m.team_a_id, teamB: m.team_b_name || m.team_b_id })}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={styles.btnOutlineDangerText}>🚫 Cancel</Text>
+                              </TouchableOpacity>
+
+                              <TouchableOpacity
+                                style={styles.btnOutlineDelete}
+                                onPress={() => handleDeleteMatch(m.id)}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={styles.btnOutlineDeleteText}>🗑 Delete Fixture</Text>
                               </TouchableOpacity>
                             </>
                           )}
@@ -4643,81 +5073,84 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     </View>
                   </View>
 
-                  {/* Searchable Tournament Dropdown / Selector */}
+                  {/* Tournament Dropdown from Database */}
                   <View style={{ marginTop: 14 }}>
-                    <Text style={styles.formFieldLabel}>Tournament Name *</Text>
-                    <View style={styles.tournamentInputWrap}>
-                      <Text style={styles.inputPrefixIcon}>🏆</Text>
-                      <TextInput
-                        style={styles.tournamentTextInput}
-                        placeholder="Search or type tournament name (e.g. Virudhunagar Premier League 2026)..."
-                        placeholderTextColor="#94a3b8"
-                        value={scheduleForm.tournament_name}
-                        onChangeText={(val) => {
-                          setScheduleForm({
-                            ...scheduleForm,
-                            tournament_name: val,
-                            tournament_id: val ? val.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 24) : 'T-CUSTOM'
-                          });
+                    <Text style={styles.formFieldLabel}>Select Tournament</Text>
+                    {Platform.OS === 'web' ? (
+                      <select
+                        aria-label="Select Tournament"
+                        value={availableTournaments.some(t => t.name === scheduleForm.tournament_name) ? scheduleForm.tournament_name : ''}
+                        onChange={(e: any) => {
+                          const val = e.target.value;
+                          const found = availableTournaments.find(t => t.name === val || t.id === val);
+                          if (found) {
+                            setScheduleForm(prev => ({
+                              ...prev,
+                              tournament_id: found.id,
+                              tournament_name: found.name
+                            }));
+                            setCustomTournamentInput(found.name);
+                            setScheduleFormError(null);
+                          }
                         }}
-                      />
-                      {scheduleForm.tournament_name ? (
-                        <TouchableOpacity
-                          onPress={() => setScheduleForm({ ...scheduleForm, tournament_name: '', tournament_id: 'T-CUSTOM' })}
-                          style={{ padding: 6 }}
-                        >
-                          <Text style={{ color: '#94a3b8', fontSize: 15 }}>✕</Text>
-                        </TouchableOpacity>
-                      ) : null}
-                    </View>
-                  </View>
+                        style={{
+                          padding: '10px 14px',
+                          fontSize: 13.5,
+                          fontWeight: '600',
+                          borderRadius: 8,
+                          border: '1.5px solid #cbd5e1',
+                          backgroundColor: '#ffffff',
+                          color: '#0f172a',
+                          width: '100%',
+                          outline: 'none',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <option value="" disabled>Select Tournament</option>
+                        {availableTournaments.map((t) => (
+                          <option key={t.id} value={t.name}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <TouchableOpacity
+                        style={[styles.dropdownTriggerCompact, { paddingVertical: 10, paddingHorizontal: 12 }]}
+                        onPress={() => setTournamentDropdownOpen(!tournamentDropdownOpen)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: scheduleForm.tournament_name ? '#0f172a' : '#94a3b8' }}>
+                          {scheduleForm.tournament_name || 'Select Tournament'}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: '#64748b' }}>{tournamentDropdownOpen ? '▲' : '▼'}</Text>
+                      </TouchableOpacity>
+                    )}
 
-                  {/* Registered Tournaments Quick Selection Grid */}
-                  <View style={{ marginTop: 14 }}>
-                    <Text style={styles.compactSubHeading}>Available Tournaments</Text>
-                    <View style={styles.tournamentsGrid}>
-                      {availableTournaments.map((t) => {
-                        const isSelected = (scheduleForm.tournament_name || '').toLowerCase() === t.name.toLowerCase();
-                        return (
-                          <TouchableOpacity
-                            key={t.id}
-                            style={[styles.tournamentCard, isSelected && styles.tournamentCardSelected]}
-                            onPress={() => {
-                              setScheduleForm({
-                                ...scheduleForm,
-                                tournament_name: t.name,
-                                tournament_id: t.id
-                              });
-                              setScheduleFormError(null);
-                            }}
-                            activeOpacity={0.8}
-                          >
-                            <View style={styles.tournamentCardHeader}>
-                              <Text style={styles.tournamentCardIcon}>🏆</Text>
-                              <View style={{ flex: 1 }}>
-                                <Text style={[styles.tournamentCardTitle, isSelected && styles.tournamentCardTitleActive]}>
-                                  {t.name}
-                                </Text>
-                                <Text style={styles.tournamentCardSeason}>{t.season} • {t.format}</Text>
-                              </View>
-                              {isSelected ? (
-                                <View style={styles.tournamentCheckBadge}>
-                                  <Text style={styles.tournamentCheckBadgeText}>✓</Text>
-                                </View>
-                              ) : null}
-                            </View>
-                            <View style={styles.tournamentCardFooter}>
-                              <Text style={styles.tournamentClubCountText}>
-                                👥 {t.clubsCount} Registered Clubs
-                              </Text>
-                              <View style={[styles.tournamentStatusPill, t.status === 'Active' ? styles.statusActivePill : styles.statusUpcomingPill]}>
-                                <Text style={styles.tournamentStatusText}>{t.status}</Text>
-                              </View>
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
+                    {tournamentDropdownOpen && (
+                      <View style={[styles.dropdownTablePanelCompact, { marginTop: 6 }]}>
+                        <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
+                          {availableTournaments.map(t => (
+                            <TouchableOpacity
+                              key={t.id}
+                              style={styles.dropdownTableRowCompact}
+                              onPress={() => {
+                                setScheduleForm(prev => ({
+                                  ...prev,
+                                  tournament_id: t.id,
+                                  tournament_name: t.name
+                                }));
+                                setCustomTournamentInput(t.name);
+                                setTournamentDropdownOpen(false);
+                                setScheduleFormError(null);
+                              }}
+                            >
+                              <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>{t.name}</Text>
+                              <Text style={{ fontSize: 11, color: '#64748b' }}>{t.format} • {t.season}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    )}
                   </View>
 
                   {/* Dynamic Registered Teams Preview for Selected Tournament */}
@@ -4941,7 +5374,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   {/* Venue and Stadium Selection with Google Maps Integration */}
                   <View style={[styles.colFormCard, { marginTop: 14 }]}>
                     <View style={styles.fieldLabelRow}>
-                      <Text style={styles.formFieldLabel}>Match Venue / Ground *</Text>
+                      <Text style={styles.formFieldLabel}>Select Ground</Text>
                       {scheduleForm.venue ? (
                         <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, borderWidth: 1, borderColor: '#a7f3d0' }}>
                           <Text style={{ fontSize: 11, color: '#059669', fontWeight: '700' }}>✓ Location Set</Text>
@@ -4949,10 +5382,92 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       ) : null}
                     </View>
 
-                    {/* Editable Ground Name Input */}
+                    {/* Ground / Venue Selection Dropdown from Database */}
+                    {Platform.OS === 'web' ? (
+                      <select
+                        aria-label="Select Ground"
+                        value={availableVenues.some(v => v.name === scheduleForm.venue) ? scheduleForm.venue : (scheduleForm.venue ? '__custom__' : '')}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '__custom__') return;
+                          const found = availableVenues.find(v => v.name === val);
+                          const groundName = found ? found.name : val;
+                          const mapsLoc = found && found.location ? `${found.name} ${found.location}` : groundName;
+                          setScheduleForm(prev => ({
+                            ...prev,
+                            venue: groundName,
+                            venue_maps_url: groundName ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsLoc)}` : ''
+                          }));
+                          setScheduleFormError(null);
+                        }}
+                        style={{
+                          padding: '10px 14px',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          borderRadius: '8px',
+                          border: '1.5px solid #cbd5e1',
+                          backgroundColor: '#ffffff',
+                          color: '#0f172a',
+                          width: '100%',
+                          outline: 'none',
+                          cursor: 'pointer',
+                          marginBottom: 8
+                        }}
+                      >
+                        <option value="" disabled>Select Ground</option>
+                        {availableVenues.map((v) => (
+                          <option key={v.id} value={v.name}>
+                            {v.name}
+                          </option>
+                        ))}
+                        {scheduleForm.venue && !availableVenues.some(v => v.name === scheduleForm.venue) && (
+                          <option value="__custom__">
+                            Custom: {scheduleForm.venue}
+                          </option>
+                        )}
+                      </select>
+                    ) : (
+                      <TouchableOpacity
+                        style={[styles.dropdownTriggerCompact, { paddingVertical: 10, paddingHorizontal: 12, marginBottom: 8 }]}
+                        onPress={() => setVenueDropdownOpen(!venueDropdownOpen)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: scheduleForm.venue ? '#0f172a' : '#94a3b8' }}>
+                          {scheduleForm.venue || 'Select Ground'}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: '#64748b' }}>{venueDropdownOpen ? '▲' : '▼'}</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {venueDropdownOpen && (
+                      <View style={[styles.dropdownTablePanelCompact, { marginBottom: 8 }]}>
+                        <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
+                          {availableVenues.map(v => (
+                            <TouchableOpacity
+                              key={v.id}
+                              style={styles.dropdownTableRowCompact}
+                              onPress={() => {
+                                setScheduleForm(prev => ({
+                                  ...prev,
+                                  venue: v.name,
+                                  venue_maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.name + ' ' + (v.location || ''))}`
+                                }));
+                                setVenueDropdownOpen(false);
+                                setScheduleFormError(null);
+                              }}
+                            >
+                              <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>{v.name}</Text>
+                              <Text style={{ fontSize: 11, color: '#64748b' }}>{v.location} • {v.capacity}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    )}
+
+                    {/* Editable / Custom Ground Name Input */}
                     <TextInput
                       style={styles.formTextInputCompact}
-                      placeholder="Type ground name (e.g. The Arasan Turf Court, Sivakasi)..."
+                      placeholder="Or enter custom ground name if not in list..."
                       placeholderTextColor="#94a3b8"
                       value={scheduleForm.venue}
                       onChangeText={(val) => {
@@ -4996,43 +5511,46 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       ) : null}
                     </View>
 
-                    {/* Dropdown for registered venues if any exist */}
-                    {availableVenues.length > 0 && (
-                      <View style={{ marginTop: 8 }}>
-                        <TouchableOpacity
-                          style={styles.dropdownToggleSmall}
-                          onPress={() => setVenueDropdownOpen(!venueDropdownOpen)}
-                        >
-                          <Text style={styles.dropdownToggleSmallText}>
-                            {venueDropdownOpen ? '▲ Hide Registered Venues' : '▼ Pick from Registered Venues'}
-                          </Text>
-                        </TouchableOpacity>
-                        {venueDropdownOpen && (
-                          <View style={styles.dropdownTablePanelCompact}>
-                            <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
-                              {availableVenues.map(v => (
-                                <TouchableOpacity
-                                  key={v.id}
-                                  style={styles.dropdownTableRowCompact}
-                                  onPress={() => {
-                                    setScheduleForm(prev => ({
-                                      ...prev,
-                                      venue: v.name,
-                                      venue_maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.name + ' ' + (v.location || ''))}`
-                                    }));
-                                    setVenueDropdownOpen(false);
-                                    setScheduleFormError(null);
-                                  }}
-                                >
-                                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>📍 {v.name}</Text>
-                                  <Text style={{ fontSize: 11, color: '#64748b' }}>{v.location} • {v.capacity}</Text>
-                                </TouchableOpacity>
-                              ))}
-                            </ScrollView>
+                    {/* Database Ground Details Card */}
+                    {(() => {
+                      const matchedVenue = availableVenues.find(v => v.name === scheduleForm.venue);
+                      if (!matchedVenue) return null;
+                      return (
+                        <View style={{
+                          marginTop: 10,
+                          padding: 10,
+                          backgroundColor: '#f8fafc',
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: '#cbd5e1'
+                        }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>
+                              🏟️ {matchedVenue.name}
+                            </Text>
+                            <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#a7f3d0' }}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>✓ Database Ground</Text>
+                            </View>
                           </View>
-                        )}
-                      </View>
-                    )}
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 6 }}>
+                            <Text style={{ fontSize: 12, color: '#475569' }}>
+                              📍 Location: <Text style={{ fontWeight: '600', color: '#1e293b' }}>{matchedVenue.location}</Text>
+                            </Text>
+                            <Text style={{ fontSize: 12, color: '#475569' }}>
+                              👥 Capacity: <Text style={{ fontWeight: '600', color: '#1e293b' }}>{matchedVenue.capacity} spectators</Text>
+                            </Text>
+                            <Text style={{ fontSize: 12, color: '#475569' }}>
+                              💡 Floodlights: <Text style={{ fontWeight: '600', color: '#1e293b' }}>{matchedVenue.floodlights ? 'Available (Day/Night)' : 'Day Only'}</Text>
+                            </Text>
+                          </View>
+                          {matchedVenue.description ? (
+                            <Text style={{ fontSize: 11.5, color: '#64748b', marginTop: 4, fontStyle: 'italic' }}>
+                              {matchedVenue.description}
+                            </Text>
+                          ) : null}
+                        </View>
+                      );
+                    })()}
                   </View>
                 </View>
               )}
@@ -5058,48 +5576,73 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   <View style={styles.twoColFormGrid}>
                     <View style={styles.colFormCard}>
                       <Text style={styles.formFieldLabel}>Match Date (YYYY-MM-DD) *</Text>
-                      <TextInput
-                        style={styles.formTextInputCompact}
-                        placeholder="e.g. 2026-10-24"
-                        placeholderTextColor="#94a3b8"
-                        value={scheduleForm.match_date}
-                        onChangeText={(val) => setScheduleForm(prev => ({ ...prev, match_date: val }))}
-                      />
+                      {Platform.OS === 'web' ? (
+                        <input
+                          type="text"
+                          placeholder="e.g. 2026-11-09 or 09/11/2026"
+                          value={scheduleForm.match_date}
+                          onChange={(e: any) => setScheduleForm(prev => ({ ...prev, match_date: e.target.value }))}
+                          style={{
+                            padding: '8px 10px',
+                            fontSize: 13,
+                            fontWeight: '600',
+                            borderRadius: 6,
+                            border: currentDateTimeVal.dateError ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
+                            backgroundColor: '#ffffff',
+                            color: '#0f172a',
+                            width: '100%',
+                            outline: 'none',
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                      ) : (
+                        <TextInput
+                          style={[styles.formTextInputCompact, currentDateTimeVal.dateError ? { borderColor: '#dc2626', borderWidth: 1.5 } : null]}
+                          placeholder="e.g. 2026-11-09 or 09/11/2026"
+                          placeholderTextColor="#94a3b8"
+                          value={scheduleForm.match_date}
+                          onChangeText={(val) => setScheduleForm(prev => ({ ...prev, match_date: val }))}
+                        />
+                      )}
+                      {currentDateTimeVal.dateError ? (
+                        <Text style={{ fontSize: 11, color: '#dc2626', marginTop: 4, fontWeight: '600' }}>
+                          ⚠️ {currentDateTimeVal.dateError}
+                        </Text>
+                      ) : null}
                       {/* Quick Date Presets */}
                       <View style={styles.quickPresetRow}>
                         <TouchableOpacity
                           style={styles.quickDateChip}
-                          onPress={() => setScheduleForm(prev => ({ ...prev, match_date: new Date().toISOString().split('T')[0] }))}
+                          onPress={() => {
+                            const today = getTodayKolkata();
+                            const slot = getDefaultScheduleDateTime();
+                            setScheduleForm(prev => {
+                              const checkTime = validateScheduleTime(today, prev.match_time);
+                              return {
+                                ...prev,
+                                match_date: today,
+                                match_time: checkTime.isValid ? prev.match_time : slot.time
+                              };
+                            });
+                          }}
                         >
                           <Text style={styles.quickDateChipText}>Today</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.quickDateChip}
-                          onPress={() => {
-                            const d = new Date();
-                            d.setDate(d.getDate() + 1);
-                            setScheduleForm(prev => ({ ...prev, match_date: d.toISOString().split('T')[0] }));
-                          }}
+                          onPress={() => setScheduleForm(prev => ({ ...prev, match_date: getFutureDateKolkata(1) }))}
                         >
                           <Text style={styles.quickDateChipText}>Tomorrow</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.quickDateChip}
-                          onPress={() => {
-                            const d = new Date();
-                            d.setDate(d.getDate() + 3);
-                            setScheduleForm(prev => ({ ...prev, match_date: d.toISOString().split('T')[0] }));
-                          }}
+                          onPress={() => setScheduleForm(prev => ({ ...prev, match_date: getFutureDateKolkata(3) }))}
                         >
                           <Text style={styles.quickDateChipText}>+3 Days</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.quickDateChip}
-                          onPress={() => {
-                            const d = new Date();
-                            d.setDate(d.getDate() + 7);
-                            setScheduleForm(prev => ({ ...prev, match_date: d.toISOString().split('T')[0] }));
-                          }}
+                          onPress={() => setScheduleForm(prev => ({ ...prev, match_date: getFutureDateKolkata(7) }))}
                         >
                           <Text style={styles.quickDateChipText}>+1 Week</Text>
                         </TouchableOpacity>
@@ -5108,26 +5651,74 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                     <View style={styles.colFormCard}>
                       <Text style={styles.formFieldLabel}>Match Start Time *</Text>
-                      <TextInput
-                        style={styles.formTextInputCompact}
-                        placeholder="e.g. 09:30 AM"
-                        placeholderTextColor="#94a3b8"
-                        value={scheduleForm.match_time}
-                        onChangeText={(val) => setScheduleForm(prev => ({ ...prev, match_time: val }))}
-                      />
+                      {Platform.OS === 'web' ? (
+                        <input
+                          type="text"
+                          placeholder="e.g. 09:30 AM"
+                          value={scheduleForm.match_time}
+                          onChange={(e: any) => setScheduleForm(prev => ({ ...prev, match_time: e.target.value }))}
+                          style={{
+                            padding: '8px 10px',
+                            fontSize: 13,
+                            fontWeight: '600',
+                            borderRadius: 6,
+                            border: currentDateTimeVal.timeError ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
+                            backgroundColor: '#ffffff',
+                            color: '#0f172a',
+                            width: '100%',
+                            outline: 'none',
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                      ) : (
+                        <TextInput
+                          style={[styles.formTextInputCompact, currentDateTimeVal.timeError ? { borderColor: '#dc2626', borderWidth: 1.5 } : null]}
+                          placeholder="e.g. 09:30 AM"
+                          placeholderTextColor="#94a3b8"
+                          value={scheduleForm.match_time}
+                          onChangeText={(val) => setScheduleForm(prev => ({ ...prev, match_time: val }))}
+                        />
+                      )}
+                      {currentDateTimeVal.timeError ? (
+                        <Text style={{ fontSize: 11, color: '#dc2626', marginTop: 4, fontWeight: '600' }}>
+                          ⚠️ {currentDateTimeVal.timeError}
+                        </Text>
+                      ) : null}
                       {/* Quick Time Presets */}
                       <View style={styles.quickPresetRow}>
-                        {['07:00 AM', '09:30 AM', '02:00 PM', '05:30 PM'].map((tStr) => (
-                          <TouchableOpacity
-                            key={tStr}
-                            style={[styles.quickDateChip, scheduleForm.match_time === tStr && styles.quickDateChipActive]}
-                            onPress={() => setScheduleForm(prev => ({ ...prev, match_time: tStr }))}
-                          >
-                            <Text style={[styles.quickDateChipText, scheduleForm.match_time === tStr && styles.quickDateChipTextActive]}>
-                              {tStr}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
+                        {['07:00 AM', '09:30 AM', '02:00 PM', '05:30 PM'].map((tStr) => {
+                          const isPresetPast = currentDateTimeVal.isToday && (() => {
+                            const parsed = parseTimeString(tStr);
+                            const nowK = getKolkataNow();
+                            return parsed ? parsed.totalMinutes <= nowK.totalMinutes : false;
+                          })();
+                          return (
+                            <TouchableOpacity
+                              key={tStr}
+                              disabled={isPresetPast}
+                              style={[
+                                styles.quickDateChip,
+                                scheduleForm.match_time === tStr && styles.quickDateChipActive,
+                                isPresetPast ? { opacity: 0.35, backgroundColor: '#f1f5f9', borderColor: '#e2e8f0' } : null
+                              ]}
+                              onPress={() => {
+                                if (!isPresetPast) {
+                                  setScheduleForm(prev => ({ ...prev, match_time: tStr }));
+                                }
+                              }}
+                            >
+                              <Text
+                                style={[
+                                  styles.quickDateChipText,
+                                  scheduleForm.match_time === tStr && styles.quickDateChipTextActive,
+                                  isPresetPast ? { color: '#94a3b8', textDecorationLine: 'line-through' } : null
+                                ]}
+                              >
+                                {tStr}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
                       </View>
                     </View>
                   </View>
@@ -5514,9 +6105,15 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                 {scheduleStep === 3 && (
                   <TouchableOpacity
-                    style={[styles.btnPrimaryGreenCompact, isSubmittingSchedule && { opacity: 0.6 }]}
+                    style={[
+                      styles.btnPrimaryGreenCompact,
+                      (!currentDateTimeVal.isValid || isSubmittingSchedule) && {
+                        backgroundColor: '#94a3b8',
+                        opacity: 0.6
+                      }
+                    ]}
                     onPress={handleSaveSchedule}
-                    disabled={isSubmittingSchedule}
+                    disabled={isSubmittingSchedule || !currentDateTimeVal.isValid}
                     activeOpacity={0.85}
                   >
                     {isSubmittingSchedule ? (
@@ -5715,6 +6312,183 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
                   <Text style={styles.btnDangerConfirmText}>Confirm Cancellation</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ─────────────────────────────────────────────────────────────
+          13.1. POSTPONE MATCH MODAL
+          ───────────────────────────────────────────────────────────── */}
+      <Modal
+        visible={!!postponeMatchModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPostponeMatchModal(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalDialogSmall}>
+            <Text style={[styles.rejectModalHeading, { color: '#d97706' }]}>⏸️ Postpone Match Fixture</Text>
+            <Text style={styles.rejectModalSubtitle}>
+              Are you sure you want to postpone the match between{' '}
+              <Text style={{ fontWeight: '700' }}>{postponeMatchModal?.teamA}</Text> and{' '}
+              <Text style={{ fontWeight: '700' }}>{postponeMatchModal?.teamB}</Text> (ID: {postponeMatchModal?.id})?
+            </Text>
+
+            <Text style={[styles.formLabel, { marginTop: 12 }]}>Reason for Postponement *</Text>
+            <TextInput
+              style={styles.rejectInput}
+              value={postponeReasonInput}
+              onChangeText={setPostponeReasonInput}
+              multiline
+              numberOfLines={3}
+              placeholder="e.g. Inclement weather / heavy rain, waterlogged pitch, administrative decision..."
+              placeholderTextColor="#94a3b8"
+            />
+
+            <View style={styles.rejectModalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setPostponeMatchModal(null)}
+                disabled={isPostponingMatch}
+              >
+                <Text style={styles.modalCancelBtnText}>Dismiss</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btnDangerConfirm, { backgroundColor: '#d97706', borderColor: '#b45309' }, isPostponingMatch && { opacity: 0.6 }]}
+                onPress={handleConfirmPostponeMatch}
+                disabled={isPostponingMatch}
+              >
+                {isPostponingMatch ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.btnDangerConfirmText}>Confirm Postponement</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ─────────────────────────────────────────────────────────────
+          13.2. RESCHEDULE POSTPONED MATCH MODAL
+          ───────────────────────────────────────────────────────────── */}
+      <Modal
+        visible={!!rescheduleModalMatch}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRescheduleModalMatch(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalDialogSmall, { maxWidth: 520, width: '92%' }]}>
+            <Text style={[styles.rejectModalHeading, { color: '#0284c7' }]}>📅 Reschedule Match Fixture</Text>
+            <Text style={styles.rejectModalSubtitle}>
+              Reschedule fixture between{' '}
+              <Text style={{ fontWeight: '700' }}>{rescheduleModalMatch?.teamA}</Text> and{' '}
+              <Text style={{ fontWeight: '700' }}>{rescheduleModalMatch?.teamB}</Text> (ID: {rescheduleModalMatch?.id}).
+            </Text>
+
+            {rescheduleErrors.generalError && (
+              <View style={{ backgroundColor: '#fee2e2', borderColor: '#ef4444', borderWidth: 1, padding: 8, borderRadius: 6, marginVertical: 8 }}>
+                <Text style={{ color: '#b91c1c', fontSize: 12 }}>⚠️ {rescheduleErrors.generalError}</Text>
+              </View>
+            )}
+
+            <Text style={[styles.formLabel, { marginTop: 10 }]}>New Match Date (YYYY-MM-DD) *</Text>
+            <TextInput
+              style={[styles.formInput, rescheduleErrors.dateError ? { borderColor: '#ef4444' } : null]}
+              value={rescheduleDateInput}
+              onChangeText={(text) => {
+                setRescheduleDateInput(text);
+                const val = validateScheduleDate(text);
+                setRescheduleErrors(prev => ({ ...prev, dateError: val.isValid ? null : val.error }));
+              }}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#94a3b8"
+            />
+            {rescheduleErrors.dateError && (
+              <Text style={{ color: '#ef4444', fontSize: 11, marginTop: 2 }}>{rescheduleErrors.dateError}</Text>
+            )}
+
+            <View style={{ flexDirection: 'row', gap: 6, marginVertical: 6, flexWrap: 'wrap' }}>
+              {[1, 2, 3, 7].map((days) => {
+                const targetDate = getFutureDateKolkata(days);
+                return (
+                  <TouchableOpacity
+                    key={days}
+                    style={{ backgroundColor: '#f1f5f9', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 4, borderWidth: 1, borderColor: '#cbd5e1' }}
+                    onPress={() => {
+                      setRescheduleDateInput(targetDate);
+                      setRescheduleErrors(prev => ({ ...prev, dateError: null }));
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, color: '#334155' }}>+{days}d ({targetDate})</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={[styles.formLabel, { marginTop: 10 }]}>New Match Time *</Text>
+            <TextInput
+              style={[styles.formInput, rescheduleErrors.timeError ? { borderColor: '#ef4444' } : null]}
+              value={rescheduleTimeInput}
+              onChangeText={(text) => {
+                setRescheduleTimeInput(text);
+                const val = validateScheduleTime(text, rescheduleDateInput);
+                setRescheduleErrors(prev => ({ ...prev, timeError: val.isValid ? null : val.error }));
+              }}
+              placeholder="e.g. 09:30 AM"
+              placeholderTextColor="#94a3b8"
+            />
+            {rescheduleErrors.timeError && (
+              <Text style={{ color: '#ef4444', fontSize: 11, marginTop: 2 }}>{rescheduleErrors.timeError}</Text>
+            )}
+
+            <View style={{ flexDirection: 'row', gap: 6, marginVertical: 6, flexWrap: 'wrap' }}>
+              {['07:00 AM', '09:30 AM', '01:30 PM', '04:30 PM'].map((slot) => (
+                <TouchableOpacity
+                  key={slot}
+                  style={{ backgroundColor: '#f1f5f9', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 4, borderWidth: 1, borderColor: '#cbd5e1' }}
+                  onPress={() => {
+                    setRescheduleTimeInput(slot);
+                    setRescheduleErrors(prev => ({ ...prev, timeError: null }));
+                  }}
+                >
+                  <Text style={{ fontSize: 11, color: '#334155' }}>{slot}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[styles.formLabel, { marginTop: 10 }]}>Rescheduling Reason / Notes</Text>
+            <TextInput
+              style={styles.rejectInput}
+              value={rescheduleReasonInput}
+              onChangeText={setRescheduleReasonInput}
+              multiline
+              numberOfLines={2}
+              placeholder="e.g. Pitch ready, weather cleared, agreed by both teams..."
+              placeholderTextColor="#94a3b8"
+            />
+
+            <View style={styles.rejectModalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setRescheduleModalMatch(null)}
+                disabled={isReschedulingMatch}
+              >
+                <Text style={styles.modalCancelBtnText}>Dismiss</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btnDangerConfirm, { backgroundColor: '#0284c7', borderColor: '#0369a1' }, isReschedulingMatch && { opacity: 0.6 }]}
+                onPress={handleConfirmRescheduleMatch}
+                disabled={isReschedulingMatch}
+              >
+                {isReschedulingMatch ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.btnDangerConfirmText}>Reschedule & Notify</Text>
                 )}
               </TouchableOpacity>
             </View>

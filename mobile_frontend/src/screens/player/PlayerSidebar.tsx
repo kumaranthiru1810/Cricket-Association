@@ -16,6 +16,7 @@ import {
   StyleSheet,
   View,
   Text,
+  Image,
   TouchableOpacity,
   useWindowDimensions,
   Platform
@@ -58,6 +59,7 @@ export interface PlayerSidebarProps {
   onSelectTab: (tab: PlayerTabType) => void;
   playerName?: string;
   playerRole?: string;
+  playerPhoto?: string | null;
   jerseyNumber?: string | number;
   squadCount?: number;
   matchesCount?: number;
@@ -125,9 +127,10 @@ export const getPlayerNavItems = (badges?: {
 export const PlayerSidebar: React.FC<PlayerSidebarProps> = ({
   activeTab,
   onSelectTab,
-  playerName = 'Player',
-  playerRole = 'Batter',
-  jerseyNumber = '10',
+  playerName = '',
+  playerRole = '',
+  playerPhoto,
+  jerseyNumber = '',
   squadCount = 0,
   matchesCount = 0,
   achievementsCount = 0,
@@ -166,7 +169,7 @@ export const PlayerSidebar: React.FC<PlayerSidebarProps> = ({
 
   // Build nav items with dynamic badges
   const navItems = getPlayerNavItems({
-    squadCount: squadCount || 15,
+    squadCount,
     matchesCount,
     achievementsCount,
     notificationsCount
@@ -179,9 +182,17 @@ export const PlayerSidebar: React.FC<PlayerSidebarProps> = ({
         {/* 1. Player Profile Header Card */}
         <View style={[styles.sidebarPlayerCard, isCollapsed && styles.sidebarPlayerCardCollapsed]}>
           <View style={styles.playerAvatarCircle}>
-            <Text style={styles.playerAvatarText}>
-              {playerName ? playerName.charAt(0).toUpperCase() : 'P'}
-            </Text>
+            {playerPhoto ? (
+              <Image
+                source={{ uri: playerPhoto }}
+                style={{ width: 44, height: 44, borderRadius: 4 }}
+                resizeMode="cover"
+              />
+            ) : (
+              <Text style={styles.playerAvatarText}>
+                {playerName ? playerName.charAt(0).toUpperCase() : 'P'}
+              </Text>
+            )}
           </View>
           {!isCollapsed && (
             <View style={styles.sidebarPlayerInfo}>
@@ -189,7 +200,7 @@ export const PlayerSidebar: React.FC<PlayerSidebarProps> = ({
                 {playerName}
               </Text>
               <Text style={styles.sidebarPlayerRole} numberOfLines={1}>
-                {playerRole} - {jerseyNumber}
+                {playerRole || 'Player'}{jerseyNumber ? ` • #${jerseyNumber}` : ''}
               </Text>
               {/* <View style={styles.playerDistrictBadge}>
                 <Text style={styles.playerDistrictBadgeText}>CFVD OFFICIAL</Text>
@@ -398,12 +409,13 @@ const styles = StyleSheet.create({
   playerAvatarCircle: {
     width: 44,
     height: 44,
-    borderRadius: 6, // Square shape with clean crisp borders
+    borderRadius: 6,
     backgroundColor: '#071026',
     borderWidth: 2,
     borderColor: '#d4af37',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
     shadowColor: '#d4af37',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.4,

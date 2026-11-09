@@ -105,6 +105,18 @@ class UmpireController {
       res.status(err.status || 500).json({ success: false, message: err.message, error: err.message });
     }
   }
+
+  // POST /api/umpire/matches/:matchId/request-postponement
+  async requestPostponement(req, res) {
+    try {
+      const { matchId } = req.params;
+      const { reason, notes } = req.body;
+      const data = await umpireService.requestPostponement(matchId, { reason, notes }, req.user);
+      res.json({ success: true, message: 'Match postponement request submitted to Admin for approval.', data });
+    } catch (err) {
+      res.status(err.status || 500).json({ success: false, message: err.message, error: err.message });
+    }
+  }
 }
 
 module.exports = new UmpireController();

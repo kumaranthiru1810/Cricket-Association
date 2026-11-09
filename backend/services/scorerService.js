@@ -170,7 +170,7 @@ class ScorerService {
           { assigned_scorer_id: null },
           { assigned_scorer_id: '' },
           { assigned_scorer_id: 'Unassigned' },
-          { status: { $in: ['SCHEDULED', 'LIVE', 'INNINGS_BREAK', 'Scheduled', 'Live'] } }
+          { status: { $in: ['SCHEDULED', 'LIVE', 'INNINGS_BREAK', 'Scheduled', 'Live', 'POSTPONED'] } }
         ]
       };
     }
@@ -181,12 +181,14 @@ class ScorerService {
     let liveCount = 0;
     let upcomingCount = 0;
     let completedCount = 0;
+    let postponedCount = 0;
 
     const formattedMatches = await Promise.all(allMatches.map(async (m) => {
       const statusUpper = (m.status || 'SCHEDULED').toUpperCase();
       if (statusUpper === 'LIVE' || statusUpper === 'INNINGS_BREAK') liveCount++;
       else if (statusUpper === 'SCHEDULED') upcomingCount++;
       else if (statusUpper === 'COMPLETED') completedCount++;
+      else if (statusUpper === 'POSTPONED') postponedCount++;
 
       const teamA = teamMap[m.team_a_id] || { name: m.team_a_id, short_name: 'TMA' };
       const teamB = teamMap[m.team_b_id] || { name: m.team_b_id, short_name: 'TMB' };
@@ -207,6 +209,7 @@ class ScorerService {
       const isLive = statusUpper === 'LIVE' || statusUpper === 'INNINGS_BREAK';
       const isCompleted = statusUpper === 'COMPLETED';
       const isCancelled = statusUpper === 'CANCELLED' || statusUpper === 'ABANDONED';
+      const isPostponed = statusUpper === 'POSTPONED';
 
       return {
         id: m.id,
@@ -225,7 +228,16 @@ class ScorerService {
         format: m.match_type || 'T20',
         overs: m.overs_per_side || 20,
         rawStatus: statusUpper,
-        status: isLive ? 'Live' : (isCompleted ? 'Completed' : (isCancelled ? 'Cancelled' : 'Upcoming')),
+        status: isLive ? 'Live' : (isCompleted ? 'Completed' : (isCancelled ? 'Cancelled' : (isPostponed ? 'Postponed' : 'Upcoming'))),
+        isPostponed,
+        postponement: m.postponement || null,
+        postponementReason: m.postponement?.reason || null,
+        originalDate: m.postponement?.original_date || m.match_date,
+        originalTime: m.postponement?.original_time || m.match_time,
+        rescheduledDate: m.postponement?.rescheduled_date || null,
+        rescheduledTime: m.postponement?.rescheduled_time || null,
+        umpire_postponement_request: m.umpire_postponement_request || null,
+        postponement_history: m.postponement_history || [],
         scoreA,
         scoreB: scoreB || (isLive ? 'Yet to bat' : null),
         result: m.result_summary,
@@ -246,6 +258,7 @@ class ScorerService {
       liveMatches: liveCount,
       upcomingMatches: upcomingCount,
       completedMatches: completedCount,
+      postponedMatches: postponedCount,
       assignedMatches: formattedMatches.length,
       matches: formattedMatches
     };

@@ -10,6 +10,7 @@ const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
+const path = require('path');
 
 const db = require('./config/db');
 const { initSocket } = require('./services/socketService');
@@ -55,8 +56,12 @@ app.use(cors(getCorsOptions()));
 app.options('*', cors(getCorsOptions()));
 
 // Security 4: Payload size limiting (prevent memory exhaustion denial of service)
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(cookieParser());
+
+// Static file serving for uploaded photos and media
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Security 5: Global Rate Limiting
 app.use('/api', generalRateLimiter);
