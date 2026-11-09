@@ -20,7 +20,19 @@ interface ScorecardScreenProps {
 export default function ScorecardScreen({ onExit, initialMatchId, initialParams }: ScorecardScreenProps = {}) {
   const scorerNav = useScorerNavigation();
   const params = initialParams || scorerNav.params;
-  const matchId = initialMatchId || params?.matchId || 'M001';
+  const matchId = initialMatchId || params?.matchId ||
+    (Platform.OS === 'web' && typeof window !== 'undefined'
+      ? (new URL(window.location.href).searchParams.get('matchId') || localStorage.getItem('cfvd_last_scorecard_match_id'))
+      : null) ||
+    'M001';
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && matchId && matchId !== 'M001') {
+      try {
+        localStorage.setItem('cfvd_last_scorecard_match_id', matchId);
+      } catch (e) {}
+    }
+  }, [matchId]);
 
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;

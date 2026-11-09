@@ -217,8 +217,37 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     if (onExit) onExit();
   };
 
-  // Start on 'scorers' tab to immediately match the user's screenshot, or allow 'overview'
-  const [activeTab, setActiveTab] = useState<AdminTab>(initialParams?.tab || initialParams?.activeTab || 'scorers');
+  const [activeTab, setActiveTab] = useState<AdminTab>(() => {
+    if (initialParams?.tab || initialParams?.activeTab) {
+      return (initialParams.tab || initialParams.activeTab) as AdminTab;
+    }
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        const q = new URL(window.location.href).searchParams.get('tab') as AdminTab;
+        if (q && ['overview', 'teams', 'scorers', 'umpires', 'content', 'schedules', 'tournaments', 'laws', 'calculations'].includes(q)) {
+          return q;
+        }
+        const saved = localStorage.getItem('cfvd_admin_active_tab') as AdminTab;
+        if (saved && ['overview', 'teams', 'scorers', 'umpires', 'content', 'schedules', 'tournaments', 'laws', 'calculations'].includes(saved)) {
+          return saved;
+        }
+      } catch (e) {}
+    }
+    return 'scorers';
+  });
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('cfvd_admin_active_tab', activeTab);
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('tab') !== activeTab) {
+          url.searchParams.set('tab', activeTab);
+          window.history.replaceState({ appScreen: 'Admin', tab: activeTab }, '', url.toString());
+        }
+      } catch (e) {}
+    }
+  }, [activeTab]);
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [notification, setNotification] = useState<string | null>(null);

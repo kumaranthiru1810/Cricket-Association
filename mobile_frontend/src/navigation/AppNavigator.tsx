@@ -159,18 +159,55 @@ export default function AppNavigator({
     let urlParams: any = null;
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const p = (window.location.pathname + window.location.search + window.location.hash).toLowerCase();
+      const search = window.location.search;
+      const getQuery = (key: string) => {
+        const match = search.match(new RegExp(`[?&]${key}=([^&]+)`, 'i'));
+        return match && match[1] ? decodeURIComponent(match[1]) : null;
+      };
+
       if (p.includes('admin/login') || p.includes('admin-login')) requested = 'AdminLogin';
-      else if (p.includes('umpire')) requested = 'Umpire';
-      else if (p.includes('scorer')) requested = 'Scorer';
-      else if (p.includes('player')) requested = 'Player';
-      else if (p.includes('team') || p.includes('coach')) requested = 'Team';
-      else if (p.includes('admin')) requested = 'Admin';
+      else if (p.includes('umpire')) {
+        requested = 'Umpire';
+        const tab = getQuery('tab');
+        const matchId = getQuery('matchId');
+        if (tab || matchId) {
+          urlParams = {
+            ...(tab ? { initialTab: tab } : {}),
+            ...(matchId ? { matchId } : {})
+          };
+        }
+      }
+      else if (p.includes('scorer')) {
+        requested = 'Scorer';
+        const sScreen = getQuery('scorerScreen') || localStorage.getItem('cfvd_last_scorer_screen');
+        const matchId = getQuery('matchId') || localStorage.getItem('cfvd_last_scorer_match_id');
+        if (sScreen || matchId) {
+          urlParams = {
+            ...(sScreen ? { initialScreen: sScreen } : {}),
+            ...(matchId ? { matchId } : {})
+          };
+        }
+      }
+      else if (p.includes('player')) {
+        requested = 'Player';
+        const tab = getQuery('tab');
+        if (tab) urlParams = { initialTab: tab };
+      }
+      else if (p.includes('team') || p.includes('coach')) {
+        requested = 'Team';
+        const tab = getQuery('tab');
+        if (tab) urlParams = { initialTab: tab };
+      }
+      else if (p.includes('admin')) {
+        requested = 'Admin';
+        const tab = getQuery('tab');
+        if (tab) urlParams = { tab, activeTab: tab };
+      }
       else if (p.includes('scorecard')) {
         requested = 'Scorecard';
-        // Check for matchId in query
-        const match = window.location.search.match(/[?&]matchId=([^&]+)/i);
-        if (match && match[1]) {
-          urlParams = { matchId: decodeURIComponent(match[1]) };
+        const matchId = getQuery('matchId') || localStorage.getItem('cfvd_last_scorecard_match_id');
+        if (matchId) {
+          urlParams = { matchId };
         }
       }
       else if (p.includes('login')) requested = 'Login';
@@ -230,16 +267,26 @@ export default function AppNavigator({
         else if (targetScreen === 'Login') route = '/login';
         else if (targetScreen === 'Registration') route = '/register';
         else if (targetScreen === 'Scorecard') route = screenParams?.matchId ? `/scorecard?matchId=${screenParams.matchId}` : '/scorecard';
-        else if (targetScreen === 'Scorer') route = '/scorer';
-        else if (targetScreen === 'Umpire') route = '/umpire';
-        else if (targetScreen === 'Admin') route = '/admin';
-        else if (targetScreen === 'Player') route = '/player';
-        else if (targetScreen === 'Team' || targetScreen === 'Coach') route = '/team';
+        else if (targetScreen === 'Scorer') {
+          const s = screenParams?.initialScreen || screenParams?.scorerScreen;
+          const m = screenParams?.matchId;
+          route = s ? `/scorer?scorerScreen=${s}${m ? `&matchId=${m}` : ''}` : (m ? `/scorer?matchId=${m}` : '/scorer');
+        }
+        else if (targetScreen === 'Umpire') {
+          const t = screenParams?.initialTab || screenParams?.tab;
+          const m = screenParams?.matchId;
+          route = t ? `/umpire?tab=${t}${m ? `&matchId=${m}` : ''}` : (m ? `/umpire?matchId=${m}` : '/umpire');
+        }
+        else if (targetScreen === 'Admin') route = (screenParams?.tab || screenParams?.activeTab) ? `/admin?tab=${screenParams.tab || screenParams.activeTab}` : '/admin';
+        else if (targetScreen === 'Player') route = screenParams?.tab ? `/player?tab=${screenParams.tab}` : '/player';
+        else if (targetScreen === 'Team' || targetScreen === 'Coach') route = screenParams?.tab ? `/team?tab=${screenParams.tab}` : '/team';
         else if (targetScreen === 'Content') route = '/admin';
         else if (targetScreen === 'Home') route = '/';
 
-        if (window.location.pathname !== route) {
-          window.history.pushState({ appScreen: targetScreen }, '', route);
+        localStorage.setItem('cfvd_last_app_screen', targetScreen);
+        const currentFull = window.location.pathname + window.location.search;
+        if (currentFull !== route) {
+          window.history.replaceState({ appScreen: targetScreen }, '', route);
         }
       } catch (e) {}
     }

@@ -41,7 +41,38 @@ export interface PlayerDashboardProps {
 }
 
 export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerDashboardProps) {
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    if (initialParams?.initialTab || initialParams?.tab) {
+      return (initialParams.initialTab || initialParams.tab) as TabType;
+    }
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        const q = new URL(window.location.href).searchParams.get('tab') as TabType;
+        if (q && ['overview', 'profile', 'team', 'matches', 'statistics', 'achievements', 'notifications'].includes(q)) {
+          return q;
+        }
+        const saved = localStorage.getItem('cfvd_player_active_tab') as TabType;
+        if (saved && ['overview', 'profile', 'team', 'matches', 'statistics', 'achievements', 'notifications'].includes(saved)) {
+          return saved;
+        }
+      } catch (e) {}
+    }
+    return 'overview';
+  });
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('cfvd_player_active_tab', activeTab);
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('tab') !== activeTab) {
+          url.searchParams.set('tab', activeTab);
+          window.history.replaceState({ appScreen: 'Player', tab: activeTab }, '', url.toString());
+        }
+      } catch (e) {}
+    }
+  }, [activeTab]);
+
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);

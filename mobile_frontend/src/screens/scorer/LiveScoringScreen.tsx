@@ -110,8 +110,29 @@ export default function LiveScoringScreen() {
   const { navigate, params } = useScorerNavigation();
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
-  const matchId = params?.matchId || 'M002';
+  const matchId = params?.matchId ||
+    (Platform.OS === 'web' && typeof window !== 'undefined'
+      ? (new URL(window.location.href).searchParams.get('matchId') || localStorage.getItem('cfvd_last_scorer_match_id'))
+      : null) ||
+    'M002';
   const styles = getStyles(isDesktop);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('cfvd_last_scorer_screen', 'LiveScoring');
+        if (matchId && matchId !== 'M002') {
+          localStorage.setItem('cfvd_last_scorer_match_id', matchId);
+          const currentUrl = new URL(window.location.href);
+          if (currentUrl.searchParams.get('scorerScreen') !== 'LiveScoring' || currentUrl.searchParams.get('matchId') !== matchId) {
+            currentUrl.searchParams.set('scorerScreen', 'LiveScoring');
+            currentUrl.searchParams.set('matchId', matchId);
+            window.history.replaceState({ appScreen: 'Scorer', scorerScreen: 'LiveScoring', matchId }, '', currentUrl.toString());
+          }
+        }
+      } catch (e) {}
+    }
+  }, [matchId]);
 
   const currentUser = getCurrentUser();
   const [profileUser, setProfileUser] = useState<any>(currentUser);
