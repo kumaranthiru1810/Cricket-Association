@@ -48,6 +48,7 @@ import {
   LiveScoringIcon
 } from '../../admin/components/Icons';
 import TeamSidebar, { TeamTabType as TabType, getTeamNavItems } from './TeamSidebar';
+import MatchHighlightsBanner from '../../components/common/MatchHighlightsBanner';
 
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
 
@@ -766,6 +767,12 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                         </View>
                       </TouchableOpacity>
                     </View>
+
+                    {/* OFFICIAL MATCH HIGHLIGHTS & MILESTONES SHOWCASE */}
+                    <MatchHighlightsBanner
+                      title="🏆 TEAM & MATCH HIGHLIGHTS"
+                      subtitle="Official verified club milestones: Centuries, Fifers, Player of the Match & Record Spells"
+                    />
 
                     {/* HERO CLUB STATUS CARD */}
                     <View style={styles.heroCard}>

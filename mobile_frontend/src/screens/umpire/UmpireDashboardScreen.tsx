@@ -35,6 +35,7 @@ import SharedBackground from '../../components/scorer/SharedBackground';
 import { UmpireApi, getCurrentUser } from '../../services/api';
 import { showAlert as showSwal, showSuccess, showError } from '../../utils/sweetalert';
 import CricketRulesModal from '../../components/scorer/CricketRulesModal';
+import MatchHighlightsBanner from '../../components/common/MatchHighlightsBanner';
 
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
 
@@ -501,6 +502,12 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
                     </View>
                   )}
                 </View>
+
+                {/* BROADCAST MATCH HIGHLIGHTS & CERTIFIED PERFORMANCES */}
+                <MatchHighlightsBanner
+                  title="⚖️ TOURNAMENT HIGHLIGHTS & PERFORMANCE RECORDS"
+                  subtitle="Verified match achievements: Centuries, Five-Wicket Hauls, Catches & Man of the Match"
+                />
 
                 {/* TODAY'S ASSIGNED MATCHES */}
                 <View style={styles.sectionCard}>

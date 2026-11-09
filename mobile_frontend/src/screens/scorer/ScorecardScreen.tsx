@@ -7,6 +7,7 @@ import { ScorerApi } from '../../services/api';
 import WagonWheel from '../../components/analytics/WagonWheel';
 import ErrorBoundary from '../../components/common/ErrorBoundary';
 import CricketRulesModal, { CricketRuleType } from '../../components/scorer/CricketRulesModal';
+import MatchHighlightsBanner from '../../components/common/MatchHighlightsBanner';
 
 const IMG_CHAMPIONS = require('../../../assets/cricket_champions.png');
 
@@ -409,6 +410,9 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Broadcast Highlights & Milestones Banner */}
+          <MatchHighlightsBanner />
 
           {/* ─────────────────────────────────────────────────────────────
               BATTING SCORECARD TABLE

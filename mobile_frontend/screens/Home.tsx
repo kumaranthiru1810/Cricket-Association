@@ -28,6 +28,7 @@ import { io } from 'socket.io-client';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppNavigation } from '../src/navigation/AppNavigator';
 import { ScorerApi, getCurrentUser, setCurrentUser, setAuthToken, SOCKET_URL } from '../src/services/api';
+import { MatchHighlightsBanner } from '../src/components/common/MatchHighlightsBanner';
 import Header from '../src/layouts/Header';
 
 // ─── ASSET REFERENCES ──────────────────────────────────────────────────────────
@@ -1199,6 +1200,9 @@ export default function HomeScreen() {
                 Real-time coverage displaying complete logistics: Match Date, Time, Venues & Assigned Officials
               </Text>
             </View>
+
+            {/* Broadcast Match Highlights & Milestones Showcase */}
+            <MatchHighlightsBanner />
 
             {/* Filter Tabs */}
             {(() => {

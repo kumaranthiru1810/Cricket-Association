@@ -28,6 +28,7 @@ import {
   LogoutIcon
 } from '../../admin/components/Icons';
 import PlayerSidebar, { PlayerTabType as TabType, getPlayerNavItems } from './PlayerSidebar';
+import MatchHighlightsBanner from '../../components/common/MatchHighlightsBanner';
 
 // Asset references
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
@@ -782,6 +783,12 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                   </View>
                 </View>
               </View>
+
+              {/* ── Official Match Highlights & Player Milestone Achievements ── */}
+              <MatchHighlightsBanner
+                title="🌟 DISTRICT MATCH HIGHLIGHTS & MILESTONES"
+                subtitle="Hall of Fame: Centuries, 5-Wicket Hauls, Spectacular Catches & Match Heroes"
+              />
 
               {/* ── Incoming Matches Section for this Player ── */}
               <View style={{ marginTop: 14 }}>
