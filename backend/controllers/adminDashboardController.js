@@ -8,6 +8,7 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
+const { validateScheduleDateTime } = require('../utils/dateTimeValidation');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'cricket_super_secret_jwt_2026';
 
@@ -709,11 +710,16 @@ class AdminDashboardController {
         return res.status(400).json({ success: false, message: 'Both participating teams are required.' });
       }
 
+      const dtValidation = validateScheduleDateTime(date, time || '10:00 AM');
+      if (!dtValidation.isValid) {
+        return res.status(400).json({ success: false, error: dtValidation.error, message: dtValidation.error });
+      }
+
       const matchId = 'M-' + Date.now();
       await db.query(
         `INSERT INTO matches (id, tournament_id, venue_name, team_a_id, team_b_id, scheduled_date, scheduled_time, overs, status, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'SCHEDULED', NOW(), NOW())`,
-        [matchId, tournamentId || 'TOUR-2026', venueName || 'Kamarajar Stadium, Virudhunagar', teamAId, teamBId, date, time || '10:00 AM', overs || 20]
+        [matchId, tournamentId || 'TOUR-2026', venueName || 'Kamarajar Stadium, Virudhunagar', teamAId, teamBId, dtValidation.cleanDate, dtValidation.parsedTime.formatted12, overs || 20]
       );
 
       return res.status(201).json({ success: true, message: 'Match scheduled successfully.' });
@@ -729,6 +735,14 @@ class AdminDashboardController {
     try {
       const { id } = req.params;
       const { status, resultText, venueName, scheduledDate, scheduledTime } = req.body;
+
+      if (scheduledDate !== undefined || scheduledTime !== undefined) {
+        const dtValidation = validateScheduleDateTime(scheduledDate, scheduledTime);
+        if (!dtValidation.isValid) {
+          return res.status(400).json({ success: false, error: dtValidation.error, message: dtValidation.error });
+        }
+      }
+
       await db.query(
         `UPDATE matches SET status = COALESCE(?, status), result_text = COALESCE(?, result_text),
          venue_name = COALESCE(?, venue_name), scheduled_date = COALESCE(?, scheduled_date), scheduled_time = COALESCE(?, scheduled_time), updated_at = NOW()
@@ -741,6 +755,51 @@ class AdminDashboardController {
     }
   }
 
+  async postponeMatch(req, res) {
+    try {
+      const { id } = req.params;
+      const { reason } = req.body;
+      const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+      const match = await adminService.postponeMatch(id, { reason }, adminEmail);
+      return res.status(200).json({ success: true, message: 'Match postponed successfully.', match });
+    } catch (err) {
+      return res.status(400).json({ success: false, message: err.message, error: err.message });
+    }
+  }
+
+  async rescheduleMatch(req, res) {
+    try {
+      const { id } = req.params;
+      const { newDate, newTime, reason } = req.body;
+      const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+      const match = await adminService.rescheduleMatch(id, { newDate, newTime, reason }, adminEmail);
+      return res.status(200).json({ success: true, message: 'Match rescheduled successfully.', match });
+    } catch (err) {
+      return res.status(400).json({ success: false, message: err.message, error: err.message });
+    }
+  }
+
+  async getPostponementRequests(req, res) {
+    try {
+      const requests = await adminService.getPostponementRequests();
+      return res.status(200).json({ success: true, requests });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message, error: err.message });
+    }
+  }
+
+  async reviewPostponementRequest(req, res) {
+    try {
+      const { id } = req.params;
+      const { decision, reviewNotes } = req.body;
+      const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+      const match = await adminService.reviewUmpirePostponement(id, { decision, reviewNotes }, adminEmail);
+      return res.status(200).json({ success: true, message: `Postponement request ${decision}D.`, match });
+    } catch (err) {
+      return res.status(400).json({ success: false, message: err.message, error: err.message });
+    }
+  }
+
   /**
    * GET /api/admin/approvals
    */
@@ -748,6 +807,40 @@ class AdminDashboardController {
     try {
       await db.initDb();
       const items = [];
+
+      // 0. Match Postponement Requests (from Match model)
+      try {
+        const postpReqs = await db.models.Match.find({
+          'umpire_postponement_request.status': 'PENDING'
+        }).sort({ 'umpire_postponement_request.requested_at': -1 }).lean();
+
+        postpReqs.forEach(m => {
+          items.push({
+            id: m.id,
+            matchId: m.id,
+            applicantName: m.umpire_postponement_request?.umpire_name || 'Assigned Field Umpire',
+            type: 'POSTPONEMENT',
+            contact: m.umpire_postponement_request?.umpire_id || 'Umpire',
+            phone: m.venue || 'Stadium',
+            association: `Match Postponement • ${m.team_a_name || 'Team A'} vs ${m.team_b_name || 'Team B'}`,
+            date: m.umpire_postponement_request?.requested_at || m.created_at,
+            status: 'PENDING',
+            details: {
+              matchId: m.id,
+              teamA: m.team_a_name,
+              teamB: m.team_b_name,
+              matchDate: m.match_date,
+              matchTime: m.match_time,
+              venue: m.venue,
+              reason: m.umpire_postponement_request?.reason,
+              umpireName: m.umpire_postponement_request?.umpire_name
+            },
+            rejectionReason: null
+          });
+        });
+      } catch (e) {
+        console.warn('Postponements fetch error in getApprovals:', e.message);
+      }
 
       // 1. Scorers (from User and Scorer models)
       try {
@@ -874,7 +967,15 @@ class AdminDashboardController {
 
       let applicantName = id;
 
-      if (cleanType === 'SCORER') {
+      if (cleanType === 'POSTPONEMENT' || cleanType === 'MATCH_POSTPONE') {
+        const decision = isApprove ? 'APPROVE' : 'REJECT';
+        const match = await adminService.reviewUmpirePostponement(id, { decision, reviewNotes: reason }, req.adminUser ? req.adminUser.email : 'admin@cfvd.org');
+        return res.status(200).json({
+          success: true,
+          message: `Match postponement request ${decision}D.`,
+          match
+        });
+      } else if (cleanType === 'SCORER') {
         const u = await db.models.User.findOneAndUpdate(
           queryId,
           { $set: { status: isApprove ? 'ACTIVE' : 'REJECTED', updated_at: new Date() } },

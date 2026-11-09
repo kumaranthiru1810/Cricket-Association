@@ -677,6 +677,31 @@ export const ScorerApi = {
     });
   },
 
+  postponeMatch: async (matchId: string, reason: string) => {
+    return request(`/admin/matches/${matchId}/postpone`, {
+      method: 'POST',
+      body: JSON.stringify({ reason })
+    });
+  },
+
+  rescheduleMatch: async (matchId: string, newDate: string, newTime: string, reason?: string) => {
+    return request(`/admin/matches/${matchId}/reschedule`, {
+      method: 'POST',
+      body: JSON.stringify({ newDate, newTime, reason })
+    });
+  },
+
+  getPostponementRequests: async () => {
+    return request('/admin/matches/postponement-requests');
+  },
+
+  reviewPostponementRequest: async (matchId: string, decision: 'APPROVE' | 'REJECT', reviewNotes?: string) => {
+    return request(`/admin/matches/${matchId}/postponement-requests/review`, {
+      method: 'POST',
+      body: JSON.stringify({ decision, reviewNotes })
+    });
+  },
+
   deleteMatch: async (matchId: string) => {
     return request(`/admin/matches/${matchId}`, {
       method: 'DELETE'
@@ -1347,6 +1372,16 @@ export const UmpireApi = {
     return request(`/umpire/matches/${matchId}/status`, {
       method: 'PUT',
       body: JSON.stringify({ status, reason })
+    });
+  },
+
+  requestPostponement: async (matchId: string, reasonOrPayload: string | { reason: string; notes?: string }, notes?: string) => {
+    const bodyObj = typeof reasonOrPayload === 'string'
+      ? { reason: reasonOrPayload, notes }
+      : reasonOrPayload;
+    return request(`/umpire/matches/${matchId}/request-postponement`, {
+      method: 'POST',
+      body: JSON.stringify(bodyObj)
     });
   },
 

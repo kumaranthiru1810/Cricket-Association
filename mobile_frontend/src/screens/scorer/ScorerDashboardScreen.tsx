@@ -216,11 +216,20 @@ export default function ScorerDashboardScreen() {
     .filter(m => (m.status || '').toLowerCase() === 'completed')
     .sort((a, b) => parseMatchTimestamp(b) - parseMatchTimestamp(a));
 
+  // 4. Postponed matches:
+  const postponedMatches = matches
+    .filter(m => {
+      const s = (m.status || '').toLowerCase();
+      return s === 'postponed' || !!m.postponement?.is_postponed || !!m.isPostponed;
+    })
+    .sort((a, b) => parseMatchTimestamp(b) - parseMatchTimestamp(a));
+
   const totalAssigned = matches.length;
 
   const chartSegments = [
     { id: 'Live', label: 'Live Matches', count: liveMatches.length, color: '#ef4444', desc: 'Currently scoring' },
     { id: 'Upcoming', label: 'Upcoming', count: upcomingMatches.length, color: '#3b82f6', desc: 'Next scheduled' },
+    { id: 'Postponed', label: 'Postponed', count: postponedMatches.length, color: '#f59e0b', desc: 'Awaiting reschedule' },
     { id: 'Completed', label: 'Completed', count: completedMatches.length, color: '#10b981', desc: 'Recently finished' }
   ];
 
@@ -398,6 +407,24 @@ export default function ScorerDashboardScreen() {
                 📊 RECENT SCORECARDS ({completedMatches.length})
               </Text>
             </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[
+                styles.secondaryActionBtn,
+                selectedFilter === 'Postponed' && styles.activeFilterBtn
+              ]} 
+              onPress={() => {
+                setSelectedFilter(selectedFilter === 'Postponed' ? null : 'Postponed');
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={[
+                styles.secondaryActionText,
+                selectedFilter === 'Postponed' && styles.activeFilterText
+              ]}>
+                ⏸️ POSTPONED MATCHES ({postponedMatches.length})
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -521,6 +548,60 @@ export default function ScorerDashboardScreen() {
               ))
             ) : (
               <Text style={styles.emptyText}>No live matches currently in progress.</Text>
+            )}
+          </View>
+        ) : selectedFilter === 'Postponed' ? (
+          /* VIEW 5: POSTPONED MATCHES */
+          <View style={{ width: '100%' }}>
+            <View style={styles.filterHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.filterHeaderTitle}>⏸️ POSTPONED MATCHES ({postponedMatches.length})</Text>
+                <Text style={styles.filterHeaderSub}>
+                  Matches temporarily postponed by Admin/Umpires • Details and reschedule status below
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedFilter(null)} style={styles.clearFilterBtn} activeOpacity={0.7}>
+                <Text style={styles.clearFilterText}>✕ Show Standard View</Text>
+              </TouchableOpacity>
+            </View>
+
+            {postponedMatches.length > 0 ? (
+              postponedMatches.map(match => (
+                <View key={match.id} style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderColor: '#fcd34d', borderWidth: 1.5, borderRadius: 8, padding: 16, marginBottom: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 3 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                    <Text style={{ fontWeight: '700', fontSize: 16, color: '#1e293b' }}>
+                      {match.teamA?.name || match.team_a_name || 'Team A'} <Text style={{ color: '#d97706' }}>vs</Text> {match.teamB?.name || match.team_b_name || 'Team B'}
+                    </Text>
+                    <View style={{ backgroundColor: '#fef3c7', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 4, borderColor: '#f59e0b', borderWidth: 1 }}>
+                      <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 11 }}>⏸️ POSTPONED</Text>
+                    </View>
+                  </View>
+
+                  <Text style={{ color: '#64748b', fontSize: 13, marginTop: 4 }}>
+                    🏆 {match.tournamentName || 'Tournament'} • 📍 {match.venue || 'District Stadium'}
+                  </Text>
+
+                  <View style={{ backgroundColor: '#fffbeb', padding: 12, borderRadius: 6, marginTop: 10, borderColor: '#fde68a', borderWidth: 1 }}>
+                    <Text style={{ color: '#92400e', fontWeight: '700', fontSize: 13 }}>
+                      Reason: {match.postponement?.reason || match.postponementReason || 'Reason not recorded'}
+                    </Text>
+                    <Text style={{ color: '#78350f', fontSize: 12, marginTop: 3 }}>
+                      Original Schedule: 📅 {match.postponement?.original_date || match.originalDate || match.date} • ⏰ {match.postponement?.original_time || match.originalTime || match.time || '09:30 AM'}
+                    </Text>
+                    {(match.postponement?.rescheduled_date || match.rescheduledDate) ? (
+                      <Text style={{ color: '#15803d', fontWeight: '700', fontSize: 13, marginTop: 4 }}>
+                        📅 Rescheduled Date: {match.postponement?.rescheduled_date || match.rescheduledDate} • ⏰ {match.postponement?.rescheduled_time || match.rescheduledTime || '09:30 AM'}
+                      </Text>
+                    ) : (
+                      <Text style={{ color: '#b45309', fontStyle: 'italic', fontSize: 12, marginTop: 4 }}>
+                        ⏳ Awaiting Admin Rescheduling
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.emptyText}>No postponed matches.</Text>
             )}
           </View>
         ) : (
