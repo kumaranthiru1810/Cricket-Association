@@ -25,6 +25,11 @@ import CricketRulesModal, { CricketRuleType } from '../../components/scorer/Cric
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
 const IMG_CHAMPIONS = require('../../../assets/cricket_champions.png');
 const IMG_END_INNINGS = require('../../../assets/cricket_end_innings.png');
+const IMG_MAN_OF_THE_MATCH = require('../../../assets/man_of_the_match.png');
+const catchMilestoneImage = require('../../../assets/catch_milestone.jpg');
+const bestBowlerImage = require('../../../assets/best_bowler.png');
+const runOutMilestoneImage = require('../../../assets/run_out_milestone.png');
+const keeperDismissalImage = require('../../../assets/keeper_dismissal.png');
 
 const STANDARD_BREAK_OPTIONS = [
   { label: 'Tea break', icon: '☕', sub: 'Afternoon tea interval' },
@@ -475,9 +480,9 @@ export default function LiveScoringScreen() {
   // 12. Exit Screen Modal State
   const [showExitModal, setShowExitModal] = useState<boolean>(false);
 
-  // 13. Cricket Milestones Celebration State (50s, 100s, 5-Wicket Hauls, Hat-Tricks)
+  // 13. Cricket Milestones Celebration State (50s, 100s, 5-Wickets, Catches, Run Outs, Keeper Outs, MOTM)
   interface MilestoneCelebration {
-    type: 'BATTER_50' | 'BATTER_100' | 'BATTER_150' | 'BATTER_200' | 'BOWLER_3W' | 'BOWLER_5W' | 'HAT_TRICK' | 'TEAM_50' | 'TEAM_100' | 'TEAM_150' | 'TEAM_200';
+    type: 'BATTER_50' | 'BATTER_100' | 'BATTER_150' | 'BATTER_200' | 'BOWLER_3W' | 'BOWLER_5W' | 'HAT_TRICK' | 'TOP_CATCHES' | 'RUN_OUT' | 'KEEPER_OUT' | 'MAN_OF_THE_MATCH' | 'TEAM_50' | 'TEAM_100' | 'TEAM_150' | 'TEAM_200';
     title: string;
     badge: string;
     subtitle: string;
@@ -488,6 +493,7 @@ export default function LiveScoringScreen() {
     strikeRateText?: string;
     fours?: number;
     sixes?: number;
+    imageKey?: 'BATSMAN_SHOT' | 'BATSMAN_CENTURY' | 'BOWLER' | 'CATCH' | 'RUN_OUT' | 'KEEPER' | 'MOTM';
   }
   const [activeMilestone, setActiveMilestone] = useState<MilestoneCelebration | null>(null);
   const [showMilestoneModal, setShowMilestoneModal] = useState<boolean>(false);
@@ -630,9 +636,10 @@ export default function LiveScoringScreen() {
             fours: 16,
             sixes: 6
           });
-        } else if (type === '5w') {
+        } else if (type === '5w' || type === 'bowler') {
           triggerMilestone({
             type: 'BOWLER_5W',
+            imageKey: 'BOWLER',
             title: 'FIVE-WICKET HAUL (FIFER)!',
             badge: '🔥 5-WICKET HAUL 🔥',
             subtitle: 'Spectacular bowling spell! Dismantles the batting lineup.',
@@ -641,6 +648,57 @@ export default function LiveScoringScreen() {
             scoreText: '5/18',
             ballsText: '3.4 Overs',
             strikeRateText: 'ER: 4.9'
+          });
+        } else if (type === 'catch') {
+          triggerMilestone({
+            type: 'TOP_CATCHES',
+            imageKey: 'CATCH',
+            title: 'OUTSTANDING CATCH!',
+            badge: '🦅 SPECTACULAR CATCH 🦅',
+            subtitle: 'Sensational athleticism! Full-length diving catch near the boundary.',
+            playerName: 'M. Siddharth',
+            teamName: matchInfo?.bowlingTeam || 'Rajapalayam Royals',
+            scoreText: 'WICKET',
+            ballsText: 'Super Catch'
+          });
+        } else if (type === 'runout') {
+          triggerMilestone({
+            type: 'RUN_OUT',
+            imageKey: 'RUN_OUT',
+            title: 'DIRECT HIT RUN OUT!',
+            badge: '🎯 SPECTACULAR RUN OUT 🎯',
+            subtitle: 'Incredible direct-hit throw! Batter caught short of the crease.',
+            playerName: 'R. Sanjay',
+            teamName: 'Direct Hit Dismissal',
+            scoreText: 'RUN OUT',
+            ballsText: 'Bullseye Throw'
+          });
+        } else if (type === 'keeper') {
+          triggerMilestone({
+            type: 'KEEPER_OUT',
+            imageKey: 'KEEPER',
+            title: 'LIGHTNING STUMPING!',
+            badge: '🧤 WICKETKEEPER STUMPING 🧤',
+            subtitle: 'Flawless glovework! Feet out of the crease, bails dislodged in 0.12 seconds.',
+            playerName: 'Dinesh Karthik',
+            teamName: matchInfo?.bowlingTeam || 'Rajapalayam Royals',
+            scoreText: 'STUMPED',
+            ballsText: 'Lightning Gloves'
+          });
+        } else if (type === 'motm') {
+          triggerMilestone({
+            type: 'MAN_OF_THE_MATCH',
+            imageKey: 'MOTM',
+            title: 'MAN OF THE MATCH!',
+            badge: '🏆 OFFICIAL PLAYER OF THE MATCH 🏆',
+            subtitle: 'Spectacular match-winning all-round performance on the big stage!',
+            playerName: matchInfo?.playerOfTheMatch || 'N. Jagadeesan',
+            teamName: matchInfo?.battingTeam || 'Virudhunagar Spartans',
+            scoreText: '86* (48b)',
+            ballsText: 'Match Winner',
+            strikeRateText: 'SR: 179.2',
+            fours: 8,
+            sixes: 4
           });
         } else {
           triggerMilestone({
@@ -910,6 +968,7 @@ export default function LiveScoringScreen() {
           shownMilestonesRef.current.add(k5w);
           triggerMilestone({
             type: 'BOWLER_5W',
+            imageKey: 'BOWLER',
             title: 'FIVE-WICKET HAUL (FIFER)!',
             badge: '🔥 5-WICKET HAUL 🔥',
             subtitle: 'Spectacular bowling spell! Dismantles the batting lineup.',
@@ -927,6 +986,7 @@ export default function LiveScoringScreen() {
           shownMilestonesRef.current.add(k3w);
           triggerMilestone({
             type: 'BOWLER_3W',
+            imageKey: 'BOWLER',
             title: 'THREE WICKETS HAUL!',
             badge: '🎯 3 WICKETS HAUL 🎯',
             subtitle: 'Crucial bowling breakthroughs that turned the game!',
@@ -1512,6 +1572,57 @@ export default function LiveScoringScreen() {
       }
       setCustomBatterName('');
       await loadLiveState(false);
+
+      // Trigger Dismissal Celebrations (Run Out, Keeper Stumped/Caught Behind, Diving Catch)
+      if (wicketType === 'RUN_OUT') {
+        triggerMilestone({
+          type: 'RUN_OUT',
+          imageKey: 'RUN_OUT',
+          title: 'DIRECT HIT RUN OUT!',
+          badge: '🎯 SPECTACULAR RUN OUT 🎯',
+          subtitle: `Incredible direct-hit throw by ${resolvedFielderName || 'Fielder'}! ${outBatter?.name || 'Batter'} is caught short of the crease.`,
+          playerName: resolvedFielderName || 'Fielder',
+          teamName: `${outBatter?.name || 'Batter'} dismissed`,
+          scoreText: 'RUN OUT',
+          ballsText: `Ov ${getOvers(balls + 1)}`
+        });
+      } else if (wicketType === 'STUMPED') {
+        triggerMilestone({
+          type: 'KEEPER_OUT',
+          imageKey: 'KEEPER',
+          title: 'LIGHTNING STUMPING!',
+          badge: '🧤 WICKETKEEPER STUMPING 🧤',
+          subtitle: `Flawless glovework by ${resolvedFielderName || 'Wicketkeeper'}! Feet out of the crease, bails dislodged in a flash.`,
+          playerName: resolvedFielderName || 'Wicketkeeper',
+          teamName: `${outBatter?.name || 'Batter'} st ${resolvedFielderName || 'Keeper'} b ${bowler?.name || 'Bowler'}`,
+          scoreText: 'STUMPED',
+          ballsText: `Ov ${getOvers(balls + 1)}`
+        });
+      } else if (wicketType === 'CAUGHT_BEHIND') {
+        triggerMilestone({
+          type: 'KEEPER_OUT',
+          imageKey: 'KEEPER',
+          title: 'CAUGHT BEHIND!',
+          badge: '🧤 WICKETKEEPER CATCH 🧤',
+          subtitle: `Snicked to the keeper! Superb reflex catch taken by ${resolvedFielderName || 'Wicketkeeper'}.`,
+          playerName: resolvedFielderName || 'Wicketkeeper',
+          teamName: `${outBatter?.name || 'Batter'} c ${resolvedFielderName || 'Keeper'} b ${bowler?.name || 'Bowler'}`,
+          scoreText: 'CAUGHT BEHIND',
+          ballsText: `Ov ${getOvers(balls + 1)}`
+        });
+      } else if (wicketType === 'CAUGHT') {
+        triggerMilestone({
+          type: 'TOP_CATCHES',
+          imageKey: 'CATCH',
+          title: 'OUTSTANDING CATCH!',
+          badge: '🦅 SPECTACULAR CATCH 🦅',
+          subtitle: `Sensational athleticism! Full-length diving catch by ${resolvedFielderName || 'Fielder'} under pressure.`,
+          playerName: resolvedFielderName || 'Fielder',
+          teamName: `${outBatter?.name || 'Batter'} c ${resolvedFielderName || 'Fielder'} b ${bowler?.name || 'Bowler'}`,
+          scoreText: 'WICKET',
+          ballsText: `Ov ${getOvers(balls + 1)}`
+        });
+      }
 
       if (res.isOverComplete || res.data?.isOverComplete) {
         if (res.matchStatus === 'LIVE' && !res.data?.isMatchCompleted) {
@@ -5882,6 +5993,33 @@ export default function LiveScoringScreen() {
                       </Text>
                     </View>
 
+                    {/* OFFICIAL MAN OF THE MATCH PRESENTATION PODIUM */}
+                    <View style={styles.motmPresentationCard}>
+                      <View style={styles.motmRibbonHeader}>
+                        <Text style={styles.motmRibbonText}>🏆 OFFICIAL PLAYER OF THE MATCH 🏆</Text>
+                      </View>
+                      <View style={styles.motmCardContentRow}>
+                        <View style={styles.motmImageCircle}>
+                          <Image
+                            source={IMG_MAN_OF_THE_MATCH}
+                            style={styles.motmImage}
+                            resizeMode="contain"
+                          />
+                        </View>
+                        <View style={styles.motmInfoCol}>
+                          <Text style={styles.motmPlayerTitle}>
+                            {matchInfo?.playerOfTheMatch || playerOfMatchInput || 'N. Jagadeesan'}
+                          </Text>
+                          <Text style={styles.motmTeamSubtitle}>
+                            {winnerName || matchInfo?.teamA} • Match Winning Performance
+                          </Text>
+                          <View style={styles.motmPillBadge}>
+                            <Text style={styles.motmPillBadgeText}>⭐ MAN OF THE MATCH AWARD</Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+
                     {/* Action buttons */}
                     <View style={styles.championActionsRow}>
                       <TouchableOpacity
@@ -7430,6 +7568,54 @@ export default function LiveScoringScreen() {
                     </TouchableOpacity>
                   </View>
 
+                  {/* WICKETKEEPER DISMISSAL VISUAL CARD (Caught Behind / Stumped) */}
+                  {(wicketType === 'STUMPED' || wicketType === 'CAUGHT_BEHIND') && (
+                    <View style={styles.keeperDismissalCard}>
+                      <View style={styles.keeperImageContainer}>
+                        <Image
+                          source={keeperDismissalImage}
+                          style={styles.keeperArtwork}
+                          resizeMode="contain"
+                        />
+                      </View>
+                      <View style={styles.keeperTextCol}>
+                        <View style={styles.keeperTagBadge}>
+                          <Text style={styles.keeperTagBadgeText}>🧤 WICKETKEEPER DISMISSAL</Text>
+                        </View>
+                        <Text style={styles.keeperDismissalTitle}>
+                          {wicketType === 'STUMPED' ? 'Stumped (st Keeper b Bowler)' : 'Caught Behind (c Keeper b Bowler)'}
+                        </Text>
+                        <Text style={styles.keeperDismissalExplanation}>
+                          {wicketType === 'STUMPED'
+                            ? 'பேட்டர் க்ரீஸை விட்டு வெளியே வந்ததும் கீப்பர் ஸ்டம்பைத் தட்டி அவுட் செய்தார்.'
+                            : 'பேட்டர் எட்ஜ் செய்த பந்தை விக்கெட் கீப்பர் கேட்ச் பிடித்தார்.'}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* RUN OUT DISMISSAL VISUAL CARD */}
+                  {wicketType === 'RUN_OUT' && (
+                    <View style={styles.runOutDismissalCard}>
+                      <View style={styles.runOutImageContainer}>
+                        <Image
+                          source={runOutMilestoneImage}
+                          style={styles.runOutArtwork}
+                          resizeMode="contain"
+                        />
+                      </View>
+                      <View style={styles.runOutTextCol}>
+                        <View style={[styles.keeperTagBadge, { backgroundColor: '#fee2e2', borderColor: '#ef4444' }]}>
+                          <Text style={[styles.keeperTagBadgeText, { color: '#dc2626' }]}>🎯 DIRECT HIT RUN OUT</Text>
+                        </View>
+                        <Text style={styles.runOutDismissalTitle}>Run Out (Fielder Direct Hit / Throw)</Text>
+                        <Text style={styles.runOutDismissalExplanation}>
+                          பேட்டர் க்ரீஸுக்குள் வருவதற்கு முன் பீல்டர் வீசிய பந்து ஸ்டம்பைத் தகர்த்தது.
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
                   {/* 3. FIELDER SELECTION - ONLY SHOWN FOR CAUGHT, CAUGHT_BEHIND, RUN_OUT, STUMPED */}
                   {['CAUGHT', 'CAUGHT_BEHIND', 'RUN_OUT', 'STUMPED'].includes(wicketType) && (
                     <View style={{ marginTop: 4, marginBottom: 14 }}>
@@ -7973,14 +8159,25 @@ export default function LiveScoringScreen() {
               <Text style={styles.milestoneRibbonText}>{activeMilestone?.badge || '🏆 MILESTONE REACHED 🏆'}</Text>
             </View>
 
-            {/* Batsman Hero Image (100 / 200: Century Batsman with Flames; 50 / 150: Shot Batsman with Spirals) */}
-            <View style={styles.milestoneImageContainer}>
+            {/* Dynamic Cricket Milestone Hero Image (MOTM, Century, 50s, Bowler, Catch, Run Out, Keeper) */}
+            <View style={[
+              styles.milestoneImageContainer,
+              activeMilestone?.imageKey === 'KEEPER' && styles.milestoneKeeperBg,
+              activeMilestone?.imageKey === 'BOWLER' && styles.milestoneBowlerBg
+            ]}>
               <Image
                 source={
-                  activeMilestone?.type === 'BATTER_100' ||
-                  activeMilestone?.type === 'BATTER_200' ||
-                  activeMilestone?.type === 'TEAM_100' ||
-                  activeMilestone?.type === 'TEAM_200'
+                  activeMilestone?.imageKey === 'MOTM' || activeMilestone?.type === 'MAN_OF_THE_MATCH'
+                    ? IMG_MAN_OF_THE_MATCH
+                    : activeMilestone?.imageKey === 'BOWLER' || activeMilestone?.type === 'BOWLER_3W' || activeMilestone?.type === 'BOWLER_5W'
+                    ? bestBowlerImage
+                    : activeMilestone?.imageKey === 'CATCH' || activeMilestone?.type === 'TOP_CATCHES'
+                    ? catchMilestoneImage
+                    : activeMilestone?.imageKey === 'RUN_OUT' || activeMilestone?.type === 'RUN_OUT'
+                    ? runOutMilestoneImage
+                    : activeMilestone?.imageKey === 'KEEPER' || activeMilestone?.type === 'KEEPER_OUT'
+                    ? keeperDismissalImage
+                    : activeMilestone?.type === 'BATTER_100' || activeMilestone?.type === 'BATTER_200' || activeMilestone?.type === 'TEAM_100' || activeMilestone?.type === 'TEAM_200'
                     ? centuryBatsmanImage
                     : milestoneBatsmanImage
                 }
@@ -12039,5 +12236,196 @@ const getStyles = (isDesktop: boolean) =>
       color: '#ffffff',
       fontSize: 14,
       fontWeight: '900'
+    },
+
+    // MOTM Presentation Card Styles (End of Match)
+    motmPresentationCard: {
+      width: '100%',
+      backgroundColor: '#0f172a',
+      borderRadius: 16,
+      borderWidth: 2,
+      borderColor: '#f59e0b',
+      overflow: 'hidden',
+      marginTop: 14,
+      marginBottom: 14,
+      shadowColor: '#f59e0b',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.35,
+      shadowRadius: 10,
+      elevation: 6
+    },
+    motmRibbonHeader: {
+      backgroundColor: '#f59e0b',
+      paddingVertical: 6,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    motmRibbonText: {
+      color: '#0f172a',
+      fontSize: 11,
+      fontWeight: '900',
+      letterSpacing: 1,
+      textTransform: 'uppercase'
+    },
+    motmCardContentRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 12,
+      gap: 12
+    },
+    motmImageCircle: {
+      width: 70,
+      height: 70,
+      borderRadius: 35,
+      backgroundColor: '#ffffff',
+      borderWidth: 2,
+      borderColor: '#f59e0b',
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden'
+    },
+    motmImage: {
+      width: '85%',
+      height: '85%'
+    },
+    motmInfoCol: {
+      flex: 1
+    },
+    motmPlayerTitle: {
+      fontSize: 18,
+      fontWeight: '900',
+      color: '#fde047',
+      letterSpacing: 0.5
+    },
+    motmTeamSubtitle: {
+      fontSize: 11,
+      color: '#cbd5e1',
+      fontWeight: '600',
+      marginTop: 2
+    },
+    motmPillBadge: {
+      alignSelf: 'flex-start',
+      backgroundColor: '#b45309',
+      borderRadius: 12,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      marginTop: 6
+    },
+    motmPillBadgeText: {
+      color: '#ffffff',
+      fontSize: 9,
+      fontWeight: '900',
+      letterSpacing: 0.5
+    },
+
+    // Wicketkeeper Dismissal Card Styles (Wicket Modal Step 2)
+    keeperDismissalCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#f0fdf4',
+      borderWidth: 1.5,
+      borderColor: '#22c55e',
+      borderRadius: 12,
+      padding: 10,
+      marginBottom: 12,
+      gap: 10
+    },
+    keeperImageContainer: {
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: '#ffffff',
+      borderWidth: 1.5,
+      borderColor: '#16a34a',
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden'
+    },
+    keeperArtwork: {
+      width: '85%',
+      height: '85%'
+    },
+    keeperTextCol: {
+      flex: 1
+    },
+    keeperTagBadge: {
+      alignSelf: 'flex-start',
+      backgroundColor: '#dcfce7',
+      borderWidth: 1,
+      borderColor: '#86efac',
+      borderRadius: 6,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      marginBottom: 3
+    },
+    keeperTagBadgeText: {
+      fontSize: 9,
+      fontWeight: '900',
+      color: '#15803d'
+    },
+    keeperDismissalTitle: {
+      fontSize: 13,
+      fontWeight: '800',
+      color: '#14532d'
+    },
+    keeperDismissalExplanation: {
+      fontSize: 11,
+      color: '#166534',
+      marginTop: 2,
+      fontWeight: '500'
+    },
+
+    // Run Out Dismissal Card Styles
+    runOutDismissalCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#fff1f2',
+      borderWidth: 1.5,
+      borderColor: '#f43f5e',
+      borderRadius: 12,
+      padding: 10,
+      marginBottom: 12,
+      gap: 10
+    },
+    runOutImageContainer: {
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: '#ffffff',
+      borderWidth: 1.5,
+      borderColor: '#e11d48',
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden'
+    },
+    runOutArtwork: {
+      width: '85%',
+      height: '85%'
+    },
+    runOutTextCol: {
+      flex: 1
+    },
+    runOutDismissalTitle: {
+      fontSize: 13,
+      fontWeight: '800',
+      color: '#9f1239'
+    },
+    runOutDismissalExplanation: {
+      fontSize: 11,
+      color: '#881337',
+      marginTop: 2,
+      fontWeight: '500'
+    },
+
+    // Background color highlights for milestone modal
+    milestoneKeeperBg: {
+      backgroundColor: '#064e3b',
+      borderRadius: 16,
+      padding: 8
+    },
+    milestoneBowlerBg: {
+      backgroundColor: '#78350f',
+      borderRadius: 16,
+      padding: 8
     }
   });

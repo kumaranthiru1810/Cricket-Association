@@ -458,6 +458,7 @@ class ScorerService {
         isSuperOver: Boolean(match.is_super_over),
         status: match.status,
         result: match.result_summary,
+        playerOfTheMatch: match.player_of_the_match || match.man_of_the_match || match.player_of_match || null,
         teamAId: match.team_a_id,
         teamBId: match.team_b_id,
         teamA: teamA.name || match.team_a_id,
