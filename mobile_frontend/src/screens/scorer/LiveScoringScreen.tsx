@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,8 @@ import {
   Image
 } from 'react-native';
 import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
+
+const milestoneBatsmanImage = require('../../../assets/milestone_batsman.png');
 import SharedFooter from '../../components/scorer/SharedFooter';
 import { ScorerApi, getCurrentUser } from '../../services/api';
 import { ClockPickerModal, calculateDurationMinutes } from '../../components/common/ClockPickerModal';
@@ -472,6 +474,24 @@ export default function LiveScoringScreen() {
   // 12. Exit Screen Modal State
   const [showExitModal, setShowExitModal] = useState<boolean>(false);
 
+  // 13. Cricket Milestones Celebration State (50s, 100s, 5-Wicket Hauls, Hat-Tricks)
+  interface MilestoneCelebration {
+    type: 'BATTER_50' | 'BATTER_100' | 'BATTER_150' | 'BATTER_200' | 'BOWLER_3W' | 'BOWLER_5W' | 'HAT_TRICK' | 'TEAM_50' | 'TEAM_100' | 'TEAM_150' | 'TEAM_200';
+    title: string;
+    badge: string;
+    subtitle: string;
+    playerName: string;
+    teamName: string;
+    scoreText: string;
+    ballsText: string;
+    strikeRateText?: string;
+    fours?: number;
+    sixes?: number;
+  }
+  const [activeMilestone, setActiveMilestone] = useState<MilestoneCelebration | null>(null);
+  const [showMilestoneModal, setShowMilestoneModal] = useState<boolean>(false);
+  const shownMilestonesRef = useRef<Set<string>>(new Set());
+
   // Manual Batter Change & Strike Swap Modal State
   const [showChangeBatterModal, setShowChangeBatterModal] = useState<boolean>(false);
   const [changeBatterTarget, setChangeBatterTarget] = useState<'striker' | 'nonStriker'>('striker');
@@ -553,6 +573,8 @@ export default function LiveScoringScreen() {
         } else if (modalName === 'rules') {
           if (param) setActiveCricketRule(param as any);
           setShowCricketRulesModal(true);
+        } else if (modalName === 'milestone') {
+          (window as any).__TRIGGER_MILESTONE__(param || '50');
         } else if (modalName === 'closeAll') {
           setShowWicketModal(false);
           setShowChangeBowlerModal(false);
@@ -560,6 +582,51 @@ export default function LiveScoringScreen() {
           setShowExtrasModal(false);
           setShowUmpireModal(false);
           setShowCricketRulesModal(false);
+          setShowMilestoneModal(false);
+        }
+      };
+
+      (window as any).__TRIGGER_MILESTONE__ = (type: string = '50') => {
+        if (type === '100') {
+          triggerMilestone({
+            type: 'BATTER_100',
+            title: 'MAGNIFICENT CENTURY!',
+            badge: '👑 100 RUNS CENTURY 👑',
+            subtitle: 'Outstanding masterclass ton! Raises the bat to a standing ovation.',
+            playerName: striker?.name || 'N. Jagadeesan',
+            teamName: matchInfo?.battingTeam || 'Virudhunagar Spartans',
+            scoreText: '100*',
+            ballsText: '58 Balls',
+            strikeRateText: '172.4',
+            fours: 11,
+            sixes: 4
+          });
+        } else if (type === '5w') {
+          triggerMilestone({
+            type: 'BOWLER_5W',
+            title: 'FIVE-WICKET HAUL (FIFER)!',
+            badge: '🔥 5-WICKET HAUL 🔥',
+            subtitle: 'Spectacular bowling spell! Dismantles the batting lineup.',
+            playerName: bowler?.name || 'S. Sandeep Warrier',
+            teamName: matchInfo?.bowlingTeam || 'Rajapalayam Royals',
+            scoreText: '5/18',
+            ballsText: '3.4 Overs',
+            strikeRateText: 'ER: 4.9'
+          });
+        } else {
+          triggerMilestone({
+            type: 'BATTER_50',
+            title: 'HALF-CENTURY!',
+            badge: '⭐ 50 RUNS MILESTONE ⭐',
+            subtitle: 'Splendid half-century under pressure! A crucial innings for the team.',
+            playerName: striker?.name || 'N. Jagadeesan',
+            teamName: matchInfo?.battingTeam || 'Virudhunagar Spartans',
+            scoreText: '52*',
+            ballsText: '31 Balls',
+            strikeRateText: '167.7',
+            fours: 6,
+            sixes: 3
+          });
         }
       };
     }
@@ -649,6 +716,236 @@ export default function LiveScoringScreen() {
     }
 
     return { winnerName, winMargin, fullSummary: summary || `${winnerName} ${winMargin}` };
+  };
+
+  const triggerMilestone = (m: MilestoneCelebration) => {
+    setActiveMilestone(m);
+    setShowMilestoneModal(true);
+  };
+
+  const checkMilestones = (d: any, isInitial: boolean) => {
+    if (isInitial || !d) return;
+
+    const innId = d.innings?.id || 'inn1';
+
+    // 1. Striker Milestone (50, 100, 150, 200)
+    if (d.striker && d.striker.runs !== undefined) {
+      const sRuns = d.striker.runs;
+      const sBalls = d.striker.balls || 0;
+      const sName = d.striker.name || 'Batter';
+      const sId = d.striker.id || sName;
+      const team = d.innings?.battingTeam || matchInfo?.battingTeam || 'Batting Team';
+      const sr = sBalls > 0 ? ((sRuns / sBalls) * 100).toFixed(1) : '0.0';
+
+      if (sRuns >= 50 && sRuns < 100) {
+        const k50 = `50_${sId}_${innId}`;
+        if (!shownMilestonesRef.current.has(k50)) {
+          shownMilestonesRef.current.add(k50);
+          triggerMilestone({
+            type: 'BATTER_50',
+            title: 'HALF-CENTURY!',
+            badge: '⭐ 50 RUNS MILESTONE ⭐',
+            subtitle: 'Splendid half-century under pressure! A crucial innings for the team.',
+            playerName: sName,
+            teamName: team,
+            scoreText: `${sRuns}*`,
+            ballsText: `${sBalls} Balls`,
+            strikeRateText: sr,
+            fours: d.striker.fours || 0,
+            sixes: d.striker.sixes || 0
+          });
+          return;
+        }
+      } else if (sRuns >= 100 && sRuns < 150) {
+        const k100 = `100_${sId}_${innId}`;
+        if (!shownMilestonesRef.current.has(k100)) {
+          shownMilestonesRef.current.add(k100);
+          triggerMilestone({
+            type: 'BATTER_100',
+            title: 'MAGNIFICENT CENTURY!',
+            badge: '👑 100 RUNS CENTURY 👑',
+            subtitle: 'Outstanding masterclass ton! Raises the bat to a standing ovation.',
+            playerName: sName,
+            teamName: team,
+            scoreText: `${sRuns}*`,
+            ballsText: `${sBalls} Balls`,
+            strikeRateText: sr,
+            fours: d.striker.fours || 0,
+            sixes: d.striker.sixes || 0
+          });
+          return;
+        }
+      } else if (sRuns >= 150 && sRuns < 200) {
+        const k150 = `150_${sId}_${innId}`;
+        if (!shownMilestonesRef.current.has(k150)) {
+          shownMilestonesRef.current.add(k150);
+          triggerMilestone({
+            type: 'BATTER_150',
+            title: 'COLOSSAL 150* RUNS!',
+            badge: '🔥 150 RUNS MILESTONE 🔥',
+            subtitle: 'Unbelievable power-hitting and determination!',
+            playerName: sName,
+            teamName: team,
+            scoreText: `${sRuns}*`,
+            ballsText: `${sBalls} Balls`,
+            strikeRateText: sr,
+            fours: d.striker.fours || 0,
+            sixes: d.striker.sixes || 0
+          });
+          return;
+        }
+      } else if (sRuns >= 200) {
+        const k200 = `200_${sId}_${innId}`;
+        if (!shownMilestonesRef.current.has(k200)) {
+          shownMilestonesRef.current.add(k200);
+          triggerMilestone({
+            type: 'BATTER_200',
+            title: 'HISTORIC DOUBLE TON (200*)!',
+            badge: '💎 200 RUNS DOUBLE CENTURY 💎',
+            subtitle: 'A historic monumental innings for the ages!',
+            playerName: sName,
+            teamName: team,
+            scoreText: `${sRuns}*`,
+            ballsText: `${sBalls} Balls`,
+            strikeRateText: sr,
+            fours: d.striker.fours || 0,
+            sixes: d.striker.sixes || 0
+          });
+          return;
+        }
+      }
+    }
+
+    // 2. Non-Striker Milestone
+    if (d.nonStriker && d.nonStriker.runs !== undefined) {
+      const nsRuns = d.nonStriker.runs;
+      const nsBalls = d.nonStriker.balls || 0;
+      const nsName = d.nonStriker.name || 'Batter';
+      const nsId = d.nonStriker.id || nsName;
+      const team = d.innings?.battingTeam || matchInfo?.battingTeam || 'Batting Team';
+      const sr = nsBalls > 0 ? ((nsRuns / nsBalls) * 100).toFixed(1) : '0.0';
+
+      if (nsRuns >= 50 && nsRuns < 100) {
+        const k50 = `50_${nsId}_${innId}`;
+        if (!shownMilestonesRef.current.has(k50)) {
+          shownMilestonesRef.current.add(k50);
+          triggerMilestone({
+            type: 'BATTER_50',
+            title: 'HALF-CENTURY!',
+            badge: '⭐ 50 RUNS MILESTONE ⭐',
+            subtitle: 'Splendid half-century under pressure!',
+            playerName: nsName,
+            teamName: team,
+            scoreText: `${nsRuns}*`,
+            ballsText: `${nsBalls} Balls`,
+            strikeRateText: sr,
+            fours: d.nonStriker.fours || 0,
+            sixes: d.nonStriker.sixes || 0
+          });
+          return;
+        }
+      } else if (nsRuns >= 100 && nsRuns < 150) {
+        const k100 = `100_${nsId}_${innId}`;
+        if (!shownMilestonesRef.current.has(k100)) {
+          shownMilestonesRef.current.add(k100);
+          triggerMilestone({
+            type: 'BATTER_100',
+            title: 'MAGNIFICENT CENTURY!',
+            badge: '👑 100 RUNS CENTURY 👑',
+            subtitle: 'Sensational ton! Raises the bat to great acclaim.',
+            playerName: nsName,
+            teamName: team,
+            scoreText: `${nsRuns}*`,
+            ballsText: `${nsBalls} Balls`,
+            strikeRateText: sr,
+            fours: d.nonStriker.fours || 0,
+            sixes: d.nonStriker.sixes || 0
+          });
+          return;
+        }
+      }
+    }
+
+    // 3. Bowler Milestones (3 Wickets, 5 Wickets / Fifer)
+    if (d.bowler && d.bowler.wickets !== undefined) {
+      const bWkts = d.bowler.wickets;
+      const bName = d.bowler.name || 'Bowler';
+      const bId = d.bowler.id || bName;
+      const bOvers = d.bowler.overs || '0.0';
+      const bRuns = d.bowler.runs || 0;
+      const bowlingTeam = d.innings?.bowlingTeam || matchInfo?.bowlingTeam || 'Bowling Team';
+
+      if (bWkts >= 5) {
+        const k5w = `5w_${bId}_${innId}`;
+        if (!shownMilestonesRef.current.has(k5w)) {
+          shownMilestonesRef.current.add(k5w);
+          triggerMilestone({
+            type: 'BOWLER_5W',
+            title: 'FIVE-WICKET HAUL (FIFER)!',
+            badge: '🔥 5-WICKET HAUL 🔥',
+            subtitle: 'Spectacular bowling spell! Dismantles the batting lineup.',
+            playerName: bName,
+            teamName: bowlingTeam,
+            scoreText: `${bWkts}/${bRuns}`,
+            ballsText: `${bOvers} Overs`,
+            strikeRateText: `ER: ${d.bowler.economy || '0.0'}`
+          });
+          return;
+        }
+      } else if (bWkts === 3) {
+        const k3w = `3w_${bId}_${innId}`;
+        if (!shownMilestonesRef.current.has(k3w)) {
+          shownMilestonesRef.current.add(k3w);
+          triggerMilestone({
+            type: 'BOWLER_3W',
+            title: 'THREE WICKETS HAUL!',
+            badge: '🎯 3 WICKETS HAUL 🎯',
+            subtitle: 'Crucial bowling breakthroughs that turned the game!',
+            playerName: bName,
+            teamName: bowlingTeam,
+            scoreText: `${bWkts}/${bRuns}`,
+            ballsText: `${bOvers} Overs`,
+            strikeRateText: `ER: ${d.bowler.economy || '0.0'}`
+          });
+          return;
+        }
+      }
+    }
+
+    // 4. Team Milestones (50, 100, 150, 200 Team Runs)
+    if (d.innings && d.innings.totalRuns !== undefined) {
+      const tRuns = d.innings.totalRuns;
+      const team = d.innings.battingTeam || matchInfo?.battingTeam || 'Batting Team';
+      const teamOvers = d.innings.overs || '0.0';
+
+      const thresholds = [
+        { run: 200, badge: '🚀 TEAM 200 RUNS UP! 🚀', title: 'TEAM 200 UP!' },
+        { run: 150, badge: '⚡ TEAM 150 RUNS UP! ⚡', title: 'TEAM 150 UP!' },
+        { run: 100, badge: '💯 TEAM 100 RUNS UP! 💯', title: 'TEAM 100 UP!' },
+        { run: 50, badge: '🏏 TEAM 50 RUNS UP! 🏏', title: 'TEAM 50 UP!' }
+      ];
+
+      for (const th of thresholds) {
+        if (tRuns >= th.run) {
+          const kt = `team_${th.run}_${innId}`;
+          if (!shownMilestonesRef.current.has(kt)) {
+            shownMilestonesRef.current.add(kt);
+            triggerMilestone({
+              type: ('TEAM_' + th.run) as any,
+              title: th.title,
+              badge: th.badge,
+              subtitle: `Sensational collective batting! ${team} crosses the ${th.run}-run mark.`,
+              playerName: team,
+              teamName: `Overs: ${teamOvers} | Score: ${tRuns}/${d.innings.wickets || 0}`,
+              scoreText: `${tRuns}/${d.innings.wickets || 0}`,
+              ballsText: `${teamOvers} Ov`,
+              strikeRateText: `CRR: ${d.innings.runRate || '0.0'}`
+            });
+            break;
+          }
+        }
+      }
+    }
   };
 
   const loadLiveState = async (isInitial = false) => {
@@ -811,6 +1108,8 @@ export default function LiveScoringScreen() {
       if (ScorerApi.getOfflineQueueCount) {
         setOfflineQueueCount(ScorerApi.getOfflineQueueCount());
       }
+      // Automatic Milestone Celebration Popup (50s, 100s, 5-Wickets, etc.)
+      checkMilestones(d, isInitial);
     } catch (err: any) {
       console.error('loadLiveState error:', err);
       setApiError(err.message || 'Unable to connect to live scoring database.');
@@ -7631,6 +7930,92 @@ export default function LiveScoringScreen() {
         </View>
       </Modal>
 
+      {/* CRICKET MILESTONE CELEBRATION MODAL (50s, 100s, 5-Wickets, Hat-Tricks) */}
+      <Modal
+        visible={showMilestoneModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowMilestoneModal(false)}
+      >
+        <View style={styles.milestoneModalOverlay}>
+          <View style={styles.milestoneCard}>
+            {/* Top Ribbon */}
+            <View style={styles.milestoneRibbon}>
+              <Text style={styles.milestoneRibbonText}>{activeMilestone?.badge || '🏆 MILESTONE REACHED 🏆'}</Text>
+            </View>
+
+            {/* Batsman Hero Image (Provided Silhouette Graphic) */}
+            <View style={styles.milestoneImageContainer}>
+              <Image
+                source={milestoneBatsmanImage}
+                style={styles.milestoneHeroImage}
+                resizeMode="contain"
+              />
+            </View>
+
+            {/* Details Box */}
+            <View style={styles.milestoneContentBox}>
+              <Text style={styles.milestoneTitleText}>{activeMilestone?.title || 'HALF-CENTURY!'}</Text>
+              <Text style={styles.milestonePlayerName}>{activeMilestone?.playerName?.toUpperCase()}</Text>
+              <Text style={styles.milestoneTeamName}>{activeMilestone?.teamName?.toUpperCase()}</Text>
+
+              {/* Stat Pillars */}
+              <View style={styles.milestoneStatsBox}>
+                <View style={styles.milestoneStatItem}>
+                  <Text style={styles.milestoneStatValue}>{activeMilestone?.scoreText}</Text>
+                  <Text style={styles.milestoneStatLabel}>SCORE</Text>
+                </View>
+                <View style={styles.milestoneStatDivider} />
+                <View style={styles.milestoneStatItem}>
+                  <Text style={styles.milestoneStatValue}>{activeMilestone?.ballsText}</Text>
+                  <Text style={styles.milestoneStatLabel}>BALLS</Text>
+                </View>
+                {activeMilestone?.strikeRateText ? (
+                  <>
+                    <View style={styles.milestoneStatDivider} />
+                    <View style={styles.milestoneStatItem}>
+                      <Text style={styles.milestoneStatValue}>{activeMilestone?.strikeRateText}</Text>
+                      <Text style={styles.milestoneStatLabel}>STRIKE RATE</Text>
+                    </View>
+                  </>
+                ) : null}
+              </View>
+
+              {/* Boundary Pill (Fours & Sixes) */}
+              {(activeMilestone?.fours !== undefined || activeMilestone?.sixes !== undefined) && (
+                <View style={styles.milestoneBoundariesRow}>
+                  <View style={styles.milestoneBoundaryTag}>
+                    <Text style={styles.milestoneBoundaryTagText}>🏏 {activeMilestone?.fours || 0} Fours (4s)</Text>
+                  </View>
+                  <View style={[styles.milestoneBoundaryTag, styles.milestoneSixTag]}>
+                    <Text style={styles.milestoneBoundaryTagText}>🚀 {activeMilestone?.sixes || 0} Sixes (6s)</Text>
+                  </View>
+                </View>
+              )}
+
+              <Text style={styles.milestoneSubtitle}>{activeMilestone?.subtitle}</Text>
+            </View>
+
+            {/* Action Button */}
+            <TouchableOpacity
+              style={styles.milestoneDismissBtn}
+              onPress={() => setShowMilestoneModal(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.milestoneDismissBtnText}>CONTINUE LIVE SCORING ▶</Text>
+            </TouchableOpacity>
+
+            {/* Close Cross */}
+            <TouchableOpacity
+              style={styles.milestoneCloseCross}
+              onPress={() => setShowMilestoneModal(false)}
+            >
+              <Text style={styles.milestoneCloseCrossText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Smart Cricket Rule & Umpire Assistant Modal */}
       <CricketRulesModal
         visible={showCricketRulesModal}
@@ -11437,5 +11822,186 @@ const getStyles = (isDesktop: boolean) =>
       fontSize: 13,
       fontWeight: '800',
       color: '#ffffff'
+    },
+
+    // Cricket Milestone Celebration Styles
+    milestoneModalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.88)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 16
+    },
+    milestoneCard: {
+      width: '92%',
+      maxWidth: 460,
+      backgroundColor: '#0f172a',
+      borderRadius: 24,
+      borderWidth: 2,
+      borderColor: '#f59e0b',
+      overflow: 'hidden',
+      alignItems: 'center',
+      paddingBottom: 22,
+      position: 'relative',
+      shadowColor: '#f59e0b',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.45,
+      shadowRadius: 20,
+      elevation: 12
+    },
+    milestoneRibbon: {
+      width: '100%',
+      backgroundColor: '#f59e0b',
+      paddingVertical: 8,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    milestoneRibbonText: {
+      color: '#0f172a',
+      fontSize: 12,
+      fontWeight: '900',
+      letterSpacing: 1.2,
+      textTransform: 'uppercase'
+    },
+    milestoneImageContainer: {
+      width: 250,
+      height: 180,
+      marginTop: 10,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    milestoneHeroImage: {
+      width: '100%',
+      height: '100%'
+    },
+    milestoneContentBox: {
+      width: '100%',
+      paddingHorizontal: 20,
+      alignItems: 'center'
+    },
+    milestoneTitleText: {
+      fontSize: 22,
+      fontWeight: '900',
+      color: '#fde047',
+      letterSpacing: 0.8,
+      marginTop: 4,
+      textAlign: 'center'
+    },
+    milestonePlayerName: {
+      fontSize: 20,
+      fontWeight: '900',
+      color: '#ffffff',
+      letterSpacing: 0.5,
+      marginTop: 4,
+      textAlign: 'center'
+    },
+    milestoneTeamName: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: '#94a3b8',
+      letterSpacing: 0.5,
+      marginTop: 2,
+      textAlign: 'center'
+    },
+    milestoneStatsBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#1e293b',
+      borderWidth: 1.5,
+      borderColor: '#334155',
+      borderRadius: 14,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      marginTop: 14,
+      width: '100%'
+    },
+    milestoneStatItem: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    milestoneStatValue: {
+      fontSize: 20,
+      fontWeight: '900',
+      color: '#f8fafc'
+    },
+    milestoneStatLabel: {
+      fontSize: 10,
+      fontWeight: '800',
+      color: '#94a3b8',
+      marginTop: 2,
+      letterSpacing: 0.5
+    },
+    milestoneStatDivider: {
+      width: 1,
+      height: 28,
+      backgroundColor: '#334155',
+      marginHorizontal: 8
+    },
+    milestoneBoundariesRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginTop: 12
+    },
+    milestoneBoundaryTag: {
+      backgroundColor: '#14532d',
+      borderColor: '#22c55e',
+      borderWidth: 1,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 5
+    },
+    milestoneSixTag: {
+      backgroundColor: '#1e3a8a',
+      borderColor: '#3b82f6'
+    },
+    milestoneBoundaryTagText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: '#ffffff'
+    },
+    milestoneSubtitle: {
+      fontSize: 12,
+      color: '#cbd5e1',
+      textAlign: 'center',
+      marginTop: 12,
+      fontStyle: 'italic',
+      lineHeight: 17
+    },
+    milestoneDismissBtn: {
+      backgroundColor: '#16a34a',
+      borderRadius: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 28,
+      marginTop: 16,
+      shadowColor: '#16a34a',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.4,
+      shadowRadius: 8,
+      elevation: 4
+    },
+    milestoneDismissBtnText: {
+      color: '#ffffff',
+      fontSize: 13,
+      fontWeight: '900',
+      letterSpacing: 0.5
+    },
+    milestoneCloseCross: {
+      position: 'absolute',
+      top: 6,
+      right: 10,
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: 'rgba(0, 0, 0, 0.4)',
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    milestoneCloseCrossText: {
+      color: '#ffffff',
+      fontSize: 14,
+      fontWeight: '900'
     }
   });
