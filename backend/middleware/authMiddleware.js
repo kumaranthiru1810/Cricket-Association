@@ -132,8 +132,8 @@ async function verifyMatchPermission(req, res, next) {
       return res.status(404).json({ success: false, message: `Match '${matchId}' not found.` });
     }
 
-    // Admin has access to all matches
-    if (req.user && req.user.role === 'ADMIN') {
+    // Admin and Match Scorer have access to all matches
+    if (req.user && (req.user.role === 'ADMIN' || req.user.role === 'SCORER')) {
       req.match = match;
       return next();
     }
@@ -356,8 +356,8 @@ async function requireUmpireAuth(req, res, next) {
         });
       }
 
-      // Role check: Umpire or Admin
-      const isAllowedRole = user.role === 'UMPIRE' || user.role === 'ADMIN';
+      // Role check: Umpire, Admin, or Scorer
+      const isAllowedRole = user.role === 'UMPIRE' || user.role === 'ADMIN' || user.role === 'SCORER';
       if (!isAllowedRole) {
         return res.status(403).json({
           success: false,
@@ -413,8 +413,8 @@ async function verifyUmpireMatchPermission(req, res, next) {
       return res.status(404).json({ success: false, message: `Match '${matchId}' not found.` });
     }
 
-    // Admin has access to all matches
-    if (req.user && req.user.role === 'ADMIN') {
+    // Admin and Match Scorer have access to all matches
+    if (req.user && (req.user.role === 'ADMIN' || req.user.role === 'SCORER')) {
       req.match = match;
       return next();
     }

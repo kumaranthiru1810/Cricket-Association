@@ -52,12 +52,12 @@ export function checkScreenAccess(
       loginRole: 'PLAYER'
     },
     Scorer: {
-      roles: ['SCORER', 'ADMIN'],
+      roles: ['SCORER', 'ADMIN', 'UMPIRE'],
       portalName: 'Official Match Console',
       loginRole: 'SCORER'
     },
     Umpire: {
-      roles: ['UMPIRE', 'ADMIN'],
+      roles: ['UMPIRE', 'ADMIN', 'SCORER'],
       portalName: 'Official Umpire Console',
       loginRole: 'UMPIRE'
     },
