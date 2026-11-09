@@ -824,6 +824,29 @@ export default function HomeScreen() {
         onLogout={handleLogout}
         onNavigateToUserPortal={handleNavigateToUserPortal}
         scrollToSection={scrollToSection}
+        onSelectCategory={(category) => {
+          if (category === 'tournaments') {
+            scrollToSection('tournaments');
+          } else if (category === 'fixtures') {
+            setMatchFilter('upcoming');
+            scrollToSection('matchCentre');
+          } else if (category === 'results') {
+            setMatchFilter('results');
+            scrollToSection('matchCentre');
+          } else if (category === 'pointsTable') {
+            scrollToSection('pointsTable');
+          } else if (category === 'stats') {
+            scrollToSection('stats');
+          } else if (category === 'rules') {
+            scrollToSection('rules');
+          } else if (category === 'clubs') {
+            scrollToSection('clubs');
+          } else if (category === 'grounds') {
+            scrollToSection('grounds');
+          } else if (category === 'news' || category === 'photos') {
+            scrollToSection('news');
+          }
+        }}
         onScrollToTop={() => mainScrollRef.current?.scrollTo({ y: 0, animated: true })}
         isMobile={isMobile}
         mobileNavOpen={mobileNavOpen}
@@ -1553,9 +1576,9 @@ export default function HomeScreen() {
                           </View>
                         </View>
 
-                        {/* 5. Action CTA */}
+                        {/* 5. Action CTA (TNCA Match Centre Button) */}
                         <TouchableOpacity
-                          style={[styles.btnOutlineGoldBlock, isSmallMobile && { paddingVertical: 8 }]}
+                          style={[styles.tncaMatchCentreCardBtn, isSmallMobile && { paddingVertical: 8 }]}
                           onPress={() => {
                             if (isLive || isCompleted) {
                               handleOpenScorecard(m);
@@ -1569,15 +1592,16 @@ export default function HomeScreen() {
                               );
                             }
                           }}
+                          activeOpacity={0.85}
                         >
-                          <Text style={[styles.btnOutlineGoldBlockText, isSmallMobile && { fontSize: 11 }]}>
+                          <Text style={[styles.tncaMatchCentreCardBtnText, isSmallMobile && { fontSize: 11 }]}>
                             {isLive
-                              ? '👁️ View Live Scorecard & Analytics ▶'
+                              ? '🔴 Match Centre (Live Scorecard) ▶'
                               : isCompleted
-                                ? '📊 View Scorecard & Wagon Wheel ▶'
+                                ? '📊 Match Centre (Review & Wagon Wheel) ▶'
                                 : isUpcoming
-                                  ? '🔔 View Fixture Logistics'
-                                  : 'ℹ️ View Match Details'}
+                                  ? '📅 Match Centre (Fixture Details)'
+                                  : 'ℹ️ Match Centre (Match Details)'}
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -2463,10 +2487,39 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* ─── 12. MEDIA & PRESS NOTICES ─────────────────────────────────── */}
-        <View style={styles.section}>
+        {/* ─── 12. MEDIA & PRESS NOTICES (TNCA STYLE SUB-NAV) ─────────── */}
+        <View
+          nativeID="cfvd-section-news"
+          {...({ id: 'cfvd-section-news' } as any)}
+          style={styles.section}
+        >
           <View style={[styles.container, containerResponsiveStyle]}>
-            <View style={styles.sectionHead}>
+            {/* TNCA Sub-Nav Bar: [ 📰 News ] [ 📷 Photos ] ──────── See More > */}
+            <View style={styles.tncaMediaSubNavRow}>
+              <View style={styles.tncaMediaPillGroup}>
+                <TouchableOpacity style={styles.tncaPillYellowActive} activeOpacity={0.85}>
+                  <Text style={styles.tncaPillYellowText}>📰 News</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.tncaPillWhiteInactive}
+                  onPress={() => alert('Official CFVD Tournament Photo Gallery available in the portal.')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.tncaPillWhiteText}>📷 Photos</Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={styles.tncaSeeMoreLink}
+                onPress={() => alert('Browsing all official circulars, media releases and news bulletins.')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.tncaSeeMoreText}>See More ›</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.tncaMediaGoldDivider} />
+
+            <View style={[styles.sectionHead, { marginTop: 16 }]}>
               <View style={styles.sectionTagBadge}>
                 <Text style={styles.sectionTagBadgeText}>📰 MEDIA & NOTICES</Text>
               </View>
@@ -5592,6 +5645,89 @@ const styles = StyleSheet.create({
     color: '#b45309',
     fontSize: 12,
     fontWeight: '800'
+  },
+
+  // Official TNCA Match Centre Button (#0e184e Deep Navy)
+  tncaMatchCentreCardBtn: {
+    backgroundColor: '#0e184e',
+    borderRadius: 8,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    shadowColor: '#0e184e',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  tncaMatchCentreCardBtnText: {
+    color: '#ffffff',
+    fontSize: 12.5,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+
+  // TNCA Media Sub-Nav Row (Image 1 Style: [ 📰 News ] [ 📷 Photos ] ── See More >)
+  tncaMediaSubNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    marginBottom: 6,
+  },
+  tncaMediaPillGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  tncaPillYellowActive: {
+    backgroundColor: '#f5c43d',
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 7,
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  tncaPillYellowText: {
+    color: '#0e184e',
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 0.3,
+  },
+  tncaPillWhiteInactive: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 7,
+  },
+  tncaPillWhiteText: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  tncaSeeMoreLink: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  tncaSeeMoreText: {
+    color: '#0e184e',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  tncaMediaGoldDivider: {
+    width: '100%',
+    height: 2,
+    backgroundColor: '#f5c43d',
+    marginBottom: 16,
+    borderRadius: 1,
   },
 
   // Tournaments Section
