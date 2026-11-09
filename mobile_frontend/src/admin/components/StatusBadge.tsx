@@ -16,6 +16,7 @@ export type StatusType =
   | 'LIVE'
   | 'COMPLETED'
   | 'CANCELLED'
+  | 'POSTPONED'
   | string;
 
 interface Props {
@@ -58,6 +59,10 @@ export const StatusBadge: React.FC<Props> = ({ status, label, size = 'md' }) => 
     bg = '#f8fafc';
     text = '#334155';
     border = '#cbd5e1';
+  } else if (normalized === 'POSTPONED') {
+    bg = '#fffbeb';
+    text = '#b45309';
+    border = '#fde68a';
   }
 
   const isSmall = size === 'sm';

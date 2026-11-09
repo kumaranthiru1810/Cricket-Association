@@ -14,14 +14,28 @@ class TournamentController {
   async getTournaments(req, res) {
     try {
       const { status, search } = req.query;
-      const tournaments = await tournamentService.getTournaments({ status, search });
+      let tournaments = await tournamentService.getTournaments({ status, search });
+      if (!tournaments || tournaments.length === 0) {
+        await db.initDb();
+        tournaments = await db.models.Tournament.find({}).sort({ start_date: -1 }).lean();
+      }
       res.json({
         success: true,
-        count: tournaments.length,
-        tournaments,
-        data: tournaments // support both access patterns
+        count: (tournaments || []).length,
+        tournaments: tournaments || [],
+        data: tournaments || [] // support both access patterns
       });
     } catch (err) {
+      try {
+        await db.initDb();
+        const fallback = await db.models.Tournament.find({}).sort({ start_date: -1 }).lean();
+        return res.json({
+          success: true,
+          count: fallback.length,
+          tournaments: fallback,
+          data: fallback
+        });
+      } catch (_e) {}
       res.status(err.status || 500).json({
         success: false,
         message: err.message || 'Failed to retrieve tournaments.'

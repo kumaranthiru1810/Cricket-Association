@@ -43,7 +43,7 @@ export interface UmpireDashboardProps {
 }
 
 type TabType = 'overview' | 'matches' | 'currentMatch' | 'profile';
-type MatchFilter = 'ALL' | 'TODAY' | 'LIVE' | 'UPCOMING' | 'COMPLETED';
+type MatchFilter = 'ALL' | 'TODAY' | 'LIVE' | 'UPCOMING' | 'COMPLETED' | 'POSTPONED';
 
 export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireDashboardProps) {
   const [activeTab, setActiveTab] = useState<TabType>(initialParams?.initialTab || 'overview');
@@ -61,13 +61,15 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
     live: any[];
     upcoming: any[];
     completed: any[];
+    postponed: any[];
   }>({
     all: [],
     today: [],
     current: null,
     live: [],
     upcoming: [],
-    completed: []
+    completed: [],
+    postponed: []
   });
 
   // Selected Active Match for Supervision
@@ -104,6 +106,12 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
   const [pendingDecisionType, setPendingDecisionType] = useState<string>('');
   const [decisionNotes, setDecisionNotes] = useState<string>('');
   const [isSubmittingDecision, setIsSubmittingDecision] = useState<boolean>(false);
+
+  // Postponement Request Modal
+  const [postponeModalMatch, setPostponeModalMatch] = useState<any | null>(null);
+  const [umpirePostponeReason, setUmpirePostponeReason] = useState<string>('Unplayable pitch condition / safety hazard');
+  const [umpirePostponeNotes, setUmpirePostponeNotes] = useState<string>('');
+  const [isSubmittingUmpirePostpone, setIsSubmittingUmpirePostpone] = useState<boolean>(false);
 
   // Responsive Layout
   const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
@@ -153,7 +161,8 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
           current: d.current || null,
           live: Array.isArray(d.live) ? d.live : [],
           upcoming: Array.isArray(d.upcoming) ? d.upcoming : [],
-          completed: Array.isArray(d.completed) ? d.completed : []
+          completed: Array.isArray(d.completed) ? d.completed : [],
+          postponed: Array.isArray(d.postponed) ? d.postponed : []
         });
 
         // Auto-select match if not selected
@@ -329,6 +338,38 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
     }
   };
 
+  // Umpire Postponement Request
+  const handleRequestPostponement = async () => {
+    if (!postponeModalMatch) return;
+    if (!umpirePostponeReason.trim()) {
+      showError('Mandatory Reason Required', 'Please provide an official reason for requesting match postponement.');
+      return;
+    }
+    setIsSubmittingUmpirePostpone(true);
+    try {
+      const matchIdToPostpone = postponeModalMatch.matchId || postponeModalMatch.id;
+      await UmpireApi.requestPostponement(matchIdToPostpone, {
+        reason: umpirePostponeReason.trim(),
+        notes: umpirePostponeNotes.trim()
+      });
+      showSuccess(
+        'Request Submitted',
+        'Your match postponement request has been submitted to Tournament Administration for approval.'
+      );
+      setPostponeModalMatch(null);
+      setUmpirePostponeReason('Unplayable pitch condition / safety hazard');
+      setUmpirePostponeNotes('');
+      await loadUmpireData(true);
+      if (selectedMatchId === matchIdToPostpone) {
+        await loadMatchDetails(matchIdToPostpone);
+      }
+    } catch (err: any) {
+      showError('Submission Error', err.message || 'Failed to submit postponement request.');
+    } finally {
+      setIsSubmittingUmpirePostpone(false);
+    }
+  };
+
   // Filtered Matches List
   const filteredMatches = useMemo(() => {
     let list = matchesData.all || [];
@@ -336,6 +377,11 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
     if (matchFilter === 'LIVE') list = matchesData.live || [];
     if (matchFilter === 'UPCOMING') list = matchesData.upcoming || [];
     if (matchFilter === 'COMPLETED') list = matchesData.completed || [];
+    if (matchFilter === 'POSTPONED') {
+      list = matchesData.postponed && matchesData.postponed.length > 0
+        ? matchesData.postponed
+        : (matchesData.all || []).filter(m => (m.status || '').toUpperCase() === 'POSTPONED' || !!m.postponement?.is_postponed);
+    }
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
@@ -582,14 +628,14 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
 
                 {/* Filter Tabs */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-                  {(['ALL', 'TODAY', 'LIVE', 'UPCOMING', 'COMPLETED'] as MatchFilter[]).map(f => (
+                  {(['ALL', 'TODAY', 'LIVE', 'UPCOMING', 'POSTPONED', 'COMPLETED'] as MatchFilter[]).map(f => (
                     <TouchableOpacity
                       key={f}
                       style={[styles.filterPill, matchFilter === f && styles.filterPillActive]}
                       onPress={() => setMatchFilter(f)}
                     >
                       <Text style={[styles.filterPillText, matchFilter === f && styles.filterPillTextActive]}>
-                        {f}
+                        {f === 'POSTPONED' ? '⏸️ POSTPONED' : f}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -631,6 +677,36 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
                         <Text style={styles.fixtureDetail}>⚖️ Assigned: {m.umpireAssignment}</Text>
                       </View>
 
+                      {/* Postponement Notices */}
+                      {m.status === 'POSTPONED' ? (
+                        <View style={{ backgroundColor: '#fffbeb', borderColor: '#fcd34d', borderWidth: 1, borderRadius: 8, padding: 8, marginVertical: 6 }}>
+                          <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 12 }}>
+                            ⏸️ Match Postponed: {m.postponement?.reason || 'Reason not recorded'}
+                          </Text>
+                          {m.postponement?.original_date && (
+                            <Text style={{ color: '#78350f', fontSize: 11, marginTop: 2 }}>
+                              Original: {m.postponement.original_date} • {m.postponement.original_time || '09:30 AM'}
+                            </Text>
+                          )}
+                          {m.postponement?.rescheduled_date && (
+                            <Text style={{ color: '#15803d', fontSize: 11, fontWeight: '700', marginTop: 2 }}>
+                              Rescheduled: {m.postponement.rescheduled_date} • {m.postponement.rescheduled_time || '09:30 AM'}
+                            </Text>
+                          )}
+                        </View>
+                      ) : null}
+
+                      {m.umpirePostponementRequest?.status === 'PENDING' ? (
+                        <View style={{ backgroundColor: '#fef2f2', borderColor: '#fca5a5', borderWidth: 1, borderRadius: 8, padding: 8, marginVertical: 6 }}>
+                          <Text style={{ color: '#991b1b', fontWeight: '700', fontSize: 12 }}>
+                            ⏳ Postponement Requested (Pending Admin Review)
+                          </Text>
+                          <Text style={{ color: '#7f1d1d', fontSize: 11, marginTop: 2 }}>
+                            Reason: {m.umpirePostponementRequest.reason}
+                          </Text>
+                        </View>
+                      ) : null}
+
                       {/* Result or Live Status */}
                       {m.resultSummary ? (
                         <View style={styles.resultBanner}>
@@ -642,13 +718,26 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
                       ) : null}
 
                       {/* Card Actions */}
-                      <View style={styles.cardActionRow}>
+                      <View style={[styles.cardActionRow, { gap: 8, flexWrap: 'wrap' }]}>
                         <TouchableOpacity
                           style={styles.openConsoleBtn}
                           onPress={() => handleSelectMatch(m.matchId || m.id)}
                         >
                           <Text style={styles.openConsoleBtnText}>Open Supervisor Console →</Text>
                         </TouchableOpacity>
+
+                        {m.status !== 'POSTPONED' && m.status !== 'COMPLETED' && m.umpirePostponementRequest?.status !== 'PENDING' && (
+                          <TouchableOpacity
+                            style={[styles.openConsoleBtn, { backgroundColor: '#fffbeb', borderColor: '#f59e0b', borderWidth: 1 }]}
+                            onPress={() => {
+                              setPostponeModalMatch(m);
+                              setUmpirePostponeReason('Unplayable pitch condition / safety hazard');
+                              setUmpirePostponeNotes('');
+                            }}
+                          >
+                            <Text style={[styles.openConsoleBtnText, { color: '#b45309', fontWeight: '700' }]}>⚠️ Request Postponement</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                     </View>
                   ))
@@ -749,6 +838,36 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
                         Official Match Control for certified Federation Umpires
                       </Text>
 
+                      {/* Postponement Notices */}
+                      {selectedMatchDetails.umpirePostponementRequest?.status === 'PENDING' && (
+                        <View style={{ backgroundColor: '#fef2f2', borderColor: '#fca5a5', borderWidth: 1, borderRadius: 8, padding: 10, marginVertical: 8 }}>
+                          <Text style={{ color: '#991b1b', fontWeight: '700', fontSize: 13 }}>
+                            ⏳ Match Postponement Requested (Pending Admin Review)
+                          </Text>
+                          <Text style={{ color: '#7f1d1d', fontSize: 12, marginTop: 2 }}>
+                            Reason: {selectedMatchDetails.umpirePostponementRequest.reason}
+                          </Text>
+                        </View>
+                      )}
+
+                      {selectedMatchDetails.status === 'POSTPONED' && (
+                        <View style={{ backgroundColor: '#fffbeb', borderColor: '#fcd34d', borderWidth: 1, borderRadius: 8, padding: 10, marginVertical: 8 }}>
+                          <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 13 }}>
+                            ⏸️ Match Is Postponed: {selectedMatchDetails.postponement?.reason || 'Reason not recorded'}
+                          </Text>
+                          {selectedMatchDetails.postponement?.original_date && (
+                            <Text style={{ color: '#78350f', fontSize: 12, marginTop: 2 }}>
+                              Original Schedule: {selectedMatchDetails.postponement.original_date} • {selectedMatchDetails.postponement.original_time || '09:30 AM'}
+                            </Text>
+                          )}
+                          {selectedMatchDetails.postponement?.rescheduled_date && (
+                            <Text style={{ color: '#15803d', fontSize: 12, fontWeight: '700', marginTop: 2 }}>
+                              Rescheduled: {selectedMatchDetails.postponement.rescheduled_date} • {selectedMatchDetails.postponement.rescheduled_time || '09:30 AM'}
+                            </Text>
+                          )}
+                        </View>
+                      )}
+
                       <View style={styles.controlButtonsGrid}>
                         {/* 1. Start Match / Confirm Toss */}
                         <TouchableOpacity
@@ -802,6 +921,21 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
                           <Text style={styles.ctrlBtnIcon}>🏆</Text>
                           <Text style={styles.ctrlBtnText}>End Match & Certify</Text>
                         </TouchableOpacity>
+
+                        {/* 5. Request Postponement */}
+                        {selectedMatchDetails.status !== 'POSTPONED' && selectedMatchDetails.status !== 'COMPLETED' && selectedMatchDetails.umpirePostponementRequest?.status !== 'PENDING' && (
+                          <TouchableOpacity
+                            style={[styles.ctrlBtn, { backgroundColor: '#b45309' }]}
+                            onPress={() => {
+                              setPostponeModalMatch(selectedMatchDetails);
+                              setUmpirePostponeReason('Unplayable pitch condition / safety hazard');
+                              setUmpirePostponeNotes('');
+                            }}
+                          >
+                            <Text style={styles.ctrlBtnIcon}>⚠️</Text>
+                            <Text style={styles.ctrlBtnText}>Request Postponement</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                     </View>
 
@@ -1271,6 +1405,62 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
             </View>
           </View>
         </Modal>
+
+        {/* POSTPONEMENT REQUEST MODAL */}
+        <Modal visible={!!postponeModalMatch} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalBox}>
+              <Text style={[styles.modalTitle, { color: '#b45309' }]}>⚠️ REQUEST MATCH POSTPONEMENT</Text>
+              <Text style={styles.modalSubtitle}>
+                Submit an official Umpire request to Tournament Administration to postpone match #{postponeModalMatch?.matchId || postponeModalMatch?.id}.
+              </Text>
+
+              <Text style={styles.modalLabel}>Reason for Postponement Request *</Text>
+              <TextInput
+                style={[styles.modalInput, { minHeight: 70, textAlignVertical: 'top' }]}
+                value={umpirePostponeReason}
+                onChangeText={setUmpirePostponeReason}
+                placeholder="e.g. Unplayable pitch conditions, continuous rain, safety hazard..."
+                placeholderTextColor="#94a3b8"
+                multiline
+                numberOfLines={3}
+              />
+
+              <Text style={styles.modalLabel}>Additional Umpire Notes / Ground Conditions (Optional)</Text>
+              <TextInput
+                style={[styles.modalInput, { minHeight: 50, textAlignVertical: 'top' }]}
+                value={umpirePostponeNotes}
+                onChangeText={setUmpirePostponeNotes}
+                placeholder="e.g. Both captains consulted; ground waterlogged; inspection at 2 PM not feasible."
+                placeholderTextColor="#94a3b8"
+                multiline
+                numberOfLines={2}
+              />
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setPostponeModalMatch(null)}
+                  disabled={isSubmittingUmpirePostpone}
+                >
+                  <Text style={styles.modalCancelText}>Dismiss</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.modalConfirmBtn, { backgroundColor: '#b45309' }]}
+                  onPress={handleRequestPostponement}
+                  disabled={isSubmittingUmpirePostpone}
+                >
+                  {isSubmittingUmpirePostpone ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.modalConfirmText}>Submit Request to Admin</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </SharedBackground>
   );
@@ -1279,6 +1469,7 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
 function getStatusBadgeStyle(status: string) {
   const s = String(status || '').toUpperCase();
   if (s === 'LIVE') return { backgroundColor: '#059669' };
+  if (s === 'POSTPONED') return { backgroundColor: '#b45309' };
   if (s === 'SCHEDULED') return { backgroundColor: '#2563eb' };
   if (s === 'INNINGS_BREAK') return { backgroundColor: '#7c3aed' };
   if (s === 'PAUSED') return { backgroundColor: '#d97706' };

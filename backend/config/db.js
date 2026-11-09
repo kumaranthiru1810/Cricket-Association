@@ -285,7 +285,51 @@ const MatchSchema = new mongoose.Schema({
   match_type: { type: String, default: 'T20' },
   overs_per_side: { type: Number, default: 20 },
   stage: { type: String, default: 'LEAGUE' }, // LEAGUE, QUARTER_FINAL, SEMI_FINAL, FINAL, etc.
-  status: { type: String, enum: ['SCHEDULED', 'TOSS', 'LIVE', 'INNINGS_BREAK', 'PAUSED', 'COMPLETED', 'ABANDONED', 'CANCELLED'], default: 'SCHEDULED', index: true },
+  status: { type: String, enum: ['SCHEDULED', 'TOSS', 'LIVE', 'INNINGS_BREAK', 'PAUSED', 'COMPLETED', 'ABANDONED', 'CANCELLED', 'POSTPONED'], default: 'SCHEDULED', index: true },
+  postponement: {
+    is_postponed: { type: Boolean, default: false },
+    reason: { type: String, default: null },
+    postponed_at: { type: Date, default: null },
+    postponed_by: {
+      user_id: { type: String, default: null },
+      role: { type: String, default: 'ADMIN' },
+      name: { type: String, default: '' }
+    },
+    original_date: { type: String, default: null },
+    original_time: { type: String, default: null },
+    rescheduled_date: { type: String, default: null },
+    rescheduled_time: { type: String, default: null },
+    rescheduled_at: { type: Date, default: null },
+    rescheduled_by: {
+      user_id: { type: String, default: null },
+      role: { type: String, default: null },
+      name: { type: String, default: '' }
+    }
+  },
+  umpire_postponement_request: {
+    requested: { type: Boolean, default: false },
+    umpire_id: { type: String, default: null },
+    umpire_name: { type: String, default: '' },
+    reason: { type: String, default: '' },
+    status: { type: String, enum: ['NONE', 'PENDING', 'APPROVED', 'REJECTED'], default: 'NONE' },
+    requested_at: { type: Date, default: null },
+    reviewed_by: { type: String, default: null },
+    reviewed_at: { type: Date, default: null },
+    review_notes: { type: String, default: '' }
+  },
+  postponement_history: [{
+    action: { type: String, required: true }, // 'POSTPONED', 'RESCHEDULED', 'REQUESTED', 'REQUEST_APPROVED', 'REQUEST_REJECTED'
+    reason: { type: String, default: '' },
+    from_date: { type: String, default: '' },
+    from_time: { type: String, default: '' },
+    to_date: { type: String, default: '' },
+    to_time: { type: String, default: '' },
+    actor_id: { type: String, default: '' },
+    actor_name: { type: String, default: '' },
+    actor_role: { type: String, default: '' },
+    timestamp: { type: Date, default: Date.now },
+    notes: { type: String, default: '' }
+  }],
   toss_winner_id: { type: String, default: null },
   toss_decision: { type: String, default: null },
   current_innings_number: { type: Number, default: 1 },
