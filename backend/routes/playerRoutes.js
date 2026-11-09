@@ -16,6 +16,7 @@ const express = require('express');
 const router = express.Router();
 const authService = require('../services/authService');
 const playerService = require('../services/playerService');
+const playerRatingService = require('../services/playerRatingService');
 const { requirePlayerAuth } = require('../middleware/authMiddleware');
 
 // -------------------------------------------------------------
@@ -201,6 +202,99 @@ router.get('/notifications', requirePlayerAuth, async (req, res) => {
   } catch (err) {
     const status = err.status || 500;
     res.status(status).json({ success: false, message: err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// 3. PLAYER PERFORMANCE & CAREER RATING SYSTEM ENDPOINTS
+// -------------------------------------------------------------
+
+/**
+ * GET /api/players/leaderboards/ratings or /api/player/leaderboards/ratings
+ * Public leaderboard of top rated players across format / category
+ */
+router.get('/leaderboards/ratings', async (req, res) => {
+  try {
+    const { category = 'overall', format = 'ALL', limit = 10 } = req.query;
+    const leaders = await playerRatingService.getRatingsLeaderboard({ category, format, limit });
+    res.status(200).json({ success: true, category, format, leaders });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/players/matches/:matchId/recalculate-ratings
+ * Idempotently trigger rating computation for all players in a match
+ */
+router.post('/matches/:matchId/recalculate-ratings', async (req, res) => {
+  try {
+    const result = await playerRatingService.recalculateMatchRatings(req.params.matchId);
+    res.status(result.success ? 200 : 400).json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * Authenticated Player's Own Rating Endpoints
+ */
+router.get('/ratings', requirePlayerAuth, async (req, res) => {
+  try {
+    const ratings = await playerRatingService.getPlayerMatchRatings(req.user.id);
+    res.status(200).json({ success: true, ratings });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.get('/career-ratings', requirePlayerAuth, async (req, res) => {
+  try {
+    const career = await playerRatingService.getCareerRatings(req.user.id);
+    res.status(200).json({ success: true, career });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.get('/form', requirePlayerAuth, async (req, res) => {
+  try {
+    const matchLimit = req.query.matches ? parseInt(req.query.matches, 10) : 5;
+    const form = await playerRatingService.getPlayerForm(req.user.id, matchLimit);
+    res.status(200).json({ success: true, form });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * Public / Generic Player Rating Endpoints by Player ID
+ */
+router.get('/:id/ratings', async (req, res) => {
+  try {
+    const ratings = await playerRatingService.getPlayerMatchRatings(req.params.id);
+    res.status(200).json({ success: true, playerId: req.params.id, ratings });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.get('/:id/career-ratings', async (req, res) => {
+  try {
+    const career = await playerRatingService.getCareerRatings(req.params.id);
+    res.status(200).json({ success: true, playerId: req.params.id, career });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.get('/:id/form', async (req, res) => {
+  try {
+    const matchLimit = req.query.matches ? parseInt(req.query.matches, 10) : 5;
+    const form = await playerRatingService.getPlayerForm(req.params.id, matchLimit);
+    res.status(200).json({ success: true, playerId: req.params.id, form });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 

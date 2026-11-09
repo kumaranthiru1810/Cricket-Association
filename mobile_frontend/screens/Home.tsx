@@ -27,7 +27,7 @@ import {
 import { io } from 'socket.io-client';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppNavigation } from '../src/navigation/AppNavigator';
-import { ScorerApi, getCurrentUser, setCurrentUser, setAuthToken, SOCKET_URL } from '../src/services/api';
+import { ScorerApi, PlayerApi, getCurrentUser, setCurrentUser, setAuthToken, logoutAndClearAllSessions, SOCKET_URL } from '../src/services/api';
 import { MatchHighlightsBanner } from '../src/components/common/MatchHighlightsBanner';
 import Header from '../src/layouts/Header';
 
@@ -496,11 +496,14 @@ export default function HomeScreen() {
 
   const handleLogout = async () => {
     try {
-      await ScorerApi.logout();
+      await logoutAndClearAllSessions();
     } catch (_e) { }
     setAuthToken(null);
     setCurrentUser(null);
     setSessionUser(null);
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.location.href = '/';
+    }
   };
 
   const handleNavigateToUserPortal = () => {
@@ -631,34 +634,76 @@ export default function HomeScreen() {
     }
   };
 
+  // State: Ratings Leaderboard (Module 5)
+  const [ratingCategory, setRatingCategory] = useState<'overall' | 'batting' | 'bowling'>('overall');
+  const [ratingFormat, setRatingFormat] = useState<'ALL' | 'T20' | 'ONE_DAY' | 'MULTI_DAY'>('ALL');
+  const [ratingLeaders, setRatingLeaders] = useState<any[]>([]);
+  const [isLoadingLeaders, setIsLoadingLeaders] = useState<boolean>(false);
+
+  const loadRatingsLeaderboard = async (category = ratingCategory, format = ratingFormat) => {
+    try {
+      setIsLoadingLeaders(true);
+      const res = await PlayerApi.getRatingsLeaderboard({
+        category,
+        format,
+        limit: 10
+      });
+      if (res && res.success && Array.isArray(res.leaders)) {
+        setRatingLeaders(res.leaders);
+      }
+    } catch (e: any) {
+      console.warn('Ratings leaderboard fetch error:', e.message);
+    } finally {
+      setIsLoadingLeaders(false);
+    }
+  };
+
   useEffect(() => {
     loadPublicMatches(true);
     loadPortalData();
+    loadRatingsLeaderboard();
 
-    // Real-time Socket.IO Live Score Synchronization
+    // Real-time Socket.IO Live Score Synchronization (Zero-Flicker targeted updates)
     let socket: any = null;
     try {
       socket = io(SOCKET_URL, { timeout: 5000, reconnectionAttempts: 3 });
-      socket.on('score:update', () => {
-        loadPublicMatches(false);
-        loadPortalData();
-      });
-      socket.on('connect', () => {
-        loadPublicMatches(false);
-        loadPortalData();
+      socket.on('score:update', (payload: any) => {
+        // Targeted in-place update without re-fetching entire portal
+        if (payload?.matchId) {
+          setPublicMatches(prev => prev.map(m => {
+            if (m.id === payload.matchId) {
+              return {
+                ...m,
+                scoreA: payload.scoreA !== undefined ? payload.scoreA : m.scoreA,
+                scoreB: payload.scoreB !== undefined ? payload.scoreB : m.scoreB,
+                currentInnings: payload.currentInnings || m.currentInnings,
+                status: payload.status || m.status,
+                statusText: payload.statusText || m.statusText,
+                liveText: payload.liveText || m.liveText
+              };
+            }
+            return m;
+          }));
+        } else {
+          loadPublicMatches(false);
+        }
       });
     } catch (e) {
       // Fallback to active interval
     }
 
-    // Silent background poll every 10 seconds
-    const timer = setInterval(() => {
+    // Silent background poll every 30 seconds for matches, 60s for portal
+    const matchTimer = setInterval(() => {
       loadPublicMatches(false);
+    }, 30000);
+
+    const portalTimer = setInterval(() => {
       loadPortalData();
-    }, 10000);
+    }, 60000);
 
     return () => {
-      clearInterval(timer);
+      clearInterval(matchTimer);
+      clearInterval(portalTimer);
       if (socket) socket.disconnect();
     };
   }, []);
@@ -681,8 +726,8 @@ export default function HomeScreen() {
   // State: Points Table Filter
   const [pointsTableKey, setPointsTableKey] = useState<string>('div1');
 
-  // State: Performance Stats Filter
-  const [perfTab, setPerfTab] = useState<'batting' | 'bowling' | 'fielding'>('batting');
+  // State: Performance Stats Filter (default to ⭐ ratings)
+  const [perfTab, setPerfTab] = useState<'ratings' | 'batting' | 'bowling' | 'fielding'>('ratings');
 
   // State: District Players
   const [playerFilter, setPlayerFilter] = useState<string>('all');
@@ -824,7 +869,7 @@ export default function HomeScreen() {
         onLogout={handleLogout}
         onNavigateToUserPortal={handleNavigateToUserPortal}
         scrollToSection={scrollToSection}
-        onSelectCategory={(category) => {
+        onSelectCategory={(category: any) => {
           if (category === 'tournaments') {
             scrollToSection('tournaments');
           } else if (category === 'fixtures') {
@@ -1579,19 +1624,7 @@ export default function HomeScreen() {
                         {/* 5. Action CTA (TNCA Match Centre Button) */}
                         <TouchableOpacity
                           style={[styles.tncaMatchCentreCardBtn, isSmallMobile && { paddingVertical: 8 }]}
-                          onPress={() => {
-                            if (isLive || isCompleted) {
-                              handleOpenScorecard(m);
-                            } else if (isUpcoming) {
-                              alert(
-                                `Fixture Logistics:\n• Tournament: ${m.tournament || 'CFVD'}\n• Teams: ${m.teamA} vs ${m.teamB}\n• Date: ${cleanDate} ${cleanTime}\n• Venue: ${cleanVenue}\n• Format: ${m.format}`
-                              );
-                            } else {
-                              alert(
-                                `Match Details:\n• Teams: ${m.teamA} vs ${m.teamB}\n• Status: ${m.status}\n• Note: ${m.result || 'No details'}`
-                              );
-                            }
-                          }}
+                          onPress={() => handleOpenScorecard(m)}
                           activeOpacity={0.85}
                         >
                           <Text style={[styles.tncaMatchCentreCardBtnText, isSmallMobile && { fontSize: 11 }]}>
@@ -1937,6 +1970,7 @@ export default function HomeScreen() {
             {/* Performance Tabs */}
             <View style={[styles.perfTabsRow, isSmallMobile && { gap: 6, marginBottom: 14 }]}>
               {[
+                { id: 'ratings', short: '⭐ Player Ratings', label: '⭐ Performance Ratings (0–10 ★)' },
                 { id: 'batting', short: '🏏 Batting', label: '🏏 Batting Stats (Runs, 50/100s)' },
                 { id: 'bowling', short: '🎯 Bowling', label: '🎯 Bowling Stats (Runs, 3w/5w)' },
                 { id: 'fielding', short: '🧤 Fielding', label: '🧤 Fielding Stats (Catches, Stumpings)' }
@@ -1961,6 +1995,69 @@ export default function HomeScreen() {
               ))}
             </View>
 
+            {/* If Ratings Tab selected, show Category and Format Filters */}
+            {perfTab === 'ratings' && (
+              <View style={{ marginBottom: 14, gap: 8 }}>
+                {/* Category Selector */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                  <Text style={{ color: '#d4af37', fontSize: 11, fontWeight: '800', marginRight: 4 }}>CATEGORY:</Text>
+                  {[
+                    { id: 'overall', label: '⭐ Overall' },
+                    { id: 'batting', label: '🏏 Batting' },
+                    { id: 'bowling', label: '🎯 Bowling' }
+                  ].map(c => (
+                    <TouchableOpacity
+                      key={c.id}
+                      style={[
+                        styles.ratingSubFilterBtn,
+                        ratingCategory === c.id && styles.ratingSubFilterBtnActive
+                      ]}
+                      onPress={() => {
+                        setRatingCategory(c.id as any);
+                        loadRatingsLeaderboard(c.id as any, ratingFormat);
+                      }}
+                    >
+                      <Text style={[
+                        styles.ratingSubFilterText,
+                        ratingCategory === c.id && styles.ratingSubFilterTextActive
+                      ]}>
+                        {c.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Format Selector */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                  <Text style={{ color: '#94a3b8', fontSize: 11, fontWeight: '800', marginRight: 4 }}>FORMAT:</Text>
+                  {[
+                    { id: 'ALL', label: 'All Formats' },
+                    { id: 'T20', label: 'T20' },
+                    { id: 'ONE_DAY', label: 'One-Day' }
+                  ].map(f => (
+                    <TouchableOpacity
+                      key={f.id}
+                      style={[
+                        styles.ratingFormatBtn,
+                        ratingFormat === f.id && styles.ratingFormatBtnActive
+                      ]}
+                      onPress={() => {
+                        setRatingFormat(f.id as any);
+                        loadRatingsLeaderboard(ratingCategory, f.id as any);
+                      }}
+                    >
+                      <Text style={[
+                        styles.ratingFormatText,
+                        ratingFormat === f.id && styles.ratingFormatTextActive
+                      ]}>
+                        {f.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+
             {/* Dynamic Performance Table */}
             {isMobile && (
               <Text style={{ fontSize: 11, color: '#b45309', fontWeight: '700', marginBottom: 8, textAlign: 'center' }}>
@@ -1969,6 +2066,72 @@ export default function HomeScreen() {
             )}
             <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{ width: '100%' }}>
               <View style={styles.tableBox}>
+                {perfTab === 'ratings' && (
+                  <View>
+                    <View style={styles.tableHeaderRow}>
+                      <Text style={[styles.tableTh, { width: 50, textAlign: 'center' }]}>Rank</Text>
+                      <Text style={[styles.tableTh, { width: 180 }]}>Player / Role</Text>
+                      <Text style={[styles.tableTh, { width: 65, textAlign: 'center' }]}>Matches</Text>
+                      <Text style={[styles.tableTh, { width: 140, textAlign: 'center', color: '#fde047' }]}>Rating (0-10 ★)</Text>
+                      <Text style={[styles.tableTh, { width: 100, textAlign: 'center' }]}>Confidence</Text>
+                      <Text style={[styles.tableTh, { width: 75, textAlign: 'center', color: '#fed966' }]}>Batting ★</Text>
+                      <Text style={[styles.tableTh, { width: 75, textAlign: 'center', color: '#4ade80' }]}>Bowling ★</Text>
+                      <Text style={[styles.tableTh, { width: 75, textAlign: 'center', color: '#a5b4fc' }]}>Fielding ★</Text>
+                    </View>
+                    {isLoadingLeaders ? (
+                      <View style={{ padding: 24, alignItems: 'center' }}>
+                        <ActivityIndicator size="small" color="#f59e0b" />
+                        <Text style={{ color: '#94a3b8', fontSize: 11, marginTop: 8 }}>Computing Player Ratings...</Text>
+                      </View>
+                    ) : (ratingLeaders.length > 0 ? ratingLeaders : []).map((p: any, idx: number) => {
+                      const rank = idx + 1;
+                      const rankBadge = rank === 1 ? '🥇 1' : rank === 2 ? '🥈 2' : rank === 3 ? '🥉 3' : `#${rank}`;
+                      const score = ratingCategory === 'batting' ? p.battingRating : (ratingCategory === 'bowling' ? p.bowlingRating : p.overallRating);
+                      return (
+                        <View key={p.playerId || idx} style={styles.tableRow}>
+                          <Text style={[styles.tableTd, { width: 50, textAlign: 'center', fontWeight: '800', color: rank <= 3 ? '#f59e0b' : '#94a3b8' }]}>
+                            {rankBadge}
+                          </Text>
+                          <View style={{ width: 180 }}>
+                            <Text style={styles.pointsTeamName}>{p.playerName}</Text>
+                            <Text style={styles.playerSubRole}>{p.role || 'Player'}</Text>
+                          </View>
+                          <Text style={[styles.tableTd, { width: 65, textAlign: 'center' }]}>{p.matchesCount || 1}</Text>
+                          <View style={{ width: 140, alignItems: 'center', justifyContent: 'center' }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(245, 158, 11, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: '#f59e0b' }}>
+                              <Text style={{ color: '#fde047', fontWeight: '900', fontSize: 12 }}>
+                                {score !== null && score !== undefined ? `${Number(score).toFixed(1)} ★` : '—'}
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={{ width: 100, alignItems: 'center', justifyContent: 'center' }}>
+                            <Text style={{
+                              fontSize: 9.5,
+                              fontWeight: '800',
+                              color: p.confidence === 'Established' ? '#4ade80' : (p.confidence === 'Developing' ? '#fbbf24' : '#38bdf8'),
+                              backgroundColor: p.confidence === 'Established' ? 'rgba(74, 222, 128, 0.15)' : (p.confidence === 'Developing' ? 'rgba(251, 191, 36, 0.15)' : 'rgba(56, 189, 248, 0.15)'),
+                              paddingHorizontal: 6,
+                              paddingVertical: 2,
+                              borderRadius: 4
+                            }}>
+                              {p.confidence || 'Provisional'}
+                            </Text>
+                          </View>
+                          <Text style={[styles.tableTd, { width: 75, textAlign: 'center', color: '#fed966' }]}>
+                            {p.battingRating !== null && p.battingRating !== undefined ? `${Number(p.battingRating).toFixed(1)} ★` : '—'}
+                          </Text>
+                          <Text style={[styles.tableTd, { width: 75, textAlign: 'center', color: '#4ade80' }]}>
+                            {p.bowlingRating !== null && p.bowlingRating !== undefined ? `${Number(p.bowlingRating).toFixed(1)} ★` : '—'}
+                          </Text>
+                          <Text style={[styles.tableTd, { width: 75, textAlign: 'center', color: '#a5b4fc' }]}>
+                            {p.fieldingRating !== null && p.fieldingRating !== undefined ? `${Number(p.fieldingRating).toFixed(1)} ★` : '—'}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
                 {perfTab === 'batting' && (
                   <View>
                     <View style={styles.tableHeaderRow}>
@@ -6005,6 +6168,51 @@ const styles = StyleSheet.create({
   perfTabBtnTextActive: {
     color: '#ffffff',
     fontWeight: '900'
+  },
+
+  // Ratings Leaderboard Sub-Filters
+  ratingSubFilterBtn: {
+    backgroundColor: '#ffffff',
+    borderColor: '#e2e8f0',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6
+  },
+  ratingSubFilterBtnActive: {
+    backgroundColor: '#0e184e',
+    borderColor: '#d4af37',
+    borderWidth: 1.5
+  },
+  ratingSubFilterText: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  ratingSubFilterTextActive: {
+    color: '#fde047',
+    fontWeight: '800'
+  },
+  ratingFormatBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    borderColor: '#cbd5e1',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4
+  },
+  ratingFormatBtnActive: {
+    backgroundColor: '#1e3a8a',
+    borderColor: '#3b82f6'
+  },
+  ratingFormatText: {
+    color: '#475569',
+    fontSize: 10.5,
+    fontWeight: '600'
+  },
+  ratingFormatTextActive: {
+    color: '#ffffff',
+    fontWeight: '800'
   },
 
   // District Players

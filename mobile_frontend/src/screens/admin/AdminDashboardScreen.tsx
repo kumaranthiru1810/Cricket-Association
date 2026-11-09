@@ -214,6 +214,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     } catch (_e) { }
     setAuthToken(null);
     setCurrentUser(null);
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.location.href = '/';
+      return;
+    }
     if (onExit) onExit();
   };
 

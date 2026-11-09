@@ -119,7 +119,7 @@ const DEFAULT_HIGHLIGHTS: HighlightItem[] = [
 ];
 
 export const MatchHighlightsBanner: React.FC<MatchHighlightsBannerProps> = ({
-  highlights = DEFAULT_HIGHLIGHTS,
+  highlights,
   title = '⚡ AUTOMATIC MATCH HIGHLIGHTS & MILESTONES',
   subtitle = 'Instant verified highlights: Centuries, Fifers, Player of the Match & Record Performances',
   variant = 'full',
@@ -130,6 +130,11 @@ export const MatchHighlightsBanner: React.FC<MatchHighlightsBannerProps> = ({
   const isMobile = width < 600;
 
   const [selectedHighlight, setSelectedHighlight] = useState<HighlightItem | null>(null);
+
+  // If no highlights are provided or list is empty, never render fake/dummy cards!
+  if (!highlights || highlights.length === 0) {
+    return null;
+  }
 
   const getImageSource = (key: string) => {
     switch (key) {

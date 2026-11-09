@@ -680,6 +680,58 @@ const TournamentCalculationSchema = new mongoose.Schema({
 
 const TournamentCalculation = mongoose.models.TournamentCalculation || mongoose.model('TournamentCalculation', TournamentCalculationSchema);
 
+// 24. Player Performance Match Rating Schema
+const PlayerMatchRatingSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true, index: true },
+  player_id: { type: String, required: true, index: true },
+  player_name: { type: String, default: '' },
+  match_id: { type: String, required: true, index: true },
+  tournament_id: { type: String, default: null },
+  tournament_name: { type: String, default: '' },
+  match_date: { type: Date, default: Date.now },
+  format: { type: String, enum: ['T20', 'ONE_DAY', 'MULTI_DAY', 'T10', 'CUSTOM'], default: 'T20' },
+  role: { type: String, enum: ['BATSMAN', 'BOWLER', 'ALL_ROUNDER', 'WICKETKEEPER'], default: 'BATSMAN' },
+  batting_rating: { type: Number, default: null },
+  bowling_rating: { type: Number, default: null },
+  fielding_rating: { type: Number, default: null },
+  impact_rating: { type: Number, default: null },
+  overall_rating: { type: Number, default: null },
+  component_availability: {
+    batting: { type: Boolean, default: false },
+    bowling: { type: Boolean, default: false },
+    fielding: { type: Boolean, default: false },
+    impact: { type: Boolean, default: false }
+  },
+  match_stats: {
+    runs: { type: Number, default: 0 },
+    balls: { type: Number, default: 0 },
+    fours: { type: Number, default: 0 },
+    sixes: { type: Number, default: 0 },
+    strike_rate: { type: Number, default: 0 },
+    is_out: { type: Boolean, default: false },
+    dismissal_text: { type: String, default: '' },
+    overs: { type: Number, default: 0 },
+    balls_bowled: { type: Number, default: 0 },
+    maidens: { type: Number, default: 0 },
+    runs_conceded: { type: Number, default: 0 },
+    wickets: { type: Number, default: 0 },
+    economy: { type: Number, default: 0 },
+    catches: { type: Number, default: 0 },
+    run_outs: { type: Number, default: 0 },
+    stumpings: { type: Number, default: 0 }
+  },
+  calculation_version: { type: String, default: 'v2.0' },
+  verification_status: { type: String, enum: ['VERIFIED', 'PROVISIONAL', 'INVALIDATED'], default: 'VERIFIED' },
+  calculated_at: { type: Date, default: Date.now }
+}, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
+
+// Ensure compound index for fast lookups and unique constraint per player per match
+PlayerMatchRatingSchema.index({ player_id: 1, match_id: 1 }, { unique: true });
+PlayerMatchRatingSchema.index({ player_id: 1, match_date: -1 });
+PlayerMatchRatingSchema.index({ format: 1, overall_rating: -1 });
+
+const PlayerMatchRating = mongoose.models.PlayerMatchRating || mongoose.model('PlayerMatchRating', PlayerMatchRatingSchema);
+
 // In-Memory Temporary Registrations & OTPs cache
 const memoryDb = {
   registrationOtps: new Map(),
@@ -1922,6 +1974,7 @@ module.exports = {
     CricketLawSection,
     CricketLawVersion,
     CricketLawAuditLog,
-    TournamentCalculation
+    TournamentCalculation,
+    PlayerMatchRating
   }
 };

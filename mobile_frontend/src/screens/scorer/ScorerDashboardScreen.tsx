@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image, use
 import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
 import MatchCard from '../../components/scorer/MatchCard';
 import SharedFooter from '../../components/scorer/SharedFooter';
-import { ScorerApi, getCurrentUser } from '../../services/api';
+import { ScorerApi, getCurrentUser, logoutAndClearAllSessions } from '../../services/api';
 import { showInfo, showConfirm } from '../../utils/sweetalert';
 
 export default function ScorerDashboardScreen() {
@@ -171,12 +171,19 @@ export default function ScorerDashboardScreen() {
 
   const handleLogout = async () => {
     const confirmed = await showConfirm(
-      'Exit Scorer Console',
-      'Are you sure you want to exit the scorer console?',
-      'Yes, Exit',
+      'Log Out Official Scorer',
+      'Are you sure you want to log out and return to the main CFVD website?',
+      'Yes, Log Out',
       'Cancel'
     );
-    if (confirmed) onExit();
+    if (confirmed) {
+      await logoutAndClearAllSessions();
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.location.href = '/';
+        return;
+      }
+      onExit('Home');
+    }
   };
 
   // Helper to parse date & time into a numeric timestamp for accurate sorting

@@ -21,6 +21,8 @@ import SharedFooter from '../../components/scorer/SharedFooter';
 import { ScorerApi, getCurrentUser } from '../../services/api';
 import { ClockPickerModal, calculateDurationMinutes } from '../../components/common/ClockPickerModal';
 import CricketRulesModal, { CricketRuleType } from '../../components/scorer/CricketRulesModal';
+import CricketConfetti from '../../components/common/CricketConfetti';
+import CricketFigurine3D from '../../components/common/CricketFigurine3D';
 
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
 const IMG_CHAMPIONS = require('../../../assets/cricket_champions.png');
@@ -107,7 +109,7 @@ const SHOT_TYPE_OPTIONS = [
 ];
 
 export default function LiveScoringScreen() {
-  const { navigate, params } = useScorerNavigation();
+  const { navigate, params, onExit } = useScorerNavigation();
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
   const matchId = params?.matchId ||
@@ -121,7 +123,7 @@ export default function LiveScoringScreen() {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       try {
         localStorage.setItem('cfvd_last_scorer_screen', 'LiveScoring');
-        if (matchId && matchId !== 'M002') {
+        if (matchId) {
           localStorage.setItem('cfvd_last_scorer_match_id', matchId);
           const currentUrl = new URL(window.location.href);
           if (currentUrl.searchParams.get('scorerScreen') !== 'LiveScoring' || currentUrl.searchParams.get('matchId') !== matchId) {
@@ -185,8 +187,41 @@ export default function LiveScoringScreen() {
   const [matchStatus, setMatchStatus] = useState<string>('LIVE');
   const [isInningsBreak, setIsInningsBreak] = useState<boolean>(false);
   const [isMatchEnded, setIsMatchEnded] = useState<boolean>(false);
+  const [confettiActive, setConfettiActive] = useState<boolean>(true);
   const [targetRuns, setTargetRuns] = useState<number | null>(null);
   const [allInningsList, setAllInningsList] = useState<any[]>([]);
+
+  const playVictoryFanfare = () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        if (ctx.state === 'suspended') {
+          ctx.resume();
+        }
+        const notes = [
+          { freq: 261.63, start: 0, dur: 0.15 }, // C4
+          { freq: 329.63, start: 0.15, dur: 0.15 }, // E4
+          { freq: 392.00, start: 0.30, dur: 0.18 }, // G4
+          { freq: 523.25, start: 0.48, dur: 0.55 }, // C5 High
+        ];
+        notes.forEach(({ freq, start, dur }) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+          gain.gain.setValueAtTime(0.001, ctx.currentTime + start);
+          gain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + start + 0.03);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(ctx.currentTime + start);
+          osc.stop(ctx.currentTime + start + dur);
+        });
+      } catch (_e) {}
+    }
+  };
 
   // Striker, Non-Striker & Bowler
   const [striker, setStriker] = useState<any>(null);
@@ -4886,21 +4921,43 @@ export default function LiveScoringScreen() {
               Click "Exit Screen" menu to exit from the scoring engine and give yes to exit. All recorded scores and deliveries are safely preserved in the database.
             </Text>
 
-            <View style={styles.modalActions}>
+            <View style={[styles.modalActions, { flexWrap: 'wrap', gap: 8 }]}>
               <TouchableOpacity
                 style={styles.modalCancelBtn}
                 onPress={() => setShowExitModal(false)}
               >
-                <Text style={styles.modalCancelText}>No, Stay</Text>
+                <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalConfirmBtn, { backgroundColor: '#dc2626' }]}
+                style={[styles.modalConfirmBtn, { backgroundColor: '#1e3a8a' }]}
                 onPress={() => {
                   setShowExitModal(false);
                   navigate('Dashboard');
                 }}
               >
-                <Text style={styles.modalConfirmText}>Yes, Exit</Text>
+                <Text style={styles.modalConfirmText}>📋 Match List</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalConfirmBtn, { backgroundColor: '#dc2626' }]}
+                onPress={() => {
+                  setShowExitModal(false);
+                  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                    try {
+                      localStorage.setItem('cfvd_last_app_screen', 'Home');
+                      localStorage.removeItem('cfvd_last_scorer_match_id');
+                      localStorage.removeItem('cfvd_last_scorer_screen');
+                      window.location.href = '/';
+                      return;
+                    } catch (_e) {}
+                  }
+                  if (typeof onExit === 'function') {
+                    onExit('Home');
+                  } else {
+                    navigate('Dashboard');
+                  }
+                }}
+              >
+                <Text style={styles.modalConfirmText}>🌐 Exit to Website</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -5957,24 +6014,31 @@ export default function LiveScoringScreen() {
           {isMatchEnded && (() => {
             const { winnerName, winMargin, fullSummary } = getWinnerInfo();
             return (
-              <View style={styles.championsCelebrationCard}>
-                {/* Top Status Header */}
+              <View style={[styles.championsCelebrationCard, { position: 'relative' }]}>
+                {/* Dynamic Falling Confetti / Colour Papers */}
+                <CricketConfetti active={confettiActive} count={85} />
+
+                {/* Top Status Header with Fireworks Fanfare */}
                 <View style={styles.championTopHeader}>
+                  <Text style={{ fontSize: 16 }}>🎆</Text>
                   <View style={styles.championPulsingDot} />
                   <Text style={styles.championTopHeaderText}>
                     👑 OFFICIAL MATCH CONCLUDED • MATCH CHAMPIONS 👑
                   </Text>
                   <View style={styles.championPulsingDot} />
+                  <Text style={{ fontSize: 16 }}>🎇</Text>
                 </View>
 
                 {/* Main Card Content */}
                 <View style={styles.championCardBody}>
-                  {/* The Cricket Champions Art Illustration */}
+                  {/* The 3D Cricket Champions Collectible Figurine Statuette (Sketchfab 3D Style) */}
                   <View style={styles.championArtworkWrapper}>
-                    <Image
-                      source={IMG_CHAMPIONS}
-                      style={styles.championImage}
-                      resizeMode="cover"
+                    <CricketFigurine3D
+                      imageSource={IMG_CHAMPIONS}
+                      playerName={winnerName || 'CHAMPIONS'}
+                      badgeText={winMargin || 'MATCH CHAMPIONS'}
+                      milestoneTitle="MATCH WINNER"
+                      height={200}
                     />
                   </View>
 
@@ -6043,6 +6107,21 @@ export default function LiveScoringScreen() {
 
                     {/* Action buttons */}
                     <View style={styles.championActionsRow}>
+                      {/* Blast Confetti / Colour Papers Button */}
+                      <TouchableOpacity
+                        style={styles.blastConfettiBtn}
+                        onPress={() => {
+                          setConfettiActive(false);
+                          setTimeout(() => {
+                            setConfettiActive(true);
+                            playVictoryFanfare();
+                          }, 50);
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.blastConfettiBtnText}>🎉 Blast Confetti (Colour Papers) 🎉</Text>
+                      </TouchableOpacity>
+
                       <TouchableOpacity
                         style={styles.viewScorecardBtn}
                         onPress={() => navigate('Scorecard', { matchId, returnTo: 'LiveScoring', status: 'COMPLETED' })}
@@ -8174,38 +8253,42 @@ export default function LiveScoringScreen() {
         onRequestClose={() => setShowMilestoneModal(false)}
       >
         <View style={styles.milestoneModalOverlay}>
+          {/* Falling 3D Confetti Ribbons / Colour Papers */}
+          <CricketConfetti active={showMilestoneModal} count={60} />
+
           <View style={styles.milestoneCard}>
             {/* Top Ribbon */}
             <View style={styles.milestoneRibbon}>
               <Text style={styles.milestoneRibbonText}>{activeMilestone?.badge || '🏆 MILESTONE REACHED 🏆'}</Text>
             </View>
 
-            {/* Dynamic Cricket Milestone Hero Image (MOTM, Century, 50s, Bowler, Catch, Run Out, Keeper) */}
-            <View style={[
-              styles.milestoneImageContainer,
-              activeMilestone?.imageKey === 'KEEPER' && styles.milestoneKeeperBg,
-              activeMilestone?.imageKey === 'BOWLER' && styles.milestoneBowlerBg
-            ]}>
-              <Image
-                source={
-                  activeMilestone?.imageKey === 'MOTM' || activeMilestone?.type === 'MAN_OF_THE_MATCH'
-                    ? IMG_MAN_OF_THE_MATCH
-                    : activeMilestone?.imageKey === 'BOWLER' || activeMilestone?.type === 'BOWLER_3W' || activeMilestone?.type === 'BOWLER_5W'
-                    ? bestBowlerImage
-                    : activeMilestone?.imageKey === 'CATCH' || activeMilestone?.type === 'TOP_CATCHES'
-                    ? catchMilestoneImage
-                    : activeMilestone?.imageKey === 'RUN_OUT' || activeMilestone?.type === 'RUN_OUT'
-                    ? runOutMilestoneImage
-                    : activeMilestone?.imageKey === 'KEEPER' || activeMilestone?.type === 'KEEPER_OUT'
-                    ? keeperDismissalImage
-                    : activeMilestone?.type === 'BATTER_100' || activeMilestone?.type === 'BATTER_200' || activeMilestone?.type === 'TEAM_100' || activeMilestone?.type === 'TEAM_200'
-                    ? centuryBatsmanImage
-                    : milestoneBatsmanImage
-                }
-                style={styles.milestoneHeroImage}
-                resizeMode="contain"
-              />
-            </View>
+            {/* 3D FIGURINE & METALLIC PEDESTAL (Drop-Down 3D Slam & Interactive Tilt) */}
+            <CricketFigurine3D
+              imageSource={
+                activeMilestone?.imageKey === 'MOTM' || activeMilestone?.type === 'MAN_OF_THE_MATCH'
+                  ? IMG_MAN_OF_THE_MATCH
+                  : activeMilestone?.imageKey === 'BOWLER' || activeMilestone?.type === 'BOWLER_3W' || activeMilestone?.type === 'BOWLER_5W'
+                  ? bestBowlerImage
+                  : activeMilestone?.imageKey === 'CATCH' || activeMilestone?.type === 'TOP_CATCHES'
+                  ? catchMilestoneImage
+                  : activeMilestone?.imageKey === 'RUN_OUT' || activeMilestone?.type === 'RUN_OUT'
+                  ? runOutMilestoneImage
+                  : activeMilestone?.imageKey === 'KEEPER' || activeMilestone?.type === 'KEEPER_OUT'
+                  ? keeperDismissalImage
+                  : activeMilestone?.type === 'BATTER_100' || activeMilestone?.type === 'BATTER_200' || activeMilestone?.type === 'TEAM_100' || activeMilestone?.type === 'TEAM_200'
+                  ? centuryBatsmanImage
+                  : milestoneBatsmanImage
+              }
+              playerName={activeMilestone?.playerName || 'CHAMPION'}
+              badgeText={activeMilestone?.badge || activeMilestone?.title || '50 RUNS'}
+              teamName={activeMilestone?.teamName}
+              milestoneTitle={activeMilestone?.title}
+              scoreText={activeMilestone?.scoreText}
+              ballsText={activeMilestone?.ballsText}
+              strikeRateText={activeMilestone?.strikeRateText}
+              fours={activeMilestone?.fours}
+              sixes={activeMilestone?.sixes}
+            />
 
             {/* Details Box */}
             <View style={styles.milestoneContentBox}>
@@ -8805,11 +8888,11 @@ const getStyles = (isDesktop: boolean) =>
       gap: 20
     },
     championArtworkWrapper: {
-      width: isDesktop ? 240 : '100%',
-      height: isDesktop ? 195 : 190,
-      borderRadius: 12,
-      overflow: 'hidden',
-      backgroundColor: '#111e38',
+      width: isDesktop ? 280 : '100%',
+      minHeight: 220,
+      borderRadius: 16,
+      overflow: 'visible',
+      backgroundColor: 'rgba(15, 23, 42, 0.65)',
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: 1.5,
@@ -8936,6 +9019,28 @@ const getStyles = (isDesktop: boolean) =>
       elevation: 3
     },
     viewScorecardBtnText: {
+      color: '#ffffff',
+      fontSize: 12,
+      fontWeight: '800'
+    },
+    blastConfettiBtn: {
+      backgroundColor: '#7c3aed',
+      paddingVertical: 9,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      borderWidth: 1.5,
+      borderColor: '#a78bfa',
+      shadowColor: '#8b5cf6',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.4,
+      shadowRadius: 4,
+      elevation: 3
+    },
+    blastConfettiBtnText: {
       color: '#ffffff',
       fontSize: 12,
       fontWeight: '800'

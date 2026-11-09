@@ -212,6 +212,31 @@ export default function AppNavigator({
       }
       else if (p.includes('login')) requested = 'Login';
       else if (p.includes('register')) requested = 'Registration';
+      else {
+        const savedScreen = localStorage.getItem('cfvd_last_app_screen') as AppScreenName;
+        if (savedScreen && savedScreen !== 'Home') {
+          requested = savedScreen;
+          if (savedScreen === 'Scorer') {
+            const sScreen = localStorage.getItem('cfvd_last_scorer_screen');
+            const matchId = localStorage.getItem('cfvd_last_scorer_match_id');
+            if (sScreen || matchId) {
+              urlParams = {
+                ...(sScreen ? { initialScreen: sScreen } : {}),
+                ...(matchId ? { matchId } : {})
+              };
+            }
+          } else if (savedScreen === 'Player') {
+            const tab = localStorage.getItem('cfvd_player_active_tab');
+            if (tab) urlParams = { initialTab: tab };
+          } else if (savedScreen === 'Team' || savedScreen === 'Coach') {
+            const tab = localStorage.getItem('cfvd_team_active_tab');
+            if (tab) urlParams = { initialTab: tab };
+          } else if (savedScreen === 'Scorecard') {
+            const matchId = localStorage.getItem('cfvd_last_scorecard_match_id');
+            if (matchId) urlParams = { matchId };
+          }
+        }
+      }
     }
 
     const user = getCurrentUser();
@@ -266,20 +291,29 @@ export default function AppNavigator({
         if (targetScreen === 'AdminLogin') route = '/admin/login';
         else if (targetScreen === 'Login') route = '/login';
         else if (targetScreen === 'Registration') route = '/register';
-        else if (targetScreen === 'Scorecard') route = screenParams?.matchId ? `/scorecard?matchId=${screenParams.matchId}` : '/scorecard';
+        else if (targetScreen === 'Scorecard') {
+          const m = screenParams?.matchId || localStorage.getItem('cfvd_last_scorecard_match_id');
+          route = m ? `/scorecard?matchId=${m}` : '/scorecard';
+        }
         else if (targetScreen === 'Scorer') {
-          const s = screenParams?.initialScreen || screenParams?.scorerScreen;
-          const m = screenParams?.matchId;
+          const s = screenParams?.initialScreen || screenParams?.scorerScreen || localStorage.getItem('cfvd_last_scorer_screen');
+          const m = screenParams?.matchId || localStorage.getItem('cfvd_last_scorer_match_id');
           route = s ? `/scorer?scorerScreen=${s}${m ? `&matchId=${m}` : ''}` : (m ? `/scorer?matchId=${m}` : '/scorer');
         }
         else if (targetScreen === 'Umpire') {
-          const t = screenParams?.initialTab || screenParams?.tab;
-          const m = screenParams?.matchId;
+          const t = screenParams?.initialTab || screenParams?.tab || localStorage.getItem('cfvd_umpire_active_tab');
+          const m = screenParams?.matchId || localStorage.getItem('cfvd_umpire_active_match_id');
           route = t ? `/umpire?tab=${t}${m ? `&matchId=${m}` : ''}` : (m ? `/umpire?matchId=${m}` : '/umpire');
         }
         else if (targetScreen === 'Admin') route = (screenParams?.tab || screenParams?.activeTab) ? `/admin?tab=${screenParams.tab || screenParams.activeTab}` : '/admin';
-        else if (targetScreen === 'Player') route = screenParams?.tab ? `/player?tab=${screenParams.tab}` : '/player';
-        else if (targetScreen === 'Team' || targetScreen === 'Coach') route = screenParams?.tab ? `/team?tab=${screenParams.tab}` : '/team';
+        else if (targetScreen === 'Player') {
+          const tab = screenParams?.tab || localStorage.getItem('cfvd_player_active_tab');
+          route = tab ? `/player?tab=${tab}` : '/player';
+        }
+        else if (targetScreen === 'Team' || targetScreen === 'Coach') {
+          const tab = screenParams?.tab || localStorage.getItem('cfvd_team_active_tab');
+          route = tab ? `/team?tab=${tab}` : '/team';
+        }
         else if (targetScreen === 'Content') route = '/admin';
         else if (targetScreen === 'Home') route = '/';
 

@@ -2197,6 +2197,10 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                   try {
                     await ScorerApi.logout();
                   } catch (_e) {}
+                  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                    window.location.href = '/';
+                    return;
+                  }
                   if (onExit) onExit();
                 }}
               >

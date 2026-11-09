@@ -106,6 +106,32 @@ currentUser = getCurrentUser();
 
 let currentSocket: Socket | null = null;
 
+export const logoutAndClearAllSessions = async () => {
+  try {
+    await request('/auth/logout', { method: 'POST' });
+  } catch (_e) {}
+  setAuthToken(null);
+  setCurrentUser(null);
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('team_token');
+      localStorage.removeItem('cfvd_admin_token');
+      sessionStorage.removeItem('cfvd_admin_token');
+      localStorage.removeItem('auth_user');
+      localStorage.removeItem('cfvd_admin_user');
+      sessionStorage.removeItem('cfvd_admin_user');
+      localStorage.removeItem('team_session');
+      localStorage.removeItem('cfvd_last_scorer_screen');
+      localStorage.removeItem('cfvd_last_scorer_match_id');
+      localStorage.removeItem('cfvd_last_scorecard_match_id');
+      localStorage.removeItem('cfvd_player_active_tab');
+      localStorage.removeItem('cfvd_team_active_tab');
+      localStorage.setItem('cfvd_last_app_screen', 'Home');
+    } catch (_e) {}
+  }
+};
+
 export const setAuthToken = (newToken: string | null) => {
   token = newToken;
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -317,11 +343,7 @@ export const ScorerApi = {
   },
 
   logout: async () => {
-    try {
-      await request('/auth/logout', { method: 'POST' });
-    } catch (_e) {}
-    setAuthToken(null);
-    setCurrentUser(null);
+    await logoutAndClearAllSessions();
     return { success: true };
   },
 
@@ -1296,6 +1318,27 @@ export const PlayerApi = {
 
   getNotifications: async () => {
     return request('/player/notifications');
+  },
+
+  getCareerRatings: async (playerId?: string) => {
+    return request(playerId ? `/players/${playerId}/career-ratings` : '/player/career-ratings');
+  },
+
+  getPlayerForm: async (playerId?: string, matches: number = 5) => {
+    return request(playerId ? `/players/${playerId}/form?matches=${matches}` : `/player/form?matches=${matches}`);
+  },
+
+  getPlayerRatings: async (playerId?: string) => {
+    return request(playerId ? `/players/${playerId}/ratings` : '/player/ratings');
+  },
+
+  getRatingsLeaderboard: async (params?: { category?: string; format?: string; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.category) query.append('category', params.category);
+    if (params?.format) query.append('format', params.format);
+    if (params?.limit) query.append('limit', String(params.limit));
+    const qs = query.toString();
+    return request(`/players/leaderboards/ratings${qs ? `?${qs}` : ''}`);
   },
 
   logout: async () => {

@@ -411,6 +411,13 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
             <TouchableOpacity
               style={styles.exitBtn}
               onPress={() => {
+                if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                  try {
+                    localStorage.setItem('cfvd_last_app_screen', 'Home');
+                    window.location.href = '/';
+                    return;
+                  } catch (_e) {}
+                }
                 if (onExit) onExit();
               }}
             >
