@@ -16,6 +16,7 @@ import {
 import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
 
 const milestoneBatsmanImage = require('../../../assets/milestone_batsman.png');
+const centuryBatsmanImage = require('../../../assets/century_batsman.jpg');
 import SharedFooter from '../../components/scorer/SharedFooter';
 import { ScorerApi, getCurrentUser } from '../../services/api';
 import { ClockPickerModal, calculateDurationMinutes } from '../../components/common/ClockPickerModal';
@@ -587,7 +588,21 @@ export default function LiveScoringScreen() {
       };
 
       (window as any).__TRIGGER_MILESTONE__ = (type: string = '50') => {
-        if (type === '100') {
+        if (type === '200') {
+          triggerMilestone({
+            type: 'BATTER_200',
+            title: 'DOUBLE CENTURY (200*)!',
+            badge: '💎 200 RUNS DOUBLE TON 💎',
+            subtitle: 'Colossal achievement! An immortal double hundred etched in history.',
+            playerName: striker?.name || 'N. Jagadeesan',
+            teamName: matchInfo?.battingTeam || 'Virudhunagar Spartans',
+            scoreText: '202*',
+            ballsText: '112 Balls',
+            strikeRateText: '180.4',
+            fours: 22,
+            sixes: 8
+          });
+        } else if (type === '100') {
           triggerMilestone({
             type: 'BATTER_100',
             title: 'MAGNIFICENT CENTURY!',
@@ -600,6 +615,20 @@ export default function LiveScoringScreen() {
             strikeRateText: '172.4',
             fours: 11,
             sixes: 4
+          });
+        } else if (type === '150') {
+          triggerMilestone({
+            type: 'BATTER_150',
+            title: 'COLOSSAL 150* RUNS!',
+            badge: '🔥 150 RUNS MILESTONE 🔥',
+            subtitle: 'Unbelievable power-hitting and determination!',
+            playerName: striker?.name || 'N. Jagadeesan',
+            teamName: matchInfo?.battingTeam || 'Virudhunagar Spartans',
+            scoreText: '150*',
+            ballsText: '84 Balls',
+            strikeRateText: '178.6',
+            fours: 16,
+            sixes: 6
           });
         } else if (type === '5w') {
           triggerMilestone({
@@ -7944,10 +7973,17 @@ export default function LiveScoringScreen() {
               <Text style={styles.milestoneRibbonText}>{activeMilestone?.badge || '🏆 MILESTONE REACHED 🏆'}</Text>
             </View>
 
-            {/* Batsman Hero Image (Provided Silhouette Graphic) */}
+            {/* Batsman Hero Image (100 / 200: Century Batsman with Flames; 50 / 150: Shot Batsman with Spirals) */}
             <View style={styles.milestoneImageContainer}>
               <Image
-                source={milestoneBatsmanImage}
+                source={
+                  activeMilestone?.type === 'BATTER_100' ||
+                  activeMilestone?.type === 'BATTER_200' ||
+                  activeMilestone?.type === 'TEAM_100' ||
+                  activeMilestone?.type === 'TEAM_200'
+                    ? centuryBatsmanImage
+                    : milestoneBatsmanImage
+                }
                 style={styles.milestoneHeroImage}
                 resizeMode="contain"
               />
