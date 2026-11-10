@@ -21,17 +21,18 @@ const IMG_BOUNDARY_SAVE = require('../../../assets/fielding_boundary_save.png');
 const IMG_DIRECT_HIT = require('../../../assets/fielding_direct_hit.jpg');
 const IMG_CLEAN_COLLECT = require('../../../assets/fielding_clean_collect.jpg');
 const IMG_KEEPER = require('../../../assets/keeper_dismissal.png');
+const IMG_OVERTHROW = require('../../../assets/overthrow.jpg');
 
 export interface HighlightItem {
   id: string;
-  type: 'CENTURY' | 'FIFTY' | 'FIFER' | 'MOTM' | 'VICTORY' | 'CATCH' | 'RUN_OUT' | 'PARTNERSHIP' | 'BOUNDARY_SAVE' | 'DIRECT_HIT' | 'CLEAN_COLLECT' | 'BEST_FIELDER' | 'STUMPING';
+  type: 'CENTURY' | 'FIFTY' | 'FIFER' | 'MOTM' | 'VICTORY' | 'CATCH' | 'RUN_OUT' | 'PARTNERSHIP' | 'BOUNDARY_SAVE' | 'DIRECT_HIT' | 'CLEAN_COLLECT' | 'BEST_FIELDER' | 'STUMPING' | 'OVERTHROW';
   categoryTitle: string;
   badge: string;
   playerName: string;
   teamName: string;
   stats: string;
   description: string;
-  imageKey: 'CENTURY' | 'FIFTY' | 'BOWLER' | 'MOTM' | 'CATCH' | 'RUN_OUT' | 'VICTORY' | 'BOUNDARY_SAVE' | 'DIRECT_HIT' | 'CLEAN_COLLECT' | 'KEEPER';
+  imageKey: 'CENTURY' | 'FIFTY' | 'BOWLER' | 'MOTM' | 'CATCH' | 'RUN_OUT' | 'VICTORY' | 'BOUNDARY_SAVE' | 'DIRECT_HIT' | 'CLEAN_COLLECT' | 'KEEPER' | 'OVERTHROW';
 }
 
 interface MatchHighlightsBannerProps {
@@ -162,6 +163,8 @@ export const MatchHighlightsBanner: React.FC<MatchHighlightsBannerProps> = ({
         return IMG_CLEAN_COLLECT;
       case 'KEEPER':
         return IMG_KEEPER;
+      case 'OVERTHROW':
+        return IMG_OVERTHROW;
       case 'VICTORY':
       default:
         return IMG_CHAMPIONS;
@@ -192,6 +195,8 @@ export const MatchHighlightsBanner: React.FC<MatchHighlightsBannerProps> = ({
         return { bg: '#f0f9ff', border: '#0284c7', tag: '#0369a1', badgeBg: '#e0f2fe' };
       case 'STUMPING':
         return { bg: '#faf5ff', border: '#9333ea', tag: '#7e22ce', badgeBg: '#f3e8ff' };
+      case 'OVERTHROW':
+        return { bg: '#fffbeb', border: '#f59e0b', tag: '#b45309', badgeBg: '#fef3c7' };
       default:
         return { bg: '#f8fafc', border: '#64748b', tag: '#334155', badgeBg: '#e2e8f0' };
     }

@@ -35,6 +35,7 @@ const catchMilestoneImage = require('../../../assets/catch_milestone.jpg');
 const bestBowlerImage = require('../../../assets/best_bowler.png');
 const runOutMilestoneImage = require('../../../assets/run_out_milestone.png');
 const keeperDismissalImage = require('../../../assets/keeper_dismissal.png');
+const overthrowImage = require('../../../assets/overthrow.jpg');
 
 const STANDARD_BREAK_OPTIONS = [
   { label: 'Tea break', icon: '☕', sub: 'Afternoon tea interval' },
@@ -1660,6 +1661,19 @@ export default function LiveScoringScreen() {
   const handleOverThrowSelect = async (r: number) => {
     setShowOverThrowModal(false);
     setCustomOverthrowInput('');
+
+    // Trigger instant broadcast animation with Overthrow illustration
+    setActiveFieldingEvent({
+      type: 'OVERTHROW',
+      fielderName: bowler?.name || 'Fielding Side',
+      teamName: matchInfo?.bowlingTeam || 'Bowling Team',
+      title: `OVERTHROW: +${r} EXTRA RUNS! ⚡`,
+      badge: `+${r} RUNS CONCEDED`,
+      stats: `MCC Law 19.8 • ${r} Extra Run${r > 1 ? 's' : ''}`,
+      details: `Stray throw missed stumps and keeper, allowing batters to complete ${r} overthrow run${r > 1 ? 's' : ''}!`,
+      durationMs: 3500
+    });
+
     await handleScore(r, 'normal', { remarks: `Overthrow: ${r} runs` });
   };
 
@@ -1706,6 +1720,7 @@ export default function LiveScoringScreen() {
     else if (action.includes('Pick and Throw')) fType = 'PICK_AND_THROW';
     else if (action.includes('Relay Throw')) fType = 'RELAY_THROW';
     else if (action.includes('Dropped Catch') || action.includes('Misfield')) fType = 'MISFIELD';
+    else if (action.includes('Overthrow')) fType = 'OVERTHROW';
 
     setActiveFieldingEvent({
       type: fType,
@@ -5364,9 +5379,14 @@ export default function LiveScoringScreen() {
         }}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxWidth: 400 }]}>
+          <View style={[styles.modalContent, { maxWidth: 440, width: '92%', borderRadius: 16, borderWidth: 1.5, borderColor: '#f59e0b', padding: 18 }]}>
             <View style={styles.revisedModalHeader}>
-              <Text style={styles.revisedModalTitle}>OVER THROW RUNS</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.revisedModalTitle}>OVER THROW RUNS</Text>
+                <Text style={[styles.revisedModalInfo, { marginTop: 2 }]}>
+                  Select extra runs completed or conceded on fielding overthrow:
+                </Text>
+              </View>
               <TouchableOpacity
                 style={styles.redCloseBtn}
                 onPress={() => {
@@ -5377,12 +5397,63 @@ export default function LiveScoringScreen() {
                 <Text style={styles.redCloseBtnText}>✕</Text>
               </TouchableOpacity>
             </View>
-            <Text style={styles.revisedModalInfo}>
-              Select extra runs completed or conceded on fielding overthrow:
-            </Text>
+
+            {/* Overthrow Broadcast Illustration Card */}
+            <View style={{
+              marginTop: 10,
+              marginBottom: 12,
+              borderRadius: 12,
+              overflow: 'hidden',
+              backgroundColor: '#fffbeb',
+              borderWidth: 1.5,
+              borderColor: '#fde68a',
+              shadowColor: '#d97706',
+              shadowOffset: { width: 0, height: 3 },
+              shadowOpacity: 0.15,
+              shadowRadius: 6,
+              elevation: 3
+            }}>
+              <Image
+                source={overthrowImage}
+                style={{
+                  width: '100%',
+                  height: 145,
+                  resizeMode: 'cover'
+                }}
+              />
+              <View style={{
+                position: 'absolute',
+                top: 8,
+                left: 8,
+                backgroundColor: 'rgba(217, 119, 6, 0.92)',
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: 6
+              }}>
+                <Text style={{ color: '#ffffff', fontSize: 10, fontWeight: '900', letterSpacing: 0.5 }}>
+                  ⚡ MCC LAW 19.8 • OVERTHROW
+                </Text>
+              </View>
+              <View style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                backgroundColor: 'rgba(15, 23, 42, 0.78)',
+                paddingVertical: 5,
+                paddingHorizontal: 10
+              }}>
+                <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: '700', textAlign: 'center' }}>
+                  🏃 Batters sprinting extra runs on missed throw to stumps / keeper
+                </Text>
+              </View>
+            </View>
 
             {/* Quick 1 to 5 Buttons */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 6, marginTop: 14 }}>
+            <Text style={{ fontSize: 11, fontWeight: '800', color: '#854d0e', textTransform: 'uppercase', marginBottom: 6 }}>
+              QUICK OVERTHROW RUNS:
+            </Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 6 }}>
               {[1, 2, 3, 4, 5].map((r) => (
                 <TouchableOpacity
                   key={`ot-${r}`}
@@ -5391,10 +5462,16 @@ export default function LiveScoringScreen() {
                     {
                       backgroundColor: '#fef3c7',
                       borderColor: '#f59e0b',
+                      borderWidth: 1.5,
                       flex: 1,
-                      height: 52,
+                      height: 50,
                       marginHorizontal: 2,
-                      borderRadius: 8
+                      borderRadius: 10,
+                      shadowColor: '#d97706',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.15,
+                      shadowRadius: 3,
+                      elevation: 2
                     }
                   ]}
                   onPress={() => handleOverThrowSelect(r)}
@@ -5406,7 +5483,7 @@ export default function LiveScoringScreen() {
             </View>
 
             {/* Custom Input Box for 6 or more runs */}
-            <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 14 }}>
+            <View style={{ marginTop: 14, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 }}>
               <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 8 }}>
                 Or Type Custom Overthrow Runs (6+ or more):
               </Text>
@@ -5563,7 +5640,8 @@ export default function LiveScoringScreen() {
                 'Boundary Save (4 Runs Saved)',
                 'Slide and Miss',
                 'Misfield',
-                'Dropped Catch'
+                'Dropped Catch',
+                'Overthrow Conceded'
               ].map((action) => (
                 <TouchableOpacity
                   key={action}

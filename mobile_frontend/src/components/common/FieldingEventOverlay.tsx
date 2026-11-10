@@ -20,7 +20,8 @@ export type FieldingEventType =
   | 'RELAY_THROW'
   | 'CATCH'
   | 'STUMPING'
-  | 'MISFIELD';
+  | 'MISFIELD'
+  | 'OVERTHROW';
 
 export interface FieldingEventData {
   type: FieldingEventType;
@@ -139,6 +140,17 @@ const FIELDING_CONFIGS: Record<FieldingEventType, FieldingConfig> = {
     glowColor: 'rgba(245, 158, 11, 0.45)',
     impactText: 'FIELDING ANALYSIS • AGILITY DRILL REQUIRED',
     icon: '⚠️'
+  },
+  OVERTHROW: {
+    title: 'WILD OVERTHROW CONCEDED! ⚡',
+    badge: 'OVERTHROW RUNS',
+    tagline: 'Errant throw missed the stumps allowing batters extra stolen runs',
+    image: require('../../../assets/overthrow.jpg'),
+    primaryColor: '#f59e0b',
+    accentColor: '#d97706',
+    glowColor: 'rgba(245, 158, 11, 0.45)',
+    impactText: 'MCC LAW 19.8 • EXTRA RUNS CONCEDED',
+    icon: '⚡'
   }
 };
 
