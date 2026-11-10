@@ -17,17 +17,21 @@ const IMG_MOTM = require('../../../assets/man_of_the_match.png');
 const IMG_CATCH = require('../../../assets/catch_milestone.jpg');
 const IMG_RUN_OUT = require('../../../assets/run_out_milestone.png');
 const IMG_CHAMPIONS = require('../../../assets/cricket_champions.png');
+const IMG_BOUNDARY_SAVE = require('../../../assets/fielding_boundary_save.png');
+const IMG_DIRECT_HIT = require('../../../assets/fielding_direct_hit.jpg');
+const IMG_CLEAN_COLLECT = require('../../../assets/fielding_clean_collect.jpg');
+const IMG_KEEPER = require('../../../assets/keeper_dismissal.png');
 
 export interface HighlightItem {
   id: string;
-  type: 'CENTURY' | 'FIFTY' | 'FIFER' | 'MOTM' | 'VICTORY' | 'CATCH' | 'RUN_OUT' | 'PARTNERSHIP';
+  type: 'CENTURY' | 'FIFTY' | 'FIFER' | 'MOTM' | 'VICTORY' | 'CATCH' | 'RUN_OUT' | 'PARTNERSHIP' | 'BOUNDARY_SAVE' | 'DIRECT_HIT' | 'CLEAN_COLLECT' | 'BEST_FIELDER' | 'STUMPING';
   categoryTitle: string;
   badge: string;
   playerName: string;
   teamName: string;
   stats: string;
   description: string;
-  imageKey: 'CENTURY' | 'FIFTY' | 'BOWLER' | 'MOTM' | 'CATCH' | 'RUN_OUT' | 'VICTORY';
+  imageKey: 'CENTURY' | 'FIFTY' | 'BOWLER' | 'MOTM' | 'CATCH' | 'RUN_OUT' | 'VICTORY' | 'BOUNDARY_SAVE' | 'DIRECT_HIT' | 'CLEAN_COLLECT' | 'KEEPER';
 }
 
 interface MatchHighlightsBannerProps {
@@ -150,6 +154,14 @@ export const MatchHighlightsBanner: React.FC<MatchHighlightsBannerProps> = ({
         return IMG_CATCH;
       case 'RUN_OUT':
         return IMG_RUN_OUT;
+      case 'BOUNDARY_SAVE':
+        return IMG_BOUNDARY_SAVE;
+      case 'DIRECT_HIT':
+        return IMG_DIRECT_HIT;
+      case 'CLEAN_COLLECT':
+        return IMG_CLEAN_COLLECT;
+      case 'KEEPER':
+        return IMG_KEEPER;
       case 'VICTORY':
       default:
         return IMG_CHAMPIONS;
@@ -163,6 +175,7 @@ export const MatchHighlightsBanner: React.FC<MatchHighlightsBannerProps> = ({
       case 'FIFER':
         return { bg: '#fef2f2', border: '#ef4444', tag: '#b91c1c', badgeBg: '#fee2e2' };
       case 'MOTM':
+      case 'BEST_FIELDER':
         return { bg: '#fefce8', border: '#eab308', tag: '#854d0e', badgeBg: '#fef08a' };
       case 'VICTORY':
         return { bg: '#f0fdf4', border: '#22c55e', tag: '#15803d', badgeBg: '#dcfce7' };
@@ -171,7 +184,14 @@ export const MatchHighlightsBanner: React.FC<MatchHighlightsBannerProps> = ({
       case 'CATCH':
         return { bg: '#f5f3ff', border: '#8b5cf6', tag: '#6d28d9', badgeBg: '#ede9fe' };
       case 'RUN_OUT':
+      case 'DIRECT_HIT':
         return { bg: '#fff1f2', border: '#f43f5e', tag: '#be123c', badgeBg: '#ffe4e6' };
+      case 'BOUNDARY_SAVE':
+        return { bg: '#ecfdf5', border: '#10b981', tag: '#047857', badgeBg: '#d1fae5' };
+      case 'CLEAN_COLLECT':
+        return { bg: '#f0f9ff', border: '#0284c7', tag: '#0369a1', badgeBg: '#e0f2fe' };
+      case 'STUMPING':
+        return { bg: '#faf5ff', border: '#9333ea', tag: '#7e22ce', badgeBg: '#f3e8ff' };
       default:
         return { bg: '#f8fafc', border: '#64748b', tag: '#334155', badgeBg: '#e2e8f0' };
     }

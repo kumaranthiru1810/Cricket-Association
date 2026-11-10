@@ -509,6 +509,7 @@ const DeliverySchema = new mongoose.Schema({
   shot_y: { type: Number, default: null },
   fielder_id: { type: String, default: null },
   fielder_name: { type: String, default: null },
+  fielding_action: { type: String, default: null },
   reason: { type: String, default: null },
   replacement_batter_id: { type: String, default: null },
   commentary: { type: String, default: '' },

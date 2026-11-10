@@ -227,6 +227,7 @@ class ScoringEngine {
       shotY = null,
       fielderId = null,
       fielderName = null,
+      fieldingAction = null,
       reason = null,
       note = null
     } = deliveryData;
@@ -343,6 +344,7 @@ class ScoringEngine {
       shot_y: shotY !== null && shotY !== undefined ? Number(shotY) : (deliveryData.shot_y !== undefined && deliveryData.shot_y !== null ? Number(deliveryData.shot_y) : null),
       fielder_id: fielderId,
       fielder_name: actualFielderName,
+      fielding_action: fieldingAction || deliveryData.fielding_action || deliveryData.fieldingAction || null,
       commentary,
       created_by: scorerId || 'SCR-101',
       timestamp: new Date()

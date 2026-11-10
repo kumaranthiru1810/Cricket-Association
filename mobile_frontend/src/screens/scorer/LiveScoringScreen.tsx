@@ -25,6 +25,7 @@ import CricketConfetti from '../../components/common/CricketConfetti';
 import CricketFigurine3D from '../../components/common/CricketFigurine3D';
 import InteractiveWagonWheelModal, { ShotDirectionResult } from '../../components/analytics/InteractiveWagonWheelModal';
 import UmpireSignalOverlay, { UmpireSignalEvent, UmpireSignalsGalleryModal, UmpireSignalType } from '../../components/common/UmpireSignalOverlay';
+import FieldingEventOverlay, { FieldingEventData, FieldingEventType } from '../../components/common/FieldingEventOverlay';
 
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
 const IMG_CHAMPIONS = require('../../../assets/cricket_champions.png');
@@ -560,6 +561,9 @@ export default function LiveScoringScreen() {
   // Broadcast Umpire Signal Overlay & Hand Signals Gallery State
   const [activeUmpireSignal, setActiveUmpireSignal] = useState<UmpireSignalEvent | null>(null);
   const [showUmpireGallery, setShowUmpireGallery] = useState<boolean>(false);
+
+  // Broadcast Fielding Event Animation Overlay State
+  const [activeFieldingEvent, setActiveFieldingEvent] = useState<FieldingEventData | null>(null);
 
   // Manual Batter Change & Strike Swap Modal State
   const [showChangeBatterModal, setShowChangeBatterModal] = useState<boolean>(false);
@@ -1443,6 +1447,8 @@ export default function LiveScoringScreen() {
       shotZone: customOpts.shotZone ?? finalFieldingPos ?? undefined,
       shotX: customOpts.shotX ?? undefined,
       shotY: customOpts.shotY ?? undefined,
+      fielderId: selectedFielderId || undefined,
+      fieldingAction: selectedFieldingAction || undefined,
       remarks: customOpts.remarks || deliveryRemarks || undefined
     };
 
@@ -1691,9 +1697,22 @@ export default function LiveScoringScreen() {
     setSelectedFieldingAction(action);
     setShowFieldingModal(false);
     const fielderObj = bowlingSquad.find(f => f.id === selectedFielderId);
-    const fielderName = fielderObj ? fielderObj.name : 'Fielder';
-    const msg = `Fielding Action Recorded: ${fielderName} - ${action}`;
-    Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Fielding Logged', msg);
+    const fielderName = fielderObj ? fielderObj.name : 'Active Fielder';
+
+    // Map to FieldingEventType for instant broadcast animation
+    let fType: FieldingEventType = 'CLEAN_COLLECT';
+    if (action.includes('Direct Hit')) fType = 'DIRECT_HIT';
+    else if (action.includes('Boundary Save') || action.includes('Slide')) fType = 'BOUNDARY_SAVE';
+    else if (action.includes('Pick and Throw')) fType = 'PICK_AND_THROW';
+    else if (action.includes('Relay Throw')) fType = 'RELAY_THROW';
+    else if (action.includes('Dropped Catch') || action.includes('Misfield')) fType = 'MISFIELD';
+
+    setActiveFieldingEvent({
+      type: fType,
+      fielderName: fielderName,
+      teamName: matchInfo?.bowlingTeam || 'Fielding Team',
+      details: `${fielderName} executed ${action} • Logged for match scorecard`
+    });
   };
 
   const handleWicketClick = () => {
@@ -5537,12 +5556,13 @@ export default function LiveScoringScreen() {
             <Text style={styles.fieldSubLabel}>FIELDING ACTION:</Text>
             <View style={{ marginTop: 6, gap: 6 }}>
               {[
-                'Slide and Miss',
-                'Misfield',
                 'Clean Collect',
                 'Pick and Throw',
                 'Relay Throw',
                 'Direct Hit',
+                'Boundary Save (4 Runs Saved)',
+                'Slide and Miss',
+                'Misfield',
                 'Dropped Catch'
               ].map((action) => (
                 <TouchableOpacity
@@ -5596,6 +5616,12 @@ export default function LiveScoringScreen() {
             overText: `Over ${getOvers(balls)}`
           });
         }}
+      />
+
+      {/* 22. BROADCAST FIELDING EVENT ANIMATION OVERLAY */}
+      <FieldingEventOverlay
+        event={activeFieldingEvent}
+        onDismiss={() => setActiveFieldingEvent(null)}
       />
 
       {/* 20. PITCH MAP MODAL */}
