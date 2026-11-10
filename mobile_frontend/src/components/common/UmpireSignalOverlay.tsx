@@ -22,7 +22,15 @@ export type UmpireSignalType =
   | 'BYE'
   | 'FOUR'
   | 'SIX'
-  | 'CONSECUTIVE_WIDES';
+  | 'CONSECUTIVE_WIDES'
+  | 'FREE_HIT'
+  | 'SHORT_RUN'
+  | 'PENALTY_RUNS'
+  | 'CANCEL_CALL'
+  | 'TV_REVIEW'
+  | 'NEW_BALL'
+  | 'POWERPLAY'
+  | 'LAST_HOUR';
 
 export interface UmpireSignalEvent {
   type: UmpireSignalType;
@@ -183,6 +191,118 @@ export const SIGNAL_CONFIGS: Record<UmpireSignalType, SignalConfig> = {
     bgGradient: '#4c0519',
     soundCueText: '⚠️ CONSECUTIVE WIDES • BOWLER CAUTION',
     iccIcon: '⚠️'
+  },
+  FREE_HIT: {
+    type: 'FREE_HIT',
+    title: 'FREE HIT (NO BALL)',
+    badge: 'NO DISMISSAL DELIVERY',
+    lawText: 'ICC Playing Conditions Law 21 • Mandatory Free Hit Next Ball',
+    gestureDescription: 'One arm rotated overhead in circular motion to signal free hit to scorers and teams',
+    image: require('../../../assets/umpire/umpire_freehit.png'),
+    primaryColor: '#8b5cf6',
+    accentColor: '#7c3aed',
+    glowColor: 'rgba(139, 92, 246, 0.45)',
+    bgGradient: '#2e1065',
+    soundCueText: '🔄 CIRCULAR ARM ROTATION • FREE HIT DELIVERY',
+    iccIcon: '🔄'
+  },
+  SHORT_RUN: {
+    type: 'SHORT_RUN',
+    title: 'SHORT RUN',
+    badge: 'RUN CANCELLED',
+    lawText: 'MCC Law 18.3 • Batter Fails to Ground Bat Past Crease',
+    gestureDescription: 'Umpire touches near shoulder with finger tips of one hand to deduct 1 run',
+    image: require('../../../assets/umpire/umpire_shortrun.png'),
+    primaryColor: '#d97706',
+    accentColor: '#b45309',
+    glowColor: 'rgba(217, 119, 6, 0.45)',
+    bgGradient: '#451a03',
+    soundCueText: '👆 SHOULDER TOUCH • 1 RUN SHORT & DEDUCTED',
+    iccIcon: '📏'
+  },
+  PENALTY_RUNS: {
+    type: 'PENALTY_RUNS',
+    title: '5 PENALTY RUNS',
+    badge: '+5 PENALTY EXTRA',
+    lawText: 'MCC Law 41 & 42 • Unfair Play / Helmet Strike (+5 Runs)',
+    gestureDescription: 'Umpire places one hand onto the opposite shoulder repeatedly to award 5 penalty runs',
+    image: require('../../../assets/umpire/umpire_penalty.png'),
+    primaryColor: '#ec4899',
+    accentColor: '#db2777',
+    glowColor: 'rgba(236, 72, 153, 0.45)',
+    bgGradient: '#500724',
+    soundCueText: '✋ OPPOSITE SHOULDER • 5 PENALTY RUNS AWARDED',
+    iccIcon: '🚨'
+  },
+  CANCEL_CALL: {
+    type: 'CANCEL_CALL',
+    title: 'CANCEL CALL / REVOKE',
+    badge: 'DECISION REVERSED',
+    lawText: 'MCC Law 2.12 • Previous Umpire Call Revoked or Cancelled',
+    gestureDescription: 'Crossing arms across the chest and touching shoulders to cancel previous signal',
+    image: require('../../../assets/umpire/umpire_cancel.png'),
+    primaryColor: '#64748b',
+    accentColor: '#475569',
+    glowColor: 'rgba(100, 116, 139, 0.45)',
+    bgGradient: '#1e293b',
+    soundCueText: '❌ CROSSED ARMS • PREVIOUS CALL REVOKED',
+    iccIcon: '❌'
+  },
+  TV_REVIEW: {
+    type: 'TV_REVIEW',
+    title: 'DRS / TV UMPIRE REVIEW',
+    badge: '3RD UMPIRE REFERRAL',
+    lawText: 'ICC DRS Protocol • Video Umpire Official Review',
+    gestureDescription: 'Both index fingers shaping a television screen in the air towards 3rd umpire',
+    image: require('../../../assets/umpire/umpire_tv_review.png'),
+    primaryColor: '#0284c7',
+    accentColor: '#0369a1',
+    glowColor: 'rgba(2, 132, 199, 0.45)',
+    bgGradient: '#082f49',
+    soundCueText: '📺 TV SCREEN BOX • THIRD UMPIRE DRS REVIEW',
+    iccIcon: '📺'
+  },
+  NEW_BALL: {
+    type: 'NEW_BALL',
+    title: 'NEW BALL TAKEN',
+    badge: 'BALL REPLACEMENT',
+    lawText: 'MCC Law 4 • New Ball Available (80 Overs or Damaged)',
+    gestureDescription: 'Umpire holds match ball high above head towards scorer box to signal new ball',
+    image: require('../../../assets/umpire/umpire_new_ball.png'),
+    primaryColor: '#059669',
+    accentColor: '#047857',
+    glowColor: 'rgba(5, 150, 105, 0.45)',
+    bgGradient: '#064e3b',
+    soundCueText: '⚾ BALL RAISED ALOFT • NEW MATCH BALL IN PLAY',
+    iccIcon: '⚾'
+  },
+  POWERPLAY: {
+    type: 'POWERPLAY',
+    title: 'POWERPLAY RESTRICTION',
+    badge: 'FIELD RESTRICTIONS',
+    lawText: 'ICC Law 28 / T20 Playing Conditions • Mandatory Powerplay Overs',
+    gestureDescription: 'Windmill rotation of arm in a circular motion pointing forward for field restrictions',
+    image: require('../../../assets/umpire/umpire_powerplay.png'),
+    primaryColor: '#eab308',
+    accentColor: '#ca8a04',
+    glowColor: 'rgba(234, 179, 8, 0.45)',
+    bgGradient: '#422006',
+    soundCueText: '⚡ ROTATING ARM • MANDATORY POWERPLAY ACTIVE',
+    iccIcon: '⚡'
+  },
+  LAST_HOUR: {
+    type: 'LAST_HOUR',
+    title: 'LAST HOUR / FINAL 20 OVERS',
+    badge: 'FINAL MATCH SESSION',
+    lawText: 'MCC Law 12.6 • The Last Hour of a Match (Minimum 20 Overs)',
+    gestureDescription: 'Umpire points with index finger directly to wrist/watch to start last hour of play',
+    image: require('../../../assets/umpire/umpire_last_hour.png'),
+    primaryColor: '#6366f1',
+    accentColor: '#4f46e5',
+    glowColor: 'rgba(99, 102, 241, 0.45)',
+    bgGradient: '#1e1b4b',
+    soundCueText: '⏱️ WRIST POINT • LAST HOUR 20 OVERS COMMENCED',
+    iccIcon: '⏱️'
   }
 };
 
@@ -721,152 +841,172 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8
   },
 
-  // Gallery Styles
+  // Gallery Styles - Daylight White & Warm Gold CFVD Theme
   galleryBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(2, 6, 23, 0.88)',
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16
   },
   galleryContainer: {
     width: '100%',
-    maxWidth: 680,
-    maxHeight: '90%',
-    backgroundColor: '#0f172a',
+    maxWidth: 720,
+    maxHeight: '92%',
+    backgroundColor: '#ffffff',
     borderRadius: 20,
     borderWidth: 2,
-    borderColor: '#38bdf8',
+    borderColor: '#f59e0b',
     overflow: 'hidden',
+    shadowColor: '#78350f',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
     elevation: 24
   },
   galleryHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#1e293b',
-    borderBottomWidth: 1,
-    borderBottomColor: '#334155'
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    backgroundColor: '#fffbeb',
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#fef08a'
   },
   galleryTitle: {
-    color: '#38bdf8',
-    fontSize: 15,
+    color: '#92400e',
+    fontSize: 16,
     fontWeight: '900',
     letterSpacing: 0.5
   },
   gallerySub: {
-    color: '#94a3b8',
-    fontSize: 11,
+    color: '#a16207',
+    fontSize: 11.5,
+    fontWeight: '600',
     marginTop: 2
   },
   galleryCloseBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#fde68a',
     justifyContent: 'center',
     alignItems: 'center'
   },
   galleryCloseBtnText: {
-    color: '#ffffff',
+    color: '#92400e',
     fontSize: 16,
     fontWeight: 'bold'
   },
   galleryScrollView: {
-    flexGrow: 1
+    flexGrow: 1,
+    backgroundColor: '#fafaf9'
   },
   galleryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 14,
     padding: 16,
     justifyContent: 'center'
   },
   galleryCard: {
     width: '47%',
-    minWidth: 150,
-    maxWidth: 200,
-    backgroundColor: '#1e293b',
+    minWidth: 155,
+    maxWidth: 210,
+    backgroundColor: '#ffffff',
     borderRadius: 14,
     borderWidth: 1.5,
     overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 5,
+    elevation: 3,
     marginBottom: 4
   },
   galleryCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 5
+    paddingHorizontal: 10,
+    paddingVertical: 6
   },
   galleryCardBadge: {
     color: '#ffffff',
-    fontSize: 9,
+    fontSize: 9.5,
     fontWeight: '900'
   },
   galleryCardIcon: {
-    fontSize: 12
+    fontSize: 13
   },
   galleryThumbWrapper: {
     width: '100%',
-    height: 100,
+    height: 120,
     backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden'
+    padding: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9'
   },
   galleryThumbImage: {
-    width: '90%',
-    height: '90%'
+    width: '94%',
+    height: '94%'
   },
   galleryCardBody: {
     padding: 10,
+    backgroundColor: '#ffffff',
     alignItems: 'center'
   },
   galleryCardTitle: {
     fontSize: 12.5,
     fontWeight: '900',
     textAlign: 'center',
-    marginBottom: 2
+    marginBottom: 3
   },
   galleryCardLaw: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 9.5,
     fontWeight: '700',
     textAlign: 'center',
     marginBottom: 4
   },
   galleryCardDesc: {
-    color: '#cbd5e1',
+    color: '#334155',
     fontSize: 10,
+    fontWeight: '500',
     textAlign: 'center',
-    lineHeight: 13,
+    lineHeight: 14,
     marginBottom: 8
   },
   galleryPlayBtn: {
-    paddingVertical: 5,
+    paddingVertical: 6,
     paddingHorizontal: 10,
-    borderRadius: 6,
+    borderRadius: 7,
     width: '100%',
     alignItems: 'center'
   },
   galleryPlayBtnText: {
     color: '#ffffff',
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: '800'
   },
   galleryFooter: {
-    padding: 12,
-    backgroundColor: '#1e293b',
-    borderTopWidth: 1,
-    borderTopColor: '#334155'
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fffbeb',
+    borderTopWidth: 1.5,
+    borderTopColor: '#fef08a'
   },
   galleryFooterNote: {
-    color: '#94a3b8',
-    fontSize: 10.5,
+    color: '#854d0e',
+    fontSize: 11,
+    fontWeight: '600',
     textAlign: 'center',
-    lineHeight: 14
+    lineHeight: 15
   }
 });
 
