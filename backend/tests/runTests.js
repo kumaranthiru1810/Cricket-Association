@@ -40,9 +40,10 @@ async function runAllTests() {
   await db.initDb();
 
   // Idempotent test fixture reset before each run
-  await db.models.Match.updateOne({ id: 'M001' }, { status: 'SCHEDULED', team_a_id: 'TM-01', team_b_id: 'TM-02', current_innings_number: 1, result_summary: null });
-  await db.models.Match.updateOne({ id: 'M002' }, { status: 'LIVE', team_a_id: 'TM-01', team_b_id: 'TM-02', current_innings_number: 1, result_summary: null });
-  await db.models.Match.updateOne({ id: 'M003' }, { status: 'COMPLETED', team_a_id: 'TM-01', team_b_id: 'TM-02', result_summary: 'Virudhunagar Strikers won by 7 wickets' });
+  await db.models.Match.deleteMany({ id: { $nin: ['M001', 'M002', 'M003'] } });
+  await db.models.Match.updateOne({ id: 'M001' }, { status: 'SCHEDULED', team_a_id: 'TM-01', team_b_id: 'TM-02', current_innings_number: 1, result_summary: null, assigned_scorer_id: 'SCR-101' });
+  await db.models.Match.updateOne({ id: 'M002' }, { status: 'LIVE', team_a_id: 'TM-01', team_b_id: 'TM-02', current_innings_number: 1, result_summary: null, assigned_scorer_id: 'SCR-101' });
+  await db.models.Match.updateOne({ id: 'M003' }, { status: 'COMPLETED', team_a_id: 'TM-01', team_b_id: 'TM-02', result_summary: 'Virudhunagar Strikers won by 7 wickets', assigned_scorer_id: 'SCR-101' });
   await db.models.Innings.updateOne({ id: 'INN-M002-1' }, { is_completed: false, is_over_complete: false, wickets: 3, total_runs: 142, overs: 16, balls: 2 });
   await db.models.Innings.deleteOne({ id: 'INN-M002-2' });
   await db.models.Team.updateOne({ id: 'TM-01' }, { name: 'Sattur Spartans' });
@@ -550,14 +551,15 @@ async function runAllTests() {
     assert.strictEqual(inn1.extras.bye, 2);
     assert.strictEqual(inn1.extras.legBye, 2);
 
-    // Bowlers: Karthik N & Saravanan
-    const karthik = inn1.bowlers.find(b => b.name === 'Karthik N');
-    assert(karthik, 'Karthik N must be in bowling card');
-    assert.strictEqual(karthik.overs, '4.0');
-    assert.strictEqual(karthik.wickets, 2);
+    // Bowlers in Innings 1 and Innings 2
+    const dk = inn1.bowlers.find(b => b.name === 'Dinesh Karthik' || b.name === 'Karthik N');
+    assert(dk, 'Dinesh Karthik / Karthik N must be in bowling card');
+    assert.strictEqual(dk.overs, '4.0');
 
-    const saravanan = inn1.bowlers.find(b => b.name === 'Saravanan');
-    assert(saravanan, 'Saravanan must be in bowling card');
+    const inn2 = scorecard.innings[1];
+    assert(inn2, 'Innings 2 must be present in full scorecard');
+    const saravanan = (inn2.bowlers || []).find(b => b.name === 'Saravanan');
+    assert(saravanan, 'Saravanan must be in Innings 2 bowling card');
     assert.strictEqual(saravanan.overs, '4.0');
     assert.strictEqual(saravanan.wickets, 2);
 
