@@ -2743,6 +2743,25 @@ export default function LiveScoringScreen() {
                 <Text style={styles.drawerMenuChevron}>›</Text>
               </TouchableOpacity>
 
+              {/* 0c. 3D Milestone Showcase */}
+              <TouchableOpacity
+                style={styles.drawerMenuItem}
+                onPress={() => {
+                  setShowSideDrawer(false);
+                  navigate('MilestoneGallery');
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.drawerMenuIconBox, { backgroundColor: '#fef3c7', borderColor: '#fde68a' }]}>
+                  <Text style={styles.drawerMenuIconText}>🏆</Text>
+                </View>
+                <View style={styles.drawerMenuTextBox}>
+                  <Text style={[styles.drawerMenuLabel, { color: '#b45309' }]}>3D Milestones Showcase</Text>
+                  <Text style={styles.drawerMenuDesc}>Inspect all 11 cricket milestone statuettes</Text>
+                </View>
+                <Text style={styles.drawerMenuChevron}>›</Text>
+              </TouchableOpacity>
+
               {/* 1. Breaks */}
               <TouchableOpacity
                 style={styles.drawerMenuItem}
@@ -5633,6 +5652,23 @@ export default function LiveScoringScreen() {
                     <Text style={styles.sidebarNavText}>Scorecard</Text>
                     <View style={styles.sidebarBadgeBlue}>
                       <Text style={styles.sidebarBadgeBlueText}>LIVE</Text>
+                    </View>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {/* 3. 3D Milestones Showcase */}
+              <TouchableOpacity
+                style={[styles.sidebarNavItem, isSidebarCollapsed && styles.sidebarNavItemCollapsed]}
+                onPress={() => navigate('MilestoneGallery')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.sidebarNavIcon}>🏆</Text>
+                {!isSidebarCollapsed && (
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={styles.sidebarNavText}>3D Milestones</Text>
+                    <View style={[styles.sidebarBadgeBlue, { backgroundColor: '#f59e0b' }]}>
+                      <Text style={styles.sidebarBadgeBlueText}>NEW</Text>
                     </View>
                   </View>
                 )}

@@ -177,6 +177,10 @@ export default function AppNavigator({
           };
         }
       }
+      else if (p.includes('milestone')) {
+        requested = 'Scorer';
+        urlParams = { initialScreen: 'MilestoneGallery' };
+      }
       else if (p.includes('scorer')) {
         requested = 'Scorer';
         const sScreen = getQuery('scorerScreen') || localStorage.getItem('cfvd_last_scorer_screen');
