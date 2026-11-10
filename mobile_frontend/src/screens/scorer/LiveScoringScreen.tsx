@@ -868,9 +868,98 @@ export default function LiveScoringScreen() {
   };
 
   const checkMilestones = (d: any, isInitial: boolean) => {
-    if (isInitial || !d) return;
+    if (!d) return;
 
     const innId = d.innings?.id || 'inn1';
+    const tRuns = d.innings?.totalRuns ?? 0;
+    const sRuns = d.striker?.runs;
+    const sId = d.striker?.id || d.striker?.name || 's1';
+    const nsRuns = d.nonStriker?.runs;
+    const nsId = d.nonStriker?.id || d.nonStriker?.name || 'ns1';
+    const bWkts = d.bowler?.wickets;
+    const bId = d.bowler?.id || d.bowler?.name || 'b1';
+
+    // ── STEP 1: DYNAMIC BIDIRECTIONAL PRUNING (Handles Undo Ball & Retroactive Edits) ──
+    // If scores dropped below milestone thresholds (via Undo or Edit), delete those milestone keys
+    // so that when the team or batter reaches the milestone again, the 3D celebration triggers reliably!
+    if (tRuns < 50) {
+      shownMilestonesRef.current.delete(`team_50_${innId}`);
+      shownMilestonesRef.current.delete(`team_100_${innId}`);
+      shownMilestonesRef.current.delete(`team_150_${innId}`);
+      shownMilestonesRef.current.delete(`team_200_${innId}`);
+    } else if (tRuns < 100) {
+      shownMilestonesRef.current.delete(`team_100_${innId}`);
+      shownMilestonesRef.current.delete(`team_150_${innId}`);
+      shownMilestonesRef.current.delete(`team_200_${innId}`);
+    } else if (tRuns < 150) {
+      shownMilestonesRef.current.delete(`team_150_${innId}`);
+      shownMilestonesRef.current.delete(`team_200_${innId}`);
+    } else if (tRuns < 200) {
+      shownMilestonesRef.current.delete(`team_200_${innId}`);
+    }
+
+    if (sRuns !== undefined) {
+      if (sRuns < 50) {
+        shownMilestonesRef.current.delete(`50_${sId}_${innId}`);
+        shownMilestonesRef.current.delete(`100_${sId}_${innId}`);
+        shownMilestonesRef.current.delete(`150_${sId}_${innId}`);
+        shownMilestonesRef.current.delete(`200_${sId}_${innId}`);
+      } else if (sRuns < 100) {
+        shownMilestonesRef.current.delete(`100_${sId}_${innId}`);
+        shownMilestonesRef.current.delete(`150_${sId}_${innId}`);
+        shownMilestonesRef.current.delete(`200_${sId}_${innId}`);
+      } else if (sRuns < 150) {
+        shownMilestonesRef.current.delete(`150_${sId}_${innId}`);
+        shownMilestonesRef.current.delete(`200_${sId}_${innId}`);
+      } else if (sRuns < 200) {
+        shownMilestonesRef.current.delete(`200_${sId}_${innId}`);
+      }
+    }
+
+    if (nsRuns !== undefined) {
+      if (nsRuns < 50) {
+        shownMilestonesRef.current.delete(`50_${nsId}_${innId}`);
+        shownMilestonesRef.current.delete(`100_${nsId}_${innId}`);
+        shownMilestonesRef.current.delete(`150_${nsId}_${innId}`);
+      } else if (nsRuns < 100) {
+        shownMilestonesRef.current.delete(`100_${nsId}_${innId}`);
+        shownMilestonesRef.current.delete(`150_${nsId}_${innId}`);
+      } else if (nsRuns < 150) {
+        shownMilestonesRef.current.delete(`150_${nsId}_${innId}`);
+      }
+    }
+
+    if (bWkts !== undefined) {
+      if (bWkts < 3) {
+        shownMilestonesRef.current.delete(`3w_${bId}_${innId}`);
+        shownMilestonesRef.current.delete(`5w_${bId}_${innId}`);
+      } else if (bWkts < 5) {
+        shownMilestonesRef.current.delete(`5w_${bId}_${innId}`);
+      }
+    }
+
+    // On initial page mount, we only seed the passed milestones so an existing match does not suddenly pop up on initial refresh
+    if (isInitial) {
+      if (tRuns >= 50) shownMilestonesRef.current.add(`team_50_${innId}`);
+      if (tRuns >= 100) shownMilestonesRef.current.add(`team_100_${innId}`);
+      if (tRuns >= 150) shownMilestonesRef.current.add(`team_150_${innId}`);
+      if (tRuns >= 200) shownMilestonesRef.current.add(`team_200_${innId}`);
+      if (sRuns !== undefined) {
+        if (sRuns >= 50) shownMilestonesRef.current.add(`50_${sId}_${innId}`);
+        if (sRuns >= 100) shownMilestonesRef.current.add(`100_${sId}_${innId}`);
+        if (sRuns >= 150) shownMilestonesRef.current.add(`150_${sId}_${innId}`);
+        if (sRuns >= 200) shownMilestonesRef.current.add(`200_${sId}_${innId}`);
+      }
+      if (nsRuns !== undefined) {
+        if (nsRuns >= 50) shownMilestonesRef.current.add(`50_${nsId}_${innId}`);
+        if (nsRuns >= 100) shownMilestonesRef.current.add(`100_${nsId}_${innId}`);
+      }
+      if (bWkts !== undefined) {
+        if (bWkts >= 3) shownMilestonesRef.current.add(`3w_${bId}_${innId}`);
+        if (bWkts >= 5) shownMilestonesRef.current.add(`5w_${bId}_${innId}`);
+      }
+      return;
+    }
 
     // 1. Striker Milestone (50, 100, 150, 200)
     if (d.striker && d.striker.runs !== undefined) {
@@ -2479,6 +2568,8 @@ export default function LiveScoringScreen() {
   const handleUndoLastDelivery = async () => {
     setIsUndoingDelivery(true);
     try {
+      setShowMilestoneModal(false);
+      setActiveMilestone(null);
       await ScorerApi.undoDelivery(matchId);
       await loadLiveState(false);
       const msg = 'Last delivery successfully reversed and match state restored.';
