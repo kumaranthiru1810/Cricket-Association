@@ -29,6 +29,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAppNavigation } from '../src/navigation/AppNavigator';
 import { ScorerApi, PlayerApi, getCurrentUser, setCurrentUser, setAuthToken, logoutAndClearAllSessions, SOCKET_URL } from '../src/services/api';
 import { MatchHighlightsBanner } from '../src/components/common/MatchHighlightsBanner';
+import UmpireSignalOverlay, { UmpireSignalEvent, UmpireSignalsGalleryModal, UmpireSignalType } from '../src/components/common/UmpireSignalOverlay';
 import Header from '../src/layouts/Header';
 
 // ─── ASSET REFERENCES ──────────────────────────────────────────────────────────
@@ -761,6 +762,10 @@ export default function HomeScreen() {
   const [lightboxImage, setLightboxImage] = useState<{ uri: any; caption: string } | null>(null);
   const [activeNewsModal, setActiveNewsModal] = useState<{ title: string; date: string; content: string } | null>(null);
 
+  // Official ICC & TNCA Umpire Signals Broadcast Overlay State
+  const [activeUmpireSignal, setActiveUmpireSignal] = useState<UmpireSignalEvent | null>(null);
+  const [showUmpireGallery, setShowUmpireGallery] = useState<boolean>(false);
+
   // Handlers
   const handleAddCollege = () => {
     if (!newColName.trim()) {
@@ -1323,6 +1328,39 @@ export default function HomeScreen() {
                 </View>
               );
             })()}
+
+            {/* Official ICC & TNCA Umpire Hand Signals Showcase Button */}
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: '#0f172a',
+                borderWidth: 1.5,
+                borderColor: '#38bdf8',
+                paddingVertical: 9,
+                paddingHorizontal: 16,
+                borderRadius: 24,
+                marginBottom: 16,
+                gap: 8,
+                alignSelf: 'center',
+                shadowColor: '#38bdf8',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.25,
+                shadowRadius: 6,
+                elevation: 3
+              }}
+              onPress={() => setShowUmpireGallery(true)}
+              activeOpacity={0.8}
+            >
+              <Text style={{ fontSize: 15 }}>🏁</Text>
+              <Text style={{ color: '#38bdf8', fontSize: 13, fontWeight: '800' }}>
+                Official ICC & TNCA Umpire Signals (Live Animated Guide)
+              </Text>
+              <View style={{ backgroundColor: '#0284c7', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}>
+                <Text style={{ color: '#ffffff', fontSize: 10, fontWeight: '900' }}>9 GESTURES</Text>
+              </View>
+            </TouchableOpacity>
 
             {/* Loading State: Only show spinner if matches haven't loaded yet */}
             {isLoadingMatches && publicMatches.length === 0 && (
@@ -3557,6 +3595,24 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Official ICC & TNCA Broadcast Umpire Signal Overlay */}
+      <UmpireSignalOverlay
+        event={activeUmpireSignal}
+        onDismiss={() => setActiveUmpireSignal(null)}
+      />
+
+      {/* Umpire Signals Showcase Gallery Modal */}
+      <UmpireSignalsGalleryModal
+        visible={showUmpireGallery}
+        onClose={() => setShowUmpireGallery(false)}
+        onSelectSignal={(sigType) => {
+          setActiveUmpireSignal({
+            type: sigType,
+            overText: 'CFVD League Live Showcase • Kamarajar Stadium'
+          });
+        }}
+      />
     </View>
   );
 }

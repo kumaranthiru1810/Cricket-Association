@@ -24,6 +24,7 @@ import CricketRulesModal, { CricketRuleType } from '../../components/scorer/Cric
 import CricketConfetti from '../../components/common/CricketConfetti';
 import CricketFigurine3D from '../../components/common/CricketFigurine3D';
 import InteractiveWagonWheelModal, { ShotDirectionResult } from '../../components/analytics/InteractiveWagonWheelModal';
+import UmpireSignalOverlay, { UmpireSignalEvent, UmpireSignalsGalleryModal, UmpireSignalType } from '../../components/common/UmpireSignalOverlay';
 
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
 const IMG_CHAMPIONS = require('../../../assets/cricket_champions.png');
@@ -555,6 +556,10 @@ export default function LiveScoringScreen() {
   const [activeMilestone, setActiveMilestone] = useState<MilestoneCelebration | null>(null);
   const [showMilestoneModal, setShowMilestoneModal] = useState<boolean>(false);
   const shownMilestonesRef = useRef<Set<string>>(new Set());
+
+  // Broadcast Umpire Signal Overlay & Hand Signals Gallery State
+  const [activeUmpireSignal, setActiveUmpireSignal] = useState<UmpireSignalEvent | null>(null);
+  const [showUmpireGallery, setShowUmpireGallery] = useState<boolean>(false);
 
   // Manual Batter Change & Strike Swap Modal State
   const [showChangeBatterModal, setShowChangeBatterModal] = useState<boolean>(false);
@@ -1474,6 +1479,72 @@ export default function LiveScoringScreen() {
         setIsFreeHitActive(false);
       }
 
+      // ─── Broadcast Umpire Signal Trigger (Official Hand Signals & Broadcast HUD) ───
+      if (type === 'wide') {
+        const isConsecutive = (consecutiveWidesCount + 1 >= 2);
+        setActiveUmpireSignal({
+          type: isConsecutive ? 'CONSECUTIVE_WIDES' : 'WIDE',
+          batterName: striker?.name,
+          bowlerName: bowler?.name,
+          overText: `Over ${getOvers(balls)}`,
+          extraDetails: isConsecutive
+            ? `Consecutive wide balls bowled by ${bowler?.name || 'Bowler'} • Standing umpire caution issued`
+            : '+1 Extra run added to team total • Ball must be re-bowled (MCC Law 22)'
+        });
+      } else if (type === 'noball') {
+        setActiveUmpireSignal({
+          type: 'NO_BALL',
+          batterName: striker?.name,
+          bowlerName: bowler?.name,
+          overText: `Over ${getOvers(balls)}`,
+          extraDetails: '+1 Penalty run • Mandatory Free Hit awarded for next delivery (MCC Law 21)'
+        });
+      } else if ((type as string) === 'deadball') {
+        setActiveUmpireSignal({
+          type: 'DEAD_BALL',
+          batterName: striker?.name,
+          bowlerName: bowler?.name,
+          overText: `Over ${getOvers(balls)}`,
+          extraDetails: 'Ball is dead • Delivery cancelled, ball does not count toward over (MCC Law 20)'
+        });
+      } else if (type === 'legbye') {
+        setActiveUmpireSignal({
+          type: 'LEG_BYE',
+          batterName: striker?.name,
+          bowlerName: bowler?.name,
+          runs: runs,
+          overText: `Over ${getOvers(balls)}`,
+          extraDetails: `${runs} Leg Bye run(s) credited to extras • Signal to official scorer (MCC Law 23)`
+        });
+      } else if (type === 'bye') {
+        setActiveUmpireSignal({
+          type: 'BYE',
+          batterName: striker?.name,
+          bowlerName: bowler?.name,
+          runs: runs,
+          overText: `Over ${getOvers(balls)}`,
+          extraDetails: `${runs} Bye run(s) credited to extras • Signal to official scorer (MCC Law 23)`
+        });
+      } else if (type === 'normal' && runs === 4) {
+        setActiveUmpireSignal({
+          type: 'FOUR',
+          batterName: striker?.name,
+          bowlerName: bowler?.name,
+          runs: 4,
+          overText: `Over ${getOvers(balls)}`,
+          extraDetails: `${striker?.name || 'Batter'} hits boundary four along the ground (MCC Law 19)`
+        });
+      } else if (type === 'normal' && runs === 6) {
+        setActiveUmpireSignal({
+          type: 'SIX',
+          batterName: striker?.name,
+          bowlerName: bowler?.name,
+          runs: 6,
+          overText: `Over ${getOvers(balls)}`,
+          extraDetails: `${striker?.name || 'Batter'} smashes massive six over the boundary rope (MCC Law 19)`
+        });
+      }
+
       // Smart Rules Analysis: Consecutive Wides
       if (type === 'wide') {
         const nextWides = consecutiveWidesCount + 1;
@@ -1740,6 +1811,17 @@ export default function LiveScoringScreen() {
       }
       setCustomBatterName('');
       await loadLiveState(false);
+
+      // Trigger Official Broadcast Umpire Signal (OUT - Index Finger Raised)
+      setActiveUmpireSignal({
+        type: 'OUT',
+        title: `OUT! (${wicketType.replace('_', ' ')})`,
+        batterName: outBatter?.name || 'Batter',
+        bowlerName: bowler?.name || 'Bowler',
+        dismissalType: wicketType.replace('_', ' '),
+        overText: `Over ${getOvers(balls + 1)}`,
+        extraDetails: `Appeal upheld by standing umpire: ${outBatter?.name || 'Batter'} dismissed ${wicketType.replace('_', ' ')} (MCC Law 31)`
+      });
 
       // Trigger Dismissal Celebrations (Run Out, Keeper Stumped/Caught Behind, Diving Catch)
       if (wicketType === 'RUN_OUT') {
@@ -5496,6 +5578,26 @@ export default function LiveScoringScreen() {
         onClose={handleWagonWheelSkip}
       />
 
+      {/* 20. OFFICIAL UMPIRE SIGNAL BROADCAST OVERLAY */}
+      <UmpireSignalOverlay
+        event={activeUmpireSignal}
+        onDismiss={() => setActiveUmpireSignal(null)}
+      />
+
+      {/* 21. UMPIRE SIGNALS GALLERY MODAL */}
+      <UmpireSignalsGalleryModal
+        visible={showUmpireGallery}
+        onClose={() => setShowUmpireGallery(false)}
+        onSelectSignal={(sigType) => {
+          setActiveUmpireSignal({
+            type: sigType,
+            batterName: striker?.name || 'K. Balaji',
+            bowlerName: bowler?.name || 'Vijay',
+            overText: `Over ${getOvers(balls)}`
+          });
+        }}
+      />
+
       {/* 20. PITCH MAP MODAL */}
       <Modal
         visible={showPitchMapModal}
@@ -6376,8 +6478,31 @@ export default function LiveScoringScreen() {
                         if (isEditMode) {
                           handleOpenEditDelivery(del);
                         } else {
-                          const info = `Ball ${del.ball}: ${del.text} • ${del.commentary || 'Recorded delivery'}\n\nTip: Activate 'Edit Mode' in the sidebar or top banner to modify past deliveries directly.`;
-                          Platform.OS === 'web' ? window.alert(info) : Alert.alert('Delivery Details', info);
+                          // Check if delivery matches an official umpire signal
+                          const dt = (del.text || '').toUpperCase();
+                          let sigType: UmpireSignalType | null = null;
+                          if (isWicket || (dt.includes('W') && !dt.includes('WD'))) sigType = 'OUT';
+                          else if (dt.includes('WD')) sigType = 'WIDE';
+                          else if (dt.includes('NB')) sigType = 'NO_BALL';
+                          else if (dt.includes('DEAD')) sigType = 'DEAD_BALL';
+                          else if (dt.includes('LB')) sigType = 'LEG_BYE';
+                          else if (dt.includes('B') && !dt.includes('NB')) sigType = 'BYE';
+                          else if (isSix || dt === '6') sigType = 'SIX';
+                          else if (isFour || dt === '4') sigType = 'FOUR';
+
+                          if (sigType) {
+                            setActiveUmpireSignal({
+                              type: sigType,
+                              batterName: del.strikerName || striker?.name,
+                              bowlerName: del.bowlerName || bowler?.name,
+                              runs: del.runs,
+                              overText: `Ball ${del.ball}`,
+                              extraDetails: del.commentary || `Delivery ${del.ball}: ${del.text} • Click 'Edit Mode' to alter historical ball`
+                            });
+                          } else {
+                            const info = `Ball ${del.ball}: ${del.text} • ${del.commentary || 'Recorded delivery'}\n\nTip: Activate 'Edit Mode' in the sidebar or top banner to modify past deliveries directly.`;
+                            Platform.OS === 'web' ? window.alert(info) : Alert.alert('Delivery Details', info);
+                          }
                         }
                       }}
                       activeOpacity={0.7}
@@ -6483,17 +6608,27 @@ export default function LiveScoringScreen() {
                 </View>
               )}
 
-              {/* Cricket Rules Interactive Assistant Quick Button */}
-              <TouchableOpacity
-                style={styles.smartRulesNavBtn}
-                onPress={() => {
-                  setActiveCricketRule('FREE_HIT');
-                  setShowCricketRulesModal(true);
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.smartRulesNavBtnText}>⚖️ Smart Cricket Rules & Visual Diagrams Guide</Text>
-              </TouchableOpacity>
+              {/* Cricket Rules & Umpire Signals Quick Navigation Buttons */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+                <TouchableOpacity
+                  style={[styles.smartRulesNavBtn, { flex: 1, marginBottom: 0 }]}
+                  onPress={() => {
+                    setActiveCricketRule('FREE_HIT');
+                    setShowCricketRulesModal(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.smartRulesNavBtnText} numberOfLines={1}>⚖️ Smart Cricket Rules</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.smartRulesNavBtn, { flex: 1, marginBottom: 0, backgroundColor: '#0284c7', borderColor: '#0ea5e9' }]}
+                  onPress={() => setShowUmpireGallery(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.smartRulesNavBtnText, { color: '#ffffff' }]} numberOfLines={1}>🏁 Umpire Hand Signals</Text>
+                </TouchableOpacity>
+              </View>
 
               {/* Main Scoring Keypad Grid */}
               <View style={styles.engineKeypadContainer}>

@@ -8,6 +8,7 @@ import WagonWheel from '../../components/analytics/WagonWheel';
 import ErrorBoundary from '../../components/common/ErrorBoundary';
 import CricketRulesModal, { CricketRuleType } from '../../components/scorer/CricketRulesModal';
 import MatchHighlightsBanner, { HighlightItem } from '../../components/common/MatchHighlightsBanner';
+import UmpireSignalOverlay, { UmpireSignalEvent, UmpireSignalsGalleryModal, UmpireSignalType } from '../../components/common/UmpireSignalOverlay';
 
 const IMG_CHAMPIONS = require('../../../assets/cricket_champions.png');
 
@@ -44,6 +45,10 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
   const [selectedWagonBatterId, setSelectedWagonBatterId] = useState<string>('');
   const [showRulesModal, setShowRulesModal] = useState<boolean>(false);
   const [activeRule, setActiveRule] = useState<CricketRuleType>('FREE_HIT');
+
+  // Broadcast Umpire Signal & Hand Gestures Gallery State
+  const [activeUmpireSignal, setActiveUmpireSignal] = useState<UmpireSignalEvent | null>(null);
+  const [showUmpireGallery, setShowUmpireGallery] = useState<boolean>(false);
 
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -625,16 +630,26 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                   ⭕ Powerplay: Overs 1-6 (Max 2 fielders outside 30y ring)
                 </Text>
               </View>
-              <TouchableOpacity
-                style={styles.rulesGuideBtn}
-                onPress={() => {
-                  setActiveRule('FREE_HIT');
-                  setShowRulesModal(true);
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.rulesGuideBtnText}>⚖️ View Cricket Rules Guide & Diagrams</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
+                <TouchableOpacity
+                  style={[styles.rulesGuideBtn, { flex: 1, minWidth: 200 }]}
+                  onPress={() => {
+                    setActiveRule('FREE_HIT');
+                    setShowRulesModal(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.rulesGuideBtnText}>⚖️ View Cricket Rules Guide & Diagrams</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.rulesGuideBtn, { flex: 1, minWidth: 200, backgroundColor: '#0284c7', borderColor: '#0ea5e9' }]}
+                  onPress={() => setShowUmpireGallery(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.rulesGuideBtnText, { color: '#ffffff' }]}>🏁 Umpire Hand Signals Guide & Animations</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
 
@@ -668,7 +683,26 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                   <View key={b.id || bIdx} style={[styles.tableRow, bIdx % 2 === 1 && styles.tableRowAlt]}>
                     <View style={styles.colName}>
                       <Text style={styles.playerName}>{b.name}</Text>
-                      <Text style={styles.dismissal}>{b.dismissal || (b.isOut ? 'out' : 'not out')}</Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          const isDismissed = b.isOut || (b.dismissal && !b.dismissal.toLowerCase().includes('not out'));
+                          if (isDismissed) {
+                            setActiveUmpireSignal({
+                              type: 'OUT',
+                              title: `BATTER OUT!`,
+                              batterName: b.name,
+                              runs: b.runs,
+                              dismissalType: b.dismissal || 'Wicket Out',
+                              extraDetails: `Official dismissal recorded: ${b.dismissal || 'Out'} (${b.runs} off ${b.balls}b) • MCC Law 31`
+                            });
+                          }
+                        }}
+                        activeOpacity={b.isOut ? 0.7 : 1}
+                      >
+                        <Text style={[styles.dismissal, b.isOut && { color: '#ef4444', fontWeight: 'bold' }]}>
+                          {b.dismissal || (b.isOut ? 'out' : 'not out')}{b.isOut ? ' ☝️' : ''}
+                        </Text>
+                      </TouchableOpacity>
                     </View>
                     <Text style={[styles.cell, styles.colNum, styles.runsText]}>{b.runs}</Text>
                     <Text style={[styles.cell, styles.colNum]}>{b.balls}</Text>
@@ -1021,6 +1055,24 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
           wickets: currentInnings?.wickets
         }}
         onClose={() => setShowRulesModal(false)}
+      />
+
+      {/* Broadcast Umpire Signal Overlay */}
+      <UmpireSignalOverlay
+        event={activeUmpireSignal}
+        onDismiss={() => setActiveUmpireSignal(null)}
+      />
+
+      {/* Umpire Hand Signals Showcase Gallery Modal */}
+      <UmpireSignalsGalleryModal
+        visible={showUmpireGallery}
+        onClose={() => setShowUmpireGallery(false)}
+        onSelectSignal={(sigType) => {
+          setActiveUmpireSignal({
+            type: sigType,
+            overText: `Scorecard Preview • ${match?.tournament || 'Match'}`
+          });
+        }}
       />
     </View>
   );
