@@ -58,7 +58,7 @@ const FIELD_ZONES: ZoneDef[] = [
   { id: 'fine_leg', name: 'Fine Leg', shortName: 'Fine Leg', side: 'LEG', standardAngleRHB: 155, color: '#a855f7' }
 ];
 
-export default function InteractiveWagonWheelModal({
+export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProps> = ({
   visible,
   runs,
   batterName = 'Batter',
@@ -66,11 +66,11 @@ export default function InteractiveWagonWheelModal({
   onConfirm,
   onSkip,
   onClose
-}: InteractiveWagonWheelModalProps) {
+}) => {
   const { width } = useWindowDimensions();
-  const isMobile = width < 500;
+  const isMobile = width < 600;
 
-  // Batting orientation (RHB / LHB)
+  // Striker orientation (Right-hand or Left-hand)
   const [battingHand, setBattingHand] = useState<'RIGHT' | 'LEFT'>(initialBattingHand);
 
   useEffect(() => {
@@ -79,116 +79,107 @@ export default function InteractiveWagonWheelModal({
     }
   }, [initialBattingHand, visible]);
 
-  // Coordinate Geometry
-  // SVG internal coordinate space: 400 x 400
+  // Coordinate geometry for 380x380 SVG top-down field
   const size = 380;
   const cx = size / 2; // 190
   const cy = size / 2; // 190
-  const groundRadius = 165; // Boundary rope radius
-  const innerCircleRadius = 78; // 30-yard fielding circle
-  const strikerX = cx; // 190
-  const strikerY = cy + 18; // Striker stands at popping crease (lower half of pitch)
-  const nonStrikerX = cx;
-  const nonStrikerY = cy - 18;
+  const groundRadius = 168; // Outer boundary rope
+  const innerCircleRadius = 78; // 30-yard circle
+  const pitchWidth = 14;
+  const pitchHeight = 44;
+  const pitchY = cy - pitchHeight / 2;
+  const strikerX = cx;
+  const strikerY = cy + 14; // Striker stands at bottom batting crease
 
-  // Selected landing position state
-  // Default to Cover for 4 or Midwicket for 6 on open
-  const defaultZone = runs === 6 ? 'mid_wicket' : 'cover';
-  const defaultAngle = battingHand === 'LEFT' ? 360 - 298 : 298;
-  const defaultDistPct = runs === 6 ? 96 : (runs === 4 ? 92 : 60);
+  // Landing position state (initialized based on runs)
+  const defaultAngle = runs >= 6 ? 325 : (runs === 4 ? 298 : 345);
+  const defaultDist = runs >= 6 ? 96 : (runs === 4 ? 92 : 60);
 
   const getPosFromAngleDist = (angleDeg: number, distPct: number) => {
     const rad = (angleDeg * Math.PI) / 180;
-    const px = (groundRadius * distPct) / 100;
-    const targetX = strikerX + px * Math.sin(rad);
-    const targetY = strikerY - px * Math.cos(rad);
-    return { x: targetX, y: targetY };
+    const r = (distPct / 100) * groundRadius;
+    return {
+      x: strikerX + r * Math.sin(rad),
+      y: strikerY - r * Math.cos(rad)
+    };
   };
 
-  const initialPos = getPosFromAngleDist(defaultAngle, defaultDistPct);
+  const initialPos = getPosFromAngleDist(defaultAngle, defaultDist);
   const [landingX, setLandingX] = useState<number>(initialPos.x);
   const [landingY, setLandingY] = useState<number>(initialPos.y);
   const [selectedAngle, setSelectedAngle] = useState<number>(defaultAngle);
-  const [selectedDistPct, setSelectedDistPct] = useState<number>(defaultDistPct);
-  const [selectedZone, setSelectedZone] = useState<ZoneDef>(
-    FIELD_ZONES.find(z => z.id === defaultZone) || FIELD_ZONES[2]
-  );
+  const [selectedDistPct, setSelectedDistPct] = useState<number>(defaultDist);
+  const [selectedZone, setSelectedZone] = useState<ZoneDef>(FIELD_ZONES[3]); // Extra Cover
 
-  // Ball Flight Animation state
-  // animProgress: 0 (at striker) -> 1 (at landing target)
+  // Trajectory flight animation progress (0.0 to 1.0)
   const [animProgress, setAnimProgress] = useState<number>(1);
-  const [isAnimating, setIsAnimating] = useState<boolean>(false);
-  const animRef = useRef<number | null>(null);
+  const animRef = useRef<any>(null);
 
-  // Trigger ball flight animation whenever target changes or on open
+  // Trigger smooth ball flight animation
   const triggerBallAnimation = (targetX: number, targetY: number) => {
-    if (animRef.current) {
-      cancelAnimationFrame(animRef.current);
-    }
-    setIsAnimating(true);
+    if (animRef.current) cancelAnimationFrame(animRef.current);
     setAnimProgress(0);
+    const startTime = Date.now();
+    const duration = 520; // 520ms smooth trajectory flight
 
-    const startTime = performance.now();
-    const duration = 650; // ms
-
-    const step = (now: number) => {
-      const elapsed = now - startTime;
-      const t = Math.min(1, elapsed / duration);
-      // Ease out cubic for realistic ball deceleration at landing
-      const ease = 1 - Math.pow(1 - t, 3);
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(1, elapsed / duration);
+      // Quad ease-out for realistic decelerating ball flight
+      const ease = 1 - Math.pow(1 - progress, 2);
       setAnimProgress(ease);
-
-      if (t < 1) {
-        animRef.current = requestAnimationFrame(step);
+      if (progress < 1) {
+        animRef.current = requestAnimationFrame(animate);
       } else {
-        setIsAnimating(false);
+        setAnimProgress(1);
       }
     };
-
-    animRef.current = requestAnimationFrame(step);
+    animRef.current = requestAnimationFrame(animate);
   };
 
-  // On modal open, trigger animation
+  // Re-trigger animation when modal opens
   useEffect(() => {
     if (visible) {
-      const initP = getPosFromAngleDist(
-        battingHand === 'LEFT' ? (runs === 6 ? 295 : 62) : (runs === 6 ? 68 : 298),
-        runs >= 4 ? 94 : 65
-      );
-      setLandingX(initP.x);
-      setLandingY(initP.y);
-      resolveZoneFromCoords(initP.x, initP.y, battingHand);
+      const defAngle = runs >= 6 ? 325 : (runs === 4 ? 298 : 345);
+      const defDist = runs >= 6 ? 96 : (runs === 4 ? 92 : 60);
+      let adjustedAngle = defAngle;
+      if (battingHand === 'LEFT') {
+        adjustedAngle = (360 - defAngle) % 360;
+      }
+      const pos = getPosFromAngleDist(adjustedAngle, defDist);
+      setLandingX(pos.x);
+      setLandingY(pos.y);
+      resolveZoneFromCoords(pos.x, pos.y, battingHand);
       setTimeout(() => {
-        triggerBallAnimation(initP.x, initP.y);
-      }, 150);
+        triggerBallAnimation(pos.x, pos.y);
+      }, 100);
     }
     return () => {
       if (animRef.current) cancelAnimationFrame(animRef.current);
     };
   }, [visible, runs, battingHand]);
 
-  // Resolve Zone from arbitrary (x, y) coordinates
+  // Compute angle, distance & closest field zone from landing (x,y)
   const resolveZoneFromCoords = (x: number, y: number, hand: 'RIGHT' | 'LEFT') => {
     const dx = x - strikerX;
-    const dy = y - strikerY;
-    let rad = Math.atan2(dx, -dy); // 0 at 12 o'clock, clockwise
-    let deg = (rad * 180) / Math.PI;
+    const dy = strikerY - y; // Screen Y goes down, so invert for standard cartesian
+    let deg = (Math.atan2(dx, dy) * 180) / Math.PI;
     if (deg < 0) deg += 360;
 
-    const rawDistance = Math.sqrt(dx * dx + dy * dy);
-    const distPct = Math.min(100, Math.max(12, Math.round((rawDistance / groundRadius) * 100)));
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const distPct = Math.min(100, Math.round((dist / groundRadius) * 100));
 
-    // For Left Hand Batsman, perspective angle mirrors horizontally
-    let effectiveAngleForZone = deg;
+    // For Left Hand Batsman, mirror angles relative to straight (0 deg)
+    let effectiveAngle = deg;
     if (hand === 'LEFT') {
-      effectiveAngleForZone = (360 - deg) % 360;
+      effectiveAngle = (360 - deg) % 360;
     }
 
-    // Find closest zone based on angle definition
+    // Find zone whose standardAngleRHB is closest to effectiveAngle
     let closest = FIELD_ZONES[0];
     let minDiff = 999;
     for (const z of FIELD_ZONES) {
-      let diff = Math.abs(z.standardAngleRHB - effectiveAngleForZone);
+      let diff = Math.abs(z.standardAngleRHB - effectiveAngle);
       if (diff > 180) diff = 360 - diff;
       if (diff < minDiff) {
         minDiff = diff;
@@ -205,7 +196,6 @@ export default function InteractiveWagonWheelModal({
 
   // Handle click / tap on SVG ground
   const handleGroundPress = (event: any) => {
-    // Get click location relative to SVG viewBox
     const nativeEvent = event.nativeEvent;
     let localX = 0;
     let localY = 0;
@@ -222,12 +212,10 @@ export default function InteractiveWagonWheelModal({
       localY = nativeEvent.clientY - rect.top;
     }
 
-    // Scale from client render width to internal 380x380 SVG coordinates
     const scale = size / (isMobile ? Math.min(width - 40, 340) : 340);
     const svgX = Math.round(localX * scale);
     const svgY = Math.round(localY * scale);
 
-    // Clamp to boundary circle
     const dx = svgX - strikerX;
     const dy = svgY - strikerY;
     const dist = Math.sqrt(dx * dx + dy * dy);
@@ -252,7 +240,6 @@ export default function InteractiveWagonWheelModal({
     if (battingHand === 'LEFT') {
       targetAngle = (360 - zone.standardAngleRHB) % 360;
     }
-    // Boundary distance for 4s/6s, infield for smaller runs
     const dist = runs >= 6 ? 96 : (runs === 4 ? 92 : 62);
     const pos = getPosFromAngleDist(targetAngle, dist);
 
@@ -266,7 +253,7 @@ export default function InteractiveWagonWheelModal({
 
   // Confirm and submit
   const handleConfirm = () => {
-    const meters = Math.round(15 + (selectedDistPct / 100) * 65); // 15m to 80m
+    const meters = Math.round(15 + (selectedDistPct / 100) * 65);
     onConfirm({
       zone: selectedZone.name,
       side: selectedZone.side,
@@ -279,17 +266,13 @@ export default function InteractiveWagonWheelModal({
     });
   };
 
-  // Current animated ball coordinates
   const currentBallX = strikerX + (landingX - strikerX) * animProgress;
   const currentBallY = strikerY + (landingY - strikerY) * animProgress;
-  // Parabolic elevation factor for 3D aerial flight look
   const ballElevation = Math.sin(animProgress * Math.PI) * (runs === 6 ? 1.6 : 1.25);
   const ballScale = 1 + (ballElevation - 1) * 0.45;
 
-  // Ground render size
   const renderSize = isMobile ? Math.min(width - 40, 340) : 340;
 
-  // Off Side Zones & Leg Side Zones according to batter hand
   const offSideZones = useMemo(() => {
     return FIELD_ZONES.filter(z => z.side === 'OFF');
   }, []);
@@ -298,7 +281,6 @@ export default function InteractiveWagonWheelModal({
     return FIELD_ZONES.filter(z => z.side === 'LEG' || z.side === 'STRAIGHT');
   }, []);
 
-  // Distance in estimated meters
   const distanceMeters = Math.round(15 + (selectedDistPct / 100) * 65);
 
   return (
@@ -310,7 +292,7 @@ export default function InteractiveWagonWheelModal({
     >
       <View style={styles.modalOverlay}>
         <View style={[styles.modalCard, { maxWidth: isMobile ? 380 : 460 }]}>
-          {/* Header Bar */}
+          {/* Top Sunlight Header Bar */}
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
               <View style={styles.titleRow}>
@@ -326,7 +308,7 @@ export default function InteractiveWagonWheelModal({
                 </View>
               </View>
               <Text style={styles.subtitleText}>
-                Select shot landing direction for <Text style={{ color: '#0284c7', fontWeight: '800' }}>{batterName}</Text>
+                Select shot landing direction for <Text style={styles.batterNameHighlight}>{batterName}</Text>
               </Text>
             </View>
 
@@ -336,7 +318,7 @@ export default function InteractiveWagonWheelModal({
             </TouchableOpacity>
           </View>
 
-          {/* Batting Hand Toggle Bar (RHB vs LHB) */}
+          {/* Batting Hand Toggle Bar (RHB vs LHB) in Daylight Gold & Yellow Theme */}
           <View style={styles.handToggleRow}>
             <Text style={styles.handToggleLabel}>STRIKER ORIENTATION:</Text>
             <View style={styles.handBtnGroup}>
@@ -361,7 +343,7 @@ export default function InteractiveWagonWheelModal({
             </View>
           </View>
 
-          {/* Interactive SVG Cricket Ground */}
+          {/* Interactive Daylight SVG Cricket Ground */}
           <View style={styles.groundWrapper}>
             <TouchableOpacity
               activeOpacity={0.95}
@@ -375,33 +357,34 @@ export default function InteractiveWagonWheelModal({
                 style={{ width: '100%', height: '100%', display: 'block', cursor: 'crosshair', userSelect: 'none' }}
               >
                 <defs>
-                  {/* Radial Turf Lawn Gradients with Mowing Stripes */}
-                  <radialGradient id="fieldGrass" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor="#14532d" />
-                    <stop offset="65%" stopColor="#0f3d21" />
-                    <stop offset="92%" stopColor="#0a2a16" />
-                    <stop offset="100%" stopColor="#05170b" />
+                  {/* Natural Sunlight Outfield Turf Gradients (Bright, lush green for daytime play) */}
+                  <radialGradient id="fieldGrassDay" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stopColor="#22c55e" />
+                    <stop offset="55%" stopColor="#16a34a" />
+                    <stop offset="88%" stopColor="#15803d" />
+                    <stop offset="100%" stopColor="#166534" />
                   </radialGradient>
 
                   {/* Concentric Mower Stripes */}
-                  <radialGradient id="lawnPattern" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor="rgba(255, 255, 255, 0.05)" />
+                  <radialGradient id="lawnPatternDay" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stopColor="rgba(255, 255, 255, 0.08)" />
                     <stop offset="25%" stopColor="rgba(0, 0, 0, 0.06)" />
-                    <stop offset="50%" stopColor="rgba(255, 255, 255, 0.05)" />
+                    <stop offset="50%" stopColor="rgba(255, 255, 255, 0.08)" />
                     <stop offset="75%" stopColor="rgba(0, 0, 0, 0.06)" />
-                    <stop offset="100%" stopColor="rgba(255, 255, 255, 0.05)" />
+                    <stop offset="100%" stopColor="rgba(255, 255, 255, 0.08)" />
                   </radialGradient>
 
-                  {/* Pitch Texture Gradient */}
-                  <linearGradient id="pitchTexture" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#b4916c" />
-                    <stop offset="50%" stopColor="#cfaf88" />
-                    <stop offset="100%" stopColor="#b4916c" />
+                  {/* Pitch Texture Gradient: Authentic Clay Strip */}
+                  <linearGradient id="pitchTextureDay" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#d97706" />
+                    <stop offset="35%" stopColor="#fef08a" />
+                    <stop offset="65%" stopColor="#fde047" />
+                    <stop offset="100%" stopColor="#b45309" />
                   </linearGradient>
 
                   {/* Trajectory Glow Filter */}
-                  <filter id="trajGlow" x="-30%" y="-30%" width="160%" height="160%">
-                    <feGaussianBlur stdDeviation="3.5" result="blur" />
+                  <filter id="trajGlowDay" x="-30%" y="-30%" width="160%" height="160%">
+                    <feGaussianBlur stdDeviation="3" result="blur" />
                     <feMerge>
                       <feMergeNode in="blur" />
                       <feMergeNode in="SourceGraphic" />
@@ -409,18 +392,17 @@ export default function InteractiveWagonWheelModal({
                   </filter>
 
                   {/* Ball 3D Shading */}
-                  <radialGradient id="cricketBallGrad" cx="35%" cy="35%" r="65%">
+                  <radialGradient id="cricketBallDay" cx="35%" cy="35%" r="65%">
                     <stop offset="0%" stopColor="#ff4d4d" />
-                    <stop offset="45%" stopColor="#dc2626" />
-                    <stop offset="90%" stopColor="#991b1b" />
-                    <stop offset="100%" stopColor="#5b0b0b" />
+                    <stop offset="50%" stopColor="#dc2626" />
+                    <stop offset="100%" stopColor="#7f1d1d" />
                   </radialGradient>
 
                   {/* Landing Ripple Glow */}
-                  <radialGradient id="rippleGlow" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor={runs === 6 ? '#ec4899' : (runs === 4 ? '#06b6d4' : '#f59e0b')} stopOpacity="0.8" />
-                    <stop offset="60%" stopColor={runs === 6 ? '#ec4899' : (runs === 4 ? '#06b6d4' : '#f59e0b')} stopOpacity="0.3" />
-                    <stop offset="100%" stopColor={runs === 6 ? '#ec4899' : (runs === 4 ? '#06b6d4' : '#f59e0b')} stopOpacity="0" />
+                  <radialGradient id="rippleGlowDay" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stopColor={runs === 6 ? '#f59e0b' : (runs === 4 ? '#0284c7' : '#10b981')} stopOpacity="0.8" />
+                    <stop offset="60%" stopColor={runs === 6 ? '#f59e0b' : (runs === 4 ? '#0284c7' : '#10b981')} stopOpacity="0.3" />
+                    <stop offset="100%" stopColor={runs === 6 ? '#f59e0b' : (runs === 4 ? '#0284c7' : '#10b981')} stopOpacity="0" />
                   </radialGradient>
                 </defs>
 
@@ -429,9 +411,9 @@ export default function InteractiveWagonWheelModal({
                   cx={cx}
                   cy={cy}
                   r={groundRadius}
-                  fill="url(#fieldGrass)"
-                  stroke="#15803d"
-                  strokeWidth="2"
+                  fill="url(#fieldGrassDay)"
+                  stroke="#b8860b"
+                  strokeWidth="2.5"
                 />
 
                 {/* 2. Concentric Mowing Grass Rings Overlay */}
@@ -439,44 +421,36 @@ export default function InteractiveWagonWheelModal({
                   cx={cx}
                   cy={cy}
                   r={groundRadius}
-                  fill="url(#lawnPattern)"
+                  fill="url(#lawnPatternDay)"
                   style={{ pointerEvents: 'none' }}
                 />
 
-                {/* Concentric Distance Rings (25m, 50m, 75m) */}
-                <circle cx={cx} cy={cy} r={groundRadius * 0.35} fill="none" stroke="rgba(255, 255, 255, 0.08)" strokeWidth="1" strokeDasharray="3 3" />
-                <circle cx={cx} cy={cy} r={groundRadius * 0.70} fill="none" stroke="rgba(255, 255, 255, 0.08)" strokeWidth="1" strokeDasharray="3 3" />
+                {/* Distance Circles (25m, 50m, 75m) */}
+                <circle cx={cx} cy={cy} r={groundRadius * 0.35} fill="none" stroke="rgba(255, 255, 255, 0.25)" strokeWidth="1" strokeDasharray="3 3" />
+                <circle cx={cx} cy={cy} r={groundRadius * 0.70} fill="none" stroke="rgba(255, 255, 255, 0.25)" strokeWidth="1" strokeDasharray="3 3" />
 
-                {/* 3. 30-Yard Inner Field Circle (White Dashed Circle with Disc Markers) */}
+                {/* 3. 30-Yard Inner Field Circle (Crisp White Dashed Ring) */}
                 <circle
                   cx={cx}
                   cy={cy}
                   r={innerCircleRadius}
                   fill="none"
-                  stroke="rgba(255, 255, 255, 0.45)"
-                  strokeWidth="1.5"
+                  stroke="#ffffff"
+                  strokeWidth="2"
                   strokeDasharray="6 4"
                 />
 
-                {/* 4. White Boundary Rope with Stadium Border Glow */}
+                {/* 4. White Boundary Rope with Clean Rim */}
                 <circle
                   cx={cx}
                   cy={cy}
                   r={groundRadius}
                   fill="none"
                   stroke="#ffffff"
-                  strokeWidth="2.5"
-                />
-                <circle
-                  cx={cx}
-                  cy={cy}
-                  r={groundRadius + 3}
-                  fill="none"
-                  stroke="rgba(255, 255, 255, 0.25)"
-                  strokeWidth="1.2"
+                  strokeWidth="3"
                 />
 
-                {/* 5. 10 Zone Sector Divider Radial Rays & Sector Watermarks */}
+                {/* 5. 10 Zone Sector Divider Radial Rays & High-Contrast Zone Labels */}
                 {FIELD_ZONES.map((zone) => {
                   let angle = zone.standardAngleRHB;
                   if (battingHand === 'LEFT') {
@@ -492,25 +466,26 @@ export default function InteractiveWagonWheelModal({
 
                   return (
                     <g key={zone.id}>
-                      {/* Subtle ray line */}
+                      {/* Radial boundary ray */}
                       <line
                         x1={strikerX}
                         y1={strikerY}
                         x2={borderX}
                         y2={borderY}
-                        stroke={isZoneActive ? 'rgba(255, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.12)'}
-                        strokeWidth={isZoneActive ? 1.5 : 0.8}
+                        stroke={isZoneActive ? '#fef08a' : 'rgba(255, 255, 255, 0.25)'}
+                        strokeWidth={isZoneActive ? 2 : 1}
                         strokeDasharray={isZoneActive ? 'none' : '3 3'}
                       />
-                      {/* Floating Zone Name Label */}
+                      {/* Floating Zone Name Label (White with dark shadow for outdoor sun visibility) */}
                       <text
                         x={labelX}
                         y={labelY}
-                        fill={isZoneActive ? '#38bdf8' : 'rgba(255, 255, 255, 0.6)'}
-                        fontSize={isZoneActive ? 9.5 : 8}
-                        fontWeight={isZoneActive ? '900' : '700'}
+                        fill={isZoneActive ? '#fef08a' : '#ffffff'}
+                        fontSize={isZoneActive ? 10.5 : 8.5}
+                        fontWeight="900"
                         textAnchor="middle"
                         dominantBaseline="central"
+                        filter="drop-shadow(0 1px 2px rgba(0,0,0,0.85))"
                         style={{ pointerEvents: 'none', userSelect: 'none' }}
                       >
                         {zone.shortName}
@@ -519,55 +494,106 @@ export default function InteractiveWagonWheelModal({
                   );
                 })}
 
-                {/* 6. Realistic Cricket Pitch in the Center */}
-                {/* Pitch Clay Strip */}
+                {/* 6. Realistic Cricket Pitch in the Center (Clay Strip with Popping Creases) */}
                 <rect
-                  x={cx - 7}
-                  y={cy - 22}
-                  width="14"
-                  height="44"
-                  rx="1.5"
-                  fill="url(#pitchTexture)"
-                  stroke="#854d0e"
-                  strokeWidth="1"
+                  x={cx - 8}
+                  y={cy - 24}
+                  width="16"
+                  height="48"
+                  rx="2"
+                  fill="url(#pitchTextureDay)"
+                  stroke="#78350f"
+                  strokeWidth="1.2"
                 />
 
                 {/* Bowling Creases & Popping Creases */}
                 {/* Non-Striker Crease (Top) */}
-                <line x1={cx - 10} y1={cy - 16} x2={cx + 10} y2={cy - 16} stroke="#ffffff" strokeWidth="1" />
+                <line x1={cx - 12} y1={cy - 17} x2={cx + 12} y2={cy - 17} stroke="#ffffff" strokeWidth="1.2" />
                 {/* Non-Striker Stumps */}
-                <line x1={cx - 3} y1={cy - 19} x2={cx + 3} y2={cy - 19} stroke="#fef08a" strokeWidth="2" strokeLinecap="round" />
+                <line x1={cx - 3.5} y1={cy - 20} x2={cx + 3.5} y2={cy - 20} stroke="#fef08a" strokeWidth="2.5" strokeLinecap="round" />
 
                 {/* Striker Crease (Bottom) */}
-                <line x1={cx - 10} y1={cy + 16} x2={cx + 10} y2={cy + 16} stroke="#ffffff" strokeWidth="1" />
+                <line x1={cx - 12} y1={cy + 17} x2={cx + 12} y2={cy + 17} stroke="#ffffff" strokeWidth="1.2" />
                 {/* Striker Stumps */}
-                <line x1={cx - 3} y1={cy + 19} x2={cx + 3} y2={cy + 19} stroke="#fef08a" strokeWidth="2" strokeLinecap="round" />
+                <line x1={cx - 3.5} y1={cy + 20} x2={cx + 3.5} y2={cy + 20} stroke="#fef08a" strokeWidth="2.5" strokeLinecap="round" />
 
-                {/* Striker Batsman Stance Icon / Bat Graphic */}
-                <circle cx={strikerX} cy={strikerY} r="3.5" fill="#facc15" stroke="#000000" strokeWidth="0.8" />
-                {/* Bat Direction indication */}
-                <line
-                  x1={strikerX}
-                  y1={strikerY}
-                  x2={battingHand === 'RIGHT' ? strikerX - 6 : strikerX + 6}
-                  y2={strikerY + 4}
-                  stroke="#e2e8f0"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                />
+                {/* ─── 7. PROMINENT BATSMAN FIGURINE AT STRIKER'S CREASE ─── */}
+                <g transform={`translate(${strikerX}, ${strikerY})`}>
+                  {/* Shadow under batsman */}
+                  <ellipse cx="0" cy="5" rx="9" ry="3.5" fill="rgba(0,0,0,0.3)" />
 
-                {/* 7. Trajectory Line: Glowing Line from Striker to Target */}
+                  {/* Batting Pads on Legs */}
+                  <rect x="-4.5" y="1" width="3.2" height="6" rx="1.5" fill="#ffffff" stroke="#94a3b8" strokeWidth="0.6" />
+                  <rect x="1.3" y="1" width="3.2" height="6" rx="1.5" fill="#ffffff" stroke="#94a3b8" strokeWidth="0.6" />
+
+                  {/* Body / Jersey (TNCA Royal Navy with Golden Trim) */}
+                  <path
+                    d="M -4.5 1 L -5 -6 L 5 -6 L 4.5 1 Z"
+                    fill="#1e3a8a"
+                    stroke="#f59e0b"
+                    strokeWidth="0.8"
+                  />
+
+                  {/* Batting Helmet with Visor */}
+                  <circle cx="0" cy="-9" r="4.2" fill="#0f172a" stroke="#f59e0b" strokeWidth="0.8" />
+                  {/* Visor Grill pointing in batting stance */}
+                  <path
+                    d={battingHand === 'RIGHT' ? 'M 0 -8.5 L 3.5 -7' : 'M 0 -8.5 L -3.5 -7'}
+                    stroke="#ffffff"
+                    strokeWidth="1"
+                    strokeLinecap="round"
+                  />
+
+                  {/* Cricket Bat in Batting Stance (Tilted toward slips/sweet-spot) */}
+                  <line
+                    x1={battingHand === 'RIGHT' ? '-2' : '2'}
+                    y1="-3"
+                    x2={battingHand === 'RIGHT' ? '-11' : '11'}
+                    y2="6"
+                    stroke="#b45309"
+                    strokeWidth="3.2"
+                    strokeLinecap="round"
+                  />
+                  {/* Bat Willow Blade Highlight */}
+                  <line
+                    x1={battingHand === 'RIGHT' ? '-4' : '4'}
+                    y1="-1"
+                    x2={battingHand === 'RIGHT' ? '-10' : '10'}
+                    y2="5"
+                    stroke="#fef08a"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </g>
+
+                {/* Floating Batsman Indicator Tag */}
+                <g transform={`translate(${strikerX}, ${strikerY - 22})`}>
+                  <rect x="-38" y="-7" width="76" height="14" rx="7" fill="#0f172a" stroke="#f59e0b" strokeWidth="1" />
+                  <text
+                    x="0"
+                    y="0"
+                    fill="#fef08a"
+                    fontSize="7.5"
+                    fontWeight="900"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                  >
+                    🏏 {batterName.split(' ')[0]} ({battingHand})
+                  </text>
+                </g>
+
+                {/* 8. Trajectory Line: Glowing Line from Striker to Target */}
                 {/* Outer Glow Line */}
                 <line
                   x1={strikerX}
                   y1={strikerY}
                   x2={currentBallX}
                   y2={currentBallY}
-                  stroke={runs === 6 ? '#ec4899' : (runs === 4 ? '#06b6d4' : '#eab308')}
+                  stroke={runs === 6 ? '#f59e0b' : (runs === 4 ? '#0284c7' : '#10b981')}
                   strokeWidth="5"
-                  strokeOpacity="0.4"
+                  strokeOpacity="0.45"
                   strokeLinecap="round"
-                  filter="url(#trajGlow)"
+                  filter="url(#trajGlowDay)"
                 />
                 {/* Core Trajectory Line */}
                 <line
@@ -575,91 +601,66 @@ export default function InteractiveWagonWheelModal({
                   y1={strikerY}
                   x2={currentBallX}
                   y2={currentBallY}
-                  stroke={runs === 6 ? '#f472b6' : (runs === 4 ? '#22d3ee' : '#fef08a')}
-                  strokeWidth="2.5"
+                  stroke={runs === 6 ? '#fef08a' : (runs === 4 ? '#38bdf8' : '#6ee7b7')}
+                  strokeWidth="2.8"
                   strokeLinecap="round"
                 />
 
-                {/* 8. Final Landing Position Marker & Expanding Shockwave Ripple */}
-                {!isAnimating && (
-                  <g>
-                    {/* Pulsating Ripple Disc */}
+                {/* 9. Landing Marker: Pulsing Beacon & Target Pin */}
+                {animProgress >= 0.85 && (
+                  <g transform={`translate(${landingX}, ${landingY})`}>
+                    {/* Animated Ripple Waves */}
+                    <circle cx="0" cy="0" r="16" fill="url(#rippleGlowDay)" />
+                    <circle cx="0" cy="0" r="10" fill="none" stroke="#ffffff" strokeWidth="1.5" strokeOpacity="0.75" />
+                    {/* Center Landing Pin */}
                     <circle
-                      cx={landingX}
-                      cy={landingY}
-                      r="16"
-                      fill="url(#rippleGlow)"
-                    />
-                    <circle
-                      cx={landingX}
-                      cy={landingY}
-                      r="10"
-                      fill="none"
-                      stroke={runs === 6 ? '#f472b6' : '#22d3ee'}
-                      strokeWidth="1.5"
-                      strokeDasharray="2 2"
-                    />
-                    {/* Landing Bullseye Pin */}
-                    <circle
-                      cx={landingX}
-                      cy={landingY}
-                      r="4.5"
-                      fill={runs === 6 ? '#ec4899' : '#06b6d4'}
+                      cx="0"
+                      cy="0"
+                      r="5.5"
+                      fill={runs === 6 ? '#f59e0b' : (runs === 4 ? '#0284c7' : '#10b981')}
                       stroke="#ffffff"
-                      strokeWidth="1.8"
+                      strokeWidth="2"
                     />
+                    {/* Run Number Inside Landing Pin */}
+                    <text
+                      x="0"
+                      y="0.5"
+                      fill="#ffffff"
+                      fontSize="6.5"
+                      fontWeight="900"
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                    >
+                      {runs}
+                    </text>
                   </g>
                 )}
 
-                {/* 9. Animated Cricket Ball traveling in 3D Flight Arc */}
-                <g transform={`translate(${currentBallX}, ${currentBallY}) scale(${ballScale})`}>
-                  {/* Ball Drop Shadow for 3D elevation illusion */}
-                  <ellipse
-                    cx="0"
-                    cy={ballElevation * 4}
-                    rx="4.5"
-                    ry="2.2"
-                    fill="rgba(0, 0, 0, 0.45)"
-                  />
-                  {/* Red Cricket Ball */}
+                {/* 10. Flying Cricket Ball */}
+                {animProgress < 1 && (
                   <circle
-                    cx="0"
-                    cy="0"
-                    r="4.5"
-                    fill="url(#cricketBallGrad)"
+                    cx={currentBallX}
+                    cy={currentBallY}
+                    r={4 * ballScale}
+                    fill="url(#cricketBallDay)"
                     stroke="#ffffff"
                     strokeWidth="0.8"
                   />
-                  {/* White Ball Seam Line */}
-                  <line
-                    x1="-2.5"
-                    y1="-2"
-                    x2="2.5"
-                    y2="2"
-                    stroke="#ffffff"
-                    strokeWidth="0.8"
-                    strokeDasharray="1 1"
-                  />
-                </g>
-
-                {/* Cardinal Compass Tags */}
-                <text x={cx} y="14" fill="#fef08a" fontSize="8" fontWeight="800" textAnchor="middle">STRAIGHT</text>
-                <text x={cx} y={size - 6} fill="#fef08a" fontSize="8" fontWeight="800" textAnchor="middle">FINE LEG / THIRD MAN</text>
+                )}
               </svg>
             </TouchableOpacity>
 
-            {/* Instruction Callout */}
             <Text style={styles.groundHint}>
-              👆 Tap / Click anywhere on field to set landing location
+              👆 Tap / Click anywhere on the daylight field to set shot landing location
             </Text>
           </View>
 
-          {/* Real-time Direction & Distance Preview Banner */}
+          {/* Selected Direction Preview Card (Sunlight High Contrast Theme) */}
           <View style={styles.previewCard}>
             <View style={styles.previewRow}>
               <View style={styles.previewZoneBadge}>
-                <Text style={styles.previewZoneEmoji}>
-                  {selectedZone.side === 'OFF' ? '🏏 OFF' : (selectedZone.side === 'LEG' ? '🏏 LEG' : '🎯 STRAIGHT')}
+                <Text style={styles.previewZoneSideTag}>
+                  {selectedZone.side === 'OFF' ? '🏏 OFF SIDE' : (selectedZone.side === 'LEG' ? '🏏 LEG SIDE' : '🎯 STRAIGHT')}
                 </Text>
                 <Text style={styles.previewZoneName}>{selectedZone.name}</Text>
               </View>
@@ -686,7 +687,7 @@ export default function InteractiveWagonWheelModal({
             </View>
           </View>
 
-          {/* Quick Selection Zone Chips */}
+          {/* Quick Selection Zone Chips (Daylight High-Contrast Themed) */}
           <View style={styles.quickChipsSection}>
             {/* Off Side */}
             <View style={styles.chipGroup}>
@@ -697,7 +698,7 @@ export default function InteractiveWagonWheelModal({
                   return (
                     <TouchableOpacity
                       key={z.id}
-                      style={[styles.zoneChip, isActive && styles.zoneChipActive]}
+                      style={[styles.zoneChip, isActive && styles.zoneChipActiveOff]}
                       onPress={() => handleZoneSelect(z)}
                       activeOpacity={0.7}
                     >
@@ -746,7 +747,7 @@ export default function InteractiveWagonWheelModal({
               </Text>
             </TouchableOpacity>
 
-            {/* Skip Direction Option (Preserves Existing Fast Workflow) */}
+            {/* Skip Direction Option */}
             <TouchableOpacity
               style={styles.skipBtn}
               onPress={onSkip}
@@ -761,28 +762,28 @@ export default function InteractiveWagonWheelModal({
       </View>
     </Modal>
   );
-}
+};
 
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(5, 10, 20, 0.85)',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 12
   },
   modalCard: {
     width: '100%',
-    backgroundColor: '#0f172a',
+    backgroundColor: '#ffffff',
     borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: '#1e293b',
+    borderWidth: 2,
+    borderColor: '#b8860b', // CFVD TNCA Gold
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.5,
-    shadowRadius: 24,
-    elevation: 20
+    shadowColor: '#b8860b',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 18,
+    elevation: 16
   },
   header: {
     flexDirection: 'row',
@@ -793,7 +794,8 @@ const styles = StyleSheet.create({
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8
+    gap: 8,
+    flexWrap: 'wrap'
   },
   titleIcon: {
     fontSize: 18
@@ -801,7 +803,7 @@ const styles = StyleSheet.create({
   titleText: {
     fontSize: 16,
     fontWeight: '900',
-    color: '#ffffff',
+    color: '#0f172a',
     letterSpacing: 0.5
   },
   runPill: {
@@ -810,21 +812,21 @@ const styles = StyleSheet.create({
     borderRadius: 12
   },
   runPillSix: {
-    backgroundColor: '#ec4899',
-    shadowColor: '#ec4899',
+    backgroundColor: '#d97706',
+    shadowColor: '#d97706',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6
+    shadowOpacity: 0.3,
+    shadowRadius: 4
   },
   runPillFour: {
     backgroundColor: '#0284c7',
     shadowColor: '#0284c7',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6
+    shadowOpacity: 0.3,
+    shadowRadius: 4
   },
   runPillOther: {
-    backgroundColor: '#334155'
+    backgroundColor: '#059669'
   },
   runPillText: {
     fontSize: 10,
@@ -833,37 +835,45 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5
   },
   subtitleText: {
-    fontSize: 11,
-    color: '#94a3b8',
+    fontSize: 11.5,
+    color: '#475569',
     marginTop: 2
+  },
+  batterNameHighlight: {
+    color: '#0284c7',
+    fontWeight: '800'
   },
   closeBtn: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#1e293b',
+    backgroundColor: '#fef3c7',
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#fde68a'
   },
   closeBtnText: {
-    color: '#94a3b8',
+    color: '#92400e',
     fontSize: 13,
-    fontWeight: '800'
+    fontWeight: '900'
   },
   handToggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#1e293b',
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 10,
-    marginBottom: 10
+    marginBottom: 8
   },
   handToggleLabel: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#94a3b8',
+    color: '#854d0e',
     letterSpacing: 0.5
   },
   handBtnGroup: {
@@ -874,19 +884,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
-    backgroundColor: '#0f172a'
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1'
   },
   handBtnActive: {
-    backgroundColor: '#0284c7'
+    backgroundColor: '#d97706',
+    borderColor: '#b45309'
   },
   handBtnText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#94a3b8'
+    color: '#475569'
   },
   handBtnTextActive: {
     color: '#ffffff',
-    fontWeight: '800'
+    fontWeight: '900'
   },
   groundWrapper: {
     alignItems: 'center',
@@ -896,28 +909,28 @@ const styles = StyleSheet.create({
   groundBox: {
     borderRadius: 175,
     overflow: 'hidden',
-    shadowColor: '#10b981',
+    shadowColor: '#15803d',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
-    shadowRadius: 16,
+    shadowRadius: 12,
     elevation: 8,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.15)'
+    borderWidth: 2.5,
+    borderColor: '#b8860b'
   },
   groundHint: {
     fontSize: 10,
     color: '#64748b',
     fontWeight: '600',
-    marginTop: 6,
+    marginTop: 5,
     textAlign: 'center'
   },
   previewCard: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#fffbeb',
     borderRadius: 12,
     padding: 8,
     marginTop: 6,
     borderWidth: 1,
-    borderColor: '#334155'
+    borderColor: '#fde68a'
   },
   previewRow: {
     flexDirection: 'row',
@@ -927,24 +940,26 @@ const styles = StyleSheet.create({
   previewZoneBadge: {
     flex: 1
   },
-  previewZoneEmoji: {
+  previewZoneSideTag: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#38bdf8',
+    color: '#0284c7',
     letterSpacing: 0.5
   },
   previewZoneName: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '900',
-    color: '#ffffff'
+    color: '#0f172a'
   },
   previewMetrics: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0f172a',
+    backgroundColor: '#ffffff',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 8
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fde68a'
   },
   metricItem: {
     alignItems: 'center'
@@ -952,39 +967,39 @@ const styles = StyleSheet.create({
   metricLabel: {
     fontSize: 8,
     fontWeight: '800',
-    color: '#64748b'
+    color: '#854d0e'
   },
   metricVal: {
     fontSize: 11,
-    fontWeight: '800',
-    color: '#f8fafc'
+    fontWeight: '900',
+    color: '#0f172a'
   },
   metricDivider: {
     width: 1,
     height: 16,
-    backgroundColor: '#334155',
+    backgroundColor: '#fde68a',
     marginHorizontal: 8
   },
   replayBtn: {
     marginLeft: 8,
-    backgroundColor: '#334155',
+    backgroundColor: '#0284c7',
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 6
   },
   replayBtnText: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#f8fafc'
+    fontWeight: '800',
+    color: '#ffffff'
   },
   quickChipsSection: {
     marginTop: 8
   },
   chipGroup: {},
   chipGroupLabel: {
-    fontSize: 9,
+    fontSize: 9.5,
     fontWeight: '800',
-    color: '#0284c7',
+    color: '#0369a1',
     letterSpacing: 0.5,
     marginBottom: 4
   },
@@ -994,33 +1009,33 @@ const styles = StyleSheet.create({
     gap: 4
   },
   zoneChip: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#f8fafc',
     paddingHorizontal: 7,
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#334155'
+    borderColor: '#e2e8f0'
   },
-  zoneChipActive: {
+  zoneChipActiveOff: {
     backgroundColor: '#0284c7',
-    borderColor: '#38bdf8'
+    borderColor: '#0369a1'
   },
   zoneChipActiveLeg: {
     backgroundColor: '#d97706',
-    borderColor: '#f59e0b'
+    borderColor: '#b45309'
   },
   zoneChipText: {
     fontSize: 9.5,
     fontWeight: '700',
-    color: '#94a3b8'
+    color: '#334155'
   },
   zoneChipTextActive: {
     color: '#ffffff',
     fontWeight: '900'
   },
   footer: {
-    marginTop: 12,
-    gap: 6
+    marginTop: 10,
+    gap: 4
   },
   confirmBtn: {
     backgroundColor: '#10b981',
@@ -1028,19 +1043,19 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 4
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 3
   },
   confirmBtnText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '900',
     color: '#ffffff',
     letterSpacing: 0.5
   },
   skipBtn: {
-    paddingVertical: 6,
+    paddingVertical: 5,
     alignItems: 'center'
   },
   skipBtnText: {
@@ -1049,3 +1064,5 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   }
 });
+
+export default InteractiveWagonWheelModal;
