@@ -505,6 +505,8 @@ const DeliverySchema = new mongoose.Schema({
   shot_angle: { type: Number, default: null },
   shot_distance: { type: Number, default: null },
   shot_zone: { type: String, default: null },
+  shot_x: { type: Number, default: null },
+  shot_y: { type: Number, default: null },
   fielder_id: { type: String, default: null },
   fielder_name: { type: String, default: null },
   reason: { type: String, default: null },

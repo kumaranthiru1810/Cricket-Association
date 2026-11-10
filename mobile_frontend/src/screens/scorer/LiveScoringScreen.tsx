@@ -23,6 +23,7 @@ import { ClockPickerModal, calculateDurationMinutes } from '../../components/com
 import CricketRulesModal, { CricketRuleType } from '../../components/scorer/CricketRulesModal';
 import CricketConfetti from '../../components/common/CricketConfetti';
 import CricketFigurine3D from '../../components/common/CricketFigurine3D';
+import InteractiveWagonWheelModal, { ShotDirectionResult } from '../../components/analytics/InteractiveWagonWheelModal';
 
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
 const IMG_CHAMPIONS = require('../../../assets/cricket_champions.png');
@@ -1343,6 +1344,11 @@ export default function LiveScoringScreen() {
       ballType: selectedBallType,
       bowlingMode,
       isMarkedForEdit,
+      shotAngle: customOpts.shotAngle ?? undefined,
+      shotDistance: customOpts.shotDistance ?? undefined,
+      shotZone: customOpts.shotZone ?? finalFieldingPos ?? undefined,
+      shotX: customOpts.shotX ?? undefined,
+      shotY: customOpts.shotY ?? undefined,
       remarks: customOpts.remarks || deliveryRemarks || undefined
     };
 
@@ -1441,6 +1447,23 @@ export default function LiveScoringScreen() {
       Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
     } finally {
       setIsSubmittingDelivery(false);
+    }
+  };
+
+  const handleWagonWheelConfirm = async (result: ShotDirectionResult) => {
+    setSelectedWagonSector(result.zone);
+    setShowWagonWheelModal(false);
+    if (pendingBoundaryRun !== null) {
+      const r = pendingBoundaryRun;
+      setPendingBoundaryRun(null);
+      await handleScore(r, 'normal', {
+        wagonSector: result.zone,
+        shotZone: result.zone,
+        shotAngle: result.angle,
+        shotDistance: result.distance,
+        shotX: result.x,
+        shotY: result.y
+      });
     }
   };
 
@@ -5352,142 +5375,16 @@ export default function LiveScoringScreen() {
         </View>
       </Modal>
 
-      {/* 19. WAGON WHEEL MODAL - Triggered automatically on 4 or 6 */}
-      <Modal
+      {/* 19. ADVANCED INTERACTIVE 3D WAGON WHEEL MODAL */}
+      <InteractiveWagonWheelModal
         visible={showWagonWheelModal}
-        transparent
-        animationType="fade"
-        onRequestClose={handleWagonWheelSkip}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxWidth: 480, paddingHorizontal: 18, paddingVertical: 16 }]}>
-            <View style={styles.revisedModalHeader}>
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.revisedModalTitle}>🎯 WAGON WHEEL</Text>
-                  <View style={[
-                    styles.boundaryBadgePill,
-                    pendingBoundaryRun === 6 ? styles.boundaryBadgeSix : styles.boundaryBadgeFour
-                  ]}>
-                    <Text style={styles.boundaryBadgePillText}>
-                      {pendingBoundaryRun === 6 ? '🚀 6 RUNS' : '⚡ 4 RUNS'}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={{ fontSize: 11, color: '#64748b', fontWeight: '600', marginTop: 2 }}>
-                  {pendingBoundaryRun === 6
-                    ? 'Maximum! Select where the SIX landed on the field:'
-                    : 'Boundary Four! Select where the FOUR was hit:'}
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.redCloseBtn}
-                onPress={handleWagonWheelSkip}
-              >
-                <Text style={styles.redCloseBtnText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Circular Cricket Ground Graphic */}
-            <View style={styles.wagonWheelContainer}>
-              <View style={styles.wagonGroundCircle}>
-                {/* 30-yard Circle */}
-                <View style={styles.wagonInnerCircle} />
-
-                {/* Field Orientation Axes */}
-                <View style={{ position: 'absolute', width: '100%', height: 1, backgroundColor: 'rgba(255,255,255,0.2)' }} />
-                <View style={{ position: 'absolute', height: '100%', width: 1, backgroundColor: 'rgba(255,255,255,0.2)' }} />
-
-                {/* Boundary Cardinal Indicators */}
-                <Text style={{ position: 'absolute', top: 6, fontSize: 8, fontWeight: '800', color: '#fef08a' }}>STRAIGHT</Text>
-                <Text style={{ position: 'absolute', bottom: 6, fontSize: 8, fontWeight: '800', color: '#fef08a' }}>FINE LEG</Text>
-                <Text style={{ position: 'absolute', left: 6, fontSize: 8, fontWeight: '800', color: '#fef08a' }}>POINT</Text>
-                <Text style={{ position: 'absolute', right: 6, fontSize: 8, fontWeight: '800', color: '#fef08a' }}>SQ LEG</Text>
-
-                {/* Pitch */}
-                <View style={styles.wagonPitchBox}>
-                  <Text style={{ fontSize: 7, color: '#92400e', fontWeight: '900' }}>PITCH</Text>
-                </View>
-
-                {/* Current Selected Indicator */}
-                {selectedWagonSector ? (
-                  <View style={styles.wagonSelectedBadge}>
-                    <Text style={styles.wagonSelectedBadgeText}>📍 {selectedWagonSector}</Text>
-                  </View>
-                ) : null}
-              </View>
-            </View>
-
-            {/* Sectors Selection: Off Side vs Leg Side */}
-            <View style={{ width: '100%', marginTop: 4 }}>
-              {/* Off Side */}
-              <View style={{ marginBottom: 8 }}>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: '#0369a1', letterSpacing: 0.5, marginBottom: 4 }}>
-                  🏏 OFF SIDE
-                </Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                  {['Third Man', 'Point', 'Cover', 'Extra Cover', 'Long Off'].map((sector) => (
-                    <TouchableOpacity
-                      key={sector}
-                      style={[
-                        styles.wagonSectorChip,
-                        selectedWagonSector === sector && styles.wagonSectorChipActive
-                      ]}
-                      onPress={() => handleWagonWheelSelect(sector)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[
-                        styles.wagonSectorChipText,
-                        selectedWagonSector === sector && styles.wagonSectorChipTextActive
-                      ]}>
-                        {sector}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Leg Side & Straight */}
-              <View style={{ marginBottom: 12 }}>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: '#b45309', letterSpacing: 0.5, marginBottom: 4 }}>
-                  🏏 LEG SIDE & STRAIGHT
-                </Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                  {['Straight', 'Long On', 'Mid Wicket', 'Square Leg', 'Fine Leg'].map((sector) => (
-                    <TouchableOpacity
-                      key={sector}
-                      style={[
-                        styles.wagonSectorChip,
-                        selectedWagonSector === sector && styles.wagonSectorChipActive
-                      ]}
-                      onPress={() => handleWagonWheelSelect(sector)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[
-                        styles.wagonSectorChipText,
-                        selectedWagonSector === sector && styles.wagonSectorChipTextActive
-                      ]}>
-                        {sector}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            </View>
-
-            {/* Skip Direction button */}
-            <TouchableOpacity
-              style={styles.wagonSkipBtn}
-              onPress={handleWagonWheelSkip}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.wagonSkipBtnText}>
-                ⏭️ Skip Direction (Record {pendingBoundaryRun || 4} Runs Directly)
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        runs={pendingBoundaryRun || 4}
+        batterName={striker?.name || 'Striker'}
+        initialBattingHand={striker?.battingHand || (striker?.batting_hand?.toUpperCase().includes('LEFT') ? 'LEFT' : 'RIGHT')}
+        onConfirm={handleWagonWheelConfirm}
+        onSkip={handleWagonWheelSkip}
+        onClose={handleWagonWheelSkip}
+      />
 
       {/* 20. PITCH MAP MODAL */}
       <Modal

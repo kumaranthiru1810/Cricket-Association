@@ -60,6 +60,62 @@ const SECTORS = [
   { key: 'point', name: 'Point / Backward Point', startAngle: 247.5, endAngle: 292.5, side: 'OFF', color: '#14b8a6' }
 ];
 
+const ZONE_ANGLES: Record<string, number> = {
+  'third man': 220,
+  'third_man': 220,
+  'point': 265,
+  'backward point': 250,
+  'cover': 298,
+  'extra cover': 325,
+  'extra_cover': 325,
+  'mid-off': 340,
+  'long off': 345,
+  'long_off': 345,
+  'straight': 0,
+  'long on': 25,
+  'long_on': 25,
+  'mid-on': 20,
+  'mid wicket': 68,
+  'mid_wicket': 68,
+  'midwicket': 68,
+  'cow corner': 85,
+  'square leg': 112,
+  'square_leg': 112,
+  'fine leg': 155,
+  'fine_leg': 155
+};
+
+const resolveDeliveryAngleAndDist = (d: ShotDelivery): ShotDelivery => {
+  let angle = d.shotAngle;
+  let dist = d.shotDistance;
+  const runs = Number(d.runsBatter) || 0;
+
+  if (typeof angle !== 'number') {
+    const key = (d.shotZone || d.fieldingPosition || '').toLowerCase().trim();
+    if (key && ZONE_ANGLES[key] !== undefined) {
+      angle = ZONE_ANGLES[key];
+    } else {
+      const hash = (((d.ballNumber || 1) * 37 + (d.overNumber || 0) * 19 + runs * 53) % 360);
+      angle = hash;
+    }
+  }
+
+  if (typeof dist !== 'number') {
+    if (runs === 6) dist = 104;
+    else if (runs === 4) dist = 92;
+    else if (runs === 3) dist = 76;
+    else if (runs === 2) dist = 58;
+    else if (runs === 1) dist = 42;
+    else dist = 24;
+  }
+
+  return {
+    ...d,
+    shotAngle: angle,
+    shotDistance: dist
+  };
+};
+
 export default function WagonWheel({
   deliveries = [],
   batters = [],
@@ -97,16 +153,32 @@ export default function WagonWheel({
   const [activeShot, setActiveShot] = useState<ShotDelivery | null>(null);
 
   const currentBatter = useMemo(() => {
+    if (activeBatterId === 'ALL') {
+      const totalRuns = (deliveries || []).reduce((acc, d) => acc + (Number(d.runsBatter) || 0), 0);
+      const totalBalls = (deliveries || []).filter(d => d.extraType === 'NONE' || !d.extraType).length;
+      return {
+        id: 'ALL',
+        name: 'Entire Team Innings',
+        runs: totalRuns,
+        balls: totalBalls,
+        strikeRate: totalBalls > 0 ? ((totalRuns / totalBalls) * 100).toFixed(1) : '0.0',
+        dismissal: 'All Batters Combined'
+      } as BatterProfile;
+    }
     return batters.find(b => b.id === activeBatterId) || batters[0];
-  }, [batters, activeBatterId]);
+  }, [batters, activeBatterId, deliveries]);
 
-  // Filter deliveries belonging to this batter
+  // Filter deliveries belonging to this batter or entire team
   const batterDeliveries = useMemo(() => {
+    if (activeBatterId === 'ALL') {
+      if (deliveries && deliveries.length > 0) {
+        return deliveries.map(d => resolveDeliveryAngleAndDist(d));
+      }
+      return [];
+    }
     if (!currentBatter) return [];
     const id = currentBatter.id ? String(currentBatter.id) : '';
-    const name = currentBatter.name?.toLowerCase() || '';
 
-    // If deliveries are provided with strikerId
     const matched = (deliveries || []).filter(d => {
       if (!d) return false;
       const sId = d.strikerId ? String(d.strikerId) : '';
@@ -114,13 +186,13 @@ export default function WagonWheel({
       if (sId === id) return true;
       if (id.includes(sId) || sId.includes(id)) return true;
       return false;
-    });
+    }).map(d => resolveDeliveryAngleAndDist(d));
 
     if (matched.length > 0) return matched;
 
-    // Synthetic fallback generator for demonstration if real deliveries list is empty
+    // Fallback generator if real deliveries list is empty
     return generateSyntheticShots(currentBatter);
-  }, [deliveries, currentBatter]);
+  }, [deliveries, currentBatter, activeBatterId]);
 
   // Calculate sector and playing area percentages
   const stats = useMemo(() => {
@@ -198,15 +270,18 @@ export default function WagonWheel({
     };
   }, [batterDeliveries]);
 
-  // Filtered deliveries based on user selection (Only boundaries: 4s & 6s)
+  // Filtered deliveries based on user selection (All shots or filtered by runs/sector)
   const displayedDeliveries = useMemo(() => {
     return batterDeliveries.filter(d => {
       const runs = Number(d.runsBatter) || 0;
-      // ONLY SHOW BOUNDARIES (4s and 6s) ON WAGON WHEEL
-      if (runs !== 4 && runs !== 6) return false;
 
-      if (runFilter === '4' && runs !== 4) return false;
       if (runFilter === '6' && runs !== 6) return false;
+      if (runFilter === '4' && runs !== 4) return false;
+      if (runFilter === '3' && runs !== 3) return false;
+      if (runFilter === '2' && runs !== 2) return false;
+      if (runFilter === '1' && runs !== 1) return false;
+      if (runFilter === '0' && runs !== 0) return false;
+      if (runFilter === 'BOUNDARIES' && runs !== 4 && runs !== 6) return false;
 
       if (sectorFilter) {
         const s = SECTORS.find(sec => sec.key === sectorFilter);
@@ -224,18 +299,18 @@ export default function WagonWheel({
     });
   }, [batterDeliveries, runFilter, sectorFilter]);
 
-  // Run counts for badges (only boundaries: total, fours, sixes)
+  // Run counts for badges
   const runCounts = useMemo(() => {
-    const counts = { total: 0, fours: 0, sixes: 0 };
+    const counts = { total: 0, sixes: 0, fours: 0, threes: 0, twos: 0, ones: 0, dots: 0 };
     batterDeliveries.forEach(d => {
       const r = Number(d.runsBatter) || 0;
-      if (r === 4) {
-        counts.fours++;
-        counts.total++;
-      } else if (r === 6) {
-        counts.sixes++;
-        counts.total++;
-      }
+      counts.total++;
+      if (r === 6) counts.sixes++;
+      else if (r === 4) counts.fours++;
+      else if (r === 3) counts.threes++;
+      else if (r === 2) counts.twos++;
+      else if (r === 1) counts.ones++;
+      else if (r === 0) counts.dots++;
     });
     return counts;
   }, [batterDeliveries]);
@@ -263,7 +338,11 @@ export default function WagonWheel({
   const getShotColor = (runs: number) => {
     switch (runs) {
       case 6: return '#ec4899'; // Hot Magenta (Sixes)
-      case 4: return '#10b981'; // Vivid Green (Fours)
+      case 4: return '#06b6d4'; // Bright Cyan (Fours)
+      case 3: return '#a855f7'; // Purple (3 Runs)
+      case 2: return '#f59e0b'; // Amber (2 Runs)
+      case 1: return '#38bdf8'; // Sky Blue (1 Run)
+      case 0: return '#94a3b8'; // Slate Gray (Dot ball)
       default: return '#10b981';
     }
   };
@@ -329,6 +408,41 @@ export default function WagonWheel({
           {isDropdownOpen && (
             <View style={styles.dropdownMenu}>
               <ScrollView style={{ maxHeight: 260 }} nestedScrollEnabled showsVerticalScrollIndicator>
+                {/* Team Innings All Batters Option */}
+                <TouchableOpacity
+                  key="ALL"
+                  style={[styles.dropdownItem, activeBatterId === 'ALL' && styles.dropdownItemSelected]}
+                  onPress={() => {
+                    handleBatterChange('ALL');
+                    setIsDropdownOpen(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.dropdownItemLeft}>
+                    <Text style={{ fontSize: 13, marginRight: 8 }}>👥</Text>
+                    <View style={{ flexShrink: 1 }}>
+                      <Text style={[styles.dropdownItemName, activeBatterId === 'ALL' && styles.dropdownItemNameActive]}>
+                        All Batters (Team Innings)
+                      </Text>
+                      <Text style={styles.dropdownItemDismissal}>
+                        Entire innings wagon wheel & shots
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.dropdownItemRight}>
+                    <View style={styles.dropdownItemStatsCol}>
+                      <Text style={[styles.dropdownItemRuns, activeBatterId === 'ALL' && styles.dropdownItemRunsActive]}>
+                        {deliveries.length} balls
+                      </Text>
+                    </View>
+                    {activeBatterId === 'ALL' && (
+                      <View style={styles.dropdownCheckmark}>
+                        <Text style={styles.dropdownCheckmarkText}>✓</Text>
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+
                 {batters.map((b, idx) => {
                   const isSelected = b.id === activeBatterId;
                   return (
@@ -429,9 +543,9 @@ export default function WagonWheel({
           ───────────────────────────────────────────────────────────── */}
       {activeSlide === 'wheel' && (
         <View style={styles.slideContent}>
-          {/* Boundary Filter Pills (Removed 3s, 2s, 1s, Dots) */}
+          {/* Shot Run Filter Bar */}
           <View style={styles.filterBar}>
-            <Text style={styles.filterLabel}>BOUNDARIES FILTER:</Text>
+            <Text style={styles.filterLabel}>SHOT FILTER:</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
               <TouchableOpacity
                 style={[styles.filterPill, runFilter === 'ALL' && styles.filterPillActive]}
@@ -439,7 +553,7 @@ export default function WagonWheel({
                 activeOpacity={0.7}
               >
                 <Text style={[styles.filterPillText, runFilter === 'ALL' && styles.filterPillTextActive]}>
-                  All Boundaries ({runCounts.total})
+                  All Shots ({runCounts.total})
                 </Text>
               </TouchableOpacity>
 
@@ -459,9 +573,53 @@ export default function WagonWheel({
                 onPress={() => setRunFilter(runFilter === '4' ? 'ALL' : '4')}
                 activeOpacity={0.7}
               >
-                <View style={[styles.dotMarker, { backgroundColor: '#10b981' }]} />
+                <View style={[styles.dotMarker, { backgroundColor: '#06b6d4' }]} />
                 <Text style={[styles.filterPillText, runFilter === '4' && styles.filterPillTextActive]}>
                   4s ({runCounts.fours})
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.filterPill, runFilter === '3' && styles.filterPillActive]}
+                onPress={() => setRunFilter(runFilter === '3' ? 'ALL' : '3')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.dotMarker, { backgroundColor: '#a855f7' }]} />
+                <Text style={[styles.filterPillText, runFilter === '3' && styles.filterPillTextActive]}>
+                  3s ({runCounts.threes})
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.filterPill, runFilter === '2' && styles.filterPillActive]}
+                onPress={() => setRunFilter(runFilter === '2' ? 'ALL' : '2')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.dotMarker, { backgroundColor: '#f59e0b' }]} />
+                <Text style={[styles.filterPillText, runFilter === '2' && styles.filterPillTextActive]}>
+                  2s ({runCounts.twos})
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.filterPill, runFilter === '1' && styles.filterPillActive]}
+                onPress={() => setRunFilter(runFilter === '1' ? 'ALL' : '1')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.dotMarker, { backgroundColor: '#38bdf8' }]} />
+                <Text style={[styles.filterPillText, runFilter === '1' && styles.filterPillTextActive]}>
+                  1s ({runCounts.ones})
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.filterPill, runFilter === '0' && styles.filterPillActive]}
+                onPress={() => setRunFilter(runFilter === '0' ? 'ALL' : '0')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.dotMarker, { backgroundColor: '#94a3b8' }]} />
+                <Text style={[styles.filterPillText, runFilter === '0' && styles.filterPillTextActive]}>
+                  Dots ({runCounts.dots})
                 </Text>
               </TouchableOpacity>
             </ScrollView>
@@ -635,17 +793,18 @@ export default function WagonWheel({
                 {/* Stumps Marker */}
                 <circle cx={cx} cy={cy + pitchH / 2 - 3} r="1.5" fill="#e11d48" />
 
-                {/* 6. Wagon Wheel Boundary Trajectory Lines (4s & 6s Only) */}
+                {/* 6. Wagon Wheel Shot Trajectory Lines */}
                 {displayedDeliveries.map((del, idx) => {
                   const runs = Number(del.runsBatter) || 0;
                   const angle = typeof del.shotAngle === 'number' ? del.shotAngle : 315;
-                  const dist = typeof del.shotDistance === 'number' ? del.shotDistance : (runs === 6 ? 108 : 95);
+                  const dist = typeof del.shotDistance === 'number' ? del.shotDistance : (runs === 6 ? 104 : (runs === 4 ? 92 : 55));
                   const end = getCoordinates(angle, dist);
-                  const color = runs === 6 ? '#ec4899' : '#10b981';
+                  const color = getShotColor(runs);
                   const isCurrentActive = activeShot?.id === del.id;
 
-                  const strokeWidth = runs === 6 ? 2.6 : 2.0;
-                  const strokeDash = runs === 6 ? '5 3' : 'none';
+                  const strokeWidth = runs === 6 ? 2.8 : (runs === 4 ? 2.2 : (runs >= 2 ? 1.6 : 1.2));
+                  const strokeDash = runs === 6 ? 'none' : (runs === 3 ? '4 2' : (runs === 0 ? '2 2' : 'none'));
+                  const markerRadius = runs === 6 ? 4.5 : (runs === 4 ? 3.5 : (runs >= 2 ? 2.8 : (runs === 1 ? 2.2 : 1.8)));
                   const startY = cy + pitchH / 2 - 5; // From striker crease
 
                   return (
@@ -675,13 +834,13 @@ export default function WagonWheel({
                         stroke={color}
                         strokeWidth={isCurrentActive ? strokeWidth + 1.5 : strokeWidth}
                         strokeDasharray={strokeDash}
-                        opacity={isCurrentActive ? 1.0 : 0.9}
+                        opacity={isCurrentActive ? 1.0 : (runs === 0 ? 0.6 : 0.88)}
                       />
-                      {/* Terminal Marker */}
+                      {/* Terminal Landing Marker */}
                       <circle
                         cx={end.x}
                         cy={end.y}
-                        r={runs === 6 ? 4.5 : 3.5}
+                        r={markerRadius}
                         fill={color}
                         stroke="#ffffff"
                         strokeWidth={isCurrentActive ? 1.5 : 0.8}
@@ -719,26 +878,40 @@ export default function WagonWheel({
               )}
             </View>
 
-            {/* Empty Boundaries Notice when no boundaries match */}
+            {/* Empty Deliveries Notice when no shots match filter */}
             {displayedDeliveries.length === 0 && (
               <View style={styles.emptyWagonNotice}>
                 <Text style={styles.emptyWagonText}>
-                  🏏 No {runFilter === '6' ? 'sixes (6s)' : runFilter === '4' ? 'fours (4s)' : 'boundaries'} hit by {currentBatter?.name || 'this batsman'}.
+                  🏏 No {runFilter === '6' ? 'sixes (6s)' : runFilter === '4' ? 'fours (4s)' : runFilter === '0' ? 'dot balls' : 'deliveries'} match filter for {currentBatter?.name || 'this batsman'}.
                 </Text>
               </View>
             )}
 
-            {/* Boundary Legend (Fours & Sixes) */}
+            {/* Professional Broadcast Color Legend */}
             <View style={styles.boundaryLegendRow}>
               <View style={styles.boundaryLegendItem}>
-                <View style={[styles.legendLine, { backgroundColor: '#10b981' }]} />
-                <View style={[styles.legendDot, { backgroundColor: '#10b981' }]} />
-                <Text style={styles.legendText}>4s (Fours) — Solid Green</Text>
+                <View style={[styles.legendDot, { backgroundColor: '#ec4899' }]} />
+                <Text style={styles.legendText}>6s</Text>
               </View>
               <View style={styles.boundaryLegendItem}>
-                <View style={[styles.legendLine, { backgroundColor: '#ec4899', borderStyle: 'dashed' }]} />
-                <View style={[styles.legendDot, { backgroundColor: '#ec4899' }]} />
-                <Text style={styles.legendText}>6s (Sixes) — Dashed Pink</Text>
+                <View style={[styles.legendDot, { backgroundColor: '#06b6d4' }]} />
+                <Text style={styles.legendText}>4s</Text>
+              </View>
+              <View style={styles.boundaryLegendItem}>
+                <View style={[styles.legendDot, { backgroundColor: '#a855f7' }]} />
+                <Text style={styles.legendText}>3s</Text>
+              </View>
+              <View style={styles.boundaryLegendItem}>
+                <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
+                <Text style={styles.legendText}>2s</Text>
+              </View>
+              <View style={styles.boundaryLegendItem}>
+                <View style={[styles.legendDot, { backgroundColor: '#38bdf8' }]} />
+                <Text style={styles.legendText}>1s</Text>
+              </View>
+              <View style={styles.boundaryLegendItem}>
+                <View style={[styles.legendDot, { backgroundColor: '#94a3b8' }]} />
+                <Text style={styles.legendText}>0s (Dots)</Text>
               </View>
             </View>
 
