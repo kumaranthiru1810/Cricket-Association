@@ -36,6 +36,9 @@ const bestBowlerImage = require('../../../assets/best_bowler.png');
 const runOutMilestoneImage = require('../../../assets/run_out_milestone.png');
 const keeperDismissalImage = require('../../../assets/keeper_dismissal.png');
 const overthrowImage = require('../../../assets/overthrow.jpg');
+const doubleCenturyImage = require('../../../assets/double_century_200.jpg');
+const team50Image = require('../../../assets/team_50.jpg');
+const team100Image = require('../../../assets/team_100.jpg');
 
 const STANDARD_BREAK_OPTIONS = [
   { label: 'Tea break', icon: '☕', sub: 'Afternoon tea interval' },
@@ -8538,7 +8541,13 @@ export default function LiveScoringScreen() {
                   ? runOutMilestoneImage
                   : activeMilestone?.imageKey === 'KEEPER' || activeMilestone?.type === 'KEEPER_OUT'
                   ? keeperDismissalImage
-                  : activeMilestone?.type === 'BATTER_100' || activeMilestone?.type === 'BATTER_200' || activeMilestone?.type === 'TEAM_100' || activeMilestone?.type === 'TEAM_200'
+                  : activeMilestone?.type === 'BATTER_200'
+                  ? doubleCenturyImage
+                  : activeMilestone?.type === 'TEAM_50'
+                  ? team50Image
+                  : activeMilestone?.type === 'TEAM_100' || activeMilestone?.type === 'TEAM_200'
+                  ? team100Image
+                  : activeMilestone?.type === 'BATTER_100'
                   ? centuryBatsmanImage
                   : milestoneBatsmanImage
               }
@@ -12457,29 +12466,31 @@ const getStyles = (isDesktop: boolean) =>
     milestoneCard: {
       width: '92%',
       maxWidth: 460,
-      backgroundColor: '#0f172a',
+      backgroundColor: '#ffffff',
       borderRadius: 24,
-      borderWidth: 2,
-      borderColor: '#f59e0b',
+      borderWidth: 2.5,
+      borderColor: '#b8860b',
       overflow: 'hidden',
       alignItems: 'center',
       paddingBottom: 22,
       position: 'relative',
-      shadowColor: '#f59e0b',
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.45,
-      shadowRadius: 20,
-      elevation: 12
+      shadowColor: '#b8860b',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.22,
+      shadowRadius: 16,
+      elevation: 8
     },
     milestoneRibbon: {
       width: '100%',
-      backgroundColor: '#f59e0b',
+      backgroundColor: '#fffbeb',
+      borderBottomWidth: 2,
+      borderBottomColor: '#f59e0b',
       paddingVertical: 8,
       alignItems: 'center',
       justifyContent: 'center'
     },
     milestoneRibbonText: {
-      color: '#0f172a',
+      color: '#b45309',
       fontSize: 12,
       fontWeight: '900',
       letterSpacing: 1.2,
@@ -12504,7 +12515,7 @@ const getStyles = (isDesktop: boolean) =>
     milestoneTitleText: {
       fontSize: 22,
       fontWeight: '900',
-      color: '#fde047',
+      color: '#b45309',
       letterSpacing: 0.8,
       marginTop: 4,
       textAlign: 'center'
@@ -12512,7 +12523,7 @@ const getStyles = (isDesktop: boolean) =>
     milestonePlayerName: {
       fontSize: 20,
       fontWeight: '900',
-      color: '#ffffff',
+      color: '#0f172a',
       letterSpacing: 0.5,
       marginTop: 4,
       textAlign: 'center'
@@ -12520,7 +12531,7 @@ const getStyles = (isDesktop: boolean) =>
     milestoneTeamName: {
       fontSize: 12,
       fontWeight: '700',
-      color: '#94a3b8',
+      color: '#64748b',
       letterSpacing: 0.5,
       marginTop: 2,
       textAlign: 'center'
@@ -12529,9 +12540,9 @@ const getStyles = (isDesktop: boolean) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: '#1e293b',
+      backgroundColor: '#fffbeb',
       borderWidth: 1.5,
-      borderColor: '#334155',
+      borderColor: '#fde68a',
       borderRadius: 14,
       paddingVertical: 10,
       paddingHorizontal: 16,
@@ -12546,19 +12557,19 @@ const getStyles = (isDesktop: boolean) =>
     milestoneStatValue: {
       fontSize: 20,
       fontWeight: '900',
-      color: '#f8fafc'
+      color: '#0f172a'
     },
     milestoneStatLabel: {
       fontSize: 10,
       fontWeight: '800',
-      color: '#94a3b8',
+      color: '#854d0e',
       marginTop: 2,
       letterSpacing: 0.5
     },
     milestoneStatDivider: {
       width: 1,
       height: 28,
-      backgroundColor: '#334155',
+      backgroundColor: '#fde68a',
       marginHorizontal: 8
     },
     milestoneBoundariesRow: {
@@ -12568,7 +12579,7 @@ const getStyles = (isDesktop: boolean) =>
       marginTop: 12
     },
     milestoneBoundaryTag: {
-      backgroundColor: '#14532d',
+      backgroundColor: '#f0fdf4',
       borderColor: '#22c55e',
       borderWidth: 1,
       borderRadius: 8,
@@ -12576,17 +12587,17 @@ const getStyles = (isDesktop: boolean) =>
       paddingVertical: 5
     },
     milestoneSixTag: {
-      backgroundColor: '#1e3a8a',
-      borderColor: '#3b82f6'
+      backgroundColor: '#fff1f2',
+      borderColor: '#f43f5e'
     },
     milestoneBoundaryTagText: {
       fontSize: 11,
       fontWeight: '800',
-      color: '#ffffff'
+      color: '#15803d'
     },
     milestoneSubtitle: {
       fontSize: 12,
-      color: '#cbd5e1',
+      color: '#475569',
       textAlign: 'center',
       marginTop: 12,
       fontStyle: 'italic',

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,14 +7,19 @@ import {
   TouchableOpacity,
   Modal,
   useWindowDimensions,
-  Image
+  Animated,
+  Easing
 } from 'react-native';
 import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
 import CricketConfetti from '../../components/common/CricketConfetti';
 import CricketFigurine3D from '../../components/common/CricketFigurine3D';
 
+// All 11 Milestone Unique Non-Repeating Assets
 const milestoneBatsmanImage = require('../../../assets/milestone_batsman.png');
 const centuryBatsmanImage = require('../../../assets/century_batsman.jpg');
+const doubleCenturyImage = require('../../../assets/double_century_200.jpg');
+const team50Image = require('../../../assets/team_50.jpg');
+const team100Image = require('../../../assets/team_100.jpg');
 const catchMilestoneImage = require('../../../assets/catch_milestone.jpg');
 const bestBowlerImage = require('../../../assets/best_bowler.png');
 const runOutMilestoneImage = require('../../../assets/run_out_milestone.png');
@@ -54,7 +59,7 @@ const ALL_MILESTONES: MilestoneItem[] = [
     fours: 6,
     sixes: 2,
     image: milestoneBatsmanImage,
-    accentColor: '#38bdf8'
+    accentColor: '#d97706'
   },
   {
     id: 'batter-100',
@@ -70,7 +75,7 @@ const ALL_MILESTONES: MilestoneItem[] = [
     fours: 11,
     sixes: 5,
     image: centuryBatsmanImage,
-    accentColor: '#fbbf24'
+    accentColor: '#b45309'
   },
   {
     id: 'batter-200',
@@ -85,8 +90,8 @@ const ALL_MILESTONES: MilestoneItem[] = [
     strikeRateText: '180.36',
     fours: 22,
     sixes: 8,
-    image: centuryBatsmanImage,
-    accentColor: '#ec4899'
+    image: doubleCenturyImage,
+    accentColor: '#b8860b'
   },
   {
     id: 'team-50',
@@ -99,8 +104,8 @@ const ALL_MILESTONES: MilestoneItem[] = [
     scoreText: '57/0',
     ballsText: '2.1 Ov',
     strikeRateText: 'CRR: 26.31',
-    image: milestoneBatsmanImage,
-    accentColor: '#38bdf8'
+    image: team50Image,
+    accentColor: '#d97706'
   },
   {
     id: 'team-100',
@@ -113,8 +118,8 @@ const ALL_MILESTONES: MilestoneItem[] = [
     scoreText: '100/0',
     ballsText: '4.1 Ov',
     strikeRateText: 'CRR: 24.00',
-    image: centuryBatsmanImage,
-    accentColor: '#fbbf24'
+    image: team100Image,
+    accentColor: '#b45309'
   },
   {
     id: 'catch-milestone',
@@ -128,7 +133,7 @@ const ALL_MILESTONES: MilestoneItem[] = [
     ballsText: 'Top Fielder',
     strikeRateText: 'Deep Midwicket',
     image: catchMilestoneImage,
-    accentColor: '#06b6d4'
+    accentColor: '#0284c7'
   },
   {
     id: 'runout-milestone',
@@ -142,7 +147,7 @@ const ALL_MILESTONES: MilestoneItem[] = [
     ballsText: '1 Stumps Hit',
     strikeRateText: 'Deep Cover',
     image: runOutMilestoneImage,
-    accentColor: '#ef4444'
+    accentColor: '#dc2626'
   },
   {
     id: 'keeper-milestone',
@@ -156,7 +161,7 @@ const ALL_MILESTONES: MilestoneItem[] = [
     ballsText: 'Wicketkeeper',
     strikeRateText: 'Fast Glovework',
     image: keeperDismissalImage,
-    accentColor: '#8b5cf6'
+    accentColor: '#7c3aed'
   },
   {
     id: 'bowler-5w',
@@ -170,7 +175,7 @@ const ALL_MILESTONES: MilestoneItem[] = [
     ballsText: '4.0 Overs',
     strikeRateText: 'ER: 4.50',
     image: bestBowlerImage,
-    accentColor: '#f97316'
+    accentColor: '#ea580c'
   },
   {
     id: 'motm-milestone',
@@ -184,7 +189,7 @@ const ALL_MILESTONES: MilestoneItem[] = [
     ballsText: 'Match Winner',
     strikeRateText: 'SR: 179.31',
     image: IMG_MAN_OF_THE_MATCH,
-    accentColor: '#f59e0b'
+    accentColor: '#b45309'
   },
   {
     id: 'champions-trophy',
@@ -198,7 +203,7 @@ const ALL_MILESTONES: MilestoneItem[] = [
     ballsText: '10 Wickets',
     strikeRateText: 'Virudhunagar PL',
     image: IMG_CHAMPIONS,
-    accentColor: '#eab308'
+    accentColor: '#b8860b'
   }
 ];
 
@@ -212,6 +217,73 @@ export default function MilestoneGalleryScreen() {
 
   const selected = ALL_MILESTONES[selectedIndex];
 
+  // Dynamic Runs Counting Animation from 0
+  const [animatedScore, setAnimatedScore] = useState<string>('0');
+
+  useEffect(() => {
+    const raw = selected.scoreText;
+    const match = raw.match(/^(\d+)(.*)$/);
+    if (!match) {
+      setAnimatedScore(raw);
+      return;
+    }
+
+    const targetNum = parseInt(match[1], 10);
+    const suffix = match[2];
+    const duration = 900; // ms
+    const startTime = performance.now();
+
+    let animId: number;
+    const step = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(1, elapsed / duration);
+      // Ease out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const curr = Math.round(targetNum * eased);
+      setAnimatedScore(`${curr}${suffix}`);
+
+      if (progress < 1) {
+        animId = requestAnimationFrame(step);
+      } else {
+        setAnimatedScore(`${targetNum}${suffix}`);
+      }
+    };
+
+    animId = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(animId);
+  }, [selectedIndex, selected.scoreText]);
+
+  // Entrance Split Slide-in Animations: Left for Figurine, Right for Details
+  const slideLeftAnim = useRef(new Animated.Value(-120)).current;
+  const slideRightAnim = useRef(new Animated.Value(120)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    slideLeftAnim.setValue(-120);
+    slideRightAnim.setValue(120);
+    fadeAnim.setValue(0);
+
+    Animated.parallel([
+      Animated.spring(slideLeftAnim, {
+        toValue: 0,
+        friction: 6,
+        tension: 48,
+        useNativeDriver: true
+      }),
+      Animated.spring(slideRightAnim, {
+        toValue: 0,
+        friction: 6,
+        tension: 48,
+        useNativeDriver: true
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 350,
+        useNativeDriver: true
+      })
+    ]).start();
+  }, [selectedIndex]);
+
   const handleNext = () => {
     setSelectedIndex((prev) => (prev + 1) % ALL_MILESTONES.length);
   };
@@ -222,7 +294,7 @@ export default function MilestoneGalleryScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Top Header Bar */}
+      {/* Top Header Bar - White & TNCA Gold Daylight Standard */}
       <View style={styles.topHeader}>
         <View style={styles.headerLeft}>
           <TouchableOpacity
@@ -235,7 +307,7 @@ export default function MilestoneGalleryScreen() {
           <View>
             <Text style={styles.headerTitle}>🏆 3D MILESTONE & STATUETTE SHOWCASE</Text>
             <Text style={styles.headerSubtitle}>
-              Live visual verification for all 11 cricket milestones with zero text overlap
+              11 unique cricket milestones • Dynamic runs calculation & split slide animations
             </Text>
           </View>
         </View>
@@ -249,7 +321,7 @@ export default function MilestoneGalleryScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Milestone Selection Tabs */}
+      {/* Milestone Selection Tabs (Daylight White & Gold) */}
       <View style={styles.tabScrollWrapper}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScrollContent}>
           {ALL_MILESTONES.map((m, idx) => {
@@ -259,7 +331,7 @@ export default function MilestoneGalleryScreen() {
                 key={m.id}
                 style={[
                   styles.tabChip,
-                  isTabActive && [styles.tabChipActive, { borderColor: m.accentColor }]
+                  isTabActive && styles.tabChipActive
                 ]}
                 onPress={() => setSelectedIndex(idx)}
                 activeOpacity={0.7}
@@ -292,22 +364,28 @@ export default function MilestoneGalleryScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* The Exact Milestone Card Container */}
+        {/* The Exact Milestone Card Container - Daylight White & Gold Theme */}
         <View style={[styles.milestoneCard, { maxWidth: isMobile ? 380 : 440 }]}>
-          {/* Top Gold Ribbon */}
-          <View style={[styles.milestoneRibbon, { backgroundColor: selected.accentColor }]}>
-            <Text style={styles.milestoneRibbonText}>{selected.badge}</Text>
+          {/* Top Gold Ribbon Banner */}
+          <View style={[styles.milestoneRibbon, { backgroundColor: '#fffbeb', borderBottomColor: selected.accentColor }]}>
+            <Text style={[styles.milestoneRibbonText, { color: selected.accentColor }]}>{selected.badge}</Text>
           </View>
 
-          {/* 3D Figurine Statuette with Drop-down and Interactive Tilt */}
-          <View style={styles.figurineContainer}>
+          {/* LEFT SLIDE COMPONENT: 3D Figurine Statuette slides in from the left */}
+          <Animated.View style={[
+            styles.figurineContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateX: slideLeftAnim }]
+            }
+          ]}>
             <CricketFigurine3D
               imageSource={selected.image}
               playerName={selected.playerName}
               badgeText={selected.badge}
               teamName={selected.teamName}
               milestoneTitle={selected.title}
-              scoreText={selected.scoreText}
+              scoreText={animatedScore}
               ballsText={selected.ballsText}
               strikeRateText={selected.strikeRateText}
               fours={selected.fours}
@@ -315,19 +393,25 @@ export default function MilestoneGalleryScreen() {
               height={320}
               interactive={true}
             />
-          </View>
+          </Animated.View>
 
-          {/* Details Box */}
-          <View style={styles.detailsBox}>
+          {/* RIGHT SLIDE COMPONENT: Details & Stats Box slides in from the right */}
+          <Animated.View style={[
+            styles.detailsBox,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateX: slideRightAnim }]
+            }
+          ]}>
             <Text style={styles.detailTitle}>{selected.title}</Text>
             <Text style={styles.detailPlayerName}>{selected.playerName.toUpperCase()}</Text>
             <Text style={styles.detailTeamName}>{selected.teamName.toUpperCase()}</Text>
 
-            {/* Stat Pillars */}
+            {/* Stat Pillars with Real-time Counting Score */}
             <View style={styles.statsBox}>
               <View style={styles.statItem}>
-                <Text style={styles.statVal}>{selected.scoreText}</Text>
-                <Text style={styles.statLbl}>SCORE</Text>
+                <Text style={styles.statVal}>{animatedScore}</Text>
+                <Text style={styles.statLbl}>SCORE (0 ➔ {selected.scoreText})</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
@@ -352,13 +436,13 @@ export default function MilestoneGalleryScreen() {
                   <Text style={styles.boundaryTagText}>🏏 {selected.fours || 0} Fours (4s)</Text>
                 </View>
                 <View style={[styles.boundaryTag, styles.sixTag]}>
-                  <Text style={styles.boundaryTagText}>🚀 {selected.sixes || 0} Sixes (6s)</Text>
+                  <Text style={[styles.boundaryTagText, { color: '#be123c' }]}>🚀 {selected.sixes || 0} Sixes (6s)</Text>
                 </View>
               </View>
             )}
 
             <Text style={styles.subtitle}>{selected.subtitle}</Text>
-          </View>
+          </Animated.View>
 
           {/* Action Button */}
           <TouchableOpacity
@@ -375,19 +459,19 @@ export default function MilestoneGalleryScreen() {
           <Text style={styles.checklistTitle}>✅ Visual Verification Checklist</Text>
           <View style={styles.checklistRow}>
             <Text style={styles.checkIcon}>✓</Text>
-            <Text style={styles.checkText}>Plaque Text: Line 1 (★ {selected.playerName.toUpperCase()} ★) is 100% visible with zero overlap.</Text>
+            <Text style={styles.checkText}>Unique Assets: No repeated images across all 11 cricket milestones.</Text>
           </View>
           <View style={styles.checklistRow}>
             <Text style={styles.checkIcon}>✓</Text>
-            <Text style={styles.checkText}>Plaque Subtitle: Line 2 ({selected.badge}) is crystal-clear in metallic gold.</Text>
+            <Text style={styles.checkText}>Score Counter: Score animates dynamically starting from 0 up to final milestone.</Text>
           </View>
           <View style={styles.checklistRow}>
             <Text style={styles.checkIcon}>✓</Text>
-            <Text style={styles.checkText}>Statuette: Cutout character is centered and drop-lands onto golden turntable.</Text>
+            <Text style={styles.checkText}>Split Animation: Figurine slides from LEFT, Details panel slides from RIGHT.</Text>
           </View>
           <View style={styles.checklistRow}>
             <Text style={styles.checkIcon}>✓</Text>
-            <Text style={styles.checkText}>3D Interaction: Hover or drag statuette to rotate in 3D perspective.</Text>
+            <Text style={styles.checkText}>Website Design: High-contrast daylight White & TNCA Yellow/Gold theme.</Text>
           </View>
         </View>
       </ScrollView>
@@ -403,8 +487,8 @@ export default function MilestoneGalleryScreen() {
           <CricketConfetti active={showLiveModal} count={70} />
 
           <View style={[styles.milestoneCard, { maxWidth: isMobile ? 380 : 440 }]}>
-            <View style={[styles.milestoneRibbon, { backgroundColor: selected.accentColor }]}>
-              <Text style={styles.milestoneRibbonText}>{selected.badge}</Text>
+            <View style={[styles.milestoneRibbon, { backgroundColor: '#fffbeb', borderBottomColor: selected.accentColor }]}>
+              <Text style={[styles.milestoneRibbonText, { color: selected.accentColor }]}>{selected.badge}</Text>
             </View>
 
             <View style={styles.figurineContainer}>
@@ -414,7 +498,7 @@ export default function MilestoneGalleryScreen() {
                 badgeText={selected.badge}
                 teamName={selected.teamName}
                 milestoneTitle={selected.title}
-                scoreText={selected.scoreText}
+                scoreText={animatedScore}
                 ballsText={selected.ballsText}
                 strikeRateText={selected.strikeRateText}
                 fours={selected.fours}
@@ -431,7 +515,7 @@ export default function MilestoneGalleryScreen() {
 
               <View style={styles.statsBox}>
                 <View style={styles.statItem}>
-                  <Text style={styles.statVal}>{selected.scoreText}</Text>
+                  <Text style={styles.statVal}>{animatedScore}</Text>
                   <Text style={styles.statLbl}>SCORE</Text>
                 </View>
                 <View style={styles.statDivider} />
@@ -456,7 +540,7 @@ export default function MilestoneGalleryScreen() {
                     <Text style={styles.boundaryTagText}>🏏 {selected.fours || 0} Fours (4s)</Text>
                   </View>
                   <View style={[styles.boundaryTag, styles.sixTag]}>
-                    <Text style={styles.boundaryTagText}>🚀 {selected.sixes || 0} Sixes (6s)</Text>
+                    <Text style={[styles.boundaryTagText, { color: '#be123c' }]}>🚀 {selected.sixes || 0} Sixes (6s)</Text>
                   </View>
                 </View>
               )}
@@ -488,17 +572,17 @@ export default function MilestoneGalleryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#090d16'
+    backgroundColor: '#fcfbf7'
   },
   topHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#0f172a',
+    backgroundColor: '#ffffff',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1.5,
-    borderBottomColor: '#1e293b'
+    borderBottomWidth: 2,
+    borderBottomColor: '#b8860b'
   },
   headerLeft: {
     flexDirection: 'row',
@@ -506,25 +590,27 @@ const styles = StyleSheet.create({
     gap: 12
   },
   backBtn: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#fffbeb',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fde68a'
   },
   backBtnText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#38bdf8'
+    color: '#b45309'
   },
   headerTitle: {
     fontSize: 14,
     fontWeight: '900',
-    color: '#ffffff',
+    color: '#0f172a',
     letterSpacing: 0.5
   },
   headerSubtitle: {
     fontSize: 11,
-    color: '#94a3b8',
+    color: '#64748b',
     marginTop: 1
   },
   testModalBtn: {
@@ -533,9 +619,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 10,
     shadowColor: '#d97706',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3
   },
   testModalBtnText: {
     fontSize: 11,
@@ -544,9 +631,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5
   },
   tabScrollWrapper: {
-    backgroundColor: '#0a0f1d',
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b'
+    borderBottomColor: '#f1f5f9'
   },
   tabScrollContent: {
     paddingHorizontal: 12,
@@ -554,23 +641,24 @@ const styles = StyleSheet.create({
     gap: 6
   },
   tabChip: {
-    backgroundColor: '#1e293b',
-    paddingHorizontal: 10,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 11,
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1.5,
-    borderColor: '#334155'
+    borderColor: '#cbd5e1'
   },
   tabChipActive: {
-    backgroundColor: '#0f172a'
+    backgroundColor: '#fffbeb',
+    borderColor: '#d97706'
   },
   tabChipText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#94a3b8'
+    color: '#64748b'
   },
   tabChipTextActive: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontWeight: '900'
   },
   mainContent: {
@@ -587,56 +675,56 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   stepBtn: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#ffffff',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cbd5e1'
   },
   stepBtnText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#38bdf8'
+    color: '#0284c7'
   },
   stepIndicator: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#fffbeb',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 6
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#fde68a'
   },
   stepIndicatorText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#f59e0b',
+    color: '#b45309',
     letterSpacing: 0.5
   },
   milestoneCard: {
     width: '100%',
-    backgroundColor: '#0f172a',
+    backgroundColor: '#ffffff',
     borderRadius: 24,
-    borderWidth: 2,
-    borderColor: '#f59e0b',
+    borderWidth: 2.5,
+    borderColor: '#b8860b',
     overflow: 'hidden',
     alignItems: 'center',
     paddingBottom: 20,
     position: 'relative',
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.45,
-    shadowRadius: 20,
-    elevation: 12
+    shadowColor: '#b8860b',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    elevation: 8
   },
   milestoneRibbon: {
     width: '100%',
     paddingVertical: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4
+    borderBottomWidth: 2
   },
   milestoneRibbonText: {
-    color: '#0f172a',
     fontWeight: '900',
     fontSize: 12,
     letterSpacing: 1.2
@@ -650,28 +738,28 @@ const styles = StyleSheet.create({
   detailsBox: {
     width: '92%',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    backgroundColor: '#fffbeb',
     borderRadius: 16,
     padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1.5,
+    borderColor: '#fde68a',
     marginTop: 2
   },
   detailTitle: {
-    color: '#fbbf24',
+    color: '#b45309',
     fontSize: 17,
     fontWeight: '900',
     letterSpacing: 0.8
   },
   detailPlayerName: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 15,
     fontWeight: '900',
     marginTop: 2,
     letterSpacing: 0.5
   },
   detailTeamName: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 11,
     fontWeight: '700',
     marginTop: 1
@@ -681,25 +769,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-around',
     width: '100%',
-    backgroundColor: '#090d16',
+    backgroundColor: '#ffffff',
     borderRadius: 12,
     paddingVertical: 8,
     paddingHorizontal: 8,
     marginTop: 10,
     borderWidth: 1,
-    borderColor: '#1e293b'
+    borderColor: '#fde68a'
   },
   statItem: {
     alignItems: 'center',
     flex: 1
   },
   statVal: {
-    color: '#f8fafc',
-    fontSize: 13,
+    color: '#0f172a',
+    fontSize: 14,
     fontWeight: '900'
   },
   statLbl: {
-    color: '#64748b',
+    color: '#854d0e',
     fontSize: 8.5,
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -708,7 +796,7 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     height: 22,
-    backgroundColor: '#1e293b'
+    backgroundColor: '#fde68a'
   },
   boundaryTagsRow: {
     flexDirection: 'row',
@@ -716,24 +804,24 @@ const styles = StyleSheet.create({
     marginTop: 8
   },
   boundaryTag: {
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    backgroundColor: '#f0fdf4',
     borderWidth: 1,
-    borderColor: '#38bdf8',
+    borderColor: '#22c55e',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 12
   },
   sixTag: {
-    backgroundColor: 'rgba(236, 72, 153, 0.15)',
-    borderColor: '#ec4899'
+    backgroundColor: '#fff1f2',
+    borderColor: '#f43f5e'
   },
   boundaryTagText: {
-    color: '#ffffff',
+    color: '#15803d',
     fontSize: 10,
     fontWeight: '800'
   },
   subtitle: {
-    color: '#cbd5e1',
+    color: '#475569',
     fontSize: 11,
     textAlign: 'center',
     marginTop: 10,
@@ -748,9 +836,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 14,
     shadowColor: '#d97706',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4
   },
   actionBtnText: {
     color: '#ffffff',
@@ -761,17 +850,17 @@ const styles = StyleSheet.create({
   checklistCard: {
     width: '100%',
     maxWidth: 440,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: '#cbd5e1',
     padding: 14,
     marginTop: 16
   },
   checklistTitle: {
     fontSize: 12,
     fontWeight: '900',
-    color: '#10b981',
+    color: '#15803d',
     letterSpacing: 0.5,
     marginBottom: 8
   },
@@ -783,18 +872,18 @@ const styles = StyleSheet.create({
   },
   checkIcon: {
     fontSize: 12,
-    color: '#10b981',
+    color: '#15803d',
     fontWeight: '900'
   },
   checkText: {
     fontSize: 11,
-    color: '#cbd5e1',
+    color: '#334155',
     flex: 1,
     lineHeight: 15
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(3, 7, 18, 0.92)',
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 14
@@ -816,4 +905,3 @@ const styles = StyleSheet.create({
     fontWeight: '900'
   }
 });
-
