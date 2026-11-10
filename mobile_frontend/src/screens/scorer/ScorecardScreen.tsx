@@ -5,6 +5,7 @@ import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
 import SharedFooter from '../../components/scorer/SharedFooter';
 import { ScorerApi } from '../../services/api';
 import WagonWheel from '../../components/analytics/WagonWheel';
+import PitchMap from '../../components/analytics/PitchMap';
 import ErrorBoundary from '../../components/common/ErrorBoundary';
 import CricketRulesModal, { CricketRuleType } from '../../components/scorer/CricketRulesModal';
 import MatchHighlightsBanner, { HighlightItem } from '../../components/common/MatchHighlightsBanner';
@@ -992,6 +993,19 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
             </ScrollView>
           </View>
 
+          {/* ─────────────────────────────────────────────────────────────
+              BOWLER PITCH MAP & LENGTH DISTRIBUTION ANALYTICS
+              ───────────────────────────────────────────────────────────── */}
+          {currentInnings && currentInnings.bowlers && currentInnings.bowlers.length > 0 && (
+            <ErrorBoundary fallbackTitle="Bowler Pitch Map & Line/Length">
+              <PitchMap
+                deliveries={[]}
+                bowlerName={currentInnings.bowlers[0]?.name || 'Attack Bowlers'}
+                title={`🎯 ${currentInnings.bowlingTeam || 'Bowling Side'} - Pitch Map (22 Yards)`}
+              />
+            </ErrorBoundary>
+          )}
+
           {/* FALL OF WICKETS */}
           {Array.isArray(currentInnings.fallOfWickets) && currentInnings.fallOfWickets.length > 0 && (
             <View style={styles.fowCard}>
@@ -1030,6 +1044,34 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                     <View key={idx} style={styles.fowPill}>
                       <Text style={styles.fowPillScore}>{s || '0'}/{w || (idx + 1)}</Text>
                       <Text style={styles.fowPillSub}>({b || 'Batter'}, {o || '0.0'} ov)</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {/* ─────────────────────────────────────────────────────────────
+              KEY BATTING PARTNERSHIPS
+              ───────────────────────────────────────────────────────────── */}
+          {Array.isArray(currentInnings.partnerships) && currentInnings.partnerships.length > 0 && (
+            <View style={styles.fowCard}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={styles.fowTitle}>🤝 Key Batting Partnerships</Text>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#b45309' }}>{currentInnings.battingTeam}</Text>
+              </View>
+              <View style={styles.fowRow}>
+                {currentInnings.partnerships.map((p: any, idx: number) => {
+                  const runs = p.runs || 0;
+                  const balls = p.balls || 0;
+                  const batters = p.batters || 'Pair';
+                  const wicketLabel = p.wicket || `${idx + 1}th Wicket`;
+                  return (
+                    <View key={`part-${idx}`} style={[styles.fowPill, { borderColor: '#f59e0b', backgroundColor: '#fffbeb' }]}>
+                      <Text style={[styles.fowPillScore, { color: '#b45309' }]}>
+                        {runs} runs <Text style={{ fontSize: 11, fontWeight: '600', color: '#78350f' }}>({balls}b)</Text>
+                      </Text>
+                      <Text style={styles.fowPillSub}>{wicketLabel} • {batters}</Text>
                     </View>
                   );
                 })}
