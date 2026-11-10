@@ -315,6 +315,27 @@ export default function WagonWheel({
     return counts;
   }, [batterDeliveries]);
 
+  // Scoring Breakdown with Run Multipliers (e.g. 3s: 3 × 3 = 9 runs)
+  const scoringBreakdown = useMemo(() => {
+    const sixRuns = runCounts.sixes * 6;
+    const fourRuns = runCounts.fours * 4;
+    const threeRuns = runCounts.threes * 3;
+    const twoRuns = runCounts.twos * 2;
+    const oneRuns = runCounts.ones * 1;
+    const totalScored = sixRuns + fourRuns + threeRuns + twoRuns + oneRuns;
+
+    return {
+      sixes: { count: runCounts.sixes, mult: 6, runs: sixRuns, pct: totalScored > 0 ? Math.round((sixRuns / totalScored) * 100) : 0 },
+      fours: { count: runCounts.fours, mult: 4, runs: fourRuns, pct: totalScored > 0 ? Math.round((fourRuns / totalScored) * 100) : 0 },
+      threes: { count: runCounts.threes, mult: 3, runs: threeRuns, pct: totalScored > 0 ? Math.round((threeRuns / totalScored) * 100) : 0 },
+      twos: { count: runCounts.twos, mult: 2, runs: twoRuns, pct: totalScored > 0 ? Math.round((twoRuns / totalScored) * 100) : 0 },
+      ones: { count: runCounts.ones, mult: 1, runs: oneRuns, pct: totalScored > 0 ? Math.round((oneRuns / totalScored) * 100) : 0 },
+      dots: { count: runCounts.dots, mult: 0, runs: 0, pct: runCounts.total > 0 ? Math.round((runCounts.dots / runCounts.total) * 100) : 0 },
+      totalRuns: totalScored,
+      totalBalls: runCounts.total
+    };
+  }, [runCounts]);
+
   // Responsive Geometry dimensions: Fixed internal viewBox with responsive render sizing
   const baseSize = 400;
   const cx = baseSize / 2;
@@ -564,7 +585,7 @@ export default function WagonWheel({
               >
                 <View style={[styles.dotMarker, { backgroundColor: '#ec4899' }]} />
                 <Text style={[styles.filterPillText, runFilter === '6' && styles.filterPillTextActive]}>
-                  6s ({runCounts.sixes})
+                  6s ({runCounts.sixes} × 6 = {scoringBreakdown.sixes.runs}r)
                 </Text>
               </TouchableOpacity>
 
@@ -575,7 +596,7 @@ export default function WagonWheel({
               >
                 <View style={[styles.dotMarker, { backgroundColor: '#06b6d4' }]} />
                 <Text style={[styles.filterPillText, runFilter === '4' && styles.filterPillTextActive]}>
-                  4s ({runCounts.fours})
+                  4s ({runCounts.fours} × 4 = {scoringBreakdown.fours.runs}r)
                 </Text>
               </TouchableOpacity>
 
@@ -586,7 +607,7 @@ export default function WagonWheel({
               >
                 <View style={[styles.dotMarker, { backgroundColor: '#a855f7' }]} />
                 <Text style={[styles.filterPillText, runFilter === '3' && styles.filterPillTextActive]}>
-                  3s ({runCounts.threes})
+                  3s ({runCounts.threes} × 3 = {scoringBreakdown.threes.runs}r)
                 </Text>
               </TouchableOpacity>
 
@@ -597,7 +618,7 @@ export default function WagonWheel({
               >
                 <View style={[styles.dotMarker, { backgroundColor: '#f59e0b' }]} />
                 <Text style={[styles.filterPillText, runFilter === '2' && styles.filterPillTextActive]}>
-                  2s ({runCounts.twos})
+                  2s ({runCounts.twos} × 2 = {scoringBreakdown.twos.runs}r)
                 </Text>
               </TouchableOpacity>
 
@@ -608,7 +629,7 @@ export default function WagonWheel({
               >
                 <View style={[styles.dotMarker, { backgroundColor: '#38bdf8' }]} />
                 <Text style={[styles.filterPillText, runFilter === '1' && styles.filterPillTextActive]}>
-                  1s ({runCounts.ones})
+                  1s ({runCounts.ones} × 1 = {scoringBreakdown.ones.runs}r)
                 </Text>
               </TouchableOpacity>
 
@@ -619,7 +640,7 @@ export default function WagonWheel({
               >
                 <View style={[styles.dotMarker, { backgroundColor: '#94a3b8' }]} />
                 <Text style={[styles.filterPillText, runFilter === '0' && styles.filterPillTextActive]}>
-                  Dots ({runCounts.dots})
+                  Dots ({runCounts.dots}b • 0r)
                 </Text>
               </TouchableOpacity>
             </ScrollView>
@@ -636,17 +657,17 @@ export default function WagonWheel({
                 style={{ width: '100%', height: '100%', display: 'block', overflow: 'visible' }}
               >
                 <defs>
-                  {/* Stadium Grass Gradient */}
+                  {/* Stadium Grass Gradient - Vibrant Daylight Turf */}
                   <radialGradient id="turfGradient" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor="#0b381e" />
-                    <stop offset="70%" stopColor="#062613" />
-                    <stop offset="100%" stopColor="#02140a" />
+                    <stop offset="0%" stopColor="#22c55e" />
+                    <stop offset="65%" stopColor="#16a34a" />
+                    <stop offset="100%" stopColor="#15803d" />
                   </radialGradient>
                   {/* Pitch Texture */}
                   <linearGradient id="pitchGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#c5a880" />
-                    <stop offset="50%" stopColor="#d8b991" />
-                    <stop offset="100%" stopColor="#c5a880" />
+                    <stop offset="0%" stopColor="#d97706" />
+                    <stop offset="50%" stopColor="#f59e0b" />
+                    <stop offset="100%" stopColor="#d97706" />
                   </linearGradient>
                   {/* Glow Filter for Boundaries */}
                   <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
@@ -655,25 +676,25 @@ export default function WagonWheel({
                   </filter>
                 </defs>
 
-                {/* 1. Main Outfield Circle */}
+                {/* 1. Main Outfield Circle - Natural Daylight Turf */}
                 <circle
                   cx={cx}
                   cy={cy}
                   r={radius}
                   fill="url(#turfGradient)"
-                  stroke="#10b981"
+                  stroke="#ffffff"
                   strokeWidth="2.5"
-                  strokeDasharray="4 2"
                 />
 
                 {/* 2. Outer Boundary Rope Border */}
                 <circle
                   cx={cx}
                   cy={cy}
-                  r={radius + 4}
+                  r={radius + 3}
                   fill="none"
-                  stroke="rgba(245, 158, 11, 0.4)"
-                  strokeWidth="1.5"
+                  stroke="#b8860b"
+                  strokeWidth="2"
+                  strokeDasharray="6 3"
                 />
 
                 {/* 3. 8 Sector Divider Lines & Sector Labels */}
@@ -690,20 +711,20 @@ export default function WagonWheel({
                         y1={cy}
                         x2={borderCoord.x}
                         y2={borderCoord.y}
-                        stroke="rgba(255, 255, 255, 0.15)"
-                        strokeWidth="1"
-                        strokeDasharray="3 3"
+                        stroke="rgba(255, 255, 255, 0.45)"
+                        strokeWidth="1.2"
+                        strokeDasharray="4 3"
                       />
                       {/* Sector Name Watermark inside field */}
                       <text
                         x={labelCoord.x}
                         y={labelCoord.y}
-                        fill={isSelected ? '#38bdf8' : 'rgba(255, 255, 255, 0.65)'}
-                        fontSize={isDesktop ? 10 : 9}
-                        fontWeight={isSelected ? 'bold' : '600'}
+                        fill={isSelected ? '#fef08a' : '#ffffff'}
+                        fontSize={isDesktop ? 10.5 : 9.5}
+                        fontWeight="800"
                         textAnchor="middle"
                         dominantBaseline="central"
-                        style={{ pointerEvents: 'none', userSelect: 'none' }}
+                        style={{ pointerEvents: 'none', userSelect: 'none', filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,0.85))' }}
                       >
                         {s.name.split(' / ')[0]}
                       </text>
@@ -792,6 +813,16 @@ export default function WagonWheel({
                 <line x1={cx - pitchW / 2} y1={cy + pitchH / 2 - 5} x2={cx + pitchW / 2} y2={cy + pitchH / 2 - 5} stroke="#ffffff" strokeWidth="1" />
                 {/* Stumps Marker */}
                 <circle cx={cx} cy={cy + pitchH / 2 - 3} r="1.5" fill="#e11d48" />
+
+                {/* Batsman Figurine at Batting Crease */}
+                <g transform={`translate(${cx}, ${cy + pitchH / 2 - 4})`}>
+                  <ellipse cx="0" cy="1" rx="5" ry="2" fill="rgba(0,0,0,0.3)" />
+                  <rect x="-3" y="-5" width="2.5" height="5" rx="1" fill="#f8fafc" stroke="#94a3b8" strokeWidth="0.5" />
+                  <rect x="0.5" y="-5" width="2.5" height="5" rx="1" fill="#f8fafc" stroke="#94a3b8" strokeWidth="0.5" />
+                  <path d="M-3,-5 L-4,-10 L4,-10 L3,-5 Z" fill="#1e3a8a" />
+                  <circle cx="0" cy="-12" r="2.8" fill="#d97706" />
+                  <line x1="2" y1="-7" x2="6" y2="-2" stroke="#b45309" strokeWidth="1.6" strokeLinecap="round" />
+                </g>
 
                 {/* 6. Wagon Wheel Shot Trajectory Lines */}
                 {displayedDeliveries.map((del, idx) => {
@@ -931,6 +962,97 @@ export default function WagonWheel({
               </View>
               <View style={styles.compactSideLeg}>
                 <Text style={styles.compactSideText}>🟠 Leg-Side: <Text style={styles.boldText}>{stats.legRuns} runs</Text> ({stats.legPct}%)</Text>
+              </View>
+            </View>
+
+            {/* BATSMAN RUNS BY SHOT MULTIPLIER BREAKDOWN */}
+            <View style={styles.multiplierCard}>
+              <View style={styles.multiplierHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.multiplierTitle}>⚡ BATSMAN SCORING BREAKDOWN & RUN MULTIPLIER</Text>
+                  <Text style={styles.multiplierSubtitle}>
+                    Runs completed by {currentBatter?.name || 'Batsman'} across each scoring shot type:
+                  </Text>
+                </View>
+                <View style={styles.multiplierTotalBadge}>
+                  <Text style={styles.multiplierTotalBadgeText}>
+                    Total: {scoringBreakdown.totalRuns} runs ({scoringBreakdown.totalBalls} balls)
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.multiplierGrid}>
+                {/* 6s */}
+                <View style={[styles.multiplierItem, { borderColor: '#ec4899', backgroundColor: '#fdf2f8' }]}>
+                  <View style={styles.multiplierItemTop}>
+                    <Text style={[styles.multiplierItemTag, { color: '#be185d' }]}>🚀 SIXES (6s)</Text>
+                    <Text style={[styles.multiplierItemPct, { color: '#be185d' }]}>{scoringBreakdown.sixes.pct}%</Text>
+                  </View>
+                  <Text style={styles.multiplierFormula}>
+                    {scoringBreakdown.sixes.count} × 6 = <Text style={[styles.multiplierHighlight, { color: '#be185d' }]}>{scoringBreakdown.sixes.runs} runs</Text>
+                  </Text>
+                  <Text style={styles.multiplierItemSub}>{scoringBreakdown.sixes.count} maximums over boundary</Text>
+                </View>
+
+                {/* 4s */}
+                <View style={[styles.multiplierItem, { borderColor: '#06b6d4', backgroundColor: '#f0fdf4' }]}>
+                  <View style={styles.multiplierItemTop}>
+                    <Text style={[styles.multiplierItemTag, { color: '#0369a1' }]}>🏏 FOURS (4s)</Text>
+                    <Text style={[styles.multiplierItemPct, { color: '#0369a1' }]}>{scoringBreakdown.fours.pct}%</Text>
+                  </View>
+                  <Text style={styles.multiplierFormula}>
+                    {scoringBreakdown.fours.count} × 4 = <Text style={[styles.multiplierHighlight, { color: '#0369a1' }]}>{scoringBreakdown.fours.runs} runs</Text>
+                  </Text>
+                  <Text style={styles.multiplierItemSub}>{scoringBreakdown.fours.count} boundary fence shots</Text>
+                </View>
+
+                {/* 3s - User Example: 3s 3nu na 3s*3 = 9 runs */}
+                <View style={[styles.multiplierItem, { borderColor: '#a855f7', backgroundColor: '#faf5ff' }]}>
+                  <View style={styles.multiplierItemTop}>
+                    <Text style={[styles.multiplierItemTag, { color: '#7e22ce' }]}>⚡ THREES (3s)</Text>
+                    <Text style={[styles.multiplierItemPct, { color: '#7e22ce' }]}>{scoringBreakdown.threes.pct}%</Text>
+                  </View>
+                  <Text style={styles.multiplierFormula}>
+                    {scoringBreakdown.threes.count} × 3 = <Text style={[styles.multiplierHighlight, { color: '#7e22ce' }]}>{scoringBreakdown.threes.runs} runs</Text>
+                  </Text>
+                  <Text style={styles.multiplierItemSub}>{scoringBreakdown.threes.count} hard running triplets</Text>
+                </View>
+
+                {/* 2s */}
+                <View style={[styles.multiplierItem, { borderColor: '#f59e0b', backgroundColor: '#fffbeb' }]}>
+                  <View style={styles.multiplierItemTop}>
+                    <Text style={[styles.multiplierItemTag, { color: '#b45309' }]}>🏃 TWOS (2s)</Text>
+                    <Text style={[styles.multiplierItemPct, { color: '#b45309' }]}>{scoringBreakdown.twos.pct}%</Text>
+                  </View>
+                  <Text style={styles.multiplierFormula}>
+                    {scoringBreakdown.twos.count} × 2 = <Text style={[styles.multiplierHighlight, { color: '#b45309' }]}>{scoringBreakdown.twos.runs} runs</Text>
+                  </Text>
+                  <Text style={styles.multiplierItemSub}>{scoringBreakdown.twos.count} quick gap doubles</Text>
+                </View>
+
+                {/* 1s */}
+                <View style={[styles.multiplierItem, { borderColor: '#38bdf8', backgroundColor: '#f0f9ff' }]}>
+                  <View style={styles.multiplierItemTop}>
+                    <Text style={[styles.multiplierItemTag, { color: '#0284c7' }]}>🚶 SINGLES (1s)</Text>
+                    <Text style={[styles.multiplierItemPct, { color: '#0284c7' }]}>{scoringBreakdown.ones.pct}%</Text>
+                  </View>
+                  <Text style={styles.multiplierFormula}>
+                    {scoringBreakdown.ones.count} × 1 = <Text style={[styles.multiplierHighlight, { color: '#0284c7' }]}>{scoringBreakdown.ones.runs} runs</Text>
+                  </Text>
+                  <Text style={styles.multiplierItemSub}>{scoringBreakdown.ones.count} strike rotation singles</Text>
+                </View>
+
+                {/* Dots */}
+                <View style={[styles.multiplierItem, { borderColor: '#cbd5e1', backgroundColor: '#f8fafc' }]}>
+                  <View style={styles.multiplierItemTop}>
+                    <Text style={[styles.multiplierItemTag, { color: '#475569' }]}>⚪ DOT BALLS (0s)</Text>
+                    <Text style={[styles.multiplierItemPct, { color: '#475569' }]}>{scoringBreakdown.dots.pct}%</Text>
+                  </View>
+                  <Text style={styles.multiplierFormula}>
+                    {scoringBreakdown.dots.count} balls = <Text style={[styles.multiplierHighlight, { color: '#475569' }]}>0 runs</Text>
+                  </Text>
+                  <Text style={styles.multiplierItemSub}>{scoringBreakdown.dots.count} defensive / scoreless balls</Text>
+                </View>
               </View>
             </View>
 
@@ -1088,14 +1210,15 @@ export default function WagonWheel({
   );
 }
 
-// Helper: Synthetic mock shot generator for initial display or players without ball-by-ball logs (Boundaries only)
+// Helper: Synthetic mock shot generator for initial display or players without ball-by-ball logs
 function generateSyntheticShots(batter: BatterProfile): ShotDelivery[] {
   const shots: ShotDelivery[] = [];
-  const runsTotal = batter.runs || 24;
-  const fours = batter.fours !== undefined ? batter.fours : Math.max(1, Math.floor(runsTotal / 6));
+  const runsTotal = Number(batter.runs) || 0;
+  const ballsTotal = Number(batter.balls) || Math.max(1, Math.round(runsTotal / 1.3));
+  const fours = batter.fours !== undefined ? batter.fours : Math.max(0, Math.floor(runsTotal / 7));
   const sixes = batter.sixes !== undefined ? batter.sixes : (runsTotal >= 20 ? 1 : 0);
 
-  // Add sixes (clearing the ropes)
+  // Sixes (Clearing the boundary ropes)
   const sixPositions = [
     { angle: 75, pos: 'Midwicket', zone: 'Midwicket / Cow Corner' },
     { angle: 345, pos: 'Mid-Off', zone: 'Mid-Off / Long Off' },
@@ -1114,7 +1237,7 @@ function generateSyntheticShots(batter: BatterProfile): ShotDelivery[] {
     });
   }
 
-  // Add fours (piercing gaps to fence)
+  // Fours (Piercing the infield gaps to fence)
   const fourPositions = [
     { angle: 315, pos: 'Cover', zone: 'Cover / Extra Cover' },
     { angle: 270, pos: 'Point', zone: 'Point / Backward Point' },
@@ -1133,6 +1256,105 @@ function generateSyntheticShots(batter: BatterProfile): ShotDelivery[] {
       fieldingPosition: item.pos,
       shotZone: item.zone,
       commentary: 'Crisp timing, pierces the gap to the fence!'
+    });
+  }
+
+  // Calculate remaining runs and balls to distribute into 3s, 2s, 1s, and Dots
+  const boundaryRuns = sixes * 6 + fours * 4;
+  let remainingRuns = Math.max(0, runsTotal - boundaryRuns);
+  let remainingBalls = Math.max(0, ballsTotal - (sixes + fours));
+
+  // Threes (3s)
+  let threes = 0;
+  if (remainingRuns >= 6 && remainingBalls >= 4) {
+    threes = Math.min(2, Math.floor(remainingRuns / 9) || 1);
+    remainingRuns -= threes * 3;
+    remainingBalls -= threes;
+  }
+  const threePositions = [
+    { angle: 320, pos: 'Extra Cover', zone: 'Cover / Extra Cover' },
+    { angle: 80, pos: 'Deep Midwicket', zone: 'Midwicket / Cow Corner' },
+    { angle: 150, pos: 'Deep Fine Leg', zone: 'Fine Leg' }
+  ];
+  for (let i = 0; i < threes; i++) {
+    const p = threePositions[i % threePositions.length];
+    shots.push({
+      strikerId: batter.id,
+      runsBatter: 3,
+      shotAngle: p.angle,
+      shotDistance: 78,
+      fieldingPosition: p.pos,
+      shotZone: p.zone,
+      commentary: 'Pushed deep into the outfield, energetic running completes 3 runs!'
+    });
+  }
+
+  // Twos (2s)
+  const twos = Math.min(Math.floor(remainingRuns / 2), Math.floor(remainingBalls / 2));
+  remainingRuns -= twos * 2;
+  remainingBalls -= twos;
+  const twoPositions = [
+    { angle: 260, pos: 'Deep Point', zone: 'Point / Backward Point' },
+    { angle: 105, pos: 'Square Leg', zone: 'Square Leg' },
+    { angle: 330, pos: 'Deep Cover', zone: 'Cover / Extra Cover' },
+    { angle: 35, pos: 'Mid-On', zone: 'Mid-On / Long On' }
+  ];
+  for (let i = 0; i < twos; i++) {
+    const p = twoPositions[i % twoPositions.length];
+    shots.push({
+      strikerId: batter.id,
+      runsBatter: 2,
+      shotAngle: p.angle,
+      shotDistance: 62,
+      fieldingPosition: p.pos,
+      shotZone: p.zone,
+      commentary: 'Worked with soft hands into the gap for a brisk couple!'
+    });
+  }
+
+  // Singles (1s)
+  const ones = Math.min(remainingRuns, remainingBalls);
+  remainingBalls -= ones;
+  const onePositions = [
+    { angle: 340, pos: 'Mid-Off', zone: 'Mid-Off / Long Off' },
+    { angle: 20, pos: 'Mid-On', zone: 'Mid-On / Long On' },
+    { angle: 280, pos: 'Point', zone: 'Point / Backward Point' },
+    { angle: 110, pos: 'Square Leg', zone: 'Square Leg' },
+    { angle: 200, pos: 'Third Man', zone: 'Third Man / Slips' },
+    { angle: 70, pos: 'Midwicket', zone: 'Midwicket / Cow Corner' }
+  ];
+  for (let i = 0; i < ones; i++) {
+    const p = onePositions[i % onePositions.length];
+    shots.push({
+      strikerId: batter.id,
+      runsBatter: 1,
+      shotAngle: p.angle,
+      shotDistance: 45,
+      fieldingPosition: p.pos,
+      shotZone: p.zone,
+      commentary: 'Tapped and scampered through for a sharp single.'
+    });
+  }
+
+  // Dot balls (0s)
+  const dots = Math.max(0, remainingBalls);
+  const dotPositions = [
+    { angle: 300, pos: 'Cover', zone: 'Cover / Extra Cover' },
+    { angle: 270, pos: 'Point', zone: 'Point / Backward Point' },
+    { angle: 0, pos: 'Bowler', zone: 'Mid-Off / Long Off' },
+    { angle: 90, pos: 'Midwicket', zone: 'Midwicket / Cow Corner' },
+    { angle: 120, pos: 'Square Leg', zone: 'Square Leg' }
+  ];
+  for (let i = 0; i < dots; i++) {
+    const p = dotPositions[i % dotPositions.length];
+    shots.push({
+      strikerId: batter.id,
+      runsBatter: 0,
+      shotAngle: p.angle,
+      shotDistance: 22,
+      fieldingPosition: p.pos,
+      shotZone: p.zone,
+      commentary: 'Solid defense straight to the fielder.'
     });
   }
 
@@ -2034,5 +2256,95 @@ const styles = StyleSheet.create({
   sectorRowItemDesktop: {
     width: '49%',
     minWidth: 260
+  },
+  multiplierCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#fde68a',
+    marginTop: 14,
+    width: '100%',
+    shadowColor: '#d4af37',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2
+  },
+  multiplierHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#fef3c7',
+    paddingBottom: 8,
+    marginBottom: 10
+  },
+  multiplierTitle: {
+    fontSize: 12.5,
+    fontWeight: '900',
+    color: '#0f172a',
+    letterSpacing: 0.5
+  },
+  multiplierSubtitle: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2
+  },
+  multiplierTotalBadge: {
+    backgroundColor: '#fffbeb',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fde68a'
+  },
+  multiplierTotalBadgeText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#b45309'
+  },
+  multiplierGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4
+  },
+  multiplierItem: {
+    flexBasis: '48%',
+    flexGrow: 1,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1.5
+  },
+  multiplierItemTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4
+  },
+  multiplierItemTag: {
+    fontSize: 10.5,
+    fontWeight: '900',
+    letterSpacing: 0.3
+  },
+  multiplierItemPct: {
+    fontSize: 11,
+    fontWeight: '900'
+  },
+  multiplierFormula: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#1e293b'
+  },
+  multiplierHighlight: {
+    fontWeight: '900'
+  },
+  multiplierItemSub: {
+    fontSize: 9.5,
+    color: '#64748b',
+    marginTop: 2
   }
 });
