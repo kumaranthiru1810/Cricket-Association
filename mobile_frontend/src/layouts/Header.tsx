@@ -17,7 +17,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { useAppNavigation } from '../navigation/AppNavigator';
-import { ScorerApi, getCurrentUser, setCurrentUser, setAuthToken } from '../services/api';
+import { ScorerApi, getCurrentUser, setCurrentUser, setAuthToken, logoutAndClearAllSessions } from '../services/api';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 const IMG_LOGO = require('../../assets/logo_transparent.png');
@@ -27,6 +27,7 @@ export interface HeaderProps {
   onLogout?: () => void;
   onNavigateToUserPortal?: () => void;
   scrollToSection?: (secName: string) => void;
+  onSelectCategory?: (category: any) => void;
   onScrollToTop?: () => void;
   isMobile?: boolean;
   mobileNavOpen?: boolean;
@@ -38,6 +39,7 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout: propOnLogout,
   onNavigateToUserPortal: propOnNavigateToUserPortal,
   scrollToSection: propScrollToSection,
+  onSelectCategory: _propOnSelectCategory,
   onScrollToTop: propOnScrollToTop,
   isMobile: propIsMobile,
   mobileNavOpen: propMobileNavOpen,
@@ -82,16 +84,20 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   const handleLogout = async () => {
-    if (propOnLogout) {
-      propOnLogout();
-      return;
-    }
     try {
-      await ScorerApi.logout();
+      await logoutAndClearAllSessions();
     } catch (_e) { }
     setAuthToken(null);
     setCurrentUser(null);
     setInternalUser(null);
+    if (propOnLogout) {
+      try { propOnLogout(); } catch (_e) {}
+    }
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.location.href = '/';
+      return;
+    }
+    navigate('Home');
   };
 
   const handleNavigateToUserPortal = () => {
@@ -175,7 +181,24 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Ionicons name="trophy-outline" size={15} color="#f5c43d" style={{ marginRight: 6 }} />
               <Text style={styles.navDropdownText}>Standings</Text>
-              {/* <Ionicons name="chevron-down" size={12} color="#c0d1eb" style={{ marginLeft: 4 }} /> */}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.navLinkDropdown}
+              onPress={() => handleScrollToSection('stats')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="star-outline" size={15} color="#f5c43d" style={{ marginRight: 6 }} />
+              <Text style={styles.navDropdownText}>Player Ratings</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.navLinkDropdown}
+              onPress={() => navigate('Registration')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="document-text-outline" size={15} color="#f5c43d" style={{ marginRight: 6 }} />
+              <Text style={styles.navDropdownText}>Register</Text>
             </TouchableOpacity>
           </View>
         )}

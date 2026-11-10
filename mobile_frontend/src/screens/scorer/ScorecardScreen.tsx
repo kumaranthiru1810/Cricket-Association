@@ -7,6 +7,7 @@ import { ScorerApi } from '../../services/api';
 import WagonWheel from '../../components/analytics/WagonWheel';
 import ErrorBoundary from '../../components/common/ErrorBoundary';
 import CricketRulesModal, { CricketRuleType } from '../../components/scorer/CricketRulesModal';
+import MatchHighlightsBanner, { HighlightItem } from '../../components/common/MatchHighlightsBanner';
 
 const IMG_CHAMPIONS = require('../../../assets/cricket_champions.png');
 
@@ -19,7 +20,19 @@ interface ScorecardScreenProps {
 export default function ScorecardScreen({ onExit, initialMatchId, initialParams }: ScorecardScreenProps = {}) {
   const scorerNav = useScorerNavigation();
   const params = initialParams || scorerNav.params;
-  const matchId = initialMatchId || params?.matchId || 'M001';
+  const matchId = initialMatchId || params?.matchId ||
+    (Platform.OS === 'web' && typeof window !== 'undefined'
+      ? (new URL(window.location.href).searchParams.get('matchId') || localStorage.getItem('cfvd_last_scorecard_match_id'))
+      : null) ||
+    'M001';
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && matchId && matchId !== 'M001') {
+      try {
+        localStorage.setItem('cfvd_last_scorecard_match_id', matchId);
+      } catch (e) {}
+    }
+  }, [matchId]);
 
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
@@ -31,6 +44,12 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
   const [selectedWagonBatterId, setSelectedWagonBatterId] = useState<string>('');
   const [showRulesModal, setShowRulesModal] = useState<boolean>(false);
   const [activeRule, setActiveRule] = useState<CricketRuleType>('FREE_HIT');
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      (window as any).__SET_INNINGS_TAB__ = (idx: number) => setActiveInningsTab(idx);
+    }
+  }, []);
 
   const handleBack = () => {
     const isLiveMatch = scorecardData?.match?.status === 'LIVE' || scorecardData?.match?.status === 'Live';
@@ -134,6 +153,221 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
       runRate
     };
   }, [currentInnings]);
+
+  // Dynamically compute verified match highlights strictly from actual scorecard data
+  const computedHighlights = useMemo<HighlightItem[]>(() => {
+    if (!scorecardData) return [];
+    const items: HighlightItem[] = [];
+    const m = scorecardData.match;
+    const innList = scorecardData.innings || [];
+
+    // 1. MATCH RESULT (If match is completed or has official winner)
+    if (m?.status === 'COMPLETED' || m?.winner) {
+      items.push({
+        id: 'hl-result',
+        type: 'VICTORY',
+        categoryTitle: '🚀 MATCH RESULT',
+        badge: 'OFFICIAL RESULT',
+        playerName: m.winner || m.teamA || 'Match Champion',
+        teamName: `${m.teamA || 'Team A'} vs ${m.teamB || 'Team B'}`,
+        stats: m.resultSummary || `${m.winner || 'Winner'} won the match`,
+        description: 'Official match concluded under Cricket Federation of Virudhunagar District rules.',
+        imageKey: 'VICTORY'
+      });
+    }
+
+    // 2. OFFICIAL PLAYER OF THE MATCH (If awarded)
+    if (m?.playerOfTheMatch) {
+      items.push({
+        id: 'hl-motm',
+        type: 'MOTM',
+        categoryTitle: '🏆 PLAYER OF THE MATCH',
+        badge: 'MAN OF THE MATCH',
+        playerName: m.playerOfTheMatch,
+        teamName: m.winner || m.teamA || 'Match Performer',
+        stats: 'Outstanding match-winning performance',
+        description: 'Awarded official Player of the Match honors for exceptional match contribution.',
+        imageKey: 'MOTM'
+      });
+    }
+
+    // 3. CENTURIES & HALF-CENTURIES (Only real milestone scores >= 50)
+    innList.forEach((inn: any, innIdx: number) => {
+      const battingTeam = inn.battingTeam || `Innings ${innIdx + 1}`;
+      (inn.batters || []).forEach((b: any, bIdx: number) => {
+        const runs = Number(b.runs) || 0;
+        const balls = Number(b.balls) || 0;
+        const fours = Number(b.fours) || 0;
+        const sixes = Number(b.sixes) || 0;
+        const sr = balls > 0 ? ((runs / balls) * 100).toFixed(1) : '0.0';
+        const notOut = b.isNotOut || b.notOut || !b.dismissalText || b.dismissalText === 'not out';
+
+        if (runs >= 100) {
+          items.push({
+            id: `hl-cen-${innIdx}-${bIdx}`,
+            type: 'CENTURY',
+            categoryTitle: '👑 CENTURY ALERT',
+            badge: '100 RUNS',
+            playerName: b.name || 'Batter',
+            teamName: battingTeam,
+            stats: `${runs}${notOut ? '*' : ''} (${balls}b • ${fours}x4, ${sixes}x6 • SR: ${sr})`,
+            description: `Sensational century milestone reached under match pressure for ${battingTeam}!`,
+            imageKey: 'CENTURY'
+          });
+        } else if (runs >= 50) {
+          items.push({
+            id: `hl-fifty-${innIdx}-${bIdx}`,
+            type: 'FIFTY',
+            categoryTitle: '⭐ HALF-CENTURY ALERT',
+            badge: '50 RUNS',
+            playerName: b.name || 'Batter',
+            teamName: battingTeam,
+            stats: `${runs}${notOut ? '*' : ''} (${balls}b • ${fours}x4, ${sixes}x6 • SR: ${sr})`,
+            description: `Crucial anchoring half-century milestone scored for ${battingTeam}.`,
+            imageKey: 'FIFTY'
+          });
+        }
+      });
+    });
+
+    // 4. BOWLER HAULS (>= 5 Wkts or >= 3 Wkts)
+    innList.forEach((inn: any, innIdx: number) => {
+      const bowlingTeam = inn.bowlingTeam || `Bowling Side`;
+      (inn.bowlers || []).forEach((bw: any, bwIdx: number) => {
+        const wkts = Number(bw.wickets) || 0;
+        const rConceded = Number(bw.runs) || 0;
+        const ov = bw.overs || '0.0';
+        const econ = bw.economy || '0.0';
+
+        if (wkts >= 5) {
+          items.push({
+            id: `hl-fifer-${innIdx}-${bwIdx}`,
+            type: 'FIFER',
+            categoryTitle: '🔥 FIVE-WICKET HAUL',
+            badge: '5 WICKETS',
+            playerName: bw.name || 'Bowler',
+            teamName: bowlingTeam,
+            stats: `${wkts}/${rConceded} (${ov} Ov • ER: ${econ})`,
+            description: `Devastating five-wicket bowling haul dismantling the opposition lineup!`,
+            imageKey: 'BOWLER'
+          });
+        } else if (wkts >= 3) {
+          items.push({
+            id: `hl-3w-${innIdx}-${bwIdx}`,
+            type: 'FIFER',
+            categoryTitle: '🎯 THREE-WICKET HAUL',
+            badge: '3 WICKETS',
+            playerName: bw.name || 'Bowler',
+            teamName: bowlingTeam,
+            stats: `${wkts}/${rConceded} (${ov} Ov • ER: ${econ})`,
+            description: `Crucial bowling breakthroughs breaking key partnerships!`,
+            imageKey: 'BOWLER'
+          });
+        }
+      });
+    });
+
+    // 5. CATCHES (ONLY IF A FIELDER ACTUALLY TOOK >= 2 CATCHES IN THIS MATCH!)
+    const catchCountMap: Record<string, { count: number; team: string }> = {};
+    innList.forEach((inn: any) => {
+      const fieldingTeam = inn.bowlingTeam || 'Fielding Side';
+      (inn.batters || []).forEach((b: any) => {
+        const dText = (b.dismissalText || '').trim();
+        if (dText.startsWith('c ') && !dText.includes('& b') && !dText.includes('†')) {
+          const matchC = dText.match(/^c\s+(.*?)\s+b\s+/i);
+          if (matchC && matchC[1]) {
+            const fielder = matchC[1].trim();
+            if (fielder) {
+              catchCountMap[fielder] = catchCountMap[fielder] || { count: 0, team: fieldingTeam };
+              catchCountMap[fielder].count += 1;
+            }
+          }
+        }
+      });
+    });
+
+    Object.entries(catchCountMap).forEach(([fielder, data], idx) => {
+      if (data.count >= 2) {
+        items.push({
+          id: `hl-catch-${idx}`,
+          type: 'CATCH',
+          categoryTitle: '🦅 SAFE HANDS',
+          badge: `${data.count} CATCHES`,
+          playerName: fielder,
+          teamName: data.team,
+          stats: `${data.count} Catches in the Match`,
+          description: `Remarkable fielding reliability and sharp reflexes in the outfield!`,
+          imageKey: 'CATCH'
+        });
+      }
+    });
+
+    // 6. RUN OUTS (ONLY IF AN ACTUAL RUN OUT HAPPENED IN THIS MATCH!)
+    const runOutList: Array<{ batter: string; fielder?: string; team: string }> = [];
+    innList.forEach((inn: any) => {
+      const fieldingTeam = inn.bowlingTeam || 'Fielding Side';
+      (inn.batters || []).forEach((b: any) => {
+        const dText = (b.dismissalText || '').toLowerCase();
+        if (dText.includes('run out')) {
+          const matchRo = b.dismissalText.match(/run out\s*\((.*?)\)/i);
+          const fielder = matchRo && matchRo[1] ? matchRo[1].trim() : undefined;
+          runOutList.push({
+            batter: b.name,
+            fielder,
+            team: fieldingTeam
+          });
+        }
+      });
+    });
+
+    if (runOutList.length > 0) {
+      const firstRo = runOutList[0];
+      items.push({
+        id: 'hl-runout-real',
+        type: 'RUN_OUT',
+        categoryTitle: '🎯 DIRECT HIT / RUN OUT',
+        badge: 'RUN OUT',
+        playerName: firstRo.fielder || 'Fielding Side',
+        teamName: firstRo.team,
+        stats: firstRo.fielder ? `Direct Hit dismissing ${firstRo.batter}` : `Crucial dismissal of ${firstRo.batter}`,
+        description: 'Sensational fielding precision catching the runner short of the crease.',
+        imageKey: 'RUN_OUT'
+      });
+    }
+
+    // 7. TOP INNINGS IF NO BATTER HIT 50+ (e.g. quickfire 30+ leading innings)
+    const hasBattingMilestone = items.some(it => it.type === 'CENTURY' || it.type === 'FIFTY');
+    if (!hasBattingMilestone) {
+      let topBatter: any = null;
+      let topTeam = '';
+      innList.forEach((inn: any) => {
+        (inn.batters || []).forEach((b: any) => {
+          if (!topBatter || (Number(b.runs) || 0) > (Number(topBatter.runs) || 0)) {
+            topBatter = b;
+            topTeam = inn.battingTeam || '';
+          }
+        });
+      });
+      if (topBatter && Number(topBatter.runs) >= 30) {
+        const r = Number(topBatter.runs);
+        const b = Number(topBatter.balls) || 0;
+        const sr = b > 0 ? ((r / b) * 100).toFixed(1) : '0.0';
+        items.push({
+          id: 'hl-top-batter',
+          type: 'FIFTY',
+          categoryTitle: '⚡ TOP SCORER',
+          badge: `${r} RUNS`,
+          playerName: topBatter.name,
+          teamName: topTeam,
+          stats: `${r}${topBatter.isNotOut || !topBatter.dismissalText ? '*' : ''} (${b}b • SR: ${sr})`,
+          description: `Highest individual score of the innings leading the team's charge.`,
+          imageKey: 'FIFTY'
+        });
+      }
+    }
+
+    return items;
+  }, [scorecardData]);
 
   if (isLoading) {
     return (
@@ -403,6 +637,11 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Broadcast Highlights & Milestones Banner (Strictly dynamically calculated from real match performance) */}
+          {computedHighlights && computedHighlights.length > 0 && (
+            <MatchHighlightsBanner highlights={computedHighlights} />
+          )}
 
           {/* ─────────────────────────────────────────────────────────────
               BATTING SCORECARD TABLE

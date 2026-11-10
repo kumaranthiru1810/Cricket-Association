@@ -237,6 +237,25 @@ router.post('/matches/:matchId/undo', verifyMatchPermission, async (req, res) =>
   }
 });
 
+// Edit Delivery (Retroactive ball correction)
+const handleEditDelivery = async (req, res) => {
+  try {
+    const result = await scoringEngine.editDelivery(
+      req.params.matchId,
+      req.params.deliveryId,
+      req.body,
+      req.user?.id
+    );
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message, message: err.message });
+  }
+};
+
+router.patch('/matches/:matchId/deliveries/:deliveryId', verifyMatchPermission, handleEditDelivery);
+router.put('/matches/:matchId/deliveries/:deliveryId', verifyMatchPermission, handleEditDelivery);
+router.post('/matches/:matchId/deliveries/:deliveryId/edit', verifyMatchPermission, handleEditDelivery);
+
 // Swap Strike
 router.post('/matches/:matchId/swap-strike', verifyMatchPermission, async (req, res) => {
   try {

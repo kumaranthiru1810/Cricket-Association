@@ -34,6 +34,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import SharedBackground from '../../components/scorer/SharedBackground';
 import { UmpireApi, getCurrentUser } from '../../services/api';
 import { showAlert as showSwal, showSuccess, showError } from '../../utils/sweetalert';
+import CricketRulesModal from '../../components/scorer/CricketRulesModal';
+import MatchHighlightsBanner from '../../components/common/MatchHighlightsBanner';
 
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
 
@@ -46,7 +48,38 @@ type TabType = 'overview' | 'matches' | 'currentMatch' | 'profile';
 type MatchFilter = 'ALL' | 'TODAY' | 'LIVE' | 'UPCOMING' | 'COMPLETED' | 'POSTPONED';
 
 export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireDashboardProps) {
-  const [activeTab, setActiveTab] = useState<TabType>(initialParams?.initialTab || 'overview');
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    if (initialParams?.initialTab || initialParams?.tab) {
+      return (initialParams.initialTab || initialParams.tab) as TabType;
+    }
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        const q = new URL(window.location.href).searchParams.get('tab') as TabType;
+        if (q && ['overview', 'matches', 'currentMatch', 'profile'].includes(q)) {
+          return q;
+        }
+        const saved = localStorage.getItem('cfvd_umpire_active_tab') as TabType;
+        if (saved && ['overview', 'matches', 'currentMatch', 'profile'].includes(saved)) {
+          return saved;
+        }
+      } catch (e) {}
+    }
+    return 'overview';
+  });
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('cfvd_umpire_active_tab', activeTab);
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('tab') !== activeTab) {
+          url.searchParams.set('tab', activeTab);
+          window.history.replaceState({ appScreen: 'Umpire', tab: activeTab }, '', url.toString());
+        }
+      } catch (e) {}
+    }
+  }, [activeTab]);
+
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -106,6 +139,9 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
   const [pendingDecisionType, setPendingDecisionType] = useState<string>('');
   const [decisionNotes, setDecisionNotes] = useState<string>('');
   const [isSubmittingDecision, setIsSubmittingDecision] = useState<boolean>(false);
+
+  // Cricket Rules Guide & Decision Support Modal
+  const [showRulesModal, setShowRulesModal] = useState<boolean>(false);
 
   // Postponement Request Modal
   const [postponeModalMatch, setPostponeModalMatch] = useState<any | null>(null);
@@ -421,6 +457,13 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
             <TouchableOpacity
               style={styles.exitBtn}
               onPress={() => {
+                if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                  try {
+                    localStorage.setItem('cfvd_last_app_screen', 'Home');
+                    window.location.href = '/';
+                    return;
+                  } catch (_e) {}
+                }
                 if (onExit) onExit();
               }}
             >
@@ -543,6 +586,12 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
                     </View>
                   )}
                 </View>
+
+                {/* BROADCAST MATCH HIGHLIGHTS & CERTIFIED PERFORMANCES */}
+                <MatchHighlightsBanner
+                  title="⚖️ TOURNAMENT HIGHLIGHTS & PERFORMANCE RECORDS"
+                  subtitle="Verified match achievements: Centuries, Five-Wicket Hauls, Catches & Man of the Match"
+                />
 
                 {/* TODAY'S ASSIGNED MATCHES */}
                 <View style={styles.sectionCard}>
@@ -1176,7 +1225,22 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
             <Text style={styles.navIcon}>👤</Text>
             <Text style={[styles.navText, activeTab === 'profile' && styles.navTextActive]}>Profile</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.navItem, showRulesModal && styles.navItemActive]}
+            onPress={() => setShowRulesModal(true)}
+          >
+            <Text style={styles.navIcon}>📜</Text>
+            <Text style={[styles.navText, showRulesModal && styles.navTextActive]}>Rules Guide</Text>
+          </TouchableOpacity>
         </View>
+
+        {/* OFFICIAL CRICKET UMPIRE DECISION-SUPPORT & RULES MODAL */}
+        <CricketRulesModal
+          visible={showRulesModal}
+          matchId={selectedMatchId || undefined}
+          onClose={() => setShowRulesModal(false)}
+        />
 
         {/* TOSS CONFIRMATION MODAL */}
         <Modal visible={isTossModalVisible} transparent animationType="fade">
@@ -2403,24 +2467,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18
   },
-  // BOTTOM NAVIGATION
+  // BOTTOM NAVIGATION (Fixed sticky footer for web & mobile)
   bottomNav: {
-    position: 'absolute',
+    position: (Platform.OS === 'web' ? 'fixed' : 'absolute') as any,
     bottom: 0,
     left: 0,
     right: 0,
+    zIndex: 9999,
     flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
     paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     justifyContent: 'space-around',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 4
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 8
   },
   navItem: {
     alignItems: 'center',

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image, use
 import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
 import MatchCard from '../../components/scorer/MatchCard';
 import SharedFooter from '../../components/scorer/SharedFooter';
-import { ScorerApi, getCurrentUser } from '../../services/api';
+import { ScorerApi, getCurrentUser, logoutAndClearAllSessions } from '../../services/api';
 import { showInfo, showConfirm } from '../../utils/sweetalert';
 
 export default function ScorerDashboardScreen() {
@@ -15,7 +15,22 @@ export default function ScorerDashboardScreen() {
   const [matches, setMatches] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [profile, setProfile] = useState<any>(params?.user || getCurrentUser() || { name: 'Official Scorer', id: 'SCORER', association: 'Virudhunagar District' });
-  const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
+  const [selectedFilter, setSelectedFilter] = useState<string | null>(() => {
+    if (typeof window !== 'undefined' && window.location) {
+      try {
+        const url = new URL(window.location.href);
+        const f = url.searchParams.get('tab') || url.searchParams.get('filter');
+        if (f) {
+          const lower = f.toLowerCase();
+          if (lower === 'upcoming') return 'Upcoming';
+          if (lower === 'assigned') return 'Assigned';
+          if (lower === 'completed') return 'Completed';
+          if (lower === 'live') return 'Live';
+        }
+      } catch (_e) {}
+    }
+    return null;
+  });
 
   useEffect(() => {
     loadDashboardData();
@@ -75,22 +90,20 @@ export default function ScorerDashboardScreen() {
       }
     }
 
-    // Ensure upcoming scheduled matches are accessible to the scorer
-    const hasUpcoming = assignedMatches.some((m: any) => {
+    // Ensure all upcoming association matches are accessible to scorers for governance & coverage
+    const allUpcoming = loadedMatches.filter((m: any) => {
       const s = (m.status || '').toLowerCase();
       return s === 'upcoming' || s === 'scheduled';
     });
+    for (const upMatch of allUpcoming) {
+      if (!assignedMatches.some((m: any) => m.id === upMatch.id)) {
+        assignedMatches.push(upMatch);
+      }
+    }
 
-    if (!hasUpcoming) {
-      const loadedUpcoming = loadedMatches.filter((m: any) => {
-        const s = (m.status || '').toLowerCase();
-        return s === 'upcoming' || s === 'scheduled';
-      });
-      if (loadedUpcoming.length > 0) {
-        assignedMatches = [...assignedMatches, ...loadedUpcoming];
-      } else {
-        // District Sanctioned Upcoming Fixtures
-        const defaultUpcoming = [
+    if (allUpcoming.length === 0 && !assignedMatches.some((m: any) => (m.status || '').toLowerCase() === 'upcoming')) {
+      // District Sanctioned Upcoming Fixtures fallback
+      const defaultUpcoming = [
           {
             id: 'M001',
             tournament_name: 'Virudhunagar Premier League 2026',
@@ -106,7 +119,12 @@ export default function ScorerDashboardScreen() {
             overs: 20,
             overs_per_side: 20,
             status: 'SCHEDULED',
-            assigned_scorer_id: 'SCR-101'
+            assigned_scorer_id: 'SCR-101',
+            assigned_scorer: 'Athi Lingam',
+            umpire1_id: 'UMP-101',
+            umpire2_id: 'UMP-102',
+            umpire1_name: 'Thiru. K. Sundaram',
+            umpire2_name: 'Thiru. M. Ramanathan'
           },
           {
             id: 'M004',
@@ -123,12 +141,16 @@ export default function ScorerDashboardScreen() {
             overs: 20,
             overs_per_side: 20,
             status: 'SCHEDULED',
-            assigned_scorer_id: 'SCR-101'
+            assigned_scorer_id: 'SCR-101',
+            assigned_scorer: 'Athi Lingam',
+            umpire1_id: 'UMP-101',
+            umpire2_id: 'UMP-102',
+            umpire1_name: 'Thiru. K. Sundaram',
+            umpire2_name: 'Thiru. M. Ramanathan'
           }
         ];
         assignedMatches = [...assignedMatches, ...defaultUpcoming];
       }
-    }
 
     setMatches(assignedMatches);
     setIsLoading(false);
@@ -149,12 +171,19 @@ export default function ScorerDashboardScreen() {
 
   const handleLogout = async () => {
     const confirmed = await showConfirm(
-      'Exit Scorer Console',
-      'Are you sure you want to exit the scorer console?',
-      'Yes, Exit',
+      'Log Out Official Scorer',
+      'Are you sure you want to log out and return to the main CFVD website?',
+      'Yes, Log Out',
       'Cancel'
     );
-    if (confirmed) onExit();
+    if (confirmed) {
+      await logoutAndClearAllSessions();
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.location.href = '/';
+        return;
+      }
+      onExit('Home');
+    }
   };
 
   // Helper to parse date & time into a numeric timestamp for accurate sorting

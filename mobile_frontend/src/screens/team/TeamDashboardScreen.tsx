@@ -48,6 +48,7 @@ import {
   LiveScoringIcon
 } from '../../admin/components/Icons';
 import TeamSidebar, { TeamTabType as TabType, getTeamNavItems } from './TeamSidebar';
+import MatchHighlightsBanner from '../../components/common/MatchHighlightsBanner';
 
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
 
@@ -75,7 +76,38 @@ export interface TeamDashboardProps {
 }
 
 export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashboardProps) {
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    if (initialParams?.initialTab || initialParams?.tab) {
+      return (initialParams.initialTab || initialParams.tab) as TabType;
+    }
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        const q = new URL(window.location.href).searchParams.get('tab') as TabType;
+        if (q && ['overview', 'team', 'squad', 'tournaments', 'schedule', 'matches', 'scorecard', 'statistics', 'notifications', 'profile'].includes(q)) {
+          return q;
+        }
+        const saved = localStorage.getItem('cfvd_team_active_tab') as TabType;
+        if (saved && ['overview', 'team', 'squad', 'tournaments', 'schedule', 'matches', 'scorecard', 'statistics', 'notifications', 'profile'].includes(saved)) {
+          return saved;
+        }
+      } catch (e) {}
+    }
+    return 'overview';
+  });
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('cfvd_team_active_tab', activeTab);
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('tab') !== activeTab) {
+          url.searchParams.set('tab', activeTab);
+          window.history.replaceState({ appScreen: 'Team', tab: activeTab }, '', url.toString());
+        }
+      } catch (e) {}
+    }
+  }, [activeTab]);
+
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -802,6 +834,12 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                         </View>
                       </TouchableOpacity>
                     </View>
+
+                    {/* OFFICIAL MATCH HIGHLIGHTS & MILESTONES SHOWCASE */}
+                    <MatchHighlightsBanner
+                      title="🏆 TEAM & MATCH HIGHLIGHTS"
+                      subtitle="Official verified club milestones: Centuries, Fifers, Player of the Match & Record Spells"
+                    />
 
                     {/* HERO CLUB STATUS CARD */}
                     <View style={styles.heroCard}>
@@ -2337,6 +2375,10 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                   try {
                     await ScorerApi.logout();
                   } catch (_e) {}
+                  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                    window.location.href = '/';
+                    return;
+                  }
                   if (onExit) onExit();
                 }}
               >

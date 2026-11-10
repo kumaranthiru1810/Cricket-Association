@@ -30,7 +30,7 @@ class UmpireController {
   async getAssignedMatches(req, res) {
     try {
       const { filter } = req.query;
-      const isAdmin = req.user.role === 'ADMIN';
+      const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SCORER';
       const data = await umpireService.getAssignedMatches(req.user.id, req.user.email, filter, isAdmin);
       res.json({ success: true, data });
     } catch (err) {
@@ -42,7 +42,7 @@ class UmpireController {
   async getMatchDetails(req, res) {
     try {
       const { matchId } = req.params;
-      const isAdmin = req.user.role === 'ADMIN';
+      const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SCORER';
       const data = await umpireService.getMatchDetails(matchId, req.user.id, req.user.email, isAdmin);
       res.json({ success: true, data });
     } catch (err) {
