@@ -6641,7 +6641,6 @@ export default function LiveScoringScreen() {
                 />
               );
             })()}
-
             {/* THIS OVER & RECENT DELIVERIES INTERACTIVE STRIP (CricHeroes Retroactive Ball Correction) */}
             <View style={[styles.recentDeliveriesCard, isEditMode && styles.recentDeliveriesCardEditMode]}>
               <View style={styles.recentDeliveriesHeader}>
