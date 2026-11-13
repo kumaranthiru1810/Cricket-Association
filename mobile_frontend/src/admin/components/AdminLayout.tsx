@@ -4,7 +4,7 @@
  */
 
 import React, { useState, createContext, useContext } from 'react';
-import { View, StyleSheet, Dimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, Platform, useWindowDimensions } from 'react-native';
 import AdminSidebar, { AdminRouteKey } from './AdminSidebar';
 import AdminTopbar from './AdminTopbar';
 
@@ -52,6 +52,9 @@ export const AdminLayout: React.FC<Props> = ({
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState(2);
   const [liveMatchesCount, setLiveMatchesCount] = useState(1);
 
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
+
   const computedRoute: AdminRouteKey = currentRoute || (
     currentPath
       ? (currentPath.replace(/^\/admin\/?/, '').split('/')[0] || 'dashboard') as AdminRouteKey
@@ -90,18 +93,43 @@ export const AdminLayout: React.FC<Props> = ({
       }}
     >
       <View style={styles.layoutRoot}>
-        {/* Sidebar */}
-        <AdminSidebar
-          currentRoute={computedRoute}
-          onNavigate={(key) => handleNav(key)}
-          collapsed={collapsed}
-          onToggleCollapse={() => setCollapsed(!collapsed)}
-          isMobileOpen={mobileOpen}
-          onCloseMobile={() => setMobileOpen(false)}
-          onExitToPublic={handleExit}
-          pendingApprovalsCount={pendingApprovalsCount}
-          liveMatchesCount={liveMatchesCount}
-        />
+        {/* Desktop Sidebar (inline) */}
+        {isDesktop && (
+          <AdminSidebar
+            currentRoute={computedRoute}
+            currentPath={currentPath}
+            onNavigate={(key) => handleNav(key)}
+            collapsed={collapsed}
+            onToggleCollapse={() => setCollapsed(!collapsed)}
+            isMobileOpen={false}
+            onCloseMobile={() => setMobileOpen(false)}
+            onExitToPublic={handleExit}
+            pendingApprovalsCount={pendingApprovalsCount}
+            liveMatchesCount={liveMatchesCount}
+          />
+        )}
+
+        {/* Mobile Sidebar (overlay drawer) */}
+        {!isDesktop && mobileOpen && (
+          <AdminSidebar
+            currentRoute={computedRoute}
+            currentPath={currentPath}
+            onNavigate={(key) => {
+              handleNav(key);
+              setMobileOpen(false);
+            }}
+            collapsed={false}
+            onToggleCollapse={() => {}}
+            isMobileOpen={true}
+            onCloseMobile={() => setMobileOpen(false)}
+            onExitToPublic={() => {
+              setMobileOpen(false);
+              handleExit();
+            }}
+            pendingApprovalsCount={pendingApprovalsCount}
+            liveMatchesCount={liveMatchesCount}
+          />
+        )}
 
         {/* Right Main Column */}
         <View style={styles.mainColumn}>
@@ -110,10 +138,10 @@ export const AdminLayout: React.FC<Props> = ({
             currentRoute={computedRoute}
             onNavigate={(key) => handleNav(key)}
             onToggleSidebar={() => {
-              if (Dimensions.get('window').width < 768) {
-                setMobileOpen(true);
+              if (!isDesktop) {
+                setMobileOpen(prev => !prev);
               } else {
-                setCollapsed(!collapsed);
+                setCollapsed(prev => !prev);
               }
             }}
             onExitToPublic={handleExit}
@@ -125,6 +153,7 @@ export const AdminLayout: React.FC<Props> = ({
             <View
               style={[
                 styles.toastBanner,
+                !isDesktop && styles.toastBannerMobile,
                 toast.type === 'success' && styles.toastSuccess,
                 toast.type === 'error' && styles.toastError,
                 toast.type === 'warning' && styles.toastWarning,
@@ -141,16 +170,18 @@ export const AdminLayout: React.FC<Props> = ({
                 ]}
               />
               <View style={styles.toastContent}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>
                   {toast.message}
-                </span>
+                </Text>
               </View>
             </View>
           )}
 
           {/* Scrollable Page Content */}
           <View style={styles.contentArea}>
-            <View style={styles.contentContainer}>{children}</View>
+            <View style={[styles.contentContainer, !isDesktop && styles.contentContainerMobile]}>
+              {children}
+            </View>
           </View>
         </View>
       </View>
@@ -184,6 +215,9 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center'
   },
+  contentContainerMobile: {
+    padding: 12
+  },
   toastBanner: {
     marginHorizontal: 24,
     marginTop: 16,
@@ -195,6 +229,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     zIndex: 20
+  },
+  toastBannerMobile: {
+    marginHorizontal: 12,
+    marginTop: 10
   },
   toastSuccess: {
     backgroundColor: '#ecfdf5',

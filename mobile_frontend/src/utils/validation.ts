@@ -87,3 +87,7 @@ export function validatePassword(password: string): ValidationResult {
 
   return { isValid: true };
 }
+
+// Re-export schedule date and time validation
+export * from './dateTimeValidation';
+

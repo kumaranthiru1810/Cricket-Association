@@ -13,7 +13,8 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
-  Platform
+  Platform,
+  useWindowDimensions
 } from 'react-native';
 
 // Standard 20-over & 50-over resource curve approximation tables
@@ -22,6 +23,9 @@ const DLS_RESOURCE_50 = [
 ];
 
 export const CalculationSettingsManagement: React.FC = () => {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+
   // Method selection
   const [selectedMethod, setSelectedMethod] = useState<'DLS' | 'VJD'>('DLS');
   const [selectedTournament, setSelectedTournament] = useState<string>('CFVD Premier League T20');
@@ -109,9 +113,9 @@ export const CalculationSettingsManagement: React.FC = () => {
   }, [team1Score, team1Overs, team2TargetOvers, currentOvers, currentWickets, currentScore, selectedMethod]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isMobile && { padding: 10 }]}>
       {/* ── HEADER BANNER ────────────────────────────────────────── */}
-      <View style={styles.headerCard}>
+      <View style={[styles.headerCard, isMobile && { padding: 14 }]}>
         <View style={styles.headerTop}>
           <View style={styles.headerTextGroup}>
             <View style={styles.badgeRow}>
@@ -122,8 +126,8 @@ export const CalculationSettingsManagement: React.FC = () => {
                 <Text style={styles.badgeAmberText}>REAL-TIME RAIN RULE</Text>
               </View>
             </View>
-            <Text style={styles.headerTitle}>Live Chasing Score Predictor & Target Engine</Text>
-            <Text style={styles.headerSubtitle}>
+            <Text style={[styles.headerTitle, isMobile && { fontSize: 18 }]}>Live Chasing Score Predictor & Target Engine</Text>
+            <Text style={[styles.headerSubtitle, isMobile && { fontSize: 12 }]}>
               Configure association rain-rule calculation methodology (DLS vs VJD) and simulate live chasing
               targets, par scores, required run-rate pressure, and dynamic win probabilities.
             </Text>
@@ -131,7 +135,7 @@ export const CalculationSettingsManagement: React.FC = () => {
         </View>
 
         {/* METHOD SELECTOR CARDS */}
-        <View style={styles.methodCardsRow}>
+        <View style={[styles.methodCardsRow, isMobile && { flexDirection: 'column' }]}>
           {/* DLS Card */}
           <TouchableOpacity
             style={[styles.methodCard, selectedMethod === 'DLS' && styles.methodCardActiveDLS]}
@@ -179,7 +183,7 @@ export const CalculationSettingsManagement: React.FC = () => {
       {/* ── LIVE SIMULATOR / CALCULATOR ──────────────────────────── */}
       <View style={styles.simulatorGrid}>
         {/* Left Column: Match Parameters Input */}
-        <View style={styles.inputsCard}>
+        <View style={[styles.inputsCard, isMobile && { minWidth: '100%', padding: 14 }]}>
           <Text style={styles.sectionHeading}>🎯 Match Scenario Controls</Text>
           <Text style={styles.sectionSubheading}>Input 1st innings score & 2nd innings live match conditions</Text>
 
@@ -300,7 +304,7 @@ export const CalculationSettingsManagement: React.FC = () => {
         </View>
 
         {/* Right Column: Live Output & Par Score Widget */}
-        <View style={styles.resultsCard}>
+        <View style={[styles.resultsCard, isMobile && { minWidth: '100%', padding: 14 }]}>
           <View style={styles.resultsHeader}>
             <Text style={styles.sectionHeading}>📊 Target & Par Score Arbitrament</Text>
             <View style={styles.methodActiveBadge}>
@@ -309,14 +313,14 @@ export const CalculationSettingsManagement: React.FC = () => {
           </View>
 
           {/* Big Target & Par Score Box */}
-          <View style={styles.scoreHeroBox}>
+          <View style={[styles.scoreHeroBox, isMobile && { flexDirection: 'column', gap: 12 }]}>
             <View style={styles.scoreHeroItem}>
               <Text style={styles.scoreHeroLabel}>Revised Target</Text>
               <Text style={styles.scoreHeroValue}>{calculationResults.targetRuns}</Text>
               <Text style={styles.scoreHeroSub}>Runs from {team2TargetOvers} Overs</Text>
             </View>
 
-            <View style={styles.heroDivider} />
+            <View style={[styles.heroDivider, isMobile && { width: '100%', height: 1, marginVertical: 6 }]} />
 
             <View style={styles.scoreHeroItem}>
               <Text style={styles.scoreHeroLabel}>Current DLS Par Score</Text>
@@ -333,19 +337,19 @@ export const CalculationSettingsManagement: React.FC = () => {
 
           {/* Pressure Metrics */}
           <View style={styles.metricsGrid}>
-            <View style={styles.metricItem}>
+            <View style={[styles.metricItem, isMobile && { minWidth: '45%' }]}>
               <Text style={styles.metricLabel}>Required Run Rate (RRR)</Text>
               <Text style={styles.metricValue}>{calculationResults.rrr}</Text>
             </View>
-            <View style={styles.metricItem}>
+            <View style={[styles.metricItem, isMobile && { minWidth: '45%' }]}>
               <Text style={styles.metricLabel}>Current Run Rate (CRR)</Text>
               <Text style={styles.metricValue}>{calculationResults.crr}</Text>
             </View>
-            <View style={styles.metricItem}>
+            <View style={[styles.metricItem, isMobile && { minWidth: '45%' }]}>
               <Text style={styles.metricLabel}>Runs Needed</Text>
               <Text style={styles.metricValue}>{calculationResults.runsNeeded}</Text>
             </View>
-            <View style={styles.metricItem}>
+            <View style={[styles.metricItem, isMobile && { minWidth: '45%' }]}>
               <Text style={styles.metricLabel}>Balls Remaining</Text>
               <Text style={styles.metricValue}>{calculationResults.ballsRemaining}</Text>
             </View>

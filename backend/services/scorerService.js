@@ -170,7 +170,7 @@ class ScorerService {
           { assigned_scorer_id: null },
           { assigned_scorer_id: '' },
           { assigned_scorer_id: 'Unassigned' },
-          { status: { $in: ['SCHEDULED', 'LIVE', 'INNINGS_BREAK', 'Scheduled', 'Live'] } }
+          { status: { $in: ['SCHEDULED', 'LIVE', 'INNINGS_BREAK', 'Scheduled', 'Live', 'POSTPONED'] } }
         ]
       };
     }
@@ -181,12 +181,14 @@ class ScorerService {
     let liveCount = 0;
     let upcomingCount = 0;
     let completedCount = 0;
+    let postponedCount = 0;
 
     const formattedMatches = await Promise.all(allMatches.map(async (m) => {
       const statusUpper = (m.status || 'SCHEDULED').toUpperCase();
       if (statusUpper === 'LIVE' || statusUpper === 'INNINGS_BREAK') liveCount++;
       else if (statusUpper === 'SCHEDULED') upcomingCount++;
       else if (statusUpper === 'COMPLETED') completedCount++;
+      else if (statusUpper === 'POSTPONED') postponedCount++;
 
       const teamA = teamMap[m.team_a_id] || { name: m.team_a_id, short_name: 'TMA' };
       const teamB = teamMap[m.team_b_id] || { name: m.team_b_id, short_name: 'TMB' };
@@ -207,6 +209,7 @@ class ScorerService {
       const isLive = statusUpper === 'LIVE' || statusUpper === 'INNINGS_BREAK';
       const isCompleted = statusUpper === 'COMPLETED';
       const isCancelled = statusUpper === 'CANCELLED' || statusUpper === 'ABANDONED';
+      const isPostponed = statusUpper === 'POSTPONED';
 
       return {
         id: m.id,
@@ -225,11 +228,26 @@ class ScorerService {
         format: m.match_type || 'T20',
         overs: m.overs_per_side || 20,
         rawStatus: statusUpper,
-        status: isLive ? 'Live' : (isCompleted ? 'Completed' : (isCancelled ? 'Cancelled' : 'Upcoming')),
+        status: isLive ? 'Live' : (isCompleted ? 'Completed' : (isCancelled ? 'Cancelled' : (isPostponed ? 'Postponed' : 'Upcoming'))),
+        isPostponed,
+        postponement: m.postponement || null,
+        postponementReason: m.postponement?.reason || null,
+        originalDate: m.postponement?.original_date || m.match_date,
+        originalTime: m.postponement?.original_time || m.match_time,
+        rescheduledDate: m.postponement?.rescheduled_date || null,
+        rescheduledTime: m.postponement?.rescheduled_time || null,
+        umpire_postponement_request: m.umpire_postponement_request || null,
+        postponement_history: m.postponement_history || [],
         scoreA,
         scoreB: scoreB || (isLive ? 'Yet to bat' : null),
         result: m.result_summary,
-        assigned_scorer_id: m.assigned_scorer_id,
+        assigned_scorer_id: m.assigned_scorer_id || 'SCR-101',
+        assigned_scorer: m.assigned_scorer || (m.assigned_scorer_id === 'OFF-02' ? 'K. Murugan' : (m.assigned_scorer_id === 'OFF-01' ? 'S. Ramesh' : 'Athi Lingam')),
+        umpire1_id: m.umpire1_id || 'UMP-101',
+        umpire2_id: m.umpire2_id || 'UMP-102',
+        umpire1_name: m.umpire1_name || 'Thiru. K. Sundaram',
+        umpire2_name: m.umpire2_name || 'Thiru. M. Ramanathan',
+        stage: m.stage || 'LEAGUE',
         currentBreak: m.current_break || null,
         statusComment: m.status_comment || '',
         breaks: m.breaks || []
@@ -240,6 +258,7 @@ class ScorerService {
       liveMatches: liveCount,
       upcomingMatches: upcomingCount,
       completedMatches: completedCount,
+      postponedMatches: postponedCount,
       assignedMatches: formattedMatches.length,
       matches: formattedMatches
     };
@@ -372,7 +391,7 @@ class ScorerService {
     // Recent deliveries
     const deliveries = await db.models.Delivery.find({
       $or: [{ match_id: matchId }, { innings_id: currentInnings.id }]
-    }).sort({ timestamp: -1, created_at: -1 }).limit(16).lean();
+    }).sort({ timestamp: -1, created_at: -1 }).limit(24).lean();
 
     const lastDelivery = deliveries && deliveries[0];
 
@@ -452,6 +471,7 @@ class ScorerService {
         isSuperOver: Boolean(match.is_super_over),
         status: match.status,
         result: match.result_summary,
+        playerOfTheMatch: match.player_of_the_match || match.man_of_the_match || match.player_of_match || null,
         teamAId: match.team_a_id,
         teamBId: match.team_b_id,
         teamA: teamA.name || match.team_a_id,
@@ -488,7 +508,8 @@ class ScorerService {
         balls: striker ? striker.balls || 0 : 0,
         fours: striker ? striker.fours || 0 : 0,
         sixes: striker ? striker.sixes || 0 : 0,
-        strikeRate: striker ? striker.strike_rate || 0 : 0
+        strikeRate: striker ? striker.strike_rate || 0 : 0,
+        battingHand: ((playerMap[striker?.player_id]?.batting_style || playerMap[striker?.player_id]?.batting_hand || '').toUpperCase().includes('LEFT')) ? 'LEFT' : 'RIGHT'
       },
       nonStriker: {
         id: nonStriker ? nonStriker.player_id : null,
@@ -497,7 +518,8 @@ class ScorerService {
         balls: nonStriker ? nonStriker.balls || 0 : 0,
         fours: nonStriker ? nonStriker.fours || 0 : 0,
         sixes: nonStriker ? nonStriker.sixes || 0 : 0,
-        strikeRate: nonStriker ? nonStriker.strike_rate || 0 : 0
+        strikeRate: nonStriker ? nonStriker.strike_rate || 0 : 0,
+        battingHand: ((playerMap[nonStriker?.player_id]?.batting_style || playerMap[nonStriker?.player_id]?.batting_hand || '').toUpperCase().includes('LEFT')) ? 'LEFT' : 'RIGHT'
       },
       bowler: {
         id: currentBowler ? currentBowler.player_id : null,
@@ -523,13 +545,20 @@ class ScorerService {
         fielderName: lastDelivery.fielder_name,
         commentary: lastDelivery.commentary
       } : null,
-      recentDeliveries: (deliveries || []).slice(0, 8).map(d => ({
-        id: d.id,
+      recentDeliveries: (deliveries || []).slice(0, 24).map(d => ({
+        id: d.id || d._id?.toString(),
         ball: `${d.over_number}.${d.ball_number}`,
+        overNumber: d.over_number,
+        ballNumber: d.ball_number,
         runs: d.runs_batter,
+        runsBatter: d.runs_batter,
+        runsExtras: d.runs_extras || 0,
         extra: d.extra_type !== 'NONE' ? d.extra_type : null,
-        wicket: d.wicket,
+        extraType: d.extra_type,
+        wicket: Boolean(d.wicket),
         wicketType: d.wicket_type,
+        strikerId: d.striker_id,
+        bowlerId: d.bowler_id,
         text: d.wicket ? 'W' : (d.extra_type === 'WIDE' ? 'WD' : (d.extra_type === 'NO_BALL' ? 'NB' : d.runs_batter)),
         dismissalText: d.dismissal_text,
         commentary: d.commentary
@@ -717,6 +746,8 @@ class ScorerService {
         shotAngle: d.shot_angle,
         shotDistance: d.shot_distance,
         shotZone: d.shot_zone,
+        shotX: d.shot_x,
+        shotY: d.shot_y,
         overNumber: d.over_number,
         ballNumber: d.ball_number,
         commentary: d.commentary

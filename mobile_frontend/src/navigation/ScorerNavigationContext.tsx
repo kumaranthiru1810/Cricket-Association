@@ -1,6 +1,6 @@
 import React, { createContext, useContext } from 'react';
 
-export type ScreenName = 'Auth' | 'Dashboard' | 'MatchSetup' | 'LiveScoring' | 'Scorecard';
+export type ScreenName = 'Auth' | 'Dashboard' | 'MatchSetup' | 'LiveScoring' | 'Scorecard' | 'MilestoneGallery';
 
 export interface ScorerNavigationContextType {
   currentScreen: ScreenName;

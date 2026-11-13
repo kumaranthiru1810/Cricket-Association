@@ -43,6 +43,9 @@ const getBaseUrl = () => {
     if (host && host !== 'localhost' && host !== '127.0.0.1' && !host.startsWith('192.168.') && !host.startsWith('10.')) {
       return `${PROD_BACKEND_URL}/api`;
     }
+    if (host) {
+      return `http://${host}:5000/api`;
+    }
   }
   return `http://${getBackendHost()}:5000/api`;
 };
@@ -55,6 +58,9 @@ const getSocketUrl = () => {
     const host = window.location.hostname;
     if (host && host !== 'localhost' && host !== '127.0.0.1' && !host.startsWith('192.168.') && !host.startsWith('10.')) {
       return PROD_BACKEND_URL;
+    }
+    if (host) {
+      return `http://${host}:5000`;
     }
   }
   return `http://${getBackendHost()}:5000`;
@@ -105,6 +111,32 @@ token = getAuthToken();
 currentUser = getCurrentUser();
 
 let currentSocket: Socket | null = null;
+
+export const logoutAndClearAllSessions = async () => {
+  try {
+    await request('/auth/logout', { method: 'POST' });
+  } catch (_e) {}
+  setAuthToken(null);
+  setCurrentUser(null);
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('team_token');
+      localStorage.removeItem('cfvd_admin_token');
+      sessionStorage.removeItem('cfvd_admin_token');
+      localStorage.removeItem('auth_user');
+      localStorage.removeItem('cfvd_admin_user');
+      sessionStorage.removeItem('cfvd_admin_user');
+      localStorage.removeItem('team_session');
+      localStorage.removeItem('cfvd_last_scorer_screen');
+      localStorage.removeItem('cfvd_last_scorer_match_id');
+      localStorage.removeItem('cfvd_last_scorecard_match_id');
+      localStorage.removeItem('cfvd_player_active_tab');
+      localStorage.removeItem('cfvd_team_active_tab');
+      localStorage.setItem('cfvd_last_app_screen', 'Home');
+    } catch (_e) {}
+  }
+};
 
 export const setAuthToken = (newToken: string | null, role?: string) => {
   token = newToken;
@@ -253,6 +285,89 @@ async function request(endpoint: string, options: RequestInit = {}) {
   }
 }
 
+// ==========================================
+// OFFLINE QUEUE MANAGER (MCC / Rural Ground Resilience)
+// ==========================================
+const OFFLINE_QUEUE_KEY = 'cfvd_offline_delivery_queue';
+let memoryOfflineQueue: Array<{ id: string; matchId: string; delivery: any; timestamp: number }> = [];
+
+export const OfflineQueue = {
+  getQueue: (): Array<{ id: string; matchId: string; delivery: any; timestamp: number }> => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const raw = window.localStorage.getItem(OFFLINE_QUEUE_KEY);
+        return raw ? JSON.parse(raw) : [];
+      }
+    } catch (_e) {}
+    return memoryOfflineQueue;
+  },
+  enqueue: (matchId: string, delivery: any) => {
+    try {
+      const q = OfflineQueue.getQueue();
+      const item = {
+        id: `offline_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        matchId,
+        delivery,
+        timestamp: Date.now()
+      };
+      q.push(item);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(q));
+      } else {
+        memoryOfflineQueue = q;
+      }
+      return item;
+    } catch (_e) {
+      return null;
+    }
+  },
+  clear: () => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(OFFLINE_QUEUE_KEY);
+      }
+      memoryOfflineQueue = [];
+    } catch (_e) {}
+  },
+  remove: (id: string) => {
+    try {
+      const q = OfflineQueue.getQueue().filter(item => item.id !== id);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(q));
+      } else {
+        memoryOfflineQueue = q;
+      }
+    } catch (_e) {}
+  },
+  sync: async (): Promise<{ synced: number; remaining: number }> => {
+    const q = OfflineQueue.getQueue();
+    if (q.length === 0) return { synced: 0, remaining: 0 };
+    let synced = 0;
+    for (const item of q) {
+      try {
+        const res = await request(`/scorer/matches/${item.matchId}/deliveries`, {
+          method: 'POST',
+          body: JSON.stringify(item.delivery)
+        });
+        if (res && (res.success || res.status === 'success' || res.data)) {
+          synced++;
+          OfflineQueue.remove(item.id);
+        }
+      } catch (_e) {
+        break; // Stop syncing to preserve order if still failing
+      }
+    }
+    return { synced, remaining: OfflineQueue.getQueue().length };
+  }
+};
+
+// Auto-sync whenever online connectivity resumes
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener('online', () => {
+    OfflineQueue.sync().catch(() => {});
+  });
+}
+
 export const ScorerApi = {
   // --- REAL AUTHENTICATION & PASSWORD APIs ---
   getMe: async () => {
@@ -265,11 +380,7 @@ export const ScorerApi = {
   },
 
   logout: async () => {
-    try {
-      await request('/auth/logout', { method: 'POST' });
-    } catch (_e) {}
-    setAuthToken(null);
-    setCurrentUser(null);
+    await logoutAndClearAllSessions();
     return { success: true };
   },
 
@@ -286,10 +397,24 @@ export const ScorerApi = {
     return currentUser;
   },
 
-  sendRegistrationOtp: async (email: string, name?: string, role?: string) => {
+  checkRegistrationExists: async (params: { role?: string; email?: string; name?: string; teamName?: string }) => {
+    return request('/auth/check-registration-exists', {
+      method: 'POST',
+      body: JSON.stringify(params)
+    });
+  },
+
+  checkTeamExists: async (teamName?: string, coachEmail?: string) => {
+    return request('/auth/check-team-exists', {
+      method: 'POST',
+      body: JSON.stringify({ role: 'TEAM', teamName, coachEmail, email: coachEmail })
+    });
+  },
+
+  sendRegistrationOtp: async (email: string, name?: string, role?: string, teamName?: string) => {
     return request('/auth/send-registration-otp', {
       method: 'POST',
-      body: JSON.stringify({ email, name, role })
+      body: JSON.stringify({ email, name, role, teamName })
     });
   },
 
@@ -336,6 +461,14 @@ export const ScorerApi = {
     });
   },
 
+
+  // Find Player's Team by Email & Send to Player's Email
+  findPlayerTeam: async (email: string) => {
+    return request('/auth/player/find-team', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    });
+  },
 
   requestOtp: async (email: string, role?: string) => {
     return request('/auth/request-otp', {
@@ -702,6 +835,31 @@ export const ScorerApi = {
     });
   },
 
+  postponeMatch: async (matchId: string, reason: string) => {
+    return request(`/admin/matches/${matchId}/postpone`, {
+      method: 'POST',
+      body: JSON.stringify({ reason })
+    });
+  },
+
+  rescheduleMatch: async (matchId: string, newDate: string, newTime: string, reason?: string) => {
+    return request(`/admin/matches/${matchId}/reschedule`, {
+      method: 'POST',
+      body: JSON.stringify({ newDate, newTime, reason })
+    });
+  },
+
+  getPostponementRequests: async () => {
+    return request('/admin/matches/postponement-requests');
+  },
+
+  reviewPostponementRequest: async (matchId: string, decision: 'APPROVE' | 'REJECT', reviewNotes?: string) => {
+    return request(`/admin/matches/${matchId}/postponement-requests/review`, {
+      method: 'POST',
+      body: JSON.stringify({ decision, reviewNotes })
+    });
+  },
+
   deleteMatch: async (matchId: string) => {
     return request(`/admin/matches/${matchId}`, {
       method: 'DELETE'
@@ -892,10 +1050,46 @@ export const ScorerApi = {
   },
 
   recordDelivery: async (matchId: string, delivery: any) => {
-    return request(`/scorer/matches/${matchId}/deliveries`, {
-      method: 'POST',
-      body: JSON.stringify(delivery)
-    });
+    const isOnline = typeof window !== 'undefined' && typeof window.navigator !== 'undefined' ? window.navigator.onLine : true;
+    if (!isOnline) {
+      OfflineQueue.enqueue(matchId, delivery);
+      return {
+        success: true,
+        offlineQueued: true,
+        message: 'Network offline. Delivery saved to local queue and will sync automatically.',
+        queueCount: OfflineQueue.getQueue().length
+      };
+    }
+    try {
+      return await request(`/scorer/matches/${matchId}/deliveries`, {
+        method: 'POST',
+        body: JSON.stringify(delivery)
+      });
+    } catch (err: any) {
+      if (
+        (typeof window !== 'undefined' && !window.navigator?.onLine) ||
+        err?.message?.includes('Network') ||
+        err?.message?.includes('Failed to fetch') ||
+        err?.message?.includes('Network request failed')
+      ) {
+        OfflineQueue.enqueue(matchId, delivery);
+        return {
+          success: true,
+          offlineQueued: true,
+          message: 'Connection dropped. Delivery queued offline.',
+          queueCount: OfflineQueue.getQueue().length
+        };
+      }
+      throw err;
+    }
+  },
+
+  syncOfflineDeliveries: async () => {
+    return await OfflineQueue.sync();
+  },
+
+  getOfflineQueueCount: () => {
+    return OfflineQueue.getQueue().length;
   },
 
   undoDelivery: async (matchId: string) => {
@@ -1219,6 +1413,27 @@ export const PlayerApi = {
     return request('/player/notifications');
   },
 
+  getCareerRatings: async (playerId?: string) => {
+    return request(playerId ? `/players/${playerId}/career-ratings` : '/player/career-ratings');
+  },
+
+  getPlayerForm: async (playerId?: string, matches: number = 5) => {
+    return request(playerId ? `/players/${playerId}/form?matches=${matches}` : `/player/form?matches=${matches}`);
+  },
+
+  getPlayerRatings: async (playerId?: string) => {
+    return request(playerId ? `/players/${playerId}/ratings` : '/player/ratings');
+  },
+
+  getRatingsLeaderboard: async (params?: { category?: string; format?: string; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.category) query.append('category', params.category);
+    if (params?.format) query.append('format', params.format);
+    if (params?.limit) query.append('limit', String(params.limit));
+    const qs = query.toString();
+    return request(`/players/leaderboards/ratings${qs ? `?${qs}` : ''}`);
+  },
+
   logout: async () => {
     return ScorerApi.logout();
   }
@@ -1384,6 +1599,16 @@ export const UmpireApi = {
     });
   },
 
+  requestPostponement: async (matchId: string, reasonOrPayload: string | { reason: string; notes?: string }, notes?: string) => {
+    const bodyObj = typeof reasonOrPayload === 'string'
+      ? { reason: reasonOrPayload, notes }
+      : reasonOrPayload;
+    return request(`/umpire/matches/${matchId}/request-postponement`, {
+      method: 'POST',
+      body: JSON.stringify(bodyObj)
+    });
+  },
+
   // --- UMPIRE DECISIONS ---
   recordDecision: async (
     matchId: string,
@@ -1424,6 +1649,25 @@ export const UmpireApi = {
   logout: async () => {
     return ScorerApi.logout();
   }
+};
+
+export const fetchMasterSettings = async (category?: string) => {
+  const query = category ? `?category=${encodeURIComponent(category)}` : '';
+  try {
+    const res = await request(`/master-settings${query}`);
+    if (res && (res.success || Array.isArray(res) || Array.isArray(res.data) || res.grouped)) {
+      return res;
+    }
+  } catch (err) {}
+
+  try {
+    const adminRes = await request(`/admin/master-settings${query}`);
+    if (adminRes && (adminRes.success || Array.isArray(adminRes) || Array.isArray(adminRes.data) || adminRes.grouped)) {
+      return adminRes;
+    }
+  } catch (adminErr) {}
+
+  return { success: false, data: [], grouped: {} };
 };
 
 export const authService = ScorerApi;

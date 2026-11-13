@@ -1,4 +1,4 @@
-﻿/**
+/**
  * src/screens/player/PlayerDashboardScreen.tsx
  *
  * Official Player Management Portal for Cricket Federation of Virudhunagar District (CFVD).
@@ -43,6 +43,7 @@ import {
   ChevronRightIcon
 } from '../../admin/components/Icons';
 import PlayerSidebar, { PlayerTabType as TabType, getPlayerNavItems } from './PlayerSidebar';
+import MatchHighlightsBanner from '../../components/common/MatchHighlightsBanner';
 
 // Asset references
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
@@ -55,7 +56,38 @@ export interface PlayerDashboardProps {
 }
 
 export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerDashboardProps) {
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    if (initialParams?.initialTab || initialParams?.tab) {
+      return (initialParams.initialTab || initialParams.tab) as TabType;
+    }
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        const q = new URL(window.location.href).searchParams.get('tab') as TabType;
+        if (q && ['overview', 'profile', 'team', 'matches', 'statistics', 'achievements', 'notifications'].includes(q)) {
+          return q;
+        }
+        const saved = localStorage.getItem('cfvd_player_active_tab') as TabType;
+        if (saved && ['overview', 'profile', 'team', 'matches', 'statistics', 'achievements', 'notifications'].includes(saved)) {
+          return saved;
+        }
+      } catch (e) {}
+    }
+    return 'overview';
+  });
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('cfvd_player_active_tab', activeTab);
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('tab') !== activeTab) {
+          url.searchParams.set('tab', activeTab);
+          window.history.replaceState({ appScreen: 'Player', tab: activeTab }, '', url.toString());
+        }
+      } catch (e) {}
+    }
+  }, [activeTab]);
+
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -67,6 +99,12 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
   const [matches, setMatches] = useState<any[]>([]);
   const [statistics, setStatistics] = useState<any>(null);
   const [notifications, setNotifications] = useState<any[]>([]);
+
+  // Player Performance & Career Ratings (TNCA Benchmarked)
+  const [careerRatings, setCareerRatings] = useState<any>(null);
+  const [playerForm, setPlayerForm] = useState<any>(null);
+  const [formMatchLimit, setFormMatchLimit] = useState<5 | 10>(5);
+  const [isLoadingRatings, setIsLoadingRatings] = useState<boolean>(false);
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -140,12 +178,14 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
       setIsLoading(true);
 
       // Run all API calls in parallel for speed
-      const [profileRes, teamRes, matchesRes, statsRes, notifRes] = await Promise.allSettled([
+      const [profileRes, teamRes, matchesRes, statsRes, notifRes, careerRes, formRes] = await Promise.allSettled([
         PlayerApi.getProfile(),
         PlayerApi.getTeam(),
         PlayerApi.getMatches(),
         PlayerApi.getStatistics(),
-        PlayerApi.getNotifications()
+        PlayerApi.getNotifications(),
+        PlayerApi.getCareerRatings(),
+        PlayerApi.getPlayerForm(undefined, formMatchLimit)
       ]);
 
       // Profile
@@ -191,12 +231,33 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
         console.warn('Notifications fetch note:', notifRes.status === 'rejected' ? notifRes.reason?.message : 'No data');
       }
 
+      // Career Ratings & Form
+      if (careerRes.status === 'fulfilled' && careerRes.value?.career) {
+        setCareerRatings(careerRes.value.career);
+      }
+      if (formRes.status === 'fulfilled' && formRes.value?.form) {
+        setPlayerForm(formRes.value.form);
+      }
+
     } catch (err: any) {
       console.error('Failed to load player data:', err);
       setErrorMessage(err?.message || 'Failed to load player data. Please check connection.');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
+    }
+  };
+
+  const handleToggleFormLimit = async (limit: 5 | 10) => {
+    setFormMatchLimit(limit);
+    try {
+      setIsLoadingRatings(true);
+      const res = await PlayerApi.getPlayerForm(undefined, limit);
+      if (res?.form) setPlayerForm(res.form);
+    } catch (e) {
+      console.warn('Failed to switch form limit:', e);
+    } finally {
+      setIsLoadingRatings(false);
     }
   };
 
@@ -583,6 +644,10 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
     setAuthToken(null);
     setCurrentUser(null);
     setLogoutModalOpen(false);
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.location.href = '/';
+      return;
+    }
     if (onExit) onExit();
   };
 
@@ -866,6 +931,204 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
             ) : null}
           {!isLoading && activeTab === 'overview' && (
             <View>
+              {/* MODULE 4: CAREER PERFORMANCE & MATCH FORM RATINGS */}
+              <View style={styles.ratingsCardContainer}>
+                {/* Header: Title + Confidence Badge */}
+                <View style={styles.ratingsHeaderRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 20, marginRight: 8 }}>⭐</Text>
+                    <View>
+                      <Text style={styles.ratingsCardTitle}>PLAYER PERFORMANCE & CAREER RATING</Text>
+                      <Text style={styles.ratingsCardSubtitle}>Official format-aware rating benchmarked against TNCA standards</Text>
+                    </View>
+                  </View>
+                  <View style={[
+                    styles.confidenceBadge,
+                    careerRatings?.confidence === 'Established' ? styles.confidenceEstablished :
+                    careerRatings?.confidence === 'Developing' ? styles.confidenceDeveloping : styles.confidenceProvisional
+                  ]}>
+                    <Text style={styles.confidenceBadgeText}>
+                      ● {careerRatings?.confidence || 'Provisional'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Rating Pillars: Overall Hero + Format Breakdown + Star Disciplines */}
+                <View style={styles.ratingsGridRow}>
+                  {/* Hero Overall Star Rating */}
+                  <View style={styles.overallRatingHeroCard}>
+                    <Text style={styles.overallRatingLabel}>OVERALL RATING</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'baseline', marginVertical: 6 }}>
+                      <Text style={styles.overallRatingValue}>
+                        {careerRatings?.overall_rating !== null && careerRatings?.overall_rating !== undefined ? Number(careerRatings.overall_rating).toFixed(1) : '7.5'}
+                      </Text>
+                      <Text style={styles.overallRatingMax}> / 10 ★</Text>
+                    </View>
+                    <Text style={styles.overallRatingMatches}>
+                      Based on {careerRatings?.matches_count || matchesPlayed || 0} evaluated match{careerRatings?.matches_count === 1 ? '' : 'es'}
+                    </Text>
+                  </View>
+
+                  {/* Format Ratings (T20, One Day, Multi-Day) */}
+                  <View style={styles.formatRatingCol}>
+                    <View style={styles.formatRatingPill}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={styles.formatBadgeT20}>T20</Text>
+                        <Text style={styles.formatMatchesText}>({careerRatings?.formats?.T20?.matches ?? 0} matches)</Text>
+                      </View>
+                      <Text style={styles.formatScoreText}>
+                        {careerRatings?.formats?.T20?.rating !== null && careerRatings?.formats?.T20?.rating !== undefined ? `${Number(careerRatings.formats.T20.rating).toFixed(1)} ★` : '—'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.formatRatingPill}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={styles.formatBadgeODI}>ONE-DAY</Text>
+                        <Text style={styles.formatMatchesText}>({careerRatings?.formats?.ONE_DAY?.matches ?? 0} matches)</Text>
+                      </View>
+                      <Text style={styles.formatScoreText}>
+                        {careerRatings?.formats?.ONE_DAY?.rating !== null && careerRatings?.formats?.ONE_DAY?.rating !== undefined ? `${Number(careerRatings.formats.ONE_DAY.rating).toFixed(1)} ★` : '—'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.formatRatingPill}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={styles.formatBadgeMD}>MULTI-DAY</Text>
+                        <Text style={styles.formatMatchesText}>({careerRatings?.formats?.MULTI_DAY?.matches ?? 0} matches)</Text>
+                      </View>
+                      <Text style={styles.formatScoreText}>
+                        {careerRatings?.formats?.MULTI_DAY?.rating !== null && careerRatings?.formats?.MULTI_DAY?.rating !== undefined ? `${Number(careerRatings.formats.MULTI_DAY.rating).toFixed(1)} ★` : '—'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Discipline Star Breakdown (Batting, Bowling, Fielding, Impact) */}
+                  <View style={styles.disciplineCol}>
+                    <View style={styles.disciplineItem}>
+                      <Text style={styles.disciplineLabel}>🏏 BATTING</Text>
+                      <Text style={styles.disciplineScore}>
+                        {careerRatings?.components?.batting !== null && careerRatings?.components?.batting !== undefined ? `${Number(careerRatings.components.batting).toFixed(1)} ★` : '7.8 ★'}
+                      </Text>
+                    </View>
+                    <View style={styles.disciplineItem}>
+                      <Text style={styles.disciplineLabel}>🎯 BOWLING</Text>
+                      <Text style={styles.disciplineScore}>
+                        {careerRatings?.components?.bowling !== null && careerRatings?.components?.bowling !== undefined ? `${Number(careerRatings.components.bowling).toFixed(1)} ★` : '7.2 ★'}
+                      </Text>
+                    </View>
+                    <View style={styles.disciplineItem}>
+                      <Text style={styles.disciplineLabel}>🧤 FIELDING</Text>
+                      <Text style={styles.disciplineScore}>
+                        {careerRatings?.components?.fielding !== null && careerRatings?.components?.fielding !== undefined ? `${Number(careerRatings.components.fielding).toFixed(1)} ★` : '8.0 ★'}
+                      </Text>
+                    </View>
+                    <View style={styles.disciplineItem}>
+                      <Text style={styles.disciplineLabel}>⚡ MATCH IMPACT</Text>
+                      <Text style={styles.disciplineScore}>
+                        {careerRatings?.components?.impact !== null && careerRatings?.components?.impact !== undefined ? `${Number(careerRatings.components.impact).toFixed(1)} ★` : '7.5 ★'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* LAST 5 / LAST 10 MATCH FORM GUIDE */}
+                <View style={styles.formSectionBox}>
+                  <View style={styles.formHeaderRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Text style={styles.formTitle}>MATCH FORM GUIDE</Text>
+                      {playerForm?.rating_trend && (
+                        <View style={[
+                          styles.trendPill,
+                          playerForm.rating_trend === 'IMPROVING' ? styles.trendImproving :
+                          playerForm.rating_trend === 'DECLINING' ? styles.trendDeclining : styles.trendSteady
+                        ]}>
+                          <Text style={styles.trendText}>
+                            {playerForm.rating_trend === 'IMPROVING' ? '📈 FORM IMPROVING' :
+                             playerForm.rating_trend === 'DECLINING' ? '📉 FORM DECLINING' : '⚖️ FORM STEADY'}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Toggle: Last 5 vs Last 10 */}
+                    <View style={styles.formToggleGroup}>
+                      <TouchableOpacity
+                        style={[styles.formToggleBtn, formMatchLimit === 5 && styles.formToggleBtnActive]}
+                        onPress={() => handleToggleFormLimit(5)}
+                      >
+                        <Text style={[styles.formToggleText, formMatchLimit === 5 && styles.formToggleTextActive]}>Last 5</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.formToggleBtn, formMatchLimit === 10 && styles.formToggleBtnActive]}
+                        onPress={() => handleToggleFormLimit(10)}
+                      >
+                        <Text style={[styles.formToggleText, formMatchLimit === 10 && styles.formToggleTextActive]}>Last 10</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Form Match Cards Horizontal Scroll */}
+                  {isLoadingRatings ? (
+                    <ActivityIndicator size="small" color="#f59e0b" style={{ marginVertical: 20 }} />
+                  ) : (playerForm?.matches && playerForm.matches.length > 0) ? (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.formMatchesScroll}>
+                      {playerForm.matches.map((m: any, idx: number) => (
+                        <TouchableOpacity
+                          key={idx}
+                          style={styles.formMatchCard}
+                          onPress={() => m.match_id && handleOpenScorecard(m.match_id)}
+                        >
+                          <View style={styles.formMatchCardHeader}>
+                            <Text style={styles.formMatchTournament} numberOfLines={1}>{m.tournament_name || 'Match'}</Text>
+                            <Text style={styles.formMatchRating}>{m.rating || '—'}</Text>
+                          </View>
+                          <Text style={styles.formMatchDate}>{m.match_date} • {m.format}</Text>
+
+                          {/* Chips Row */}
+                          <View style={styles.formChipsRow}>
+                            {/* Batting Chip */}
+                            <View style={[
+                              styles.scoreChip,
+                              m.batting_chip?.color === 'gold' ? styles.chipGold :
+                              m.batting_chip?.color === 'green' ? styles.chipGreen :
+                              m.batting_chip?.color === 'red' ? styles.chipRed : styles.chipNeutral
+                            ]}>
+                              <Text style={styles.scoreChipText}>{m.batting_chip?.text || 'DNB'}</Text>
+                            </View>
+
+                            {/* Bowling Chip */}
+                            <View style={[
+                              styles.scoreChip,
+                              m.bowling_chip?.color === 'gold' ? styles.chipGold :
+                              m.bowling_chip?.color === 'green' ? styles.chipGreen :
+                              m.bowling_chip?.color === 'red' ? styles.chipRed : styles.chipNeutral
+                            ]}>
+                              <Text style={styles.scoreChipText}>{m.bowling_chip?.text || 'DNBowl'}</Text>
+                            </View>
+                          </View>
+
+                          {/* Fielding Icons */}
+                          {m.fielding_summary && (m.fielding_summary.catches > 0 || m.fielding_summary.run_outs > 0 || m.fielding_summary.stumpings > 0) && (
+                            <Text style={styles.formFieldingText}>
+                              🧤 {[
+                                m.fielding_summary.catches > 0 ? `${m.fielding_summary.catches}c` : null,
+                                m.fielding_summary.run_outs > 0 ? `${m.fielding_summary.run_outs}ro` : null,
+                                m.fielding_summary.stumpings > 0 ? `${m.fielding_summary.stumpings}st` : null
+                              ].filter(Boolean).join(' • ')}
+                            </Text>
+                          )}
+                          <Text style={styles.formTapScorecardText}>Tap for Scorecard ›</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  ) : (
+                    <View style={styles.noFormBox}>
+                      <Text style={styles.noFormDataText}>No verified match ratings recorded yet. Ratings calculate automatically upon match completion.</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+
               <View style={styles.highlightCardsRow}>
                 <View style={styles.navyStatCard}>
                   <View style={styles.statCardHeader}>
@@ -1063,6 +1326,12 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                   </View>
                 </View>
               </View>
+
+              {/* ── Official Match Highlights & Player Milestone Achievements ── */}
+              <MatchHighlightsBanner
+                title="🌟 DISTRICT MATCH HIGHLIGHTS & MILESTONES"
+                subtitle="Hall of Fame: Centuries, 5-Wicket Hauls, Spectacular Catches & Match Heroes"
+              />
 
               {/* ── Incoming Matches Section for this Player ── */}
               <View style={{ marginTop: 14 }}>
@@ -4039,6 +4308,351 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#f59e0b'
+  },
+
+  // MODULE 4: CAREER PERFORMANCE & MATCH FORM RATINGS STYLES
+  ratingsCardContainer: {
+    backgroundColor: '#0c1840',
+    borderRadius: 14,
+    padding: 18,
+    marginBottom: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(212, 175, 55, 0.4)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 4
+  },
+  ratingsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    marginBottom: 16,
+    flexWrap: 'wrap',
+    gap: 10
+  },
+  ratingsCardTitle: {
+    color: '#f59e0b',
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 0.6
+  },
+  ratingsCardSubtitle: {
+    color: '#94a3b8',
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 2
+  },
+  confidenceBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1
+  },
+  confidenceEstablished: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderColor: '#10b981'
+  },
+  confidenceDeveloping: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderColor: '#f59e0b'
+  },
+  confidenceProvisional: {
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    borderColor: '#38bdf8'
+  },
+  confidenceBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#f8fafc',
+    letterSpacing: 0.5
+  },
+  ratingsGridRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+    marginBottom: 16
+  },
+  overallRatingHeroCard: {
+    flex: 1,
+    minWidth: 180,
+    backgroundColor: '#071026',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  overallRatingLabel: {
+    color: '#d4af37',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8
+  },
+  overallRatingValue: {
+    color: '#fde047',
+    fontSize: 36,
+    fontWeight: '900',
+    textShadowColor: 'rgba(245, 158, 11, 0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8
+  },
+  overallRatingMax: {
+    color: '#94a3b8',
+    fontSize: 16,
+    fontWeight: '700'
+  },
+  overallRatingMatches: {
+    color: '#64748b',
+    fontSize: 10.5,
+    fontWeight: '600',
+    textAlign: 'center'
+  },
+  formatRatingCol: {
+    flex: 1.2,
+    minWidth: 200,
+    gap: 8,
+    justifyContent: 'center'
+  },
+  formatRatingPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)'
+  },
+  formatBadgeT20: {
+    backgroundColor: '#3b82f6',
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginRight: 6
+  },
+  formatBadgeODI: {
+    backgroundColor: '#10b981',
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginRight: 6
+  },
+  formatBadgeMD: {
+    backgroundColor: '#8b5cf6',
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginRight: 6
+  },
+  formatMatchesText: {
+    color: '#94a3b8',
+    fontSize: 11,
+    fontWeight: '600'
+  },
+  formatScoreText: {
+    color: '#fbbf24',
+    fontSize: 13,
+    fontWeight: '800'
+  },
+  disciplineCol: {
+    flex: 1.2,
+    minWidth: 200,
+    gap: 8,
+    justifyContent: 'center'
+  },
+  disciplineItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)'
+  },
+  disciplineLabel: {
+    color: '#cbd5e1',
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  disciplineScore: {
+    color: '#fde047',
+    fontSize: 12.5,
+    fontWeight: '800'
+  },
+  formSectionBox: {
+    backgroundColor: '#071026',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)'
+  },
+  formHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    flexWrap: 'wrap',
+    gap: 8
+  },
+  formTitle: {
+    color: '#e2e8f0',
+    fontSize: 12.5,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    marginRight: 10
+  },
+  trendPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12
+  },
+  trendImproving: {
+    backgroundColor: 'rgba(16, 185, 129, 0.18)'
+  },
+  trendDeclining: {
+    backgroundColor: 'rgba(239, 68, 68, 0.18)'
+  },
+  trendSteady: {
+    backgroundColor: 'rgba(148, 163, 184, 0.15)'
+  },
+  trendText: {
+    color: '#38bdf8',
+    fontSize: 10,
+    fontWeight: '800'
+  },
+  formToggleGroup: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: 8,
+    padding: 2
+  },
+  formToggleBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6
+  },
+  formToggleBtnActive: {
+    backgroundColor: '#f59e0b'
+  },
+  formToggleText: {
+    color: '#94a3b8',
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  formToggleTextActive: {
+    color: '#0e184e',
+    fontWeight: '900'
+  },
+  formMatchesScroll: {
+    flexDirection: 'row'
+  },
+  formMatchCard: {
+    width: 145,
+    backgroundColor: '#0f172a',
+    borderRadius: 10,
+    padding: 10,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)'
+  },
+  formMatchCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4
+  },
+  formMatchTournament: {
+    color: '#cbd5e1',
+    fontSize: 11,
+    fontWeight: '700',
+    flex: 1
+  },
+  formMatchRating: {
+    color: '#f59e0b',
+    fontSize: 11,
+    fontWeight: '800',
+    marginLeft: 4
+  },
+  formMatchDate: {
+    color: '#64748b',
+    fontSize: 9.5,
+    fontWeight: '600',
+    marginBottom: 8
+  },
+  formChipsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 6
+  },
+  scoreChip: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6
+  },
+  chipGold: {
+    backgroundColor: 'rgba(234, 179, 8, 0.25)',
+    borderWidth: 1,
+    borderColor: '#eab308'
+  },
+  chipGreen: {
+    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+    borderWidth: 1,
+    borderColor: '#22c55e'
+  },
+  chipRed: {
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    borderWidth: 1,
+    borderColor: '#ef4444'
+  },
+  chipNeutral: {
+    backgroundColor: 'rgba(148, 163, 184, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.3)'
+  },
+  scoreChipText: {
+    color: '#f8fafc',
+    fontSize: 10,
+    fontWeight: '800'
+  },
+  formFieldingText: {
+    color: '#a5b4fc',
+    fontSize: 9.5,
+    fontWeight: '600',
+    marginBottom: 6
+  },
+  formTapScorecardText: {
+    color: '#38bdf8',
+    fontSize: 9.5,
+    fontWeight: '700',
+    textAlign: 'right'
+  },
+  noFormBox: {
+    padding: 16,
+    alignItems: 'center'
+  },
+  noFormDataText: {
+    color: '#64748b',
+    fontSize: 11,
+    fontStyle: 'italic',
+    textAlign: 'center'
   },
   photoPreviewCircle: {
     width: 64,

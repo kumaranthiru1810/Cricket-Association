@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { validateEmail, validatePassword } from '../../utils/validation';
 import { useAppNavigation } from '../../navigation/AppNavigator';
-import { ScorerApi } from '../../services/api';
+import { ScorerApi, fetchMasterSettings } from '../../services/api';
 import { showSuccess, showError, showWarning, showInfo } from '../../utils/sweetalert';
 
 export type RegistrationRole = 'PLAYER' | 'TEAM' | 'SCORER' | 'UMPIRE';
@@ -38,7 +38,7 @@ const COMMON_ROLES = [
   'All-Rounder'
 ];
 
-const PLAYER_ROLES = ['Batsman', 'Bowler', 'All-Rounder', 'Wicket Keeper'];
+const PLAYER_ROLES = ['Batsman', 'Bowler', 'All-Rounder', 'Wicket Keeper', 'Captain', 'Vice Captain'];
 const AGE_CATEGORIES = ['Senior Men', "Women's Senior", 'Under-23', 'Under-19', 'Under-16', 'Under-14', 'Under-12'];
 const BATTING_STYLES = ['Right-Handed Batsman', 'Left-Handed Batsman'];
 const BOWLING_ARMS = ['Right-arm', 'Left-arm'];
@@ -63,7 +63,18 @@ const WICKET_KEEPER_SPECIALIZATIONS = [
 ];
 
 const BOWLING_STYLES = ['Right-Arm Fast', 'Right-Arm Fast-Medium', 'Right-Arm Medium Pace', 'Right-Arm Medium-Fast', 'Off Spinner (Off Break)', 'Leg Spinner (Leg Break)', 'Left-Arm Fast', 'Left-Arm Orthodox (Finger Spin)', 'Left-Arm Chinaman (Wrist Spin)'];
-const TALUKS = ['Virudhunagar', 'Sivakasi', 'Rajapalayam', 'Srivilliputhur', 'Aruppukottai', 'Sattur', 'Watrap'];
+const TALUKS = [
+  'Virudhunagar',
+  'Sivakasi',
+  'Rajapalayam',
+  'Srivilliputhur',
+  'Aruppukottai',
+  'Sattur',
+  'Watrap',
+  'Kariapatti',
+  'Tiruchuli',
+  'Vembakottai'
+];
 const TALUK_OPTIONS = [...TALUKS, 'Other'];
 const SCORER_LEVELS = ['District Certified', 'State Panel', 'Club Scorer', 'Trainee Scorer'];
 
@@ -96,7 +107,23 @@ const DISTRICT_OPTIONS = [
   'Tirunelveli',
   'Other'
 ];
-const STATE_OPTIONS = ['Tamil Nadu', 'Kerala', 'Karnataka', 'Andhra Pradesh', 'Other'];
+const STATE_OPTIONS = [
+  'Tamil Nadu',
+  'Kerala',
+  'Karnataka',
+  'Andhra Pradesh',
+  'Telangana',
+  'Pondicherry',
+  'Other'
+];
+
+const getInitialCategoryOptions = (categoryKey: string, defaultList: string[], ensureOther = false): string[] => {
+  let list = [...defaultList];
+  if (ensureOther && !list.includes('Other')) {
+    list.push('Other');
+  }
+  return Array.from(new Set(list));
+};
 
 const SAMPLE_15_SQUAD: Array<{ name: string; email: string; role: string }> = [
   { name: 'R. Saravanan', email: 'saravanan.r@strikerscc.org', role: 'Captain' },
@@ -237,6 +264,141 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       if (timer) clearInterval(timer);
     };
   }, [resendCooldown]);
+
+  // Dynamic Master Settings Options (Taluk, Roles, Batting, Age, Certs, State)
+  const [dynamicTaluks, setDynamicTaluks] = useState<string[]>(() =>
+    getInitialCategoryOptions('taluk_jurisdiction', TALUK_OPTIONS, true)
+  );
+  const [dynamicPlayerRoles, setDynamicPlayerRoles] = useState<string[]>(() =>
+    getInitialCategoryOptions('playing_role', PLAYER_ROLES)
+  );
+  const [dynamicBattingStyles, setDynamicBattingStyles] = useState<string[]>(() =>
+    getInitialCategoryOptions('batting_style', BATTING_STYLES)
+  );
+  const [dynamicAgeCategories, setDynamicAgeCategories] = useState<string[]>(() =>
+    getInitialCategoryOptions('age_category', AGE_CATEGORIES)
+  );
+  const [dynamicScorerLevels, setDynamicScorerLevels] = useState<string[]>(() =>
+    getInitialCategoryOptions('certification_level', SCORER_LEVELS)
+  );
+  const [dynamicUmpireQualifications, setDynamicUmpireQualifications] = useState<string[]>(() =>
+    getInitialCategoryOptions('umpire_certification', UMPIRE_QUALIFICATIONS)
+  );
+  const [dynamicStates, setDynamicStates] = useState<string[]>(() =>
+    getInitialCategoryOptions('state', STATE_OPTIONS, true)
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const resolveCategory = (key: string, backendItems: any[] | undefined, defaultList: string[], ensureOther = false) => {
+      // Clean up legacy localStorage if any
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem(`mset_added_${key}`);
+          localStorage.removeItem(`mset_del_${key}`);
+        } catch (e) {}
+      }
+
+      let dbNames: string[] = [];
+      if (backendItems && Array.isArray(backendItems) && backendItems.length > 0) {
+        dbNames = backendItems
+          .filter((i: any) => i && i.is_active !== false)
+          .map((i: any) => (typeof i === 'string' ? i : i.name))
+          .map((s: string) => String(s || '').trim())
+          .filter(Boolean);
+      }
+
+      // If database returned items, use database list directly (truly dynamic from MongoDB)
+      let list = dbNames.length > 0 ? dbNames : [...defaultList];
+      if (ensureOther && !list.includes('Other')) {
+        list.push('Other');
+      }
+      return Array.from(new Set(list));
+    };
+
+    const loadDynamicMasterOptions = async () => {
+      try {
+        const res = await fetchMasterSettings();
+        if (isMounted) {
+          const flatList: any[] = Array.isArray(res)
+            ? res
+            : Array.isArray(res?.data)
+            ? res.data
+            : [];
+          const g = res && res.grouped ? res.grouped : {};
+
+          const extractItemsForCategory = (catKey: string): any[] => {
+            if (g[catKey]?.items?.length) return g[catKey].items;
+            const clean = catKey.toLowerCase().replace(/[-\s]/g, '_');
+            const fromFlat = flatList.filter(
+              (i: any) => (i.category || '').toLowerCase().replace(/[-\s]/g, '_') === clean
+            );
+            return fromFlat;
+          };
+
+          const taluks = resolveCategory('taluk_jurisdiction', extractItemsForCategory('taluk_jurisdiction'), TALUK_OPTIONS, true);
+          const roles = resolveCategory('playing_role', extractItemsForCategory('playing_role'), PLAYER_ROLES);
+          const batting = resolveCategory('batting_style', extractItemsForCategory('batting_style'), BATTING_STYLES);
+          const ages = resolveCategory('age_category', extractItemsForCategory('age_category'), AGE_CATEGORIES);
+          const scorerLevels = resolveCategory('certification_level', extractItemsForCategory('certification_level'), SCORER_LEVELS);
+          const umpireQuals = resolveCategory('umpire_certification', extractItemsForCategory('umpire_certification'), UMPIRE_QUALIFICATIONS);
+          const states = resolveCategory('state', extractItemsForCategory('state'), STATE_OPTIONS, true);
+
+          setDynamicTaluks(taluks);
+          setDynamicPlayerRoles(roles);
+          setDynamicBattingStyles(batting);
+          setDynamicAgeCategories(ages);
+          setDynamicScorerLevels(scorerLevels);
+          setDynamicUmpireQualifications(umpireQuals);
+          setDynamicStates(states);
+
+          // Auto-align selections with live database options
+          setPRole(c => (roles.includes(c) ? c : roles[0] || c));
+          setPTaluk(c => (taluks.includes(c) ? c : taluks[0] || c));
+          setPBattingStyle(c => (batting.includes(c) ? c : batting[0] || c));
+          setPCategory(c => (ages.includes(c) ? c : ages[0] || c));
+          setTeamTaluk(c => (taluks.includes(c) ? c : taluks[0] || c));
+          setSquadPlayerRole(c => (roles.includes(c) ? c : roles[0] || c));
+          setSLevel(c => (scorerLevels.includes(c) ? c : scorerLevels[0] || c));
+          setSTaluk(c => (taluks.includes(c) ? c : taluks[0] || c));
+          setUQualification(c => (umpireQuals.includes(c) ? c : umpireQuals[0] || c));
+          setUDistrict(c => (taluks.includes(c) ? c : taluks[0] || c));
+          setUState(c => (states.includes(c) ? c : states[0] || c));
+        }
+      } catch (err) {
+        if (isMounted) {
+          setDynamicTaluks(getInitialCategoryOptions('taluk_jurisdiction', TALUK_OPTIONS, true));
+          setDynamicPlayerRoles(getInitialCategoryOptions('playing_role', PLAYER_ROLES));
+          setDynamicBattingStyles(getInitialCategoryOptions('batting_style', BATTING_STYLES));
+          setDynamicAgeCategories(getInitialCategoryOptions('age_category', AGE_CATEGORIES));
+          setDynamicScorerLevels(getInitialCategoryOptions('certification_level', SCORER_LEVELS));
+          setDynamicUmpireQualifications(getInitialCategoryOptions('umpire_certification', UMPIRE_QUALIFICATIONS));
+          setDynamicStates(getInitialCategoryOptions('state', STATE_OPTIONS, true));
+        }
+      }
+    };
+
+    loadDynamicMasterOptions();
+
+    // Listen to window focus or storage/custom events to automatically pick up admin updates
+    let syncHandler: any = null;
+    if (typeof window !== 'undefined') {
+      syncHandler = () => loadDynamicMasterOptions();
+      window.addEventListener('focus', syncHandler);
+      window.addEventListener('storage', syncHandler);
+      window.addEventListener('master_settings_updated', syncHandler);
+    }
+
+    return () => {
+      isMounted = false;
+      if (typeof window !== 'undefined' && syncHandler) {
+        window.removeEventListener('focus', syncHandler);
+        window.removeEventListener('storage', syncHandler);
+        window.removeEventListener('master_settings_updated', syncHandler);
+      }
+    };
+  }, []);
 
   // 1. PLAYER REGISTRATION STATE
   const [pName, setPName] = useState<string>('');
@@ -502,6 +664,16 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const email = (customEmail || popupEmail || getTargetEmail()).trim().toLowerCase();
     const name = (customName || getTargetName()).trim();
 
+    // If Team Registration, validate Team Name
+    if (activeRole === 'TEAM') {
+      const teamNameErr = validateNameValue(teamName, 'Team Name');
+      if (teamNameErr) {
+        setFieldErrors((prev) => ({ ...prev, teamName: teamNameErr }));
+        showWarning('Validation Error', teamNameErr);
+        return;
+      }
+    }
+
     const nameErr = validateNameValue(name, activeRole === 'TEAM' ? 'Coach Name' : 'Full Name');
     const emailErr = validateEmailValue(email, activeRole === 'TEAM' ? 'Coach Official Email Address' : 'Email Address');
 
@@ -519,15 +691,49 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       return;
     }
 
+    // Check duplicate existence across ALL roles before requesting OTP
+    setIsSendingOtp(true);
+    try {
+      const checkRes = await ScorerApi.checkRegistrationExists({
+        role: activeRole,
+        email,
+        name,
+        teamName: activeRole === 'TEAM' ? teamName.trim() : undefined
+      });
+      if (checkRes?.exists) {
+        setIsSendingOtp(false);
+        setIsOtpModalVisible(false);
+        const existMsg = checkRes.message || `${activeRole === 'TEAM' ? 'Team or Coach' : activeRole} with email "${email}" is already registered. Please login directly.`;
+        setStatusMessage(existMsg);
+        setStatusType('error');
+        setOtpModalError(existMsg);
+        await showError('Already Registered', existMsg);
+        return;
+      }
+    } catch (err: any) {
+      setIsSendingOtp(false);
+      setIsOtpModalVisible(false);
+      const existMsg = err?.message || `${activeRole === 'TEAM' ? 'Team or Coach' : activeRole} with email "${email}" is already registered. Please login directly.`;
+      setStatusMessage(existMsg);
+      setStatusType('error');
+      setOtpModalError(existMsg);
+      await showError(
+        err?.status === 409 || err?.message?.toLowerCase().includes('already') || err?.message?.toLowerCase().includes('registered')
+          ? 'Already Registered'
+          : 'Registration Check Failed',
+        existMsg
+      );
+      return;
+    }
+
     setTargetEmail(email);
     setPopupEmail(email);
 
-    setIsSendingOtp(true);
     setStatusMessage(`Sending verification code to ${email}...`);
     setStatusType('info');
 
     try {
-      await ScorerApi.sendRegistrationOtp(email, name, activeRole);
+      await ScorerApi.sendRegistrationOtp(email, name, activeRole, activeRole === 'TEAM' ? teamName.trim() : undefined);
       setOtpSent(true);
       setResendCooldown(30);
       const okMsg = `✓ Verification code sent to ${email}! Enter the 6-digit code below.`;
@@ -539,7 +745,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setStatusMessage(errMsg);
       setStatusType('error');
       setOtpModalError(errMsg);
-      showError('OTP Request Failed', errMsg);
+      setIsOtpModalVisible(false);
+      showError('Already Registered', errMsg);
     } finally {
       setIsSendingOtp(false);
     }
@@ -547,8 +754,23 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
   // Open Cricket OTP Popup Modal
   const openOtpModal = async (triggerSend: boolean = true) => {
+    setStatusMessage(null);
+    setStatusType(null);
+    setOtpModalError(null);
+    setOtpModalSuccess(null);
+
     const email = getTargetEmail();
     const name = getTargetName();
+
+    // If Team Registration, validate Team Name
+    if (activeRole === 'TEAM') {
+      const teamNameErr = validateNameValue(teamName, 'Team Name');
+      if (teamNameErr) {
+        setFieldErrors((prev) => ({ ...prev, teamName: teamNameErr }));
+        showWarning('Validation Error', teamNameErr);
+        return;
+      }
+    }
 
     const nameErr = validateNameValue(name, activeRole === 'TEAM' ? 'Coach Name' : 'Full Name');
     const emailErr = validateEmailValue(email, activeRole === 'TEAM' ? 'Coach Official Email Address' : 'Email Address');
@@ -562,6 +784,42 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       const firstErr = nameErr || emailErr || 'Please correct errors before verifying email.';
       showWarning('Validation Error', firstErr);
       return;
+    }
+
+    // Check if already registered across ALL roles before opening popup modal or sending OTP
+    setIsSendingOtp(true);
+    try {
+      const checkRes = await ScorerApi.checkRegistrationExists({
+        role: activeRole,
+        email,
+        name,
+        teamName: activeRole === 'TEAM' ? teamName.trim() : undefined
+      });
+
+      if (checkRes?.exists) {
+        setIsSendingOtp(false);
+        setIsOtpModalVisible(false);
+        const existMsg = checkRes.message || `${activeRole === 'TEAM' ? 'Team or Coach' : activeRole} with email "${email}" is already registered. Please login directly.`;
+        setStatusMessage(existMsg);
+        setStatusType('error');
+        await showError('Already Registered', existMsg);
+        return;
+      }
+    } catch (err: any) {
+      setIsSendingOtp(false);
+      setIsOtpModalVisible(false);
+      const existMsg = err?.message || `${activeRole === 'TEAM' ? 'Team or Coach' : activeRole} with email "${email}" is already registered. Please login directly.`;
+      setStatusMessage(existMsg);
+      setStatusType('error');
+      await showError(
+        err?.status === 409 || err?.message?.toLowerCase().includes('already') || err?.message?.toLowerCase().includes('registered')
+          ? 'Already Registered'
+          : 'Registration Check Failed',
+        existMsg
+      );
+      return;
+    } finally {
+      setIsSendingOtp(false);
     }
 
     setPopupEmail(email);
@@ -642,6 +900,30 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       return;
     }
 
+    // Check if player email or user is already registered before OTP or submit
+    try {
+      const checkRes = await ScorerApi.checkRegistrationExists({
+        role: 'PLAYER',
+        email,
+        name
+      });
+      if (checkRes?.exists) {
+        const existMsg = checkRes.message || `Player with email "${email}" is already registered. Please login directly.`;
+        setStatusMessage(existMsg);
+        setStatusType('error');
+        await showError('Already Registered', existMsg);
+        return;
+      }
+    } catch (err: any) {
+      if (err?.status === 409 || err?.message?.toLowerCase().includes('already') || err?.message?.toLowerCase().includes('registered')) {
+        const existMsg = err?.message || `Player with email "${email}" is already registered. Please login directly.`;
+        setStatusMessage(existMsg);
+        setStatusType('error');
+        await showError('Already Registered', existMsg);
+        return;
+      }
+    }
+
     if (!isEmailVerified) {
       showWarning('Email Verification Required', 'Please verify your email address with OTP before submitting registration.');
       openOtpModal(true);
@@ -674,12 +956,13 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       const isBowler = pRole === 'Bowler';
       const isAllRounder = pRole === 'All-Rounder';
       const isWicketKeeper = pRole === 'Wicket Keeper';
+      const isOtherOrBatsman = !isBowler && !isAllRounder && !isWicketKeeper;
 
       let computedBowlingStyle = 'N/A';
       if (isBowler || isAllRounder) {
         computedBowlingStyle = pBowlingAction || `${pBowlingArm} ${pBowlingCategory}`;
-      } else if (isBatsman) {
-        computedBowlingStyle = 'N/A (Batsman)';
+      } else if (isBatsman || isOtherOrBatsman) {
+        computedBowlingStyle = `N/A (${pRole})`;
       } else if (isWicketKeeper) {
         computedBowlingStyle = `N/A (${pKeeperSpec})`;
       }
@@ -837,6 +1120,26 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       return;
     }
 
+    // Check if team name or coach email is already registered before proceeding with OTP
+    try {
+      const checkRes = await ScorerApi.checkTeamExists(teamName.trim(), coachEmail.trim());
+      if (checkRes?.exists) {
+        const existMsg = checkRes.message || `Team "${teamName.trim()}" is already registered. Please login directly.`;
+        setStatusMessage(existMsg);
+        setStatusType('error');
+        await showError('Team Already Registered', existMsg);
+        return;
+      }
+    } catch (err: any) {
+      if (err?.status === 409 || err?.message?.toLowerCase().includes('already') || err?.message?.toLowerCase().includes('registered')) {
+        const existMsg = err?.message || `Team "${teamName.trim()}" is already registered. Please login directly.`;
+        setStatusMessage(existMsg);
+        setStatusType('error');
+        await showError('Team Already Registered', existMsg);
+        return;
+      }
+    }
+
     if (!isEmailVerified) {
       showWarning('Email Verification Required', 'Please verify Coach email with OTP before submitting registration.');
       openOtpModal(true);
@@ -938,6 +1241,30 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       return;
     }
 
+    // Check if scorer is already registered before OTP or submit
+    try {
+      const checkRes = await ScorerApi.checkRegistrationExists({
+        role: 'SCORER',
+        email,
+        name
+      });
+      if (checkRes?.exists) {
+        const existMsg = checkRes.message || `Official Scorer with email "${email}" is already registered. Please login directly.`;
+        setStatusMessage(existMsg);
+        setStatusType('error');
+        await showError('Already Registered', existMsg);
+        return;
+      }
+    } catch (err: any) {
+      if (err?.status === 409 || err?.message?.toLowerCase().includes('already') || err?.message?.toLowerCase().includes('registered')) {
+        const existMsg = err?.message || `Official Scorer with email "${email}" is already registered. Please login directly.`;
+        setStatusMessage(existMsg);
+        setStatusType('error');
+        await showError('Already Registered', existMsg);
+        return;
+      }
+    }
+
     if (!isEmailVerified) {
       showWarning('Email Verification Required', 'Please verify your official email with OTP before submitting registration.');
       openOtpModal(true);
@@ -1025,6 +1352,30 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       const firstErr = Object.values(errs)[0];
       showWarning('Validation Error', firstErr || 'Please correct the highlighted validation errors.');
       return;
+    }
+
+    // Check if umpire is already registered before OTP or submit
+    try {
+      const checkRes = await ScorerApi.checkRegistrationExists({
+        role: 'UMPIRE',
+        email,
+        name
+      });
+      if (checkRes?.exists) {
+        const existMsg = checkRes.message || `Official Umpire with email "${email}" is already registered. Please login directly.`;
+        setStatusMessage(existMsg);
+        setStatusType('error');
+        await showError('Already Registered', existMsg);
+        return;
+      }
+    } catch (err: any) {
+      if (err?.status === 409 || err?.message?.toLowerCase().includes('already') || err?.message?.toLowerCase().includes('registered')) {
+        const existMsg = err?.message || `Official Umpire with email "${email}" is already registered. Please login directly.`;
+        setStatusMessage(existMsg);
+        setStatusType('error');
+        await showError('Already Registered', existMsg);
+        return;
+      }
     }
 
     if (!isEmailVerified) {
@@ -1248,6 +1599,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   const isBowler = pRole === 'Bowler';
   const isAllRounder = pRole === 'All-Rounder';
   const isWicketKeeper = pRole === 'Wicket Keeper';
+  const isOtherOrBatsman = !isBowler && !isAllRounder && !isWicketKeeper;
 
   return (
     <PickerContext.Provider value={openPicker}>
@@ -1357,13 +1709,13 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                   </View>
 
                   <View style={styles.headerRightActions}>
-                    <TouchableOpacity
+                    {/* <TouchableOpacity
                       style={styles.demoFillBtn}
                       activeOpacity={0.8}
                       onPress={handleDemoFill}
                     >
                       <Text style={styles.demoFillBtnText}>⚡ Demo Fill</Text>
-                    </TouchableOpacity>
+                    </TouchableOpacity> */}
 
                     {/* Dropdown Box for Selecting Role */}
                     <View style={styles.roleDropdownWrapper}>
@@ -1508,13 +1860,13 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <DropdownField
                       label="Playing Role"
                       value={pRole}
-                      options={PLAYER_ROLES}
+                      options={dynamicPlayerRoles}
                       onSelect={handleRoleChange}
                     />
                     <DropdownField
                       label="Taluk Jurisdiction"
                       value={pTaluk}
-                      options={TALUK_OPTIONS}
+                      options={dynamicTaluks}
                       onSelect={(val) => {
                         setPTaluk(val);
                         if (val !== 'Other') setPCustomTaluk('');
@@ -1546,26 +1898,24 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     </View>
                   )}
 
-                  {/* Dynamic Role Specialization Columns */}
-                  {/* Case 1: Batsman */}
-                  {isBatsman && (
-                    <View style={styles.formRow}>
-                      <DropdownField
-                        label="Batting Style"
-                        value={pBattingStyle}
-                        options={BATTING_STYLES}
-                        onSelect={setPBattingStyle}
-                      />
-                      <DropdownField
-                        label="Age Category"
-                        value={pCategory}
-                        options={AGE_CATEGORIES}
-                        onSelect={setPCategory}
-                      />
-                    </View>
-                  )}
+                  {/* Common Cricketing Attributes: Batting Style & Age Category */}
+                  <View style={styles.formRow}>
+                    <DropdownField
+                      label="Batting Style"
+                      value={pBattingStyle}
+                      options={dynamicBattingStyles}
+                      onSelect={setPBattingStyle}
+                    />
+                    <DropdownField
+                      label="Age Category"
+                      value={pCategory}
+                      options={dynamicAgeCategories}
+                      onSelect={setPCategory}
+                    />
+                  </View>
 
-                  {/* Case 2: Bowler */}
+                  {/* Dynamic Role Specialization Columns */}
+                  {/* Case 1: Bowler Additional Fields */}
                   {isBowler && (
                     <>
                       <View style={styles.formRow}>
@@ -1589,40 +1939,28 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                           options={getBowlingActionOptions(pBowlingArm, pBowlingCategory)}
                           onSelect={setPBowlingAction}
                         />
-                        <DropdownField
-                          label="Batting Hand"
-                          value={pBattingStyle}
-                          options={BATTING_STYLES}
-                          onSelect={setPBattingStyle}
-                        />
                       </View>
                     </>
                   )}
 
-                  {/* Case 3: All-Rounder */}
+                  {/* Case 2: All-Rounder Additional Fields */}
                   {isAllRounder && (
                     <>
                       <View style={styles.formRow}>
-                        <DropdownField
-                          label="Batting Hand / Style"
-                          value={pBattingStyle}
-                          options={BATTING_STYLES}
-                          onSelect={setPBattingStyle}
-                        />
                         <DropdownField
                           label="Bowling Arm"
                           value={pBowlingArm}
                           options={BOWLING_ARMS}
                           onSelect={handleBowlingArmChange}
                         />
-                      </View>
-                      <View style={styles.formRow}>
                         <DropdownField
                           label="Bowling Type"
                           value={pBowlingCategory}
                           options={BOWLING_CATEGORIES}
                           onSelect={handleBowlingCategoryChange}
                         />
+                      </View>
+                      <View style={styles.formRow}>
                         <DropdownField
                           label="Bowling Action / Sub-Type"
                           value={pBowlingAction}
@@ -1633,15 +1971,9 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     </>
                   )}
 
-                  {/* Case 4: Wicket Keeper */}
+                  {/* Case 3: Wicket Keeper Additional Fields */}
                   {isWicketKeeper && (
                     <View style={styles.formRow}>
-                      <DropdownField
-                        label="Batting Hand / Style"
-                        value={pBattingStyle}
-                        options={BATTING_STYLES}
-                        onSelect={setPBattingStyle}
-                      />
                       <DropdownField
                         label="Keeper Specialization"
                         value={pKeeperSpec}
@@ -1655,7 +1987,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                   <View style={styles.cricketSummaryBadge}>
                     <Text style={styles.cricketSummaryText}>
                       🏏 <Text style={{ fontWeight: '800', color: '#b45309' }}>Role Specification:</Text>{' '}
-                      {isBatsman && `${pBattingStyle} • ${pCategory}`}
+                      {(isBatsman || isOtherOrBatsman) && `${pBattingStyle} • ${pCategory}`}
                       {isBowler && `${pBowlingAction} (${pBowlingArm} ${pBowlingCategory}) • Bat: ${pBattingStyle}`}
                       {isAllRounder && `Bat: ${pBattingStyle} • Bowl: ${pBowlingAction}`}
                       {isWicketKeeper && `${pBattingStyle} • ${pKeeperSpec}`}
@@ -1781,7 +2113,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <DropdownField
                       label="Team Taluk Jurisdiction"
                       value={teamTaluk}
-                      options={TALUK_OPTIONS}
+                      options={dynamicTaluks}
                       onSelect={(val) => {
                         setTeamTaluk(val);
                         if (val !== 'Other') setTeamCustomTaluk('');
@@ -1872,7 +2204,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       <DropdownField
                         label="Squad Role"
                         value={squadPlayerRole}
-                        options={COMMON_ROLES}
+                        options={dynamicPlayerRoles}
                         onSelect={setSquadPlayerRole}
                       />
                       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
@@ -2039,13 +2371,13 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <DropdownField
                       label="Certification Level"
                       value={sLevel}
-                      options={SCORER_LEVELS}
+                      options={dynamicScorerLevels}
                       onSelect={setSLevel}
                     />
                     <DropdownField
                       label="Taluk Jurisdiction"
                       value={sTaluk}
-                      options={TALUK_OPTIONS}
+                      options={dynamicTaluks}
                       onSelect={(val) => {
                         setSTaluk(val);
                         if (val !== 'Other') setSCustomTaluk('');
@@ -2203,7 +2535,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <DropdownField
                       label="Umpire Certification / Qualification *"
                       value={uQualification}
-                      options={UMPIRE_QUALIFICATIONS}
+                      options={dynamicUmpireQualifications}
                       onSelect={setUQualification}
                     />
                     <View style={{ flex: 1 }}>
@@ -2227,9 +2559,9 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                   {/* Row 4: District & State */}
                   <View style={styles.formRow}>
                     <DropdownField
-                      label="District *"
+                      label="District / Taluk *"
                       value={uDistrict}
-                      options={DISTRICT_OPTIONS}
+                      options={dynamicTaluks}
                       onSelect={(val) => {
                         setUDistrict(val);
                         if (val !== 'Other') setUCustomDistrict('');
@@ -2239,7 +2571,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <DropdownField
                       label="State *"
                       value={uState}
-                      options={STATE_OPTIONS}
+                      options={dynamicStates}
                       onSelect={setUState}
                     />
                   </View>

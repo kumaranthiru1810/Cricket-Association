@@ -7,6 +7,7 @@ import ScorerDashboardScreen from '../screens/scorer/ScorerDashboardScreen';
 import MatchSetupScreen from '../screens/scorer/MatchSetupScreen';
 import LiveScoringScreen from '../screens/scorer/LiveScoringScreen';
 import ScorecardScreen from '../screens/scorer/ScorecardScreen';
+import MilestoneGalleryScreen from '../screens/scorer/MilestoneGalleryScreen';
 import SharedBackground from '../components/scorer/SharedBackground';
 import {
   ScreenName,
@@ -17,7 +18,8 @@ import {
 
 import ErrorBoundary from '../components/common/ErrorBoundary';
 
-export { ScreenName, ScorerNavigationContext, useScorerNavigation, ScorerNavigationContextType };
+export { ScorerNavigationContext, useScorerNavigation };
+export type { ScreenName, ScorerNavigationContextType };
 
 interface Props {
   onExit: (targetScreen?: any) => void;
@@ -25,8 +27,54 @@ interface Props {
 }
 
 export default function ScorerNavigator({ onExit, initialParams }: Props) {
-  const [currentScreen, setCurrentScreen] = useState<ScreenName>(initialParams?.initialScreen || 'Dashboard');
-  const [params, setParams] = useState<any>(initialParams || null);
+  const resolveInitialRoute = (): { screen: ScreenName; initialParams?: any } => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        const url = new URL(window.location.href);
+        const qScreen = url.searchParams.get('scorerScreen');
+        const qMatchId = url.searchParams.get('matchId');
+        if (qScreen && ['Dashboard', 'MatchSetup', 'LiveScoring', 'Scorecard', 'MilestoneGallery'].includes(qScreen)) {
+          const finalMatchId = qMatchId || initialParams?.matchId;
+          return { screen: qScreen as ScreenName, initialParams: { ...(initialParams || {}), ...(finalMatchId ? { matchId: finalMatchId } : {}) } };
+        }
+
+        // Check localStorage persistence across browser refresh
+        const savedScreen = localStorage.getItem('cfvd_last_scorer_screen');
+        const savedMatchId = localStorage.getItem('cfvd_last_scorer_match_id');
+        if (savedScreen && ['Dashboard', 'MatchSetup', 'LiveScoring', 'Scorecard', 'MilestoneGallery'].includes(savedScreen)) {
+          const finalMatchId = qMatchId || savedMatchId || initialParams?.matchId;
+          return {
+            screen: savedScreen as ScreenName,
+            initialParams: { ...(initialParams || {}), ...(finalMatchId ? { matchId: finalMatchId } : {}) }
+          };
+        }
+      } catch (_e) {}
+    }
+    return { screen: initialParams?.initialScreen || 'Dashboard', initialParams };
+  };
+
+  const initialRoute = resolveInitialRoute();
+  const [currentScreen, setCurrentScreen] = useState<ScreenName>(initialRoute.screen);
+  const [params, setParams] = useState<any>(initialRoute.initialParams || null);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('cfvd_last_scorer_screen', currentScreen);
+        const mId = params?.matchId || (currentScreen !== 'Dashboard' ? localStorage.getItem('cfvd_last_scorer_match_id') : null);
+        if (mId && currentScreen !== 'Dashboard') {
+          localStorage.setItem('cfvd_last_scorer_match_id', mId);
+        } else if (currentScreen === 'Dashboard') {
+          localStorage.removeItem('cfvd_last_scorer_match_id');
+        }
+        const search = `?scorerScreen=${currentScreen}${mId && currentScreen !== 'Dashboard' ? `&matchId=${mId}` : ''}`;
+        const newUrl = window.location.origin + '/scorer' + search;
+        if (window.location.pathname + window.location.search !== '/scorer' + search) {
+          window.history.replaceState({ appScreen: 'Scorer', scorerScreen: currentScreen, matchId: mId }, '', newUrl);
+        }
+      } catch (e) {}
+    }
+  }, [currentScreen, params]);
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -43,7 +91,24 @@ export default function ScorerNavigator({ onExit, initialParams }: Props) {
 
   const navigate = (screen: ScreenName, screenParams?: any) => {
     setCurrentScreen(screen);
-    setParams(screenParams || null);
+    const combinedParams = { ...(params || {}), ...(screenParams || {}) };
+    setParams(combinedParams);
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('cfvd_last_scorer_screen', screen);
+        if (combinedParams?.matchId && screen !== 'Dashboard') {
+          localStorage.setItem('cfvd_last_scorer_match_id', combinedParams.matchId);
+        } else if (screen === 'Dashboard') {
+          localStorage.removeItem('cfvd_last_scorer_match_id');
+        }
+
+        const mId = screen !== 'Dashboard' ? (combinedParams?.matchId || localStorage.getItem('cfvd_last_scorer_match_id')) : null;
+        const search = `?scorerScreen=${screen}${mId ? `&matchId=${mId}` : ''}`;
+        const newUrl = window.location.origin + '/scorer' + search;
+        window.history.replaceState({ appScreen: 'Scorer', scorerScreen: screen, matchId: mId }, '', newUrl);
+      } catch (e) {}
+    }
   };
 
   const renderScreen = () => {
@@ -66,6 +131,8 @@ export default function ScorerNavigator({ onExit, initialParams }: Props) {
             }}
           />
         );
+      case 'MilestoneGallery':
+        return <MilestoneGalleryScreen />;
       default: return <ScorerAuthScreen />;
     }
   };

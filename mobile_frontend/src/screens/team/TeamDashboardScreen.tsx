@@ -48,8 +48,27 @@ import {
   LiveScoringIcon
 } from '../../admin/components/Icons';
 import TeamSidebar, { TeamTabType as TabType, getTeamNavItems } from './TeamSidebar';
+import MatchHighlightsBanner from '../../components/common/MatchHighlightsBanner';
 
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
+
+const safeTeamName = (teamObjOrName: any, fallback = ''): string => {
+  if (!teamObjOrName) return fallback;
+  if (typeof teamObjOrName === 'string') return teamObjOrName;
+  if (typeof teamObjOrName === 'object') {
+    return teamObjOrName.name || teamObjOrName.team_name || teamObjOrName.teamName || fallback;
+  }
+  return String(teamObjOrName);
+};
+
+const safeTeamId = (teamObjOrName: any, fallback = ''): string => {
+  if (!teamObjOrName) return fallback;
+  if (typeof teamObjOrName === 'string') return teamObjOrName;
+  if (typeof teamObjOrName === 'object') {
+    return teamObjOrName.id || teamObjOrName._id || teamObjOrName.teamId || teamObjOrName.team_id || fallback;
+  }
+  return String(teamObjOrName);
+};
 
 export interface TeamDashboardProps {
   onExit?: () => void;
@@ -57,7 +76,38 @@ export interface TeamDashboardProps {
 }
 
 export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashboardProps) {
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    if (initialParams?.initialTab || initialParams?.tab) {
+      return (initialParams.initialTab || initialParams.tab) as TabType;
+    }
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        const q = new URL(window.location.href).searchParams.get('tab') as TabType;
+        if (q && ['overview', 'team', 'squad', 'tournaments', 'schedule', 'matches', 'scorecard', 'statistics', 'notifications', 'profile'].includes(q)) {
+          return q;
+        }
+        const saved = localStorage.getItem('cfvd_team_active_tab') as TabType;
+        if (saved && ['overview', 'team', 'squad', 'tournaments', 'schedule', 'matches', 'scorecard', 'statistics', 'notifications', 'profile'].includes(saved)) {
+          return saved;
+        }
+      } catch (e) {}
+    }
+    return 'overview';
+  });
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('cfvd_team_active_tab', activeTab);
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('tab') !== activeTab) {
+          url.searchParams.set('tab', activeTab);
+          window.history.replaceState({ appScreen: 'Team', tab: activeTab }, '', url.toString());
+        }
+      } catch (e) {}
+    }
+  }, [activeTab]);
+
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -89,7 +139,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
   const [isSubmittingReg, setIsSubmittingReg] = useState<boolean>(false);
 
   // Filter States
-  const [matchFilter, setMatchFilter] = useState<'ALL' | 'LIVE' | 'SCHEDULED' | 'COMPLETED'>('ALL');
+  const [matchFilter, setMatchFilter] = useState<'ALL' | 'LIVE' | 'SCHEDULED' | 'POSTPONED' | 'COMPLETED'>('ALL');
   const [squadSearchQuery, setSquadSearchQuery] = useState<string>('');
 
   // Read-Only Scorecard Modal State
@@ -420,7 +470,9 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
   const filteredMatches = useMemo(() => {
     return matches.filter(m => {
       if (matchFilter === 'ALL') return true;
-      return (m.status || '').toUpperCase() === matchFilter;
+      const statusUpper = (m.status || '').toUpperCase();
+      if (matchFilter === 'POSTPONED') return statusUpper === 'POSTPONED' || m.isPostponed;
+      return statusUpper === matchFilter;
     });
   }, [matches, matchFilter]);
 
@@ -429,6 +481,14 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
     return matches.filter(m => {
       const statusUpper = (m.status || 'SCHEDULED').toUpperCase();
       return statusUpper === 'SCHEDULED' || statusUpper === 'UPCOMING' || statusUpper === 'LIVE';
+    });
+  }, [matches]);
+
+  // Postponed matches involving this team
+  const postponedMatches = useMemo(() => {
+    return matches.filter(m => {
+      const statusUpper = (m.status || '').toUpperCase();
+      return statusUpper === 'POSTPONED' || m.isPostponed;
     });
   }, [matches]);
 
@@ -460,6 +520,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
       case 'tournaments': return '🏆 Tournament & Championship Directory';
       case 'schedule': return '📅 Match Fixtures & Official Schedule';
       case 'matches': return '🏏 Match Results & Live Encounters';
+      case 'postponed': return '⏸️ Postponed Matches';
       case 'scorecard': return '📊 Official Match Scorecard Viewer';
       case 'statistics': return '📈 Team & Player Performance Statistics';
       case 'notifications': return '🔔 Association Notices & Circulars';
@@ -475,7 +536,8 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
       case 'squad': return `Verified 15-member player lineup registered with the District Cricket Association`;
       case 'tournaments': return `Register your team for district championships and monitor Apex Council approval status`;
       case 'schedule': return `Upcoming association fixtures, ground venues, and reporting times`;
-      case 'matches': return `Filter by LIVE, SCHEDULED, and COMPLETED league encounters`;
+      case 'matches': return `Filter by LIVE, SCHEDULED, POSTPONED, and COMPLETED league encounters`;
+      case 'postponed': return `Official fixtures involving ${teamName} that have been postponed or are awaiting rescheduling`;
       case 'scorecard': return `Complete ball-by-ball innings records, batting totals, and bowling analyses`;
       case 'statistics': return `Real match-derived averages, win rates, and individual player milestones`;
       case 'notifications': return `Official association communications, bulletins, and administrative advisories`;
@@ -583,6 +645,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
           squadCount={squad.length || 15}
           matchesCount={matches.length}
           upcomingCount={upcomingMatches.length}
+          postponedCount={postponedMatches.length}
           registrationsCount={myRegistrations.length}
           notificationsCount={notifications.filter(n => !n.isRead).length}
           isDesktop={isDesktop}
@@ -641,12 +704,14 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                     {(() => {
                       const todayStr = new Date().toISOString().split('T')[0];
                       const activeMatch = matches.find((m: any) => {
-                        const mTeamAId = m.teamAId || m.team_a_id || '';
-                        const mTeamBId = m.teamBId || m.team_b_id || '';
-                        const mTeamAName = (m.team_a_name || m.teamA || '').toLowerCase();
-                        const mTeamBName = (m.team_b_name || m.teamB || '').toLowerCase();
-                        const curName = teamName.toLowerCase();
-                        const isOurMatch = mTeamAId === teamId || mTeamBId === teamId || mTeamAName.includes(curName) || mTeamBName.includes(curName);
+                        const mTeamAId = m.teamAId || m.team_a_id || safeTeamId(m.teamA);
+                        const mTeamBId = m.teamBId || m.team_b_id || safeTeamId(m.teamB);
+                        const mTeamAName = (m.team_a_name || safeTeamName(m.teamA)).toLowerCase();
+                        const mTeamBName = (m.team_b_name || safeTeamName(m.teamB)).toLowerCase();
+                        const curName = String(teamName || '').toLowerCase();
+                        const isOurMatch = (mTeamAId && mTeamAId === teamId) ||
+                                           (mTeamBId && mTeamBId === teamId) ||
+                                           (curName && (mTeamAName.includes(curName) || mTeamBName.includes(curName)));
                         const mDate = m.match_date || m.date || '';
                         const isTodayOrActive = mDate === todayStr || m.status === 'LIVE' || m.status === 'Live' || m.status === 'SCHEDULED' || m.status === 'Scheduled';
                         const showOnHome = m.show_on_team_home !== false;
@@ -655,10 +720,13 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
 
                       if (!activeMatch) return null;
 
-                      const isTeamA = activeMatch.team_a_id === teamId || (activeMatch.team_a_name || activeMatch.teamA || '').toLowerCase().includes(teamName.toLowerCase());
+                      const activeTeamAId = activeMatch.teamAId || activeMatch.team_a_id || safeTeamId(activeMatch.teamA);
+                      const activeTeamAName = activeMatch.team_a_name || safeTeamName(activeMatch.teamA);
+                      const activeTeamBName = activeMatch.team_b_name || safeTeamName(activeMatch.teamB);
+                      const isTeamA = (activeTeamAId && activeTeamAId === teamId) || (activeTeamAName && activeTeamAName.toLowerCase().includes(String(teamName || '').toLowerCase()));
                       const opponentName = isTeamA
-                        ? (activeMatch.team_b_name || activeMatch.teamB || 'Opponent Club')
-                        : (activeMatch.team_a_name || activeMatch.teamA || 'Opponent Club');
+                        ? (activeTeamBName || 'Opponent Club')
+                        : (activeTeamAName || 'Opponent Club');
                       const matchVenue = activeMatch.venue || 'Kamarajar District Stadium';
                       const matchTime = activeMatch.match_time || activeMatch.time || '09:30 AM';
                       const matchOvers = activeMatch.overs_per_side || activeMatch.overs || 20;
@@ -767,6 +835,12 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                       </TouchableOpacity>
                     </View>
 
+                    {/* OFFICIAL MATCH HIGHLIGHTS & MILESTONES SHOWCASE */}
+                    <MatchHighlightsBanner
+                      title="🏆 TEAM & MATCH HIGHLIGHTS"
+                      subtitle="Official verified club milestones: Centuries, Fifers, Player of the Match & Record Spells"
+                    />
+
                     {/* HERO CLUB STATUS CARD */}
                     <View style={styles.heroCard}>
                       <View style={styles.heroTopRow}>
@@ -843,7 +917,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                           </View>
                         </View>
                         <Text style={styles.matchVersusText}>
-                          {matches[0]?.teamA?.name || matches[0]?.teamA || teamName} vs {matches[0]?.teamB?.name || matches[0]?.teamB || 'Strikers'}
+                          {safeTeamName(matches[0]?.teamA, teamName)} vs {safeTeamName(matches[0]?.teamB, 'Strikers')}
                         </Text>
                         <View style={styles.matchMetaRow}>
                           <Text style={styles.matchMetaItem}>📍 {matches[0]?.venue || 'Kamarajar Stadium, Virudhunagar'}</Text>
@@ -1006,8 +1080,8 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                         </View>
                       ) : (
                         filteredSquad.map((player, idx) => {
-                          const isCap = idx === 0 || player.isCaptain || (captain && player.name && captain.toLowerCase().includes(player.name.toLowerCase()));
-                          const isVc = idx === 1 || player.isViceCaptain || (viceCaptain && player.name && viceCaptain.toLowerCase().includes(player.name.toLowerCase()));
+                          const isCap = idx === 0 || player.isCaptain || (captain && player.name && String(captain).toLowerCase().includes(String(player.name).toLowerCase()));
+                          const isVc = idx === 1 || player.isViceCaptain || (viceCaptain && player.name && String(viceCaptain).toLowerCase().includes(String(player.name).toLowerCase()));
 
                           return (
                             <View key={player.id || idx} style={styles.squadPlayerCard}>
@@ -1355,10 +1429,13 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                       </View>
                     ) : (
                       upcomingMatches.map((m, idx) => {
-                        const isTeamA = m.team_a_id === teamId || (m.team_a_name || m.teamA || '').toLowerCase().includes(teamName.toLowerCase());
+                        const mTeamAId = m.teamAId || m.team_a_id || safeTeamId(m.teamA);
+                        const mNameA = m.team_a_name || safeTeamName(m.teamA);
+                        const mNameB = m.team_b_name || safeTeamName(m.teamB);
+                        const isTeamA = (mTeamAId && mTeamAId === teamId) || (mNameA && mNameA.toLowerCase().includes(String(teamName || '').toLowerCase()));
                         const oppName = isTeamA
-                          ? (m.team_b_name || m.teamB || 'Opponent Club')
-                          : (m.team_a_name || m.teamA || 'Opponent Club');
+                          ? (mNameB || 'Opponent Club')
+                          : (mNameA || 'Opponent Club');
 
                         return (
                           <View key={m.id || idx} style={styles.matchCard}>
@@ -1414,7 +1491,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                   <View>
                     {/* Match Filter Bar */}
                     <View style={styles.matchFilterBar}>
-                      {(['ALL', 'LIVE', 'SCHEDULED', 'COMPLETED'] as const).map(tabKey => (
+                      {(['ALL', 'LIVE', 'SCHEDULED', 'POSTPONED', 'COMPLETED'] as const).map(tabKey => (
                         <TouchableOpacity
                           key={tabKey}
                           style={[styles.filterPill, matchFilter === tabKey && styles.filterPillActive]}
@@ -1437,16 +1514,19 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                         const statusUpper = (m.status || 'SCHEDULED').toUpperCase();
                         const isLive = statusUpper === 'LIVE';
                         const isCompleted = statusUpper === 'COMPLETED';
+                        const isPostponed = statusUpper === 'POSTPONED' || m.isPostponed;
 
                         return (
-                          <View key={m.id || idx} style={styles.matchCard}>
+                          <View key={m.id || idx} style={[styles.matchCard, isPostponed && { borderLeftColor: '#f59e0b', borderLeftWidth: 4 }]}>
                             <View style={styles.matchCardHeader}>
                               <Text style={styles.matchCardTournament}>{m.tournament || m.tournament_name || 'Virudhunagar League 2026'}</Text>
                               <View style={[
                                 styles.statusPill,
-                                isLive ? styles.statusPillLive : isCompleted ? styles.statusPillCompleted : styles.statusPillScheduled
+                                isLive ? styles.statusPillLive : isCompleted ? styles.statusPillCompleted : isPostponed ? { backgroundColor: '#fef3c7' } : styles.statusPillScheduled
                               ]}>
-                                <Text style={styles.statusPillText}>{statusUpper}</Text>
+                                <Text style={[styles.statusPillText, isPostponed && { color: '#b45309' }]}>
+                                  {isPostponed ? '⏸️ POSTPONED' : statusUpper}
+                                </Text>
                               </View>
                             </View>
 
@@ -1454,14 +1534,14 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                             <View style={styles.matchCardBody}>
                               <View style={styles.matchTeamSide}>
                                 <Text style={styles.matchTeamTitle} numberOfLines={1}>
-                                  {m.teamA?.name || m.teamA || teamName}
+                                  {safeTeamName(m.teamA, m.team_a_name || teamName)}
                                 </Text>
                                 {m.scoreA ? <Text style={styles.matchScoreText}>{m.scoreA}</Text> : null}
                               </View>
                               <Text style={styles.matchVsSmall}>VS</Text>
                               <View style={styles.matchTeamSide}>
                                 <Text style={styles.matchTeamTitle} numberOfLines={1}>
-                                  {m.teamB?.name || m.teamB || 'Strikers'}
+                                  {safeTeamName(m.teamB, m.team_b_name || 'Strikers')}
                                 </Text>
                                 {m.scoreB ? <Text style={styles.matchScoreText}>{m.scoreB}</Text> : null}
                               </View>
@@ -1473,7 +1553,16 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                               <Text style={styles.matchFooterText}>📅 {m.date || 'Today'} • {m.time || '09:30 AM'}</Text>
                             </View>
 
-                            {m.result ? (
+                            {isPostponed && (
+                              <View style={{ backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a', borderRadius: 8, padding: 8, marginTop: 8 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: '#b45309' }}>⚠️ POSTPONEMENT REASON</Text>
+                                <Text style={{ fontSize: 12, color: '#92400e', marginTop: 2 }}>
+                                  {m.postponementReason || m.postponement?.reason || m.result || 'Fixture postponed by administration.'}
+                                </Text>
+                              </View>
+                            )}
+
+                            {m.result && !isPostponed ? (
                               <View style={styles.resultBanner}>
                                 <Text style={styles.resultBannerText}>🏆 {m.result}</Text>
                               </View>
@@ -1485,6 +1574,133 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                             >
                               <Text style={styles.viewScorecardBtnText}>View Official Scorecard →</Text>
                             </TouchableOpacity>
+                          </View>
+                        );
+                      })
+                    )}
+                  </View>
+                )}
+
+                {/* ══════════════════════════════════════════════════════════ */}
+                {/* 6b. POSTPONED MATCHES TAB                                   */}
+                {/* ══════════════════════════════════════════════════════════ */}
+                {activeTab === 'postponed' && (
+                  <View>
+                    <View style={styles.sectionHeaderCard}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View style={[styles.kpiIconWrap, { backgroundColor: '#fef3c7' }]}>
+                          <Text style={{ fontSize: 20 }}>⏸️</Text>
+                        </View>
+                        <View>
+                          <Text style={styles.sectionTitle}>Postponed Fixtures</Text>
+                          <Text style={styles.sectionSubtitle}>
+                            Showing official fixtures involving {teamName} that have been postponed or are awaiting rescheduling
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={[styles.statusBadge, { backgroundColor: '#fef3c7', borderColor: '#f59e0b', borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }]}>
+                        <Text style={[styles.statusBadgeText, { color: '#b45309', fontWeight: '700', fontSize: 12 }]}>
+                          {postponedMatches.length} Postponed
+                        </Text>
+                      </View>
+                    </View>
+
+                    {postponedMatches.length === 0 ? (
+                      <View style={styles.emptyCard}>
+                        <Text style={{ fontSize: 32, marginBottom: 8 }}>✅</Text>
+                        <Text style={styles.emptyTitle}>No Postponed Matches</Text>
+                        <Text style={styles.emptyText}>
+                          All fixtures involving {teamName} are proceeding according to their official schedules.
+                        </Text>
+                      </View>
+                    ) : (
+                      postponedMatches.map((m: any, idx: number) => {
+                        const mTeamAId = m.teamAId || m.team_a_id || safeTeamId(m.teamA);
+                        const mNameA = m.team_a_name || safeTeamName(m.teamA);
+                        const mNameB = m.team_b_name || safeTeamName(m.teamB);
+                        const isTeamA =
+                          (mTeamAId && mTeamAId === teamId) ||
+                          (mNameA && mNameA.toLowerCase().includes(String(teamName || '').toLowerCase()));
+                        const opponentName = isTeamA
+                          ? (mNameB || 'Opponent Club')
+                          : (mNameA || 'Opponent Club');
+                        const origDate = m.originalDate || m.postponement?.original_date || m.date || m.match_date || 'TBD';
+                        const origTime = m.originalTime || m.postponement?.original_time || m.time || m.match_time || '';
+                        const reason = m.postponementReason || m.postponement?.reason || m.result || 'Postponed due to administrative or weather conditions';
+                        const reschedDate = m.rescheduledDate || m.postponement?.rescheduled_date;
+                        const reschedTime = m.rescheduledTime || m.postponement?.rescheduled_time;
+
+                        return (
+                          <View key={m.id || `postponed-${idx}`} style={[styles.matchCard, { borderLeftColor: '#f59e0b', borderLeftWidth: 4 }]}>
+                            <View style={styles.matchCardHeader}>
+                              <View>
+                                <Text style={styles.matchTournamentName}>
+                                  {m.tournament || m.tournament_name || 'Virudhunagar Premier League 2026'}
+                                </Text>
+                                <Text style={styles.matchFormatText}>
+                                  Match #{m.id} • {m.format || 'T20'} ({m.overs || 20} Overs)
+                                </Text>
+                              </View>
+                              <View style={[styles.statusBadge, { backgroundColor: '#fef3c7', borderColor: '#f59e0b', borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }]}>
+                                <Text style={[styles.statusBadgeText, { color: '#b45309', fontWeight: '700', fontSize: 12 }]}>⏸️ POSTPONED</Text>
+                              </View>
+                            </View>
+
+                            {/* Opponent & Matchup */}
+                            <View style={styles.matchCardBody}>
+                              <View style={styles.matchTeamSide}>
+                                <Text style={styles.matchTeamTitle} numberOfLines={1}>
+                                  {isTeamA ? teamName : opponentName}
+                                </Text>
+                                <Text style={{ fontSize: 11, color: '#64748b' }}>{isTeamA ? '(Your Club)' : 'Opponent'}</Text>
+                              </View>
+                              <Text style={styles.matchVsSmall}>VS</Text>
+                              <View style={styles.matchTeamSide}>
+                                <Text style={styles.matchTeamTitle} numberOfLines={1}>
+                                  {isTeamA ? opponentName : teamName}
+                                </Text>
+                                <Text style={{ fontSize: 11, color: '#64748b' }}>{isTeamA ? 'Opponent' : '(Your Club)'}</Text>
+                              </View>
+                            </View>
+
+                            {/* Details Grid: Opponent, Original Date, Venue */}
+                            <View style={[styles.matchCardFooter, { flexDirection: 'column', gap: 6, alignItems: 'flex-start' }]}>
+                              <Text style={styles.matchFooterText}>
+                                🏏 <Text style={{ fontWeight: '700' }}>Opponent:</Text> {opponentName}
+                              </Text>
+                              <Text style={styles.matchFooterText}>
+                                📅 <Text style={{ fontWeight: '700' }}>Original Scheduled Date:</Text> {origDate} {origTime ? `at ${origTime}` : ''}
+                              </Text>
+                              <Text style={styles.matchFooterText}>
+                                📍 <Text style={{ fontWeight: '700' }}>Venue:</Text> {m.venue || 'Kamarajar District Stadium'}
+                              </Text>
+                            </View>
+
+                            {/* Postponement Reason Box */}
+                            <View style={{ backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a', borderRadius: 8, padding: 10, marginTop: 8 }}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#b45309', textTransform: 'uppercase' }}>
+                                ⚠️ Postponement Reason
+                              </Text>
+                              <Text style={{ fontSize: 13, color: '#92400e', marginTop: 3 }}>
+                                {reason}
+                              </Text>
+                            </View>
+
+                            {/* Rescheduled Date Status */}
+                            <View style={{ backgroundColor: reschedDate ? '#ecfdf5' : '#f8fafc', borderWidth: 1, borderColor: reschedDate ? '#a7f3d0' : '#e2e8f0', borderRadius: 8, padding: 10, marginTop: 8 }}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: reschedDate ? '#065f46' : '#64748b', textTransform: 'uppercase' }}>
+                                🗓️ Rescheduling Status
+                              </Text>
+                              {reschedDate ? (
+                                <Text style={{ fontSize: 13, color: '#047857', fontWeight: '700', marginTop: 3 }}>
+                                  ✓ Rescheduled to: {reschedDate} {reschedTime ? `at ${reschedTime}` : ''}
+                                </Text>
+                              ) : (
+                                <Text style={{ fontSize: 13, color: '#64748b', fontStyle: 'italic', marginTop: 3 }}>
+                                  ⏳ Awaiting new schedule announcement by District Cricket Association.
+                                </Text>
+                              )}
+                            </View>
                           </View>
                         );
                       })
@@ -1517,7 +1733,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                             >
                               <View style={{ flex: 1 }}>
                                 <Text style={styles.scorecardSelectTitle}>
-                                  🏏 {m.teamA?.name || m.teamA || teamName} vs {m.teamB?.name || m.teamB || 'Opponent'}
+                                  🏏 {safeTeamName(m.teamA, m.team_a_name || teamName)} vs {safeTeamName(m.teamB, m.team_b_name || 'Opponent')}
                                 </Text>
                                 <Text style={styles.scorecardSelectSub}>
                                   {m.tournament || 'District Match'} • {m.venue || 'Stadium'} • {m.date || '2026'}
@@ -2159,6 +2375,10 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                   try {
                     await ScorerApi.logout();
                   } catch (_e) {}
+                  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                    window.location.href = '/';
+                    return;
+                  }
                   if (onExit) onExit();
                 }}
               >

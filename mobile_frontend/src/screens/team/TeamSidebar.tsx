@@ -48,6 +48,7 @@ export type TeamTabType =
   | 'tournaments'
   | 'schedule'
   | 'matches'
+  | 'postponed'
   | 'scorecard'
   | 'statistics'
   | 'notifications'
@@ -73,6 +74,7 @@ export interface TeamSidebarProps {
   squadCount?: number;
   matchesCount?: number;
   upcomingCount?: number;
+  postponedCount?: number;
   registrationsCount?: number;
   notificationsCount?: number;
   isDesktop?: boolean;
@@ -87,6 +89,7 @@ export const getTeamNavItems = (badges?: {
   squadCount?: number;
   matchesCount?: number;
   upcomingCount?: number;
+  postponedCount?: number;
   registrationsCount?: number;
   notificationsCount?: number;
 }): TeamNavItem[] => [
@@ -129,6 +132,13 @@ export const getTeamNavItems = (badges?: {
     badgeType: 'orange'
   },
   {
+    key: 'postponed',
+    label: 'Postponed Matches',
+    icon: (c) => <LiveScoringIcon size={18} color={c} />,
+    badge: badges?.postponedCount,
+    badgeType: 'orange'
+  },
+  {
     key: 'scorecard',
     label: 'Score',
     icon: (c) => <LiveScoringIcon size={18} color={c} />
@@ -162,6 +172,7 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
   squadCount = 15,
   matchesCount = 0,
   upcomingCount = 0,
+  postponedCount = 0,
   registrationsCount = 0,
   notificationsCount = 0,
   isDesktop: propIsDesktop,
@@ -200,6 +211,7 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
     squadCount: squadCount || 15,
     matchesCount,
     upcomingCount,
+    postponedCount,
     registrationsCount,
     notificationsCount
   });

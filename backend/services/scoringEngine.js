@@ -220,8 +220,14 @@ class ScoringEngine {
       dismissedPlayerId = null,
       shotType = null,
       fieldingPosition = null,
+      shotAngle = null,
+      shotDistance = null,
+      shotZone = null,
+      shotX = null,
+      shotY = null,
       fielderId = null,
       fielderName = null,
+      fieldingAction = null,
       reason = null,
       note = null
     } = deliveryData;
@@ -331,8 +337,14 @@ class ScoringEngine {
       is_legal_delivery: isLegal,
       shot_type: shotType,
       fielding_position: fieldingPosition,
+      shot_angle: shotAngle !== null && shotAngle !== undefined ? Number(shotAngle) : (deliveryData.shot_angle !== undefined && deliveryData.shot_angle !== null ? Number(deliveryData.shot_angle) : null),
+      shot_distance: shotDistance !== null && shotDistance !== undefined ? Number(shotDistance) : (deliveryData.shot_distance !== undefined && deliveryData.shot_distance !== null ? Number(deliveryData.shot_distance) : null),
+      shot_zone: shotZone || deliveryData.shot_zone || fieldingPosition || null,
+      shot_x: shotX !== null && shotX !== undefined ? Number(shotX) : (deliveryData.shot_x !== undefined && deliveryData.shot_x !== null ? Number(deliveryData.shot_x) : null),
+      shot_y: shotY !== null && shotY !== undefined ? Number(shotY) : (deliveryData.shot_y !== undefined && deliveryData.shot_y !== null ? Number(deliveryData.shot_y) : null),
       fielder_id: fielderId,
       fielder_name: actualFielderName,
+      fielding_action: fieldingAction || deliveryData.fielding_action || deliveryData.fieldingAction || null,
       commentary,
       created_by: scorerId || 'SCR-101',
       timestamp: new Date()
@@ -697,6 +709,7 @@ class ScoringEngine {
     const matchTotalOvers = match.overs || 20;
     const maxQuota = Math.ceil(matchTotalOvers / 5) || 4;
     let bowlerQuotaWarning = null;
+    const bowlerStats = bowler;
     if (bowlerStats && bowlerStats.overs >= maxQuota) {
       bowlerQuotaWarning = {
         bowlerId: activeBowlerId,
@@ -877,35 +890,96 @@ class ScoringEngine {
    */
   async editDelivery(matchId, deliveryId, updateData, scorerId) {
     await db.initDb();
-    const delivery = await db.models.Delivery.findOne({ id: deliveryId });
+    const mongoose = require('mongoose');
+    const isObjectId = mongoose.Types.ObjectId.isValid(deliveryId);
+    const query = isObjectId ? { $or: [{ id: deliveryId }, { _id: deliveryId }] } : { id: deliveryId };
+    const delivery = await db.models.Delivery.findOne(query);
     if (!delivery) throw { status: 404, message: `Delivery '${deliveryId}' not found.` };
+
+    const oldBatterRuns = delivery.runs_batter || 0;
+    const oldExtrasRuns = delivery.runs_extras || 0;
+    const oldTotalRuns = delivery.total_runs || (oldBatterRuns + oldExtrasRuns);
+    const oldWicket = Boolean(delivery.wicket);
+
+    const newRunsBatter = typeof updateData.runsBatter === 'number' ? updateData.runsBatter : (typeof updateData.runs === 'number' ? updateData.runs : oldBatterRuns);
+    const newRunsExtras = typeof updateData.runsExtras === 'number' ? updateData.runsExtras : oldExtrasRuns;
+    const newTotalRuns = newRunsBatter + newRunsExtras;
+    const newWicket = typeof updateData.wicket === 'boolean' ? updateData.wicket : oldWicket;
+    const newWicketType = updateData.wicketType || delivery.wicket_type;
+    const newExtraType = updateData.extraType || delivery.extra_type;
+
+    const runsDelta = newTotalRuns - oldTotalRuns;
+    const batterRunsDelta = newRunsBatter - oldBatterRuns;
+    const wicketDelta = (newWicket ? 1 : 0) - (oldWicket ? 1 : 0);
 
     const innings = await db.models.Innings.findOne({ id: delivery.innings_id });
     if (innings) {
-      innings.total_runs -= delivery.total_runs;
-      if (delivery.wicket) innings.wickets = Math.max(0, innings.wickets - 1);
-
-      const newRuns = typeof updateData.runsBatter === 'number' ? updateData.runsBatter : delivery.runs_batter;
-      const newExtras = typeof updateData.runsExtras === 'number' ? updateData.runsExtras : delivery.runs_extras;
-      const newTotal = newRuns + newExtras;
-      const newWicket = typeof updateData.wicket === 'boolean' ? updateData.wicket : delivery.wicket;
-
-      delivery.runs_batter = newRuns;
-      delivery.runs_extras = newExtras;
-      delivery.total_runs = newTotal;
-      delivery.wicket = newWicket;
-      await delivery.save();
-
-      innings.total_runs += newTotal;
-      if (newWicket) innings.wickets += 1;
+      innings.total_runs = Math.max(0, (innings.total_runs || 0) + runsDelta);
+      innings.wickets = Math.max(0, (innings.wickets || 0) + wicketDelta);
       await innings.save();
+
+      // Update Batter stats if applicable
+      if (delivery.striker_id && batterRunsDelta !== 0) {
+        await db.models.InningsBatter.updateOne(
+          { innings_id: innings.id, player_id: delivery.striker_id },
+          {
+            $inc: {
+              runs: batterRunsDelta,
+              fours: (newRunsBatter === 4 ? 1 : (oldBatterRuns === 4 ? -1 : 0)),
+              sixes: (newRunsBatter === 6 ? 1 : (oldBatterRuns === 6 ? -1 : 0))
+            }
+          }
+        );
+      }
+
+      // Update Bowler stats if applicable
+      if (delivery.bowler_id) {
+        await db.models.InningsBowler.updateOne(
+          { innings_id: innings.id, player_id: delivery.bowler_id },
+          {
+            $inc: {
+              runs_conceded: runsDelta,
+              wickets: wicketDelta
+            }
+          }
+        );
+      }
     }
+
+    delivery.runs_batter = newRunsBatter;
+    delivery.runs_extras = newRunsExtras;
+    delivery.total_runs = newTotalRuns;
+    delivery.wicket = newWicket;
+    if (newWicketType) delivery.wicket_type = newWicketType;
+    if (newExtraType) delivery.extra_type = newExtraType;
+    if (typeof updateData.shotAngle === 'number') delivery.shot_angle = updateData.shotAngle;
+    if (typeof updateData.shotDistance === 'number') delivery.shot_distance = updateData.shotDistance;
+    if (updateData.shotZone) delivery.shot_zone = updateData.shotZone;
+    if (typeof updateData.shotX === 'number') delivery.shot_x = updateData.shotX;
+    if (typeof updateData.shotY === 'number') delivery.shot_y = updateData.shotY;
+    await delivery.save();
+
+    try {
+      broadcastScoreUpdate(matchId, {
+        action: 'DELIVERY_EDITED',
+        deliveryId,
+        totalRuns: innings?.total_runs,
+        wickets: innings?.wickets
+      });
+    } catch (_) {}
 
     return {
       success: true,
-      message: 'Delivery edited successfully.',
+      message: `Delivery ${delivery.over_number}.${delivery.ball_number} corrected successfully.`,
       deliveryId,
-      data: { action: 'EDIT_DELIVERY', deliveryId }
+      data: {
+        action: 'EDIT_DELIVERY',
+        deliveryId,
+        runsBatter: newRunsBatter,
+        runsExtras: newRunsExtras,
+        totalRuns: newTotalRuns,
+        wicket: newWicket
+      }
     };
   }
 
@@ -940,12 +1014,24 @@ class ScoringEngine {
       innings.is_over_complete = false;
 
       if (lastDelivery.extra_type === 'WIDE' && innings.extras) {
-        innings.extras.wides = Math.max(0, innings.extras.wides - lastDelivery.runs_extras);
-        innings.extras.total = Math.max(0, innings.extras.total - lastDelivery.runs_extras);
+        innings.extras.wides = Math.max(0, (innings.extras.wides || 0) - lastDelivery.runs_extras);
+        innings.extras.total = Math.max(0, (innings.extras.total || 0) - lastDelivery.runs_extras);
       }
       if (lastDelivery.extra_type === 'NO_BALL' && innings.extras) {
-        innings.extras.no_balls = Math.max(0, innings.extras.no_balls - lastDelivery.runs_extras);
-        innings.extras.total = Math.max(0, innings.extras.total - lastDelivery.runs_extras);
+        innings.extras.no_balls = Math.max(0, (innings.extras.no_balls || 0) - lastDelivery.runs_extras);
+        innings.extras.total = Math.max(0, (innings.extras.total || 0) - lastDelivery.runs_extras);
+      }
+      if (lastDelivery.extra_type === 'BYE' && innings.extras) {
+        innings.extras.byes = Math.max(0, (innings.extras.byes || 0) - lastDelivery.runs_extras);
+        innings.extras.total = Math.max(0, (innings.extras.total || 0) - lastDelivery.runs_extras);
+      }
+      if (lastDelivery.extra_type === 'LEG_BYE' && innings.extras) {
+        innings.extras.leg_byes = Math.max(0, (innings.extras.leg_byes || 0) - lastDelivery.runs_extras);
+        innings.extras.total = Math.max(0, (innings.extras.total || 0) - lastDelivery.runs_extras);
+      }
+      if (lastDelivery.extra_type === 'PENALTY' && innings.extras) {
+        innings.extras.penalty = Math.max(0, ((innings.extras.penalty || 0) - lastDelivery.runs_extras));
+        innings.extras.total = Math.max(0, (innings.extras.total || 0) - lastDelivery.runs_extras);
       }
 
       // Restore active striker and non-striker
@@ -1239,8 +1325,8 @@ class ScoringEngine {
     if (!match) throw { status: 404, message: 'Match not found.' };
 
     match.status = 'COMPLETED';
-    if (payload.resultText || payload.result) {
-      match.result_summary = payload.resultText || payload.result;
+    if (payload.resultText || payload.result || payload.resultSummary) {
+      match.result_summary = payload.resultText || payload.result || payload.resultSummary;
     }
     if (payload.playerOfMatch) {
       match.player_of_match = payload.playerOfMatch;

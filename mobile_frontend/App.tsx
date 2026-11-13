@@ -147,7 +147,8 @@ function MainAppShell() {
   if (currentScreen === 'Scorer') {
     const access = checkScreenAccess('Scorer', currentUser);
     if (!access.allowed) {
-      return <LoginScreen onExit={() => navigate('Home')} />;
+      navigate('Home');
+      return null;
     }
     return <ScorerNavigator onExit={(target?: any) => navigate(target || 'Home')} initialParams={params} />;
   }
@@ -155,7 +156,8 @@ function MainAppShell() {
   if (currentScreen === 'Umpire') {
     const access = checkScreenAccess('Umpire', currentUser);
     if (!access.allowed) {
-      return <LoginScreen />;
+      navigate('Home');
+      return null;
     }
     return <UmpireDashboardScreen onExit={() => navigate('Home')} initialParams={params} />;
   }
@@ -163,7 +165,8 @@ function MainAppShell() {
   if (currentScreen === 'Player') {
     const access = checkScreenAccess('Player', currentUser);
     if (!access.allowed) {
-      return <LoginScreen />;
+      navigate('Home');
+      return null;
     }
     return <PlayerDashboardScreen onExit={() => navigate('Home')} initialParams={params} />;
   }
@@ -171,7 +174,8 @@ function MainAppShell() {
   if (currentScreen === 'Team' || currentScreen === 'Coach') {
     const access = checkScreenAccess('Team', currentUser);
     if (!access.allowed) {
-      return <LoginScreen />;
+      navigate('Home');
+      return null;
     }
     return <TeamDashboardScreen onExit={() => navigate('Home')} initialParams={params} />;
   }

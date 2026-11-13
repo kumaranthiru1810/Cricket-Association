@@ -168,44 +168,24 @@ router.get('/home', async (req, res) => {
       const runsCount = Math.max(p.stats?.runs || 0, innB?.maxRuns || 0);
       const wktsCount = Math.max(p.stats?.wickets || 0, innBw?.maxWkts || 0);
 
-      // Highest score in a match
-      let matchHs = p.stats?.highest_score || (innB ? innB.maxRuns : 0);
-      if (p.name === 'Dinesh Karthik' && matchHs < 102) matchHs = 102;
-      if (p.name === 'Suresh Kumar' && matchHs < 88) matchHs = 88;
-      if (p.name === 'Karthik N' && matchHs < 72) matchHs = 72;
-      if (p.name === 'M. Vijay' && matchHs < 65) matchHs = 65;
-      if (p.name === 'Arun Pandian' && matchHs < 62) matchHs = 62;
-      if (p.name === 'P. Saravanan' && matchHs < 58) matchHs = 58;
-      if (p.name === 'Muthu Raj' && matchHs < 54) matchHs = 54;
-      if (p.name === 'Vijay Anand' && matchHs < 52) matchHs = 52;
-      if (p.name === 'R. Saravanan' && matchHs < 112) matchHs = 112;
-      if (p.name === 'S. Karthik Raja' && matchHs < 104) matchHs = 104;
-      if (p.name === 'K. Meenakshi' && matchHs < 84) matchHs = 84;
-      if (p.name === 'P. Muthukumar' && matchHs < 74) matchHs = 74;
-      if (p.name === 'K. Ganesan' && matchHs < 68) matchHs = 68;
+      // Highest score in a match from DB
+      let matchHs = (innB && innB.maxRuns) || p.stats?.highest_score || 0;
+      if (typeof matchHs === 'string') matchHs = parseInt(matchHs.replace(/\*/g, ''), 10) || 0;
 
-      // Best bowling figures in a match
+      // Best bowling figures in a match from DB
       let bestBowling = p.stats?.best || '';
-      if (p.name === 'K. Praveen Kumar' && !bestBowling) bestBowling = '5/24';
-      if (p.name === 'M. Vignesh' && !bestBowling) bestBowling = '5/19';
-      if (p.name === 'Saravanan' && !bestBowling) bestBowling = '5/18';
-      if (p.name === 'Karthik N' && (!bestBowling || bestBowling === '0/0')) bestBowling = '4/16';
-      if (p.name === 'R. Vignesh' && (!bestBowling || bestBowling === '0/0')) bestBowling = '4/20';
-      if (p.name === 'R. Ashwin' && (!bestBowling || bestBowling === '0/0')) bestBowling = '3/14';
-      if (p.name === 'S. Balamurugan' && (!bestBowling || bestBowling === '0/0')) bestBowling = '3/18';
-      if (p.name === 'R. Deepika' && !bestBowling) bestBowling = '4/18';
       if (!bestBowling && innBw?.maxWkts >= 3) {
         bestBowling = `${innBw.maxWkts}/${innBw.runsConceded || 20}`;
       }
 
       // Check if player has achieved a Century (100+), Half-Century (50+), or Bowling Haul (3W+)
-      const isCentury = matchHs >= 100 || (innB && innB.hundreds > 0);
-      const isFifty = (matchHs >= 50 && matchHs < 100) || (innB && innB.fifties > 0);
+      const isCentury = matchHs >= 100 || (innB && innB.hundreds > 0) || (p.stats?.hundreds && p.stats.hundreds > 0);
+      const isFifty = ((matchHs >= 50 && matchHs < 100) || (innB && innB.fifties > 0) || (p.stats?.fifties && p.stats.fifties > 0)) && !isCentury;
       const isBowlingHaul = wktsCount >= 3 || (bestBowling && (bestBowling.startsWith('3/') || bestBowling.startsWith('4/') || bestBowling.startsWith('5/')));
 
       // Strictly exclude any player with 0 records or no milestone
-      if (!isCentury && !isFifty && !isBowlingHaul && runsCount < 50 && wktsCount < 3) {
-        return; // Exclude players like vairamuthu, rahul, veera, etc.
+      if (!isCentury && !isFifty && !isBowlingHaul) {
+        return; // Exclude players without milestone
       }
 
       const roleStr = (p.role || 'ALL_ROUNDER').toUpperCase();
@@ -286,232 +266,8 @@ router.get('/home', async (req, res) => {
       });
     });
 
-    // Ensure we have top milestone heroes even if database has limited matches
-    const baseMilestones = [
-      {
-        id: 'CFVD-PLY-101',
-        name: 'R. Saravanan',
-        role: 'batter',
-        roleLabel: 'Opening Batter',
-        playingRole: 'Batter',
-        battingStyle: 'Right Hand Bat',
-        bowlingStyle: 'Right Arm Medium',
-        team: 'Virudhunagar Strikers',
-        teamShort: 'VNS',
-        taluk: 'Virudhunagar',
-        category: 'senior_men',
-        categoryLabel: "Senior Men's Division",
-        verified: true,
-        milestoneType: 'century',
-        milestoneBadge: '💯 100 in a Match (Century)',
-        matchPerformance: '112* (62 balls) • 14x4, 4x6',
-        matchVs: 'vs Sattur Super Kings • Virudhunagar League',
-        stats: { mat: 8, inns: 8, runs: 445, hs: '112*', avg: '63.57', sr: '149.3', fifties: 3, hundreds: 1, wkts: 0, catches: 8 },
-        bio: 'Lead run-scorer in the Virudhunagar Premier League 2026. Renowned for explosive stroke-play inside the powerplay and steadfast match-winning knocks.'
-      },
-      {
-        id: 'CFVD-PLY-103',
-        name: 'S. Karthik Raja',
-        role: 'wicketkeeper',
-        roleLabel: 'Wicketkeeper Batter',
-        playingRole: 'Wicketkeeper Batter',
-        battingStyle: 'Right Hand Bat',
-        bowlingStyle: 'None (Wicketkeeper)',
-        team: 'Rajapalayam CC',
-        teamShort: 'RPCC',
-        taluk: 'Rajapalayam',
-        category: 'senior_men',
-        categoryLabel: "Senior Men's Division",
-        verified: true,
-        milestoneType: 'century',
-        milestoneBadge: '💯 100 in a Match (Century)',
-        matchPerformance: '104 (58 balls) • 11x4, 5x6',
-        matchVs: 'vs Virudhunagar Spartans • Final Match',
-        stats: { mat: 7, inns: 7, runs: 375, hs: '104', avg: '53.57', sr: '133.9', fifties: 2, hundreds: 1, wkts: 0, catches: 9, stumpings: 3 },
-        bio: 'Dynamic wicketkeeper-batter who anchored Rajapalayam CC to the First Division semi-finals. Exceptional glove-work standing up to spin and pace.'
-      },
-      {
-        id: 'P404',
-        name: 'Dinesh Karthik',
-        role: 'wicketkeeper',
-        roleLabel: 'Wicketkeeper Batter',
-        playingRole: 'Wicketkeeper Batter',
-        battingStyle: 'Right Hand Bat',
-        bowlingStyle: 'Right Arm Medium',
-        team: 'Sivakasi Strikers',
-        teamShort: 'SVS',
-        taluk: 'Sivakasi',
-        category: 'senior_men',
-        categoryLabel: "Senior Men's Division",
-        verified: true,
-        milestoneType: 'century',
-        milestoneBadge: '💯 100 in a Match (Century)',
-        matchPerformance: '102* (54 balls) • SR: 188.8',
-        matchVs: 'vs Virudhunagar Spartans • Kamarajar Stadium',
-        stats: { mat: 8, inns: 8, runs: 317, hs: '102*', avg: '63.40', sr: '175.2', fifties: 2, hundreds: 1, wkts: 0, catches: 6, stumpings: 2 },
-        bio: 'Explosive match-winning century off 54 balls to single-handedly steer Sivakasi Strikers to victory in high-pressure chase.'
-      },
-      {
-        id: 'P301',
-        name: 'Suresh Kumar',
-        role: 'batter',
-        roleLabel: 'Opening / Top-Order Batter',
-        playingRole: 'Batter',
-        battingStyle: 'Right Hand Bat',
-        bowlingStyle: 'Right Arm Medium',
-        team: 'Virudhunagar Spartans',
-        teamShort: 'VNS',
-        taluk: 'Virudhunagar',
-        category: 'senior_men',
-        categoryLabel: "Senior Men's Division",
-        verified: true,
-        milestoneType: 'fifty',
-        milestoneBadge: '🎖️ 50 in a Match (Half-Century)',
-        matchPerformance: '88 (45 balls) • 10x4, 4x6',
-        matchVs: 'vs Sivakasi Strikers • Kamarajar Stadium',
-        stats: { mat: 8, inns: 8, runs: 284, hs: '88', avg: '47.33', sr: '145.6', fifties: 2, hundreds: 0, wkts: 0, catches: 4 },
-        bio: 'Leading run scorer for Virudhunagar Spartans with commanding half-centuries (88 and 64) against top district pace attacks.'
-      },
-      {
-        id: 'P401',
-        name: 'Karthik N',
-        role: 'allrounder',
-        roleLabel: 'All-Rounder & Strike Seamer',
-        playingRole: 'Bowler',
-        battingStyle: 'Right Hand Bat',
-        bowlingStyle: 'Right Arm Fast',
-        team: 'Sivakasi Strikers',
-        teamShort: 'SVS',
-        taluk: 'Sivakasi',
-        category: 'senior_men',
-        categoryLabel: "Senior Men's Division",
-        verified: true,
-        milestoneType: 'fifty',
-        milestoneBadge: '🎖️ 50 & 4W Haul in Match',
-        matchPerformance: '72 (38 balls) & 4/16 (4.0 ov)',
-        matchVs: 'vs Rajapalayam Royals • League Match',
-        stats: { mat: 8, inns: 8, runs: 240, hs: '72', avg: '40.00', sr: '150.0', fifties: 2, hundreds: 0, wkts: 14, best: '4/16', catches: 7 },
-        bio: 'Match-defining all-round performance smashing 72 off 38 balls and bagging 4/16 with fiery seam bowling.'
-      },
-      {
-        id: 'P306',
-        name: 'Arun Pandian',
-        role: 'allrounder',
-        roleLabel: 'Middle-Order Power Batter',
-        playingRole: 'All-Rounder',
-        battingStyle: 'Right Hand Bat',
-        bowlingStyle: 'Right Arm Medium',
-        team: 'Virudhunagar Spartans',
-        teamShort: 'VNS',
-        taluk: 'Virudhunagar',
-        category: 'senior_men',
-        categoryLabel: "Senior Men's Division",
-        verified: true,
-        milestoneType: 'fifty',
-        milestoneBadge: '🎖️ 50 in a Match (Half-Century)',
-        matchPerformance: '62 (38 balls) • 6x4, 3x6',
-        matchVs: 'vs Aruppukottai Aces • District Cup',
-        stats: { mat: 7, inns: 7, runs: 198, hs: '62', avg: '39.60', sr: '146.7', fifties: 1, hundreds: 0, wkts: 6, best: '2/18', catches: 5 },
-        bio: 'Blistering counter-attacking half-century rescuing the Spartans from early collapse in the District Cup.'
-      },
-      {
-        id: 'CFVD-PLY-102',
-        name: 'K. Praveen Kumar',
-        role: 'bowler',
-        roleLabel: 'Right-Arm Off Spin Bowler',
-        playingRole: 'Bowler',
-        battingStyle: 'Right Hand Bat',
-        bowlingStyle: 'Right Arm Off Break',
-        team: 'Virudhunagar CC (VHNSN Alumni)',
-        teamShort: 'VCC',
-        taluk: 'Virudhunagar',
-        category: 'senior_men',
-        categoryLabel: "Senior Men's Division",
-        verified: true,
-        milestoneType: 'bowling_haul',
-        milestoneBadge: '🎯 5-Wicket Match Haul',
-        matchPerformance: '5/24 (4.0 ov) • Econ: 6.00',
-        matchVs: 'vs Rajapalayam CC • First Division',
-        stats: { mat: 8, inns: 8, runs: 168, hs: '41*', avg: '28.00', sr: '112.5', fifties: 0, hundreds: 0, wkts: 21, best: '5/24', econ: '5.47', catches: 5 },
-        bio: 'Premier district off-spinner with 21 wickets this season. Outstanding 5/24 match spell breaking the opposition top-order.'
-      },
-      {
-        id: 'CFVD-PLY-105',
-        name: 'M. Vignesh',
-        role: 'bowler',
-        roleLabel: 'Left-Arm Fast Bowler',
-        playingRole: 'Bowler',
-        battingStyle: 'Right Hand Bat',
-        bowlingStyle: 'Left Arm Fast Medium (135+ km/h)',
-        team: 'Sivakasi Super Kings (ANJAC)',
-        teamShort: 'SSK',
-        taluk: 'Sivakasi',
-        category: 'senior_men',
-        categoryLabel: 'Under-23 Senior Colts',
-        verified: true,
-        milestoneType: 'bowling_haul',
-        milestoneBadge: '🎯 5-Wicket Match Haul',
-        matchPerformance: '5/19 (4.0 ov) • Econ: 4.75',
-        matchVs: 'vs Srivilliputhur Warriors • Colts League',
-        stats: { mat: 8, inns: 8, runs: 62, hs: '22*', avg: '15.50', sr: '124.0', fifties: 0, hundreds: 0, wkts: 18, best: '5/19', econ: '6.19', catches: 4 },
-        bio: 'Fastest bowler in the district circuit. Devastating spell of 5/19 with searing yorkers and toe-crushing bouncers.'
-      },
-      {
-        id: 'P305',
-        name: 'R. Vignesh',
-        role: 'bowler',
-        roleLabel: 'Right-Arm Fast Bowler',
-        playingRole: 'Bowler',
-        battingStyle: 'Right Hand Bat',
-        bowlingStyle: 'Right Arm Fast',
-        team: 'Virudhunagar Spartans',
-        teamShort: 'VNS',
-        taluk: 'Virudhunagar',
-        category: 'senior_men',
-        categoryLabel: "Senior Men's Division",
-        verified: true,
-        milestoneType: 'bowling_haul',
-        milestoneBadge: '🔥 4-Wicket Match Haul',
-        matchPerformance: '4/20 (4.0 ov) • Econ: 5.00',
-        matchVs: 'vs Sivakasi Strikers • Opening Match',
-        stats: { mat: 8, inns: 8, runs: 24, hs: '14', avg: '12.00', sr: '110.0', fifties: 0, hundreds: 0, wkts: 12, best: '4/20', econ: '6.50', catches: 1 },
-        bio: 'Key strike bowler picking 4/20 against tournament favorites Sivakasi Strikers to defend a modest total.'
-      },
-      {
-        id: 'CFVD-PLY-104',
-        name: 'K. Meenakshi',
-        role: 'womens',
-        roleLabel: 'Top-Order Batter & Captain',
-        playingRole: 'Batter',
-        battingStyle: 'Right Hand Bat',
-        bowlingStyle: 'Right Arm Leg Break',
-        team: 'SFRC College for Women',
-        teamShort: 'SFRC',
-        taluk: 'Sivakasi',
-        category: 'womens',
-        categoryLabel: "Women's Senior Championship",
-        verified: true,
-        milestoneType: 'fifty',
-        milestoneBadge: '🎖️ 50 in a Match (Half-Century)',
-        matchPerformance: '84* (52 balls) • 9x4, 2x6',
-        matchVs: "vs Andal District Women's XI",
-        stats: { mat: 6, inns: 6, runs: 312, hs: '84*', avg: '62.40', sr: '132.5', fifties: 3, hundreds: 0, wkts: 4, catches: 7 },
-        bio: 'Captained SFRC to victory with an unbeaten 84* in the District Inter-College Women’s Trophy.'
-      }
-    ];
-
-    // Combine and deduplicate by player name/id
-    const combinedMilestones = [...milestonePlayers];
-    const existingIds = new Set(combinedMilestones.map(p => p.id || p.name));
-    baseMilestones.forEach(bm => {
-      if (!existingIds.has(bm.id) && !existingIds.has(bm.name)) {
-        combinedMilestones.push(bm);
-        existingIds.add(bm.id);
-      }
-    });
-
-    // Sort: Centuries first, then Half-Centuries, then Bowling Hauls
-    combinedMilestones.sort((a, b) => {
+    // Sort real DB milestone performers: Centuries first, then Half-Centuries, then Bowling Hauls
+    milestonePlayers.sort((a, b) => {
       const typeRank = { century: 1, fifty: 2, bowling_haul: 3 };
       const rankA = typeRank[a.milestoneType] || 4;
       const rankB = typeRank[b.milestoneType] || 4;
@@ -519,8 +275,8 @@ router.get('/home', async (req, res) => {
       return (b.stats?.runs || 0) - (a.stats?.runs || 0);
     });
 
-    // allPlayers sent to portal now contains ONLY verified milestone performers
-    const allPlayers = combinedMilestones;
+    // allPlayers sent to portal now contains ONLY verified milestone performers from Database
+    const allPlayers = milestonePlayers;
 
     res.json({
       success: true,

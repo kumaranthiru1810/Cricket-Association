@@ -1,0 +1,21 @@
+[
+  {
+    "id": "MSET-BAT-01",
+    "category": "batting_style",
+    "name": "Right-Handed Batsman",
+    "code": "RHB",
+    "description": "Right-hand batting stance and technique",
+    "is_active": true,
+    "sort_order": 1
+  },
+  {
+    "id": "MSET-BAT-02",
+    "category": "batting_style",
+    "name": "Left-Handed Batsman",
+    "code": "LHB",
+    "description": "Left-hand batting stance and technique",
+    "is_active": true,
+    "sort_order": 2
+  }
+]
+
