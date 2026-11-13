@@ -402,6 +402,7 @@ router.get('/notifications', async (req, res) => {
         title: n.title,
         message: n.message,
         reference_id: n.reference_id,
+        link: n.link || null,
         status: n.status,
         isRead: n.status === 'READ',
         createdAt: n.created_at || new Date().toISOString()

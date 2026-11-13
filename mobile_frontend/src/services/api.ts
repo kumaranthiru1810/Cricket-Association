@@ -539,6 +539,9 @@ export const ScorerApi = {
     email: string;
     password?: string;
     mobile?: string;
+    phone?: string;
+    aadhaar?: string;
+    aadhaarNumber?: string;
     role?: string;
     category?: string;
     taluk?: string;

@@ -93,8 +93,6 @@ export type AdminRouteKey =
   | 'statistics'
   | 'notifications'
   | 'content'
-  | 'laws'
-  | 'calculations'
   | 'master-settings'
   | 'settings';
 
@@ -202,18 +200,6 @@ export const AdminSidebar: React.FC<Props> = ({
       key: 'content',
       label: 'Content Management',
       icon: c => <ContentIcon size={18} color={c} />
-    },
-    {
-      key: 'laws',
-      label: 'Cricket Laws (42)',
-      icon: c => <LawsIcon size={18} color={c} />,
-      badge: 42
-    },
-    {
-      key: 'calculations',
-      label: 'DLS & VJD Predictor',
-      icon: c => <CalculatorIcon size={18} color={c} />,
-      badge: 'Live'
     },
     {
       key: 'settings',
