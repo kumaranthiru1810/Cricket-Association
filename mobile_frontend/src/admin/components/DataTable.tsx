@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, useWindowDimensions } from 'react-native';
 import { SearchIcon, ChevronLeftIcon, ChevronRightIcon } from './Icons';
 import EmptyState from './EmptyState';
 import { TableSkeleton } from './LoadingSkeleton';
@@ -49,6 +49,9 @@ export function DataTable<T extends Record<string, any>>({
   emptyDescription = 'There are no items matching the selected criteria.',
   pageSize = 10
 }: Props<T>) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [sortKey, setSortKey] = useState<string | null>(null);
@@ -119,10 +122,10 @@ export function DataTable<T extends Record<string, any>>({
     <View style={styles.container}>
       {/* Controls Bar */}
       {(searchable || filters || actions) && (
-        <View style={styles.controlsBar}>
-          <View style={styles.leftControls}>
+        <View style={[styles.controlsBar, isMobile && { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
+          <View style={[styles.leftControls, isMobile && { width: '100%' }]}>
             {searchable && (
-              <View style={styles.searchWrapper}>
+              <View style={[styles.searchWrapper, isMobile && { minWidth: '100%' }]}>
                 <SearchIcon size={16} color="#94a3b8" style={{ marginRight: 8 }} />
                 <TextInput
                   style={styles.searchInput}
@@ -143,7 +146,7 @@ export function DataTable<T extends Record<string, any>>({
             )}
             {filters && <View style={styles.filtersWrapper}>{filters}</View>}
           </View>
-          {actions && <View style={styles.actionsWrapper}>{actions}</View>}
+          {actions && <View style={[styles.actionsWrapper, isMobile && { width: '100%', justifyContent: 'flex-start' }]}>{actions}</View>}
         </View>
       )}
 
@@ -201,8 +204,8 @@ export function DataTable<T extends Record<string, any>>({
 
       {/* Pagination Footer */}
       {processedData.length > pageSize && (
-        <View style={styles.paginationBar}>
-          <Text style={styles.paginationInfo}>
+        <View style={[styles.paginationBar, isMobile && { flexWrap: 'wrap', gap: 10, justifyContent: 'center' }]}>
+          <Text style={[styles.paginationInfo, isMobile && { textAlign: 'center', width: '100%' }]}>
             Showing {(currentPage - 1) * pageSize + 1} to{' '}
             {Math.min(currentPage * pageSize, processedData.length)} of {processedData.length} records
           </Text>

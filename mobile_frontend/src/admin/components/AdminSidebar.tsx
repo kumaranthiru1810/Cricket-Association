@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, useWindowDimensions } from 'react-native';
 import {
   DashboardIcon,
   UsersIcon,
@@ -132,6 +132,10 @@ export const AdminSidebar: React.FC<Props> = ({
   liveMatchesCount = 0
 }) => {
   const { adminUser, logout } = useAdminAuth();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
+  const effectiveCollapsed = isMobileOpen ? false : collapsed;
+
   const isSettingsActive = currentRoute === 'settings' || (currentPath ? currentPath.includes('/settings') : false);
   const [isSettingsOpen, setIsSettingsOpen] = React.useState<boolean>(isSettingsActive);
 
@@ -219,14 +223,14 @@ export const AdminSidebar: React.FC<Props> = ({
   ];
 
   const sidebarContent = (
-    <View style={[styles.sidebar, collapsed && styles.sidebarCollapsed]}>
+    <View style={[styles.sidebar, effectiveCollapsed && styles.sidebarCollapsed]}>
       {/* Brand Header */}
       <View style={styles.brandHeader}>
         <View style={styles.brandRow}>
           <View style={styles.brandLogo}>
             <Text style={styles.brandLogoText}>🏏</Text>
           </View>
-          {!collapsed && (
+          {!effectiveCollapsed && (
             <View style={styles.brandInfo}>
               <Text style={styles.brandTitle} numberOfLines={1}>
                 CRICKET FEDERATION
@@ -254,8 +258,8 @@ export const AdminSidebar: React.FC<Props> = ({
         showsVerticalScrollIndicator={true}
         nestedScrollEnabled={true}
       >
-        <Text style={[styles.sectionLabel, collapsed && styles.sectionLabelCollapsed]}>
-          {collapsed ? 'MENU' : 'MANAGEMENT'}
+        <Text style={[styles.sectionLabel, effectiveCollapsed && styles.sectionLabelCollapsed]}>
+          {effectiveCollapsed ? 'MENU' : 'MANAGEMENT'}
         </Text>
 
         {navItems.map(item => {
@@ -268,32 +272,32 @@ export const AdminSidebar: React.FC<Props> = ({
               style={[
                 styles.navItem,
                 isActive && styles.navItemActive,
-                collapsed && styles.navItemCollapsed
+                effectiveCollapsed && styles.navItemCollapsed
               ]}
               onPress={() => {
                 onNavigate(item.key);
                 if (isMobileOpen) onCloseMobile();
               }}
               activeOpacity={0.7}
-              accessibilityLabel={collapsed ? item.label : undefined}
+              accessibilityLabel={effectiveCollapsed ? item.label : undefined}
             >
               <View style={[styles.iconBox, isActive && styles.iconBoxActive]}>
                 {item.icon(iconColor)}
               </View>
 
-              {!collapsed && (
+              {!effectiveCollapsed && (
                 <Text style={[styles.navLabel, isActive && styles.navLabelActive]} numberOfLines={1}>
                   {item.label}
                 </Text>
               )}
 
-              {!collapsed && item.badge !== undefined && (
+              {!effectiveCollapsed && item.badge !== undefined && (
                 <View style={styles.itemBadge}>
                   <Text style={styles.itemBadgeText}>{item.badge}</Text>
                 </View>
               )}
 
-              {!collapsed && item.isLive && (
+              {!effectiveCollapsed && item.isLive && (
                 <View style={styles.liveIndicator}>
                   <View style={styles.liveDot} />
                   <Text style={styles.liveText}>LIVE</Text>
@@ -305,12 +309,15 @@ export const AdminSidebar: React.FC<Props> = ({
 
         {/* Public Website Link */}
         <TouchableOpacity
-          style={[styles.publicSiteLink, collapsed && styles.publicSiteLinkCollapsed]}
-          onPress={onExitToPublic}
+          style={[styles.publicSiteLink, effectiveCollapsed && styles.publicSiteLinkCollapsed]}
+          onPress={() => {
+            if (isMobileOpen) onCloseMobile();
+            onExitToPublic();
+          }}
           activeOpacity={0.7}
         >
           <ExternalLinkIcon size={16} color="#d4af37" />
-          {!collapsed && <Text style={styles.publicSiteText}>View Public Website</Text>}
+          {!effectiveCollapsed && <Text style={styles.publicSiteText}>View Public Website</Text>}
         </TouchableOpacity>
       </ScrollView>
 
@@ -322,7 +329,7 @@ export const AdminSidebar: React.FC<Props> = ({
               {(adminUser?.name || 'A')[0].toUpperCase()}
             </Text>
           </View>
-          {!collapsed && (
+          {!effectiveCollapsed && (
             <View style={styles.userInfo}>
               <Text style={styles.userName} numberOfLines={1}>
                 {adminUser?.name || 'Administrator'}
@@ -335,8 +342,9 @@ export const AdminSidebar: React.FC<Props> = ({
         </View>
 
         <TouchableOpacity
-          style={[styles.logoutBtn, collapsed && styles.logoutBtnCollapsed]}
+          style={[styles.logoutBtn, effectiveCollapsed && styles.logoutBtnCollapsed]}
           onPress={() => {
+            if (isMobileOpen) onCloseMobile();
             if (Platform.OS === 'web' && typeof window !== 'undefined') {
               if (window.confirm('Are you sure you want to sign out of the Admin Console?')) {
                 logout();
@@ -346,10 +354,10 @@ export const AdminSidebar: React.FC<Props> = ({
             }
           }}
           activeOpacity={0.8}
-          accessibilityLabel={collapsed ? 'Sign Out' : undefined}
+          accessibilityLabel={effectiveCollapsed ? 'Sign Out' : undefined}
         >
           <LogoutIcon size={16} color="#ef4444" />
-          {!collapsed && <Text style={styles.logoutText}>Sign Out</Text>}
+          {!effectiveCollapsed && <Text style={styles.logoutText}>Sign Out</Text>}
         </TouchableOpacity>
 
         {/* Desktop Collapse Toggle */}
@@ -358,9 +366,9 @@ export const AdminSidebar: React.FC<Props> = ({
             style={styles.collapseToggle}
             onPress={onToggleCollapse}
             activeOpacity={0.7}
-            accessibilityLabel={collapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+            accessibilityLabel={effectiveCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
           >
-            {collapsed ? (
+            {effectiveCollapsed ? (
               <ChevronRightIcon size={16} color="#64748b" />
             ) : (
               <View style={styles.collapseToggleRow}>
@@ -386,6 +394,11 @@ export const AdminSidebar: React.FC<Props> = ({
         <View style={styles.mobileDrawerContainer}>{sidebarContent}</View>
       </View>
     );
+  }
+
+  // On mobile viewports when not open, do not render inline in layout
+  if (!isDesktop) {
+    return null;
   }
 
   return sidebarContent;
