@@ -22,7 +22,8 @@ import {
   ScrollView,
   Modal,
   ActivityIndicator,
-  Platform
+  Platform,
+  useWindowDimensions
 } from 'react-native';
 import PageHeader from '../components/PageHeader';
 import LoadingSkeleton from '../components/LoadingSkeleton';
@@ -187,6 +188,9 @@ interface Props {
 
 export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) => {
   const { showToast } = useAdminLayout();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+  const isSmall = width < 480;
 
   // Normalize initial category
   const getInitialTab = (): string => {
@@ -389,7 +393,7 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isMobile && { padding: 12 }]}>
       {/* Top Header */}
       <PageHeader
         title="Settings"
@@ -436,27 +440,27 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
       {/* Dynamic Category Management View */}
       <View style={styles.categoryViewContainer}>
           {/* Category Top Banner */}
-          <View style={styles.categoryBanner}>
-            <View style={styles.bannerLeft}>
+          <View style={[styles.categoryBanner, isMobile && { padding: 14, gap: 10 }]}>
+            <View style={[styles.bannerLeft, isMobile && { width: '100%', minWidth: 0, gap: 10 }]}>
               <View style={styles.bannerIconBox}>
                 <Text style={styles.bannerEmoji}>{activeCategoryDef?.iconText || '🏏'}</Text>
               </View>
               <View style={styles.bannerText}>
                 <View style={styles.bannerTitleRow}>
-                  <Text style={styles.bannerTitle}>{activeCategoryDef?.label}</Text>
+                  <Text style={[styles.bannerTitle, isMobile && { fontSize: 16 }]}>{activeCategoryDef?.label}</Text>
                   <View style={styles.countBadge}>
                     <Text style={styles.countBadgeText}>
                       {items.length} {items.length === 1 ? 'Option' : 'Options'}
                     </Text>
                   </View>
                 </View>
-                <Text style={styles.bannerSubtitle}>
+                <Text style={[styles.bannerSubtitle, isMobile && { fontSize: 12 }]}>
                   {activeCategoryDef?.description}
                 </Text>
               </View>
             </View>
 
-            <View style={styles.bannerActions}>
+            <View style={[styles.bannerActions, isMobile && { width: '100%', justifyContent: 'space-between', marginTop: 4 }]}>
               <TouchableOpacity
                 style={styles.refreshBtn}
                 onPress={() => loadCategoryItems(activeTab)}
@@ -466,7 +470,7 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.addBtn}
+                style={[styles.addBtn, isMobile && { flex: 1, justifyContent: 'center' }]}
                 onPress={() => {
                   setNewName('');
                   setNewCode('');
@@ -515,9 +519,53 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
               actionText={`Add ${activeCategoryDef?.singular || 'Item'}`}
               onAction={() => setShowAddModal(true)}
             />
-          ) : (
+          ) : isMobile ? (
+            /* MOBILE RESPONSIVE CARDS VIEW */
             <ScrollView style={styles.tableScroll} showsVerticalScrollIndicator={false}>
-              <View style={styles.tableCard}>
+              <View style={styles.mobileListContainer}>
+                {filteredItems.map((item, index) => (
+                  <View key={item.id || String(index)} style={styles.mobileItemCard}>
+                    <View style={styles.mobileItemHeader}>
+                      <View style={styles.mobileIndexBadge}>
+                        <Text style={styles.mobileIndexText}>#{index + 1}</Text>
+                      </View>
+                      <View style={styles.mobileItemTitleWrap}>
+                        <Text style={styles.itemNameText}>{item.name}</Text>
+                        {item.description ? (
+                          <Text style={styles.itemDescText} numberOfLines={2}>
+                            {item.description}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <View style={styles.activePill}>
+                        <View style={styles.activeDot} />
+                        <Text style={styles.activePillText}>Active</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.mobileItemFooter}>
+                      <View style={styles.codeBadge}>
+                        <Text style={styles.codeBadgeText}>CODE: {item.code || '—'}</Text>
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.deleteBtn}
+                        onPress={() => setItemToDelete(item)}
+                        activeOpacity={0.7}
+                        accessibilityLabel={`Delete ${item.name}`}
+                      >
+                        <TrashIcon size={15} color="#ef4444" />
+                        <Text style={styles.deleteBtnText}>Delete</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+          ) : (
+            /* DESKTOP TABLE VIEW */
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tableScroll}>
+              <View style={[styles.tableCard, { minWidth: 620 }]}>
                 {/* Table Header */}
                 <View style={styles.tableHeaderRow}>
                   <Text style={[styles.thCell, styles.thIndex]}>#</Text>
@@ -581,8 +629,8 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
         animationType="fade"
         onRequestClose={() => setShowAddModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
+        <View style={[styles.modalOverlay, isMobile && { padding: 12 }]}>
+          <View style={[styles.modalCard, isMobile && { maxHeight: '92%' }]}>
             {/* Modal Header */}
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderLeft}>
@@ -600,64 +648,66 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
               </TouchableOpacity>
             </View>
 
-            {/* Modal Form Body */}
-            <View style={styles.modalBody}>
-              <Text style={styles.modalSub}>
-                Add a new selectable option into{' '}
-                <Text style={{ fontWeight: '700', color: '#0f2452' }}>
-                  {activeCategoryDef?.label}
+            {/* Modal Form Body with keyboard-safe scroll */}
+            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+              <View style={styles.modalBody}>
+                <Text style={styles.modalSub}>
+                  Add a new selectable option into{' '}
+                  <Text style={{ fontWeight: '700', color: '#0f2452' }}>
+                    {activeCategoryDef?.label}
+                  </Text>
+                  . It will immediately appear in registration and profile dropdowns.
                 </Text>
-                . It will immediately appear in registration and profile dropdowns.
-              </Text>
 
-              {formError && (
-                <View style={styles.errorBanner}>
-                  <Text style={styles.errorBannerText}>{formError}</Text>
+                {formError && (
+                  <View style={styles.errorBanner}>
+                    <Text style={styles.errorBannerText}>{formError}</Text>
+                  </View>
+                )}
+
+                <View style={styles.modalField}>
+                  <Text style={styles.modalLabel}>
+                    {activeCategoryDef?.singular || 'Item'} Name <Text style={styles.reqStar}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder={activeCategoryDef?.placeholder || 'Enter option name'}
+                    placeholderTextColor="#94a3b8"
+                    value={newName}
+                    onChangeText={text => {
+                      setNewName(text);
+                      if (formError) setFormError(null);
+                    }}
+                    autoFocus
+                  />
                 </View>
-              )}
 
-              <View style={styles.modalField}>
-                <Text style={styles.modalLabel}>
-                  {activeCategoryDef?.singular || 'Item'} Name <Text style={styles.reqStar}>*</Text>
-                </Text>
-                <TextInput
-                  style={styles.modalInput}
-                  placeholder={activeCategoryDef?.placeholder || 'Enter option name'}
-                  placeholderTextColor="#94a3b8"
-                  value={newName}
-                  onChangeText={text => {
-                    setNewName(text);
-                    if (formError) setFormError(null);
-                  }}
-                  autoFocus
-                />
-              </View>
+                <View style={styles.modalField}>
+                  <Text style={styles.modalLabel}>Code / Abbreviation (Optional)</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="e.g. SVKS, RHB, U19 (Auto-generated if left blank)"
+                    placeholderTextColor="#94a3b8"
+                    value={newCode}
+                    onChangeText={setNewCode}
+                    autoCapitalize="characters"
+                  />
+                </View>
 
-              <View style={styles.modalField}>
-                <Text style={styles.modalLabel}>Code / Abbreviation (Optional)</Text>
-                <TextInput
-                  style={styles.modalInput}
-                  placeholder="e.g. SVKS, RHB, U19 (Auto-generated if left blank)"
-                  placeholderTextColor="#94a3b8"
-                  value={newCode}
-                  onChangeText={setNewCode}
-                  autoCapitalize="characters"
-                />
+                <View style={styles.modalField}>
+                  <Text style={styles.modalLabel}>Description / Notes (Optional)</Text>
+                  <TextInput
+                    style={[styles.modalInput, styles.modalTextArea]}
+                    placeholder="Additional context or notes for this item"
+                    placeholderTextColor="#94a3b8"
+                    value={newDescription}
+                    onChangeText={setNewDescription}
+                    multiline
+                    numberOfLines={2}
+                  />
+                </View>
               </View>
-
-              <View style={styles.modalField}>
-                <Text style={styles.modalLabel}>Description / Notes (Optional)</Text>
-                <TextInput
-                  style={[styles.modalInput, styles.modalTextArea]}
-                  placeholder="Additional context or notes for this item"
-                  placeholderTextColor="#94a3b8"
-                  value={newDescription}
-                  onChangeText={setNewDescription}
-                  multiline
-                  numberOfLines={2}
-                />
-              </View>
-            </View>
+            </ScrollView>
 
             {/* Modal Actions */}
             <View style={styles.modalFooter}>
@@ -939,6 +989,52 @@ const styles = StyleSheet.create({
   },
   tableScroll: {
     flex: 1
+  },
+  mobileListContainer: {
+    gap: 10,
+    marginBottom: 24
+  },
+  mobileItemCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+    gap: 12
+  },
+  mobileItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10
+  },
+  mobileIndexBadge: {
+    backgroundColor: '#f1f5f9',
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  mobileIndexText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748b'
+  },
+  mobileItemTitleWrap: {
+    flex: 1
+  },
+  mobileItemFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#f8fafc'
   },
   tableCard: {
     backgroundColor: '#ffffff',

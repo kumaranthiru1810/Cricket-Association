@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Platform, useWindowDimensions } from 'react-native';
 import { MenuIcon, SearchIcon, BellIcon, ChevronDownIcon, LogoutIcon, SettingsIcon, UsersIcon, ExternalLinkIcon } from './Icons';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { AdminRouteKey } from './AdminSidebar';
@@ -31,6 +31,10 @@ export const AdminTopbar: React.FC<Props> = ({
   const [notifOpen, setNotifOpen] = useState(false);
   const [searchVal, setSearchVal] = useState('');
 
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+  const isSmall = width < 520;
+
   const routeTitleMap: Record<AdminRouteKey, string> = {
     dashboard: 'Association Overview & Dashboard',
     users: 'System Users Management',
@@ -45,7 +49,7 @@ export const AdminTopbar: React.FC<Props> = ({
     content: 'Website Content Management',
     laws: 'MCC Laws of Cricket (2026 Edition)',
     calculations: 'DLS & VJD Live Chasing Predictor',
-    'master-settings': 'Master Settings (Database Dynamic Categories)',
+    'master-settings': 'Master Settings (Dynamic Categories)',
     settings: 'Association Settings & Preferences'
   };
 
@@ -56,9 +60,9 @@ export const AdminTopbar: React.FC<Props> = ({
   ];
 
   return (
-    <View style={styles.topbar}>
+    <View style={[styles.topbar, isMobile && { paddingHorizontal: 12 }]}>
       {/* Left Area: Toggle & Title */}
-      <View style={styles.leftArea}>
+      <View style={[styles.leftArea, isMobile && { gap: 8 }]}>
         <TouchableOpacity
           style={styles.menuToggleBtn}
           onPress={onToggleSidebar}
@@ -69,37 +73,45 @@ export const AdminTopbar: React.FC<Props> = ({
         </TouchableOpacity>
 
         <View style={styles.titleWrapper}>
-          <Text style={styles.pageTitle}>{routeTitleMap[currentRoute] || 'Admin Panel'}</Text>
-          <Text style={styles.pageBreadcrumb}>Cricket Association &gt; {currentRoute.toUpperCase()}</Text>
+          <Text style={[styles.pageTitle, isMobile && { fontSize: isSmall ? 13.5 : 15 }]} numberOfLines={1}>
+            {routeTitleMap[currentRoute] || 'Admin Panel'}
+          </Text>
+          {!isSmall && (
+            <Text style={styles.pageBreadcrumb} numberOfLines={1}>
+              Cricket Association &gt; {currentRoute.toUpperCase()}
+            </Text>
+          )}
         </View>
       </View>
 
       {/* Right Area: Search, Public Site, Notifications, Profile */}
-      <View style={styles.rightArea}>
-        {/* Quick Search */}
-        <View style={styles.searchBox}>
-          <SearchIcon size={15} color="#94a3b8" style={{ marginRight: 6 }} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Quick search..."
-            placeholderTextColor="#94a3b8"
-            value={searchVal}
-            onChangeText={t => {
-              setSearchVal(t);
-              if (onSearchGlobal) onSearchGlobal(t);
-            }}
-          />
-        </View>
+      <View style={[styles.rightArea, isMobile && { gap: 8 }]}>
+        {/* Quick Search (Desktop only) */}
+        {!isMobile && (
+          <View style={styles.searchBox}>
+            <SearchIcon size={15} color="#94a3b8" style={{ marginRight: 6 }} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Quick search..."
+              placeholderTextColor="#94a3b8"
+              value={searchVal}
+              onChangeText={t => {
+                setSearchVal(t);
+                if (onSearchGlobal) onSearchGlobal(t);
+              }}
+            />
+          </View>
+        )}
 
         {/* Public Website Button */}
         <TouchableOpacity
-          style={styles.publicBtn}
+          style={[styles.publicBtn, isSmall && { paddingHorizontal: 7, paddingVertical: 6 }]}
           onPress={onExitToPublic}
           activeOpacity={0.75}
           accessibilityLabel="View Public Cricket Website"
         >
           <ExternalLinkIcon size={14} color="#b8860b" />
-          <Text style={styles.publicBtnText}>Public Site</Text>
+          {!isSmall && <Text style={styles.publicBtnText}>Public Site</Text>}
         </TouchableOpacity>
 
         {/* Notifications Icon with Popover */}
@@ -119,7 +131,7 @@ export const AdminTopbar: React.FC<Props> = ({
           </TouchableOpacity>
 
           {notifOpen && (
-            <View style={styles.notifDropdown}>
+            <View style={[styles.notifDropdown, isMobile && { width: 260, right: -40 }]}>
               <View style={styles.dropdownHeader}>
                 <Text style={styles.dropdownTitle}>Notifications</Text>
                 <TouchableOpacity onPress={() => { setNotifOpen(false); onNavigate('notifications'); }}>
@@ -144,7 +156,7 @@ export const AdminTopbar: React.FC<Props> = ({
         {/* Admin Profile Dropdown */}
         <View style={{ position: 'relative' }}>
           <TouchableOpacity
-            style={styles.profileBtn}
+            style={[styles.profileBtn, isMobile && { paddingHorizontal: 6, gap: 4 }]}
             onPress={() => setProfileOpen(!profileOpen)}
             activeOpacity={0.75}
           >
@@ -153,13 +165,15 @@ export const AdminTopbar: React.FC<Props> = ({
                 {(adminUser?.name || 'A')[0].toUpperCase()}
               </Text>
             </View>
-            <View style={styles.profileMeta}>
-              <Text style={styles.profileName} numberOfLines={1}>
-                {adminUser?.name || 'Admin'}
-              </Text>
-              <Text style={styles.profileRole}>Administrator</Text>
-            </View>
-            <ChevronDownIcon size={14} color="#64748b" />
+            {!isMobile && (
+              <View style={styles.profileMeta}>
+                <Text style={styles.profileName} numberOfLines={1}>
+                  {adminUser?.name || 'Admin'}
+                </Text>
+                <Text style={styles.profileRole}>Administrator</Text>
+              </View>
+            )}
+            <ChevronDownIcon size={13} color="#64748b" />
           </TouchableOpacity>
 
           {profileOpen && (

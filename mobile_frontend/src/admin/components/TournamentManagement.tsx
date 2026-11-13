@@ -2722,7 +2722,7 @@ const styles: any = StyleSheet.create({
   },
   kpiCard: {
     flex: 1,
-    minWidth: 160,
+    minWidth: 140,
     backgroundColor: '#ffffff',
     borderRadius: 12,
     padding: 14,
@@ -2797,7 +2797,7 @@ const styles: any = StyleSheet.create({
   },
   searchBox: {
     flex: 1,
-    minWidth: 260,
+    minWidth: 200,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f1f5f9',
