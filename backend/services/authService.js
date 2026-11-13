@@ -947,7 +947,7 @@ class AuthService {
       }
     }
 
-    // Auto-create recognized demo accounts (Umpire, Player, Coach, Scorer)
+
     // Auto-resolve recognized Team accounts (Virudhunagar Spartans / Rajapalayam Royals)
     if (!user && (roleRequired === 'COACH' || roleRequired === 'TEAM' || !roleRequired)) {
       if (cleanEmail === 'spartans@gmail.com' || cleanEmail.includes('spartan') || cleanEmail === 'coach@cfvd.org') {
