@@ -289,6 +289,7 @@ async function request(endpoint: string, options: RequestInit = {}) {
 // OFFLINE QUEUE MANAGER (MCC / Rural Ground Resilience)
 // ==========================================
 const OFFLINE_QUEUE_KEY = 'cfvd_offline_delivery_queue';
+let memoryOfflineQueue: Array<{ id: string; matchId: string; delivery: any; timestamp: number }> = [];
 
 export const OfflineQueue = {
   getQueue: (): Array<{ id: string; matchId: string; delivery: any; timestamp: number }> => {
@@ -298,7 +299,7 @@ export const OfflineQueue = {
         return raw ? JSON.parse(raw) : [];
       }
     } catch (_e) {}
-    return [];
+    return memoryOfflineQueue;
   },
   enqueue: (matchId: string, delivery: any) => {
     try {
@@ -312,6 +313,8 @@ export const OfflineQueue = {
       q.push(item);
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(q));
+      } else {
+        memoryOfflineQueue = q;
       }
       return item;
     } catch (_e) {
@@ -323,6 +326,7 @@ export const OfflineQueue = {
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.removeItem(OFFLINE_QUEUE_KEY);
       }
+      memoryOfflineQueue = [];
     } catch (_e) {}
   },
   remove: (id: string) => {
@@ -330,6 +334,8 @@ export const OfflineQueue = {
       const q = OfflineQueue.getQueue().filter(item => item.id !== id);
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(q));
+      } else {
+        memoryOfflineQueue = q;
       }
     } catch (_e) {}
   },

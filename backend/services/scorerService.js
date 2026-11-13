@@ -508,7 +508,8 @@ class ScorerService {
         balls: striker ? striker.balls || 0 : 0,
         fours: striker ? striker.fours || 0 : 0,
         sixes: striker ? striker.sixes || 0 : 0,
-        strikeRate: striker ? striker.strike_rate || 0 : 0
+        strikeRate: striker ? striker.strike_rate || 0 : 0,
+        battingHand: ((playerMap[striker?.player_id]?.batting_style || playerMap[striker?.player_id]?.batting_hand || '').toUpperCase().includes('LEFT')) ? 'LEFT' : 'RIGHT'
       },
       nonStriker: {
         id: nonStriker ? nonStriker.player_id : null,
@@ -517,7 +518,8 @@ class ScorerService {
         balls: nonStriker ? nonStriker.balls || 0 : 0,
         fours: nonStriker ? nonStriker.fours || 0 : 0,
         sixes: nonStriker ? nonStriker.sixes || 0 : 0,
-        strikeRate: nonStriker ? nonStriker.strike_rate || 0 : 0
+        strikeRate: nonStriker ? nonStriker.strike_rate || 0 : 0,
+        battingHand: ((playerMap[nonStriker?.player_id]?.batting_style || playerMap[nonStriker?.player_id]?.batting_hand || '').toUpperCase().includes('LEFT')) ? 'LEFT' : 'RIGHT'
       },
       bowler: {
         id: currentBowler ? currentBowler.player_id : null,
@@ -744,6 +746,8 @@ class ScorerService {
         shotAngle: d.shot_angle,
         shotDistance: d.shot_distance,
         shotZone: d.shot_zone,
+        shotX: d.shot_x,
+        shotY: d.shot_y,
         overNumber: d.over_number,
         ballNumber: d.ball_number,
         commentary: d.commentary

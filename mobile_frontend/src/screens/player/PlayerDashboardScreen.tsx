@@ -1,4 +1,4 @@
-﻿/**
+/**
  * src/screens/player/PlayerDashboardScreen.tsx
  *
  * Official Player Management Portal for Cricket Federation of Virudhunagar District (CFVD).

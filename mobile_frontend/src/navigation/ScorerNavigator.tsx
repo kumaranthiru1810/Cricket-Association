@@ -7,6 +7,7 @@ import ScorerDashboardScreen from '../screens/scorer/ScorerDashboardScreen';
 import MatchSetupScreen from '../screens/scorer/MatchSetupScreen';
 import LiveScoringScreen from '../screens/scorer/LiveScoringScreen';
 import ScorecardScreen from '../screens/scorer/ScorecardScreen';
+import MilestoneGalleryScreen from '../screens/scorer/MilestoneGalleryScreen';
 import SharedBackground from '../components/scorer/SharedBackground';
 import {
   ScreenName,
@@ -32,7 +33,7 @@ export default function ScorerNavigator({ onExit, initialParams }: Props) {
         const url = new URL(window.location.href);
         const qScreen = url.searchParams.get('scorerScreen');
         const qMatchId = url.searchParams.get('matchId');
-        if (qScreen && ['Dashboard', 'MatchSetup', 'LiveScoring', 'Scorecard'].includes(qScreen)) {
+        if (qScreen && ['Dashboard', 'MatchSetup', 'LiveScoring', 'Scorecard', 'MilestoneGallery'].includes(qScreen)) {
           const finalMatchId = qMatchId || initialParams?.matchId;
           return { screen: qScreen as ScreenName, initialParams: { ...(initialParams || {}), ...(finalMatchId ? { matchId: finalMatchId } : {}) } };
         }
@@ -40,7 +41,7 @@ export default function ScorerNavigator({ onExit, initialParams }: Props) {
         // Check localStorage persistence across browser refresh
         const savedScreen = localStorage.getItem('cfvd_last_scorer_screen');
         const savedMatchId = localStorage.getItem('cfvd_last_scorer_match_id');
-        if (savedScreen && ['Dashboard', 'MatchSetup', 'LiveScoring', 'Scorecard'].includes(savedScreen)) {
+        if (savedScreen && ['Dashboard', 'MatchSetup', 'LiveScoring', 'Scorecard', 'MilestoneGallery'].includes(savedScreen)) {
           const finalMatchId = qMatchId || savedMatchId || initialParams?.matchId;
           return {
             screen: savedScreen as ScreenName,
@@ -130,6 +131,8 @@ export default function ScorerNavigator({ onExit, initialParams }: Props) {
             }}
           />
         );
+      case 'MilestoneGallery':
+        return <MilestoneGalleryScreen />;
       default: return <ScorerAuthScreen />;
     }
   };

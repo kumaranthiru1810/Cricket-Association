@@ -475,8 +475,7 @@ class AuthService {
 
     return {
       success: true,
-      message: 'OTP sent successfully',
-      otp: rawOtp
+      message: 'OTP sent successfully'
     };
   }
 
