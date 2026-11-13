@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Platform
 } from 'react-native';
+import { cricketSound } from '../../utils/cricketSoundFx';
 
 export interface BallActionEvent {
   runs: number;
@@ -34,8 +35,8 @@ export default function BroadcastLiveBallAction({
 }: Props) {
   const [visible, setVisible] = useState<boolean>(false);
   const [activeEvent, setActiveEvent] = useState<BallActionEvent>({
-    runs: 4,
-    isBoundary: true,
+    runs: 1,
+    isBoundary: false,
     batterName: 'Striker',
     shotZone: 'Cover'
   });
@@ -50,13 +51,30 @@ export default function BroadcastLiveBallAction({
 
   const triggerBroadcastAction = (evt?: BallActionEvent) => {
     const e = evt || lastEvent || {
-      runs: 4,
-      isBoundary: true,
+      runs: 1,
+      isBoundary: false,
       batterName: 'Striker',
-      shotZone: 'Extra Cover'
+      shotZone: 'Cover'
     };
     setActiveEvent(e);
     setVisible(true);
+
+    // Procedural 100% Royalty-Free Web Audio Sound Effects
+    try {
+      if (e.isWicket) {
+        cricketSound.playWicket();
+      } else if (e.isSix || e.runs === 6) {
+        cricketSound.playSix();
+      } else if (e.isBoundary || e.runs === 4) {
+        cricketSound.playFour();
+      } else if (e.isExtra || e.extraType) {
+        cricketSound.playExtraAlert();
+      } else if (e.runs > 0) {
+        cricketSound.playRunning();
+      } else {
+        cricketSound.playDotBall();
+      }
+    } catch (_soundErr) {}
 
     // Reset animations
     fadeAnim.setValue(0);
@@ -138,7 +156,7 @@ export default function BroadcastLiveBallAction({
       <View style={styles.miniTriggerBar}>
         <TouchableOpacity
           style={styles.miniTriggerBtn}
-          onPress={() => triggerBroadcastAction()}
+          onPress={() => triggerBroadcastAction(lastEvent || undefined)}
           activeOpacity={0.8}
         >
           <Text style={styles.miniTriggerIcon}>⚡</Text>
@@ -168,34 +186,72 @@ export default function BroadcastLiveBallAction({
     outputRange: [0.8, 1.4, 1.1]
   });
 
-  const isSix = activeEvent.isSix || activeEvent.runs === 6;
-  const isFour = activeEvent.isBoundary || activeEvent.runs === 4;
-  const isWkt = activeEvent.isWicket;
-  const runsCount = activeEvent.runs || 0;
+  const isSix = Boolean(activeEvent.isSix || activeEvent.runs === 6);
+  const isFour = Boolean(activeEvent.isBoundary || activeEvent.runs === 4);
+  const isWkt = Boolean(activeEvent.isWicket);
+  const runsCount = typeof activeEvent.runs === 'number' ? activeEvent.runs : 0;
+  const isExtra = Boolean(activeEvent.isExtra || activeEvent.extraType);
+  const ext = (activeEvent.extraType || '').toLowerCase();
+  const isWide = ext.includes('wide') || ext === 'wd';
+  const isNoBall = ext.includes('no_ball') || ext.includes('noball') || ext === 'nb';
+  const isDot = !isWkt && !isExtra && runsCount === 0;
 
-  const badgeColor = isSix
-    ? '#7c3aed'
-    : isFour
-      ? '#059669'
-      : isWkt
-        ? '#dc2626'
-        : '#d97706';
+  let badgeColor = '#2563eb';
+  let badgeText = `+${runsCount} RUNS`;
+  let headline = `🏏 +${runsCount} RUN${runsCount !== 1 ? 'S' : ''} • CRISP RUNNING BETWEEN CREASES`;
+  let subline = 'Smart strike rotation keeping the scoreboard continuously ticking.';
 
-  const headline = isSix
-    ? '🚀 MAXIMUM 6 • HUGE LOFTED STROKE'
-    : isFour
-      ? '⚡ BOUNDARY 4 • CRACKING WILLOW STROKE'
-      : isWkt
-        ? '🔴 WICKET! • TIMBER SHATTERED'
-        : `🏏 +${runsCount} RUN${runsCount > 1 ? 'S' : ''} • CRISP RUNNING BETWEEN CREASES`;
-
-  const subline = isSix
-    ? 'High trajectory missile sailing effortlessly over the deep boundary ropes!'
-    : isFour
-      ? 'Exquisite timing pierced through the infield fielders with pinpoint precision.'
-      : isWkt
-        ? 'Critical breakthrough captured under official Federation rules!'
-        : 'Smart strike rotation keeping the scoreboard continuously ticking.';
+  if (isWkt) {
+    badgeColor = '#dc2626';
+    badgeText = '🔴 OUT';
+    headline = `🔴 WICKET! • ${activeEvent.batterName ? activeEvent.batterName + ' DISMISSED' : 'TIMBER SHATTERED'}`;
+    subline = 'Critical breakthrough captured under official Federation rules!';
+  } else if (isSix) {
+    badgeColor = '#7c3aed';
+    badgeText = '★ SIX';
+    headline = '🚀 MAXIMUM 6 • HUGE LOFTED STROKE';
+    subline = 'High trajectory missile sailing effortlessly over the deep boundary ropes!';
+  } else if (isFour) {
+    badgeColor = '#059669';
+    badgeText = '⚡ FOUR';
+    headline = '⚡ BOUNDARY 4 • CRACKING WILLOW STROKE';
+    subline = 'Exquisite timing pierced through the infield fielders with pinpoint precision.';
+  } else if (isNoBall) {
+    badgeColor = '#ea580c';
+    badgeText = '⚠️ NO BALL';
+    headline = '⚠️ NO BALL • FREE HIT NEXT DELIVERY';
+    subline = 'Penalty run awarded to batting team; Free Hit active next ball!';
+  } else if (isWide) {
+    badgeColor = '#d97706';
+    badgeText = '↔️ WIDE';
+    headline = '↔️ WIDE BALL • +1 EXTRA RUN';
+    subline = 'Delivery strayed past the tramlines; re-bowled with penalty extra.';
+  } else if (isExtra) {
+    badgeColor = '#0284c7';
+    badgeText = '🏃 EXTRA';
+    headline = `🏃 +${runsCount} EXTRA • RUNS WITHOUT BAT CONTACT`;
+    subline = 'Batters scampered through as the delivery passed the stumps.';
+  } else if (runsCount === 1) {
+    badgeColor = '#2563eb';
+    badgeText = '+1 RUN';
+    headline = '🏏 +1 RUN • CRISP RUNNING BETWEEN CREASES';
+    subline = 'Quick single taken with sharp strike rotation keeping scoreboard moving.';
+  } else if (runsCount === 2) {
+    badgeColor = '#0284c7';
+    badgeText = '+2 RUNS';
+    headline = '🏃‍♂️ +2 RUNS • AGGRESSIVE RUNNING';
+    subline = 'Sharp calling and quick sprint turning a single into two solid runs.';
+  } else if (runsCount === 3) {
+    badgeColor = '#0d9488';
+    badgeText = '+3 RUNS';
+    headline = '⚡ +3 RUNS • COMMITTED THREE';
+    subline = 'Terrific placement into deep outfield and exceptional speed between wickets.';
+  } else if (isDot) {
+    badgeColor = '#64748b';
+    badgeText = '⚪ DOT BALL';
+    headline = '🛡️ DOT BALL • PRESSURE BUILDS';
+    subline = 'Disciplined bowling channel giving away no runs on this delivery.';
+  }
 
   return (
     <Animated.View
@@ -272,7 +328,7 @@ export default function BroadcastLiveBallAction({
           <View style={styles.badgeRow}>
             <View style={[styles.pillBadge, { backgroundColor: badgeColor }]}>
               <Text style={styles.pillBadgeText}>
-                {isSix ? '★ SIX' : isFour ? '⚡ FOUR' : isWkt ? '🔴 OUT' : `+${runsCount} RUNS`}
+                {badgeText}
               </Text>
             </View>
             <Text style={styles.speedTelemetryText}>VELOCITY: 138.4 KM/H</Text>

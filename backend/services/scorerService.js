@@ -211,6 +211,34 @@ class ScorerService {
       const isCancelled = statusUpper === 'CANCELLED' || statusUpper === 'ABANDONED';
       const isPostponed = statusUpper === 'POSTPONED';
 
+      // Fetch latest delivery for live match telemetry
+      let lastDelivery = null;
+      if (isLive) {
+        try {
+          const latestDel = await db.models.Delivery.findOne({ match_id: m.id }).sort({ created_at: -1, _id: -1 }).lean();
+          if (latestDel) {
+            const isFour = (latestDel.runs_batter === 4 || latestDel.boundary_type === 'FOUR');
+            const isSix = (latestDel.runs_batter === 6 || latestDel.boundary_type === 'SIX');
+            const isWkt = Boolean(latestDel.wicket);
+            const totalRuns = (latestDel.runs_batter || 0) + (latestDel.runs_extras || 0);
+            lastDelivery = {
+              id: latestDel.id,
+              ball: `${latestDel.over_number}.${latestDel.ball_number}`,
+              runs: totalRuns,
+              runsBatter: latestDel.runs_batter || 0,
+              runsExtras: latestDel.runs_extras || 0,
+              isBoundary: isFour,
+              isSix: isSix,
+              isWicket: isWkt,
+              wicketType: latestDel.wicket_type,
+              extraType: latestDel.extra_type,
+              shotZone: latestDel.shot_zone,
+              timestamp: latestDel.created_at ? new Date(latestDel.created_at).getTime() : Date.now()
+            };
+          }
+        } catch (_delErr) {}
+      }
+
       return {
         id: m.id,
         tournament: m.tournament_name || 'VPL 2026',
@@ -240,6 +268,8 @@ class ScorerService {
         postponement_history: m.postponement_history || [],
         scoreA,
         scoreB: scoreB || (isLive ? 'Yet to bat' : null),
+        lastDelivery,
+        lastEvent: lastDelivery,
         result: m.result_summary,
         assigned_scorer_id: m.assigned_scorer_id || 'SCR-101',
         assigned_scorer: m.assigned_scorer || (m.assigned_scorer_id === 'OFF-02' ? 'K. Murugan' : (m.assigned_scorer_id === 'OFF-01' ? 'S. Ramesh' : 'Athi Lingam')),
@@ -557,9 +587,18 @@ class ScorerService {
         ballNumber: d.ball_number,
         runs: d.runs_batter,
         runsBatter: d.runs_batter,
+        runs_batter: d.runs_batter,
         runsExtras: d.runs_extras || 0,
+        runs_extras: d.runs_extras || 0,
+        total_runs: (d.runs_batter || 0) + (d.runs_extras || 0),
+        totalRuns: (d.runs_batter || 0) + (d.runs_extras || 0),
         extra: d.extra_type !== 'NONE' ? d.extra_type : null,
         extraType: d.extra_type,
+        extra_type: d.extra_type,
+        shotZone: d.shot_zone,
+        shot_zone: d.shot_zone,
+        boundaryType: d.boundary_type,
+        boundary_type: d.boundary_type,
         wicket: Boolean(d.wicket),
         wicketType: d.wicket_type,
         strikerId: d.striker_id,

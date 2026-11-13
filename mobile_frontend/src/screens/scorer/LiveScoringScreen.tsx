@@ -6562,18 +6562,57 @@ export default function LiveScoringScreen() {
           </View>
 
           {/* Broadcast Live Kinetic Ball Action Telemetry */}
-          <BroadcastLiveBallAction
-            triggerKey={`${recentDeliveries.length}-${runs}-${wickets}`}
-            autoPlay={true}
-            lastEvent={{
-              runs: pendingBoundaryRun || (recentDeliveries[0]?.total_runs ?? 1),
-              isBoundary: pendingBoundaryRun === 4 || (recentDeliveries[0]?.runs_batter === 4),
-              isSix: pendingBoundaryRun === 6 || (recentDeliveries[0]?.runs_batter === 6),
-              isWicket: Boolean(recentDeliveries[0]?.wicket),
-              batterName: striker?.name || 'Striker',
-              bowlerName: bowler?.name || 'Bowler'
-            }}
-          />
+          {(() => {
+            const latest = recentDeliveries && recentDeliveries[0];
+            const rBatter = latest
+              ? (typeof latest.runs === 'number'
+                  ? latest.runs
+                  : typeof latest.runsBatter === 'number'
+                    ? latest.runsBatter
+                    : typeof latest.runs_batter === 'number'
+                      ? latest.runs_batter
+                      : 0)
+              : 0;
+            const rExtras = latest
+              ? (typeof latest.runsExtras === 'number'
+                  ? latest.runsExtras
+                  : typeof latest.runs_extras === 'number'
+                    ? latest.runs_extras
+                    : 0)
+              : 0;
+            const rTotal = latest
+              ? (typeof latest.total_runs === 'number'
+                  ? latest.total_runs
+                  : typeof latest.totalRuns === 'number'
+                    ? latest.totalRuns
+                    : (rBatter + rExtras))
+              : 0;
+
+            const delRuns = pendingBoundaryRun !== null ? pendingBoundaryRun : (latest ? rTotal : 1);
+            const isFour = pendingBoundaryRun === 4 || rBatter === 4 || latest?.boundary_type === 'FOUR' || latest?.boundaryType === 'FOUR';
+            const isSix = pendingBoundaryRun === 6 || rBatter === 6 || latest?.boundary_type === 'SIX' || latest?.boundaryType === 'SIX';
+            const isWkt = Boolean(latest?.wicket);
+            const rawExtra = latest?.extraType || latest?.extra_type || latest?.extra;
+            const extraType = (rawExtra && rawExtra !== 'NONE') ? rawExtra : (latest?.is_wide ? 'wide' : (latest?.is_no_ball ? 'no_ball' : undefined));
+
+            return (
+              <BroadcastLiveBallAction
+                triggerKey={latest ? `${latest.id || recentDeliveries.length}-${delRuns}-${latest.ball || latest.ballNumber || ''}-${runs}-${wickets}` : `${recentDeliveries.length}-${runs}-${wickets}`}
+                autoPlay={true}
+                lastEvent={{
+                  runs: delRuns,
+                  isBoundary: isFour,
+                  isSix: isSix,
+                  isWicket: isWkt,
+                  isExtra: Boolean(extraType),
+                  extraType: extraType,
+                  batterName: striker?.name || 'Striker',
+                  bowlerName: bowler?.name || 'Bowler',
+                  shotZone: latest?.shot_zone || latest?.shotZone || selectedWagonSector || 'Cover'
+                }}
+              />
+            );
+          })()}
 
           {/* THIS OVER & RECENT DELIVERIES INTERACTIVE STRIP (CricHeroes Retroactive Ball Correction) */}
           <View style={[styles.recentDeliveriesCard, isEditMode && styles.recentDeliveriesCardEditMode]}>

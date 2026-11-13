@@ -724,11 +724,57 @@ class ScoringEngine {
       maxFieldersOutside: isPowerplay ? 2 : 5
     };
 
+    const isBoundary = Number(runsBatter) === 4 || boundaryType === 'FOUR';
+    const isSix = Number(runsBatter) === 6 || boundaryType === 'SIX';
+    const isWkt = Boolean(wicket);
+    const totalDeliveryRuns = Number(runsBatter) + Number(runsExtras);
+
+    // Compute updated score strings for teamA / teamB
+    const currentScoreStr = `${innings.total_runs}/${innings.wickets} (${innings.overs}.${innings.balls} Ov)`;
+    let scoreAStr = null;
+    let scoreBStr = null;
+    if (innings.batting_team_id === match.team_a_id) {
+      scoreAStr = currentScoreStr;
+      scoreBStr = match.score_b || null;
+    } else {
+      scoreAStr = match.score_a || null;
+      scoreBStr = currentScoreStr;
+    }
+
+    try {
+      match.score_a = scoreAStr;
+      match.score_b = scoreBStr;
+      match.markModified('score_a');
+      match.markModified('score_b');
+      await match.save();
+    } catch (_mErr) {}
+
+    const lastDelPayload = {
+      ball: `${overNumber}.${ballNumber}`,
+      runs: totalDeliveryRuns,
+      runsBatter: Number(runsBatter),
+      runsExtras: Number(runsExtras),
+      extraType: extraType || null,
+      isBoundary,
+      isSix,
+      isWicket: isWkt,
+      wicketType: wicketType || null,
+      batterName: dismissedBatterName || strikerName || 'Striker',
+      bowlerName: bowlerName || 'Bowler',
+      shotZone: shotZone || null,
+      commentary,
+      timestamp: Date.now()
+    };
+
     try {
       socketService.emitScoreUpdate(matchId, {
         matchId,
-        score: `${innings.total_runs}/${innings.wickets}`,
+        score: currentScoreStr,
         overs: `${innings.overs}.${innings.balls}`,
+        scoreA: scoreAStr,
+        scoreB: scoreBStr,
+        battingTeamId: innings.batting_team_id,
+        currentInnings: innings.innings_number,
         isOverComplete: isOverFinished,
         isFreeHit: nextIsFreeHit,
         currentBreak: match.current_break || null,
@@ -737,11 +783,8 @@ class ScoringEngine {
         consecutiveWidesWarning,
         bowlerQuotaWarning,
         powerplay,
-        lastDelivery: {
-          ball: `${overNumber}.${ballNumber}`,
-          runs: Number(runsBatter),
-          commentary
-        }
+        lastDelivery: lastDelPayload,
+        lastEvent: lastDelPayload
       });
     } catch (e) {}
 

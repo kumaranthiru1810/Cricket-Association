@@ -388,12 +388,16 @@ export default function HomeScreen() {
         if (payload?.matchId) {
           setPublicMatches(prev => prev.map(m => {
             if (m.id === payload.matchId) {
+              const latestDelivery = payload.lastDelivery || payload.lastEvent || m.lastDelivery;
               return {
                 ...m,
-                scoreA: payload.scoreA !== undefined ? payload.scoreA : m.scoreA,
-                scoreB: payload.scoreB !== undefined ? payload.scoreB : m.scoreB,
+                scoreA: payload.scoreA !== undefined ? payload.scoreA : (payload.battingTeamId === m.teamAId ? payload.score : m.scoreA),
+                scoreB: payload.scoreB !== undefined ? payload.scoreB : (payload.battingTeamId === m.teamBId ? payload.score : m.scoreB),
+                lastDelivery: latestDelivery,
+                lastEvent: latestDelivery,
                 currentInnings: payload.currentInnings || m.currentInnings,
                 status: payload.status || m.status,
+                rawStatus: payload.status || m.rawStatus,
                 statusText: payload.statusText || m.statusText,
                 liveText: payload.liveText || m.liveText
               };
@@ -408,10 +412,10 @@ export default function HomeScreen() {
       // Fallback to active interval
     }
 
-    // Silent background poll every 30 seconds for matches, 60s for portal
+    // High-speed realtime background poll: every 3 seconds for rapid live match sync
     const matchTimer = setInterval(() => {
       loadPublicMatches(false);
-    }, 30000);
+    }, 3000);
 
     const portalTimer = setInterval(() => {
       loadPortalData();
@@ -1302,18 +1306,28 @@ export default function HomeScreen() {
                         </View>
 
                         {/* Broadcast Kinetic Delivery Action Telemetry for Live Matches */}
-                        {isLive && (
-                          <BroadcastLiveBallAction
-                            triggerKey={`${m.id}-${m.scoreA || ''}-${m.scoreB || ''}`}
-                            autoPlay={true}
-                            lastEvent={{
-                              runs: 4,
-                              isBoundary: true,
-                              batterName: m.teamA || 'Striker',
-                              shotZone: 'Cover'
-                            }}
-                          />
-                        )}
+                        {isLive && (() => {
+                          const lastDel = m.lastDelivery || m.lastEvent;
+                          const evt = lastDel ? {
+                            runs: typeof lastDel.runs === 'number' ? lastDel.runs : (lastDel.runsBatter ?? 0),
+                            isBoundary: Boolean(lastDel.isBoundary || lastDel.runs === 4 || lastDel.runsBatter === 4),
+                            isSix: Boolean(lastDel.isSix || lastDel.runs === 6 || lastDel.runsBatter === 6),
+                            isWicket: Boolean(lastDel.isWicket || lastDel.wicket),
+                            extraType: lastDel.extraType || lastDel.extra_type,
+                            isExtra: Boolean(lastDel.extraType || lastDel.extra_type),
+                            batterName: lastDel.batterName || m.teamA || 'Striker',
+                            bowlerName: lastDel.bowlerName || 'Bowler',
+                            shotZone: lastDel.shotZone || 'Cover'
+                          } : null;
+
+                          return (
+                            <BroadcastLiveBallAction
+                              triggerKey={lastDel ? `${m.id}-${lastDel.ball || ''}-${lastDel.runs ?? 0}-${lastDel.isWicket ? 'w' : 'r'}-${lastDel.timestamp || ''}` : `${m.id}-${m.scoreA || ''}-${m.scoreB || ''}`}
+                              autoPlay={true}
+                              lastEvent={evt}
+                            />
+                          );
+                        })()}
 
                         {/* 3. Status Note / Active Rain Delay Notice */}
                         {isPostponed ? (
