@@ -22,21 +22,43 @@ const DLS_RESOURCE_50 = [
   100.0, 93.4, 85.1, 74.9, 62.7, 49.0, 34.9, 22.0, 11.9, 4.7
 ];
 
-export const CalculationSettingsManagement: React.FC = () => {
+export interface CalculationSettingsManagementProps {
+  initialMethod?: 'DLS' | 'VJD';
+  initialTeam1Score?: string;
+  initialTeam1Overs?: string;
+  initialTeam2TargetOvers?: string;
+  initialCurrentOvers?: string;
+  initialCurrentWickets?: number;
+  initialCurrentScore?: string;
+  isModal?: boolean;
+  onClose?: () => void;
+}
+
+export const CalculationSettingsManagement: React.FC<CalculationSettingsManagementProps> = ({
+  initialMethod = 'DLS',
+  initialTeam1Score = '178',
+  initialTeam1Overs = '20',
+  initialTeam2TargetOvers = '16',
+  initialCurrentOvers = '9.4',
+  initialCurrentWickets = 3,
+  initialCurrentScore = '84',
+  isModal = false,
+  onClose
+}) => {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
   // Method selection
-  const [selectedMethod, setSelectedMethod] = useState<'DLS' | 'VJD'>('DLS');
+  const [selectedMethod, setSelectedMethod] = useState<'DLS' | 'VJD'>(initialMethod);
   const [selectedTournament, setSelectedTournament] = useState<string>('CFVD Premier League T20');
 
   // Simulator Inputs
-  const [team1Score, setTeam1Score] = useState<string>('178');
-  const [team1Overs, setTeam1Overs] = useState<string>('20');
-  const [team2TargetOvers, setTeam2TargetOvers] = useState<string>('16'); // Interrupted overs
-  const [currentOvers, setCurrentOvers] = useState<string>('9.4');
-  const [currentWickets, setCurrentWickets] = useState<number>(3);
-  const [currentScore, setCurrentScore] = useState<string>('84');
+  const [team1Score, setTeam1Score] = useState<string>(initialTeam1Score);
+  const [team1Overs, setTeam1Overs] = useState<string>(initialTeam1Overs);
+  const [team2TargetOvers, setTeam2TargetOvers] = useState<string>(initialTeam2TargetOvers); // Interrupted overs
+  const [currentOvers, setCurrentOvers] = useState<string>(initialCurrentOvers);
+  const [currentWickets, setCurrentWickets] = useState<number>(initialCurrentWickets);
+  const [currentScore, setCurrentScore] = useState<string>(initialCurrentScore);
 
   // Calculation Engine
   const calculationResults = useMemo(() => {
@@ -112,80 +134,113 @@ export const CalculationSettingsManagement: React.FC = () => {
     };
   }, [team1Score, team1Overs, team2TargetOvers, currentOvers, currentWickets, currentScore, selectedMethod]);
 
-  return (
-    <View style={[styles.container, isMobile && { padding: 10 }]}>
-      {/* ── HEADER BANNER ────────────────────────────────────────── */}
-      <View style={[styles.headerCard, isMobile && { padding: 14 }]}>
-        <View style={styles.headerTop}>
-          <View style={styles.headerTextGroup}>
-            <View style={styles.badgeRow}>
-              <View style={styles.badgeCyan}>
-                <Text style={styles.badgeCyanText}>TARGET ARBITRATION ENGINE</Text>
-              </View>
-              <View style={styles.badgeAmber}>
-                <Text style={styles.badgeAmberText}>REAL-TIME RAIN RULE</Text>
+  const renderMethodCards = () => (
+    <View style={[styles.methodCardsRow, isMobile && { flexDirection: 'column' }]}>
+      {/* Professional DLS Card */}
+      <TouchableOpacity
+        style={[
+          styles.methodCard,
+          selectedMethod === 'DLS' ? styles.methodCardActiveDLS : styles.methodCardInactive
+        ]}
+        onPress={() => setSelectedMethod('DLS')}
+        activeOpacity={0.85}
+      >
+        <View style={styles.methodHeader}>
+          <View style={[styles.methodSymbolCircle, selectedMethod === 'DLS' ? styles.symbolCircleActiveDLS : styles.symbolCircleInactive]}>
+            <Text style={{ fontSize: 18 }}>⚖️</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+              <Text style={styles.methodName}>Duckworth-Lewis-Stern</Text>
+              <View style={[styles.methodBadge, selectedMethod === 'DLS' && styles.methodBadgeActiveDLS]}>
+                <Text style={[styles.methodBadgeText, selectedMethod === 'DLS' && styles.methodBadgeTextActiveDLS]}>
+                  {selectedMethod === 'DLS' ? '✓ ICC Gold Standard' : 'ICC Standard'}
+                </Text>
               </View>
             </View>
-            <Text style={[styles.headerTitle, isMobile && { fontSize: 18 }]}>Live Chasing Score Predictor & Target Engine</Text>
-            <Text style={[styles.headerSubtitle, isMobile && { fontSize: 12 }]}>
-              Configure association rain-rule calculation methodology (DLS vs VJD) and simulate live chasing
-              targets, par scores, required run-rate pressure, and dynamic win probabilities.
-            </Text>
+            <Text style={styles.methodSubTitle}>International Two-Factor Resource Engine</Text>
           </View>
         </View>
+        <Text style={styles.methodDesc}>
+          ICC gold standard based on 2-factor resource percentages (overs remaining & wickets in hand).
+          Accurately scales targets for rain-curtailed limited-overs games.
+        </Text>
+      </TouchableOpacity>
 
-        {/* METHOD SELECTOR CARDS */}
-        <View style={[styles.methodCardsRow, isMobile && { flexDirection: 'column' }]}>
-          {/* DLS Card */}
-          <TouchableOpacity
-            style={[styles.methodCard, selectedMethod === 'DLS' && styles.methodCardActiveDLS]}
-            onPress={() => setSelectedMethod('DLS')}
-            activeOpacity={0.85}
-          >
-            <View style={styles.methodHeader}>
-              <View style={[styles.methodRadio, selectedMethod === 'DLS' && styles.methodRadioActiveDLS]}>
-                {selectedMethod === 'DLS' && <View style={styles.radioInner} />}
-              </View>
-              <Text style={styles.methodName}>Duckworth-Lewis-Stern (DLS)</Text>
-              <View style={styles.methodBadge}>
-                <Text style={styles.methodBadgeText}>Standard Method</Text>
+      {/* Professional VJD Card */}
+      <TouchableOpacity
+        style={[
+          styles.methodCard,
+          selectedMethod === 'VJD' ? styles.methodCardActiveVJD : styles.methodCardInactive
+        ]}
+        onPress={() => setSelectedMethod('VJD')}
+        activeOpacity={0.85}
+      >
+        <View style={styles.methodHeader}>
+          <View style={[styles.methodSymbolCircle, selectedMethod === 'VJD' ? styles.symbolCircleActiveVJD : styles.symbolCircleInactive]}>
+            <Text style={{ fontSize: 18 }}>📐</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+              <Text style={styles.methodName}>V. Jayadevan Method</Text>
+              <View style={[styles.methodBadge, selectedMethod === 'VJD' ? styles.methodBadgeActiveVJD : { backgroundColor: '#fef3c7', borderColor: '#fde68a' }]}>
+                <Text style={[styles.methodBadgeText, selectedMethod === 'VJD' ? styles.methodBadgeTextActiveVJD : { color: '#b45309' }]}>
+                  {selectedMethod === 'VJD' ? '✓ BCCI Domestic Engine' : 'BCCI Domestic'}
+                </Text>
               </View>
             </View>
-            <Text style={styles.methodDesc}>
-              International ICC gold standard based on 2-factor resource percentages (overs remaining & wickets in hand).
-              Accurately scales targets for rain-curtailed limited-overs games.
-            </Text>
-          </TouchableOpacity>
-
-          {/* VJD Card */}
-          <TouchableOpacity
-            style={[styles.methodCard, selectedMethod === 'VJD' && styles.methodCardActiveVJD]}
-            onPress={() => setSelectedMethod('VJD')}
-            activeOpacity={0.85}
-          >
-            <View style={styles.methodHeader}>
-              <View style={[styles.methodRadio, selectedMethod === 'VJD' && styles.methodRadioActiveVJD]}>
-                {selectedMethod === 'VJD' && <View style={styles.radioInner} />}
-              </View>
-              <Text style={styles.methodName}>V. Jayadevan (VJD) Method</Text>
-              <View style={[styles.methodBadge, { backgroundColor: '#fef3c7', borderColor: '#fde68a' }]}>
-                <Text style={[styles.methodBadgeText, { color: '#b45309' }]}>Domestic Method</Text>
-              </View>
-            </View>
-            <Text style={styles.methodDesc}>
-              BCCI alternative target calculation method dividing innings into normal, accelerating, and slog phases.
-              Applies parabolic power curves to adjust rain targets.
-            </Text>
-          </TouchableOpacity>
+            <Text style={styles.methodSubTitle}>Indian Domestic Parabolic Curve Engine</Text>
+          </View>
         </View>
-      </View>
+        <Text style={styles.methodDesc}>
+          BCCI alternative dividing innings into normal, accelerating, and slog phases.
+          Applies parabolic power curves to adjust rain targets.
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  return (
+    <View style={[styles.container, isMobile && { padding: 6 }, isModal && { padding: 0 }]}>
+      {/* ── HEADER BANNER (Hidden in Modal to prevent clutter & overflow) ── */}
+      {!isModal ? (
+        <View style={[styles.headerCard, isMobile && { padding: 14 }]}>
+          <View style={styles.headerTop}>
+            <View style={styles.headerTextGroup}>
+              <View style={styles.badgeRow}>
+                <View style={styles.badgeCyan}>
+                  <Text style={styles.badgeCyanText}>TARGET ARBITRATION ENGINE</Text>
+                </View>
+                <View style={styles.badgeAmber}>
+                  <Text style={styles.badgeAmberText}>REAL-TIME RAIN RULE</Text>
+                </View>
+              </View>
+              <Text style={[styles.headerTitle, isMobile && { fontSize: 18 }]}>Live Chasing Score Predictor & Target Engine</Text>
+              <Text style={[styles.headerSubtitle, isMobile && { fontSize: 12 }]}>
+                Configure association rain-rule calculation methodology (DLS vs VJD) and simulate live chasing
+                targets, par scores, required run-rate pressure, and dynamic win probabilities.
+              </Text>
+            </View>
+          </View>
+          {renderMethodCards()}
+        </View>
+      ) : (
+        <View style={{ marginBottom: 16 }}>
+          {renderMethodCards()}
+        </View>
+      )}
 
       {/* ── LIVE SIMULATOR / CALCULATOR ──────────────────────────── */}
       <View style={styles.simulatorGrid}>
         {/* Left Column: Match Parameters Input */}
         <View style={[styles.inputsCard, isMobile && { minWidth: '100%', padding: 14 }]}>
-          <Text style={styles.sectionHeading}>🎯 Match Scenario Controls</Text>
-          <Text style={styles.sectionSubheading}>Input 1st innings score & 2nd innings live match conditions</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={{ fontSize: 18 }}>🎯</Text>
+            <View>
+              <Text style={styles.sectionHeading}>Match Scenario Controls</Text>
+              <Text style={styles.sectionSubheading}>Input 1st innings score & 2nd innings live conditions</Text>
+            </View>
+          </View>
 
           {/* 1st Innings Row */}
           <View style={styles.inputGroup}>
@@ -312,22 +367,20 @@ export const CalculationSettingsManagement: React.FC = () => {
             </View>
           </View>
 
-          {/* Big Target & Par Score Box */}
-          <View style={[styles.scoreHeroBox, isMobile && { flexDirection: 'column', gap: 12 }]}>
-            <View style={styles.scoreHeroItem}>
+          {/* Big Target & Par Score Cards without harsh divider line */}
+          <View style={[styles.scoreHeroBox, isMobile && { flexDirection: 'column', gap: 10 }]}>
+            <View style={styles.scoreHeroItemLeft}>
               <Text style={styles.scoreHeroLabel}>Revised Target</Text>
               <Text style={styles.scoreHeroValue}>{calculationResults.targetRuns}</Text>
               <Text style={styles.scoreHeroSub}>Runs from {team2TargetOvers} Overs</Text>
             </View>
 
-            <View style={[styles.heroDivider, isMobile && { width: '100%', height: 1, marginVertical: 6 }]} />
-
-            <View style={styles.scoreHeroItem}>
-              <Text style={styles.scoreHeroLabel}>Current DLS Par Score</Text>
+            <View style={styles.scoreHeroItemRight}>
+              <Text style={styles.scoreHeroLabel}>Current {selectedMethod} Par Score</Text>
               <Text style={[styles.scoreHeroValue, { color: calculationResults.isAhead ? '#059669' : '#dc2626' }]}>
                 {calculationResults.parScore}
               </Text>
-              <Text style={styles.scoreHeroSub}>
+              <Text style={[styles.scoreHeroSub, { color: calculationResults.isAhead ? '#059669' : '#dc2626' }]}>
                 {calculationResults.isAhead
                   ? `▲ Ahead by ${calculationResults.diffFromPar} runs`
                   : `▼ Behind by ${Math.abs(calculationResults.diffFromPar)} runs`}
@@ -459,22 +512,25 @@ const styles = StyleSheet.create({
   },
   methodCardsRow: {
     flexDirection: 'row',
-    gap: 16,
-    marginTop: 20,
+    gap: 14,
     flexWrap: 'wrap'
   },
   methodCard: {
     flex: 1,
-    minWidth: 300,
-    backgroundColor: '#f8fafc',
+    minWidth: 290,
+    backgroundColor: '#ffffff',
     borderRadius: 14,
-    padding: 18,
-    borderWidth: 2,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0'
+  },
+  methodCardInactive: {
+    backgroundColor: '#f8fafc',
     borderColor: '#e2e8f0'
   },
   methodCardActiveDLS: {
-    borderColor: '#0891b2',
-    backgroundColor: '#f0fdfa'
+    borderColor: '#0284c7',
+    backgroundColor: '#f0f9ff'
   },
   methodCardActiveVJD: {
     borderColor: '#d97706',
@@ -483,35 +539,41 @@ const styles = StyleSheet.create({
   methodHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     marginBottom: 8
   },
-  methodRadio: {
-    width: 20,
-    height: 20,
+  methodSymbolCircle: {
+    width: 38,
+    height: 38,
     borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#94a3b8',
     justifyContent: 'center',
     alignItems: 'center'
   },
-  methodRadioActiveDLS: {
-    borderColor: '#0891b2'
+  symbolCircleActiveDLS: {
+    backgroundColor: '#e0f2fe',
+    borderWidth: 1,
+    borderColor: '#bae6fd'
   },
-  methodRadioActiveVJD: {
-    borderColor: '#d97706'
+  symbolCircleActiveVJD: {
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#fde68a'
   },
-  radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#0891b2'
+  symbolCircleInactive: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
   },
   methodName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
-    color: '#0f172a',
-    flex: 1
+    color: '#0f172a'
+  },
+  methodSubTitle: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '600',
+    marginTop: 1
   },
   methodBadge: {
     backgroundColor: '#ecfeff',
@@ -521,89 +583,103 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6
   },
+  methodBadgeActiveDLS: {
+    backgroundColor: '#0284c7',
+    borderColor: '#0369a1'
+  },
+  methodBadgeActiveVJD: {
+    backgroundColor: '#d97706',
+    borderColor: '#b45309'
+  },
   methodBadgeText: {
     fontSize: 11,
     color: '#0e7490',
     fontWeight: '700'
   },
+  methodBadgeTextActiveDLS: {
+    color: '#ffffff'
+  },
+  methodBadgeTextActiveVJD: {
+    color: '#ffffff'
+  },
   methodDesc: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#475569',
-    lineHeight: 18
+    lineHeight: 17
   },
 
   simulatorGrid: {
     flexDirection: 'row',
-    gap: 20,
+    gap: 16,
     flexWrap: 'wrap'
   },
   inputsCard: {
     flex: 1.1,
     minWidth: 320,
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 22,
+    borderRadius: 14,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 14
+  },
+  resultsCard: {
+    flex: 1.3,
+    minWidth: 330,
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 18,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     gap: 16
   },
-  resultsCard: {
-    flex: 1.3,
-    minWidth: 340,
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 22,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    gap: 18
-  },
   sectionHeading: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     color: '#0f172a'
   },
   sectionSubheading: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#64748b'
   },
   inputGroup: {
-    gap: 6
+    gap: 5
   },
   inputLabel: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#334155'
   },
   twoColInput: {
     flexDirection: 'row',
-    gap: 12
+    gap: 10
   },
   miniLabel: {
     fontSize: 11,
     color: '#64748b',
-    marginBottom: 4
+    marginBottom: 3
   },
   textInput: {
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#cbd5e1',
-    borderRadius: 10,
+    borderRadius: 8,
     paddingHorizontal: 12,
-    height: 42,
+    height: 40,
     fontSize: 14,
     fontWeight: '700',
     color: '#0f172a'
   },
   wicketsRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 5,
     flexWrap: 'wrap',
-    marginTop: 4
+    marginTop: 2
   },
   wicketPill: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 30,
+    height: 30,
+    borderRadius: 6,
     backgroundColor: '#f1f5f9',
     justifyContent: 'center',
     alignItems: 'center',
@@ -615,7 +691,7 @@ const styles = StyleSheet.create({
     borderColor: '#b91c1c'
   },
   wicketPillText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#334155'
   },
@@ -623,31 +699,28 @@ const styles = StyleSheet.create({
     color: '#ffffff'
   },
   presetsRow: {
-    marginTop: 6,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    marginTop: 4,
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 8
+    gap: 6
   },
   presetHeading: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '700',
     color: '#64748b'
   },
   presetBtn: {
-    backgroundColor: '#f1f5f9',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#cbd5e1'
   },
   presetBtnText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#334155'
   },
 
@@ -657,51 +730,58 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   methodActiveBadge: {
-    backgroundColor: '#0891b2',
+    backgroundColor: '#0284c7',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 6
   },
   methodActiveBadgeText: {
     color: '#ffffff',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800'
   },
   scoreHeroBox: {
     flexDirection: 'row',
+    gap: 10,
+    backgroundColor: 'transparent'
+  },
+  scoreHeroItemLeft: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#f8fafc',
-    borderRadius: 14,
-    padding: 18,
+    borderRadius: 12,
+    padding: 14,
     borderWidth: 1,
     borderColor: '#e2e8f0'
   },
-  scoreHeroItem: {
+  scoreHeroItemRight: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    backgroundColor: '#f0fdf4',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#bbf7d0'
   },
   scoreHeroLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#64748b',
     textTransform: 'uppercase',
     letterSpacing: 0.5
   },
   scoreHeroValue: {
-    fontSize: 42,
+    fontSize: 38,
     fontWeight: '900',
     color: '#0f172a',
-    marginVertical: 4
+    marginVertical: 2
   },
   scoreHeroSub: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '700',
-    color: '#475569'
-  },
-  heroDivider: {
-    width: 1,
-    backgroundColor: '#cbd5e1',
-    marginHorizontal: 14
+    color: '#64748b'
   },
   metricsGrid: {
     flexDirection: 'row',

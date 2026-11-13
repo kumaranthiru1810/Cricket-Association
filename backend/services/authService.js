@@ -2047,7 +2047,7 @@ class AuthService {
    * Register Individual Player (Module 2 in PDF Specification)
    * Player personal details, playing role, age category, contact info.
    */
-  async registerPlayer({ name, email, password, mobile, role, category, taluk, battingStyle, bowlingStyle, bowlingArm, bowlingCategory, bowlingAction, clubChoice }) {
+  async registerPlayer({ name, email, password, mobile, phone, aadhaar, aadhaarNumber, aadhaar_number, role, category, taluk, battingStyle, bowlingStyle, bowlingArm, bowlingCategory, bowlingAction, clubChoice }) {
     if (!name || !email) {
       throw { status: 400, message: 'Player name and email are required.' };
     }
@@ -2057,6 +2057,9 @@ class AuthService {
     if (existing) {
       throw { status: 409, message: 'An account with this email address already exists. Please log in directly.' };
     }
+
+    const cleanPhone = (phone || mobile) ? String(phone || mobile).replace(/\D/g, '') : null;
+    const cleanAadhaar = (aadhaar || aadhaarNumber || aadhaar_number) ? String(aadhaar || aadhaarNumber || aadhaar_number).replace(/\D/g, '') : null;
 
     let passwordHash = password ? String(password).trim() : null;
     if (passwordHash) {
@@ -2071,7 +2074,10 @@ class AuthService {
       id: playerId,
       name: name.trim(),
       email: cleanEmail,
-      mobile: mobile || null,
+      mobile: cleanPhone,
+      phone: cleanPhone,
+      aadhaar: cleanAadhaar,
+      aadhaar_number: cleanAadhaar,
       password_hash: passwordHash,
       role: 'PLAYER',
       status: 'ACTIVE',
@@ -2080,6 +2086,10 @@ class AuthService {
         playing_role: role || 'Batsman',
         category: category || 'Senior Men',
         taluk: taluk || 'Virudhunagar',
+        phone: cleanPhone,
+        mobile: cleanPhone,
+        aadhaar: cleanAadhaar,
+        aadhaar_number: cleanAadhaar,
         batting_style: battingStyle || 'Right-Handed Batsman',
         bowling_style: bowlingStyle || 'Right-arm Fast',
         bowling_arm: bowlingArm || '',

@@ -344,8 +344,59 @@ async function scheduleMatch(fixtureData, adminEmail) {
     initiated_by: adminEmail,
     target_user: matchId,
     result: `Match ${matchId} scheduled between ${team_a_id} and ${team_b_id}`,
-    details: `Match fixture created for ${match_date}`
+    details: `Match fixture created for ${cleanDate}`
   });
+
+  // Dispatch Notifications to Team A, Team B, registered players & officials
+  if (db.models.Notification) {
+    try {
+      const matchVenueDisplay = venue || 'Kamarajar District Stadium';
+      const mapLink = venue_maps_url || (venue ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue)}` : '');
+      const notifMsg = `Match Fixture Scheduled: ${resolvedTeamAName || team_a_id} vs ${resolvedTeamBName || team_b_id} on ${cleanDate} at ${cleanTime} at ${matchVenueDisplay}. Location: ${mapLink || matchVenueDisplay}`;
+
+      const notifPayloads = [
+        {
+          id: `NOTIF-SCHED-${Date.now()}-A`,
+          type: 'MATCH_SCHEDULED',
+          recipient_role: 'TEAM',
+          recipient_id: team_a_id,
+          title: `🏏 Fixture Scheduled: vs ${resolvedTeamBName || team_b_id}`,
+          message: notifMsg,
+          reference_id: matchId,
+          link: mapLink,
+          status: 'UNREAD'
+        },
+        {
+          id: `NOTIF-SCHED-${Date.now()}-B`,
+          type: 'MATCH_SCHEDULED',
+          recipient_role: 'TEAM',
+          recipient_id: team_b_id,
+          title: `🏏 Fixture Scheduled: vs ${resolvedTeamAName || team_a_id}`,
+          message: notifMsg,
+          reference_id: matchId,
+          link: mapLink,
+          status: 'UNREAD'
+        },
+        {
+          id: `NOTIF-SCHED-${Date.now()}-GEN`,
+          type: 'MATCH_SCHEDULED',
+          recipient_role: 'ALL',
+          recipient_id: null,
+          title: `🏏 New Fixture: ${resolvedTeamAName || team_a_id} vs ${resolvedTeamBName || team_b_id}`,
+          message: `Scheduled on ${cleanDate} at ${cleanTime} (${matchVenueDisplay}). Check fixtures & venue map.`,
+          reference_id: matchId,
+          link: mapLink,
+          status: 'UNREAD'
+        }
+      ];
+
+      for (const np of notifPayloads) {
+        await db.models.Notification.create(np);
+      }
+    } catch (notifErr) {
+      console.warn('Failed to dispatch match schedule notification:', notifErr.message);
+    }
+  }
 
   return match.toObject();
 }

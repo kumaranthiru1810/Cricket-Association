@@ -944,6 +944,8 @@ class PlayerService {
       type: n.type,
       title: n.title,
       message: n.message,
+      link: n.link || null,
+      reference_id: n.reference_id || null,
       status: n.status,
       createdAt: n.created_at || new Date().toISOString()
     }));

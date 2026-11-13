@@ -94,10 +94,6 @@ const AdminRoutingShell: React.FC<{ onExitAdmin?: () => void }> = ({ onExitAdmin
         return <NotificationsPage />;
       case '/admin/content':
         return <ContentPage />;
-      case '/admin/laws':
-        return <CricketLawsManagement />;
-      case '/admin/calculations':
-        return <CalculationSettingsManagement />;
       default:
         if (currentPath.startsWith('/admin/settings')) {
           const rawSub = currentPath.replace(/^\/admin\/settings\/?/, '').replace(/\?.*/, '');

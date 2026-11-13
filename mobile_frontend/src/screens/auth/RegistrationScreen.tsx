@@ -14,7 +14,8 @@ import {
   Modal,
   useWindowDimensions,
 } from 'react-native';
-import { validateEmail, validatePassword } from '../../utils/validation';
+import { validateEmail, validatePassword, validatePhone, formatPhone, validateAadhaar, formatAadhaar } from '../../utils/validation';
+import { FontAwesome } from '@expo/vector-icons';
 import { useAppNavigation } from '../../navigation/AppNavigator';
 import { ScorerApi, fetchMasterSettings } from '../../services/api';
 import { showSuccess, showError, showWarning, showInfo } from '../../utils/sweetalert';
@@ -206,6 +207,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isDesktop = windowWidth >= 768;
+  const isMobile = windowWidth < 640;
 
   const [activeRole, setActiveRole] = useState<RegistrationRole>(getInitialRole());
   const activeRoleObj = REGISTRATION_ROLES.find((r) => r.key === activeRole) || REGISTRATION_ROLES[0];
@@ -404,6 +406,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   const [pName, setPName] = useState<string>('');
   const [pEmail, setPEmail] = useState<string>('');
   const [pMobile, setPMobile] = useState<string>('');
+  const [pAadhaar, setPAadhaar] = useState<string>('');
   const [pRole, setPRole] = useState<string>('Batsman');
   const [pCategory, setPCategory] = useState<string>('Senior Men');
   const [pTaluk, setPTaluk] = useState<string>('Virudhunagar');
@@ -604,6 +607,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setPName('R. Saravanan');
       setPEmail('saravanan.r@strikerscc.org');
       setPMobile('9876543210');
+      setPAadhaar('5432 9876 1234');
       setPRole('Batsman');
       setPCategory('Senior Men');
       setPTaluk('Virudhunagar');
@@ -879,11 +883,16 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const name = pName.trim();
     const email = pEmail.trim().toLowerCase();
     const mobile = pMobile.trim();
+    const cleanPhone = mobile.replace(/\D/g, '');
+    const cleanAadhaar = pAadhaar.trim().replace(/\D/g, '');
     const targetTaluk = pTaluk === 'Other' ? pCustomTaluk.trim() : pTaluk;
 
     const nameErr = validateNameValue(name, 'Player Full Name');
     const emailErr = validateEmailValue(email, 'Player Email Address');
-    const mobileErr = validateMobileValue(mobile);
+    const phoneRes = validatePhone(mobile, 'Player Phone Number');
+    const mobileErr = phoneRes.isValid ? null : phoneRes.error;
+    const aadhaarRes = validateAadhaar(pAadhaar);
+    const aadhaarErr = aadhaarRes.isValid ? null : aadhaarRes.error;
     let talukErr: string | null = null;
     if (pTaluk === 'Other' && !targetTaluk) talukErr = 'Please enter your Taluk name.';
 
@@ -891,6 +900,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     if (nameErr) errs.name = nameErr;
     if (emailErr) errs.email = emailErr;
     if (mobileErr) errs.mobile = mobileErr;
+    if (aadhaarErr) errs.aadhaar = aadhaarErr;
     if (talukErr) errs.taluk = talukErr;
 
     if (Object.keys(errs).length > 0) {
@@ -971,7 +981,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
         name,
         email,
         password,
-        mobile,
+        mobile: cleanPhone,
+        phone: cleanPhone,
+        aadhaar: cleanAadhaar,
+        aadhaarNumber: cleanAadhaar,
         role: pRole,
         category: pCategory,
         taluk: targetTaluk,
@@ -1787,8 +1800,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     </View>
                   </View>
 
-                  {/* Row 1: Player Full Name (left) & Mobile Number (right) */}
-                  <View style={styles.formRow}>
+                  {/* Row 1: Player Full Name (left) & Player Email Address (right) */}
+                  <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Player Full Name *</Text>
                       <TextInput
@@ -1807,29 +1820,6 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.name}</Text>
                       )}
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.label}>Mobile Number (10 Digits) *</Text>
-                      <TextInput
-                        style={[styles.input, fieldErrors.mobile && styles.inputError]}
-                        value={pMobile}
-                        onChangeText={(val) => {
-                          setPMobile(val);
-                          const err = validateMobileValue(val);
-                          setFieldErrors((prev) => ({ ...prev, mobile: err || undefined }));
-                        }}
-                        placeholder="e.g. 9876543210"
-                        keyboardType="phone-pad"
-                        placeholderTextColor="#94a3b8"
-                        maxLength={10}
-                      />
-                      {fieldErrors.mobile && (
-                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.mobile}</Text>
-                      )}
-                    </View>
-                  </View>
-
-                  {/* Row 2: Player Email Address */}
-                  <View style={styles.formRow}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Player Email Address *</Text>
                       <TextInput
@@ -1851,6 +1841,116 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       />
                       {fieldErrors.email && (
                         <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.email}</Text>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Row 2: Phone Number (10 Digits) & Aadhaar Number (12 Digits) */}
+                  <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                    {/* Phone Number Input */}
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <FontAwesome name="phone" size={13} color="#0284c7" />
+                          <Text style={styles.label}>Phone Number (10 Digits) *</Text>
+                        </View>
+                        <Text style={{ fontSize: 10, color: pMobile.replace(/\D/g, '').length === 10 ? '#16a34a' : '#64748b', fontWeight: '700' }}>
+                          {pMobile.replace(/\D/g, '').length === 10 ? '✓ 10/10 Digits' : `(${pMobile.replace(/\D/g, '').length}/10)`}
+                        </Text>
+                      </View>
+                      <View style={[styles.dynamicInputWrap, fieldErrors.mobile ? styles.inputError : (pMobile.replace(/\D/g, '').length === 10 ? styles.dynamicInputSuccess : null)]}>
+                        <View style={styles.phonePrefixBox}>
+                          <Text style={styles.phonePrefixText}>🇮🇳 +91</Text>
+                        </View>
+                        <TextInput
+                          style={styles.dynamicInputCore}
+                          value={pMobile}
+                          onChangeText={(val) => {
+                            const cleaned = formatPhone(val);
+                            setPMobile(cleaned);
+                            if (cleaned.length === 10) {
+                              const res = validatePhone(cleaned, 'Player Phone Number');
+                              setFieldErrors((prev) => ({ ...prev, mobile: res.isValid ? undefined : res.error }));
+                            } else {
+                              setFieldErrors((prev) => ({ ...prev, mobile: undefined }));
+                            }
+                          }}
+                          onBlur={() => {
+                            if (pMobile.trim()) {
+                              const res = validatePhone(pMobile, 'Player Phone Number');
+                              setFieldErrors((prev) => ({ ...prev, mobile: res.isValid ? undefined : res.error }));
+                            }
+                          }}
+                          placeholder="9876543210"
+                          keyboardType="phone-pad"
+                          placeholderTextColor="#94a3b8"
+                          maxLength={10}
+                        />
+                        {pMobile.replace(/\D/g, '').length === 10 && (
+                          <View style={styles.validCheckBadge}>
+                            <Text style={styles.validCheckText}>✓</Text>
+                          </View>
+                        )}
+                      </View>
+                      {fieldErrors.mobile ? (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.mobile}</Text>
+                      ) : (
+                        <Text style={styles.helperText}>Used for official match alerts & communication</Text>
+                      )}
+                    </View>
+
+                    {/* Aadhaar Number Input */}
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <FontAwesome name="id-card" size={13} color="#b91c1c" />
+                          <Text style={styles.label}>Aadhaar Number (12 Digits) *</Text>
+                        </View>
+                        <Text style={{ fontSize: 10, color: pAadhaar.replace(/\D/g, '').length === 12 ? '#16a34a' : '#64748b', fontWeight: '700' }}>
+                          {pAadhaar.replace(/\D/g, '').length === 12 ? '✓ 12/12 Digits' : `(${pAadhaar.replace(/\D/g, '').length}/12)`}
+                        </Text>
+                      </View>
+                      <View style={[styles.dynamicInputWrap, fieldErrors.aadhaar ? styles.inputError : (pAadhaar.replace(/\D/g, '').length === 12 ? styles.dynamicInputSuccess : null)]}>
+                        <View style={styles.aadhaarIconBox}>
+                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#b91c1c' }}>UIDAI</Text>
+                        </View>
+                        <TextInput
+                          style={styles.dynamicInputCore}
+                          value={pAadhaar}
+                          onChangeText={(val) => {
+                            const formatted = formatAadhaar(val);
+                            setPAadhaar(formatted);
+                            const rawDigits = formatted.replace(/\D/g, '');
+                            if (rawDigits.length === 12) {
+                              const res = validateAadhaar(rawDigits);
+                              setFieldErrors((prev) => ({ ...prev, aadhaar: res.isValid ? undefined : res.error }));
+                            } else if (rawDigits.length > 0 && (rawDigits[0] === '0' || rawDigits[0] === '1')) {
+                              setFieldErrors((prev) => ({ ...prev, aadhaar: 'Aadhaar number cannot start with 0 or 1.' }));
+                            } else {
+                              setFieldErrors((prev) => ({ ...prev, aadhaar: undefined }));
+                            }
+                          }}
+                          onBlur={() => {
+                            if (pAadhaar.trim()) {
+                              const res = validateAadhaar(pAadhaar);
+                              setFieldErrors((prev) => ({ ...prev, aadhaar: res.isValid ? undefined : res.error }));
+                            }
+                          }}
+                          placeholder="5432 9876 1234"
+                          keyboardType="number-pad"
+                          placeholderTextColor="#94a3b8"
+                          maxLength={14}
+                        />
+                        {pAadhaar.replace(/\D/g, '').length === 12 && (
+                          <View style={[styles.validCheckBadge, { backgroundColor: '#16a34a' }]}>
+                            <Text style={styles.validCheckText}>✓</Text>
+                          </View>
+                        )}
+                      </View>
+                      {fieldErrors.aadhaar ? (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.aadhaar}</Text>
+                      ) : (
+                        <Text style={styles.helperText}>Indian 12-digit National Identification Number</Text>
                       )}
                     </View>
                   </View>
@@ -3862,6 +3962,71 @@ const styles = StyleSheet.create({
   inputError: {
     borderColor: '#ef4444',
     backgroundColor: '#fef2f2'
+  },
+  dynamicInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 6,
+    height: 35,
+    overflow: 'hidden'
+  },
+  dynamicInputSuccess: {
+    borderColor: '#16a34a',
+    backgroundColor: '#f0fdf4'
+  },
+  phonePrefixBox: {
+    paddingHorizontal: 8,
+    height: '100%',
+    backgroundColor: '#e2e8f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#cbd5e1'
+  },
+  phonePrefixText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155'
+  },
+  aadhaarIconBox: {
+    paddingHorizontal: 8,
+    height: '100%',
+    backgroundColor: '#fee2e2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#fca5a5'
+  },
+  dynamicInputCore: {
+    flex: 1,
+    height: '100%',
+    paddingHorizontal: 8,
+    paddingVertical: 0,
+    fontSize: 12.5,
+    color: '#1e293b',
+    fontWeight: '600'
+  },
+  validCheckBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#16a34a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6
+  },
+  validCheckText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '900'
+  },
+  helperText: {
+    fontSize: 10,
+    color: '#64748b',
+    marginTop: 2
   },
   fieldErrorText: {
     color: '#dc2626',
