@@ -98,9 +98,12 @@ const AdminRoutingShell: React.FC<{ onExitAdmin?: () => void }> = ({ onExitAdmin
         return <CricketLawsManagement />;
       case '/admin/calculations':
         return <CalculationSettingsManagement />;
-      case '/admin/settings':
-        return <SettingsPage />;
       default:
+        if (currentPath.startsWith('/admin/settings')) {
+          const rawSub = currentPath.replace(/^\/admin\/settings\/?/, '').replace(/\?.*/, '');
+          const normalizedCategory = rawSub.replace(/-/g, '_');
+          return <SettingsPage initialCategory={normalizedCategory || undefined} onNavigate={handleNavigate} />;
+        }
         return <DashboardPage onNavigate={handleNavigate} />;
     }
   };

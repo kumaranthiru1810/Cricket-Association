@@ -785,6 +785,31 @@ PlayerMatchRatingSchema.index({ player_id: 1, match_date: -1 });
 PlayerMatchRatingSchema.index({ format: 1, overall_rating: -1 });
 
 const PlayerMatchRating = mongoose.models.PlayerMatchRating || mongoose.model('PlayerMatchRating', PlayerMatchRatingSchema);
+// 21. Master Settings & Dynamic Dropdown Options Schema
+const MasterSettingSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true, index: true },
+  category: { 
+    type: String, 
+    required: true, 
+    index: true,
+    enum: [
+      'taluk_jurisdiction',
+      'playing_role',
+      'batting_style',
+      'age_category',
+      'certification_level',
+      'umpire_certification',
+      'state'
+    ]
+  },
+  name: { type: String, required: true, trim: true },
+  code: { type: String, default: null, trim: true },
+  description: { type: String, default: '' },
+  is_active: { type: Boolean, default: true },
+  sort_order: { type: Number, default: 0 }
+}, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
+
+const MasterSetting = mongoose.models.MasterSetting || mongoose.model('MasterSetting', MasterSettingSchema);
 
 // In-Memory Temporary Registrations & OTPs cache
 const memoryDb = {
@@ -1580,6 +1605,80 @@ async function seedDefaultData() {
         { id: 'OFF-02', name: 'K. Murugan', role: 'SCORER', email: 'murugan@cfvd.org', phone: '9876543214', status: 'ACTIVE' }
       ]);
     }
+
+    // Seed Master Settings Dynamic Options (Taluk Jurisdiction, Playing Role, Batting Style, Age Category, Certification Level, Umpire Certification, State)
+    const masterSettingCount = await MasterSetting.countDocuments();
+    if (masterSettingCount === 0) {
+      const jsonSeedPath = path.join(__dirname, '..', 'data', 'master_settings', 'all_master_settings.json');
+      let defaultOptions = [];
+      if (fs.existsSync(jsonSeedPath)) {
+        defaultOptions = JSON.parse(fs.readFileSync(jsonSeedPath, 'utf8'));
+      } else {
+        defaultOptions = [
+          // 1. Taluk Jurisdiction
+          { category: 'taluk_jurisdiction', name: 'Virudhunagar', code: 'VNR', sort_order: 1 },
+          { category: 'taluk_jurisdiction', name: 'Sivakasi', code: 'SVKS', sort_order: 2 },
+          { category: 'taluk_jurisdiction', name: 'Rajapalayam', code: 'RJPM', sort_order: 3 },
+          { category: 'taluk_jurisdiction', name: 'Srivilliputhur', code: 'SVPR', sort_order: 4 },
+          { category: 'taluk_jurisdiction', name: 'Aruppukottai', code: 'APKI', sort_order: 5 },
+          { category: 'taluk_jurisdiction', name: 'Sattur', code: 'STR', sort_order: 6 },
+          { category: 'taluk_jurisdiction', name: 'Watrap', code: 'WTR', sort_order: 7 },
+          { category: 'taluk_jurisdiction', name: 'Kariapatti', code: 'KPT', sort_order: 8 },
+          { category: 'taluk_jurisdiction', name: 'Tiruchuli', code: 'TCL', sort_order: 9 },
+          { category: 'taluk_jurisdiction', name: 'Vembakottai', code: 'VBK', sort_order: 10 },
+
+          // 2. Playing Role
+          { category: 'playing_role', name: 'Batsman', code: 'BAT', sort_order: 1 },
+          { category: 'playing_role', name: 'Bowler', code: 'BOWL', sort_order: 2 },
+          { category: 'playing_role', name: 'All-Rounder', code: 'AR', sort_order: 3 },
+          { category: 'playing_role', name: 'Wicket Keeper', code: 'WK', sort_order: 4 },
+
+          // 3. Batting Style
+          { category: 'batting_style', name: 'Right-Handed Batsman', code: 'RHB', sort_order: 1 },
+          { category: 'batting_style', name: 'Left-Handed Batsman', code: 'LHB', sort_order: 2 },
+
+          // 4. Age Category
+          { category: 'age_category', name: 'Senior Men', code: 'SR_MEN', sort_order: 1 },
+          { category: 'age_category', name: "Women's Senior", code: 'SR_WOMEN', sort_order: 2 },
+          { category: 'age_category', name: 'Under-23', code: 'U23', sort_order: 3 },
+          { category: 'age_category', name: 'Under-19', code: 'U19', sort_order: 4 },
+          { category: 'age_category', name: 'Under-16', code: 'U16', sort_order: 5 },
+          { category: 'age_category', name: 'Under-14', code: 'U14', sort_order: 6 },
+          { category: 'age_category', name: 'Under-12', code: 'U12', sort_order: 7 },
+
+          // 5. Certification Level (Scorer)
+          { category: 'certification_level', name: 'District Certified', code: 'DIST_CERT', sort_order: 1 },
+          { category: 'certification_level', name: 'State Panel', code: 'STATE_PANEL', sort_order: 2 },
+          { category: 'certification_level', name: 'Club Scorer', code: 'CLUB_SCR', sort_order: 3 },
+          { category: 'certification_level', name: 'Trainee Scorer', code: 'TRAINEE_SCR', sort_order: 4 },
+
+          // 6. Umpire Certification / Qualification
+          { category: 'umpire_certification', name: 'State Panel A (Senior)', code: 'STATE_PANEL_A', sort_order: 1 },
+          { category: 'umpire_certification', name: 'State Panel B', code: 'STATE_PANEL_B', sort_order: 2 },
+          { category: 'umpire_certification', name: 'BCCI Level 1 Certified', code: 'BCCI_L1', sort_order: 3 },
+          { category: 'umpire_certification', name: 'District Senior Panel', code: 'DIST_SR_PANEL', sort_order: 4 },
+          { category: 'umpire_certification', name: 'District Certified Umpire', code: 'DIST_CERT_UMP', sort_order: 5 },
+          { category: 'umpire_certification', name: 'Trainee Umpire', code: 'TRAINEE_UMP', sort_order: 6 },
+
+          // 7. State
+          { category: 'state', name: 'Tamil Nadu', code: 'TN', sort_order: 1 },
+          { category: 'state', name: 'Kerala', code: 'KL', sort_order: 2 },
+          { category: 'state', name: 'Karnataka', code: 'KA', sort_order: 3 },
+          { category: 'state', name: 'Andhra Pradesh', code: 'AP', sort_order: 4 },
+          { category: 'state', name: 'Telangana', code: 'TS', sort_order: 5 },
+          { category: 'state', name: 'Other', code: 'OTHER', sort_order: 6 }
+        ];
+      }
+
+      await MasterSetting.insertMany(
+        defaultOptions.map((opt, idx) => ({
+          id: opt.id || `MSET-${Date.now()}-${idx + 1}`,
+          ...opt,
+          is_active: opt.is_active !== undefined ? opt.is_active : true
+        }))
+      );
+      console.log('✅ Seeded default Master Settings Dynamic Subcategories (Taluk, Roles, Batting, Age, Certs, State).');
+    }
   } catch (err) {
     console.warn('Seed note:', err.message);
   }
@@ -2029,6 +2128,7 @@ module.exports = {
     CricketLawVersion,
     CricketLawAuditLog,
     TournamentCalculation,
-    PlayerMatchRating
+    PlayerMatchRating,
+    MasterSetting
   }
 };

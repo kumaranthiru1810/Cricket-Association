@@ -8,6 +8,7 @@
     "dev": "nodemon server.js",
     "migrate": "node migrations/migrate.js",
     "seed": "node seeds/seed.js",
+    "seed:settings": "node scripts/importMasterSettings.js",
     "test": "node tests/runTests.js",
     "test:umpire": "node tests/test_umpire_module.js",
     "test:security": "node tests/securityVerification.js",
