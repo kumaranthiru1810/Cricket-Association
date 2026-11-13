@@ -7117,8 +7117,9 @@ export default function LiveScoringScreen() {
         onRequestClose={() => setShowCustomModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxWidth: 500 }]}>
-            <View style={styles.wicketModalHeader}>
+          <View style={[styles.modalContent, { maxWidth: 500, width: '92%', maxHeight: '88%', padding: 16, display: 'flex', flexDirection: 'column' }]}>
+            {/* Modal Header */}
+            <View style={[styles.wicketModalHeader, { marginBottom: 8 }]}>
               <View style={styles.modalTopHeaderRow}>
                 <Text style={styles.wicketModalTitle}>⚡ Custom Runs & Extras</Text>
                 <TouchableOpacity
@@ -7130,103 +7131,117 @@ export default function LiveScoringScreen() {
                   <Text style={styles.redCloseBtnText}>✕</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={styles.wicketModalSub}>
+              <Text style={[styles.wicketModalSub, { fontSize: 11, marginTop: 2 }]}>
                 Record any number of runs (e.g. 5 runs, overthrows, penalties, or custom extras).
               </Text>
             </View>
 
-            <Text style={styles.selectLabel}>QUICK RUNS OR ENTER NUMBER:</Text>
-            <View style={styles.customRunChipsRow}>
-              {['1', '2', '3', '4', '5', '6', '7'].map((r) => (
-                <TouchableOpacity
-                  key={r}
-                  style={[styles.customRunChip, customRunsInput === r && styles.customRunChipActive]}
-                  onPress={() => setCustomRunsInput(r)}
-                >
-                  <Text style={[styles.customRunChipText, customRunsInput === r && styles.customRunChipTextActive]}>{r}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={{ marginTop: 8, marginBottom: 12 }}>
-              <Text style={styles.fieldSubLabel}>NUMBER OF RUNS:</Text>
-              <TextInput
-                style={styles.customNameInput}
-                keyboardType="numeric"
-                placeholder="e.g. 5"
-                placeholderTextColor="#94a3b8"
-                value={customRunsInput}
-                onChangeText={(val) => setCustomRunsInput(val)}
-              />
-            </View>
-
-            <Text style={styles.selectLabel}>DELIVERY CATEGORY:</Text>
-            <View style={styles.categoryGrid}>
-              {[
-                { key: 'normal', label: 'Off Bat (Normal)', desc: 'Bat & Team' },
-                { key: 'wide', label: 'Wide + Runs', desc: 'Conceded Extra' },
-                { key: 'noball_bat', label: 'No Ball + Bat', desc: '1 Extra + Bat' },
-                { key: 'noball_extra', label: 'No Ball + Bye', desc: 'Total Extras' },
-                { key: 'bye', label: 'Byes', desc: 'Legal Extra' },
-                { key: 'legbye', label: 'Leg Byes', desc: 'Legal Extra' },
-                { key: 'penalty', label: 'Penalty Runs', desc: 'Team Total' }
-              ].map((cat) => (
-                <TouchableOpacity
-                  key={cat.key}
-                  style={[styles.categoryOption, customCategory === cat.key && styles.categoryOptionActive]}
-                  onPress={() => setCustomCategory(cat.key)}
-                >
-                  <Text style={[styles.categoryOptionText, customCategory === cat.key && styles.categoryOptionTextActive]}>
-                    {cat.label}
-                  </Text>
-                  <Text style={styles.categoryOptionDesc}>{cat.desc}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* REASON / RUN NOTE (WHY GIVING RUNS?) */}
-            <View style={{ marginTop: 6, marginBottom: 8 }}>
-              <Text style={styles.selectLabel}>REASON / RUN NOTE (WHY GIVING RUNS?):</Text>
-              <TextInput
-                style={[styles.customNameInput, customRunsReason.trim() ? styles.customNameInputActive : null]}
-                placeholder="✍️ Type reason: e.g. Overthrow, Helmet penalty, Misfield, Short run..."
-                placeholderTextColor="#94a3b8"
-                value={customRunsReason}
-                onChangeText={(val) => setCustomRunsReason(val)}
-              />
-              {/* Quick suggestion chips */}
-              <View style={styles.quickReasonsRow}>
-                {['Overthrow', 'Helmet Hit (5 Penalty)', 'Misfield', 'Short Run', 'Boundary Overthrow', 'Obstruction'].map((tag) => (
+            {/* Scrollable Form Body */}
+            <ScrollView
+              showsVerticalScrollIndicator={true}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingBottom: 10 }}
+            >
+              <Text style={styles.selectLabel}>QUICK RUNS OR ENTER NUMBER:</Text>
+              <View style={[styles.customRunChipsRow, { marginBottom: 6 }]}>
+                {['1', '2', '3', '4', '5', '6', '7'].map((r) => (
                   <TouchableOpacity
-                    key={tag}
-                    style={[
-                      styles.quickReasonChip,
-                      customRunsReason === tag && styles.quickReasonChipActive
-                    ]}
-                    onPress={() => setCustomRunsReason(customRunsReason === tag ? '' : tag)}
+                    key={r}
+                    style={[styles.customRunChip, customRunsInput === r && styles.customRunChipActive]}
+                    onPress={() => setCustomRunsInput(r)}
                   >
-                    <Text
-                      style={[
-                        styles.quickReasonChipText,
-                        customRunsReason === tag && styles.quickReasonChipTextActive
-                      ]}
-                    >
-                      {tag}
-                    </Text>
+                    <Text style={[styles.customRunChipText, customRunsInput === r && styles.customRunChipTextActive]}>{r}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
-            </View>
 
-            <View style={styles.previewBox}>
-              <Text style={styles.previewBoxLabel}>RECORDING PREVIEW:</Text>
-              <Text style={styles.previewBoxText}>
-                {customRunsInput || '0'} Runs &bull; {customCategory.toUpperCase()} vs {bowler?.name || 'Bowler'}
-                {customRunsReason.trim() ? ` • [${customRunsReason.trim()}]` : ''}
-              </Text>
-            </View>
+              <View style={{ marginTop: 4, marginBottom: 8 }}>
+                <Text style={styles.fieldSubLabel}>NUMBER OF RUNS:</Text>
+                <TextInput
+                  style={[styles.customNameInput, { height: 38, paddingVertical: 6 }]}
+                  keyboardType="numeric"
+                  placeholder="e.g. 5"
+                  placeholderTextColor="#94a3b8"
+                  value={customRunsInput}
+                  onChangeText={(val) => setCustomRunsInput(val)}
+                />
+              </View>
 
-            <View style={[styles.modalActions, { marginTop: 14 }]}>
+              <Text style={styles.selectLabel}>DELIVERY CATEGORY:</Text>
+              <View style={[styles.categoryGrid, { gap: 6, marginBottom: 8 }]}>
+                {[
+                  { key: 'normal', label: 'Off Bat (Normal)', desc: 'Bat & Team' },
+                  { key: 'wide', label: 'Wide + Runs', desc: 'Conceded Extra' },
+                  { key: 'noball_bat', label: 'No Ball + Bat', desc: '1 Extra + Bat' },
+                  { key: 'noball_extra', label: 'No Ball + Bye', desc: 'Total Extras' },
+                  { key: 'bye', label: 'Byes', desc: 'Legal Extra' },
+                  { key: 'legbye', label: 'Leg Byes', desc: 'Legal Extra' },
+                  { key: 'penalty', label: 'Penalty Runs', desc: 'Team Total' }
+                ].map((cat) => (
+                  <TouchableOpacity
+                    key={cat.key}
+                    style={[
+                      styles.categoryOption,
+                      { paddingVertical: 6, paddingHorizontal: 8 },
+                      customCategory === cat.key && styles.categoryOptionActive
+                    ]}
+                    onPress={() => setCustomCategory(cat.key)}
+                  >
+                    <Text style={[styles.categoryOptionText, { fontSize: 11.5 }, customCategory === cat.key && styles.categoryOptionTextActive]}>
+                      {cat.label}
+                    </Text>
+                    <Text style={[styles.categoryOptionDesc, { fontSize: 9.5 }]}>{cat.desc}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* REASON / RUN NOTE (WHY GIVING RUNS?) */}
+              <View style={{ marginTop: 2, marginBottom: 8 }}>
+                <Text style={styles.selectLabel}>REASON / RUN NOTE (WHY GIVING RUNS?):</Text>
+                <TextInput
+                  style={[styles.customNameInput, { height: 38, paddingVertical: 6 }, customRunsReason.trim() ? styles.customNameInputActive : null]}
+                  placeholder="✍️ Type reason: e.g. Overthrow, Helmet penalty, Misfield, Short run..."
+                  placeholderTextColor="#94a3b8"
+                  value={customRunsReason}
+                  onChangeText={(val) => setCustomRunsReason(val)}
+                />
+                {/* Quick suggestion chips */}
+                <View style={[styles.quickReasonsRow, { marginTop: 4, gap: 4 }]}>
+                  {['Overthrow', 'Helmet Hit (5 Penalty)', 'Misfield', 'Short Run', 'Boundary Overthrow', 'Obstruction'].map((tag) => (
+                    <TouchableOpacity
+                      key={tag}
+                      style={[
+                        styles.quickReasonChip,
+                        { paddingHorizontal: 7, paddingVertical: 3 },
+                        customRunsReason === tag && styles.quickReasonChipActive
+                      ]}
+                      onPress={() => setCustomRunsReason(customRunsReason === tag ? '' : tag)}
+                    >
+                      <Text
+                        style={[
+                          styles.quickReasonChipText,
+                          { fontSize: 10 },
+                          customRunsReason === tag && styles.quickReasonChipTextActive
+                        ]}
+                      >
+                        {tag}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={[styles.previewBox, { padding: 8, marginTop: 4 }]}>
+                <Text style={[styles.previewBoxLabel, { fontSize: 9.5 }]}>RECORDING PREVIEW:</Text>
+                <Text style={[styles.previewBoxText, { fontSize: 12 }]}>
+                  {customRunsInput || '0'} Runs &bull; {customCategory.toUpperCase()} vs {bowler?.name || 'Bowler'}
+                  {customRunsReason.trim() ? ` • [${customRunsReason.trim()}]` : ''}
+                </Text>
+              </View>
+            </ScrollView>
+
+            {/* Modal Actions - Fixed at Bottom */}
+            <View style={[styles.modalActions, { marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f1f5f9' }]}>
               <TouchableOpacity
                 style={styles.modalCancelBtn}
                 onPress={() => setShowCustomModal(false)}
