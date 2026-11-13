@@ -2203,11 +2203,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           </TouchableOpacity>
           <Image source={IMG_LOGO} style={styles.adminMinimalLogo} resizeMode="contain" />
           <View style={{ marginLeft: 12, flex: 1 }}>
-            <Text style={styles.adminMinimalTitle} numberOfLines={2}>CRICKET FEDERATION OF VIRUDHUNAGAR DISTRICT</Text>
-            <Text style={styles.adminMinimalSub} numberOfLines={1}>Official Administrator Management Console</Text>
+            <Text style={[styles.adminMinimalTitle, !isDesktop && { fontSize: 12.5 }]} numberOfLines={!isDesktop ? 1 : 2}>CRICKET FEDERATION OF VIRUDHUNAGAR DISTRICT</Text>
+            <Text style={[styles.adminMinimalSub, !isDesktop && { fontSize: 10 }]} numberOfLines={1}>Official Administrator Management Console</Text>
           </View>
         </View>
-        {isDesktop && (
+        {isDesktop ? (
           <View style={styles.adminMinimalActionRow}>
             <View style={styles.adminUserBadgePill}>
               <Text style={styles.adminUserBadgePillText}>👤 {adminEmail}</Text>
@@ -2216,6 +2216,14 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               <Text style={styles.adminExitBtnPillText}>← Exit</Text>
             </TouchableOpacity>
           </View>
+        ) : (
+          <TouchableOpacity
+            style={[styles.adminExitBtnPill, { paddingHorizontal: 10, paddingVertical: 5, marginLeft: 8 }]}
+            onPress={() => setLogoutModalOpen(true)}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.adminExitBtnPillText, { fontSize: 11 }]}>Exit</Text>
+          </TouchableOpacity>
         )}
       </View>
 
@@ -7296,7 +7304,7 @@ const styles: any = StyleSheet.create({
   contentConstrained: {
     maxWidth: 1200,
     width: '100%',
-    marginHorizontal: 'auto'
+    alignSelf: 'center'
   },
   notificationBanner: {
     backgroundColor: '#dcfce7',

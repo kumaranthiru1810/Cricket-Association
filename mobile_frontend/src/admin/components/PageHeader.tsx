@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
   },
   titleArea: {
     flex: 1,
-    minWidth: 260
+    minWidth: 200
   },
   breadcrumbRow: {
     flexDirection: 'row',

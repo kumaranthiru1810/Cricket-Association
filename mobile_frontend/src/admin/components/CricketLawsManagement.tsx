@@ -14,7 +14,8 @@ import {
   ScrollView,
   TextInput,
   Modal,
-  Platform
+  Platform,
+  useWindowDimensions
 } from 'react-native';
 
 export interface LawItem {
@@ -560,6 +561,10 @@ const MCC_LAWS_2026: LawItem[] = [
 ];
 
 export const CricketLawsManagement: React.FC = () => {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+  const isSmall = width < 480;
+
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [showAmendedOnly, setShowAmendedOnly] = useState<boolean>(false);
@@ -587,9 +592,9 @@ export const CricketLawsManagement: React.FC = () => {
   const amendedCount = useMemo(() => MCC_LAWS_2026.filter(l => l.isAmended2026).length, []);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isMobile && { padding: 10 }]}>
       {/* ── HEADER BANNER ────────────────────────────────────────── */}
-      <View style={styles.headerCard}>
+      <View style={[styles.headerCard, isMobile && { padding: 14 }]}>
         <View style={styles.headerTop}>
           <View style={styles.headerTextGroup}>
             <View style={styles.editionBadgeRow}>
@@ -600,8 +605,8 @@ export const CricketLawsManagement: React.FC = () => {
                 <Text style={styles.effectiveBadgeText}>OFFICIAL CFVD REGISTRY</Text>
               </View>
             </View>
-            <Text style={styles.headerTitle}>Laws of Cricket Management System</Text>
-            <Text style={styles.headerSubtitle}>
+            <Text style={[styles.headerTitle, isMobile && { fontSize: 18 }]}>Laws of Cricket Management System</Text>
+            <Text style={[styles.headerSubtitle, isMobile && { fontSize: 12 }]}>
               Official MCC 42 Laws repository with 2026 amendments, Level 1–4 player conduct sanctions,
               penalty runs codification, and umpire reference arbiter.
             </Text>
@@ -609,20 +614,20 @@ export const CricketLawsManagement: React.FC = () => {
         </View>
 
         {/* STATS TILES */}
-        <View style={styles.statsRow}>
-          <View style={styles.statBox}>
+        <View style={[styles.statsRow, isMobile && { gap: 8 }]}>
+          <View style={[styles.statBox, isMobile && { minWidth: '47%' }]}>
             <Text style={styles.statNumber}>42</Text>
             <Text style={styles.statLabel}>Total MCC Laws</Text>
           </View>
-          <View style={[styles.statBox, { borderColor: '#10b981' }]}>
+          <View style={[styles.statBox, { borderColor: '#10b981' }, isMobile && { minWidth: '47%' }]}>
             <Text style={[styles.statNumber, { color: '#059669' }]}>{amendedCount}</Text>
             <Text style={styles.statLabel}>2026 Key Revisions</Text>
           </View>
-          <View style={[styles.statBox, { borderColor: '#f59e0b' }]}>
+          <View style={[styles.statBox, { borderColor: '#f59e0b' }, isMobile && { minWidth: '47%' }]}>
             <Text style={[styles.statNumber, { color: '#d97706' }]}>7</Text>
             <Text style={styles.statLabel}>Major Categories</Text>
           </View>
-          <View style={[styles.statBox, { borderColor: '#ef4444' }]}>
+          <View style={[styles.statBox, { borderColor: '#ef4444' }, isMobile && { minWidth: '47%' }]}>
             <Text style={[styles.statNumber, { color: '#dc2626' }]}>5 Runs</Text>
             <Text style={styles.statLabel}>Standard Penalty Code</Text>
           </View>
@@ -630,9 +635,9 @@ export const CricketLawsManagement: React.FC = () => {
       </View>
 
       {/* ── SEARCH & FILTER CONTROLS ─────────────────────────────── */}
-      <View style={styles.controlsCard}>
-        <View style={styles.searchRow}>
-          <View style={styles.searchInputWrapper}>
+      <View style={[styles.controlsCard, isMobile && { padding: 12 }]}>
+        <View style={[styles.searchRow, isMobile && { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
+          <View style={[styles.searchInputWrapper, isMobile && { minWidth: '100%' }]}>
             <Text style={styles.searchIcon}>🔍</Text>
             <TextInput
               style={styles.searchInput}
@@ -649,7 +654,7 @@ export const CricketLawsManagement: React.FC = () => {
           </View>
 
           <TouchableOpacity
-            style={[styles.amendedFilterBtn, showAmendedOnly && styles.amendedFilterBtnActive]}
+            style={[styles.amendedFilterBtn, showAmendedOnly && styles.amendedFilterBtnActive, isMobile && { width: '100%' }]}
             onPress={() => setShowAmendedOnly(!showAmendedOnly)}
             activeOpacity={0.8}
           >
