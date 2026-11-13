@@ -25,6 +25,7 @@ const UserSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, index: true, lowercase: true, trim: true },
   mobile: { type: String, default: null },
   password_hash: { type: String, default: null },
+  current_password: { type: String, default: null },
   role: { 
     type: String, 
     enum: ['ADMIN', 'COACH', 'TEAM', 'PLAYER', 'SCORER', 'UMPIRE', 'CONTENT', 'USER'], 
@@ -247,6 +248,7 @@ const TeamRegistrationSchema = new mongoose.Schema({
   coach_name: { type: String, required: true },
   coach_email: { type: String, required: true, lowercase: true, trim: true, index: true },
   password_hash: { type: String, default: null },
+  current_password: { type: String, default: null },
   passkey: { type: String, default: '' },
   city: { type: String, default: 'Virudhunagar' },
   taluk: { type: String, default: 'Virudhunagar' },

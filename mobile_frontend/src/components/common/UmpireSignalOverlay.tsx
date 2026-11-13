@@ -618,10 +618,6 @@ export const UmpireSignalsGalleryModal: React.FC<UmpireSignalsGalleryModalProps>
                     <Text style={styles.galleryCardDesc} numberOfLines={2}>
                       {cfg.gestureDescription}
                     </Text>
-
-                    <View style={[styles.galleryPlayBtn, { backgroundColor: cfg.primaryColor }]}>
-                      <Text style={styles.galleryPlayBtnText}>▶ Play Animation</Text>
-                    </View>
                   </View>
                 </TouchableOpacity>
               );
@@ -980,7 +976,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
     lineHeight: 14,
-    marginBottom: 8
+    marginBottom: 2
   },
   galleryPlayBtn: {
     paddingVertical: 6,

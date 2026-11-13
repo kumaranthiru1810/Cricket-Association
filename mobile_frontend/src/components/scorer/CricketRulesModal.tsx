@@ -1586,6 +1586,21 @@ export default function CricketRulesModal({
                       <Text style={styles.detailSummary}>{selectedRule.summary}</Text>
                     </View>
 
+                    {/* VISUAL CRICKET FIELD DIAGRAM (Positioned immediately after heading & summary) */}
+                    <View style={styles.diagramWrapper}>
+                      <Text style={styles.diagramHeaderTitle}>🎨 OFFICIAL VISUAL DECISION DIAGRAM</Text>
+                      {renderRuleDiagram(selectedRule.diagramType, isMobile, {
+                        brokenEnd,
+                        setBrokenEnd,
+                        didBattersCross,
+                        setDidBattersCross,
+                        calculateRunOutVictim,
+                        timedOutSeconds,
+                        competitionFormat,
+                        ruleContext
+                      })}
+                    </View>
+
                     {/* WHEN THE RULE APPLIES */}
                     <View style={styles.specBox}>
                       <Text style={styles.specBoxTitle}>📌 WHEN THIS RULE APPLIES:</Text>
@@ -1600,21 +1615,6 @@ export default function CricketRulesModal({
                           <Text style={styles.stepBulletText}>{step}</Text>
                         </View>
                       ))}
-                    </View>
-
-                    {/* VISUAL CRICKET FIELD DIAGRAM */}
-                    <View style={styles.diagramWrapper}>
-                      <Text style={styles.diagramHeaderTitle}>🎨 OFFICIAL VISUAL DECISION DIAGRAM</Text>
-                      {renderRuleDiagram(selectedRule.diagramType, isMobile, {
-                        brokenEnd,
-                        setBrokenEnd,
-                        didBattersCross,
-                        setDidBattersCross,
-                        calculateRunOutVictim,
-                        timedOutSeconds,
-                        competitionFormat,
-                        ruleContext
-                      })}
                     </View>
 
                     {/* SPECIFICATIONS GRID */}

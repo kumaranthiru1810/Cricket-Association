@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, useWindowDimensions, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, useWindowDimensions, Platform, Image, Modal } from 'react-native';
 
 import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
 import SharedFooter from '../../components/scorer/SharedFooter';
@@ -13,6 +13,8 @@ import UmpireSignalOverlay, { UmpireSignalEvent, UmpireSignalsGalleryModal, Umpi
 import FieldingEventOverlay, { FieldingEventData, FieldingEventType } from '../../components/common/FieldingEventOverlay';
 
 const IMG_CHAMPIONS = require('../../../assets/cricket_champions.png');
+const IMG_MATCH_RESULT_TROPHY = require('../../../assets/cricket_match_result_trophy.png');
+const IMG_PARTNERSHIP = require('../../../assets/cricket_batting_partnership.png');
 
 interface ScorecardScreenProps {
   onExit?: () => void;
@@ -55,6 +57,9 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
   // Broadcast Fielding Event Animation Overlay State
   const [activeFieldingEvent, setActiveFieldingEvent] = useState<FieldingEventData | null>(null);
 
+  // Exit Confirmation Modal State
+  const [showExitModal, setShowExitModal] = useState<boolean>(false);
+
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       (window as any).__SET_INNINGS_TAB__ = (idx: number) => setActiveInningsTab(idx);
@@ -62,14 +67,7 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
   }, []);
 
   const handleBack = () => {
-    const isLiveMatch = scorecardData?.match?.status === 'LIVE' || scorecardData?.match?.status === 'Live';
-    if (params?.returnTo === 'LiveScoring' && isLiveMatch) {
-      scorerNav?.navigate('LiveScoring', { matchId });
-    } else if (onExit) {
-      onExit();
-    } else if (scorerNav?.navigate) {
-      scorerNav.navigate('Dashboard');
-    }
+    setShowExitModal(true);
   };
 
   useEffect(() => {
@@ -530,16 +528,25 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
           <TouchableOpacity onPress={handleBack} style={styles.backBtn} activeOpacity={0.8}>
             <Text style={styles.backText}>
               {params?.returnTo === 'Home'
-                ? '← Back to Association Portal'
+                ? '← Exit / Back'
                 : match.status === 'Live' || match.status === 'LIVE'
                   ? '← Back to Live Scoring'
-                  : '← Back to Matches'}
+                  : '← Exit / Matches'}
             </Text>
           </TouchableOpacity>
-          <View style={styles.badgeLive}>
-            <Text style={styles.badgeLiveText}>
-              {match.status || 'Match Scorecard'}
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={styles.badgeLive}>
+              <Text style={styles.badgeLiveText}>
+                {match.status || 'Match Scorecard'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.exitScorerHeaderBtn}
+              onPress={() => setShowExitModal(true)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.exitScorerHeaderBtnText}>Exit Scorer</Text>
+            </TouchableOpacity>
           </View>
         </View>
         <Text style={styles.title}>Match Scorecard & Statistics</Text>
@@ -620,7 +627,7 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                   {/* The Cricket Champions Art Illustration */}
                   <View style={styles.championArtworkWrapper}>
                     <Image
-                      source={IMG_CHAMPIONS}
+                      source={IMG_MATCH_RESULT_TROPHY}
                       style={styles.championImage}
                       resizeMode="cover"
                     />
@@ -993,18 +1000,6 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
             </ScrollView>
           </View>
 
-          {/* ─────────────────────────────────────────────────────────────
-              BOWLER PITCH MAP & LENGTH DISTRIBUTION ANALYTICS
-              ───────────────────────────────────────────────────────────── */}
-          {currentInnings && currentInnings.bowlers && currentInnings.bowlers.length > 0 && (
-            <ErrorBoundary fallbackTitle="Bowler Pitch Map & Line/Length">
-              <PitchMap
-                deliveries={[]}
-                bowlerName={currentInnings.bowlers[0]?.name || 'Attack Bowlers'}
-                title={`🎯 ${currentInnings.bowlingTeam || 'Bowling Side'} - Pitch Map (22 Yards)`}
-              />
-            </ErrorBoundary>
-          )}
 
           {/* FALL OF WICKETS */}
           {Array.isArray(currentInnings.fallOfWickets) && currentInnings.fallOfWickets.length > 0 && (
@@ -1056,9 +1051,18 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
               ───────────────────────────────────────────────────────────── */}
           {Array.isArray(currentInnings.partnerships) && currentInnings.partnerships.length > 0 && (
             <View style={styles.fowCard}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <Text style={styles.fowTitle}>🤝 Key Batting Partnerships</Text>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: '#b45309' }}>{currentInnings.battingTeam}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                <Image
+                  source={IMG_PARTNERSHIP}
+                  style={{ width: 72, height: 48, borderRadius: 8, borderWidth: 1.5, borderColor: '#f59e0b' }}
+                  resizeMode="cover"
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fowTitle}>🤝 Key Batting Partnerships</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#b45309' }}>
+                    {currentInnings.battingTeam} • Boundary & Strike Rotation Analysis
+                  </Text>
+                </View>
               </View>
               <View style={styles.fowRow}>
                 {currentInnings.partnerships.map((p: any, idx: number) => {
@@ -1101,8 +1105,7 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                   <Text style={[styles.cell, styles.colNum, styles.tableHeaderText, { color: '#38bdf8' }]}>Run Outs</Text>
                   <Text style={[styles.cell, styles.colNum, styles.tableHeaderText, { color: '#38bdf8' }]}>Collects</Text>
                   <Text style={[styles.cell, styles.colNum, styles.tableHeaderText, { color: '#38bdf8' }]}>Saves</Text>
-                  <Text style={[styles.cell, { width: 90, textAlign: 'center' }, styles.tableHeaderText, { color: '#38bdf8' }]}>Rating</Text>
-                  <Text style={[styles.cell, { width: 95, textAlign: 'center' }, styles.tableHeaderText, { color: '#38bdf8' }]}>Action</Text>
+                  <Text style={[styles.cell, { width: 100, textAlign: 'center' }, styles.tableHeaderText, { color: '#38bdf8' }]}>Fielding Rating</Text>
                 </View>
 
                 {fieldingStats.map((f: any, fIdx: number) => (
@@ -1123,36 +1126,10 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                     <Text style={[styles.cell, styles.colNum, f.boundarySaves > 0 && { fontWeight: 'bold', color: '#059669' }]}>
                       {f.boundarySaves}
                     </Text>
-                    <View style={{ width: 90, alignItems: 'center', justifyContent: 'center' }}>
+                    <View style={{ width: 100, alignItems: 'center', justifyContent: 'center' }}>
                       <Text style={{ fontSize: 11, fontWeight: '800', color: '#0284c7' }}>
                         {f.rating}
                       </Text>
-                    </View>
-                    <View style={{ width: 95, alignItems: 'center', justifyContent: 'center' }}>
-                      <TouchableOpacity
-                        style={{
-                          backgroundColor: '#0284c7',
-                          paddingHorizontal: 8,
-                          paddingVertical: 5,
-                          borderRadius: 6
-                        }}
-                        onPress={() => {
-                          let fType: FieldingEventType = 'CLEAN_COLLECT';
-                          if (f.runOuts > 0) fType = 'DIRECT_HIT';
-                          else if (f.boundarySaves > 0) fType = 'BOUNDARY_SAVE';
-                          else if (f.catches > 0) fType = 'CATCH';
-                          else if (f.isKeeper) fType = 'STUMPING';
-
-                          setActiveFieldingEvent({
-                            type: fType,
-                            fielderName: f.name,
-                            teamName: currentInnings.bowlingTeam,
-                            details: `Outstanding fielding performance: ${f.catches} catches, ${f.runOuts} run outs, ${f.cleanCollects} clean collects & ${f.boundarySaves} boundary saves`
-                          });
-                        }}
-                      >
-                        <Text style={{ color: '#ffffff', fontSize: 10, fontWeight: '800' }}>▶ Replay</Text>
-                      </TouchableOpacity>
                     </View>
                   </View>
                 ))}
@@ -1324,6 +1301,94 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
         event={activeFieldingEvent}
         onDismiss={() => setActiveFieldingEvent(null)}
       />
+
+      {/* EXIT SCREEN CONFIRMATION MODAL */}
+      <Modal
+        visible={showExitModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowExitModal(false)}
+      >
+        <View style={styles.exitModalOverlay}>
+          <View style={styles.exitModalCard}>
+            <View style={styles.exitModalHeader}>
+              <Text style={styles.exitModalTitle}>EXIT SCREEN</Text>
+              <TouchableOpacity
+                style={styles.exitRedCloseBtn}
+                onPress={() => setShowExitModal(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.exitRedCloseBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.exitModalBodyText}>
+              Click "Exit Screen" menu to exit from the scoring engine and give yes to exit. All recorded scores and deliveries are safely preserved in the database.
+            </Text>
+
+            <View style={styles.exitModalActionsRow}>
+              <TouchableOpacity
+                style={styles.exitCancelBtn}
+                onPress={() => setShowExitModal(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.exitCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              {(match.status === 'Live' || match.status === 'LIVE' || params?.returnTo === 'LiveScoring') && (
+                <TouchableOpacity
+                  style={[styles.exitActionBtn, { backgroundColor: '#d97706' }]}
+                  onPress={() => {
+                    setShowExitModal(false);
+                    scorerNav?.navigate('LiveScoring', { matchId });
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.exitActionBtnText}>⚡ Live Scoring</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={[styles.exitActionBtn, { backgroundColor: '#1e3a8a' }]}
+                onPress={() => {
+                  setShowExitModal(false);
+                  if (scorerNav?.navigate) {
+                    scorerNav.navigate('Dashboard');
+                  } else if (onExit) {
+                    onExit();
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.exitActionBtnText}>📋 Match List</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.exitActionBtn, { backgroundColor: '#dc2626' }]}
+                onPress={() => {
+                  setShowExitModal(false);
+                  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                    try {
+                      localStorage.setItem('cfvd_last_app_screen', 'Home');
+                      localStorage.removeItem('cfvd_last_scorer_match_id');
+                      localStorage.removeItem('cfvd_last_scorer_screen');
+                      window.location.href = '/';
+                      return;
+                    } catch (_e) {}
+                  }
+                  if (typeof onExit === 'function') {
+                    onExit();
+                  } else if (scorerNav?.navigate) {
+                    scorerNav.navigate('Dashboard');
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.exitActionBtnText}>🌐 Exit to Website</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1957,6 +2022,107 @@ const styles = StyleSheet.create({
   quotaPillText: {
     color: '#b45309',
     fontSize: 9.5,
+    fontWeight: '800'
+  },
+  exitModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16
+  },
+  exitModalCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 20,
+    width: '100%',
+    maxWidth: 440,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    elevation: 8
+  },
+  exitModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9'
+  },
+  exitModalTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0f172a',
+    letterSpacing: 0.5
+  },
+  exitRedCloseBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#fee2e2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#fca5a5'
+  },
+  exitRedCloseBtnText: {
+    color: '#dc2626',
+    fontSize: 13,
+    fontWeight: '900'
+  },
+  exitModalBodyText: {
+    fontSize: 12.5,
+    color: '#475569',
+    lineHeight: 18,
+    marginVertical: 14
+  },
+  exitModalActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'flex-end',
+    marginTop: 4
+  },
+  exitCancelBtn: {
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#ffffff'
+  },
+  exitCancelBtnText: {
+    color: '#475569',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  exitActionBtn: {
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  exitActionBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800'
+  },
+  exitScorerHeaderBtn: {
+    backgroundColor: '#dc2626',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#b91c1c'
+  },
+  exitScorerHeaderBtnText: {
+    color: '#ffffff',
+    fontSize: 10.5,
     fontWeight: '800'
   }
 });

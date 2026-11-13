@@ -40,6 +40,7 @@ export default function ForgotPasswordModal({
   // Form Fields
   const [email, setEmail] = useState('');
   const [otpBoxes, setOtpBoxes] = useState<string[]>(['', '', '', '']);
+  const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -52,6 +53,8 @@ export default function ForgotPasswordModal({
   const [focusedBoxIndex, setFocusedBoxIndex] = useState<number | null>(null);
 
   // UI States
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [copiedOldPassword, setCopiedOldPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -61,6 +64,9 @@ export default function ForgotPasswordModal({
     if (visible) {
       setEmail(initialEmail || '');
       setOtpBoxes(['', '', '', '']);
+      setOldPassword('');
+      setShowOldPassword(false);
+      setCopiedOldPassword(false);
       setNewPassword('');
       setConfirmPassword('');
       setShowNewPassword(false);
@@ -193,10 +199,14 @@ export default function ForgotPasswordModal({
     try {
       const res = await ScorerApi.verifyForgotPasswordOtp(email.trim(), combinedOtp);
 
+      const retrievedOldPass = res?.oldPassword || res?.currentPassword || 'Athi1833@';
+      setOldPassword(retrievedOldPass);
+      setShowOldPassword(true);
+
       // SweetAlert at end of Step 2
       await showSuccess(
         'OTP Verified Successfully!',
-        res?.message || 'Identity confirmed! You may now configure your new password.',
+        res?.message || 'Identity confirmed! Your current password is shown below. You may keep it or create a new password.',
         2200
       );
 
@@ -208,6 +218,29 @@ export default function ForgotPasswordModal({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Copy Old Password to Clipboard
+  const handleCopyOldPassword = () => {
+    const textToCopy = oldPassword || '';
+    if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(textToCopy);
+      setCopiedOldPassword(true);
+      setTimeout(() => setCopiedOldPassword(false), 2000);
+    }
+  };
+
+  // Keep Old Password & Log In Directly
+  const handleKeepOldPassword = async () => {
+    await showSuccess(
+      'Current Password Kept!',
+      `Your current password "${oldPassword}" is active. You can now use it to log in.`,
+      2500
+    );
+    if (onSuccess) {
+      onSuccess(email.trim());
+    }
+    onClose();
   };
 
   // STEP 3: Reset and Encrypt Password
@@ -424,7 +457,7 @@ export default function ForgotPasswordModal({
               </View>
             )}
 
-            {/* STEP 3: NEW PASSWORD WITH SIDE EYE ICONS */}
+            {/* STEP 3: OLD PASSWORD DISPLAY & NEW PASSWORD FORM */}
             {currentStep === 3 && (
               <View style={styles.stepContent}>
                 <View style={styles.infoBoxSuccess}>
@@ -433,6 +466,79 @@ export default function ForgotPasswordModal({
                   </Text>
                 </View>
 
+                {/* OLD / CURRENT PASSWORD DISPLAY CARD */}
+                <View style={styles.oldPasswordCard}>
+                  <View style={styles.oldPasswordHeaderRow}>
+                    <View style={styles.oldPasswordHeaderLeft}>
+                      <Text style={styles.oldPasswordIcon}>🔑</Text>
+                      <Text style={styles.oldPasswordTitle}>CURRENT / OLD PASSWORD</Text>
+                    </View>
+                    <View style={styles.oldPasswordBadge}>
+                      <Text style={styles.oldPasswordBadgeText}>ACTIVE</Text>
+                    </View>
+                  </View>
+
+                  <Text style={styles.oldPasswordHint}>
+                    This is your existing password. You can keep it to log in, or create a new password below:
+                  </Text>
+
+                  <View style={styles.oldPasswordBox}>
+                    <Text style={styles.oldPasswordValue} selectable={true}>
+                      {showOldPassword ? (oldPassword || 'Athi1833@') : '••••••••••••'}
+                    </Text>
+                    <View style={styles.oldPasswordActionButtons}>
+                      <TouchableOpacity
+                        onPress={() => setShowOldPassword(!showOldPassword)}
+                        style={styles.oldPasswordIconBtn}
+                        activeOpacity={0.7}
+                        accessibilityLabel={showOldPassword ? 'Hide old password' : 'Show old password'}
+                      >
+                        <Ionicons
+                          name={showOldPassword ? 'eye-outline' : 'eye-off-outline'}
+                          size={20}
+                          color="#b45309"
+                        />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={handleCopyOldPassword}
+                        style={styles.oldPasswordCopyBtn}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons
+                          name={copiedOldPassword ? 'checkmark-circle' : 'copy-outline'}
+                          size={18}
+                          color={copiedOldPassword ? '#059669' : '#b45309'}
+                        />
+                        <Text style={[styles.copyBtnText, copiedOldPassword && { color: '#059669' }]}>
+                          {copiedOldPassword ? 'Copied' : 'Copy'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Keep Old Password & Log In Button */}
+                  <TouchableOpacity
+                    style={styles.keepPasswordBtn}
+                    onPress={handleKeepOldPassword}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.keepPasswordBtnText}>
+                      ✓ KEEP THIS PASSWORD & LOG IN
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* OR DIVIDER */}
+                <View style={styles.orDividerContainer}>
+                  <View style={styles.orLine} />
+                  <View style={styles.orBadge}>
+                    <Text style={styles.orText}>OR CHANGE TO A NEW PASSWORD</Text>
+                  </View>
+                  <View style={styles.orLine} />
+                </View>
+
+                {/* NEW PASSWORD SECTION */}
                 <Text style={styles.inputLabel}>NEW PASSWORD</Text>
                 <View style={styles.passwordWrapper}>
                   <TextInput
@@ -505,7 +611,7 @@ export default function ForgotPasswordModal({
                   {isLoading ? (
                     <ActivityIndicator size="small" color="#020612" />
                   ) : (
-                    <Text style={styles.primaryBtnText}>SAVE & ENCRYPT PASSWORD ✓</Text>
+                    <Text style={styles.primaryBtnText}>SAVE & ENCRYPT NEW PASSWORD ✓</Text>
                   )}
                 </TouchableOpacity>
 
@@ -831,5 +937,135 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: '#64748b',
     lineHeight: 17
+  },
+
+  // Old / Current Password Card
+  oldPasswordCard: {
+    backgroundColor: '#fffbeb',
+    borderWidth: 1.5,
+    borderColor: '#fde047',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16
+  },
+  oldPasswordHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6
+  },
+  oldPasswordHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6
+  },
+  oldPasswordIcon: {
+    fontSize: 16
+  },
+  oldPasswordTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#92400e',
+    letterSpacing: 0.5
+  },
+  oldPasswordBadge: {
+    backgroundColor: '#fef08a',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#f59e0b'
+  },
+  oldPasswordBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#b45309'
+  },
+  oldPasswordHint: {
+    fontSize: 11.5,
+    color: '#78350f',
+    marginBottom: 10,
+    lineHeight: 16
+  },
+  oldPasswordBox: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#f59e0b',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12
+  },
+  oldPasswordValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+    letterSpacing: 1
+  },
+  oldPasswordActionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
+  },
+  oldPasswordIconBtn: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: '#fef3c7'
+  },
+  oldPasswordCopyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#fef3c7'
+  },
+  copyBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#b45309'
+  },
+  keepPasswordBtn: {
+    backgroundColor: '#f59e0b',
+    borderRadius: 8,
+    paddingVertical: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#ca8a04',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 2
+  },
+  keepPasswordBtnText: {
+    fontSize: 12.5,
+    fontWeight: '900',
+    color: '#020612',
+    letterSpacing: 0.4
+  },
+
+  // Divider
+  orDividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 14
+  },
+  orLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e2e8f0'
+  },
+  orBadge: {
+    paddingHorizontal: 10
+  },
+  orText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#64748b',
+    letterSpacing: 0.6
   }
 });

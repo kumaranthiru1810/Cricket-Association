@@ -158,6 +158,7 @@ export default function AppNavigator({
     let requested: AppScreenName = initialScreen;
     let urlParams: any = null;
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const pathname = window.location.pathname.toLowerCase();
       const p = (window.location.pathname + window.location.search + window.location.hash).toLowerCase();
       const search = window.location.search;
       const getQuery = (key: string) => {
@@ -165,7 +166,12 @@ export default function AppNavigator({
         return match && match[1] ? decodeURIComponent(match[1]) : null;
       };
 
-      if (p.includes('admin/login') || p.includes('admin-login')) requested = 'AdminLogin';
+      // When accessing the root URL or opening a new tab without explicit route, ALWAYS load Home
+      if (pathname === '/' || pathname === '' || pathname === '/home') {
+        requested = 'Home';
+        urlParams = null;
+      }
+      else if (p.includes('admin/login') || p.includes('admin-login')) requested = 'AdminLogin';
       else if (p.includes('umpire')) {
         requested = 'Umpire';
         const tab = getQuery('tab');
@@ -183,8 +189,8 @@ export default function AppNavigator({
       }
       else if (p.includes('scorer')) {
         requested = 'Scorer';
-        const sScreen = getQuery('scorerScreen') || localStorage.getItem('cfvd_last_scorer_screen');
-        const matchId = getQuery('matchId') || localStorage.getItem('cfvd_last_scorer_match_id');
+        const sScreen = getQuery('scorerScreen');
+        const matchId = getQuery('matchId');
         if (sScreen || matchId) {
           urlParams = {
             ...(sScreen ? { initialScreen: sScreen } : {}),
@@ -209,7 +215,7 @@ export default function AppNavigator({
       }
       else if (p.includes('scorecard')) {
         requested = 'Scorecard';
-        const matchId = getQuery('matchId') || localStorage.getItem('cfvd_last_scorecard_match_id');
+        const matchId = getQuery('matchId');
         if (matchId) {
           urlParams = { matchId };
         }
@@ -217,29 +223,8 @@ export default function AppNavigator({
       else if (p.includes('login')) requested = 'Login';
       else if (p.includes('register')) requested = 'Registration';
       else {
-        const savedScreen = localStorage.getItem('cfvd_last_app_screen') as AppScreenName;
-        if (savedScreen && savedScreen !== 'Home') {
-          requested = savedScreen;
-          if (savedScreen === 'Scorer') {
-            const sScreen = localStorage.getItem('cfvd_last_scorer_screen');
-            const matchId = localStorage.getItem('cfvd_last_scorer_match_id');
-            if (sScreen || matchId) {
-              urlParams = {
-                ...(sScreen ? { initialScreen: sScreen } : {}),
-                ...(matchId ? { matchId } : {})
-              };
-            }
-          } else if (savedScreen === 'Player') {
-            const tab = localStorage.getItem('cfvd_player_active_tab');
-            if (tab) urlParams = { initialTab: tab };
-          } else if (savedScreen === 'Team' || savedScreen === 'Coach') {
-            const tab = localStorage.getItem('cfvd_team_active_tab');
-            if (tab) urlParams = { initialTab: tab };
-          } else if (savedScreen === 'Scorecard') {
-            const matchId = localStorage.getItem('cfvd_last_scorecard_match_id');
-            if (matchId) urlParams = { matchId };
-          }
-        }
+        requested = 'Home';
+        urlParams = null;
       }
     }
 

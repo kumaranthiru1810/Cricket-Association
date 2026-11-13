@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Modal,
   Platform,
+  ScrollView,
   useWindowDimensions
 } from 'react-native';
 
@@ -67,7 +68,7 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
   onSkip,
   onClose
 }) => {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const isMobile = width < 600;
 
   // Striker orientation (Right-hand or Left-hand)
@@ -78,6 +79,10 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
       setBattingHand(initialBattingHand);
     }
   }, [initialBattingHand, visible]);
+
+  // Dynamic responsive dimensions to guarantee modal fits viewport cleanly
+  const maxWheelByHeight = Math.max(160, Math.min(230, Math.floor((height || 700) * 0.28)));
+  const renderSize = isMobile ? Math.min(width - 56, maxWheelByHeight) : maxWheelByHeight;
 
   // Coordinate geometry for 380x380 SVG top-down field
   const size = 380;
@@ -271,8 +276,6 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
   const ballElevation = Math.sin(animProgress * Math.PI) * (runs === 6 ? 1.6 : 1.25);
   const ballScale = 1 + (ballElevation - 1) * 0.45;
 
-  const renderSize = isMobile ? Math.min(width - 40, 340) : 340;
-
   const offSideZones = useMemo(() => {
     return FIELD_ZONES.filter(z => z.side === 'OFF');
   }, []);
@@ -292,6 +295,11 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
     >
       <View style={styles.modalOverlay}>
         <View style={[styles.modalCard, { maxWidth: isMobile ? 380 : 460 }]}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ flexGrow: 1 }}
+            bounces={false}
+          >
           {/* Top Sunlight Header Bar */}
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
@@ -758,6 +766,7 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
               </Text>
             </TouchableOpacity>
           </View>
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -770,19 +779,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 12
+    padding: 8
   },
   modalCard: {
     width: '100%',
+    maxHeight: '94%',
     backgroundColor: '#ffffff',
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 2,
     borderColor: '#b8860b', // CFVD TNCA Gold
-    padding: 16,
+    padding: 12,
     shadowColor: '#b8860b',
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.25,
-    shadowRadius: 18,
+    shadowRadius: 16,
     elevation: 16
   },
   header: {

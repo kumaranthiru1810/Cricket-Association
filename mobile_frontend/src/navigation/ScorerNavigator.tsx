@@ -37,17 +37,6 @@ export default function ScorerNavigator({ onExit, initialParams }: Props) {
           const finalMatchId = qMatchId || initialParams?.matchId;
           return { screen: qScreen as ScreenName, initialParams: { ...(initialParams || {}), ...(finalMatchId ? { matchId: finalMatchId } : {}) } };
         }
-
-        // Check localStorage persistence across browser refresh
-        const savedScreen = localStorage.getItem('cfvd_last_scorer_screen');
-        const savedMatchId = localStorage.getItem('cfvd_last_scorer_match_id');
-        if (savedScreen && ['Dashboard', 'MatchSetup', 'LiveScoring', 'Scorecard', 'MilestoneGallery'].includes(savedScreen)) {
-          const finalMatchId = qMatchId || savedMatchId || initialParams?.matchId;
-          return {
-            screen: savedScreen as ScreenName,
-            initialParams: { ...(initialParams || {}), ...(finalMatchId ? { matchId: finalMatchId } : {}) }
-          };
-        }
       } catch (_e) {}
     }
     return { screen: initialParams?.initialScreen || 'Dashboard', initialParams };

@@ -3181,10 +3181,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
               {isDesktop ? (
                 /* Desktop 2-Column Side-by-Side Layout */
                 <View style={styles.approvalDesktopContainer}>
-                  {/* Left Column: Full Virat Kohli HD Celebration Image */}
+                  {/* Left Column: Full Authentic Cricket Hero Artwork (No Celebrity) */}
                   <View style={styles.approvalHeroImageContainer}>
                     <Image
-                      source={require('../../../assets/virat_kohli_otp.png')}
+                      source={require('../../../assets/cricket_verification_hero.png')}
                       style={styles.approvalHeroFullImage}
                       resizeMode="cover"
                     />
@@ -3204,7 +3204,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     {/* Bottom Overlay Info */}
                     <View style={styles.approvalHeroBottomOverlay}>
                       <View style={styles.approvalBadgePill}>
-                        <Text style={styles.approvalBadgePillText}>🏏 OFFICIAL VERIFICATION</Text>
+                        <Text style={styles.approvalBadgePillText}>🏏 OFFICIAL CRICKET VERIFICATION</Text>
                       </View>
                       <Text style={styles.approvalHeroTitle}>CRICKET FEDERATION OF</Text>
                       <Text style={styles.approvalHeroSubTitle}>VIRUDHUNAGAR DISTRICT</Text>
@@ -3220,7 +3220,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       {/* Top Bar with Pending Pill & Close X */}
                       <View style={styles.approvalTopBarRow}>
                         <View style={styles.approvalStatusPill}>
-                          <Text style={styles.approvalStatusPillText}>⏳ PENDING ADMIN VERIFICATION</Text>
+                          <Text style={styles.approvalStatusPillText}>⏳ WAITING FOR ADMIN APPROVAL</Text>
                         </View>
                         <TouchableOpacity
                           style={styles.approvalCloseCircle}
@@ -3237,20 +3237,20 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       {/* Header Row */}
                       <View style={styles.approvalHeaderRow}>
                         <View style={styles.approvalIconCircle}>
-                          <Text style={styles.approvalIconText}>🛡️</Text>
+                          <Text style={styles.approvalIconText}>🏏</Text>
                         </View>
                         <View style={{ flex: 1, marginLeft: 12 }}>
                           <Text style={styles.approvalMainHeading}>Registration Submitted Successfully!</Text>
-                          <Text style={styles.approvalSubHeading}>District Administrator Verification Required</Text>
+                          <Text style={styles.approvalSubHeading}>District Admin Verification in Progress</Text>
                         </View>
                       </View>
 
-                      {/* 4-Step Verification Workflow Diagram */}
+                      {/* 4-Step Verification Workflow Normal Diagram */}
                       <View style={styles.flowDiagramCard}>
                         <View style={styles.flowDiagramHeader}>
-                          <Text style={styles.flowDiagramTitle}>VERIFICATION & ACCESS WORKFLOW</Text>
+                          <Text style={styles.flowDiagramTitle}>HOW VERIFICATION WORKS (4 SIMPLE STEPS)</Text>
                           <Text style={styles.flowDiagramSubtitle}>
-                            Follow the progress of your {pendingApprovalData?.role ? pendingApprovalData.role.toLowerCase() : 'official'} credentials
+                            Track the progress of your {pendingApprovalData?.role ? pendingApprovalData.role.toLowerCase() : 'official'} account
                           </Text>
                         </View>
 
@@ -3258,20 +3258,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                           {/* Step 1 */}
                           <View style={styles.flowStepItem}>
                             <View style={[styles.flowStepIconCircle, styles.flowStepCompleted]}>
-                              <Text style={styles.flowStepIcon}>📝</Text>
-                              <View style={styles.flowStepCheckBadge}>
-                                <Text style={styles.flowStepCheckText}>✓</Text>
-                              </View>
+                              <Text style={styles.flowStepIcon}>✓</Text>
                             </View>
                             <Text style={styles.flowStepNum}>STEP 1</Text>
-                            <Text style={styles.flowStepLabel}>
-                              {pendingApprovalData?.role?.includes('Umpire')
-                                ? 'Umpire Registration'
-                                : pendingApprovalData?.role?.includes('Team')
-                                ? 'Team Registration'
-                                : 'Scorer Registration'}
-                            </Text>
-                            <Text style={styles.flowStepStatusGreen}>Submitted</Text>
+                            <Text style={styles.flowStepLabel}>Form Sent</Text>
+                            <Text style={styles.flowStepStatusGreen}>Done</Text>
                           </View>
 
                           <View style={styles.flowArrowContainer}>
@@ -3281,14 +3272,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                           {/* Step 2 */}
                           <View style={styles.flowStepItem}>
                             <View style={[styles.flowStepIconCircle, styles.flowStepActive]}>
-                              <Text style={styles.flowStepIcon}>🛡️</Text>
-                              <View style={styles.flowStepWaitBadge}>
-                                <Text style={styles.flowStepWaitText}>⏳</Text>
-                              </View>
+                              <Text style={styles.flowStepIcon}>⏳</Text>
                             </View>
                             <Text style={styles.flowStepNum}>STEP 2</Text>
-                            <Text style={styles.flowStepLabel}>Admin Approval</Text>
-                            <Text style={styles.flowStepStatusAmber}>In Review</Text>
+                            <Text style={styles.flowStepLabel}>Admin Review</Text>
+                            <Text style={styles.flowStepStatusAmber}>Checking Now</Text>
                           </View>
 
                           <View style={styles.flowArrowContainer}>
@@ -3301,8 +3289,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                               <Text style={styles.flowStepIcon}>✉️</Text>
                             </View>
                             <Text style={styles.flowStepNum}>STEP 3</Text>
-                            <Text style={styles.flowStepLabel}>Email Confirmation</Text>
-                            <Text style={styles.flowStepStatusMuted}>Sent to Inbox</Text>
+                            <Text style={styles.flowStepLabel}>Email Notice</Text>
+                            <Text style={styles.flowStepStatusMuted}>Next</Text>
                           </View>
 
                           <View style={styles.flowArrowContainer}>
@@ -3315,14 +3303,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                               <Text style={styles.flowStepIcon}>🔑</Text>
                             </View>
                             <Text style={styles.flowStepNum}>STEP 4</Text>
-                            <Text style={styles.flowStepLabel}>Portal Login</Text>
-                            <Text style={styles.flowStepStatusMuted}>
-                              {pendingApprovalData?.role?.includes('Umpire')
-                                ? 'Access Umpire'
-                                : pendingApprovalData?.role?.includes('Team')
-                                ? 'Access Team'
-                                : 'Access Scorer'}
-                            </Text>
+                            <Text style={styles.flowStepLabel}>Login & Play</Text>
+                            <Text style={styles.flowStepStatusMuted}>Ready 🏏</Text>
                           </View>
                         </View>
                       </View>
@@ -3335,13 +3317,13 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                             <Text style={styles.approvalDetailVal}>{pendingApprovalData.name}</Text>
                           </View>
                           <View style={styles.approvalDetailRow}>
-                            <Text style={styles.approvalDetailLabel}>Role / Category:</Text>
+                            <Text style={styles.approvalDetailLabel}>Applied Role:</Text>
                             <Text style={styles.approvalDetailVal}>{pendingApprovalData.role}</Text>
                           </View>
                           {pendingApprovalData.certificationLevel && (
                             <View style={styles.approvalDetailRow}>
                               <Text style={styles.approvalDetailLabel}>Certification Level:</Text>
-                              <Text style={[styles.approvalDetailVal, { color: '#f59e0b', fontWeight: '800' }]}>
+                              <Text style={[styles.approvalDetailVal, { color: '#d97706', fontWeight: '800' }]}>
                                 🏅 {pendingApprovalData.certificationLevel}
                               </Text>
                             </View>
@@ -3359,17 +3341,20 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         </View>
                       )}
 
-                      {/* Official English Notice Box */}
+                      {/* Official Simple English Notice Box */}
                       <View style={styles.approvalNoticeBox}>
                         <View style={styles.approvalNoticeHeaderRow}>
                           <Text style={styles.approvalNoticeHeaderIcon}>📢</Text>
-                          <Text style={styles.approvalNoticeHeading}>District Administrator Verification Notice</Text>
+                          <Text style={styles.approvalNoticeHeading}>What Happens Next?</Text>
                         </View>
                         <Text style={styles.approvalNoticeEnglish}>
-                          Your registration application and certification documents have been submitted to the District Cricket Administrator (CFVD) for official verification.
+                          1. Your registration application has been submitted to the Cricket Federation of Virudhunagar District (CFVD).
                         </Text>
-                        <Text style={[styles.approvalNoticeEnglish, { marginTop: 6, color: '#fde047' }]}>
-                          Once the Administrator approves your profile, an official confirmation email will be dispatched to <Text style={{ fontWeight: '800' }}>{pendingApprovalData?.email || 'your email'}</Text>. Your account status will be set to ACTIVE, enabling immediate access to the Portal.
+                        <Text style={[styles.approvalNoticeEnglish, { marginTop: 4 }]}>
+                          2. District Administrators will verify your profile and credentials (usually within 24 hours).
+                        </Text>
+                        <Text style={[styles.approvalNoticeEnglish, { marginTop: 4, color: '#92400e', fontWeight: '700' }]}>
+                          3. When approved, a confirmation email will arrive at {pendingApprovalData?.email || 'your registered email'}. You can then log in immediately.
                         </Text>
                       </View>
 
@@ -3384,9 +3369,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                           activeOpacity={0.85}
                         >
                           <Text style={styles.approvalPrimaryBtnText}>
-                            {pendingApprovalData?.role?.includes('Umpire')
-                              ? 'Proceed to Umpire Login Portal →'
-                              : 'Proceed to Scorer Login Portal →'}
+                            Proceed to Login Portal →
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -3399,10 +3382,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                   showsVerticalScrollIndicator={true}
                   contentContainerStyle={{ flexGrow: 1 }}
                 >
-                  {/* Top Mobile Hero Banner with Full Image */}
+                  {/* Top Mobile Hero Banner with Cricket Visual (No Celebrity) */}
                   <View style={styles.approvalMobileHeroWrap}>
                     <Image
-                      source={require('../../../assets/virat_kohli_otp.png')}
+                      source={require('../../../assets/cricket_verification_hero.png')}
                       style={styles.approvalMobileHeroImage}
                       resizeMode="cover"
                     />
@@ -3429,7 +3412,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     </View>
                     <View style={styles.approvalMobileBottomOverlay}>
                       <View style={styles.approvalBadgePill}>
-                        <Text style={styles.approvalBadgePillText}>⏳ PENDING ADMIN VERIFICATION</Text>
+                        <Text style={styles.approvalBadgePillText}>⏳ WAITING FOR ADMIN APPROVAL</Text>
                       </View>
                       <Text style={styles.approvalHeroTitleMobile}>CRICKET FEDERATION OF VIRUDHUNAGAR DISTRICT</Text>
                     </View>
@@ -3439,20 +3422,20 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                   <View style={styles.approvalBody}>
                     <View style={styles.approvalHeaderRow}>
                       <View style={styles.approvalIconCircle}>
-                        <Text style={styles.approvalIconText}>🛡️</Text>
+                        <Text style={styles.approvalIconText}>🏏</Text>
                       </View>
                       <View style={{ flex: 1, marginLeft: 12 }}>
                         <Text style={styles.approvalMainHeading}>Registration Submitted Successfully!</Text>
-                        <Text style={styles.approvalSubHeading}>District Administrator Verification Required</Text>
+                        <Text style={styles.approvalSubHeading}>District Admin Verification in Progress</Text>
                       </View>
                     </View>
 
-                    {/* 4-Step Verification Workflow Diagram */}
+                    {/* 4-Step Verification Workflow Normal Diagram */}
                     <View style={styles.flowDiagramCard}>
                       <View style={styles.flowDiagramHeader}>
-                        <Text style={styles.flowDiagramTitle}>VERIFICATION & ACCESS WORKFLOW</Text>
+                        <Text style={styles.flowDiagramTitle}>HOW VERIFICATION WORKS (4 SIMPLE STEPS)</Text>
                         <Text style={styles.flowDiagramSubtitle}>
-                          Follow the progress of your {pendingApprovalData?.role ? pendingApprovalData.role.toLowerCase() : 'official'} credentials
+                          Track the progress of your {pendingApprovalData?.role ? pendingApprovalData.role.toLowerCase() : 'official'} account
                         </Text>
                       </View>
 
@@ -3460,20 +3443,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         {/* Step 1 */}
                         <View style={styles.flowStepItem}>
                           <View style={[styles.flowStepIconCircle, styles.flowStepCompleted]}>
-                            <Text style={styles.flowStepIcon}>📝</Text>
-                            <View style={styles.flowStepCheckBadge}>
-                              <Text style={styles.flowStepCheckText}>✓</Text>
-                            </View>
+                            <Text style={styles.flowStepIcon}>✓</Text>
                           </View>
                           <Text style={styles.flowStepNum}>STEP 1</Text>
-                          <Text style={styles.flowStepLabel}>
-                            {pendingApprovalData?.role?.includes('Umpire')
-                              ? 'Umpire Registration'
-                              : pendingApprovalData?.role?.includes('Team')
-                              ? 'Team Registration'
-                              : 'Scorer Registration'}
-                          </Text>
-                          <Text style={styles.flowStepStatusGreen}>Submitted</Text>
+                          <Text style={styles.flowStepLabel}>Form Sent</Text>
+                          <Text style={styles.flowStepStatusGreen}>Done</Text>
                         </View>
 
                         <View style={styles.flowArrowContainer}>
@@ -3483,14 +3457,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         {/* Step 2 */}
                         <View style={styles.flowStepItem}>
                           <View style={[styles.flowStepIconCircle, styles.flowStepActive]}>
-                            <Text style={styles.flowStepIcon}>🛡️</Text>
-                            <View style={styles.flowStepWaitBadge}>
-                              <Text style={styles.flowStepWaitText}>⏳</Text>
-                            </View>
+                            <Text style={styles.flowStepIcon}>⏳</Text>
                           </View>
                           <Text style={styles.flowStepNum}>STEP 2</Text>
-                          <Text style={styles.flowStepLabel}>Admin Approval</Text>
-                          <Text style={styles.flowStepStatusAmber}>In Review</Text>
+                          <Text style={styles.flowStepLabel}>Admin Review</Text>
+                          <Text style={styles.flowStepStatusAmber}>Checking Now</Text>
                         </View>
 
                         <View style={styles.flowArrowContainer}>
@@ -3503,8 +3474,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                             <Text style={styles.flowStepIcon}>✉️</Text>
                           </View>
                           <Text style={styles.flowStepNum}>STEP 3</Text>
-                          <Text style={styles.flowStepLabel}>Email Confirmation</Text>
-                          <Text style={styles.flowStepStatusMuted}>Sent to Inbox</Text>
+                          <Text style={styles.flowStepLabel}>Email Notice</Text>
+                          <Text style={styles.flowStepStatusMuted}>Next</Text>
                         </View>
 
                         <View style={styles.flowArrowContainer}>
@@ -3517,14 +3488,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                             <Text style={styles.flowStepIcon}>🔑</Text>
                           </View>
                           <Text style={styles.flowStepNum}>STEP 4</Text>
-                          <Text style={styles.flowStepLabel}>Portal Login</Text>
-                          <Text style={styles.flowStepStatusMuted}>
-                            {pendingApprovalData?.role?.includes('Umpire')
-                              ? 'Access Umpire'
-                              : pendingApprovalData?.role?.includes('Team')
-                              ? 'Access Team'
-                              : 'Access Scorer'}
-                          </Text>
+                          <Text style={styles.flowStepLabel}>Login & Play</Text>
+                          <Text style={styles.flowStepStatusMuted}>Ready 🏏</Text>
                         </View>
                       </View>
                     </View>
@@ -3537,13 +3502,13 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                           <Text style={styles.approvalDetailVal}>{pendingApprovalData.name}</Text>
                         </View>
                         <View style={styles.approvalDetailRow}>
-                          <Text style={styles.approvalDetailLabel}>Role / Category:</Text>
+                          <Text style={styles.approvalDetailLabel}>Applied Role:</Text>
                           <Text style={styles.approvalDetailVal}>{pendingApprovalData.role}</Text>
                         </View>
                         {pendingApprovalData.certificationLevel && (
                           <View style={styles.approvalDetailRow}>
                             <Text style={styles.approvalDetailLabel}>Certification Level:</Text>
-                            <Text style={[styles.approvalDetailVal, { color: '#f59e0b', fontWeight: '800' }]}>
+                            <Text style={[styles.approvalDetailVal, { color: '#d97706', fontWeight: '800' }]}>
                               🏅 {pendingApprovalData.certificationLevel}
                             </Text>
                           </View>
@@ -3561,17 +3526,20 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       </View>
                     )}
 
-                    {/* Official English Notice Box */}
+                    {/* Official Simple English Notice Box */}
                     <View style={styles.approvalNoticeBox}>
                       <View style={styles.approvalNoticeHeaderRow}>
                         <Text style={styles.approvalNoticeHeaderIcon}>📢</Text>
-                        <Text style={styles.approvalNoticeHeading}>District Administrator Verification Notice</Text>
+                        <Text style={styles.approvalNoticeHeading}>What Happens Next?</Text>
                       </View>
                       <Text style={styles.approvalNoticeEnglish}>
-                        Your registration application and certification documents have been submitted to the District Cricket Administrator (CFVD) for official verification.
+                        1. Your registration application has been submitted to the Cricket Federation of Virudhunagar District (CFVD).
                       </Text>
-                      <Text style={[styles.approvalNoticeEnglish, { marginTop: 6, color: '#fde047' }]}>
-                        Once the Administrator approves your profile, an official confirmation email will be dispatched to <Text style={{ fontWeight: '800' }}>{pendingApprovalData?.email || 'your email'}</Text>. Your account status will be set to ACTIVE, enabling immediate access to the Portal.
+                      <Text style={[styles.approvalNoticeEnglish, { marginTop: 4 }]}>
+                        2. District Administrators will verify your profile and credentials (usually within 24 hours).
+                      </Text>
+                      <Text style={[styles.approvalNoticeEnglish, { marginTop: 4, color: '#92400e', fontWeight: '700' }]}>
+                        3. When approved, a confirmation email will arrive at {pendingApprovalData?.email || 'your registered email'}. You can then log in immediately.
                       </Text>
                     </View>
 
@@ -3586,9 +3554,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         activeOpacity={0.85}
                       >
                         <Text style={styles.approvalPrimaryBtnText}>
-                          {pendingApprovalData?.role?.includes('Umpire')
-                            ? 'Proceed to Umpire Login Portal →'
-                            : 'Proceed to Scorer Login Portal →'}
+                          Proceed to Login Portal →
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -4788,20 +4754,20 @@ const styles = StyleSheet.create({
   // Official Admin Approval Pending Modal Styles
   approvalModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(5, 10, 20, 0.88)',
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16
   },
   approvalModalCard: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 2,
-    borderColor: '#eab308',
-    shadowColor: '#eab308',
+    borderColor: '#f59e0b',
+    shadowColor: '#d97706',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.25,
     shadowRadius: 20,
     elevation: 15
   },
@@ -4827,7 +4793,7 @@ const styles = StyleSheet.create({
     height: '100%',
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: '#0a0f1d'
+    backgroundColor: '#0a192f'
   },
   approvalHeroFullImage: {
     width: '100%',
@@ -4842,7 +4808,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     padding: 14,
-    backgroundColor: 'rgba(5, 12, 30, 0.65)'
+    backgroundColor: 'rgba(15, 23, 42, 0.7)'
   },
   approvalHeroBottomOverlay: {
     position: 'absolute',
@@ -4850,7 +4816,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     padding: 14,
-    backgroundColor: 'rgba(5, 12, 30, 0.82)'
+    backgroundColor: 'rgba(15, 23, 42, 0.85)'
   },
   approvalHeroTitle: {
     color: '#ffffff',
@@ -4876,7 +4842,7 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '58%',
     height: '100%',
-    backgroundColor: '#0f172a'
+    backgroundColor: '#ffffff'
   },
   approvalRightScrollContent: {
     padding: 18
@@ -4888,13 +4854,15 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   approvalStatusPill: {
-    backgroundColor: '#f59e0b',
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 6
   },
   approvalStatusPillText: {
-    color: '#000000',
+    color: '#b45309',
     fontSize: 10,
     fontWeight: '900',
     letterSpacing: 0.6
@@ -4903,20 +4871,20 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(234, 179, 8, 0.3)'
+    borderColor: '#cbd5e1'
   },
   approvalCloseX: {
-    color: '#e2e8f0',
+    color: '#475569',
     fontSize: 13,
     fontWeight: 'bold'
   },
   approvalMobileHeroWrap: {
     width: '100%',
-    height: 195,
+    height: 200,
     position: 'relative'
   },
   approvalMobileHeroImage: {
@@ -4930,11 +4898,11 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#eab308',
+    borderColor: '#f59e0b',
     zIndex: 10
   },
   approvalMobileTopOverlay: {
@@ -4944,7 +4912,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(5, 12, 30, 0.6)',
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6
@@ -4970,7 +4938,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8
   },
   approvalFederationSub: {
-    color: '#cbd5e1',
+    color: '#e2e8f0',
     fontSize: 8.5,
     fontWeight: '700',
     letterSpacing: 0.5
@@ -4990,7 +4958,7 @@ const styles = StyleSheet.create({
   },
   approvalBody: {
     padding: 16,
-    backgroundColor: '#0f172a'
+    backgroundColor: '#ffffff'
   },
   approvalHeaderRow: {
     flexDirection: 'row',
@@ -5001,7 +4969,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#1e293b',
+    backgroundColor: '#fef3c7',
     borderWidth: 1.5,
     borderColor: '#f59e0b',
     alignItems: 'center',
@@ -5011,25 +4979,25 @@ const styles = StyleSheet.create({
     fontSize: 20
   },
   approvalMainHeading: {
-    color: '#ffffff',
-    fontSize: 15,
+    color: '#0f172a',
+    fontSize: 16,
     fontWeight: '800'
   },
   approvalSubHeading: {
-    color: '#f59e0b',
-    fontSize: 11.5,
+    color: '#b45309',
+    fontSize: 12,
     fontWeight: '600',
     marginTop: 2
   },
 
-  // 4-Step Flow Diagram Styles
+  // 4-Step Flow Diagram Styles (Daylight Normal Diagram)
   flowDiagramCard: {
-    backgroundColor: '#131d31',
+    backgroundColor: '#f8fafc',
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
     marginBottom: 14
   },
   flowDiagramHeader: {
@@ -5037,13 +5005,13 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   flowDiagramTitle: {
-    color: '#38bdf8',
+    color: '#0f172a',
     fontSize: 11,
     fontWeight: '900',
     letterSpacing: 0.8
   },
   flowDiagramSubtitle: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 10,
     fontWeight: '500',
     marginTop: 1
@@ -5068,22 +5036,24 @@ const styles = StyleSheet.create({
     marginBottom: 4
   },
   flowStepCompleted: {
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: '#d1fae5',
     borderWidth: 1.5,
     borderColor: '#10b981'
   },
   flowStepActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.25)',
+    backgroundColor: '#fef3c7',
     borderWidth: 2,
     borderColor: '#f59e0b'
   },
   flowStepUpcoming: {
-    backgroundColor: 'rgba(51, 65, 85, 0.45)',
+    backgroundColor: '#f1f5f9',
     borderWidth: 1,
-    borderColor: '#475569'
+    borderColor: '#cbd5e1'
   },
   flowStepIcon: {
-    fontSize: 16
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0f172a'
   },
   flowStepCheckBadge: {
     position: 'absolute',
@@ -5116,32 +5086,32 @@ const styles = StyleSheet.create({
     fontSize: 8
   },
   flowStepNum: {
-    color: '#64748b',
+    color: '#94a3b8',
     fontSize: 8,
     fontWeight: '800',
     letterSpacing: 0.5
   },
   flowStepLabel: {
-    color: '#f8fafc',
+    color: '#0f172a',
     fontSize: 9.5,
     fontWeight: '700',
     textAlign: 'center',
     marginTop: 2
   },
   flowStepStatusGreen: {
-    color: '#34d399',
+    color: '#059669',
     fontSize: 8.5,
     fontWeight: '800',
     marginTop: 2
   },
   flowStepStatusAmber: {
-    color: '#fbbf24',
+    color: '#d97706',
     fontSize: 8.5,
     fontWeight: '800',
     marginTop: 2
   },
   flowStepStatusMuted: {
-    color: '#64748b',
+    color: '#94a3b8',
     fontSize: 8.5,
     fontWeight: '600',
     marginTop: 2
@@ -5151,18 +5121,18 @@ const styles = StyleSheet.create({
     marginBottom: 16
   },
   flowArrowText: {
-    color: '#64748b',
+    color: '#cbd5e1',
     fontSize: 12,
     fontWeight: '900'
   },
 
-  // Applicant Summary Card
+  // Applicant Summary Card (Daylight)
   approvalDetailsCard: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#f8fafc',
     borderRadius: 10,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
     marginBottom: 14,
     gap: 6
   },
@@ -5172,22 +5142,22 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   approvalDetailLabel: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 12,
     fontWeight: '600'
   },
   approvalDetailVal: {
-    color: '#f8fafc',
+    color: '#0f172a',
     fontSize: 12,
     fontWeight: '700'
   },
 
-  // Official English Notice Box
+  // Official English Notice Box (Daylight Amber/Yellow)
   approvalNoticeBox: {
-    backgroundColor: 'rgba(234, 179, 8, 0.10)',
+    backgroundColor: '#fffbeb',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(234, 179, 8, 0.35)',
+    borderColor: '#fde047',
     padding: 12,
     marginBottom: 16
   },
@@ -5201,12 +5171,12 @@ const styles = StyleSheet.create({
     fontSize: 14
   },
   approvalNoticeHeading: {
-    color: '#fde047',
+    color: '#92400e',
     fontSize: 12,
     fontWeight: '800'
   },
   approvalNoticeEnglish: {
-    color: '#cbd5e1',
+    color: '#475569',
     fontSize: 11,
     lineHeight: 16
   },
