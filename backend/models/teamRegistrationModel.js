@@ -178,6 +178,122 @@ class TeamRegistrationModel {
   }
 
   /**
+   * Check if Team Name or Coach Email already exists before sending OTP or registering
+   */
+  async checkTeamExists(teamName, coachEmail) {
+    await db.initDb();
+    const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    if (teamName && typeof teamName === 'string' && teamName.trim()) {
+      const cleanName = teamName.trim();
+      const nameRegex = new RegExp('^' + escapeRegex(cleanName) + '$', 'i');
+
+      // 1. Check in TeamRegistration collection
+      const existingReg = await this.Model.findOne({
+        team_name: nameRegex,
+        status: { $ne: 'REJECTED' }
+      }).lean();
+
+      if (existingReg) {
+        return {
+          exists: true,
+          field: 'teamName',
+          status: existingReg.status || 'PENDING',
+          message: `Team "${cleanName}" is already registered (Status: ${existingReg.status || 'PENDING'}). Please login directly.`
+        };
+      }
+
+      // 2. Check in approved Team collection
+      if (db.models && db.models.Team) {
+        const existingTeam = await db.models.Team.findOne({
+          $or: [{ name: nameRegex }, { team_name: nameRegex }]
+        }).lean();
+
+        if (existingTeam) {
+          return {
+            exists: true,
+            field: 'teamName',
+            status: 'APPROVED',
+            message: `Team "${cleanName}" is already registered with the Association. Please login directly.`
+          };
+        }
+      }
+
+      // 3. Check in User collection for team_name
+      if (db.models && db.models.User) {
+        const existingUserTeam = await db.models.User.findOne({
+          team_name: nameRegex,
+          status: { $ne: 'REJECTED' }
+        }).lean();
+
+        if (existingUserTeam) {
+          return {
+            exists: true,
+            field: 'teamName',
+            status: existingUserTeam.status || 'ACTIVE',
+            message: `Team "${cleanName}" is already registered with the Association. Please login directly.`
+          };
+        }
+      }
+    }
+
+    if (coachEmail && typeof coachEmail === 'string' && coachEmail.trim()) {
+      const cleanEmail = coachEmail.trim().toLowerCase();
+
+      // 1. Check in TeamRegistration by coach_email
+      const existingCoachReg = await this.Model.findOne({
+        coach_email: cleanEmail,
+        status: { $ne: 'REJECTED' }
+      }).lean();
+
+      if (existingCoachReg) {
+        return {
+          exists: true,
+          field: 'coachEmail',
+          status: existingCoachReg.status || 'PENDING',
+          message: `Coach email "${cleanEmail}" is already registered for team "${existingCoachReg.team_name}". Please login directly.`
+        };
+      }
+
+      // 2. Check in Team collection by coach_email
+      if (db.models && db.models.Team) {
+        const existingTeamCoach = await db.models.Team.findOne({
+          coach_email: cleanEmail
+        }).lean();
+
+        if (existingTeamCoach) {
+          return {
+            exists: true,
+            field: 'coachEmail',
+            status: 'APPROVED',
+            message: `Coach email "${cleanEmail}" is already registered for team "${existingTeamCoach.team_name || existingTeamCoach.name}". Please login directly.`
+          };
+        }
+      }
+
+      // 3. Check in User collection by email for COACH or TEAM role
+      if (db.models && db.models.User) {
+        const existingCoachUser = await db.models.User.findOne({
+          email: cleanEmail,
+          role: { $in: ['COACH', 'TEAM'] },
+          status: { $ne: 'REJECTED' }
+        }).lean();
+
+        if (existingCoachUser) {
+          return {
+            exists: true,
+            field: 'coachEmail',
+            status: existingCoachUser.status || 'ACTIVE',
+            message: `Coach email "${cleanEmail}" is already registered. Please login directly.`
+          };
+        }
+      }
+    }
+
+    return { exists: false };
+  }
+
+  /**
    * Search for a player in registered squads, player directory, or user records by email or name
    */
   async findPlayerByEmailOrName(nameOrEmail) {

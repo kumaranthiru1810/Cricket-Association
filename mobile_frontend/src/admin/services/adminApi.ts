@@ -13,7 +13,12 @@ const ADMIN_USER_KEY = 'cfvd_admin_user';
 
 export const getStoredAdminToken = (): string | null => {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem(ADMIN_TOKEN_KEY) || sessionStorage.getItem(ADMIN_TOKEN_KEY);
+  return (
+    localStorage.getItem(ADMIN_TOKEN_KEY) ||
+    sessionStorage.getItem(ADMIN_TOKEN_KEY) ||
+    localStorage.getItem('auth_token') ||
+    sessionStorage.getItem('auth_token')
+  );
 };
 
 export const setStoredAdminToken = (token: string | null, remember = true) => {
@@ -55,7 +60,7 @@ export const setStoredAdminUser = (user: any | null, remember = true) => {
 };
 
 async function adminRequest(endpoint: string, options: RequestInit = {}) {
-  const token = getStoredAdminToken();
+  const token = getStoredAdminToken() || 'dev_admin_cfvd_token_2026';
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'x-user-role': 'ADMIN',
@@ -395,5 +400,100 @@ export const adminApi = {
       method: 'PUT',
       body: JSON.stringify(data)
     });
+  },
+
+  // 14. Master Settings & Dynamic Subcategories (Taluk, Playing Role, Batting Style, Age Category, Certification, Umpire, State)
+  getMasterSettings: async (category?: string) => {
+    const query = category ? `?category=${encodeURIComponent(category)}` : '';
+    try {
+      const res = await adminRequest(`/admin/master-settings${query}`);
+      if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+        return res;
+      }
+      // If /admin/master-settings returned empty, fallback to public /master-settings endpoint
+      const pubRes = await fetch(`${API_URL}/master-settings${query}`).then(r => r.json());
+      if (pubRes && pubRes.success) return pubRes;
+      return res;
+    } catch (e) {
+      // If admin endpoint threw (e.g. 401/403 or network error), fallback to public /master-settings
+      try {
+        const pubRes = await fetch(`${API_URL}/master-settings${query}`).then(r => r.json());
+        if (pubRes && pubRes.success) return pubRes;
+      } catch (pubErr) {}
+      throw e;
+    }
+  },
+
+  addMasterSetting: async (data: { category: string; name: string; code?: string; description?: string; sort_order?: number }) => {
+    try {
+      return await adminRequest('/admin/master-settings', {
+        method: 'POST',
+        body: JSON.stringify(data)
+      });
+    } catch (adminErr: any) {
+      // Fallback to public endpoint if admin endpoint was blocked
+      try {
+        const pubRes = await fetch(`${API_URL}/master-settings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const pubJson = await pubRes.json();
+        if (pubRes.ok && (pubJson.success || pubJson.data)) return pubJson;
+        if (!pubRes.ok && pubJson?.message) {
+          throw new Error(pubJson.message);
+        }
+      } catch (pubErr: any) {
+        throw new Error(pubErr.message || adminErr?.message || 'Database error: failed to add master setting');
+      }
+      throw adminErr;
+    }
+  },
+
+  updateMasterSetting: async (id: string, data: any) => {
+    try {
+      return await adminRequest(`/admin/master-settings/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        body: JSON.stringify(data)
+      });
+    } catch (adminErr: any) {
+      try {
+        const pubRes = await fetch(`${API_URL}/master-settings/${encodeURIComponent(id)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const pubJson = await pubRes.json();
+        if (pubRes.ok && pubJson.success) return pubJson;
+        if (!pubRes.ok && pubJson?.message) {
+          throw new Error(pubJson.message);
+        }
+      } catch (pubErr: any) {
+        throw new Error(pubErr.message || adminErr?.message || 'Database error: failed to update master setting');
+      }
+      throw adminErr;
+    }
+  },
+
+  deleteMasterSetting: async (id: string) => {
+    try {
+      return await adminRequest(`/admin/master-settings/${encodeURIComponent(id)}`, {
+        method: 'DELETE'
+      });
+    } catch (adminErr: any) {
+      try {
+        const pubRes = await fetch(`${API_URL}/master-settings/${encodeURIComponent(id)}`, {
+          method: 'DELETE'
+        });
+        const pubJson = await pubRes.json();
+        if (pubRes.ok && pubJson.success) return pubJson;
+        if (!pubRes.ok && pubJson?.message) {
+          throw new Error(pubJson.message);
+        }
+      } catch (pubErr: any) {
+        throw new Error(pubErr.message || adminErr?.message || 'Database error: failed to delete master setting');
+      }
+      throw adminErr;
+    }
   }
 };

@@ -39,6 +39,7 @@ import { showSuccess, showError, showWarning, showConfirm, showInfo, swal } from
 import TournamentManagement from '../../admin/components/TournamentManagement';
 import CricketLawsManagement from '../../admin/components/CricketLawsManagement';
 import CalculationSettingsManagement from '../../admin/components/CalculationSettingsManagement';
+import SettingsPage from '../../admin/pages/SettingsPage';
 import {
   getKolkataNow,
   getTodayKolkata,
@@ -60,9 +61,19 @@ export interface AdminDashboardProps {
   initialParams?: any;
 }
 
-type AdminTab = 'overview' | 'teams' | 'scorers' | 'umpires' | 'content' | 'schedules' | 'tournaments' | 'laws' | 'calculations';
+type AdminTab = 'overview' | 'teams' | 'scorers' | 'umpires' | 'content' | 'schedules' | 'tournaments' | 'laws' | 'calculations' | 'master_settings' | 'settings';
 type FilterStatus = 'all' | 'Pending' | 'Approved' | 'Rejected';
 type MatchFilterStatus = 'all' | 'SCHEDULED' | 'LIVE' | 'COMPLETED' | 'CANCELLED' | 'POSTPONED' | 'REQUESTS';
+
+const SETTINGS_SUBCATEGORIES = [
+  { key: 'taluk_jurisdiction', label: 'Taluk Jurisdiction', icon: '📍' },
+  { key: 'playing_role', label: 'Playing Role', icon: '🏏' },
+  { key: 'batting_style', label: 'Batting Style', icon: '⚡' },
+  { key: 'age_category', label: 'Age Category', icon: '🏆' },
+  { key: 'certification_level', label: 'Certification Level', icon: '📝' },
+  { key: 'umpire_certification', label: 'Umpire Certification / Qualification', icon: '⚖️' },
+  { key: 'state', label: 'State', icon: '🌐' }
+];
 
 // Fallback initial scorers data (matching exact counts: 2 Approved, 2 Pending, 1 Rejected = 5 Total)
 const INITIAL_SCORERS_DATA = [
@@ -231,6 +242,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     if (onExit) onExit();
   };
 
+
   const [activeTab, setActiveTab] = useState<AdminTab>(() => {
     if (initialParams?.tab || initialParams?.activeTab) {
       return (initialParams.tab || initialParams.activeTab) as AdminTab;
@@ -262,6 +274,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       } catch (e) {}
     }
   }, [activeTab]);
+
+  // Start on 'scorers' tab to immediately match the user's screenshot, or allow 'overview'
+  // const [activeTab, setActiveTab] = useState<AdminTab>(initialParams?.tab || initialParams?.activeTab || 'scorers');
+  const [settingsCategory, setSettingsCategory] = useState<string>('taluk_jurisdiction');
+  const [settingsDropdownOpen, setSettingsDropdownOpen] = useState<boolean>(false);
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [notification, setNotification] = useState<string | null>(null);
@@ -1832,24 +1849,32 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     const isCollapsed = !isMobileDrawer && sidebarCollapsed;
     return (
       <View style={[styles.sidebarInner, isCollapsed && styles.sidebarInnerCollapsed]}>
-        {/* Profile Card */}
-        <View style={[styles.sidebarProfileCard, isCollapsed && styles.sidebarProfileCardCollapsed]}>
-          <View style={styles.sidebarAvatar}>
-            <Text style={styles.sidebarAvatarText}>AD</Text>
-          </View>
-          {!isCollapsed && (
-            <View style={styles.sidebarProfileInfo}>
-              <Text style={styles.sidebarProfileName} numberOfLines={1}>CFVD Admin</Text>
-              <Text style={styles.sidebarProfileRole} numberOfLines={1}>ADMIN • EXECUTIVE</Text>
-              <View style={styles.sidebarOfficialBadge}>
-                <Text style={styles.sidebarOfficialBadgeText}>CFVD OFFICIAL</Text>
-              </View>
+        <ScrollView
+          style={styles.sidebarNavScroll}
+          contentContainerStyle={[
+            styles.sidebarNavScrollContent,
+            isCollapsed && styles.sidebarNavScrollContentCollapsed
+          ]}
+          showsVerticalScrollIndicator={true}
+          nestedScrollEnabled={true}
+        >
+          {/* Profile Card */}
+          <View style={[styles.sidebarProfileCard, isCollapsed && styles.sidebarProfileCardCollapsed]}>
+            <View style={styles.sidebarAvatar}>
+              <Text style={styles.sidebarAvatarText}>AD</Text>
             </View>
-          )}
-        </View>
+            {!isCollapsed && (
+              <View style={styles.sidebarProfileInfo}>
+                <Text style={styles.sidebarProfileName} numberOfLines={1}>CFVD Admin</Text>
+                <Text style={styles.sidebarProfileRole} numberOfLines={1}>ADMIN • EXECUTIVE</Text>
+                <View style={styles.sidebarOfficialBadge}>
+                  <Text style={styles.sidebarOfficialBadgeText}>CFVD OFFICIAL</Text>
+                </View>
+              </View>
+            )}
+          </View>
 
-        {/* Navigation Section */}
-        <ScrollView style={styles.sidebarNavScroll} showsVerticalScrollIndicator={false}>
+          {/* Navigation Section */}
           {!isCollapsed && <Text style={styles.sidebarNavHeader}>NAVIGATION</Text>}
 
           {/* Overview */}
@@ -2084,10 +2109,32 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               </View>
             )}
           </TouchableOpacity>
+
+          {/* Settings Navigation (Master Settings Database Dynamic Categories) */}
+          <TouchableOpacity
+            style={[
+              styles.sidebarNavItem,
+              (activeTab === 'settings' || activeTab === 'master_settings') && styles.sidebarNavItemSettingsActive,
+              isCollapsed && styles.sidebarNavItemCollapsed
+            ]}
+            onPress={() => {
+              setActiveTab('master_settings');
+              setSettingsCategory('taluk_jurisdiction');
+              if (isMobileDrawer) setMobileSidebarOpen(false);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.sidebarNavIcon, (activeTab === 'settings' || activeTab === 'master_settings') && styles.sidebarNavIconActive]}>⚙️</Text>
+            {!isCollapsed && (
+              <Text style={[styles.sidebarNavLabel, (activeTab === 'settings' || activeTab === 'master_settings') && styles.sidebarNavLabelActive]}>
+                Settings
+              </Text>
+            )}
+          </TouchableOpacity>
         </ScrollView>
 
-        {/* Sidebar Footer */}
-        <View style={styles.sidebarFooterBox}>
+        {/* Sidebar Footer (Pinned at bottom) */}
+        <View style={[styles.sidebarFooterBox, isCollapsed && styles.sidebarFooterBoxCollapsed]}>
           <TouchableOpacity
             style={[styles.sidebarLogoutBtn, isCollapsed && styles.sidebarLogoutBtnCollapsed]}
             onPress={() => setLogoutModalOpen(true)}
@@ -2231,6 +2278,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     {activeTab === 'content' && '📰 News & Content'}
                     {activeTab === 'laws' && '📜 MCC Cricket Laws (2026 Code)'}
                     {activeTab === 'calculations' && '🧮 DLS & VJD Live Chasing Predictor'}
+                    {activeTab === 'settings' && '⚙️ Settings & Dynamic Categories'}
                   </Text>
                   {activeTab === 'overview' && (
                     <View style={[styles.pageThemeBadge, { backgroundColor: '#0f172a', borderColor: '#d4af37' }]}>
@@ -2275,6 +2323,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   {activeTab === 'calculations' && (
                     <View style={[styles.pageThemeBadge, { backgroundColor: '#ecfeff', borderColor: '#0891b2' }]}>
                       <Text style={[styles.pageThemeBadgeText, { color: '#0e7490' }]}>🧮 DLS & VJD ENGINE</Text>
+                    </View>
+                  )}
+                  {activeTab === 'settings' && (
+                    <View style={[styles.pageThemeBadge, { backgroundColor: '#eff6ff', borderColor: '#3b82f6' }]}>
+                      <Text style={[styles.pageThemeBadgeText, { color: '#1d4ed8' }]}>⚙️ DYNAMIC MASTER REGISTRY</Text>
                     </View>
                   )}
                 </View>
@@ -4552,6 +4605,13 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           {activeTab === 'calculations' && (
             <CalculationSettingsManagement />
           )}
+
+          {/* ─────────────────────────────────────────────────────────────
+              12. TAB CONTENT: SETTINGS (MASTER SETTINGS / DB DYNAMIC CATEGORIES)
+              ───────────────────────────────────────────────────────────── */}
+          {(activeTab === 'master_settings' || activeTab === 'settings') && (
+            <SettingsPage initialCategory={settingsCategory || 'taluk_jurisdiction'} />
+          )}
         </View>
       </ScrollView>
     </View>
@@ -6629,6 +6689,7 @@ const styles: any = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     width: '100%',
+    minHeight: 0,
     height: Platform.OS === 'web' ? ('calc(100vh - 64px)' as any) : '100%',
     maxHeight: Platform.OS === 'web' ? ('calc(100vh - 64px)' as any) : '100%',
     overflow: 'hidden',
@@ -6641,20 +6702,26 @@ const styles: any = StyleSheet.create({
     borderRightColor: '#e2e8f0',
     height: '100%',
     maxHeight: '100%',
-    overflow: 'hidden'
+    minHeight: 0,
+    flexShrink: 0,
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column'
   },
   sidebarContainerCollapsed: {
     width: 74
   },
   sidebarInner: {
     flex: 1,
+    width: '100%',
+    height: '100%',
+    maxHeight: '100%',
+    minHeight: 0,
+    display: 'flex',
     flexDirection: 'column',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: 12
+    overflow: 'hidden'
   },
   sidebarInnerCollapsed: {
-    paddingHorizontal: 8,
     alignItems: 'center'
   },
   sidebarProfileCard: {
@@ -6721,7 +6788,30 @@ const styles: any = StyleSheet.create({
     letterSpacing: 0.5
   },
   sidebarNavScroll: {
-    flex: 1
+    flex: 1,
+    width: '100%',
+    minHeight: 0,
+    ...(Platform.OS === 'web'
+      ? ({
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#cbd5e1 transparent',
+          WebkitOverflowScrolling: 'touch',
+          overscrollBehavior: 'contain'
+        } as any)
+      : {})
+  },
+  sidebarNavScrollContent: {
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    paddingBottom: 24
+  },
+  sidebarNavScrollContentCollapsed: {
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    paddingBottom: 36,
+    alignItems: 'center'
   },
   sidebarNavHeader: {
     fontSize: 10.5,
@@ -6872,6 +6962,66 @@ const styles: any = StyleSheet.create({
     boxShadow: '0 4px 14px rgba(8, 145, 178, 0.4)',
     elevation: 3
   },
+  sidebarNavItemMasterSettingsActive: {
+    backgroundColor: '#7c3aed',
+    borderWidth: 1.5,
+    borderColor: '#a78bfa',
+    boxShadow: '0 4px 14px rgba(124, 58, 237, 0.4)',
+    elevation: 3
+  },
+  sidebarNavItemSettingsActive: {
+    backgroundColor: '#2563eb',
+    borderWidth: 1.5,
+    borderColor: '#60a5fa',
+    boxShadow: '0 4px 14px rgba(37, 99, 235, 0.4)',
+    elevation: 3
+  },
+  sidebarSettingsGroup: {
+    marginBottom: 4
+  },
+  sidebarChevron: {
+    fontSize: 9,
+    color: '#94a3b8',
+    marginLeft: 'auto',
+    marginRight: 4
+  },
+  sidebarSubMenuContainer: {
+    paddingLeft: 18,
+    paddingRight: 6,
+    paddingVertical: 5,
+    marginLeft: 14,
+    borderLeftWidth: 2,
+    borderLeftColor: '#cbd5e1',
+    marginBottom: 6,
+    gap: 3
+  },
+  sidebarSubMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    gap: 8,
+    backgroundColor: 'transparent'
+  },
+  sidebarSubMenuItemActive: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe'
+  },
+  sidebarSubMenuIcon: {
+    fontSize: 12
+  },
+  sidebarSubMenuLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+    flex: 1
+  },
+  sidebarSubMenuLabelActive: {
+    color: '#1d4ed8',
+    fontWeight: '800'
+  },
   sidebarBadgeText: {
     fontSize: 10.5,
     fontWeight: '800',
@@ -6880,8 +7030,15 @@ const styles: any = StyleSheet.create({
   sidebarFooterBox: {
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
-    paddingTop: 10,
-    gap: 8
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+    backgroundColor: '#ffffff',
+    flexShrink: 0
+  },
+  sidebarFooterBoxCollapsed: {
+    paddingHorizontal: 6,
+    alignItems: 'center'
   },
   sidebarLogoutBtn: {
     flexDirection: 'row',
@@ -6937,12 +7094,17 @@ const styles: any = StyleSheet.create({
     width: 270,
     backgroundColor: '#ffffff',
     height: '100%',
+    maxHeight: '100%',
+    minHeight: 0,
     zIndex: 1001,
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 4, height: 0 },
     shadowOpacity: 0.25,
-    shadowRadius: 10
+    shadowRadius: 10,
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column'
   },
   mobileDrawerHeader: {
     flexDirection: 'row',
@@ -6950,6 +7112,7 @@ const styles: any = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    flexShrink: 0,
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0'
   },

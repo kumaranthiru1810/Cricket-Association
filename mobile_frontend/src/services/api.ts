@@ -43,6 +43,9 @@ const getBaseUrl = () => {
     if (host && host !== 'localhost' && host !== '127.0.0.1' && !host.startsWith('192.168.') && !host.startsWith('10.')) {
       return `${PROD_BACKEND_URL}/api`;
     }
+    if (host) {
+      return `http://${host}:5000/api`;
+    }
   }
   return `http://${getBackendHost()}:5000/api`;
 };
@@ -55,6 +58,9 @@ const getSocketUrl = () => {
     const host = window.location.hostname;
     if (host && host !== 'localhost' && host !== '127.0.0.1' && !host.startsWith('192.168.') && !host.startsWith('10.')) {
       return PROD_BACKEND_URL;
+    }
+    if (host) {
+      return `http://${host}:5000`;
     }
   }
   return `http://${getBackendHost()}:5000`;
@@ -391,10 +397,24 @@ export const ScorerApi = {
     return currentUser;
   },
 
-  sendRegistrationOtp: async (email: string, name?: string, role?: string) => {
+  checkRegistrationExists: async (params: { role?: string; email?: string; name?: string; teamName?: string }) => {
+    return request('/auth/check-registration-exists', {
+      method: 'POST',
+      body: JSON.stringify(params)
+    });
+  },
+
+  checkTeamExists: async (teamName?: string, coachEmail?: string) => {
+    return request('/auth/check-team-exists', {
+      method: 'POST',
+      body: JSON.stringify({ role: 'TEAM', teamName, coachEmail, email: coachEmail })
+    });
+  },
+
+  sendRegistrationOtp: async (email: string, name?: string, role?: string, teamName?: string) => {
     return request('/auth/send-registration-otp', {
       method: 'POST',
-      body: JSON.stringify({ email, name, role })
+      body: JSON.stringify({ email, name, role, teamName })
     });
   },
 
@@ -441,6 +461,14 @@ export const ScorerApi = {
     });
   },
 
+
+  // Find Player's Team by Email & Send to Player's Email
+  findPlayerTeam: async (email: string) => {
+    return request('/auth/player/find-team', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    });
+  },
 
   requestOtp: async (email: string, role?: string) => {
     return request('/auth/request-otp', {
@@ -1621,6 +1649,25 @@ export const UmpireApi = {
   logout: async () => {
     return ScorerApi.logout();
   }
+};
+
+export const fetchMasterSettings = async (category?: string) => {
+  const query = category ? `?category=${encodeURIComponent(category)}` : '';
+  try {
+    const res = await request(`/master-settings${query}`);
+    if (res && (res.success || Array.isArray(res) || Array.isArray(res.data) || res.grouped)) {
+      return res;
+    }
+  } catch (err) {}
+
+  try {
+    const adminRes = await request(`/admin/master-settings${query}`);
+    if (adminRes && (adminRes.success || Array.isArray(adminRes) || Array.isArray(adminRes.data) || adminRes.grouped)) {
+      return adminRes;
+    }
+  } catch (adminErr) {}
+
+  return { success: false, data: [], grouped: {} };
 };
 
 export const authService = ScorerApi;

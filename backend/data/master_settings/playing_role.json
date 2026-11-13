@@ -1,0 +1,57 @@
+[
+  {
+    "id": "MSET-ROLE-01",
+    "category": "playing_role",
+    "name": "Batsman",
+    "code": "BAT",
+    "description": "Top-order / Middle-order specialist batter",
+    "is_active": true,
+    "sort_order": 1
+  },
+  {
+    "id": "MSET-ROLE-02",
+    "category": "playing_role",
+    "name": "Bowler",
+    "code": "BOWL",
+    "description": "Frontline strike bowler (Fast/Medium/Spin)",
+    "is_active": true,
+    "sort_order": 2
+  },
+  {
+    "id": "MSET-ROLE-03",
+    "category": "playing_role",
+    "name": "All-Rounder",
+    "code": "AR",
+    "description": "Multi-discipline player proficient in both batting and bowling",
+    "is_active": true,
+    "sort_order": 3
+  },
+  {
+    "id": "MSET-ROLE-04",
+    "category": "playing_role",
+    "name": "Wicket Keeper",
+    "code": "WK",
+    "description": "Designated wicket keeper and wicket keeper-batter",
+    "is_active": true,
+    "sort_order": 4
+  },
+  {
+    "id": "MSET-ROLE-05",
+    "category": "playing_role",
+    "name": "Captain",
+    "code": "CPT",
+    "description": "Appointed team captain and on-field leader",
+    "is_active": true,
+    "sort_order": 5
+  },
+  {
+    "id": "MSET-ROLE-06",
+    "category": "playing_role",
+    "name": "Vice Captain",
+    "code": "VC",
+    "description": "Appointed squad vice captain",
+    "is_active": true,
+    "sort_order": 6
+  }
+]
+

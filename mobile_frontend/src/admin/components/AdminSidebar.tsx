@@ -23,10 +23,63 @@ import {
   CloseIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ChevronDownIcon,
   LawsIcon,
   CalculatorIcon
 } from './Icons';
 import { useAdminAuth } from '../context/AdminAuthContext';
+
+export interface SettingsSubCategory {
+  key: string;
+  routeKey: string;
+  label: string;
+  iconText?: string;
+}
+
+export const SETTINGS_SUBCATEGORIES: SettingsSubCategory[] = [
+  {
+    key: 'taluk_jurisdiction',
+    routeKey: 'settings/taluk-jurisdiction',
+    label: 'Taluk Jurisdiction',
+    iconText: '📍'
+  },
+  {
+    key: 'playing_role',
+    routeKey: 'settings/playing-role',
+    label: 'Playing Role',
+    iconText: '🏏'
+  },
+  {
+    key: 'batting_style',
+    routeKey: 'settings/batting-style',
+    label: 'Batting Style',
+    iconText: '⚡'
+  },
+  {
+    key: 'age_category',
+    routeKey: 'settings/age-category',
+    label: 'Age Category',
+    iconText: '🏆'
+  },
+  {
+    key: 'certification_level',
+    routeKey: 'settings/certification-level',
+    label: 'Certification Level',
+    iconText: '📝'
+  },
+  {
+    key: 'umpire_certification',
+    routeKey: 'settings/umpire-certification',
+    label: 'Umpire Certification / Qualification',
+    iconText: '⚖️'
+  },
+  {
+    key: 'state',
+    routeKey: 'settings/state',
+    label: 'State',
+    iconText: '🌐'
+  }
+];
 
 export type AdminRouteKey =
   | 'dashboard'
@@ -42,6 +95,7 @@ export type AdminRouteKey =
   | 'content'
   | 'laws'
   | 'calculations'
+  | 'master-settings'
   | 'settings';
 
 interface NavItem {
@@ -54,7 +108,8 @@ interface NavItem {
 
 interface Props {
   currentRoute: AdminRouteKey;
-  onNavigate: (route: AdminRouteKey) => void;
+  currentPath?: string;
+  onNavigate: (route: string) => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
   isMobileOpen: boolean;
@@ -66,6 +121,7 @@ interface Props {
 
 export const AdminSidebar: React.FC<Props> = ({
   currentRoute,
+  currentPath,
   onNavigate,
   collapsed,
   onToggleCollapse,
@@ -76,6 +132,14 @@ export const AdminSidebar: React.FC<Props> = ({
   liveMatchesCount = 0
 }) => {
   const { adminUser, logout } = useAdminAuth();
+  const isSettingsActive = currentRoute === 'settings' || (currentPath ? currentPath.includes('/settings') : false);
+  const [isSettingsOpen, setIsSettingsOpen] = React.useState<boolean>(isSettingsActive);
+
+  React.useEffect(() => {
+    if (isSettingsActive) {
+      setIsSettingsOpen(true);
+    }
+  }, [isSettingsActive]);
 
   const navItems: NavItem[] = [
     {
@@ -187,15 +251,15 @@ export const AdminSidebar: React.FC<Props> = ({
       <ScrollView
         style={styles.navScrollView}
         contentContainerStyle={styles.navContent}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
+        nestedScrollEnabled={true}
       >
         <Text style={[styles.sectionLabel, collapsed && styles.sectionLabelCollapsed]}>
           {collapsed ? 'MENU' : 'MANAGEMENT'}
         </Text>
 
         {navItems.map(item => {
-          const isActive = currentRoute === item.key;
-          const activeColor = '#0f2452';
+          const isActive = currentRoute === item.key || (item.key === 'settings' && isSettingsActive);
           const iconColor = isActive ? '#0f2452' : '#64748b';
 
           return (
@@ -250,7 +314,7 @@ export const AdminSidebar: React.FC<Props> = ({
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Footer Profile & Logout */}
+      {/* Footer Profile & Logout - Pinned permanently at bottom */}
       <View style={styles.sidebarFooter}>
         <View style={styles.adminUserCard}>
           <View style={styles.userAvatar}>
@@ -273,7 +337,11 @@ export const AdminSidebar: React.FC<Props> = ({
         <TouchableOpacity
           style={[styles.logoutBtn, collapsed && styles.logoutBtnCollapsed]}
           onPress={() => {
-            if (confirm('Are you sure you want to sign out of the Admin Console?')) {
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+              if (window.confirm('Are you sure you want to sign out of the Admin Console?')) {
+                logout();
+              }
+            } else {
               logout();
             }
           }}
@@ -331,6 +399,8 @@ const styles = StyleSheet.create({
     borderRightColor: '#e2e8f0',
     flexDirection: 'column',
     height: '100%',
+    maxHeight: '100%',
+    overflow: 'hidden',
     zIndex: 40
   },
   sidebarCollapsed: {
@@ -393,11 +463,16 @@ const styles = StyleSheet.create({
     padding: 6
   },
   navScrollView: {
-    flex: 1
+    flex: 1,
+    minHeight: 0,
+    flexShrink: 1,
+    ...(Platform.OS === 'web' ? ({ overflowY: 'auto', WebkitOverflowScrolling: 'touch' } as any) : {})
   },
   navContent: {
+    flexGrow: 1,
     paddingVertical: 12,
-    paddingHorizontal: 10
+    paddingHorizontal: 10,
+    paddingBottom: 28
   },
   sectionLabel: {
     fontSize: 10.5,
@@ -445,6 +520,49 @@ const styles = StyleSheet.create({
   navLabelActive: {
     color: '#0f2452',
     fontWeight: '800'
+  },
+  settingsGroupWrapper: {
+    marginBottom: 3
+  },
+  chevronBox: {
+    paddingLeft: 4,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  subCategoryContainer: {
+    paddingLeft: 18,
+    paddingRight: 6,
+    paddingVertical: 4,
+    marginLeft: 16,
+    borderLeftWidth: 2,
+    borderLeftColor: '#e2e8f0',
+    marginBottom: 4,
+    gap: 2
+  },
+  subCategoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    backgroundColor: 'transparent'
+  },
+  subCategoryItemActive: {
+    backgroundColor: '#eff6ff'
+  },
+  subCategoryEmoji: {
+    fontSize: 11,
+    marginRight: 8
+  },
+  subCategoryText: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '500',
+    flex: 1
+  },
+  subCategoryTextActive: {
+    color: '#0f2452',
+    fontWeight: '700'
   },
   itemBadge: {
     backgroundColor: '#ef4444',

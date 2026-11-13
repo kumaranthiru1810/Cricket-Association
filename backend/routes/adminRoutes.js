@@ -11,6 +11,8 @@ const tournamentController = require('../controllers/tournamentController');
 const adminDashboardController = require('../controllers/adminDashboardController');
 const { requireAdminAuth } = require('../middleware/authMiddleware');
 
+const masterSettingController = require('../controllers/masterSettingController');
+
 // Enforce ADMIN role across all administrative management routes
 router.use(requireAdminAuth);
 
@@ -580,6 +582,12 @@ router.get('/live-scoring', (req, res) => adminDashboardController.getLiveScorin
 router.get('/statistics', (req, res) => adminDashboardController.getStatistics(req, res));
 router.get('/settings', (req, res) => adminDashboardController.getSettings(req, res));
 router.put('/settings', (req, res) => adminDashboardController.updateSettings(req, res));
+
+// MASTER SETTINGS & DYNAMIC SUBCATEGORIES (Taluk, Roles, Batting, Age, Certifications, State)
+router.get('/master-settings', (req, res) => masterSettingController.getSettings(req, res));
+router.post('/master-settings', (req, res) => masterSettingController.createSetting(req, res));
+router.put('/master-settings/:id', (req, res) => masterSettingController.updateSetting(req, res));
+router.delete('/master-settings/:id', (req, res) => masterSettingController.deleteSetting(req, res));
 
 module.exports = router;
 

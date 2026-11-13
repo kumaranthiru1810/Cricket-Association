@@ -35,7 +35,7 @@ class AuthService {
   /**
    * Send 6-digit OTP to verify email during Registration (Player, Team, Scorer)
    */
-  async requestRegistrationOtp(email, name, role) {
+  async requestRegistrationOtp(email, name, role, teamName) {
     if (!email || typeof email !== 'string') {
       throw { status: 400, message: 'Please provide a valid email address.' };
     }
@@ -47,19 +47,14 @@ class AuthService {
     }
 
     await db.initDb();
-    const existing = await userModel.findByEmail(cleanEmail);
-    if (existing && existing.status !== 'REJECTED') {
-      if (process.env.NODE_ENV !== 'production' || (role && existing.role !== role)) {
-        try {
-          await userModel.deleteById(existing.id);
-          await db.models.User.deleteOne({ email: cleanEmail });
-        } catch (_e) { }
-      } else {
-        throw {
-          status: 409,
-          message: `An account with email "${cleanEmail}" is already registered. Please log in directly.`
-        };
-      }
+
+    // Comprehensive Pre-Registration Check: reject if team, player, scorer, umpire or user already exists
+    const check = await this.checkRegistrationExists({ role, email: cleanEmail, name, teamName });
+    if (check && check.exists) {
+      throw {
+        status: 409,
+        message: check.message || `An account with email "${cleanEmail}" is already registered. Please log in directly.`
+      };
     }
 
     const rawOtp = otpService.generateOtpCode();
@@ -2265,6 +2260,209 @@ class AuthService {
     };
   }
 
+  /**
+   * Pre-Registration Check:
+   * Verify if Team, Player, Scorer, Umpire or User is already registered before sending OTP.
+   */
+  async checkRegistrationExists({ role, email, name, teamName } = {}) {
+    await db.initDb();
+    const escapeRegex = (s) => String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    // 1. TEAM REGISTRATION CHECKS
+    if (role === 'TEAM' || teamName) {
+      const cleanTeamName = String(teamName || '').trim();
+      const cleanCoachEmail = String(email || '').trim().toLowerCase();
+
+      if (cleanTeamName) {
+        const nameRegex = new RegExp('^' + escapeRegex(cleanTeamName) + '$', 'i');
+
+        // Check TeamRegistration
+        const existingReg = await teamRegistrationModel.Model.findOne({
+          team_name: nameRegex,
+          status: { $ne: 'REJECTED' }
+        }).lean();
+
+        if (existingReg) {
+          return {
+            exists: true,
+            type: 'TEAM',
+            field: 'teamName',
+            message: `Team "${cleanTeamName}" is already registered (Status: ${existingReg.status || 'PENDING'}). Please login directly.`
+          };
+        }
+
+        // Check Team model
+        if (db.models && db.models.Team) {
+          const existingTeam = await db.models.Team.findOne({
+            $or: [{ name: nameRegex }, { team_name: nameRegex }]
+          }).lean();
+
+          if (existingTeam) {
+            return {
+              exists: true,
+              type: 'TEAM',
+              field: 'teamName',
+              message: `Team "${cleanTeamName}" is already registered with the Association. Please login directly.`
+            };
+          }
+        }
+
+        // Check User model for team_name
+        if (db.models && db.models.User) {
+          const existingUserTeam = await db.models.User.findOne({
+            team_name: nameRegex,
+            status: { $ne: 'REJECTED' }
+          }).lean();
+
+          if (existingUserTeam) {
+            return {
+              exists: true,
+              type: 'TEAM',
+              field: 'teamName',
+              message: `Team "${cleanTeamName}" is already registered with the Association. Please login directly.`
+            };
+          }
+        }
+      }
+
+      if (cleanCoachEmail) {
+        // Check TeamRegistration by coach_email
+        const existingCoachReg = await teamRegistrationModel.Model.findOne({
+          coach_email: cleanCoachEmail,
+          status: { $ne: 'REJECTED' }
+        }).lean();
+
+        if (existingCoachReg) {
+          return {
+            exists: true,
+            type: 'TEAM',
+            field: 'coachEmail',
+            message: `Coach email "${cleanCoachEmail}" is already registered for team "${existingCoachReg.team_name}". Please login directly.`
+          };
+        }
+
+        // Check Team by coach_email
+        if (db.models && db.models.Team) {
+          const existingTeamCoach = await db.models.Team.findOne({
+            coach_email: cleanCoachEmail
+          }).lean();
+
+          if (existingTeamCoach) {
+            return {
+              exists: true,
+              type: 'TEAM',
+              field: 'coachEmail',
+              message: `Coach email "${cleanCoachEmail}" is already registered for team "${existingTeamCoach.team_name || existingTeamCoach.name}". Please login directly.`
+            };
+          }
+        }
+
+        // Check User for COACH / TEAM role
+        if (db.models && db.models.User) {
+          const existingCoachUser = await db.models.User.findOne({
+            email: cleanCoachEmail,
+            role: { $in: ['COACH', 'TEAM'] },
+            status: { $ne: 'REJECTED' }
+          }).lean();
+
+          if (existingCoachUser) {
+            return {
+              exists: true,
+              type: 'TEAM',
+              field: 'coachEmail',
+              message: `Coach email "${cleanCoachEmail}" is already registered. Please login directly.`
+            };
+          }
+        }
+      }
+    }
+
+    // 2. GENERAL EMAIL / ROLE CHECKS (PLAYER, SCORER, UMPIRE, TEAM)
+    if (email && typeof email === 'string' && email.trim()) {
+      const cleanEmail = email.trim().toLowerCase();
+
+      // Check User model
+      if (db.models && db.models.User) {
+        const existingUser = await db.models.User.findOne({
+          email: cleanEmail,
+          status: { $ne: 'REJECTED' }
+        }).lean();
+
+        if (existingUser) {
+          const roleLabel = existingUser.role === 'COACH' ? 'Team Coach' : (existingUser.role || role || 'User');
+          return {
+            exists: true,
+            type: existingUser.role,
+            field: 'email',
+            message: `An account with email "${cleanEmail}" is already registered as ${roleLabel}. Please login directly.`
+          };
+        }
+      }
+
+      // Check Player collection
+      if (role === 'PLAYER' && db.models && db.models.Player) {
+        const existingPlayer = await db.models.Player.findOne({ email: cleanEmail }).lean();
+        if (existingPlayer) {
+          return {
+            exists: true,
+            type: 'PLAYER',
+            field: 'email',
+            message: `Player with email "${cleanEmail}" is already registered in the district player directory. Please login directly.`
+          };
+        }
+      }
+
+      // Check Scorer collection
+      if (role === 'SCORER' && db.models && db.models.Scorer) {
+        const existingScorer = await db.models.Scorer.findOne({ email: cleanEmail }).lean();
+        if (existingScorer) {
+          return {
+            exists: true,
+            type: 'SCORER',
+            field: 'email',
+            message: `Scorer with email "${cleanEmail}" is already registered. Please login directly.`
+          };
+        }
+      }
+
+      // Check Official collection (for Umpire / Scorer)
+      if (role === 'UMPIRE' && db.models && db.models.Official) {
+        const existingOfficial = await db.models.Official.findOne({ email: cleanEmail }).lean();
+        if (existingOfficial) {
+          return {
+            exists: true,
+            type: 'UMPIRE',
+            field: 'email',
+            message: `Umpire with email "${cleanEmail}" is already registered in the officials directory. Please login directly.`
+          };
+        }
+      }
+
+      // Check if squad player in TeamRegistration
+      if (role === 'PLAYER') {
+        const regWithPlayer = await teamRegistrationModel.Model.findOne({
+          'players.email': cleanEmail,
+          status: { $ne: 'REJECTED' }
+        }).lean();
+
+        if (regWithPlayer) {
+          return {
+            exists: true,
+            type: 'PLAYER',
+            field: 'email',
+            message: `Player email "${cleanEmail}" is already enrolled in squad of team "${regWithPlayer.team_name}". Please login directly.`
+          };
+        }
+      }
+    }
+
+    return { exists: false };
+  }
+
+  async checkTeamExists(teamName, coachEmail) {
+    return this.checkRegistrationExists({ role: 'TEAM', teamName, email: coachEmail });
+  }
+
   async getTeams(status = null) {
     return teamRegistrationModel.getAll(status);
   }
@@ -2590,6 +2788,125 @@ class AuthService {
       success: true,
       message: `${user.role} "${user.name}" registration has been marked REJECTED.`,
       data: user.toObject()
+    };
+  }
+
+  /**
+   * Find player's team name by email and dispatch it to player's email
+   */
+  async findPlayerTeam(email) {
+    if (!email || typeof email !== 'string') {
+      throw { status: 400, message: 'Please provide a valid email address.' };
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      throw { status: 400, message: 'Invalid email address format.' };
+    }
+
+    await db.initDb();
+
+    let playerName = '';
+    const matchedTeams = [];
+
+    // 1. Check TeamRegistration collection (squad players registered by coaches/clubs)
+    try {
+      const registrations = await db.models.TeamRegistration.find({}).lean();
+      for (const reg of registrations) {
+        const player = (reg.players || []).find(p => p.email && p.email.trim().toLowerCase() === cleanEmail);
+        if (player) {
+          if (!playerName && player.name) playerName = player.name;
+          if (reg.team_name) {
+            matchedTeams.push(reg.team_name.trim());
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Error querying TeamRegistration for player team:', err.message);
+    }
+
+    // 2. Check User collection for PLAYER role
+    try {
+      const user = await userModel.findByEmail(cleanEmail);
+      if (user) {
+        if (!playerName && user.name) playerName = user.name;
+        if (user.player_details?.club_choice) {
+          matchedTeams.push(user.player_details.club_choice.trim());
+        }
+        if (user.player_details?.team_name) {
+          matchedTeams.push(user.player_details.team_name.trim());
+        }
+        if (user.team_id) {
+          try {
+            const team = await db.models.Team.findOne({ $or: [{ id: user.team_id }, { team_id: user.team_id }] }).lean();
+            if (team && (team.team_name || team.name)) {
+              matchedTeams.push((team.team_name || team.name).trim());
+            }
+          } catch (_e) {}
+        }
+      }
+    } catch (err) {
+      console.warn('Error querying User for player team:', err.message);
+    }
+
+    // 3. Check Player collection
+    try {
+      const playerDoc = await db.models.Player.findOne({ email: cleanEmail }).lean();
+      if (playerDoc) {
+        if (!playerName && playerDoc.name) playerName = playerDoc.name;
+        if (playerDoc.team_name) {
+          matchedTeams.push(playerDoc.team_name.trim());
+        }
+        if (playerDoc.team_id) {
+          try {
+            const team = await db.models.Team.findOne({ $or: [{ id: playerDoc.team_id }, { team_id: playerDoc.team_id }] }).lean();
+            if (team && (team.team_name || team.name)) {
+              matchedTeams.push((team.team_name || team.name).trim());
+            }
+            const teamReg = await db.models.TeamRegistration.findOne({ $or: [{ id: playerDoc.team_id }, { team_id: playerDoc.team_id }] }).lean();
+            if (teamReg && teamReg.team_name) {
+              matchedTeams.push(teamReg.team_name.trim());
+            }
+          } catch (_e) {}
+        }
+      }
+    } catch (err) {
+      console.warn('Error querying Player collection for player team:', err.message);
+    }
+
+    // 4. Fallback for demo Saravanan if not already found
+    if (cleanEmail === 'saravanan.r@strikerscc.org' && matchedTeams.length === 0) {
+      matchedTeams.push('Strikers Cricket Club');
+      if (!playerName) playerName = 'R. Saravanan';
+    }
+
+    // Deduplicate teams
+    const uniqueTeamNames = [...new Set(matchedTeams)].filter(Boolean);
+
+    if (uniqueTeamNames.length === 0) {
+      throw {
+        status: 404,
+        message: `No player account or team affiliation found for "${cleanEmail}". Please check your email or contact your team coach.`
+      };
+    }
+
+    // Dispatch email to player
+    const { sendPlayerTeamEmail } = require('../config/mailer');
+    await sendPlayerTeamEmail({
+      toEmail: cleanEmail,
+      playerName: playerName || 'Player',
+      teamNames: uniqueTeamNames
+    });
+
+    console.log(`\n📧 [FIND YOUR TEAM DISPATCHED] Email: ${cleanEmail} | Player: ${playerName || 'Player'} | Teams: ${uniqueTeamNames.join(', ')}\n`);
+
+    return {
+      success: true,
+      message: `Your team name (${uniqueTeamNames.join(', ')}) has been sent to ${cleanEmail}. Please check your email.`,
+      email: cleanEmail,
+      teamNames: uniqueTeamNames,
+      playerName: playerName || 'Player'
     };
   }
 }

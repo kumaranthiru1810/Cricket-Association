@@ -93,6 +93,7 @@ export const AdminLayout: React.FC<Props> = ({
         {/* Sidebar */}
         <AdminSidebar
           currentRoute={computedRoute}
+          currentPath={currentPath}
           onNavigate={(key) => handleNav(key)}
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed(!collapsed)}
