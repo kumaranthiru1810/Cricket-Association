@@ -562,6 +562,7 @@ export default function LiveScoringScreen() {
   const [activeMilestone, setActiveMilestone] = useState<MilestoneCelebration | null>(null);
   const [showMilestoneModal, setShowMilestoneModal] = useState<boolean>(false);
   const shownMilestonesRef = useRef<Set<string>>(new Set());
+  const shownRulesRef = useRef<Set<string>>(new Set());
 
   // Broadcast Umpire Signal Overlay & Hand Signals Gallery State
   const [activeUmpireSignal, setActiveUmpireSignal] = useState<UmpireSignalEvent | null>(null);
@@ -1477,17 +1478,21 @@ export default function LiveScoringScreen() {
       // Seamless background update without full page refresh
       await loadLiveState(false);
 
-      // Smart Rules Analysis: Free Hit status
+      // Smart Rules Analysis: Free Hit status (Rule modal triggers ONCE per match)
       if (res.isFreeHit || res.data?.isFreeHit || type === 'noball') {
         setIsFreeHitActive(true);
         if (type === 'noball') {
-          setActiveCricketRule('FREE_HIT');
-          setCricketRuleContext({
-            bowlerName: bowler?.name || 'Bowler',
-            strikerName: striker?.name || 'Striker',
-            nonStrikerName: nonStriker?.name || 'Non-Striker'
-          });
-          setShowCricketRulesModal(true);
+          const ruleKey = `${matchId}_FREE_HIT`;
+          if (!shownRulesRef.current.has(ruleKey)) {
+            shownRulesRef.current.add(ruleKey);
+            setActiveCricketRule('FREE_HIT');
+            setCricketRuleContext({
+              bowlerName: bowler?.name || 'Bowler',
+              strikerName: striker?.name || 'Striker',
+              nonStrikerName: nonStriker?.name || 'Non-Striker'
+            });
+            setShowCricketRulesModal(true);
+          }
         }
       } else if (isFreeHitActive && type === 'normal') {
         setIsFreeHitActive(false);
@@ -1559,18 +1564,22 @@ export default function LiveScoringScreen() {
         });
       }
 
-      // Smart Rules Analysis: Consecutive Wides
+      // Smart Rules Analysis: Consecutive Wides (Triggers rule modal only ONCE per match)
       if (type === 'wide') {
         const nextWides = consecutiveWidesCount + 1;
         setConsecutiveWidesCount(nextWides);
         if (nextWides >= 2) {
-          setActiveCricketRule('CONSECUTIVE_WIDES');
-          setCricketRuleContext({
-            bowlerName: bowler?.name || 'Bowler',
-            count: nextWides,
-            overNumber: Math.floor(balls / 6) + 1
-          });
-          setShowCricketRulesModal(true);
+          const ruleKey = `${matchId}_CONSECUTIVE_WIDES`;
+          if (!shownRulesRef.current.has(ruleKey)) {
+            shownRulesRef.current.add(ruleKey);
+            setActiveCricketRule('CONSECUTIVE_WIDES');
+            setCricketRuleContext({
+              bowlerName: bowler?.name || 'Bowler',
+              count: nextWides,
+              overNumber: Math.floor(balls / 6) + 1
+            });
+            setShowCricketRulesModal(true);
+          }
         }
       } else if (type === 'normal') {
         setConsecutiveWidesCount(0);
@@ -1578,34 +1587,46 @@ export default function LiveScoringScreen() {
 
       const cwWarn = res?.consecutiveWidesWarning || res?.data?.consecutiveWidesWarning;
       if (cwWarn) {
-        setActiveCricketRule('CONSECUTIVE_WIDES');
-        setCricketRuleContext({
-          bowlerName: cwWarn.bowlerName || bowler?.name || 'Bowler',
-          count: cwWarn.count || 2,
-          overNumber: cwWarn.overNumber
-        });
-        setShowCricketRulesModal(true);
+        const ruleKey = `${matchId}_CONSECUTIVE_WIDES`;
+        if (!shownRulesRef.current.has(ruleKey)) {
+          shownRulesRef.current.add(ruleKey);
+          setActiveCricketRule('CONSECUTIVE_WIDES');
+          setCricketRuleContext({
+            bowlerName: cwWarn.bowlerName || bowler?.name || 'Bowler',
+            count: cwWarn.count || 2,
+            overNumber: cwWarn.overNumber
+          });
+          setShowCricketRulesModal(true);
+        }
       }
 
-      // Smart Rules Analysis: Bowler Quota
+      // Smart Rules Analysis: Bowler Quota (Triggers rule modal only ONCE per match per bowler)
       const bqWarn = res?.bowlerQuotaWarning || res?.data?.bowlerQuotaWarning;
       if (bqWarn) {
-        setActiveCricketRule('OVER_QUOTA');
-        setCricketRuleContext({
-          bowlerName: bqWarn.bowlerName || bowler?.name || 'Bowler',
-          oversBowled: bqWarn.overs,
-          maxQuota: bqWarn.maxQuota
-        });
-        setShowCricketRulesModal(true);
+        const ruleKey = `${matchId}_OVER_QUOTA_${bqWarn.bowlerId || ''}`;
+        if (!shownRulesRef.current.has(ruleKey)) {
+          shownRulesRef.current.add(ruleKey);
+          setActiveCricketRule('OVER_QUOTA');
+          setCricketRuleContext({
+            bowlerName: bqWarn.bowlerName || bowler?.name || 'Bowler',
+            oversBowled: bqWarn.overs,
+            maxQuota: bqWarn.maxQuota
+          });
+          setShowCricketRulesModal(true);
+        }
       }
 
       // Check for 2 No-Balls dangerous bowling warning (MCC Law 41.7)
       const nbWarn = res?.noBallWarning || res?.data?.noBallWarning;
-      if (nbWarn && !dismissedNoBallBowlers.includes(nbWarn.bowlerId)) {
+      const currentBowlerNoBalls = (bowler?.no_balls || bowler?.noBalls || 0) + (type === 'noball' ? 1 : 0);
+      const isSecondNoBall = (nbWarn && (nbWarn.noBallCount >= 2 || nbWarn.beamerCount >= 2)) || (type === 'noball' && currentBowlerNoBalls >= 2);
+      const targetBowlerId = nbWarn?.bowlerId || bowler?.id || 'B1';
+
+      if (isSecondNoBall && !dismissedNoBallBowlers.includes(targetBowlerId)) {
         setNoBallAlert({
-          bowlerId: nbWarn.bowlerId,
-          bowlerName: nbWarn.bowlerName || bowler?.name || 'Current Bowler',
-          count: nbWarn.noBallCount || 2
+          bowlerId: targetBowlerId,
+          bowlerName: nbWarn?.bowlerName || bowler?.name || 'Current Bowler',
+          count: nbWarn?.noBallCount || currentBowlerNoBalls || 2
         });
       }
 

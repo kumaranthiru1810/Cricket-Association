@@ -644,38 +644,31 @@ class ScoringEngine {
 
     if (extraType === 'NO_BALL') {
       try {
-        if (isDangerousBeamer) {
-          const beamerCount = await db.models.Delivery.countDocuments({
-            innings_id: innings.id,
-            bowler_id: activeBowlerId,
-            extra_type: 'NO_BALL',
-            $or: [{ reason: 'BEAMER' }, { reason: /beamer/i }, { reason: /dangerous/i }]
-          });
+        const totalNoBalls = await db.models.Delivery.countDocuments({
+          innings_id: innings.id,
+          bowler_id: activeBowlerId,
+          extra_type: 'NO_BALL'
+        });
 
-          if (beamerCount >= 2) {
-            dangerousBowlingWarning = {
-              level: 'CRITICAL',
-              action: 'SUSPENSION',
-              bowlerId: activeBowlerId,
-              bowlerName,
-              beamerCount,
-              message: `CRITICAL (MCC Law 41.7): Bowler ${bowlerName} has bowled ${beamerCount} dangerous beamers. Bowler is immediately SUSPENDED from bowling for the remainder of this match.`
-            };
-            if (!innings.suspended_bowler_ids) innings.suspended_bowler_ids = [];
-            if (!innings.suspended_bowler_ids.includes(activeBowlerId)) {
-              innings.suspended_bowler_ids.push(activeBowlerId);
-              await innings.save();
-            }
-          } else {
-            dangerousBowlingWarning = {
-              level: 'WARNING',
-              action: 'FIRST_WARNING',
-              bowlerId: activeBowlerId,
-              bowlerName,
-              beamerCount: 1,
-              message: `WARNING (MCC Law 41.7): First dangerous waist-high beamer bowled by ${bowlerName}. A second beamer will result in mandatory bowling suspension.`
-            };
-          }
+        if (totalNoBalls >= 2) {
+          dangerousBowlingWarning = {
+            level: 'SUSPENSION',
+            action: 'MANDATORY_SUSPENSION',
+            bowlerId: activeBowlerId,
+            bowlerName,
+            noBallCount: totalNoBalls,
+            message: `MCC Law 41.7 Violation: Bowler ${bowlerName} has bowled ${totalNoBalls} No-Balls in this innings. Under cricket rules, the umpire directs the captain to take the bowler off immediately.`
+          };
+          noBallWarning = dangerousBowlingWarning;
+        } else if (isDangerousBeamer) {
+          dangerousBowlingWarning = {
+            level: 'WARNING',
+            action: 'FIRST_WARNING',
+            bowlerId: activeBowlerId,
+            bowlerName,
+            noBallCount: 1,
+            message: `WARNING (MCC Law 41.7): First dangerous waist-high beamer bowled by ${bowlerName}. A second beamer will result in mandatory bowling suspension.`
+          };
           noBallWarning = dangerousBowlingWarning;
         }
       } catch (_e) {}
