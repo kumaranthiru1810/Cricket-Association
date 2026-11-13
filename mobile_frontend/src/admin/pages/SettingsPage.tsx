@@ -190,17 +190,15 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
 
   // Normalize initial category
   const getInitialTab = (): string => {
-    if (!initialCategory) return 'taluk_jurisdiction';
+    if (!initialCategory || initialCategory === 'association' || initialCategory === 'settings') {
+      return 'taluk_jurisdiction';
+    }
     const normalized = initialCategory.replace(/-/g, '_').toLowerCase();
     const match = DYNAMIC_CATEGORIES.find(c => c.key === normalized);
     return match ? match.key : 'taluk_jurisdiction';
   };
 
-  const isAssocInitial = initialCategory === 'association' || initialCategory === 'settings';
-  const [currentSection, setCurrentSection] = useState<'master_settings' | 'association'>(
-    isAssocInitial ? 'association' : 'master_settings'
-  );
-  const [activeTab, setActiveTab] = useState<string>(isAssocInitial ? 'association' : getInitialTab());
+  const [activeTab, setActiveTab] = useState<string>(getInitialTab());
   const [loading, setLoading] = useState<boolean>(false);
   const [items, setItems] = useState<MasterSettingItem[]>(
     DEFAULT_MASTER_SETTINGS[getInitialTab()] || []
@@ -219,42 +217,19 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
   const [itemToDelete, setItemToDelete] = useState<MasterSettingItem | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
-  // Association Info State
-  const [assocName, setAssocName] = useState('Virudhunagar District Cricket Association');
-  const [shortName, setShortName] = useState('VDCA');
-  const [regNumber, setRegNumber] = useState('TN-VNR-SOCIETY-2018-092');
-  const [contactEmail, setContactEmail] = useState('admin@cfvd.org');
-  const [contactPhone, setContactPhone] = useState('+91 94431 23456');
-  const [officeAddress, setOfficeAddress] = useState('Kamarajar Stadium Complex, Virudhunagar, Tamil Nadu - 626001');
-  const [defaultFormat, setDefaultFormat] = useState('T20');
-  const [defaultOvers, setDefaultOvers] = useState('20');
-  const [ballType, setBallType] = useState('WHITE_LEATHER');
-  const [savingAssoc, setSavingAssoc] = useState<boolean>(false);
-
   // Sync initialCategory when route changes
   useEffect(() => {
-    if (initialCategory) {
-      if (initialCategory === 'association' || initialCategory === 'settings') {
-        setCurrentSection('association');
-        setActiveTab('association');
-      } else {
-        setCurrentSection('master_settings');
-        const normalized = initialCategory.replace(/-/g, '_').toLowerCase();
-        const match = DYNAMIC_CATEGORIES.find(c => c.key === normalized);
-        if (match && match.key !== activeTab) {
-          setActiveTab(match.key);
-        }
+    if (initialCategory && initialCategory !== 'association' && initialCategory !== 'settings') {
+      const normalized = initialCategory.replace(/-/g, '_').toLowerCase();
+      const match = DYNAMIC_CATEGORIES.find(c => c.key === normalized);
+      if (match && match.key !== activeTab) {
+        setActiveTab(match.key);
       }
     }
   }, [initialCategory]);
 
   // Load items whenever active dynamic category changes (Database only - no localStorage)
   const loadCategoryItems = async (categoryKey: string) => {
-    if (categoryKey === 'association') {
-      loadAssociationSettings();
-      return;
-    }
-
     // Clean up any legacy localStorage items if present
     if (typeof window !== 'undefined') {
       try {
@@ -288,29 +263,6 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
       console.warn('Load category items error from database:', err);
       const defaults = DEFAULT_MASTER_SETTINGS[categoryKey] || [];
       setItems(defaults);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadAssociationSettings = async () => {
-    setLoading(true);
-    try {
-      const res = await adminApi.getSettings();
-      if (res && res.success && res.settings) {
-        const s = res.settings;
-        if (s.association_name) setAssocName(s.association_name);
-        if (s.short_name) setShortName(s.short_name);
-        if (s.registration_number) setRegNumber(s.registration_number);
-        if (s.contact_email) setContactEmail(s.contact_email);
-        if (s.contact_phone) setContactPhone(s.contact_phone);
-        if (s.office_address) setOfficeAddress(s.office_address);
-        if (s.default_format) setDefaultFormat(s.default_format);
-        if (s.default_overs) setDefaultOvers(String(s.default_overs));
-        if (s.ball_type) setBallType(s.ball_type);
-      }
-    } catch (e: any) {
-      showToast(`Failed to load settings: ${e.message}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -436,295 +388,53 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
     }
   };
 
-  // Handle Association Settings Save
-  const handleSaveAssocSettings = async () => {
-    setSavingAssoc(true);
-    try {
-      await adminApi.updateSettings({
-        association_name: assocName,
-        short_name: shortName,
-        registration_number: regNumber,
-        contact_email: contactEmail,
-        contact_phone: contactPhone,
-        office_address: officeAddress,
-        default_format: defaultFormat,
-        default_overs: parseInt(defaultOvers, 10) || 20,
-        ball_type: ballType
-      });
-      showToast('Association parameters updated successfully.', 'success');
-    } catch (e: any) {
-      showToast(`Save failed: ${e.message}`, 'error');
-    } finally {
-      setSavingAssoc(false);
-    }
-  };
-
   return (
     <View style={styles.container}>
       {/* Top Header */}
       <PageHeader
-        title={currentSection === 'master_settings' ? 'Master Settings (Database Dynamic)' : 'Association Settings'}
-        subtitle={
-          currentSection === 'master_settings'
-            ? 'Manage official dynamic lookup categories from MongoDB mastersetting field.'
-            : 'Configure official federation legal registration, contact details, and match defaults.'
-        }
+        title="Settings"
+        subtitle="Manage official dynamic lookup categories and options saved in MongoDB database."
         breadcrumbs={[
           { label: 'Admin', link: '/admin/dashboard' },
           { label: 'Settings', link: '/admin/settings' },
-          ...(currentSection === 'master_settings'
-            ? [{ label: 'Master Settings' }, ...(activeCategoryDef ? [{ label: activeCategoryDef.label }] : [])]
-            : [{ label: 'Association Settings' }])
+          ...(activeCategoryDef ? [{ label: activeCategoryDef.label }] : [])
         ]}
       />
 
-      {/* 1. TOP SECTION SWITCHER: Master Settings vs Association Settings */}
-      <View style={styles.sectionSwitcher}>
-        {/* Master Settings Section Tab */}
-        <TouchableOpacity
-          style={[
-            styles.sectionSwitcherBtn,
-            currentSection === 'master_settings' && styles.sectionSwitcherBtnActive
-          ]}
-          onPress={() => {
-            setCurrentSection('master_settings');
-            if (activeTab === 'association') setActiveTab('taluk_jurisdiction');
-          }}
-          activeOpacity={0.8}
+      {/* DYNAMIC CATEGORY PILLS */}
+      <View style={styles.tabBarContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabBarScroll}
         >
-          <Text style={styles.sectionSwitcherIcon}>🗂️</Text>
-          <View style={{ flex: 1 }}>
-            <Text
-              style={[
-                styles.sectionSwitcherTitle,
-                currentSection === 'master_settings' && styles.sectionSwitcherTitleActive
-              ]}
-            >
-              Master Settings
-            </Text>
-            <Text
-              style={[
-                styles.sectionSwitcherSubtitle,
-                currentSection === 'master_settings' && styles.sectionSwitcherSubtitleActive
-              ]}
-              numberOfLines={1}
-            >
-              MongoDB mastersetting • 7 Subcategories
-            </Text>
-          </View>
-          <View
-            style={[
-              styles.sectionSwitcherBadge,
-              currentSection === 'master_settings' && styles.sectionSwitcherBadgeActive
-            ]}
-          >
-            <Text
-              style={[
-                styles.sectionSwitcherBadgeText,
-                currentSection === 'master_settings' && styles.sectionSwitcherBadgeTextActive
-              ]}
-            >
-              7 Fields
-            </Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* Association Settings Section Tab */}
-        <TouchableOpacity
-          style={[
-            styles.sectionSwitcherBtn,
-            currentSection === 'association' && styles.sectionSwitcherBtnActive
-          ]}
-          onPress={() => {
-            setCurrentSection('association');
-            setActiveTab('association');
-          }}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.sectionSwitcherIcon}>🏛️</Text>
-          <View style={{ flex: 1 }}>
-            <Text
-              style={[
-                styles.sectionSwitcherTitle,
-                currentSection === 'association' && styles.sectionSwitcherTitleActive
-              ]}
-            >
-              Association Settings
-            </Text>
-            <Text
-              style={[
-                styles.sectionSwitcherSubtitle,
-                currentSection === 'association' && styles.sectionSwitcherSubtitleActive
-              ]}
-              numberOfLines={1}
-            >
-              Profile, Contact & Match Rules
-            </Text>
-          </View>
-          <View
-            style={[
-              styles.sectionSwitcherBadge,
-              currentSection === 'association' && styles.sectionSwitcherBadgeActive
-            ]}
-          >
-            <Text
-              style={[
-                styles.sectionSwitcherBadgeText,
-                currentSection === 'association' && styles.sectionSwitcherBadgeTextActive
-              ]}
-            >
-              General
-            </Text>
-          </View>
-        </TouchableOpacity>
+          {DYNAMIC_CATEGORIES.map(cat => {
+            const isActive = activeTab === cat.key;
+            return (
+              <TouchableOpacity
+                key={cat.key}
+                style={[styles.tabPill, isActive && styles.tabPillActive]}
+                onPress={() => {
+                  setActiveTab(cat.key);
+                  setSearchQuery('');
+                  if (onNavigate) {
+                    onNavigate(`/admin/settings/${cat.key.replace(/_/g, '-')}`);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.tabPillIcon}>{cat.iconText}</Text>
+                <Text style={[styles.tabPillText, isActive && styles.tabPillTextActive]}>
+                  {cat.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
-      {/* 2. DYNAMIC CATEGORY PILLS (Shown only when in Master Settings section) */}
-      {currentSection === 'master_settings' && (
-        <View style={styles.tabBarContainer}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.tabBarScroll}
-          >
-            {DYNAMIC_CATEGORIES.map(cat => {
-              const isActive = activeTab === cat.key;
-              return (
-                <TouchableOpacity
-                  key={cat.key}
-                  style={[styles.tabPill, isActive && styles.tabPillActive]}
-                  onPress={() => {
-                    setActiveTab(cat.key);
-                    setSearchQuery('');
-                    if (onNavigate) {
-                      onNavigate(`/admin/settings/${cat.key.replace(/_/g, '-')}`);
-                    }
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.tabPillIcon}>{cat.iconText}</Text>
-                  <Text style={[styles.tabPillText, isActive && styles.tabPillTextActive]}>
-                    {cat.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-      )}
-
-      {/* Main Content Area */}
-      {currentSection === 'association' ? (
-        /* Association Settings View */
-        <ScrollView style={styles.contentScroll} showsVerticalScrollIndicator={false}>
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View style={styles.cardHeaderIcon}>
-                <ShieldIcon size={20} color="#0f2452" />
-              </View>
-              <View style={styles.cardHeaderText}>
-                <Text style={styles.cardTitle}>Association Registration & Details</Text>
-                <Text style={styles.cardSubtitle}>
-                  Official Federation identity, legal registration, and contact information.
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.formGrid}>
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Full Association Name</Text>
-                <TextInput
-                  style={styles.input}
-                  value={assocName}
-                  onChangeText={setAssocName}
-                  placeholder="Official registered name"
-                  placeholderTextColor="#94a3b8"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Short Name / Acronym</Text>
-                <TextInput
-                  style={styles.input}
-                  value={shortName}
-                  onChangeText={setShortName}
-                  placeholder="e.g. VDCA"
-                  placeholderTextColor="#94a3b8"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Society Registration Number</Text>
-                <TextInput
-                  style={styles.input}
-                  value={regNumber}
-                  onChangeText={setRegNumber}
-                  placeholder="Legal registry number"
-                  placeholderTextColor="#94a3b8"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Official Contact Email</Text>
-                <TextInput
-                  style={styles.input}
-                  value={contactEmail}
-                  onChangeText={setContactEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  placeholder="contact@cfvd.org"
-                  placeholderTextColor="#94a3b8"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Official Contact Phone</Text>
-                <TextInput
-                  style={styles.input}
-                  value={contactPhone}
-                  onChangeText={setContactPhone}
-                  keyboardType="phone-pad"
-                  placeholder="+91 XXXXX XXXXX"
-                  placeholderTextColor="#94a3b8"
-                />
-              </View>
-
-              <View style={[styles.formGroup, styles.formGroupFull]}>
-                <Text style={styles.label}>Headquarters / Stadium Office Address</Text>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  value={officeAddress}
-                  onChangeText={setOfficeAddress}
-                  multiline
-                  numberOfLines={2}
-                  placeholder="Full office address"
-                  placeholderTextColor="#94a3b8"
-                />
-              </View>
-            </View>
-
-            <View style={styles.saveBar}>
-              <TouchableOpacity
-                style={[styles.saveBtn, savingAssoc && styles.btnDisabled]}
-                onPress={handleSaveAssocSettings}
-                disabled={savingAssoc}
-                activeOpacity={0.8}
-              >
-                {savingAssoc ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <>
-                    <CheckIcon size={16} color="#ffffff" />
-                    <Text style={styles.saveBtnText}>Save Association Settings</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </ScrollView>
-      ) : (
-        /* Dynamic Category Management View */
-        <View style={styles.categoryViewContainer}>
+      {/* Dynamic Category Management View */}
+      <View style={styles.categoryViewContainer}>
           {/* Category Top Banner */}
           <View style={styles.categoryBanner}>
             <View style={styles.bannerLeft}>
@@ -863,7 +573,6 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
             </ScrollView>
           )}
         </View>
-      )}
 
       {/* Add New Item Modal */}
       <Modal

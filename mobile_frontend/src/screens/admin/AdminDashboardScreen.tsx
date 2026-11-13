@@ -2110,11 +2110,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             )}
           </TouchableOpacity>
 
-          {/* Master Settings (Database Dynamic Categories) */}
+          {/* Settings Navigation (Master Settings Database Dynamic Categories) */}
           <TouchableOpacity
             style={[
               styles.sidebarNavItem,
-              activeTab === 'master_settings' && styles.sidebarNavItemMasterSettingsActive,
+              (activeTab === 'settings' || activeTab === 'master_settings') && styles.sidebarNavItemSettingsActive,
               isCollapsed && styles.sidebarNavItemCollapsed
             ]}
             onPress={() => {
@@ -2124,31 +2124,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             }}
             activeOpacity={0.8}
           >
-            <Text style={[styles.sidebarNavIcon, activeTab === 'master_settings' && styles.sidebarNavIconActive]}>🗂️</Text>
+            <Text style={[styles.sidebarNavIcon, (activeTab === 'settings' || activeTab === 'master_settings') && styles.sidebarNavIconActive]}>⚙️</Text>
             {!isCollapsed && (
-              <Text style={[styles.sidebarNavLabel, activeTab === 'master_settings' && styles.sidebarNavLabelActive]}>
-                Master Settings
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Settings Navigation */}
-          <TouchableOpacity
-            style={[
-              styles.sidebarNavItem,
-              activeTab === 'settings' && styles.sidebarNavItemSettingsActive,
-              isCollapsed && styles.sidebarNavItemCollapsed
-            ]}
-            onPress={() => {
-              setActiveTab('settings');
-              setSettingsCategory('association');
-              if (isMobileDrawer) setMobileSidebarOpen(false);
-            }}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.sidebarNavIcon, activeTab === 'settings' && styles.sidebarNavIconActive]}>⚙️</Text>
-            {!isCollapsed && (
-              <Text style={[styles.sidebarNavLabel, activeTab === 'settings' && styles.sidebarNavLabelActive]}>
+              <Text style={[styles.sidebarNavLabel, (activeTab === 'settings' || activeTab === 'master_settings') && styles.sidebarNavLabelActive]}>
                 Settings
               </Text>
             )}
@@ -4629,17 +4607,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           )}
 
           {/* ─────────────────────────────────────────────────────────────
-              12. TAB CONTENT: MASTER SETTINGS (DB DYNAMIC CATEGORIES)
+              12. TAB CONTENT: SETTINGS (MASTER SETTINGS / DB DYNAMIC CATEGORIES)
               ───────────────────────────────────────────────────────────── */}
-          {activeTab === 'master_settings' && (
+          {(activeTab === 'master_settings' || activeTab === 'settings') && (
             <SettingsPage initialCategory={settingsCategory || 'taluk_jurisdiction'} />
-          )}
-
-          {/* ─────────────────────────────────────────────────────────────
-              13. TAB CONTENT: ASSOCIATION SETTINGS & DEFAULTS
-              ───────────────────────────────────────────────────────────── */}
-          {activeTab === 'settings' && (
-            <SettingsPage initialCategory="association" />
           )}
         </View>
       </ScrollView>

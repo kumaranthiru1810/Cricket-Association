@@ -212,11 +212,6 @@ export const AdminSidebar: React.FC<Props> = ({
       badge: 'Live'
     },
     {
-      key: 'master-settings',
-      label: 'Master Settings',
-      icon: () => <Text style={{ fontSize: 16 }}>🗂️</Text>
-    },
-    {
       key: 'settings',
       label: 'Settings',
       icon: c => <SettingsIcon size={18} color={c} />
@@ -317,61 +312,65 @@ export const AdminSidebar: React.FC<Props> = ({
           <ExternalLinkIcon size={16} color="#d4af37" />
           {!collapsed && <Text style={styles.publicSiteText}>View Public Website</Text>}
         </TouchableOpacity>
+      </ScrollView>
 
-        {/* Footer Profile & Logout inside ScrollView */}
-        <View style={styles.sidebarFooter}>
-          <View style={styles.adminUserCard}>
-            <View style={styles.userAvatar}>
-              <Text style={styles.userAvatarText}>
-                {(adminUser?.name || 'A')[0].toUpperCase()}
+      {/* Footer Profile & Logout - Pinned permanently at bottom */}
+      <View style={styles.sidebarFooter}>
+        <View style={styles.adminUserCard}>
+          <View style={styles.userAvatar}>
+            <Text style={styles.userAvatarText}>
+              {(adminUser?.name || 'A')[0].toUpperCase()}
+            </Text>
+          </View>
+          {!collapsed && (
+            <View style={styles.userInfo}>
+              <Text style={styles.userName} numberOfLines={1}>
+                {adminUser?.name || 'Administrator'}
+              </Text>
+              <Text style={styles.userEmail} numberOfLines={1}>
+                {adminUser?.email || 'admin@cfvd.org'}
               </Text>
             </View>
-            {!collapsed && (
-              <View style={styles.userInfo}>
-                <Text style={styles.userName} numberOfLines={1}>
-                  {adminUser?.name || 'Administrator'}
-                </Text>
-                <Text style={styles.userEmail} numberOfLines={1}>
-                  {adminUser?.email || 'admin@cfvd.org'}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          <TouchableOpacity
-            style={[styles.logoutBtn, collapsed && styles.logoutBtnCollapsed]}
-            onPress={() => {
-              if (confirm('Are you sure you want to sign out of the Admin Console?')) {
-                logout();
-              }
-            }}
-            activeOpacity={0.8}
-            accessibilityLabel={collapsed ? 'Sign Out' : undefined}
-          >
-            <LogoutIcon size={16} color="#ef4444" />
-            {!collapsed && <Text style={styles.logoutText}>Sign Out</Text>}
-          </TouchableOpacity>
-
-          {/* Desktop Collapse Toggle */}
-          {Platform.OS === 'web' && !isMobileOpen && (
-            <TouchableOpacity
-              style={styles.collapseToggle}
-              onPress={onToggleCollapse}
-              activeOpacity={0.7}
-              accessibilityLabel={collapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
-            >
-              {collapsed ? (
-                <ChevronRightIcon size={16} color="#64748b" />
-              ) : (
-                <View style={styles.collapseToggleRow}>
-                  <ChevronLeftIcon size={16} color="#64748b" />
-                  <Text style={styles.collapseToggleText}>Collapse Menu</Text>
-                </View>
-              )}
-            </TouchableOpacity>
           )}
         </View>
-      </ScrollView>
+
+        <TouchableOpacity
+          style={[styles.logoutBtn, collapsed && styles.logoutBtnCollapsed]}
+          onPress={() => {
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+              if (window.confirm('Are you sure you want to sign out of the Admin Console?')) {
+                logout();
+              }
+            } else {
+              logout();
+            }
+          }}
+          activeOpacity={0.8}
+          accessibilityLabel={collapsed ? 'Sign Out' : undefined}
+        >
+          <LogoutIcon size={16} color="#ef4444" />
+          {!collapsed && <Text style={styles.logoutText}>Sign Out</Text>}
+        </TouchableOpacity>
+
+        {/* Desktop Collapse Toggle */}
+        {Platform.OS === 'web' && !isMobileOpen && (
+          <TouchableOpacity
+            style={styles.collapseToggle}
+            onPress={onToggleCollapse}
+            activeOpacity={0.7}
+            accessibilityLabel={collapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+          >
+            {collapsed ? (
+              <ChevronRightIcon size={16} color="#64748b" />
+            ) : (
+              <View style={styles.collapseToggleRow}>
+                <ChevronLeftIcon size={16} color="#64748b" />
+                <Text style={styles.collapseToggleText}>Collapse Menu</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 
