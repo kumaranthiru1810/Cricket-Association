@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, useWindowDimensions, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, useWindowDimensions, Platform, Image, Modal } from 'react-native';
 
 import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
 import SharedFooter from '../../components/scorer/SharedFooter';
@@ -57,6 +57,9 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
   // Broadcast Fielding Event Animation Overlay State
   const [activeFieldingEvent, setActiveFieldingEvent] = useState<FieldingEventData | null>(null);
 
+  // Exit Confirmation Modal State
+  const [showExitModal, setShowExitModal] = useState<boolean>(false);
+
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       (window as any).__SET_INNINGS_TAB__ = (idx: number) => setActiveInningsTab(idx);
@@ -64,14 +67,7 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
   }, []);
 
   const handleBack = () => {
-    const isLiveMatch = scorecardData?.match?.status === 'LIVE' || scorecardData?.match?.status === 'Live';
-    if (params?.returnTo === 'LiveScoring' && isLiveMatch) {
-      scorerNav?.navigate('LiveScoring', { matchId });
-    } else if (onExit) {
-      onExit();
-    } else if (scorerNav?.navigate) {
-      scorerNav.navigate('Dashboard');
-    }
+    setShowExitModal(true);
   };
 
   useEffect(() => {
@@ -532,16 +528,25 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
           <TouchableOpacity onPress={handleBack} style={styles.backBtn} activeOpacity={0.8}>
             <Text style={styles.backText}>
               {params?.returnTo === 'Home'
-                ? '← Back to Association Portal'
+                ? '← Exit / Back'
                 : match.status === 'Live' || match.status === 'LIVE'
                   ? '← Back to Live Scoring'
-                  : '← Back to Matches'}
+                  : '← Exit / Matches'}
             </Text>
           </TouchableOpacity>
-          <View style={styles.badgeLive}>
-            <Text style={styles.badgeLiveText}>
-              {match.status || 'Match Scorecard'}
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={styles.badgeLive}>
+              <Text style={styles.badgeLiveText}>
+                {match.status || 'Match Scorecard'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.exitScorerHeaderBtn}
+              onPress={() => setShowExitModal(true)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.exitScorerHeaderBtnText}>Exit Scorer</Text>
+            </TouchableOpacity>
           </View>
         </View>
         <Text style={styles.title}>Match Scorecard & Statistics</Text>
@@ -1296,6 +1301,94 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
         event={activeFieldingEvent}
         onDismiss={() => setActiveFieldingEvent(null)}
       />
+
+      {/* EXIT SCREEN CONFIRMATION MODAL */}
+      <Modal
+        visible={showExitModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowExitModal(false)}
+      >
+        <View style={styles.exitModalOverlay}>
+          <View style={styles.exitModalCard}>
+            <View style={styles.exitModalHeader}>
+              <Text style={styles.exitModalTitle}>EXIT SCREEN</Text>
+              <TouchableOpacity
+                style={styles.exitRedCloseBtn}
+                onPress={() => setShowExitModal(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.exitRedCloseBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.exitModalBodyText}>
+              Click "Exit Screen" menu to exit from the scoring engine and give yes to exit. All recorded scores and deliveries are safely preserved in the database.
+            </Text>
+
+            <View style={styles.exitModalActionsRow}>
+              <TouchableOpacity
+                style={styles.exitCancelBtn}
+                onPress={() => setShowExitModal(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.exitCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              {(match.status === 'Live' || match.status === 'LIVE' || params?.returnTo === 'LiveScoring') && (
+                <TouchableOpacity
+                  style={[styles.exitActionBtn, { backgroundColor: '#d97706' }]}
+                  onPress={() => {
+                    setShowExitModal(false);
+                    scorerNav?.navigate('LiveScoring', { matchId });
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.exitActionBtnText}>⚡ Live Scoring</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={[styles.exitActionBtn, { backgroundColor: '#1e3a8a' }]}
+                onPress={() => {
+                  setShowExitModal(false);
+                  if (scorerNav?.navigate) {
+                    scorerNav.navigate('Dashboard');
+                  } else if (onExit) {
+                    onExit();
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.exitActionBtnText}>📋 Match List</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.exitActionBtn, { backgroundColor: '#dc2626' }]}
+                onPress={() => {
+                  setShowExitModal(false);
+                  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                    try {
+                      localStorage.setItem('cfvd_last_app_screen', 'Home');
+                      localStorage.removeItem('cfvd_last_scorer_match_id');
+                      localStorage.removeItem('cfvd_last_scorer_screen');
+                      window.location.href = '/';
+                      return;
+                    } catch (_e) {}
+                  }
+                  if (typeof onExit === 'function') {
+                    onExit();
+                  } else if (scorerNav?.navigate) {
+                    scorerNav.navigate('Dashboard');
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.exitActionBtnText}>🌐 Exit to Website</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1929,6 +2022,107 @@ const styles = StyleSheet.create({
   quotaPillText: {
     color: '#b45309',
     fontSize: 9.5,
+    fontWeight: '800'
+  },
+  exitModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16
+  },
+  exitModalCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 20,
+    width: '100%',
+    maxWidth: 440,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    elevation: 8
+  },
+  exitModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9'
+  },
+  exitModalTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0f172a',
+    letterSpacing: 0.5
+  },
+  exitRedCloseBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#fee2e2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#fca5a5'
+  },
+  exitRedCloseBtnText: {
+    color: '#dc2626',
+    fontSize: 13,
+    fontWeight: '900'
+  },
+  exitModalBodyText: {
+    fontSize: 12.5,
+    color: '#475569',
+    lineHeight: 18,
+    marginVertical: 14
+  },
+  exitModalActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'flex-end',
+    marginTop: 4
+  },
+  exitCancelBtn: {
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#ffffff'
+  },
+  exitCancelBtnText: {
+    color: '#475569',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  exitActionBtn: {
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  exitActionBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800'
+  },
+  exitScorerHeaderBtn: {
+    backgroundColor: '#dc2626',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#b91c1c'
+  },
+  exitScorerHeaderBtnText: {
+    color: '#ffffff',
+    fontSize: 10.5,
     fontWeight: '800'
   }
 });
