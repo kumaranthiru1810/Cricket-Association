@@ -556,6 +556,9 @@ const NotificationSchema = new mongoose.Schema({
   title: { type: String, required: true },
   message: { type: String, required: true },
   reference_id: { type: String, default: null },
+  recipient_role: { type: String, default: 'ALL' },
+  recipient_id: { type: String, default: null },
+  link: { type: String, default: '' },
   status: { type: String, enum: ['UNREAD', 'READ'], default: 'UNREAD' },
   created_at: { type: Date, default: Date.now }
 }, { timestamps: { createdAt: 'created_at' } });
@@ -1595,8 +1598,14 @@ async function seedDefaultData() {
     const venueCount = await Venue.countDocuments();
     if (venueCount === 0) {
       await Venue.insertMany([
-        { id: 'VEN-01', name: 'Kamarajar District Stadium', location: 'Virudhunagar Central', capacity: 8000, floodlights: true, description: 'Main association ground.' },
-        { id: 'VEN-02', name: 'Sivakasi Cricket Ground', location: 'Sivakasi Bypass', capacity: 4000, floodlights: true, description: 'Premium turf pitch ground.' }
+        { id: 'VEN-01', name: 'Kamarajar District Stadium', location: 'Virudhunagar Central', capacity: 8000, floodlights: true, description: 'Main association ground with LED floodlights and pavilion.' },
+        { id: 'VEN-02', name: 'Sivakasi Cricket Ground', location: 'Sivakasi Bypass', capacity: 4500, floodlights: true, description: 'Premium turf pitch facility.' },
+        { id: 'VEN-03', name: 'Rajapalayam RAC Ground', location: 'PACR Road, Rajapalayam', capacity: 3500, floodlights: false, description: 'Collegiate championship tournament venue.' },
+        { id: 'VEN-04', name: 'Srivilliputhur Kalasalingam Cricket Ground', location: 'Krishnankoil, Srivilliputhur', capacity: 5000, floodlights: true, description: 'Standard ICC dimension turf ground.' },
+        { id: 'VEN-05', name: 'Aruppukottai SBK College Ground', location: 'Aruppukottai', capacity: 3000, floodlights: false, description: 'Taluk-level championship ground.' },
+        { id: 'VEN-06', name: 'Sattur Railway Ground', location: 'Near Railway Station, Sattur', capacity: 2500, floodlights: false, description: 'Fast outfield and traditional turf pitch.' },
+        { id: 'VEN-07', name: 'Vembakottai Sports Pavilion Ground', location: 'Vembakottai', capacity: 2000, floodlights: false, description: 'District rural sports development facility.' },
+        { id: 'VEN-08', name: 'Watrap Taluk Sports Arena Ground', location: 'Main Road, Watrap', capacity: 2000, floodlights: false, description: 'Taluk arena with newly relaid central pitch.' }
       ]);
     }
 

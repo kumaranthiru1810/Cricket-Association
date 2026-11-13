@@ -18,6 +18,7 @@ import {
   Modal,
   Alert,
   Platform,
+  Linking,
   useWindowDimensions,
   PanResponder
 } from 'react-native';
@@ -1958,13 +1959,33 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                         </View>
                       )}
 
-                      <TouchableOpacity
-                        style={styles.btnActionView}
-                        onPress={() => handleOpenScorecard(m.id)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.btnActionViewText}>View Certified Scorecard (Read-Only) →</Text>
-                      </TouchableOpacity>
+                      {/* Map & Action Row */}
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                        {m.venue ? (
+                          <TouchableOpacity
+                            style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 6 }}
+                            onPress={() => {
+                              const url = (m as any).venue_maps_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((m.venue || '') + ' Virudhunagar Tamil Nadu')}`;
+                              if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                                window.open(url, '_blank');
+                              } else {
+                                Linking.openURL(url).catch(() => {});
+                              }
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="map-outline" size={13} color="#2563eb" />
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#2563eb' }}>View on Maps ↗</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                        <TouchableOpacity
+                          style={styles.btnActionView}
+                          onPress={() => handleOpenScorecard(m.id)}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.btnActionViewText}>View Certified Scorecard (Read-Only) →</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   );
                 })

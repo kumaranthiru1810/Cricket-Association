@@ -894,8 +894,14 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
     if (list.length === 0) {
       return [
-        { id: 'VEN-01', name: 'Kamarajar District Stadium', location: 'Virudhunagar Central', capacity: 8000, floodlights: true, description: 'Main association championship ground.' },
-        { id: 'VEN-02', name: 'Sivakasi Cricket Ground', location: 'Sivakasi Bypass', capacity: 4000, floodlights: true, description: 'Premium turf pitch facility.' }
+        { id: 'VEN-01', name: 'Kamarajar District Stadium', location: 'Virudhunagar Central', capacity: 8000, floodlights: true, description: 'Main association ground with LED floodlights and pavilion.' },
+        { id: 'VEN-02', name: 'Sivakasi Cricket Ground', location: 'Sivakasi Bypass', capacity: 4500, floodlights: true, description: 'Premium turf pitch facility.' },
+        { id: 'VEN-03', name: 'Rajapalayam RAC Ground', location: 'PACR Road, Rajapalayam', capacity: 3500, floodlights: false, description: 'Collegiate championship tournament venue.' },
+        { id: 'VEN-04', name: 'Srivilliputhur Kalasalingam Cricket Ground', location: 'Krishnankoil, Srivilliputhur', capacity: 5000, floodlights: true, description: 'Standard ICC dimension turf ground.' },
+        { id: 'VEN-05', name: 'Aruppukottai SBK College Ground', location: 'Aruppukottai', capacity: 3000, floodlights: false, description: 'Taluk-level championship ground.' },
+        { id: 'VEN-06', name: 'Sattur Railway Ground', location: 'Near Railway Station, Sattur', capacity: 2500, floodlights: false, description: 'Fast outfield and traditional turf pitch.' },
+        { id: 'VEN-07', name: 'Vembakottai Sports Pavilion Ground', location: 'Vembakottai', capacity: 2000, floodlights: false, description: 'District rural sports development facility.' },
+        { id: 'VEN-08', name: 'Watrap Taluk Sports Arena Ground', location: 'Main Road, Watrap', capacity: 2000, floodlights: false, description: 'Taluk arena with newly relaid central pitch.' }
       ];
     }
     return list;
@@ -1351,6 +1357,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         team_a_id,
         team_b_id,
         venue,
+        venue_maps_url: venue_maps_url || (venue ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue + ' Virudhunagar Tamil Nadu')}` : ''),
         match_date: cleanDate,
         match_time: match_time.trim(),
         match_type,
@@ -2058,58 +2065,6 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             )}
           </TouchableOpacity>
 
-          {/* MCC Cricket Laws */}
-          <TouchableOpacity
-            style={[
-              styles.sidebarNavItem,
-              activeTab === 'laws' && styles.sidebarNavItemLawsActive,
-              isCollapsed && styles.sidebarNavItemCollapsed
-            ]}
-            onPress={() => {
-              setActiveTab('laws');
-              if (isMobileDrawer) setMobileSidebarOpen(false);
-            }}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.sidebarNavIcon, activeTab === 'laws' && styles.sidebarNavIconActive]}>📜</Text>
-            {!isCollapsed && (
-              <Text style={[styles.sidebarNavLabel, activeTab === 'laws' && styles.sidebarNavLabelActive]}>
-                Cricket Laws
-              </Text>
-            )}
-            {!isCollapsed && (
-              <View style={styles.sidebarBadgeEmerald}>
-                <Text style={[styles.sidebarBadgeText, { color: '#065f46' }]}>42</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
-          {/* DLS & VJD Live Chasing Predictor */}
-          <TouchableOpacity
-            style={[
-              styles.sidebarNavItem,
-              activeTab === 'calculations' && styles.sidebarNavItemCalculationsActive,
-              isCollapsed && styles.sidebarNavItemCollapsed
-            ]}
-            onPress={() => {
-              setActiveTab('calculations');
-              if (isMobileDrawer) setMobileSidebarOpen(false);
-            }}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.sidebarNavIcon, activeTab === 'calculations' && styles.sidebarNavIconActive]}>🧮</Text>
-            {!isCollapsed && (
-              <Text style={[styles.sidebarNavLabel, activeTab === 'calculations' && styles.sidebarNavLabelActive]}>
-                DLS & VJD Predictor
-              </Text>
-            )}
-            {!isCollapsed && (
-              <View style={styles.sidebarBadgeCyan}>
-                <Text style={[styles.sidebarBadgeText, { color: '#0e7490' }]}>Live</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
           {/* Settings Navigation (Master Settings Database Dynamic Categories) */}
           <TouchableOpacity
             style={[
@@ -2284,8 +2239,6 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     {activeTab === 'schedules' && '⚡ Match Schedules'}
                     {activeTab === 'tournaments' && '🏆 Tournament Management & Approvals'}
                     {activeTab === 'content' && '📰 News & Content'}
-                    {activeTab === 'laws' && '📜 MCC Cricket Laws (2026 Code)'}
-                    {activeTab === 'calculations' && '🧮 DLS & VJD Live Chasing Predictor'}
                     {activeTab === 'settings' && '⚙️ Settings & Dynamic Categories'}
                   </Text>
                   {activeTab === 'overview' && (
@@ -2321,16 +2274,6 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   {activeTab === 'tournaments' && (
                     <View style={[styles.pageThemeBadge, { backgroundColor: '#fffbeb', borderColor: '#f59e0b' }]}>
                       <Text style={[styles.pageThemeBadgeText, { color: '#b45309' }]}>🏆 GOLDEN CHAMPIONSHIP</Text>
-                    </View>
-                  )}
-                  {activeTab === 'laws' && (
-                    <View style={[styles.pageThemeBadge, { backgroundColor: '#ecfdf5', borderColor: '#059669' }]}>
-                      <Text style={[styles.pageThemeBadgeText, { color: '#065f46' }]}>📜 MCC 2026 CODE</Text>
-                    </View>
-                  )}
-                  {activeTab === 'calculations' && (
-                    <View style={[styles.pageThemeBadge, { backgroundColor: '#ecfeff', borderColor: '#0891b2' }]}>
-                      <Text style={[styles.pageThemeBadgeText, { color: '#0e7490' }]}>🧮 DLS & VJD ENGINE</Text>
                     </View>
                   )}
                   {activeTab === 'settings' && (
@@ -4601,21 +4544,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           )}
 
           {/* ─────────────────────────────────────────────────────────────
-              10. TAB CONTENT: MCC CRICKET LAWS MANAGEMENT SYSTEM
-              ───────────────────────────────────────────────────────────── */}
-          {activeTab === 'laws' && (
-            <CricketLawsManagement />
-          )}
-
-          {/* ─────────────────────────────────────────────────────────────
-              11. TAB CONTENT: DLS & VJD LIVE CHASING PREDICTOR
-              ───────────────────────────────────────────────────────────── */}
-          {activeTab === 'calculations' && (
-            <CalculationSettingsManagement />
-          )}
-
-          {/* ─────────────────────────────────────────────────────────────
-              12. TAB CONTENT: SETTINGS (MASTER SETTINGS / DB DYNAMIC CATEGORIES)
+              10. TAB CONTENT: SETTINGS (MASTER SETTINGS / DB DYNAMIC CATEGORIES)
               ───────────────────────────────────────────────────────────── */}
           {(activeTab === 'master_settings' || activeTab === 'settings') && (
             <SettingsPage initialCategory={settingsCategory || 'taluk_jurisdiction'} />
@@ -6295,8 +6224,23 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     </Text>
                   </View>
                   <Text style={styles.mapsPreviewSubtitle}>
-                    Google Maps URL: https://www.google.com/maps/search/?api=1&query={encodeURIComponent(mapsSearchQuery)}
+                    Maps URL: https://www.google.com/maps/search/?api=1&query={encodeURIComponent(mapsSearchQuery)}
                   </Text>
+                  {Platform.OS === 'web' && typeof window !== 'undefined' && (
+                    <View style={{ marginTop: 8, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#e2e8f0' }}>
+                      {/* @ts-ignore web-only iframe embed */}
+                      <iframe
+                        title="Ground Map Preview"
+                        src={`https://maps.google.com/maps?q=${encodeURIComponent(mapsSearchQuery + ' Virudhunagar Tamil Nadu')}&output=embed`}
+                        width="100%"
+                        height="200"
+                        frameBorder="0"
+                        style={{ border: 0, display: 'block' }}
+                        allowFullScreen
+                        loading="lazy"
+                      />
+                    </View>
+                  )}
                   <Text style={styles.mapsPreviewHelp}>
                     Clicking below will save this ground location and return to match fixture creation. Players and teams can view this on Google Maps anytime.
                   </Text>

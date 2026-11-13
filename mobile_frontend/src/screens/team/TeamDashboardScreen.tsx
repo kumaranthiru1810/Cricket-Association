@@ -1465,9 +1465,8 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                             <TouchableOpacity
                               style={styles.matchDayMapBtn}
                               onPress={() => {
-                                const venue = m.venue || 'Kamarajar Stadium Virudhunagar';
-                                const query = encodeURIComponent(`${venue} Tamil Nadu`);
-                                const url = `https://www.google.com/maps/search/?api=1&query=${query}`;
+                                const venueStr = m.venue || 'Kamarajar Stadium Virudhunagar';
+                                const url = (m as any).venue_maps_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venueStr + ' Tamil Nadu')}`;
                                 if (Platform.OS === 'web' && typeof window !== 'undefined') {
                                   window.open(url, '_blank');
                                 } else {
