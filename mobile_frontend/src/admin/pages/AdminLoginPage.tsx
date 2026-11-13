@@ -4,7 +4,7 @@
  * Clean, light, corporate sports-governance appearance.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,8 @@ import {
   ActivityIndicator,
   Platform,
   Image,
-  ScrollView
+  ScrollView,
+  useWindowDimensions
 } from 'react-native';
 import { ShieldIcon } from '../components/Icons';
 import { useAdminAuth } from '../context/AdminAuthContext';
@@ -31,6 +32,9 @@ export interface Props {
 
 export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, onCancel }) => {
   const handleBack = onCancel || onBackToHome;
+  const { width: windowWidth } = useWindowDimensions();
+  const isDesktop = windowWidth >= 640;
+  const styles = useMemo(() => getStyles(isDesktop), [isDesktop]);
   const { login } = useAdminAuth();
   const [email, setEmail] = useState('admin@cfvd.org');
   const [password, setPassword] = useState('CFVD@Admin2026');
@@ -322,7 +326,7 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
   );
 };
 
-const styles: any = StyleSheet.create({
+const getStyles = (isDesktop: boolean): any => StyleSheet.create({
   rootContainer: {
     flex: 1,
     width: '100%',
@@ -342,8 +346,8 @@ const styles: any = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 36,
-    paddingHorizontal: 16
+    paddingVertical: isDesktop ? 44 : 36,
+    paddingHorizontal: isDesktop ? 24 : 16
   },
   bgContainer: {
     position: 'absolute',
@@ -383,18 +387,18 @@ const styles: any = StyleSheet.create({
   },
   cardWrapper: {
     width: '100%',
-    maxWidth: 460,
+    maxWidth: isDesktop ? 500 : 460,
     alignItems: 'center',
     zIndex: 1
   },
   brandBox: {
     alignItems: 'center',
-    marginBottom: 20
+    marginBottom: isDesktop ? 24 : 20
   },
   emblemOuterRing: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: isDesktop ? 104 : 96,
+    height: isDesktop ? 104 : 96,
+    borderRadius: isDesktop ? 52 : 48,
     backgroundColor: 'rgba(212, 175, 55, 0.18)',
     borderWidth: 2,
     borderColor: '#d4af37',
@@ -408,9 +412,9 @@ const styles: any = StyleSheet.create({
     elevation: 6
   },
   emblemInnerRing: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: isDesktop ? 86 : 80,
+    height: isDesktop ? 86 : 80,
+    borderRadius: isDesktop ? 43 : 40,
     backgroundColor: 'rgba(15, 36, 82, 0.08)',
     borderWidth: 1.5,
     borderColor: 'rgba(212, 175, 55, 0.45)',
@@ -418,9 +422,9 @@ const styles: any = StyleSheet.create({
     alignItems: 'center'
   },
   emblemWrapper: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: isDesktop ? 74 : 68,
+    height: isDesktop ? 74 : 68,
+    borderRadius: isDesktop ? 37 : 34,
     backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
@@ -432,18 +436,18 @@ const styles: any = StyleSheet.create({
     overflow: 'hidden'
   },
   logoMiniature: {
-    width: 60,
-    height: 60
+    width: isDesktop ? 66 : 60,
+    height: isDesktop ? 66 : 60
   },
   brandTitle: {
-    fontSize: 15,
+    fontSize: isDesktop ? 18 : 15,
     fontWeight: '900',
     color: '#0f2452',
-    letterSpacing: 2,
+    letterSpacing: isDesktop ? 2.5 : 2,
     textAlign: 'center'
   },
   brandSub: {
-    fontSize: 12,
+    fontSize: isDesktop ? 14.5 : 12,
     fontWeight: '800',
     color: '#b8860b',
     letterSpacing: 1.2,
@@ -451,11 +455,11 @@ const styles: any = StyleSheet.create({
     textAlign: 'center'
   },
   brandEst: {
-    fontSize: 10,
+    fontSize: isDesktop ? 12 : 10,
     color: '#64748b',
     fontWeight: '600',
     letterSpacing: 0.6,
-    marginTop: 3,
+    marginTop: 4,
     marginBottom: 6,
     textAlign: 'center'
   },
@@ -467,12 +471,12 @@ const styles: any = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#a7f3d0',
     borderRadius: 20,
-    paddingVertical: 4,
-    paddingHorizontal: 12,
+    paddingVertical: isDesktop ? 6 : 4,
+    paddingHorizontal: isDesktop ? 14 : 12,
     marginTop: 4
   },
   affiliationText: {
-    fontSize: 11,
+    fontSize: isDesktop ? 13 : 11,
     fontWeight: '700',
     color: '#059669'
   },
@@ -482,12 +486,12 @@ const styles: any = StyleSheet.create({
     width: '100%',
     backgroundColor: Platform.OS === 'web' ? 'rgba(255, 255, 255, 0.98)' : '#ffffff',
     backdropFilter: (Platform.OS === 'web' ? 'blur(16px)' : undefined) as any,
-    borderRadius: 18,
+    borderRadius: isDesktop ? 20 : 18,
     borderWidth: 1.5,
     borderColor: 'rgba(212, 175, 55, 0.4)',
-    paddingHorizontal: 26,
-    paddingTop: 22,
-    paddingBottom: 22,
+    paddingHorizontal: isDesktop ? 32 : 26,
+    paddingTop: isDesktop ? 26 : 22,
+    paddingBottom: isDesktop ? 26 : 22,
     shadowColor: '#0f2452',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.12,
@@ -501,15 +505,15 @@ const styles: any = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingBottom: 14,
-    marginBottom: 18,
+    paddingBottom: isDesktop ? 16 : 14,
+    marginBottom: isDesktop ? 20 : 18,
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9'
   },
   cardEmblemSmall: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: isDesktop ? 48 : 44,
+    height: isDesktop ? 48 : 44,
+    borderRadius: isDesktop ? 24 : 22,
     backgroundColor: '#ffffff',
     borderWidth: 1.5,
     borderColor: '#d4af37',
@@ -523,23 +527,23 @@ const styles: any = StyleSheet.create({
     elevation: 3
   },
   cardLogoMini: {
-    width: 38,
-    height: 38
+    width: isDesktop ? 42 : 38,
+    height: isDesktop ? 42 : 38
   },
   cardHeaderTextCol: {
     flex: 1
   },
   cardHeaderTitle: {
-    fontSize: 13,
+    fontSize: isDesktop ? 15 : 13,
     fontWeight: '900',
     color: '#0f2452',
     letterSpacing: 0.8
   },
   cardHeaderSub: {
-    fontSize: 11,
+    fontSize: isDesktop ? 13 : 11,
     fontWeight: '700',
     color: '#b8860b',
-    marginTop: 1
+    marginTop: 2
   },
 
   errorBanner: {
@@ -549,8 +553,8 @@ const styles: any = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#fecaca',
     borderRadius: 8,
-    paddingVertical: 9,
-    paddingHorizontal: 12,
+    paddingVertical: isDesktop ? 11 : 9,
+    paddingHorizontal: isDesktop ? 14 : 12,
     marginBottom: 16,
     gap: 8
   },
@@ -561,13 +565,13 @@ const styles: any = StyleSheet.create({
     backgroundColor: '#ef4444'
   },
   errorText: {
-    fontSize: 12.5,
+    fontSize: isDesktop ? 13.5 : 12.5,
     color: '#dc2626',
     fontWeight: '600',
     flex: 1
   },
   formGroup: {
-    marginBottom: 16
+    marginBottom: isDesktop ? 18 : 16
   },
   labelRow: {
     flexDirection: 'row',
@@ -576,23 +580,23 @@ const styles: any = StyleSheet.create({
     marginBottom: 6
   },
   label: {
-    fontSize: 12.5,
+    fontSize: isDesktop ? 14.5 : 12.5,
     fontWeight: '700',
     color: '#334155',
-    marginBottom: 6
+    marginBottom: isDesktop ? 8 : 6
   },
   showPassText: {
-    fontSize: 11.5,
+    fontSize: isDesktop ? 13 : 11.5,
     color: '#0f2452',
     fontWeight: '700'
   },
   input: {
-    height: 44,
-    borderWidth: 1,
+    height: isDesktop ? 48 : 44,
+    borderWidth: 1.5,
     borderColor: '#cbd5e1',
     borderRadius: 10,
     paddingHorizontal: 14,
-    fontSize: 13.5,
+    fontSize: isDesktop ? 15.5 : 13.5,
     color: '#0f172a',
     backgroundColor: '#f8fafc'
   },
@@ -600,7 +604,7 @@ const styles: any = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20
+    marginBottom: isDesktop ? 24 : 20
   },
   checkboxRow: {
     flexDirection: 'row',
@@ -608,8 +612,8 @@ const styles: any = StyleSheet.create({
     gap: 8
   },
   checkbox: {
-    width: 18,
-    height: 18,
+    width: isDesktop ? 20 : 18,
+    height: isDesktop ? 20 : 18,
     borderRadius: 4,
     borderWidth: 1.5,
     borderColor: '#94a3b8',
@@ -623,23 +627,23 @@ const styles: any = StyleSheet.create({
   },
   checkboxTick: {
     color: '#ffffff',
-    fontSize: 11,
+    fontSize: isDesktop ? 12 : 11,
     fontWeight: '900'
   },
   checkboxLabel: {
-    fontSize: 12.5,
+    fontSize: isDesktop ? 14 : 12.5,
     color: '#475569',
     fontWeight: '500'
   },
   forgotPasswordText: {
     color: '#2563eb',
-    fontSize: 13,
+    fontSize: isDesktop ? 14 : 13,
     fontWeight: '700'
   },
 
   // Submit Button (Official Association Navy Action)
   submitBtn: {
-    height: 46,
+    height: isDesktop ? 50 : 46,
     backgroundColor: '#0f2452',
     borderRadius: 10,
     justifyContent: 'center',
@@ -655,15 +659,15 @@ const styles: any = StyleSheet.create({
   },
   submitBtnText: {
     color: '#ffffff',
-    fontSize: 14,
+    fontSize: isDesktop ? 15.5 : 14,
     fontWeight: '800',
-    letterSpacing: 0.4
+    letterSpacing: 0.5
   },
 
   // Inset Dev Credentials Box
   devHintBox: {
-    marginTop: 20,
-    padding: 12,
+    marginTop: isDesktop ? 22 : 20,
+    padding: isDesktop ? 14 : 12,
     borderRadius: 10,
     backgroundColor: '#f1f5f9',
     borderWidth: 1,
@@ -676,20 +680,20 @@ const styles: any = StyleSheet.create({
     marginBottom: 4
   },
   devHintTitle: {
-    fontSize: 11.5,
+    fontSize: isDesktop ? 13 : 11.5,
     fontWeight: '800',
     color: '#475569',
     textTransform: 'uppercase',
     letterSpacing: 0.5
   },
   devAutofillLink: {
-    fontSize: 11,
+    fontSize: isDesktop ? 12.5 : 11,
     fontWeight: '800',
     color: '#0f2452',
     textDecorationLine: 'underline'
   },
   devHintText: {
-    fontSize: 11.5,
+    fontSize: isDesktop ? 13 : 11.5,
     color: '#64748b'
   },
   devCode: {
@@ -698,12 +702,12 @@ const styles: any = StyleSheet.create({
     fontWeight: '700'
   },
   backLink: {
-    marginTop: 18,
+    marginTop: isDesktop ? 20 : 18,
     alignItems: 'center',
     paddingVertical: 6
   },
   backLinkText: {
-    fontSize: 12.5,
+    fontSize: isDesktop ? 14 : 12.5,
     color: '#64748b',
     fontWeight: '600'
   },
@@ -711,14 +715,14 @@ const styles: any = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 20,
+    marginTop: isDesktop ? 22 : 20,
     paddingHorizontal: 12
   },
   securityText: {
-    fontSize: 11,
+    fontSize: isDesktop ? 12.5 : 11,
     color: '#64748b',
     textAlign: 'center',
-    lineHeight: 16
+    lineHeight: isDesktop ? 18 : 16
   }
 } as any);
 

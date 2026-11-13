@@ -1,0 +1,39 @@
+[
+  {
+    "id": "MSET-SCERT-01",
+    "category": "certification_level",
+    "name": "District Certified",
+    "code": "DIST_CERT",
+    "description": "Accredited district scorer certified by Virudhunagar Cricket Association",
+    "is_active": true,
+    "sort_order": 1
+  },
+  {
+    "id": "MSET-SCERT-02",
+    "category": "certification_level",
+    "name": "State Panel",
+    "code": "STATE_PANEL",
+    "description": "Official state panel digital and manual match scorer",
+    "is_active": true,
+    "sort_order": 2
+  },
+  {
+    "id": "MSET-SCERT-03",
+    "category": "certification_level",
+    "name": "Club Scorer",
+    "code": "CLUB_SCR",
+    "description": "Registered local club match scorer",
+    "is_active": true,
+    "sort_order": 3
+  },
+  {
+    "id": "MSET-SCERT-04",
+    "category": "certification_level",
+    "name": "Trainee Scorer",
+    "code": "TRAINEE_SCR",
+    "description": "Apprentice scorer undergoing digital scorekeeping certification",
+    "is_active": true,
+    "sort_order": 4
+  }
+]
+

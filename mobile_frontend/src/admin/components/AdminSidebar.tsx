@@ -23,10 +23,63 @@ import {
   CloseIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ChevronDownIcon,
   LawsIcon,
   CalculatorIcon
 } from './Icons';
 import { useAdminAuth } from '../context/AdminAuthContext';
+
+export interface SettingsSubCategory {
+  key: string;
+  routeKey: string;
+  label: string;
+  iconText?: string;
+}
+
+export const SETTINGS_SUBCATEGORIES: SettingsSubCategory[] = [
+  {
+    key: 'taluk_jurisdiction',
+    routeKey: 'settings/taluk-jurisdiction',
+    label: 'Taluk Jurisdiction',
+    iconText: '📍'
+  },
+  {
+    key: 'playing_role',
+    routeKey: 'settings/playing-role',
+    label: 'Playing Role',
+    iconText: '🏏'
+  },
+  {
+    key: 'batting_style',
+    routeKey: 'settings/batting-style',
+    label: 'Batting Style',
+    iconText: '⚡'
+  },
+  {
+    key: 'age_category',
+    routeKey: 'settings/age-category',
+    label: 'Age Category',
+    iconText: '🏆'
+  },
+  {
+    key: 'certification_level',
+    routeKey: 'settings/certification-level',
+    label: 'Certification Level',
+    iconText: '📝'
+  },
+  {
+    key: 'umpire_certification',
+    routeKey: 'settings/umpire-certification',
+    label: 'Umpire Certification / Qualification',
+    iconText: '⚖️'
+  },
+  {
+    key: 'state',
+    routeKey: 'settings/state',
+    label: 'State',
+    iconText: '🌐'
+  }
+];
 
 export type AdminRouteKey =
   | 'dashboard'
@@ -42,6 +95,7 @@ export type AdminRouteKey =
   | 'content'
   | 'laws'
   | 'calculations'
+  | 'master-settings'
   | 'settings';
 
 interface NavItem {
@@ -54,7 +108,8 @@ interface NavItem {
 
 interface Props {
   currentRoute: AdminRouteKey;
-  onNavigate: (route: AdminRouteKey) => void;
+  currentPath?: string;
+  onNavigate: (route: string) => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
   isMobileOpen: boolean;
@@ -66,6 +121,7 @@ interface Props {
 
 export const AdminSidebar: React.FC<Props> = ({
   currentRoute,
+  currentPath,
   onNavigate,
   collapsed,
   onToggleCollapse,
@@ -76,6 +132,14 @@ export const AdminSidebar: React.FC<Props> = ({
   liveMatchesCount = 0
 }) => {
   const { adminUser, logout } = useAdminAuth();
+  const isSettingsActive = currentRoute === 'settings' || (currentPath ? currentPath.includes('/settings') : false);
+  const [isSettingsOpen, setIsSettingsOpen] = React.useState<boolean>(isSettingsActive);
+
+  React.useEffect(() => {
+    if (isSettingsActive) {
+      setIsSettingsOpen(true);
+    }
+  }, [isSettingsActive]);
 
   const navItems: NavItem[] = [
     {
@@ -148,6 +212,11 @@ export const AdminSidebar: React.FC<Props> = ({
       badge: 'Live'
     },
     {
+      key: 'master-settings',
+      label: 'Master Settings',
+      icon: () => <Text style={{ fontSize: 16 }}>🗂️</Text>
+    },
+    {
       key: 'settings',
       label: 'Settings',
       icon: c => <SettingsIcon size={18} color={c} />
@@ -187,15 +256,15 @@ export const AdminSidebar: React.FC<Props> = ({
       <ScrollView
         style={styles.navScrollView}
         contentContainerStyle={styles.navContent}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
+        nestedScrollEnabled={true}
       >
         <Text style={[styles.sectionLabel, collapsed && styles.sectionLabelCollapsed]}>
           {collapsed ? 'MENU' : 'MANAGEMENT'}
         </Text>
 
         {navItems.map(item => {
-          const isActive = currentRoute === item.key;
-          const activeColor = '#0f2452';
+          const isActive = currentRoute === item.key || (item.key === 'settings' && isSettingsActive);
           const iconColor = isActive ? '#0f2452' : '#64748b';
 
           return (
@@ -248,61 +317,61 @@ export const AdminSidebar: React.FC<Props> = ({
           <ExternalLinkIcon size={16} color="#d4af37" />
           {!collapsed && <Text style={styles.publicSiteText}>View Public Website</Text>}
         </TouchableOpacity>
-      </ScrollView>
 
-      {/* Footer Profile & Logout */}
-      <View style={styles.sidebarFooter}>
-        <View style={styles.adminUserCard}>
-          <View style={styles.userAvatar}>
-            <Text style={styles.userAvatarText}>
-              {(adminUser?.name || 'A')[0].toUpperCase()}
-            </Text>
-          </View>
-          {!collapsed && (
-            <View style={styles.userInfo}>
-              <Text style={styles.userName} numberOfLines={1}>
-                {adminUser?.name || 'Administrator'}
-              </Text>
-              <Text style={styles.userEmail} numberOfLines={1}>
-                {adminUser?.email || 'admin@cfvd.org'}
+        {/* Footer Profile & Logout inside ScrollView */}
+        <View style={styles.sidebarFooter}>
+          <View style={styles.adminUserCard}>
+            <View style={styles.userAvatar}>
+              <Text style={styles.userAvatarText}>
+                {(adminUser?.name || 'A')[0].toUpperCase()}
               </Text>
             </View>
-          )}
-        </View>
-
-        <TouchableOpacity
-          style={[styles.logoutBtn, collapsed && styles.logoutBtnCollapsed]}
-          onPress={() => {
-            if (confirm('Are you sure you want to sign out of the Admin Console?')) {
-              logout();
-            }
-          }}
-          activeOpacity={0.8}
-          accessibilityLabel={collapsed ? 'Sign Out' : undefined}
-        >
-          <LogoutIcon size={16} color="#ef4444" />
-          {!collapsed && <Text style={styles.logoutText}>Sign Out</Text>}
-        </TouchableOpacity>
-
-        {/* Desktop Collapse Toggle */}
-        {Platform.OS === 'web' && !isMobileOpen && (
-          <TouchableOpacity
-            style={styles.collapseToggle}
-            onPress={onToggleCollapse}
-            activeOpacity={0.7}
-            accessibilityLabel={collapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
-          >
-            {collapsed ? (
-              <ChevronRightIcon size={16} color="#64748b" />
-            ) : (
-              <View style={styles.collapseToggleRow}>
-                <ChevronLeftIcon size={16} color="#64748b" />
-                <Text style={styles.collapseToggleText}>Collapse Menu</Text>
+            {!collapsed && (
+              <View style={styles.userInfo}>
+                <Text style={styles.userName} numberOfLines={1}>
+                  {adminUser?.name || 'Administrator'}
+                </Text>
+                <Text style={styles.userEmail} numberOfLines={1}>
+                  {adminUser?.email || 'admin@cfvd.org'}
+                </Text>
               </View>
             )}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.logoutBtn, collapsed && styles.logoutBtnCollapsed]}
+            onPress={() => {
+              if (confirm('Are you sure you want to sign out of the Admin Console?')) {
+                logout();
+              }
+            }}
+            activeOpacity={0.8}
+            accessibilityLabel={collapsed ? 'Sign Out' : undefined}
+          >
+            <LogoutIcon size={16} color="#ef4444" />
+            {!collapsed && <Text style={styles.logoutText}>Sign Out</Text>}
           </TouchableOpacity>
-        )}
-      </View>
+
+          {/* Desktop Collapse Toggle */}
+          {Platform.OS === 'web' && !isMobileOpen && (
+            <TouchableOpacity
+              style={styles.collapseToggle}
+              onPress={onToggleCollapse}
+              activeOpacity={0.7}
+              accessibilityLabel={collapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+            >
+              {collapsed ? (
+                <ChevronRightIcon size={16} color="#64748b" />
+              ) : (
+                <View style={styles.collapseToggleRow}>
+                  <ChevronLeftIcon size={16} color="#64748b" />
+                  <Text style={styles.collapseToggleText}>Collapse Menu</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
+      </ScrollView>
     </View>
   );
 
@@ -331,6 +400,8 @@ const styles = StyleSheet.create({
     borderRightColor: '#e2e8f0',
     flexDirection: 'column',
     height: '100%',
+    maxHeight: '100%',
+    overflow: 'hidden',
     zIndex: 40
   },
   sidebarCollapsed: {
@@ -393,11 +464,16 @@ const styles = StyleSheet.create({
     padding: 6
   },
   navScrollView: {
-    flex: 1
+    flex: 1,
+    minHeight: 0,
+    flexShrink: 1,
+    ...(Platform.OS === 'web' ? ({ overflowY: 'auto', WebkitOverflowScrolling: 'touch' } as any) : {})
   },
   navContent: {
+    flexGrow: 1,
     paddingVertical: 12,
-    paddingHorizontal: 10
+    paddingHorizontal: 10,
+    paddingBottom: 28
   },
   sectionLabel: {
     fontSize: 10.5,
@@ -445,6 +521,49 @@ const styles = StyleSheet.create({
   navLabelActive: {
     color: '#0f2452',
     fontWeight: '800'
+  },
+  settingsGroupWrapper: {
+    marginBottom: 3
+  },
+  chevronBox: {
+    paddingLeft: 4,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  subCategoryContainer: {
+    paddingLeft: 18,
+    paddingRight: 6,
+    paddingVertical: 4,
+    marginLeft: 16,
+    borderLeftWidth: 2,
+    borderLeftColor: '#e2e8f0',
+    marginBottom: 4,
+    gap: 2
+  },
+  subCategoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    backgroundColor: 'transparent'
+  },
+  subCategoryItemActive: {
+    backgroundColor: '#eff6ff'
+  },
+  subCategoryEmoji: {
+    fontSize: 11,
+    marginRight: 8
+  },
+  subCategoryText: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '500',
+    flex: 1
+  },
+  subCategoryTextActive: {
+    color: '#0f2452',
+    fontWeight: '700'
   },
   itemBadge: {
     backgroundColor: '#ef4444',

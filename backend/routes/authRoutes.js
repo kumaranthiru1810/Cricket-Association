@@ -13,6 +13,9 @@ router.post('/send-registration-otp', (req, res) => authController.requestRegist
 router.post('/register-otp', (req, res) => authController.requestRegistrationOtp(req, res));
 router.post('/verify-registration-otp', (req, res) => authController.verifyRegistrationOtp(req, res));
 router.post('/verify-register-otp', (req, res) => authController.verifyRegistrationOtp(req, res));
+router.post('/check-registration-exists', (req, res) => authController.checkRegistrationExists(req, res));
+router.post('/check-team-exists', (req, res) => authController.checkTeamExists(req, res));
+router.post('/team/check-exists', (req, res) => authController.checkTeamExists(req, res));
 
 // 1.1. Multi-Step Forgot Password Flow (4-Digit OTP & Bcrypt Password Reset)
 router.post('/forgot-password/request-otp', (req, res) => authController.requestForgotPasswordOtp(req, res));
@@ -36,6 +39,8 @@ router.post('/team/request-otp', (req, res) => authController.requestTeamOtp(req
 router.post('/team/verify-otp', (req, res) => authController.verifyTeamOtp(req, res));
 router.post('/player/request-otp', (req, res) => authController.requestPlayerOtp(req, res));
 router.post('/player/verify-otp', (req, res) => authController.verifyPlayerOtp(req, res));
+router.post('/player/find-team', (req, res) => authController.findPlayerTeam(req, res));
+router.post('/find-team', (req, res) => authController.findPlayerTeam(req, res));
 
 // 4. Registration Endpoints by Role (With Password)
 router.post('/register', (req, res) => authController.registerScorer(req, res));

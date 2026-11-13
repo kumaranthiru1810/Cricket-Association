@@ -1,0 +1,380 @@
+[
+  {
+    "id": "MSET-TALUK-01",
+    "category": "taluk_jurisdiction",
+    "name": "Virudhunagar",
+    "code": "VNR",
+    "description": "Virudhunagar Taluk Jurisdiction Headquarters",
+    "is_active": true,
+    "sort_order": 1
+  },
+  {
+    "id": "MSET-TALUK-02",
+    "category": "taluk_jurisdiction",
+    "name": "Sivakasi",
+    "code": "SVKS",
+    "description": "Sivakasi Industrial Taluk Jurisdiction",
+    "is_active": true,
+    "sort_order": 2
+  },
+  {
+    "id": "MSET-TALUK-03",
+    "category": "taluk_jurisdiction",
+    "name": "Rajapalayam",
+    "code": "RJPM",
+    "description": "Rajapalayam Taluk Jurisdiction",
+    "is_active": true,
+    "sort_order": 3
+  },
+  {
+    "id": "MSET-TALUK-04",
+    "category": "taluk_jurisdiction",
+    "name": "Srivilliputhur",
+    "code": "SVPR",
+    "description": "Srivilliputhur Heritage Taluk Jurisdiction",
+    "is_active": true,
+    "sort_order": 4
+  },
+  {
+    "id": "MSET-TALUK-05",
+    "category": "taluk_jurisdiction",
+    "name": "Aruppukottai",
+    "code": "APKI",
+    "description": "Aruppukottai Taluk Jurisdiction",
+    "is_active": true,
+    "sort_order": 5
+  },
+  {
+    "id": "MSET-TALUK-06",
+    "category": "taluk_jurisdiction",
+    "name": "Sattur",
+    "code": "STR",
+    "description": "Sattur Taluk Jurisdiction",
+    "is_active": true,
+    "sort_order": 6
+  },
+  {
+    "id": "MSET-TALUK-07",
+    "category": "taluk_jurisdiction",
+    "name": "Watrap",
+    "code": "WTR",
+    "description": "Watrap Taluk Jurisdiction",
+    "is_active": true,
+    "sort_order": 7
+  },
+  {
+    "id": "MSET-TALUK-08",
+    "category": "taluk_jurisdiction",
+    "name": "Kariapatti",
+    "code": "KPT",
+    "description": "Kariapatti Taluk Jurisdiction",
+    "is_active": true,
+    "sort_order": 8
+  },
+  {
+    "id": "MSET-TALUK-09",
+    "category": "taluk_jurisdiction",
+    "name": "Tiruchuli",
+    "code": "TCL",
+    "description": "Tiruchuli Taluk Jurisdiction",
+    "is_active": true,
+    "sort_order": 9
+  },
+  {
+    "id": "MSET-TALUK-10",
+    "category": "taluk_jurisdiction",
+    "name": "Vembakottai",
+    "code": "VBK",
+    "description": "Vembakottai Archaeological Taluk Jurisdiction",
+    "is_active": true,
+    "sort_order": 10
+  },
+  {
+    "id": "MSET-ROLE-01",
+    "category": "playing_role",
+    "name": "Batsman",
+    "code": "BAT",
+    "description": "Top-order / Middle-order specialist batter",
+    "is_active": true,
+    "sort_order": 1
+  },
+  {
+    "id": "MSET-ROLE-02",
+    "category": "playing_role",
+    "name": "Bowler",
+    "code": "BOWL",
+    "description": "Frontline strike bowler (Fast/Medium/Spin)",
+    "is_active": true,
+    "sort_order": 2
+  },
+  {
+    "id": "MSET-ROLE-03",
+    "category": "playing_role",
+    "name": "All-Rounder",
+    "code": "AR",
+    "description": "Multi-discipline player proficient in both batting and bowling",
+    "is_active": true,
+    "sort_order": 3
+  },
+  {
+    "id": "MSET-ROLE-04",
+    "category": "playing_role",
+    "name": "Wicket Keeper",
+    "code": "WK",
+    "description": "Designated wicket keeper and wicket keeper-batter",
+    "is_active": true,
+    "sort_order": 4
+  },
+  {
+    "id": "MSET-ROLE-05",
+    "category": "playing_role",
+    "name": "Captain",
+    "code": "CPT",
+    "description": "Appointed team captain and on-field leader",
+    "is_active": true,
+    "sort_order": 5
+  },
+  {
+    "id": "MSET-ROLE-06",
+    "category": "playing_role",
+    "name": "Vice Captain",
+    "code": "VC",
+    "description": "Appointed squad vice captain",
+    "is_active": true,
+    "sort_order": 6
+  },
+  {
+    "id": "MSET-BAT-01",
+    "category": "batting_style",
+    "name": "Right-Handed Batsman",
+    "code": "RHB",
+    "description": "Right-hand batting stance and technique",
+    "is_active": true,
+    "sort_order": 1
+  },
+  {
+    "id": "MSET-BAT-02",
+    "category": "batting_style",
+    "name": "Left-Handed Batsman",
+    "code": "LHB",
+    "description": "Left-hand batting stance and technique",
+    "is_active": true,
+    "sort_order": 2
+  },
+  {
+    "id": "MSET-AGE-01",
+    "category": "age_category",
+    "name": "Senior Men",
+    "code": "SR_MEN",
+    "description": "Open division men's senior district cricket category",
+    "is_active": true,
+    "sort_order": 1
+  },
+  {
+    "id": "MSET-AGE-02",
+    "category": "age_category",
+    "name": "Women's Senior",
+    "code": "SR_WOMEN",
+    "description": "Open division women's senior district cricket category",
+    "is_active": true,
+    "sort_order": 2
+  },
+  {
+    "id": "MSET-AGE-03",
+    "category": "age_category",
+    "name": "Under-23",
+    "code": "U23",
+    "description": "Colts and young emerging adults under 23 years of age",
+    "is_active": true,
+    "sort_order": 3
+  },
+  {
+    "id": "MSET-AGE-04",
+    "category": "age_category",
+    "name": "Under-19",
+    "code": "U19",
+    "description": "Junior district age group under 19 years of age",
+    "is_active": true,
+    "sort_order": 4
+  },
+  {
+    "id": "MSET-AGE-05",
+    "category": "age_category",
+    "name": "Under-16",
+    "code": "U16",
+    "description": "Sub-junior division under 16 years of age",
+    "is_active": true,
+    "sort_order": 5
+  },
+  {
+    "id": "MSET-AGE-06",
+    "category": "age_category",
+    "name": "Under-14",
+    "code": "U14",
+    "description": "Cadet and youth development division under 14 years of age",
+    "is_active": true,
+    "sort_order": 6
+  },
+  {
+    "id": "MSET-AGE-07",
+    "category": "age_category",
+    "name": "Under-12",
+    "code": "U12",
+    "description": "Grassroots foundational cricket division under 12 years of age",
+    "is_active": true,
+    "sort_order": 7
+  },
+  {
+    "id": "MSET-SCERT-01",
+    "category": "certification_level",
+    "name": "District Certified",
+    "code": "DIST_CERT",
+    "description": "Accredited district scorer certified by Virudhunagar Cricket Association",
+    "is_active": true,
+    "sort_order": 1
+  },
+  {
+    "id": "MSET-SCERT-02",
+    "category": "certification_level",
+    "name": "State Panel",
+    "code": "STATE_PANEL",
+    "description": "Official state panel digital and manual match scorer",
+    "is_active": true,
+    "sort_order": 2
+  },
+  {
+    "id": "MSET-SCERT-03",
+    "category": "certification_level",
+    "name": "Club Scorer",
+    "code": "CLUB_SCR",
+    "description": "Registered local club match scorer",
+    "is_active": true,
+    "sort_order": 3
+  },
+  {
+    "id": "MSET-SCERT-04",
+    "category": "certification_level",
+    "name": "Trainee Scorer",
+    "code": "TRAINEE_SCR",
+    "description": "Apprentice scorer undergoing digital scorekeeping certification",
+    "is_active": true,
+    "sort_order": 4
+  },
+  {
+    "id": "MSET-UCERT-01",
+    "category": "umpire_certification",
+    "name": "State Panel A (Senior)",
+    "code": "STATE_PANEL_A",
+    "description": "State Association Panel A Senior Umpire authorized for premier league fixtures",
+    "is_active": true,
+    "sort_order": 1
+  },
+  {
+    "id": "MSET-UCERT-02",
+    "category": "umpire_certification",
+    "name": "State Panel B",
+    "code": "STATE_PANEL_B",
+    "description": "State Association Panel B Umpire authorized for state & division matches",
+    "is_active": true,
+    "sort_order": 2
+  },
+  {
+    "id": "MSET-UCERT-03",
+    "category": "umpire_certification",
+    "name": "BCCI Level 1 Certified",
+    "code": "BCCI_L1",
+    "description": "National BCCI Level 1 Certified Match Official",
+    "is_active": true,
+    "sort_order": 3
+  },
+  {
+    "id": "MSET-UCERT-04",
+    "category": "umpire_certification",
+    "name": "District Senior Panel",
+    "code": "DIST_SR_PANEL",
+    "description": "Senior District Panel Umpire with 5+ years official umpiring tenure",
+    "is_active": true,
+    "sort_order": 4
+  },
+  {
+    "id": "MSET-UCERT-05",
+    "category": "umpire_certification",
+    "name": "District Certified Umpire",
+    "code": "DIST_CERT_UMP",
+    "description": "Accredited district match umpire certified under MCC Cricket Laws",
+    "is_active": true,
+    "sort_order": 5
+  },
+  {
+    "id": "MSET-UCERT-06",
+    "category": "umpire_certification",
+    "name": "Trainee Umpire",
+    "code": "TRAINEE_UMP",
+    "description": "Provisional trainee umpire currently under field mentorship",
+    "is_active": true,
+    "sort_order": 6
+  },
+  {
+    "id": "MSET-STATE-01",
+    "category": "state",
+    "name": "Tamil Nadu",
+    "code": "TN",
+    "description": "Tamil Nadu State, India",
+    "is_active": true,
+    "sort_order": 1
+  },
+  {
+    "id": "MSET-STATE-02",
+    "category": "state",
+    "name": "Kerala",
+    "code": "KL",
+    "description": "Kerala State, India",
+    "is_active": true,
+    "sort_order": 2
+  },
+  {
+    "id": "MSET-STATE-03",
+    "category": "state",
+    "name": "Karnataka",
+    "code": "KA",
+    "description": "Karnataka State, India",
+    "is_active": true,
+    "sort_order": 3
+  },
+  {
+    "id": "MSET-STATE-04",
+    "category": "state",
+    "name": "Andhra Pradesh",
+    "code": "AP",
+    "description": "Andhra Pradesh State, India",
+    "is_active": true,
+    "sort_order": 4
+  },
+  {
+    "id": "MSET-STATE-05",
+    "category": "state",
+    "name": "Telangana",
+    "code": "TS",
+    "description": "Telangana State, India",
+    "is_active": true,
+    "sort_order": 5
+  },
+  {
+    "id": "MSET-STATE-06",
+    "category": "state",
+    "name": "Pondicherry",
+    "code": "PY",
+    "description": "Puducherry Union Territory, India",
+    "is_active": true,
+    "sort_order": 6
+  },
+  {
+    "id": "MSET-STATE-07",
+    "category": "state",
+    "name": "Other",
+    "code": "OTHER",
+    "description": "Other Indian States / Union Territories",
+    "is_active": true,
+    "sort_order": 7
+  }
+]

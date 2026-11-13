@@ -1,0 +1,66 @@
+[
+  {
+    "id": "MSET-AGE-01",
+    "category": "age_category",
+    "name": "Senior Men",
+    "code": "SR_MEN",
+    "description": "Open division men's senior district cricket category",
+    "is_active": true,
+    "sort_order": 1
+  },
+  {
+    "id": "MSET-AGE-02",
+    "category": "age_category",
+    "name": "Women's Senior",
+    "code": "SR_WOMEN",
+    "description": "Open division women's senior district cricket category",
+    "is_active": true,
+    "sort_order": 2
+  },
+  {
+    "id": "MSET-AGE-03",
+    "category": "age_category",
+    "name": "Under-23",
+    "code": "U23",
+    "description": "Colts and young emerging adults under 23 years of age",
+    "is_active": true,
+    "sort_order": 3
+  },
+  {
+    "id": "MSET-AGE-04",
+    "category": "age_category",
+    "name": "Under-19",
+    "code": "U19",
+    "description": "Junior district age group under 19 years of age",
+    "is_active": true,
+    "sort_order": 4
+  },
+  {
+    "id": "MSET-AGE-05",
+    "category": "age_category",
+    "name": "Under-16",
+    "code": "U16",
+    "description": "Sub-junior division under 16 years of age",
+    "is_active": true,
+    "sort_order": 5
+  },
+  {
+    "id": "MSET-AGE-06",
+    "category": "age_category",
+    "name": "Under-14",
+    "code": "U14",
+    "description": "Cadet and youth development division under 14 years of age",
+    "is_active": true,
+    "sort_order": 6
+  },
+  {
+    "id": "MSET-AGE-07",
+    "category": "age_category",
+    "name": "Under-12",
+    "code": "U12",
+    "description": "Grassroots foundational cricket division under 12 years of age",
+    "is_active": true,
+    "sort_order": 7
+  }
+]
+

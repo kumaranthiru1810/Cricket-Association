@@ -1,0 +1,57 @@
+[
+  {
+    "id": "MSET-UCERT-01",
+    "category": "umpire_certification",
+    "name": "State Panel A (Senior)",
+    "code": "STATE_PANEL_A",
+    "description": "State Association Panel A Senior Umpire authorized for premier league fixtures",
+    "is_active": true,
+    "sort_order": 1
+  },
+  {
+    "id": "MSET-UCERT-02",
+    "category": "umpire_certification",
+    "name": "State Panel B",
+    "code": "STATE_PANEL_B",
+    "description": "State Association Panel B Umpire authorized for state & division matches",
+    "is_active": true,
+    "sort_order": 2
+  },
+  {
+    "id": "MSET-UCERT-03",
+    "category": "umpire_certification",
+    "name": "BCCI Level 1 Certified",
+    "code": "BCCI_L1",
+    "description": "National BCCI Level 1 Certified Match Official",
+    "is_active": true,
+    "sort_order": 3
+  },
+  {
+    "id": "MSET-UCERT-04",
+    "category": "umpire_certification",
+    "name": "District Senior Panel",
+    "code": "DIST_SR_PANEL",
+    "description": "Senior District Panel Umpire with 5+ years official umpiring tenure",
+    "is_active": true,
+    "sort_order": 4
+  },
+  {
+    "id": "MSET-UCERT-05",
+    "category": "umpire_certification",
+    "name": "District Certified Umpire",
+    "code": "DIST_CERT_UMP",
+    "description": "Accredited district match umpire certified under MCC Cricket Laws",
+    "is_active": true,
+    "sort_order": 5
+  },
+  {
+    "id": "MSET-UCERT-06",
+    "category": "umpire_certification",
+    "name": "Trainee Umpire",
+    "code": "TRAINEE_UMP",
+    "description": "Provisional trainee umpire currently under field mentorship",
+    "is_active": true,
+    "sort_order": 6
+  }
+]
+

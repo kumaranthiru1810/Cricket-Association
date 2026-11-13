@@ -29,14 +29,45 @@ class AuthController {
   // Step 1 of Registration: Request OTP to verify email
   async requestRegistrationOtp(req, res) {
     try {
-      const { email, name, role } = req.body;
-      const result = await authService.requestRegistrationOtp(email, name, role);
+      const { email, name, role, teamName } = req.body;
+      const result = await authService.requestRegistrationOtp(email, name, role, teamName);
       res.status(200).json(result);
     } catch (err) {
       const status = err.status || 400;
       res.status(status).json({
         success: false,
         message: err.message || 'Failed to request registration OTP'
+      });
+    }
+  }
+
+  // Pre-Registration check if Team, Player, Scorer, Umpire or User already exists
+  async checkRegistrationExists(req, res) {
+    try {
+      const { role, email, name, teamName } = req.body;
+      const result = await authService.checkRegistrationExists({ role, email, name, teamName });
+      res.status(200).json({ success: true, ...result });
+    } catch (err) {
+      const status = err.status || 500;
+      res.status(status).json({
+        success: false,
+        message: err.message || 'Failed to check registration existence'
+      });
+    }
+  }
+
+  // Pre-Registration check if Team Name or Coach Email already exists
+  async checkTeamExists(req, res) {
+    try {
+      const { teamName, coachEmail, email } = req.body;
+      const targetEmail = coachEmail || email;
+      const result = await authService.checkRegistrationExists({ role: 'TEAM', teamName, email: targetEmail });
+      res.status(200).json({ success: true, ...result });
+    } catch (err) {
+      const status = err.status || 500;
+      res.status(status).json({
+        success: false,
+        message: err.message || 'Failed to check team existence'
       });
     }
   }
@@ -251,6 +282,21 @@ class AuthController {
 
   async verifyPlayerOtp(req, res) {
     return this.login(req, res);
+  }
+
+  // Find Player Team by Email & Send to Player's Email
+  async findPlayerTeam(req, res) {
+    try {
+      const { email } = req.body;
+      const result = await authService.findPlayerTeam(email);
+      res.status(200).json(result);
+    } catch (err) {
+      const status = err.status || 500;
+      res.status(status).json({
+        success: false,
+        message: err.message || 'Failed to find player team.'
+      });
+    }
   }
 
   // Register Scorer

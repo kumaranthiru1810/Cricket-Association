@@ -1,0 +1,66 @@
+[
+  {
+    "id": "MSET-STATE-01",
+    "category": "state",
+    "name": "Tamil Nadu",
+    "code": "TN",
+    "description": "Tamil Nadu State, India",
+    "is_active": true,
+    "sort_order": 1
+  },
+  {
+    "id": "MSET-STATE-02",
+    "category": "state",
+    "name": "Kerala",
+    "code": "KL",
+    "description": "Kerala State, India",
+    "is_active": true,
+    "sort_order": 2
+  },
+  {
+    "id": "MSET-STATE-03",
+    "category": "state",
+    "name": "Karnataka",
+    "code": "KA",
+    "description": "Karnataka State, India",
+    "is_active": true,
+    "sort_order": 3
+  },
+  {
+    "id": "MSET-STATE-04",
+    "category": "state",
+    "name": "Andhra Pradesh",
+    "code": "AP",
+    "description": "Andhra Pradesh State, India",
+    "is_active": true,
+    "sort_order": 4
+  },
+  {
+    "id": "MSET-STATE-05",
+    "category": "state",
+    "name": "Telangana",
+    "code": "TS",
+    "description": "Telangana State, India",
+    "is_active": true,
+    "sort_order": 5
+  },
+  {
+    "id": "MSET-STATE-06",
+    "category": "state",
+    "name": "Pondicherry",
+    "code": "PY",
+    "description": "Puducherry Union Territory, India",
+    "is_active": true,
+    "sort_order": 6
+  },
+  {
+    "id": "MSET-STATE-07",
+    "category": "state",
+    "name": "Other",
+    "code": "OTHER",
+    "description": "Other Indian States / Union Territories",
+    "is_active": true,
+    "sort_order": 7
+  }
+]
+

@@ -45,6 +45,7 @@ export const AdminTopbar: React.FC<Props> = ({
     content: 'Website Content Management',
     laws: 'MCC Laws of Cricket (2026 Edition)',
     calculations: 'DLS & VJD Live Chasing Predictor',
+    'master-settings': 'Master Settings (Database Dynamic Categories)',
     settings: 'Association Settings & Preferences'
   };
 

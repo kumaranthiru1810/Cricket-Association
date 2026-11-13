@@ -1,0 +1,102 @@
+[
+  {
+    "id": "MSET-TALUK-01",
+    "category": "taluk_jurisdiction",
+    "name": "Virudhunagar",
+    "code": "VNR",
+    "description": "Virudhunagar Taluk Jurisdiction Headquarters",
+    "is_active": true,
+    "sort_order": 1
+  },
+  {
+    "id": "MSET-TALUK-02",
+    "category": "taluk_jurisdiction",
+    "name": "Sivakasi",
+    "code": "SVKS",
+    "description": "Sivakasi Industrial Taluk Jurisdiction",
+    "is_active": true,
+    "sort_order": 2
+  },
+  {
+    "id": "MSET-TALUK-03",
+    "category": "taluk_jurisdiction",
+    "name": "Rajapalayam",
+    "code": "RJPM",
+    "description": "Rajapalayam Taluk Jurisdiction",
+    "is_active": true,
+    "sort_order": 3
+  },
+  {
+    "id": "MSET-TALUK-04",
+    "category": "taluk_jurisdiction",
+    "name": "Srivilliputhur",
+    "code": "SVPR",
+    "description": "Srivilliputhur Heritage Taluk Jurisdiction",
+    "is_active": true,
+    "sort_order": 4
+  },
+  {
+    "id": "MSET-TALUK-05",
+    "category": "taluk_jurisdiction",
+    "name": "Aruppukottai",
+    "code": "APKI",
+    "description": "Aruppukottai Taluk Jurisdiction",
+    "is_active": true,
+    "sort_order": 5
+  },
+  {
+    "id": "MSET-TALUK-06",
+    "category": "taluk_jurisdiction",
+    "name": "Sattur",
+    "code": "STR",
+    "description": "Sattur Taluk Jurisdiction",
+    "is_active": true,
+    "sort_order": 6
+  },
+  {
+    "id": "MSET-TALUK-07",
+    "category": "taluk_jurisdiction",
+    "name": "Watrap",
+    "code": "WTR",
+    "description": "Watrap Taluk Jurisdiction",
+    "is_active": true,
+    "sort_order": 7
+  },
+  {
+    "id": "MSET-TALUK-08",
+    "category": "taluk_jurisdiction",
+    "name": "Kariapatti",
+    "code": "KPT",
+    "description": "Kariapatti Taluk Jurisdiction",
+    "is_active": true,
+    "sort_order": 8
+  },
+  {
+    "id": "MSET-TALUK-09",
+    "category": "taluk_jurisdiction",
+    "name": "Tiruchuli",
+    "code": "TCL",
+    "description": "Tiruchuli Taluk Jurisdiction",
+    "is_active": true,
+    "sort_order": 9
+  },
+  {
+    "id": "MSET-TALUK-10",
+    "category": "taluk_jurisdiction",
+    "name": "Vembakottai",
+    "code": "VBK",
+    "description": "Vembakottai Archaeological Taluk Jurisdiction",
+    "is_active": true,
+    "sort_order": 10
+  },
+  {
+    "id": "MSET-TALUK-11",
+    "category": "taluk_jurisdiction",
+    "name": "Other",
+    "code": "OTHER",
+    "description": "Other Regional Jurisdiction outside specified taluks",
+    "is_active": true,
+    "sort_order": 11
+  }
+]
+
