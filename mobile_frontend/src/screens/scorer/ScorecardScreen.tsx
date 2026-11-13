@@ -13,6 +13,8 @@ import UmpireSignalOverlay, { UmpireSignalEvent, UmpireSignalsGalleryModal, Umpi
 import FieldingEventOverlay, { FieldingEventData, FieldingEventType } from '../../components/common/FieldingEventOverlay';
 
 const IMG_CHAMPIONS = require('../../../assets/cricket_champions.png');
+const IMG_MATCH_RESULT_TROPHY = require('../../../assets/cricket_match_result_trophy.png');
+const IMG_PARTNERSHIP = require('../../../assets/cricket_batting_partnership.png');
 
 interface ScorecardScreenProps {
   onExit?: () => void;
@@ -620,7 +622,7 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                   {/* The Cricket Champions Art Illustration */}
                   <View style={styles.championArtworkWrapper}>
                     <Image
-                      source={IMG_CHAMPIONS}
+                      source={IMG_MATCH_RESULT_TROPHY}
                       style={styles.championImage}
                       resizeMode="cover"
                     />
@@ -993,18 +995,6 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
             </ScrollView>
           </View>
 
-          {/* ─────────────────────────────────────────────────────────────
-              BOWLER PITCH MAP & LENGTH DISTRIBUTION ANALYTICS
-              ───────────────────────────────────────────────────────────── */}
-          {currentInnings && currentInnings.bowlers && currentInnings.bowlers.length > 0 && (
-            <ErrorBoundary fallbackTitle="Bowler Pitch Map & Line/Length">
-              <PitchMap
-                deliveries={[]}
-                bowlerName={currentInnings.bowlers[0]?.name || 'Attack Bowlers'}
-                title={`🎯 ${currentInnings.bowlingTeam || 'Bowling Side'} - Pitch Map (22 Yards)`}
-              />
-            </ErrorBoundary>
-          )}
 
           {/* FALL OF WICKETS */}
           {Array.isArray(currentInnings.fallOfWickets) && currentInnings.fallOfWickets.length > 0 && (
@@ -1056,9 +1046,18 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
               ───────────────────────────────────────────────────────────── */}
           {Array.isArray(currentInnings.partnerships) && currentInnings.partnerships.length > 0 && (
             <View style={styles.fowCard}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <Text style={styles.fowTitle}>🤝 Key Batting Partnerships</Text>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: '#b45309' }}>{currentInnings.battingTeam}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                <Image
+                  source={IMG_PARTNERSHIP}
+                  style={{ width: 72, height: 48, borderRadius: 8, borderWidth: 1.5, borderColor: '#f59e0b' }}
+                  resizeMode="cover"
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fowTitle}>🤝 Key Batting Partnerships</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#b45309' }}>
+                    {currentInnings.battingTeam} • Boundary & Strike Rotation Analysis
+                  </Text>
+                </View>
               </View>
               <View style={styles.fowRow}>
                 {currentInnings.partnerships.map((p: any, idx: number) => {
@@ -1101,8 +1100,7 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                   <Text style={[styles.cell, styles.colNum, styles.tableHeaderText, { color: '#38bdf8' }]}>Run Outs</Text>
                   <Text style={[styles.cell, styles.colNum, styles.tableHeaderText, { color: '#38bdf8' }]}>Collects</Text>
                   <Text style={[styles.cell, styles.colNum, styles.tableHeaderText, { color: '#38bdf8' }]}>Saves</Text>
-                  <Text style={[styles.cell, { width: 90, textAlign: 'center' }, styles.tableHeaderText, { color: '#38bdf8' }]}>Rating</Text>
-                  <Text style={[styles.cell, { width: 95, textAlign: 'center' }, styles.tableHeaderText, { color: '#38bdf8' }]}>Action</Text>
+                  <Text style={[styles.cell, { width: 100, textAlign: 'center' }, styles.tableHeaderText, { color: '#38bdf8' }]}>Fielding Rating</Text>
                 </View>
 
                 {fieldingStats.map((f: any, fIdx: number) => (
@@ -1123,36 +1121,10 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                     <Text style={[styles.cell, styles.colNum, f.boundarySaves > 0 && { fontWeight: 'bold', color: '#059669' }]}>
                       {f.boundarySaves}
                     </Text>
-                    <View style={{ width: 90, alignItems: 'center', justifyContent: 'center' }}>
+                    <View style={{ width: 100, alignItems: 'center', justifyContent: 'center' }}>
                       <Text style={{ fontSize: 11, fontWeight: '800', color: '#0284c7' }}>
                         {f.rating}
                       </Text>
-                    </View>
-                    <View style={{ width: 95, alignItems: 'center', justifyContent: 'center' }}>
-                      <TouchableOpacity
-                        style={{
-                          backgroundColor: '#0284c7',
-                          paddingHorizontal: 8,
-                          paddingVertical: 5,
-                          borderRadius: 6
-                        }}
-                        onPress={() => {
-                          let fType: FieldingEventType = 'CLEAN_COLLECT';
-                          if (f.runOuts > 0) fType = 'DIRECT_HIT';
-                          else if (f.boundarySaves > 0) fType = 'BOUNDARY_SAVE';
-                          else if (f.catches > 0) fType = 'CATCH';
-                          else if (f.isKeeper) fType = 'STUMPING';
-
-                          setActiveFieldingEvent({
-                            type: fType,
-                            fielderName: f.name,
-                            teamName: currentInnings.bowlingTeam,
-                            details: `Outstanding fielding performance: ${f.catches} catches, ${f.runOuts} run outs, ${f.cleanCollects} clean collects & ${f.boundarySaves} boundary saves`
-                          });
-                        }}
-                      >
-                        <Text style={{ color: '#ffffff', fontSize: 10, fontWeight: '800' }}>▶ Replay</Text>
-                      </TouchableOpacity>
                     </View>
                   </View>
                 ))}

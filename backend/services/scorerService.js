@@ -279,9 +279,14 @@ class ScorerService {
     const teamB = teamMap[match.team_b_id] || { id: match.team_b_id, name: 'Team B' };
 
     // Active Innings
-    let currentInnings = await db.models.Innings.findOne({ match_id: matchId, is_completed: { $ne: true }, status: { $ne: "COMPLETED" } }).sort({ innings_number: -1 }).lean();
-    if (!currentInnings) {
+    let currentInnings = null;
+    if (match.status === 'COMPLETED') {
       currentInnings = await db.models.Innings.findOne({ match_id: matchId }).sort({ innings_number: -1 }).lean();
+    } else {
+      currentInnings = await db.models.Innings.findOne({ match_id: matchId, is_completed: { $ne: true }, status: { $ne: "COMPLETED" } }).sort({ innings_number: -1 }).lean();
+      if (!currentInnings) {
+        currentInnings = await db.models.Innings.findOne({ match_id: matchId }).sort({ innings_number: -1 }).lean();
+      }
     }
 
     if (!currentInnings) {

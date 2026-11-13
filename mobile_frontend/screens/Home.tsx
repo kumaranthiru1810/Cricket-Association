@@ -31,6 +31,7 @@ import { ScorerApi, PlayerApi, getCurrentUser, setCurrentUser, setAuthToken, log
 import { MatchHighlightsBanner } from '../src/components/common/MatchHighlightsBanner';
 import UmpireSignalOverlay, { UmpireSignalEvent, UmpireSignalsGalleryModal, UmpireSignalType } from '../src/components/common/UmpireSignalOverlay';
 import Header from '../src/layouts/Header';
+import BroadcastLiveBallAction from '../src/components/common/BroadcastLiveBallAction';
 
 // ─── ASSET REFERENCES ──────────────────────────────────────────────────────────
 const IMG_LOGO = require('../assets/logo_transparent.png');
@@ -1299,6 +1300,20 @@ export default function HomeScreen() {
                             </Text>
                           </View>
                         </View>
+
+                        {/* Broadcast Kinetic Delivery Action Telemetry for Live Matches */}
+                        {isLive && (
+                          <BroadcastLiveBallAction
+                            triggerKey={`${m.id}-${m.scoreA || ''}-${m.scoreB || ''}`}
+                            autoPlay={true}
+                            lastEvent={{
+                              runs: 4,
+                              isBoundary: true,
+                              batterName: m.teamA || 'Striker',
+                              shotZone: 'Cover'
+                            }}
+                          />
+                        )}
 
                         {/* 3. Status Note / Active Rain Delay Notice */}
                         {isPostponed ? (

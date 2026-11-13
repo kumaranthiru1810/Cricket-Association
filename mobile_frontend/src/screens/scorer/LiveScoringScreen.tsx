@@ -26,6 +26,7 @@ import CricketFigurine3D from '../../components/common/CricketFigurine3D';
 import InteractiveWagonWheelModal, { ShotDirectionResult } from '../../components/analytics/InteractiveWagonWheelModal';
 import UmpireSignalOverlay, { UmpireSignalEvent, UmpireSignalsGalleryModal, UmpireSignalType } from '../../components/common/UmpireSignalOverlay';
 import FieldingEventOverlay, { FieldingEventData, FieldingEventType } from '../../components/common/FieldingEventOverlay';
+import BroadcastLiveBallAction from '../../components/common/BroadcastLiveBallAction';
 
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
 const IMG_CHAMPIONS = require('../../../assets/cricket_champions.png');
@@ -1215,9 +1216,12 @@ export default function LiveScoringScreen() {
       setCurrentBreak(curBreak);
 
       const isBreak = curMatchStatus === 'INNINGS_BREAK';
-      const isCompleted = curMatchStatus === 'COMPLETED';
+      const targetVal = d.match?.revisedTarget || d.innings?.target || d.match?.targetRuns || 0;
+      const isTargetReached = (d.innings?.inningsNumber === 2 && targetVal > 0 && (d.innings?.runs || 0) >= targetVal);
+      const hasWinSummary = Boolean(d.match?.resultSummary && !d.match?.resultSummary.toLowerCase().includes('delayed') && (d.match?.resultSummary.toLowerCase().includes('won') || d.match?.resultSummary.toLowerCase().includes('tied')));
+      const isCompleted = curMatchStatus === 'COMPLETED' || isTargetReached || hasWinSummary;
       setIsInningsBreak(isBreak);
-      setIsMatchEnded(isCompleted);
+      setIsMatchEnded(Boolean(isCompleted));
 
       if (d.match) {
         const teamAName = d.match.teamA || d.innings?.battingTeam || 'Team A';
@@ -6536,6 +6540,20 @@ export default function LiveScoringScreen() {
             </View>
           </View>
 
+          {/* Broadcast Live Kinetic Ball Action Telemetry */}
+          <BroadcastLiveBallAction
+            triggerKey={`${recentDeliveries.length}-${runs}-${wickets}`}
+            autoPlay={true}
+            lastEvent={{
+              runs: pendingBoundaryRun || (recentDeliveries[0]?.total_runs ?? 1),
+              isBoundary: pendingBoundaryRun === 4 || (recentDeliveries[0]?.runs_batter === 4),
+              isSix: pendingBoundaryRun === 6 || (recentDeliveries[0]?.runs_batter === 6),
+              isWicket: Boolean(recentDeliveries[0]?.wicket),
+              batterName: striker?.name || 'Striker',
+              bowlerName: bowler?.name || 'Bowler'
+            }}
+          />
+
           {/* THIS OVER & RECENT DELIVERIES INTERACTIVE STRIP (CricHeroes Retroactive Ball Correction) */}
           <View style={[styles.recentDeliveriesCard, isEditMode && styles.recentDeliveriesCardEditMode]}>
             <View style={styles.recentDeliveriesHeader}>
@@ -6641,6 +6659,25 @@ export default function LiveScoringScreen() {
 
           {/* BOTTOM SECTION: SCORING ENGINE CONTROLS & KEYPAD (Matches Manual Image 1 Slide 3 & 4 and Image 2) */}
           <View style={styles.controlsSection}>
+            {isMatchEnded && (
+              <View style={{
+                backgroundColor: '#fef3c7',
+                borderColor: '#f59e0b',
+                borderWidth: 1.5,
+                borderRadius: 10,
+                padding: 12,
+                marginBottom: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8
+              }}>
+                <Text style={{ fontSize: 18 }}>🏆</Text>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#92400e' }}>
+                  MATCH CONCLUDED • Scoring controls are disabled. View the full scorecard above or return to dashboard.
+                </Text>
+              </View>
+            )}
             <View style={styles.controlPanel}>
               {/* 1. Primary Action Row: START BALL / END BALL & START OVER / END OVER */}
               <View style={styles.primaryEngineActionBar}>

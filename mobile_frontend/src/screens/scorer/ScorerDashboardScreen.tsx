@@ -105,7 +105,7 @@ export default function ScorerDashboardScreen() {
       // District Sanctioned Upcoming Fixtures fallback
       const defaultUpcoming = [
           {
-            id: 'M001',
+            id: 'M004',
             tournament_name: 'Virudhunagar Premier League 2026',
             tournament: 'Virudhunagar Premier League 2026',
             team_a_name: 'Virudhunagar Spartans',
@@ -127,7 +127,7 @@ export default function ScorerDashboardScreen() {
             umpire2_name: 'Thiru. M. Ramanathan'
           },
           {
-            id: 'M004',
+            id: 'M005',
             tournament_name: 'Virudhunagar Premier League 2026',
             tournament: 'Virudhunagar Premier League 2026',
             team_a_name: 'Sivakasi Strikers',

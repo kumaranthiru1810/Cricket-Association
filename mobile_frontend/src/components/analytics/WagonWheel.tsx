@@ -564,17 +564,17 @@ export default function WagonWheel({
           ───────────────────────────────────────────────────────────── */}
       {activeSlide === 'wheel' && (
         <View style={styles.slideContent}>
-          {/* Shot Run Filter Bar */}
+          {/* Shot Run Filter Bar - Only Boundaries (4s & 6s) */}
           <View style={styles.filterBar}>
-            <Text style={styles.filterLabel}>SHOT FILTER:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+            <Text style={styles.filterLabel}>BOUNDARY SHOT FILTER:</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <TouchableOpacity
                 style={[styles.filterPill, runFilter === 'ALL' && styles.filterPillActive]}
                 onPress={() => setRunFilter('ALL')}
                 activeOpacity={0.7}
               >
                 <Text style={[styles.filterPillText, runFilter === 'ALL' && styles.filterPillTextActive]}>
-                  All Shots ({runCounts.total})
+                  All Boundaries ({runCounts.fours + runCounts.sixes})
                 </Text>
               </TouchableOpacity>
 
@@ -599,51 +599,7 @@ export default function WagonWheel({
                   4s ({runCounts.fours} × 4 = {scoringBreakdown.fours.runs}r)
                 </Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.filterPill, runFilter === '3' && styles.filterPillActive]}
-                onPress={() => setRunFilter(runFilter === '3' ? 'ALL' : '3')}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.dotMarker, { backgroundColor: '#a855f7' }]} />
-                <Text style={[styles.filterPillText, runFilter === '3' && styles.filterPillTextActive]}>
-                  3s ({runCounts.threes} × 3 = {scoringBreakdown.threes.runs}r)
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.filterPill, runFilter === '2' && styles.filterPillActive]}
-                onPress={() => setRunFilter(runFilter === '2' ? 'ALL' : '2')}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.dotMarker, { backgroundColor: '#f59e0b' }]} />
-                <Text style={[styles.filterPillText, runFilter === '2' && styles.filterPillTextActive]}>
-                  2s ({runCounts.twos} × 2 = {scoringBreakdown.twos.runs}r)
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.filterPill, runFilter === '1' && styles.filterPillActive]}
-                onPress={() => setRunFilter(runFilter === '1' ? 'ALL' : '1')}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.dotMarker, { backgroundColor: '#38bdf8' }]} />
-                <Text style={[styles.filterPillText, runFilter === '1' && styles.filterPillTextActive]}>
-                  1s ({runCounts.ones} × 1 = {scoringBreakdown.ones.runs}r)
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.filterPill, runFilter === '0' && styles.filterPillActive]}
-                onPress={() => setRunFilter(runFilter === '0' ? 'ALL' : '0')}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.dotMarker, { backgroundColor: '#94a3b8' }]} />
-                <Text style={[styles.filterPillText, runFilter === '0' && styles.filterPillTextActive]}>
-                  Dots ({runCounts.dots}b • 0r)
-                </Text>
-              </TouchableOpacity>
-            </ScrollView>
+            </View>
           </View>
 
           {/* THE WAGON WHEEL CANVAS */}
