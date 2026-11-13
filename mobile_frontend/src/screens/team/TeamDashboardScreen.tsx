@@ -1866,6 +1866,20 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                                   </Text>
                                 </View>
                                 <Text style={styles.notifMessage}>{notif.message}</Text>
+                                {notif.link ? (
+                                  <TouchableOpacity
+                                    style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, alignSelf: 'flex-start' }}
+                                    onPress={() => {
+                                      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                                        window.open(notif.link, '_blank');
+                                      } else {
+                                        Linking.openURL(notif.link).catch(() => {});
+                                      }
+                                    }}
+                                  >
+                                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#1d4ed8' }}>📍 View Venue on Google Maps ↗</Text>
+                                  </TouchableOpacity>
+                                ) : null}
                                 {!isRead && (
                                   <TouchableOpacity
                                     style={{ marginTop: 6, alignSelf: 'flex-start' }}

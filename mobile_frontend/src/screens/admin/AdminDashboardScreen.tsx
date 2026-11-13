@@ -874,8 +874,21 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     return list;
   }, [allClubsList, teams]);
 
-  // Comprehensive stadiums / venues with detailed metadata fetched from database
+  // Comprehensive stadiums / venues with detailed metadata fetched from database & district registry
   const availableVenues = useMemo(() => {
+    const defaultGrounds = [
+      { id: 'VEN-01', name: 'Kamarajar District Stadium', location: 'Virudhunagar Central', capacity: 8000, floodlights: true, description: 'Main association ground with LED floodlights and pavilion.' },
+      { id: 'VEN-02', name: 'King Turf', location: 'Sivakasi Road, Virudhunagar', capacity: 1500, floodlights: true, description: 'High-speed synthetic cricket turf with full night LED floodlights.' },
+      { id: 'VEN-03', name: 'Sivakasi Cricket Ground', location: 'Sivakasi Bypass', capacity: 4500, floodlights: true, description: 'Premium turf pitch facility.' },
+      { id: 'VEN-04', name: 'Rajapalayam RAC Ground', location: 'PACR Road, Rajapalayam', capacity: 3500, floodlights: false, description: 'Collegiate championship tournament venue.' },
+      { id: 'VEN-05', name: 'Srivilliputhur Kalasalingam Cricket Ground', location: 'Krishnankoil, Srivilliputhur', capacity: 5000, floodlights: true, description: 'Standard ICC dimension turf ground.' },
+      { id: 'VEN-06', name: 'Arasan Turf Ground', location: 'Sivakasi', capacity: 1200, floodlights: true, description: 'All-weather multi-wicket turf facility.' },
+      { id: 'VEN-07', name: 'Aruppukottai SBK College Ground', location: 'Aruppukottai', capacity: 3000, floodlights: false, description: 'Taluk-level championship ground.' },
+      { id: 'VEN-08', name: 'Sattur Railway Ground', location: 'Near Railway Station, Sattur', capacity: 2500, floodlights: false, description: 'Fast outfield and traditional turf pitch.' },
+      { id: 'VEN-09', name: 'Vembakottai Sports Pavilion Ground', location: 'Vembakottai', capacity: 2000, floodlights: false, description: 'District rural sports development facility.' },
+      { id: 'VEN-10', name: 'Watrap Taluk Sports Arena Ground', location: 'Main Road, Watrap', capacity: 2000, floodlights: false, description: 'Taluk arena with newly relaid central pitch.' }
+    ];
+
     const list = (venuesList || []).map((v: any, idx: number) => {
       const vName = typeof v === 'string' ? v : v.name;
       const vLoc = typeof v === 'object' ? (v.location || v.address || 'Virudhunagar District') : 'Ground';
@@ -892,20 +905,27 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       };
     });
 
-    if (list.length === 0) {
-      return [
-        { id: 'VEN-01', name: 'Kamarajar District Stadium', location: 'Virudhunagar Central', capacity: 8000, floodlights: true, description: 'Main association ground with LED floodlights and pavilion.' },
-        { id: 'VEN-02', name: 'Sivakasi Cricket Ground', location: 'Sivakasi Bypass', capacity: 4500, floodlights: true, description: 'Premium turf pitch facility.' },
-        { id: 'VEN-03', name: 'Rajapalayam RAC Ground', location: 'PACR Road, Rajapalayam', capacity: 3500, floodlights: false, description: 'Collegiate championship tournament venue.' },
-        { id: 'VEN-04', name: 'Srivilliputhur Kalasalingam Cricket Ground', location: 'Krishnankoil, Srivilliputhur', capacity: 5000, floodlights: true, description: 'Standard ICC dimension turf ground.' },
-        { id: 'VEN-05', name: 'Aruppukottai SBK College Ground', location: 'Aruppukottai', capacity: 3000, floodlights: false, description: 'Taluk-level championship ground.' },
-        { id: 'VEN-06', name: 'Sattur Railway Ground', location: 'Near Railway Station, Sattur', capacity: 2500, floodlights: false, description: 'Fast outfield and traditional turf pitch.' },
-        { id: 'VEN-07', name: 'Vembakottai Sports Pavilion Ground', location: 'Vembakottai', capacity: 2000, floodlights: false, description: 'District rural sports development facility.' },
-        { id: 'VEN-08', name: 'Watrap Taluk Sports Arena Ground', location: 'Main Road, Watrap', capacity: 2000, floodlights: false, description: 'Taluk arena with newly relaid central pitch.' }
-      ];
+    const existingNames = new Set(list.map(v => (v.name || '').toLowerCase().trim()));
+    for (const dg of defaultGrounds) {
+      if (!existingNames.has(dg.name.toLowerCase().trim())) {
+        list.push(dg);
+        existingNames.add(dg.name.toLowerCase().trim());
+      }
     }
+
+    if (scheduleForm.venue && !existingNames.has(scheduleForm.venue.toLowerCase().trim())) {
+      list.push({
+        id: `VEN-CUSTOM-${Date.now()}`,
+        name: scheduleForm.venue,
+        location: 'Custom Google Maps Location',
+        capacity: 1000,
+        floodlights: true,
+        description: 'Dynamically selected venue from Google Maps.'
+      });
+    }
+
     return list;
-  }, [venuesList]);
+  }, [venuesList, scheduleForm.venue]);
 
   // Dynamic Time Delay calculator for Weather / Rain adjustments
   const applyDynamicTimeDelay = (minutesToAdd: number) => {
@@ -5508,40 +5528,80 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       ) : null}
                     </View>
 
-                    {/* Database Ground Details Card */}
+                    {/* Selected Ground Details & Google Maps Live Link Card */}
                     {(() => {
-                      const matchedVenue = availableVenues.find(v => v.name === scheduleForm.venue);
-                      if (!matchedVenue) return null;
+                      if (!scheduleForm.venue) return null;
+                      const matchedVenue = availableVenues.find(v => (v.name || '').toLowerCase().trim() === scheduleForm.venue.toLowerCase().trim());
+                      const isDbGround = Boolean(matchedVenue && !matchedVenue.id?.startsWith('VEN-CUSTOM'));
+                      const locationDisplay = matchedVenue?.location || 'Virudhunagar District, Tamil Nadu';
+                      const capacityDisplay = matchedVenue?.capacity || '1,500+ spectators';
+                      const lightsDisplay = matchedVenue?.floodlights ? 'Available (Day / Night)' : 'Daylight Only';
+                      const mapsLink = scheduleForm.venue_maps_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(scheduleForm.venue + ' ' + locationDisplay)}`;
+
                       return (
                         <View style={{
                           marginTop: 10,
-                          padding: 10,
+                          padding: 12,
                           backgroundColor: '#f8fafc',
                           borderRadius: 8,
-                          borderWidth: 1,
+                          borderWidth: 1.5,
                           borderColor: '#cbd5e1'
                         }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                             <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>
-                              🏟️ {matchedVenue.name}
+                              🏟️ {scheduleForm.venue}
                             </Text>
-                            <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#a7f3d0' }}>
-                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>✓ Database Ground</Text>
+                            <View style={{
+                              backgroundColor: isDbGround ? '#ecfdf5' : '#eff6ff',
+                              paddingHorizontal: 8,
+                              paddingVertical: 3,
+                              borderRadius: 6,
+                              borderWidth: 1,
+                              borderColor: isDbGround ? '#a7f3d0' : '#bfdbfe'
+                            }}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: isDbGround ? '#059669' : '#1d4ed8' }}>
+                                {isDbGround ? '✓ Official District Ground' : '📍 Google Maps Verified Turf'}
+                              </Text>
                             </View>
                           </View>
-                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 6 }}>
+
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
                             <Text style={{ fontSize: 12, color: '#475569' }}>
-                              📍 Location: <Text style={{ fontWeight: '600', color: '#1e293b' }}>{matchedVenue.location}</Text>
+                              📍 Location: <Text style={{ fontWeight: '600', color: '#1e293b' }}>{locationDisplay}</Text>
                             </Text>
                             <Text style={{ fontSize: 12, color: '#475569' }}>
-                              👥 Capacity: <Text style={{ fontWeight: '600', color: '#1e293b' }}>{matchedVenue.capacity} spectators</Text>
+                              👥 Capacity: <Text style={{ fontWeight: '600', color: '#1e293b' }}>{capacityDisplay}</Text>
                             </Text>
                             <Text style={{ fontSize: 12, color: '#475569' }}>
-                              💡 Floodlights: <Text style={{ fontWeight: '600', color: '#1e293b' }}>{matchedVenue.floodlights ? 'Available (Day/Night)' : 'Day Only'}</Text>
+                              💡 Lights: <Text style={{ fontWeight: '600', color: '#1e293b' }}>{lightsDisplay}</Text>
                             </Text>
                           </View>
-                          {matchedVenue.description ? (
-                            <Text style={{ fontSize: 11.5, color: '#64748b', marginTop: 4, fontStyle: 'italic' }}>
+
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                            <TouchableOpacity
+                              onPress={() => {
+                                if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                                  window.open(mapsLink, '_blank');
+                                } else {
+                                  Linking.openURL(mapsLink).catch(() => {});
+                                }
+                              }}
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4,
+                                backgroundColor: '#2563eb',
+                                paddingHorizontal: 10,
+                                paddingVertical: 5,
+                                borderRadius: 6
+                              }}
+                            >
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#ffffff' }}>🗺️ Open Location in Google Maps ↗</Text>
+                            </TouchableOpacity>
+                          </View>
+
+                          {matchedVenue?.description ? (
+                            <Text style={{ fontSize: 11.5, color: '#64748b', marginTop: 6, fontStyle: 'italic' }}>
                               {matchedVenue.description}
                             </Text>
                           ) : null}
@@ -6158,14 +6218,54 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               </TouchableOpacity>
             </View>
 
-            <View style={styles.mapsModalBody}>
+            <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={{ padding: 18 }} showsVerticalScrollIndicator={true}>
+              {/* Popular Virudhunagar Grounds & Turfs Quick Select */}
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155', marginBottom: 6 }}>
+                ⚡ Quick Select Popular District Turfs & Grounds:
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 10 }}>
+                {[
+                  { name: 'King Turf', sub: 'Virudhunagar' },
+                  { name: 'Kamarajar District Stadium', sub: 'Main Ground' },
+                  { name: 'Sivakasi Cricket Ground', sub: 'Turf Pitch' },
+                  { name: 'Arasan Turf Ground', sub: 'Sivakasi' },
+                  { name: 'Rajapalayam RAC Ground', sub: 'Collegiate' },
+                  { name: 'Srivilliputhur Kalasalingam Ground', sub: 'ICC Dimension' },
+                  { name: 'Aruppukottai SBK College Ground', sub: 'SBK' },
+                  { name: 'Sattur Railway Ground', sub: 'Traditional' }
+                ].map((item) => {
+                  const isCur = (mapsSearchQuery || '').toLowerCase().includes(item.name.toLowerCase());
+                  return (
+                    <TouchableOpacity
+                      key={item.name}
+                      onPress={() => setMapsSearchQuery(item.name)}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 16,
+                        backgroundColor: isCur ? '#eff6ff' : '#f8fafc',
+                        borderWidth: 1.5,
+                        borderColor: isCur ? '#2563eb' : '#cbd5e1',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: isCur ? '700' : '600', color: isCur ? '#1d4ed8' : '#1e293b' }}>
+                        {item.name === 'King Turf' ? '👑' : '📍'} {item.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
               {/* Search Input */}
               <Text style={styles.formFieldLabel}>Ground Name / Location / Turf *</Text>
               <View style={styles.mapsSearchInputWrap}>
                 <Text style={{ fontSize: 16, marginRight: 8 }}>🔍</Text>
                 <TextInput
                   style={styles.mapsSearchInput}
-                  placeholder="e.g. The Arasan Turf Court, Sivakasi..."
+                  placeholder="e.g. King Turf, The Arasan Turf Court, Sivakasi..."
                   placeholderTextColor="#94a3b8"
                   value={mapsSearchQuery}
                   onChangeText={setMapsSearchQuery}
@@ -6246,7 +6346,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   </Text>
                 </View>
               ) : null}
-            </View>
+            </ScrollView>
 
             <View style={styles.mapsModalFooter}>
               <TouchableOpacity
@@ -6261,14 +6361,14 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 disabled={!mapsSearchQuery.trim()}
                 onPress={() => {
                   const vName = mapsSearchQuery.trim();
-                  const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(vName)}`;
+                  const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(vName + ' Virudhunagar Tamil Nadu')}`;
                   setScheduleForm(prev => ({
                     ...prev,
                     venue: vName,
                     venue_maps_url: mapUrl
                   }));
                   setGoogleMapsModalOpen(false);
-                  showNotification('✓ Venue location set from Google Maps!');
+                  showNotification(`✓ Venue updated to "${vName}" with Google Maps link!`);
                 }}
               >
                 <Text style={styles.btnPrimaryGreenCompactText}>✅ Set Venue & Return to Match</Text>

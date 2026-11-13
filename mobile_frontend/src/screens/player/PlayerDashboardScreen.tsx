@@ -2313,6 +2313,22 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                             </Text>
                           </View>
                           <Text style={styles.notifItemMessage}>{n.message}</Text>
+                          {n.link ? (
+                            <TouchableOpacity
+                              style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, alignSelf: 'flex-start' }}
+                              onPress={() => {
+                                if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                                  window.open(n.link, '_blank');
+                                } else {
+                                  Linking.openURL(n.link).catch(() => {});
+                                }
+                              }}
+                              activeOpacity={0.8}
+                            >
+                              <Ionicons name="map-outline" size={12} color="#2563eb" />
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#2563eb' }}>Open Venue in Google Maps ↗</Text>
+                            </TouchableOpacity>
+                          ) : null}
                         </View>
                       </View>
                     ))
