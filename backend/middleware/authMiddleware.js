@@ -157,6 +157,14 @@ async function verifyMatchPermission(req, res, next) {
       return res.status(404).json({ success: false, message: `Match '${matchId}' not found.` });
     }
 
+    // Unconfirmed scheduled matches cannot be scored or accessed by scorers until confirmed by Admin
+    if (match.status === 'SCHEDULED' && match.schedule_confirmation_status !== 'CONFIRMED' && req.user?.role !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Match schedule is pending confirmation by Admin after team allocations.'
+      });
+    }
+
     // Admin and Match Scorer have access to all matches
     if (req.user && (req.user.role === 'ADMIN' || req.user.role === 'SCORER')) {
       req.match = match;
@@ -436,6 +444,14 @@ async function verifyUmpireMatchPermission(req, res, next) {
     const match = await db.models.Match.findOne({ id: matchId });
     if (!match) {
       return res.status(404).json({ success: false, message: `Match '${matchId}' not found.` });
+    }
+
+    // Unconfirmed scheduled matches cannot be scored or accessed by scorers until confirmed by Admin
+    if (match.status === 'SCHEDULED' && match.schedule_confirmation_status !== 'CONFIRMED' && req.user?.role !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Match schedule is pending confirmation by Admin after team allocations.'
+      });
     }
 
     // Admin and Match Scorer have access to all matches

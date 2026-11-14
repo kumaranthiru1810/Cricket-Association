@@ -287,6 +287,12 @@ export const adminApi = {
     });
   },
 
+  deleteMatch: async (id: string) => {
+    return adminRequest(`/admin/matches/${id}`, {
+      method: 'DELETE'
+    });
+  },
+
   updateMatch: async (id: string, data: any) => {
     return adminRequest(`/admin/matches/${id}`, {
       method: 'PATCH',
@@ -298,6 +304,12 @@ export const adminApi = {
     return adminRequest(`/admin/matches/${id}/postpone`, {
       method: 'POST',
       body: JSON.stringify({ reason })
+    });
+  },
+
+    confirmMatchSchedule: async (id: string) => {
+    return adminRequest(`/admin/matches/${id}/confirm-schedule`, {
+      method: 'POST'
     });
   },
 

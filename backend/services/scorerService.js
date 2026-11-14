@@ -71,7 +71,7 @@ class ScorerService {
    * Helper to resolve a complete, robust squad of players for any team
    * Handles Team, TeamRegistration, and guarantees full 11 Playing XI options
    */
-  async getSquadForTeam(teamId) {
+  async getSquadForTeam(teamId, matchContext = null) {
     await db.initDb();
     if (!teamId) return [];
 
@@ -106,9 +106,12 @@ class ScorerService {
 
       squadMap[p.id] = {
         id: p.id,
+        _id: p._id ? p._id.toString() : p.id,
         name: p.name.trim(),
         role: p.role || 'BATTER',
-        jersey_number: p.jersey_number || 0,
+        jersey_number: p.jersey_number || p.jerseyNumber || 0,
+        batting_style: p.batting_style || p.battingStyle || '',
+        bowling_style: p.bowling_style || p.bowlingStyle || '',
         team_id: teamId
       };
     });
@@ -131,13 +134,97 @@ class ScorerService {
         const pId = p.id || (p._id ? p._id.toString() : `${tr.id}-P${idx + 1}`);
         squadMap[pId] = {
           id: pId,
+          _id: p._id ? p._id.toString() : pId,
           name: p.name.trim(),
           role: p.role || 'BATTER',
-          jersey_number: p.jersey_number || (idx + 1),
+          jersey_number: p.jersey_number || p.jerseyNumber || (idx + 1),
+          batting_style: p.batting_style || p.battingStyle || '',
+          bowling_style: p.bowling_style || p.bowlingStyle || '',
           team_id: teamId
         };
       });
     });
+
+    // 3. Match Context Check: If match is provided and team has allocated Playing XI
+    let match = matchContext;
+    if (typeof matchContext === 'string') {
+      match = await db.models.Match.findOne({ id: matchContext }).lean();
+    }
+
+    if (match) {
+      const teamNameLower = (team.name || team.team_name || '').toLowerCase().trim();
+      const matchTeamAName = (match.team_a_name || '').toLowerCase().trim();
+      const matchTeamBName = (match.team_b_name || '').toLowerCase().trim();
+
+      const isTeamA = match.team_a_id === teamId ||
+        (matchTeamAName && (matchTeamAName === String(teamId).toLowerCase() || (teamNameLower && matchTeamAName === teamNameLower)));
+      const isTeamB = match.team_b_id === teamId ||
+        (matchTeamBName && (matchTeamBName === String(teamId).toLowerCase() || (teamNameLower && matchTeamBName === teamNameLower)));
+
+      const allocatedXI = isTeamA ? match.team_a_playing_xi : (isTeamB ? match.team_b_playing_xi : null);
+      const lineup = (isTeamA ? match.team_a_lineup : (isTeamB ? match.team_b_lineup : [])) || [];
+
+      if (Array.isArray(allocatedXI) && allocatedXI.length > 0) {
+        const xiPlayers = [];
+        for (let i = 0; i < allocatedXI.length; i++) {
+          const pId = allocatedXI[i];
+          let found = squadMap[pId] || Object.values(squadMap).find(p =>
+            p.id === pId ||
+            String(p.id) === String(pId) ||
+            p._id === pId ||
+            String(p._id) === String(pId) ||
+            p.name.toLowerCase() === String(pId).toLowerCase()
+          );
+
+          if (!found) {
+            const query = [{ id: pId }];
+            if (pId && /^[0-9a-fA-F]{24}$/.test(pId)) {
+              query.push({ _id: pId });
+            }
+            const extraP = await db.models.Player.findOne({ $or: query }).lean();
+            if (extraP) {
+              found = {
+                id: extraP.id || pId,
+                _id: extraP._id ? extraP._id.toString() : pId,
+                name: extraP.name,
+                role: extraP.role || 'BATTER',
+                jersey_number: extraP.jersey_number || extraP.jerseyNumber || (i + 1),
+                batting_style: extraP.batting_style || extraP.battingStyle || '',
+                bowling_style: extraP.bowling_style || extraP.bowlingStyle || '',
+                team_id: teamId
+              };
+            }
+          }
+
+          const lInfo = lineup.find(l => l && (l.playerId === pId || l.id === pId || (found && l.playerId === found.id)));
+          if (found) {
+            xiPlayers.push({
+              ...found,
+              is_playing_xi: true,
+              is_captain: Boolean(lInfo?.isCaptain || lInfo?.role === 'CAPTAIN'),
+              is_wicket_keeper: Boolean(lInfo?.isKeeper || lInfo?.role === 'WICKET_KEEPER'),
+              batting_order: lInfo?.battingOrder || (i + 1)
+            });
+          } else {
+            xiPlayers.push({
+              id: pId,
+              name: `Player ${i + 1}`,
+              role: 'BATTER',
+              jersey_number: i + 1,
+              is_playing_xi: true,
+              is_captain: Boolean(lInfo?.isCaptain || lInfo?.role === 'CAPTAIN'),
+              is_wicket_keeper: Boolean(lInfo?.isKeeper || lInfo?.role === 'WICKET_KEEPER'),
+              batting_order: lInfo?.battingOrder || (i + 1),
+              team_id: teamId
+            });
+          }
+        }
+
+        if (xiPlayers.length > 0) {
+          return xiPlayers;
+        }
+      }
+    }
 
     return Object.values(squadMap);
   }
@@ -159,20 +246,39 @@ class ScorerService {
     }
 
     let query = {};
-    if (userRole === 'ADMIN' || !scorerId || scorerId === 'ALL') {
+    if (userRole === 'ADMIN') {
       query = {}; // Admin sees all matches
     } else {
-      query = {
+      // Governance condition: Scheduled matches are ONLY visible once Admin confirms the schedule!
+      const statusCondition = {
         $or: [
-          { assigned_scorer_id: scorerId },
-          { assigned_scorer_id: { $in: linkedOfficialIds } },
-          { assigned_scorer_id: { $in: ['SCR-101', 'SCR-102', 'SCR-103', 'OFF-01', 'OFF-02'] } },
-          { assigned_scorer_id: null },
-          { assigned_scorer_id: '' },
-          { assigned_scorer_id: 'Unassigned' },
-          { status: { $in: ['SCHEDULED', 'LIVE', 'INNINGS_BREAK', 'Scheduled', 'Live', 'POSTPONED'] } }
+          { status: { $in: ['LIVE', 'INNINGS_BREAK', 'COMPLETED', 'POSTPONED', 'CANCELLED'] } },
+          {
+            status: { $in: ['SCHEDULED', 'Scheduled', 'UPCOMING', 'upcoming'] },
+            schedule_confirmation_status: 'CONFIRMED'
+          }
         ]
       };
+
+      if (!scorerId || scorerId === 'ALL') {
+        query = statusCondition;
+      } else {
+        query = {
+          $and: [
+            {
+              $or: [
+                { assigned_scorer_id: scorerId },
+                { assigned_scorer_id: { $in: linkedOfficialIds } },
+                { assigned_scorer_id: { $in: ['SCR-101', 'SCR-102', 'SCR-103', 'OFF-01', 'OFF-02'] } },
+                { assigned_scorer_id: null },
+                { assigned_scorer_id: '' },
+                { assigned_scorer_id: 'Unassigned' }
+              ]
+            },
+            statusCondition
+          ]
+        };
+      }
     }
 
     const allMatches = await db.models.Match.find(query).sort({ match_date: -1 }).lean();
@@ -280,6 +386,11 @@ class ScorerService {
         stage: m.stage || 'LEAGUE',
         currentBreak: m.current_break || null,
         statusComment: m.status_comment || '',
+        schedule_confirmation_status: m.schedule_confirmation_status || 'PENDING',
+        scheduleConfirmationStatus: m.schedule_confirmation_status || 'PENDING',
+        team_a_allocation_status: m.team_a_allocation_status || 'PENDING',
+        team_b_allocation_status: m.team_b_allocation_status || 'PENDING',
+        bothAllocationsSubmitted: (m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED'),
         breaks: m.breaks || []
       };
     }));
@@ -351,9 +462,9 @@ class ScorerService {
     const batters = await db.models.InningsBatter.find({ innings_id: currentInnings.id }).sort({ batting_position: 1 }).lean();
     const playerMap = await this.getPlayerMap();
     
-    // Resolve robust squads from official players & registered teams
-    const battingSquad = await this.getSquadForTeam(currentInnings.batting_team_id);
-    const bowlingSquad = await this.getSquadForTeam(currentInnings.bowling_team_id);
+    // Resolve robust squads from official players & registered teams (Filtered to allocated Playing XI)
+    const battingSquad = await this.getSquadForTeam(currentInnings.batting_team_id, match);
+    const bowlingSquad = await this.getSquadForTeam(currentInnings.bowling_team_id, match);
 
     // Active striker & non-striker
     const dismissedBatters = (batters || []).filter(b => b.is_out).map(b => b.player_id);
@@ -607,7 +718,15 @@ class ScorerService {
         dismissalText: d.dismissal_text,
         commentary: d.commentary
       })),
-      battingSquad: battingSquad.map(p => ({ id: p.id, name: p.name, role: p.role, jersey_number: p.jersey_number })),
+      battingSquad: battingSquad.map(p => ({
+        id: p.id,
+        name: p.name,
+        role: p.role,
+        jersey_number: p.jersey_number,
+        is_captain: Boolean(p.is_captain),
+        is_wicket_keeper: Boolean(p.is_wicket_keeper),
+        batting_order: p.batting_order || 0
+      })),
       bowlingSquad: enrichedBowlingSquad,
       allInnings: (allInningsDocs || []).map(inn => ({
         id: inn.id,

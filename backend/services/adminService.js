@@ -205,6 +205,158 @@ async function saveTournament(tournamentData, adminEmail) {
 /**
  * Schedule a new match fixture
  */
+
+/**
+ * Dispatch targeted notifications strictly to Team A, Team B, and all players belonging to them
+ */
+async function dispatchMatchScheduleNotifications(db, match, { isRescheduled = false, originalDate = '', originalTime = '' } = {}) {
+  if (!db || !db.models || !db.models.Notification) return;
+
+  const teamAId = match.team_a_id;
+  const teamBId = match.team_b_id;
+  const teamAName = match.team_a_name || teamAId;
+  const teamBName = match.team_b_name || teamBId;
+  const date = match.match_date;
+  const time = match.match_time;
+  const venue = match.venue || 'Kamarajar District Stadium';
+  const mapLink = match.venue_maps_url || (venue ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue)}` : '');
+
+  const getPlayersForTeam = async (teamId) => {
+    if (!teamId) return [];
+    const seen = new Set();
+    const result = [];
+
+    // 1. From db.models.Player
+    const players = await db.models.Player.find({
+      $or: [{ team_id: teamId }, { teamId: teamId }]
+    }).lean();
+    for (const p of players) {
+      const key = p.id || p.email;
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        result.push({ id: p.id, email: p.email ? p.email.toLowerCase() : null, name: p.name });
+      }
+    }
+
+    // 2. From db.models.User (role: PLAYER)
+    const users = await db.models.User.find({
+      role: 'PLAYER',
+      $or: [{ 'player_details.team_id': teamId }, { team_id: teamId }]
+    }).lean();
+    for (const u of users) {
+      const key = u.id || u.email;
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        result.push({ id: u.id, email: u.email ? u.email.toLowerCase() : null, name: u.name });
+      }
+    }
+
+    // 3. From db.models.TeamRegistration.players
+    const reg = await db.models.TeamRegistration.findOne({ id: teamId }).lean();
+    if (reg && Array.isArray(reg.players)) {
+      for (let i = 0; i < reg.players.length; i++) {
+        const rp = reg.players[i];
+        const key = rp.email || `${teamId}-reg-${i}`;
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          result.push({ id: rp.id || `${teamId}-p-${i + 1}`, email: rp.email ? rp.email.toLowerCase() : null, name: rp.name });
+        }
+      }
+    }
+
+    return result;
+  };
+
+  const [playersA, playersB] = await Promise.all([
+    getPlayersForTeam(teamAId),
+    getPlayersForTeam(teamBId)
+  ]);
+
+  const timestamp = Date.now();
+  const notifDocs = [];
+  const type = isRescheduled ? 'MATCH_RESCHEDULED' : 'MATCH_SCHEDULED';
+
+  // 1. Notification for Team A
+  notifDocs.push({
+    id: `NOTIF-M-${match.id}-TEAM-A-${timestamp}`,
+    type,
+    recipient_role: 'TEAM',
+    recipient_id: teamAId,
+    team_id: teamAId,
+    team_name: teamAName,
+    title: isRescheduled ? `📅 Fixture Rescheduled vs ${teamBName}` : `🏏 Match Scheduled vs ${teamBName}`,
+    message: isRescheduled
+      ? `Your match vs ${teamBName} has been rescheduled to ${date} at ${time} at ${venue}.`
+      : `Your match vs ${teamBName} has been scheduled on ${date} at ${time} at ${venue}.`,
+    reference_id: match.id,
+    link: mapLink,
+    status: 'UNREAD'
+  });
+
+  // 2. Notification for Players of Team A
+  for (let i = 0; i < playersA.length; i++) {
+    const p = playersA[i];
+    notifDocs.push({
+      id: `NOTIF-M-${match.id}-PA-${i}-${timestamp}`,
+      type,
+      recipient_role: 'PLAYER',
+      recipient_id: p.id,
+      recipient_email: p.email,
+      team_id: teamAId,
+      team_name: teamAName,
+      title: isRescheduled ? `📅 Match Rescheduled vs ${teamBName}` : `🏏 Match Scheduled vs ${teamBName}`,
+      message: isRescheduled
+        ? `Your team ${teamAName} match vs ${teamBName} has been rescheduled to ${date} at ${time} at ${venue}.`
+        : `Your team ${teamAName} is scheduled to play against ${teamBName} on ${date} at ${time} at ${venue}.`,
+      reference_id: match.id,
+      link: mapLink,
+      status: 'UNREAD'
+    });
+  }
+
+  // 3. Notification for Team B
+  notifDocs.push({
+    id: `NOTIF-M-${match.id}-TEAM-B-${timestamp}`,
+    type,
+    recipient_role: 'TEAM',
+    recipient_id: teamBId,
+    team_id: teamBId,
+    team_name: teamBName,
+    title: isRescheduled ? `📅 Fixture Rescheduled vs ${teamAName}` : `🏏 Match Scheduled vs ${teamAName}`,
+    message: isRescheduled
+      ? `Your match vs ${teamAName} has been rescheduled to ${date} at ${time} at ${venue}.`
+      : `Your match vs ${teamAName} has been scheduled on ${date} at ${time} at ${venue}.`,
+    reference_id: match.id,
+    link: mapLink,
+    status: 'UNREAD'
+  });
+
+  // 4. Notification for Players of Team B
+  for (let i = 0; i < playersB.length; i++) {
+    const p = playersB[i];
+    notifDocs.push({
+      id: `NOTIF-M-${match.id}-PB-${i}-${timestamp}`,
+      type,
+      recipient_role: 'PLAYER',
+      recipient_id: p.id,
+      recipient_email: p.email,
+      team_id: teamBId,
+      team_name: teamBName,
+      title: isRescheduled ? `📅 Match Rescheduled vs ${teamAName}` : `🏏 Match Scheduled vs ${teamAName}`,
+      message: isRescheduled
+        ? `Your team ${teamBName} match vs ${teamAName} has been rescheduled to ${date} at ${time} at ${venue}.`
+        : `Your team ${teamBName} is scheduled to play against ${teamAName} on ${date} at ${time} at ${venue}.`,
+      reference_id: match.id,
+      link: mapLink,
+      status: 'UNREAD'
+    });
+  }
+
+  if (notifDocs.length > 0) {
+    await db.models.Notification.insertMany(notifDocs);
+  }
+}
+
 async function scheduleMatch(fixtureData, adminEmail) {
   await db.initDb();
 
@@ -347,55 +499,11 @@ async function scheduleMatch(fixtureData, adminEmail) {
     details: `Match fixture created for ${cleanDate}`
   });
 
-  // Dispatch Notifications to Team A, Team B, registered players & officials
-  if (db.models.Notification) {
-    try {
-      const matchVenueDisplay = venue || 'Kamarajar District Stadium';
-      const mapLink = venue_maps_url || (venue ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue)}` : '');
-      const notifMsg = `Match Fixture Scheduled: ${resolvedTeamAName || team_a_id} vs ${resolvedTeamBName || team_b_id} on ${cleanDate} at ${cleanTime} at ${matchVenueDisplay}. Location: ${mapLink || matchVenueDisplay}`;
-
-      const notifPayloads = [
-        {
-          id: `NOTIF-SCHED-${Date.now()}-A`,
-          type: 'MATCH_SCHEDULED',
-          recipient_role: 'TEAM',
-          recipient_id: team_a_id,
-          title: `🏏 Fixture Scheduled: vs ${resolvedTeamBName || team_b_id}`,
-          message: notifMsg,
-          reference_id: matchId,
-          link: mapLink,
-          status: 'UNREAD'
-        },
-        {
-          id: `NOTIF-SCHED-${Date.now()}-B`,
-          type: 'MATCH_SCHEDULED',
-          recipient_role: 'TEAM',
-          recipient_id: team_b_id,
-          title: `🏏 Fixture Scheduled: vs ${resolvedTeamAName || team_a_id}`,
-          message: notifMsg,
-          reference_id: matchId,
-          link: mapLink,
-          status: 'UNREAD'
-        },
-        {
-          id: `NOTIF-SCHED-${Date.now()}-GEN`,
-          type: 'MATCH_SCHEDULED',
-          recipient_role: 'ALL',
-          recipient_id: null,
-          title: `🏏 New Fixture: ${resolvedTeamAName || team_a_id} vs ${resolvedTeamBName || team_b_id}`,
-          message: `Scheduled on ${cleanDate} at ${cleanTime} (${matchVenueDisplay}). Check fixtures & venue map.`,
-          reference_id: matchId,
-          link: mapLink,
-          status: 'UNREAD'
-        }
-      ];
-
-      for (const np of notifPayloads) {
-        await db.models.Notification.create(np);
-      }
-    } catch (notifErr) {
-      console.warn('Failed to dispatch match schedule notification:', notifErr.message);
-    }
+  // Dispatch targeted Notifications strictly to Team A, Team B, and their squad players
+  try {
+    await dispatchMatchScheduleNotifications(db, match, { isRescheduled: false });
+  } catch (notifErr) {
+    console.warn('Failed to dispatch match schedule notification:', notifErr.message);
   }
 
   return match.toObject();
@@ -707,43 +815,15 @@ async function rescheduleMatch(matchId, { newDate, newTime, reason }, adminEmail
     details: `Rescheduled from ${prevDate} ${prevTime} to ${cleanDate} ${cleanTime}. Reason: ${cleanReason}`
   });
 
-  // Dispatch Notifications to Team A, Team B, Scorer, and Umpires
-  if (db.models.Notification) {
-    const notifs = [
-      {
-        recipient_role: 'TEAM',
-        recipient_id: match.team_a_id,
-        title: '📅 Match Rescheduled',
-        message: `Your fixture vs ${match.team_b_name || match.team_b_id} has been rescheduled to ${cleanDate} at ${cleanTime} at ${match.venue}.`
-      },
-      {
-        recipient_role: 'TEAM',
-        recipient_id: match.team_b_id,
-        title: '📅 Match Rescheduled',
-        message: `Your fixture vs ${match.team_a_name || match.team_a_id} has been rescheduled to ${cleanDate} at ${cleanTime} at ${match.venue}.`
-      },
-      {
-        recipient_role: 'SCORER',
-        recipient_id: match.assigned_scorer_id,
-        title: '📅 Fixture Rescheduled',
-        message: `Match #${match.id} (${match.team_a_name} vs ${match.team_b_name}) has been rescheduled to ${cleanDate} at ${cleanTime}.`
-      }
-    ];
-
-    for (const n of notifs) {
-      try {
-        await db.models.Notification.create({
-          id: `NOTIF-RESCHED-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          type: 'MATCH_RESCHEDULED',
-          recipient_role: n.recipient_role,
-          recipient_id: n.recipient_id,
-          title: n.title,
-          message: n.message,
-          reference_id: match.id,
-          status: 'UNREAD'
-        });
-      } catch (_e) {}
-    }
+  // Dispatch targeted Notifications strictly to Team A, Team B, and their squad players
+  try {
+    await dispatchMatchScheduleNotifications(db, match, {
+      isRescheduled: true,
+      originalDate: prevDate,
+      originalTime: prevTime
+    });
+  } catch (notifErr) {
+    console.warn('Failed to dispatch match reschedule notification:', notifErr.message);
   }
 
   return match.toObject();
@@ -850,6 +930,128 @@ async function getPostponementRequests() {
 /**
  * Cancel a match fixture
  */
+/**
+ * Confirm a match schedule once BOTH teams have submitted their player allocations.
+ */
+async function confirmMatchSchedule(matchId, adminEmail = 'admin@cfvd.org') {
+  await db.initDb();
+
+  const match = await db.models.Match.findOne({ id: matchId });
+  if (!match) throw new Error(`Match with ID '${matchId}' not found.`);
+
+  if (match.status === 'COMPLETED' || match.status === 'CANCELLED') {
+    throw new Error(`Cannot confirm schedule for match with status ${match.status}.`);
+  }
+
+  const teamAAllocated = match.team_a_allocation_status === 'SUBMITTED';
+  const teamBAllocated = match.team_b_allocation_status === 'SUBMITTED';
+
+  if (!teamAAllocated || !teamBAllocated) {
+    const pendingTeams = [];
+    if (!teamAAllocated) pendingTeams.push(match.team_a_name || match.team_a_id);
+    if (!teamBAllocated) pendingTeams.push(match.team_b_name || match.team_b_id);
+    throw new Error(`Cannot confirm match schedule. Player allocation is pending from: ${pendingTeams.join(', ')}.`);
+  }
+
+  match.schedule_confirmation_status = 'CONFIRMED';
+  match.schedule_confirmed_at = new Date();
+  match.schedule_confirmed_by = adminEmail;
+  match.updated_at = new Date();
+  await match.save();
+
+  await addAuditLog({
+    action: 'CONFIRM_MATCH_SCHEDULE',
+    initiated_by: adminEmail,
+    target_user: matchId,
+    result: `Schedule confirmed for match ${matchId}`,
+    details: 'Both teams submitted Playing XI squad allocations. Match schedule officially confirmed.'
+  });
+
+  // Notify Team A, Team B, and all selected players
+  try {
+    const notifs = [
+      {
+        id: `NOTIF-CONFIRM-${Date.now()}-A`,
+        type: 'MATCH_SCHEDULED',
+        recipient_role: 'TEAM',
+        recipient_id: match.team_a_id,
+        team_id: match.team_a_id,
+        team_name: match.team_a_name,
+        title: '✅ Match Schedule Confirmed',
+        message: `Match schedule vs ${match.team_b_name || match.team_b_id} on ${match.match_date} at ${match.match_time} (${match.venue}) has been officially confirmed by Admin.`,
+        reference_id: match.id,
+        status: 'UNREAD'
+      },
+      {
+        id: `NOTIF-CONFIRM-${Date.now()}-B`,
+        type: 'MATCH_SCHEDULED',
+        recipient_role: 'TEAM',
+        recipient_id: match.team_b_id,
+        team_id: match.team_b_id,
+        team_name: match.team_b_name,
+        title: '✅ Match Schedule Confirmed',
+        message: `Match schedule vs ${match.team_a_name || match.team_a_id} on ${match.match_date} at ${match.match_time} (${match.venue}) has been officially confirmed by Admin.`,
+        reference_id: match.id,
+        status: 'UNREAD'
+      }
+    ];
+
+    const selectedPlayerIdsA = Array.isArray(match.team_a_playing_xi) ? match.team_a_playing_xi : [];
+    for (const pid of selectedPlayerIdsA) {
+      notifs.push({
+        id: `NOTIF-CONFIRM-${Date.now()}-PLA-${Math.random().toString(36).substring(2, 7)}`,
+        type: 'MATCH_SCHEDULED',
+        recipient_role: 'PLAYER',
+        recipient_id: pid,
+        team_id: match.team_a_id,
+        team_name: match.team_a_name,
+        title: '✅ Match Schedule Confirmed',
+        message: `Official match fixture vs ${match.team_b_name || match.team_b_id} on ${match.match_date} at ${match.match_time} (${match.venue}) is confirmed!`,
+        reference_id: match.id,
+        status: 'UNREAD'
+      });
+    }
+
+    const selectedPlayerIdsB = Array.isArray(match.team_b_playing_xi) ? match.team_b_playing_xi : [];
+    for (const pid of selectedPlayerIdsB) {
+      notifs.push({
+        id: `NOTIF-CONFIRM-${Date.now()}-PLB-${Math.random().toString(36).substring(2, 7)}`,
+        type: 'MATCH_SCHEDULED',
+        recipient_role: 'PLAYER',
+        recipient_id: pid,
+        team_id: match.team_b_id,
+        team_name: match.team_b_name,
+        title: '✅ Match Schedule Confirmed',
+        message: `Official match fixture vs ${match.team_a_name || match.team_a_id} on ${match.match_date} at ${match.match_time} (${match.venue}) is confirmed!`,
+        reference_id: match.id,
+        status: 'UNREAD'
+      });
+    }
+
+    if (match.assigned_scorer_id) {
+      notifs.push({
+        id: `NOTIF-CONFIRM-${Date.now()}-SCORER`,
+        type: 'MATCH_SCHEDULED',
+        recipient_role: 'SCORER',
+        recipient_id: match.assigned_scorer_id,
+        title: '📋 Match Schedule Confirmed - Ready For Scoring',
+        message: `Admin has officially confirmed the fixture "${match.team_a_name || match.team_a_id}" vs "${match.team_b_name || match.team_b_id}" on ${match.match_date} at ${match.match_time} (${match.venue}). Match is now ready for scoring!`,
+        reference_id: match.id,
+        status: 'UNREAD'
+      });
+    }
+
+    for (const n of notifs) {
+      await db.models.Notification.create(n);
+    }
+  } catch (notifErr) {
+    console.warn('Failed to dispatch schedule confirmation notification:', notifErr.message);
+  }
+
+  return match.toObject();
+}
+
+
 async function cancelMatch(matchId, reason, adminEmail) {
   await db.initDb();
 
@@ -1055,6 +1257,19 @@ async function getMatches() {
   const tournamentMap = {};
   (tournaments || []).forEach(t => { tournamentMap[t.id] = t; });
 
+  const allPlayerIds = new Set();
+  matches.forEach(m => {
+    (m.team_a_playing_xi || []).forEach(id => allPlayerIds.add(id));
+    (m.team_b_playing_xi || []).forEach(id => allPlayerIds.add(id));
+    (m.team_a_substitutes || []).forEach(id => allPlayerIds.add(id));
+    (m.team_b_substitutes || []).forEach(id => allPlayerIds.add(id));
+  });
+  const players = allPlayerIds.size > 0
+    ? await db.models.Player.find({ id: { $in: Array.from(allPlayerIds) } }).lean()
+    : [];
+  const playerMap = {};
+  players.forEach(p => { playerMap[p.id] = p; });
+
   return matches.map(m => {
     let teamAName = m.team_a_name;
     if (!teamAName || teamAName.startsWith('TEAM-VRD-') || teamAName.startsWith('TM-')) {
@@ -1071,6 +1286,40 @@ async function getMatches() {
     const u1 = m.umpire1_name || officialMap[m.umpire1_id]?.name || officialMap[m.umpire1_id]?.full_name || '';
     const u2 = m.umpire2_name || officialMap[m.umpire2_id]?.name || officialMap[m.umpire2_id]?.full_name || '';
 
+    const enrichSquad = (xiIds = [], subsIds = [], lineupArr = []) => {
+      const lineupByPid = {};
+      (lineupArr || []).forEach(l => { if (l && l.playerId) lineupByPid[l.playerId] = l; });
+
+      const xiList = (xiIds || []).map((pid, idx) => {
+        const p = playerMap[pid] || {};
+        const extra = lineupByPid[pid] || {};
+        return {
+          id: pid,
+          name: p.name || extra.name || pid,
+          role: p.role || extra.role || 'Player',
+          jersey_number: p.jersey_number || extra.jerseyNumber || '',
+          batting_order: extra.battingOrder || idx + 1,
+          is_captain: !!extra.isCaptain,
+          is_wicket_keeper: !!(extra.isKeeper || extra.isWicketKeeper || (p.role || '').toLowerCase().includes('keep'))
+        };
+      });
+
+      const subsList = (subsIds || []).map(pid => {
+        const p = playerMap[pid] || {};
+        return {
+          id: pid,
+          name: p.name || pid,
+          role: p.role || 'Substitute',
+          jersey_number: p.jersey_number || ''
+        };
+      });
+
+      return { playingXI: xiList, substitutes: subsList };
+    };
+
+    const squadA = enrichSquad(m.team_a_playing_xi, m.team_a_substitutes, m.team_a_lineup);
+    const squadB = enrichSquad(m.team_b_playing_xi, m.team_b_substitutes, m.team_b_lineup);
+
     return {
       ...m,
       team_a_name: teamAName,
@@ -1080,6 +1329,8 @@ async function getMatches() {
       scorer_name: scorer.name || scorer.full_name || m.assigned_scorer_id || 'Unassigned',
       umpire1_name: u1,
       umpire2_name: u2,
+      team_a_squad_details: squadA,
+      team_b_squad_details: squadB,
       venue_maps_url: m.venue_maps_url || (m.venue ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.venue)}` : ''),
       tournament_display_name: m.tournament_name || tour?.name || 'District Championship'
     };
@@ -1250,6 +1501,7 @@ module.exports = {
   rescheduleMatch,
   reviewUmpirePostponement,
   getPostponementRequests,
+  confirmMatchSchedule,
   cancelMatch,
   deleteMatch,
   initiateAddAdminRequest,

@@ -6,11 +6,12 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView } from 'react-native';
 import PageHeader from '../components/PageHeader';
 import DataTable, { ColumnDef } from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
-import { MatchesIcon, PlusIcon, EditIcon, EyeIcon, CloseIcon } from '../components/Icons';
+import { MatchesIcon, PlusIcon, EditIcon, EyeIcon, CloseIcon, TrashIcon } from '../components/Icons';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { adminApi } from '../services/adminApi';
 import { useAdminLayout } from '../components/AdminLayout';
 import {
@@ -40,10 +41,22 @@ export const MatchesPage: React.FC = () => {
   const [formTime, setFormTime] = useState('09:30 AM');
   const [formOvers, setFormOvers] = useState('20');
 
-  // Edit / Result Modal
+  // Edit Fixture Modal State
   const [activeMatch, setActiveMatch] = useState<any | null>(null);
+  const [editTournamentId, setEditTournamentId] = useState('');
+  const [editTeamAId, setEditTeamAId] = useState('');
+  const [editTeamBId, setEditTeamBId] = useState('');
+  const [editVenue, setEditVenue] = useState('');
+  const [editDate, setEditDate] = useState('');
+  const [editTime, setEditTime] = useState('09:30 AM');
+  const [editOvers, setEditOvers] = useState('20');
   const [editStatus, setEditStatus] = useState('SCHEDULED');
   const [editResult, setEditResult] = useState('');
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
+  // Delete Match State
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Postpone Match Modal
   const [postponeTarget, setPostponeTarget] = useState<any | null>(null);
@@ -56,6 +69,9 @@ export const MatchesPage: React.FC = () => {
   const [rescheduleTime, setRescheduleTime] = useState('09:30 AM');
   const [rescheduleReason, setRescheduleReason] = useState('Rescheduled by admin');
   const [isSubmittingReschedule, setIsSubmittingReschedule] = useState(false);
+
+  // Lineup & Squad Allocation Inspection Modal
+  const [inspectionMatch, setInspectionMatch] = useState<any | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -108,6 +124,9 @@ export const MatchesPage: React.FC = () => {
   const dateTimeValidation = validateScheduleDateTime(formDate, formTime);
   const isScheduleValid = dateTimeValidation.isValid;
 
+  const editDateTimeValidation = validateScheduleDateTime(editDate, editTime);
+  const isEditScheduleValid = editStatus !== 'SCHEDULED' || editDateTimeValidation.isValid;
+
   const handleOpenSchedule = () => {
     const defaultTeamA = teams.length > 0 ? teams[0].id : '';
     const defaultTeamB = teams.length > 1 ? teams[1].id : defaultTeamA;
@@ -121,12 +140,6 @@ export const MatchesPage: React.FC = () => {
     setFormTime(defaultSlot.time);
     setFormOvers('20');
     setIsScheduleMode(true);
-  };
-
-  const handleOpenEdit = (m: any) => {
-    setActiveMatch(m);
-    setEditStatus(m.status || 'SCHEDULED');
-    setEditResult(m.result || '');
   };
 
   const handleSaveSchedule = async () => {
@@ -163,18 +176,82 @@ export const MatchesPage: React.FC = () => {
     }
   };
 
+  const handleOpenEdit = (m: any) => {
+    setActiveMatch(m);
+    setEditTournamentId(m.tournament_id || m.tournamentId || (tournaments.length > 0 ? tournaments[0].id : 'TOUR-2026'));
+    setEditTeamAId(m.team_a_id || m.teamAId || (teams.length > 0 ? teams[0].id : ''));
+    setEditTeamBId(m.team_b_id || m.teamBId || (teams.length > 1 ? teams[1].id : ''));
+    setEditVenue(m.venue || (venues.length > 0 ? (venues[0].name || venues[0]) : 'Kamarajar District Stadium, Virudhunagar'));
+    setEditDate(m.match_date || m.date || '');
+    setEditTime(m.match_time || m.time || '09:30 AM');
+    setEditOvers(String(m.overs_per_side || m.overs || 20));
+    setEditStatus(m.status || 'SCHEDULED');
+    setEditResult(m.result_summary || m.result || '');
+  };
+
   const handleSaveEdit = async () => {
     if (!activeMatch) return;
+    if (!editTeamAId || !editTeamBId) {
+      showToast('Please select both competing teams.', 'error');
+      return;
+    }
+    if (editTeamAId === editTeamBId) {
+      showToast('Team A and Team B cannot be the same club.', 'error');
+      return;
+    }
+
+    if (editStatus === 'SCHEDULED' && editDate && editTime) {
+      const val = validateScheduleDateTime(editDate, editTime);
+      if (!val.isValid) {
+        showToast(val.error || 'Please provide a valid match date and time.', 'error');
+        return;
+      }
+    }
+
+    setIsSubmittingEdit(true);
     try {
       await adminApi.updateMatch(activeMatch.id, {
+        tournament_id: editTournamentId,
+        tournamentId: editTournamentId,
+        team_a_id: editTeamAId,
+        teamAId: editTeamAId,
+        team_b_id: editTeamBId,
+        teamBId: editTeamBId,
+        venue: editVenue,
+        venueName: editVenue,
+        match_date: editDate,
+        date: editDate,
+        match_time: editTime,
+        time: editTime,
+        overs_per_side: parseInt(editOvers, 10) || 20,
+        overs: parseInt(editOvers, 10) || 20,
         status: editStatus,
-        resultText: editResult
+        resultText: editResult,
+        result_summary: editResult
       });
-      showToast('Match updated successfully.', 'success');
+      showToast('Match fixture updated successfully.', 'success');
       setActiveMatch(null);
       loadData();
     } catch (e: any) {
       showToast(`Update error: ${e.message}`, 'error');
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await adminApi.deleteMatch(deleteTarget.id);
+      showToast(`Match fixture successfully deleted.`, 'success');
+      setDeleteTarget(null);
+      if (activeMatch?.id === deleteTarget.id) setActiveMatch(null);
+      loadData();
+    } catch (e: any) {
+      showToast(`Delete error: ${e.message || 'Failed to delete match'}`, 'error');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -225,18 +302,47 @@ export const MatchesPage: React.FC = () => {
   const columns: ColumnDef<any>[] = [
     {
       header: 'Fixture',
-      accessor: (m) => (
-        <View style={styles.fixtureCell}>
-          <View style={styles.teamsRow}>
-            <Text style={styles.teamBold}>{m.teamAName || 'Team A'}</Text>
-            <Text style={styles.vsBadge}>vs</Text>
-            <Text style={styles.teamBold}>{m.teamBName || 'Team B'}</Text>
+      accessor: (m) => {
+        const teamAName = m.teamAName || m.team_a_name || 'Team A';
+        const teamBName = m.teamBName || m.team_b_name || 'Team B';
+        const isScheduled = (m.status || '').toUpperCase() === 'SCHEDULED';
+        const isTeamASubmitted = m.team_a_allocation_status === 'SUBMITTED';
+        const isTeamBSubmitted = m.team_b_allocation_status === 'SUBMITTED';
+        const isConfirmed = m.schedule_confirmation_status === 'CONFIRMED';
+
+        return (
+          <View style={styles.fixtureCell}>
+            <View style={styles.teamsRow}>
+              <Text style={styles.teamBold}>{teamAName}</Text>
+              <Text style={styles.vsBadge}>vs</Text>
+              <Text style={styles.teamBold}>{teamBName}</Text>
+            </View>
+            <Text style={styles.tournamentMeta}>
+              {m.tournamentName || m.tournament_display_name || 'League Match'} • {m.overs || 20} Overs
+            </Text>
+            {isScheduled && !isConfirmed && (
+              <View style={{ marginTop: 6, gap: 3, backgroundColor: '#F8FAFC', padding: 6, borderRadius: 6, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 10, color: '#334155', fontWeight: '600' }} numberOfLines={1}>
+                    {teamAName}:
+                  </Text>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: isTeamASubmitted ? '#15803D' : '#DC2626' }}>
+                    {isTeamASubmitted ? '✅ 11 Selected' : '❌ Not Selected'}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 10, color: '#334155', fontWeight: '600' }} numberOfLines={1}>
+                    {teamBName}:
+                  </Text>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: isTeamBSubmitted ? '#15803D' : '#DC2626' }}>
+                    {isTeamBSubmitted ? '✅ 11 Selected' : '❌ Not Selected'}
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
-          <Text style={styles.tournamentMeta}>
-            {m.tournamentName || 'League Match'} • {m.overs || 20} Overs
-          </Text>
-        </View>
-      )
+        );
+      }
     },
     {
       header: 'Venue & Ground',
@@ -279,6 +385,48 @@ export const MatchesPage: React.FC = () => {
               </Text>
             </View>
           )}
+          {((m.status || '').toUpperCase() === 'SCHEDULED') && (
+            <View style={{ marginTop: 4 }}>
+              {m.schedule_confirmation_status === 'CONFIRMED' ? (
+                <View style={{ backgroundColor: '#DCFCE7', borderColor: '#86EFAC', borderWidth: 1, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, alignSelf: 'flex-start' }}>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: '#166534' }}>✓ Schedule Confirmed</Text>
+                  <Text style={{ fontSize: 9, color: '#15803D', marginTop: 1 }}>Released to Scorer</Text>
+                </View>
+              ) : (
+                <View style={{
+                  backgroundColor: (m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#ECFDF5' : '#FEF2F2',
+                  borderColor: (m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#86EFAC' : '#FECACA',
+                  borderWidth: 1,
+                  paddingHorizontal: 6,
+                  paddingVertical: 3,
+                  borderRadius: 4,
+                  alignSelf: 'flex-start'
+                }}>
+                  {(m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? (
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#059669' }}>
+                      ✓ Both Teams Ready to Confirm
+                    </Text>
+                  ) : (
+                    <View>
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: '#DC2626' }}>
+                        ⚠️ Pending Player Selection:
+                      </Text>
+                      {m.team_a_allocation_status !== 'SUBMITTED' && (
+                        <Text style={{ fontSize: 9, fontWeight: '700', color: '#B91C1C' }}>
+                          • {m.teamAName || m.team_a_name || 'Team A'} (Pending)
+                        </Text>
+                      )}
+                      {m.team_b_allocation_status !== 'SUBMITTED' && (
+                        <Text style={{ fontSize: 9, fontWeight: '700', color: '#B91C1C' }}>
+                          • {m.teamBName || m.team_b_name || 'Team B'} (Pending)
+                        </Text>
+                      )}
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+          )}
         </View>
       )
     },
@@ -294,9 +442,17 @@ export const MatchesPage: React.FC = () => {
             <TouchableOpacity
               style={styles.actionBtn}
               onPress={() => handleOpenEdit(m)}
-              accessibilityLabel="Update Score/Status"
+              accessibilityLabel="Edit Match Details"
             >
               <EditIcon size={15} color="#0284C7" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionBtn, { borderColor: '#FECACA', backgroundColor: '#FEF2F2' }]}
+              onPress={() => setDeleteTarget(m)}
+              accessibilityLabel="Delete Match"
+            >
+              <TrashIcon size={14} color="#DC2626" />
             </TouchableOpacity>
 
             {isRequestPending && (
@@ -335,16 +491,77 @@ export const MatchesPage: React.FC = () => {
             )}
 
             {isScheduled && (
-              <TouchableOpacity
-                style={[styles.actionBtn, { borderColor: '#F59E0B', backgroundColor: '#FEF3C7', paddingHorizontal: 6 }]}
-                onPress={() => {
-                  setPostponeTarget(m);
-                  setPostponeReason('Inclement weather / ground condition unplayable');
-                }}
-                accessibilityLabel="Postpone Match"
-              >
-                <Text style={{ fontSize: 11, fontWeight: '700', color: '#B45309' }}>⏸️ Postpone</Text>
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity
+                  style={[styles.actionBtn, { borderColor: '#6366F1', backgroundColor: '#EEF2FF', paddingHorizontal: 6 }]}
+                  onPress={() => setInspectionMatch(m)}
+                  accessibilityLabel="Inspect Lineups"
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#4F46E5' }}>👁️ Lineups</Text>
+                </TouchableOpacity>
+
+                {m.schedule_confirmation_status === 'CONFIRMED' ? (
+                  <View style={[styles.actionBtn, { borderColor: '#86EFAC', backgroundColor: '#DCFCE7', paddingHorizontal: 6 }]}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#166534' }}>✓ Confirmed</Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={[
+                      styles.actionBtn,
+                      {
+                        borderColor: (m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#10B981' : '#CBD5E1',
+                        backgroundColor: (m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#ECFDF5' : '#F8FAFC',
+                        paddingHorizontal: 6
+                      }
+                    ]}
+                    onPress={async () => {
+                      const bothAllocated = m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED';
+                      if (!bothAllocated) {
+                        const pendingTeams = [];
+                        if (m.team_a_allocation_status !== 'SUBMITTED') pendingTeams.push(m.teamAName || m.team_a_name || 'Team A');
+                        if (m.team_b_allocation_status !== 'SUBMITTED') pendingTeams.push(m.teamBName || m.team_b_name || 'Team B');
+                        showToast(`Cannot confirm yet. Waiting for both teams to submit squad allocations (11 Playing + 2 Substitutes). Pending: ${pendingTeams.join(', ')}`, 'error');
+                        return;
+                      }
+
+                      try {
+                        await adminApi.confirmMatchSchedule(m.id);
+                        showToast(`Schedule officially confirmed for ${m.teamAName || 'Team A'} vs ${m.teamBName || 'Team B'}!`, 'success');
+                        loadData();
+                      } catch (err: any) {
+                        showToast(err.message || 'Failed to confirm match schedule', 'error');
+                      }
+                    }}
+                    accessibilityLabel="Confirm Match Schedule"
+                  >
+                    <Text style={{
+                      fontSize: 11,
+                      fontWeight: '800',
+                      color: (m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#059669' : '#DC2626'
+                    }}>
+                      {(() => {
+                        const isA = m.team_a_allocation_status === 'SUBMITTED';
+                        const isB = m.team_b_allocation_status === 'SUBMITTED';
+                        if (isA && isB) return '✓ Confirm Schedule';
+                        if (!isA && !isB) return '⏳ Both Pending';
+                        if (!isA) return `⏳ Pending: ${(m.teamAName || m.team_a_name || 'Team A').split(' ')[0]}`;
+                        return `⏳ Pending: ${(m.teamBName || m.team_b_name || 'Team B').split(' ')[0]}`;
+                      })()}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  style={[styles.actionBtn, { borderColor: '#F59E0B', backgroundColor: '#FEF3C7', paddingHorizontal: 6 }]}
+                  onPress={() => {
+                    setPostponeTarget(m);
+                    setPostponeReason('Inclement weather / ground condition unplayable');
+                  }}
+                  accessibilityLabel="Postpone Match"
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#B45309' }}>⏸️ Postpone</Text>
+                </TouchableOpacity>
+              </>
             )}
 
             {isPostponed && (
@@ -635,27 +852,25 @@ export const MatchesPage: React.FC = () => {
       {activeMatch && (
         <Modal transparent animationType="fade" visible>
           <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
+            <View style={[styles.modalCard, { maxWidth: 640, width: '95%', maxHeight: '90%' }]}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Update Match Details</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalTitle}>Edit Match Fixture</Text>
+                  <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                    Match ID: {activeMatch.id}
+                  </Text>
+                </View>
                 <TouchableOpacity onPress={() => setActiveMatch(null)}>
                   <CloseIcon size={18} color="#64748B" />
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.modalBody}>
-                <View style={styles.fixtureSummary}>
-                  <Text style={styles.fixtureSummaryTitle}>
-                    {activeMatch.teamAName} vs {activeMatch.teamBName}
-                  </Text>
-                  <Text style={styles.fixtureSummarySub}>{activeMatch.venue}</Text>
-                </View>
-
+              <ScrollView style={[styles.modalBody, { maxHeight: 500 }]}>
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Match Status</Text>
+                  <Text style={styles.fieldLabel}>Tournament</Text>
                   <select
-                    value={editStatus}
-                    onChange={(e) => setEditStatus(e.target.value)}
+                    value={editTournamentId}
+                    onChange={(e) => setEditTournamentId(e.target.value)}
                     style={{
                       padding: '9px 12px',
                       fontSize: 13,
@@ -667,34 +882,192 @@ export const MatchesPage: React.FC = () => {
                       outline: 'none'
                     }}
                   >
-                    <option value="SCHEDULED">Scheduled</option>
-                    <option value="LIVE">Live</option>
-                    <option value="COMPLETED">Completed</option>
-                    <option value="ABANDONED">Abandoned</option>
+                    {tournaments.map((t) => (
+                      <option key={t.id || t.name} value={t.id || t.name}>
+                        {t.name}
+                      </option>
+                    ))}
                   </select>
                 </View>
 
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Official Result / Note</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={editResult}
-                    onChangeText={setEditResult}
-                    placeholder="e.g. Aruppukottai won by 24 runs"
-                    placeholderTextColor="#94A3B8"
-                  />
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={[styles.fieldGroup, { flex: 1 }]}>
+                    <Text style={styles.fieldLabel}>Team A (Home) *</Text>
+                    <select
+                      value={editTeamAId}
+                      onChange={(e) => setEditTeamAId(e.target.value)}
+                      style={{
+                        padding: '9px 12px',
+                        fontSize: 13,
+                        borderRadius: 6,
+                        border: '1px solid #CBD5E1',
+                        backgroundColor: '#FFFFFF',
+                        color: '#1E293B',
+                        width: '100%',
+                        outline: 'none'
+                      }}
+                    >
+                      {teams.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </View>
+
+                  <View style={[styles.fieldGroup, { flex: 1 }]}>
+                    <Text style={styles.fieldLabel}>Team B (Away) *</Text>
+                    <select
+                      value={editTeamBId}
+                      onChange={(e) => setEditTeamBId(e.target.value)}
+                      style={{
+                        padding: '9px 12px',
+                        fontSize: 13,
+                        borderRadius: 6,
+                        border: '1px solid #CBD5E1',
+                        backgroundColor: '#FFFFFF',
+                        color: '#1E293B',
+                        width: '100%',
+                        outline: 'none'
+                      }}
+                    >
+                      {teams.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </View>
                 </View>
-              </View>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Match Venue / Ground *</Text>
+                  <select
+                    value={editVenue}
+                    onChange={(e) => setEditVenue(e.target.value)}
+                    style={{
+                      padding: '9px 12px',
+                      fontSize: 13,
+                      borderRadius: 6,
+                      border: '1px solid #CBD5E1',
+                      backgroundColor: '#FFFFFF',
+                      color: '#1E293B',
+                      width: '100%',
+                      outline: 'none'
+                    }}
+                  >
+                    {venues.map((v) => {
+                      const vName = v.name || v;
+                      return (
+                        <option key={vName} value={vName}>
+                          {vName}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={[styles.fieldGroup, { flex: 1 }]}>
+                    <Text style={styles.fieldLabel}>Match Date (YYYY-MM-DD) *</Text>
+                    <TextInput
+                      style={[styles.input, editDateTimeValidation.dateError ? { borderColor: '#EF4444', borderWidth: 1.5 } : null]}
+                      value={editDate}
+                      onChangeText={setEditDate}
+                      placeholder="YYYY-MM-DD"
+                      placeholderTextColor="#94A3B8"
+                    />
+                    {editDateTimeValidation.dateError ? (
+                      <Text style={styles.validationErrorText}>⚠️ {editDateTimeValidation.dateError}</Text>
+                    ) : null}
+                  </View>
+
+                  <View style={[styles.fieldGroup, { flex: 1 }]}>
+                    <Text style={styles.fieldLabel}>Start Time *</Text>
+                    <TextInput
+                      style={[styles.input, editDateTimeValidation.timeError ? { borderColor: '#EF4444', borderWidth: 1.5 } : null]}
+                      value={editTime}
+                      onChangeText={setEditTime}
+                      placeholder="e.g. 09:30 AM"
+                      placeholderTextColor="#94A3B8"
+                    />
+                    {editDateTimeValidation.timeError ? (
+                      <Text style={styles.validationErrorText}>⚠️ {editDateTimeValidation.timeError}</Text>
+                    ) : null}
+                  </View>
+
+                  <View style={[styles.fieldGroup, { flex: 1 }]}>
+                    <Text style={styles.fieldLabel}>Overs</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editOvers}
+                      onChangeText={setEditOvers}
+                      keyboardType="numeric"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={[styles.fieldGroup, { flex: 1 }]}>
+                    <Text style={styles.fieldLabel}>Match Status</Text>
+                    <select
+                      value={editStatus}
+                      onChange={(e) => setEditStatus(e.target.value)}
+                      style={{
+                        padding: '9px 12px',
+                        fontSize: 13,
+                        borderRadius: 6,
+                        border: '1px solid #CBD5E1',
+                        backgroundColor: '#FFFFFF',
+                        color: '#1E293B',
+                        width: '100%',
+                        outline: 'none'
+                      }}
+                    >
+                      <option value="SCHEDULED">Scheduled</option>
+                      <option value="LIVE">Live</option>
+                      <option value="COMPLETED">Completed</option>
+                      <option value="ABANDONED">Abandoned</option>
+                      <option value="CANCELLED">Cancelled</option>
+                    </select>
+                  </View>
+
+                  <View style={[styles.fieldGroup, { flex: 2 }]}>
+                    <Text style={styles.fieldLabel}>Official Result / Note</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editResult}
+                      onChangeText={setEditResult}
+                      placeholder="e.g. Virudhunagar Spartans won by 14 runs"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+                </View>
+              </ScrollView>
 
               <View style={styles.modalFooter}>
+                <TouchableOpacity
+                  style={[styles.cancelBtn, { borderColor: '#FECACA', backgroundColor: '#FEF2F2', marginRight: 'auto' }]}
+                  onPress={() => setDeleteTarget(activeMatch)}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#DC2626' }}>🗑️ Delete Match</Text>
+                </TouchableOpacity>
+
                 <TouchableOpacity
                   style={styles.cancelBtn}
                   onPress={() => setActiveMatch(null)}
                 >
                   <Text style={styles.cancelBtnText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.saveBtn} onPress={handleSaveEdit}>
-                  <Text style={styles.saveBtnText}>Update Fixture</Text>
+                <TouchableOpacity
+                  style={[styles.saveBtn, (!isEditScheduleValid || isSubmittingEdit) && styles.saveBtnDisabled]}
+                  onPress={handleSaveEdit}
+                  disabled={!isEditScheduleValid || isSubmittingEdit}
+                >
+                  <Text style={styles.saveBtnText}>
+                    {isSubmittingEdit ? 'Saving...' : 'Save Changes'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -836,6 +1209,296 @@ export const MatchesPage: React.FC = () => {
             </View>
           </View>
         </Modal>
+      )}
+
+      {/* Squad Lineups Inspection Modal */}
+      {inspectionMatch && (
+        <Modal transparent animationType="fade" visible>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalCard, { maxWidth: 840, width: '95%', maxHeight: '90%' }]}>
+              <View style={styles.modalHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalTitle}>📋 Official Squad Lineups & Allocations</Text>
+                  <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                    {inspectionMatch.tournament_display_name || inspectionMatch.tournament_name || 'Tournament'} • {inspectionMatch.match_date || inspectionMatch.date} at {inspectionMatch.match_time || inspectionMatch.time}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => setInspectionMatch(null)} style={{ padding: 4 }}>
+                  <Text style={{ fontSize: 20, color: '#64748B', fontWeight: 'bold' }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={[styles.modalBody, { maxHeight: 520 }]}>
+                {/* Status banner */}
+                <View style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  backgroundColor: inspectionMatch.schedule_confirmation_status === 'CONFIRMED' ? '#ECFDF5' : '#FEF3C7',
+                  borderWidth: 1,
+                  borderColor: inspectionMatch.schedule_confirmation_status === 'CONFIRMED' ? '#86EFAC' : '#FDE68A',
+                  padding: 12,
+                  borderRadius: 8,
+                  marginBottom: 16
+                }}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={{
+                      fontWeight: '800',
+                      fontSize: 13,
+                      color: inspectionMatch.schedule_confirmation_status === 'CONFIRMED' ? '#166534' : '#92400E'
+                    }}>
+                      {inspectionMatch.schedule_confirmation_status === 'CONFIRMED'
+                        ? '✅ Schedule Officially Confirmed — Visible to Scorers'
+                        : '⏳ Pending Schedule Confirmation — Hidden from Scorers'}
+                    </Text>
+                    <Text style={{
+                      fontSize: 12,
+                      color: inspectionMatch.schedule_confirmation_status === 'CONFIRMED' ? '#15803D' : '#B45309',
+                      marginTop: 2
+                    }}>
+                      {inspectionMatch.schedule_confirmation_status === 'CONFIRMED'
+                        ? `Confirmed on ${inspectionMatch.schedule_confirmed_at ? new Date(inspectionMatch.schedule_confirmed_at).toLocaleDateString() : 'Official Record'}. Scorers have access to start toss and score.`
+                        : 'Both teams must submit 11 Playing XI + substitutes before you can confirm schedule and release this fixture to Scorer.'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Specific Pending Warning Alert */}
+                {inspectionMatch.schedule_confirmation_status !== 'CONFIRMED' && (
+                  (inspectionMatch.team_a_allocation_status !== 'SUBMITTED' || inspectionMatch.team_b_allocation_status !== 'SUBMITTED') && (
+                    <View style={{
+                      backgroundColor: '#FEF2F2',
+                      borderColor: '#F87171',
+                      borderWidth: 1,
+                      padding: 12,
+                      borderRadius: 8,
+                      marginBottom: 16
+                    }}>
+                      <Text style={{ fontWeight: '800', fontSize: 13, color: '#B91C1C' }}>
+                        ⚠️ Attention: Team Squad Allocation Pending
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#991B1B', marginTop: 3 }}>
+                        The following team(s) have NOT yet submitted their 11 Playing XI players:
+                      </Text>
+                      <View style={{ marginTop: 6, gap: 4 }}>
+                        {inspectionMatch.team_a_allocation_status !== 'SUBMITTED' && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Text style={{ fontSize: 12, fontWeight: '800', color: '#DC2626' }}>
+                              ❌ {inspectionMatch.team_a_name || inspectionMatch.teamAName || 'Team A'}
+                            </Text>
+                            <Text style={{ fontSize: 11, color: '#B91C1C', marginLeft: 6 }}>
+                              — Coach hasn't selected players yet.
+                            </Text>
+                          </View>
+                        )}
+                        {inspectionMatch.team_b_allocation_status !== 'SUBMITTED' && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Text style={{ fontSize: 12, fontWeight: '800', color: '#DC2626' }}>
+                              ❌ {inspectionMatch.team_b_name || inspectionMatch.teamBName || 'Team B'}
+                            </Text>
+                            <Text style={{ fontSize: 11, color: '#B91C1C', marginLeft: 6 }}>
+                              — Coach hasn't selected players yet.
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  )
+                )}
+
+                {/* Two Teams Side-by-Side or Stacked */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
+                  {/* Team A */}
+                  <View style={{ flex: 1, minWidth: 280, backgroundColor: '#F8FAFC', borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', padding: 12 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8 }}>
+                      <Text style={{ fontWeight: '800', fontSize: 14, color: '#0F172A' }}>
+                        {inspectionMatch.team_a_name || inspectionMatch.teamAName || 'Team A'}
+                      </Text>
+                      <View style={{
+                        paddingHorizontal: 8,
+                        paddingVertical: 2,
+                        borderRadius: 12,
+                        backgroundColor: inspectionMatch.team_a_allocation_status === 'SUBMITTED' ? '#DCFCE7' : '#FEF3C7',
+                        borderWidth: 1,
+                        borderColor: inspectionMatch.team_a_allocation_status === 'SUBMITTED' ? '#86EFAC' : '#FDE68A'
+                      }}>
+                        <Text style={{
+                          fontSize: 11,
+                          fontWeight: '800',
+                          color: inspectionMatch.team_a_allocation_status === 'SUBMITTED' ? '#166534' : '#B45309'
+                        }}>
+                          {inspectionMatch.team_a_allocation_status === 'SUBMITTED' ? '✓ SUBMITTED' : '⏳ PENDING'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Playing XI */}
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#0369A1', marginBottom: 6 }}>
+                      PLAYING XI ({(inspectionMatch.team_a_squad_details?.playingXI || []).length}/11)
+                    </Text>
+                    {(inspectionMatch.team_a_squad_details?.playingXI && inspectionMatch.team_a_squad_details.playingXI.length > 0) ? (
+                      inspectionMatch.team_a_squad_details.playingXI.map((pl: any, idx: number) => (
+                        <View key={`ta-xi-${pl.id || idx}`} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                          <Text style={{ width: 22, fontSize: 11, fontWeight: '700', color: '#64748B' }}>{pl.batting_order || idx + 1}.</Text>
+                          <Text style={{ flex: 1, fontSize: 12, fontWeight: '700', color: '#1E293B' }}>{pl.name}</Text>
+                          {pl.is_captain && (
+                            <View style={{ backgroundColor: '#FEF08A', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, marginRight: 4 }}>
+                              <Text style={{ fontSize: 9, fontWeight: '900', color: '#854D0E' }}>C</Text>
+                            </View>
+                          )}
+                          {pl.is_wicket_keeper && (
+                            <View style={{ backgroundColor: '#BAE6FD', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, marginRight: 4 }}>
+                              <Text style={{ fontSize: 9, fontWeight: '900', color: '#0369A1' }}>WK</Text>
+                            </View>
+                          )}
+                          <Text style={{ fontSize: 10, color: '#64748B' }}>{pl.role}</Text>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={{ fontSize: 12, color: '#94A3B8', fontStyle: 'italic', marginVertical: 8 }}>
+                        No allocation submitted by team coach yet.
+                      </Text>
+                    )}
+
+                    {/* Substitutes */}
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748B', marginTop: 12, marginBottom: 6 }}>
+                      SUBSTITUTES ({(inspectionMatch.team_a_squad_details?.substitutes || []).length})
+                    </Text>
+                    {(inspectionMatch.team_a_squad_details?.substitutes && inspectionMatch.team_a_squad_details.substitutes.length > 0) ? (
+                      inspectionMatch.team_a_squad_details.substitutes.map((pl: any, idx: number) => (
+                        <View key={`ta-sub-${pl.id || idx}`} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 3 }}>
+                          <Text style={{ width: 22, fontSize: 11, color: '#94A3B8' }}>•</Text>
+                          <Text style={{ flex: 1, fontSize: 12, color: '#334155' }}>{pl.name}</Text>
+                          <Text style={{ fontSize: 10, color: '#94A3B8' }}>{pl.role || 'Sub'}</Text>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic' }}>None selected</Text>
+                    )}
+                  </View>
+
+                  {/* Team B */}
+                  <View style={{ flex: 1, minWidth: 280, backgroundColor: '#F8FAFC', borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', padding: 12 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', paddingBottom: 8 }}>
+                      <Text style={{ fontWeight: '800', fontSize: 14, color: '#0F172A' }}>
+                        {inspectionMatch.team_b_name || inspectionMatch.teamBName || 'Team B'}
+                      </Text>
+                      <View style={{
+                        paddingHorizontal: 8,
+                        paddingVertical: 2,
+                        borderRadius: 12,
+                        backgroundColor: inspectionMatch.team_b_allocation_status === 'SUBMITTED' ? '#DCFCE7' : '#FEF3C7',
+                        borderWidth: 1,
+                        borderColor: inspectionMatch.team_b_allocation_status === 'SUBMITTED' ? '#86EFAC' : '#FDE68A'
+                      }}>
+                        <Text style={{
+                          fontSize: 11,
+                          fontWeight: '800',
+                          color: inspectionMatch.team_b_allocation_status === 'SUBMITTED' ? '#166534' : '#B45309'
+                        }}>
+                          {inspectionMatch.team_b_allocation_status === 'SUBMITTED' ? '✓ SUBMITTED' : '⏳ PENDING'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Playing XI */}
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#0369A1', marginBottom: 6 }}>
+                      PLAYING XI ({(inspectionMatch.team_b_squad_details?.playingXI || []).length}/11)
+                    </Text>
+                    {(inspectionMatch.team_b_squad_details?.playingXI && inspectionMatch.team_b_squad_details.playingXI.length > 0) ? (
+                      inspectionMatch.team_b_squad_details.playingXI.map((pl: any, idx: number) => (
+                        <View key={`tb-xi-${pl.id || idx}`} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                          <Text style={{ width: 22, fontSize: 11, fontWeight: '700', color: '#64748B' }}>{pl.batting_order || idx + 1}.</Text>
+                          <Text style={{ flex: 1, fontSize: 12, fontWeight: '700', color: '#1E293B' }}>{pl.name}</Text>
+                          {pl.is_captain && (
+                            <View style={{ backgroundColor: '#FEF08A', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, marginRight: 4 }}>
+                              <Text style={{ fontSize: 9, fontWeight: '900', color: '#854D0E' }}>C</Text>
+                            </View>
+                          )}
+                          {pl.is_wicket_keeper && (
+                            <View style={{ backgroundColor: '#BAE6FD', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, marginRight: 4 }}>
+                              <Text style={{ fontSize: 9, fontWeight: '900', color: '#0369A1' }}>WK</Text>
+                            </View>
+                          )}
+                          <Text style={{ fontSize: 10, color: '#64748B' }}>{pl.role}</Text>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={{ fontSize: 12, color: '#94A3B8', fontStyle: 'italic', marginVertical: 8 }}>
+                        No allocation submitted by team coach yet.
+                      </Text>
+                    )}
+
+                    {/* Substitutes */}
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748B', marginTop: 12, marginBottom: 6 }}>
+                      SUBSTITUTES ({(inspectionMatch.team_b_squad_details?.substitutes || []).length})
+                    </Text>
+                    {(inspectionMatch.team_b_squad_details?.substitutes && inspectionMatch.team_b_squad_details.substitutes.length > 0) ? (
+                      inspectionMatch.team_b_squad_details.substitutes.map((pl: any, idx: number) => (
+                        <View key={`tb-sub-${pl.id || idx}`} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 3 }}>
+                          <Text style={{ width: 22, fontSize: 11, color: '#94A3B8' }}>•</Text>
+                          <Text style={{ flex: 1, fontSize: 12, color: '#334155' }}>{pl.name}</Text>
+                          <Text style={{ fontSize: 10, color: '#94A3B8' }}>{pl.role || 'Sub'}</Text>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic' }}>None selected</Text>
+                    )}
+                  </View>
+                </View>
+              </ScrollView>
+
+              <View style={styles.modalFooter}>
+                <TouchableOpacity
+                  style={styles.cancelBtn}
+                  onPress={() => setInspectionMatch(null)}
+                >
+                  <Text style={styles.cancelBtnText}>Close</Text>
+                </TouchableOpacity>
+
+                {inspectionMatch.schedule_confirmation_status !== 'CONFIRMED' && (
+                  <TouchableOpacity
+                    style={[
+                      styles.saveBtn,
+                      {
+                        backgroundColor: (inspectionMatch.team_a_allocation_status === 'SUBMITTED' && inspectionMatch.team_b_allocation_status === 'SUBMITTED') ? '#10B981' : '#94A3B8'
+                      }
+                    ]}
+                    disabled={inspectionMatch.team_a_allocation_status !== 'SUBMITTED' || inspectionMatch.team_b_allocation_status !== 'SUBMITTED'}
+                    onPress={async () => {
+                      try {
+                        await adminApi.confirmMatchSchedule(inspectionMatch.id);
+                        showToast('Schedule officially confirmed! Match is now unlocked and visible to official Scorers.', 'success');
+                        setInspectionMatch(null);
+                        loadData();
+                      } catch (err: any) {
+                        showToast(err.message || 'Failed to confirm match schedule', 'error');
+                      }
+                    }}
+                  >
+                    <Text style={styles.saveBtnText}>
+                      ✓ Confirm Schedule & Release to Scorer
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Delete Match Confirmation Dialog */}
+      {deleteTarget && (
+        <ConfirmDialog
+          visible={!!deleteTarget}
+          title="Delete Match Fixture"
+          message={`Are you sure you want to permanently delete match fixture "${deleteTarget.teamAName || deleteTarget.team_a_name || 'Team A'} vs ${deleteTarget.teamBName || deleteTarget.team_b_name || 'Team B'}" scheduled on ${deleteTarget.match_date || deleteTarget.date || 'TBD'}? All associated records and schedules will be permanently removed.`}
+          confirmLabel={isDeleting ? 'Deleting...' : 'Delete Match'}
+          cancelLabel="Cancel"
+          variant="danger"
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
       )}
     </View>
   );

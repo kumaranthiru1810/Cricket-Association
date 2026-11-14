@@ -253,10 +253,13 @@ class AdminDashboardController {
         tournament: m.tournament_id === 'TOUR-2026' ? 'VPL 2026' : (m.tournament_id || 'District League'),
         teamA: teamMap[m.team_a_id] || m.team_a_id || 'Team A',
         teamB: teamMap[m.team_b_id] || m.team_b_id || 'Team B',
-        venue: m.venue_name || 'District Ground',
-        date: m.scheduled_date || 'TBD',
-        time: m.scheduled_time || '10:00 AM',
+        venue: m.venue_name || m.venue || 'District Ground',
+        date: m.match_date || m.scheduled_date || 'TBD',
+        time: m.match_time || m.scheduled_time || '10:00 AM',
         status: m.status,
+        schedule_confirmation_status: m.schedule_confirmation_status || 'PENDING',
+        team_a_allocation_status: m.team_a_allocation_status || 'PENDING',
+        team_b_allocation_status: m.team_b_allocation_status || 'PENDING',
         result: m.result_text || (m.status === 'LIVE' ? 'In Progress' : 'Scheduled')
       }));
 

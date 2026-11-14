@@ -7,20 +7,24 @@
 const db = require('../config/db');
 
 class MatchService {
-  async getMatchSetup(matchId) {
+  async getMatchSetup(matchId, user = null) {
     await db.initDb();
     const scorerService = require('./scorerService');
 
     const match = await db.models.Match.findOne({ id: matchId }).lean();
     if (!match) throw { status: 404, message: `Match '${matchId}' not found in MongoDB database.` };
 
+    if (match.status === 'SCHEDULED' && match.schedule_confirmation_status !== 'CONFIRMED' && user?.role !== 'ADMIN') {
+      throw { status: 403, message: 'Match schedule is pending confirmation by Admin after team allocations.' };
+    }
+
     const teamMap = await scorerService.getTeamMap();
     const teamA = teamMap[match.team_a_id] || { id: match.team_a_id, name: match.team_a_id };
     const teamB = teamMap[match.team_b_id] || { id: match.team_b_id, name: match.team_b_id };
 
     const [teamAPlayers, teamBPlayers] = await Promise.all([
-      scorerService.getSquadForTeam(match.team_a_id),
-      scorerService.getSquadForTeam(match.team_b_id)
+      scorerService.getSquadForTeam(match.team_a_id, match),
+      scorerService.getSquadForTeam(match.team_b_id, match)
     ]);
 
     return {
@@ -32,17 +36,27 @@ class MatchService {
       teamB,
       teamAPlayers,
       teamBPlayers,
+      teamAPlayingXI: match.team_a_playing_xi || [],
+      teamBPlayingXI: match.team_b_playing_xi || [],
+      teamASubstitutes: match.team_a_substitutes || [],
+      teamBSubstitutes: match.team_b_substitutes || [],
+      teamAAllocationStatus: match.team_a_allocation_status || 'PENDING',
+      teamBAllocationStatus: match.team_b_allocation_status || 'PENDING',
       tossWinner: match.toss_winner_id,
       tossDecision: match.toss_decision,
       status: match.status
     };
   }
 
-  async startMatch(matchId, { tossWinner, tossDecision, teamAPlayingXI, teamBPlayingXI }) {
+  async startMatch(matchId, { tossWinner, tossDecision, teamAPlayingXI, teamBPlayingXI }, user = null) {
     await db.initDb();
 
     const match = await db.models.Match.findOne({ id: matchId });
     if (!match) throw { status: 404, message: `Match '${matchId}' not found.` };
+
+    if (match.schedule_confirmation_status !== 'CONFIRMED' && user?.role !== 'ADMIN') {
+      throw { status: 403, message: 'Cannot start match: Schedule confirmation is pending Admin approval.' };
+    }
 
     const winnerTeamId = tossWinner || match.team_a_id;
     const decision = tossDecision || 'BAT';
@@ -58,6 +72,18 @@ class MatchService {
     match.current_innings_number = 1;
     match.result_summary = '';
     match.target_runs = undefined;
+
+    // If team has not allocated, use provided playing XI; if already allocated by coach, preserve coach's official 11!
+    if (teamAPlayingXI && Array.isArray(teamAPlayingXI) && teamAPlayingXI.length > 0) {
+      if (!match.team_a_playing_xi || match.team_a_playing_xi.length === 0) {
+        match.team_a_playing_xi = teamAPlayingXI;
+      }
+    }
+    if (teamBPlayingXI && Array.isArray(teamBPlayingXI) && teamBPlayingXI.length > 0) {
+      if (!match.team_b_playing_xi || match.team_b_playing_xi.length === 0) {
+        match.team_b_playing_xi = teamBPlayingXI;
+      }
+    }
     await match.save();
 
     // Clean up any stale subsequent innings & deliveries from previous runs

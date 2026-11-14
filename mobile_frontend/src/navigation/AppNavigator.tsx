@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { View, StyleSheet, Platform, Alert } from 'react-native';
+import { router, useLocalSearchParams, usePathname } from 'expo-router';
 import { getCurrentUser, getAuthToken } from '../services/api';
 import ErrorBoundary from '../components/common/ErrorBoundary';
 
@@ -136,7 +137,129 @@ const AppNavigationContext = createContext<AppNavigationContextType>({
   goBack: () => {}
 });
 
-export const useAppNavigation = () => useContext(AppNavigationContext);
+export const useAppNavigation = () => {
+  const context = useContext(AppNavigationContext);
+  const localParams = useLocalSearchParams();
+  const currentPath = usePathname() || '/';
+
+  const resolveScreenFromPath = (path: string): AppScreenName => {
+    if (!path || path === '/') return 'Home';
+    if (path.includes('login') && path.includes('admin')) return 'AdminLogin';
+    if (path.includes('login')) return 'Login';
+    if (path.includes('register')) return 'Registration';
+    if (path.includes('admin')) return 'Admin';
+    if (path.includes('team') || path.includes('coach')) return 'Team';
+    if (path.includes('player')) return 'Player';
+    if (path.includes('umpire')) return 'Umpire';
+    if (path.includes('scorer')) return 'Scorer';
+    if (path.includes('scorecard')) return 'Scorecard';
+    return 'Home';
+  };
+
+  const navigate = useCallback((screenName: AppScreenName, screenParams?: any) => {
+    try {
+      switch (screenName) {
+        case 'Home':
+          router.push('/');
+          break;
+        case 'Login':
+          router.push({ pathname: '/login', params: screenParams });
+          break;
+        case 'AdminLogin':
+          router.push({ pathname: '/admin-login', params: screenParams });
+          break;
+        case 'Registration':
+          if (screenParams?.initialRole) {
+            const role = String(screenParams.initialRole).toLowerCase();
+            router.push({ pathname: `/register/${role}` as any, params: screenParams });
+          } else {
+            router.push({ pathname: '/register', params: screenParams });
+          }
+          break;
+        case 'Scorecard':
+          if (screenParams?.matchId) {
+            router.push({ pathname: `/scorecard/${screenParams.matchId}` as any, params: screenParams });
+          } else {
+            router.push({ pathname: '/scorecard', params: screenParams });
+          }
+          break;
+        case 'Team':
+        case 'Coach':
+          if (screenParams?.tab || screenParams?.initialTab) {
+            const tab = String(screenParams.tab || screenParams.initialTab).toLowerCase();
+            router.push({ pathname: `/team/${tab}` as any, params: screenParams });
+          } else {
+            router.push({ pathname: '/team', params: screenParams });
+          }
+          break;
+        case 'Player':
+          if (screenParams?.tab || screenParams?.initialTab) {
+            const tab = String(screenParams.tab || screenParams.initialTab).toLowerCase();
+            router.push({ pathname: `/player/${tab}` as any, params: screenParams });
+          } else {
+            router.push({ pathname: '/player', params: screenParams });
+          }
+          break;
+        case 'Admin':
+          if (screenParams?.tab || screenParams?.activeTab) {
+            const tab = String(screenParams.tab || screenParams.activeTab).toLowerCase();
+            router.push({ pathname: `/admin/${tab}` as any, params: screenParams });
+          } else {
+            router.push({ pathname: '/admin', params: screenParams });
+          }
+          break;
+        case 'Umpire':
+          if (screenParams?.tab || screenParams?.initialTab) {
+            const tab = String(screenParams.tab || screenParams.initialTab).toLowerCase();
+            router.push({ pathname: `/umpire/${tab}` as any, params: screenParams });
+          } else {
+            router.push({ pathname: '/umpire', params: screenParams });
+          }
+          break;
+        case 'Scorer':
+          if (screenParams?.initialScreen || screenParams?.scorerScreen) {
+            const scr = String(screenParams.initialScreen || screenParams.scorerScreen).toLowerCase();
+            router.push({ pathname: `/scorer/${scr}` as any, params: screenParams });
+          } else {
+            router.push({ pathname: '/scorer', params: screenParams });
+          }
+          break;
+        default:
+          router.push('/');
+      }
+      return;
+    } catch (e) {
+      if (context && context.navigate) {
+        context.navigate(screenName, screenParams);
+      }
+    }
+  }, [context]);
+
+  const goBack = useCallback(() => {
+    try {
+      if (router.canGoBack()) {
+        router.back();
+        return;
+      }
+      router.replace('/');
+      return;
+    } catch (e) {
+      if (context && context.goBack) {
+        context.goBack();
+      }
+    }
+  }, [context]);
+
+  const currentScreen = resolveScreenFromPath(currentPath) || context?.currentScreen || 'Home';
+  const effectiveParams = localParams && Object.keys(localParams).length > 0 ? localParams : context?.params;
+
+  return {
+    currentScreen,
+    navigate,
+    params: effectiveParams,
+    goBack
+  };
+};
 
 interface AppNavigatorProps {
   children?: React.ReactNode;
@@ -321,26 +444,25 @@ export default function AppNavigator({
     const access = checkScreenAccess(targetScreen, user);
 
     if (!access.allowed) {
-      showAccessAlert(access.message || 'Access Denied.');
-
       if (access.reason === 'UNAUTHENTICATED') {
         const isTargetAdmin = targetScreen === 'Admin';
         const targetLoginScreen: AppScreenName = isTargetAdmin ? 'AdminLogin' : 'Login';
-        // Redirect to Login (or AdminLogin if accessing Admin)
+        // Redirect to Login (or AdminLogin if accessing Admin) directly without alert popup
         setParams({ initialRole: access.loginRole, attemptedScreen: targetScreen, ...screenParams });
         setScreenHistory((prev) => [...prev.filter((s) => s !== targetLoginScreen), targetLoginScreen]);
         updateBrowserUrl(targetLoginScreen);
         return;
-      } else {
-        // Role mismatch: do not allow entering forbidden screen!
-        const userPortal = getUserDashboardScreen(user);
-        updateBrowserUrl(userPortal);
-        if (currentScreen !== userPortal && userPortal !== 'Home') {
-          setParams(null);
-          setScreenHistory((prev) => [...prev.filter((s) => s !== userPortal), userPortal]);
-        }
-        return;
       }
+
+      // Role mismatch: show alert and bounce to user's permitted portal
+      showAccessAlert(access.message || 'Access Denied.');
+      const userPortal = getUserDashboardScreen(user);
+      updateBrowserUrl(userPortal);
+      if (currentScreen !== userPortal && userPortal !== 'Home') {
+        setParams(null);
+        setScreenHistory((prev) => [...prev.filter((s) => s !== userPortal), userPortal]);
+      }
+      return;
     }
 
     setParams(screenParams || null);
@@ -387,18 +509,19 @@ export default function AppNavigator({
         const access = checkScreenAccess(requested, user);
 
         if (!access.allowed) {
-          showAccessAlert(access.message || 'Access Denied.');
           if (access.reason === 'UNAUTHENTICATED') {
             const isTargetAdmin = requested === 'Admin';
             const targetLoginScreen: AppScreenName = isTargetAdmin ? 'AdminLogin' : 'Login';
             setParams({ initialRole: access.loginRole, attemptedScreen: requested });
             setScreenHistory([targetLoginScreen]);
             updateBrowserUrl(targetLoginScreen);
-          } else {
-            const fallback = getUserDashboardScreen(user);
-            setScreenHistory([fallback]);
-            updateBrowserUrl(fallback);
+            return;
           }
+
+          showAccessAlert(access.message || 'Access Denied.');
+          const fallback = getUserDashboardScreen(user);
+          setScreenHistory([fallback]);
+          updateBrowserUrl(fallback);
           return;
         }
 

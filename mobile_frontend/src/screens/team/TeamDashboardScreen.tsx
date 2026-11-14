@@ -50,6 +50,38 @@ import {
 import TeamSidebar, { TeamTabType as TabType, getTeamNavItems } from './TeamSidebar';
 import MatchHighlightsBanner from '../../components/common/MatchHighlightsBanner';
 
+// ── Registration-Style Player & Bowling Options ──────────────────────────
+const SQUAD_PLAYER_ROLES = ['Batsman', 'Bowler', 'All-Rounder', 'Wicket Keeper', 'Captain', 'Vice Captain'];
+const SQUAD_BATTING_STYLES = ['Right-Handed Batsman', 'Left-Handed Batsman'];
+const SQUAD_BOWLING_ARMS = ['Right-arm', 'Left-arm'];
+const SQUAD_BOWLING_CATEGORIES = ['Fast Bowler', 'Medium Pacer', 'Spin Bowler'];
+const SQUAD_BOWLING_ACTIONS_MAP: Record<string, Record<string, string[]>> = {
+  'Right-arm': {
+    'Fast Bowler': ['Right-Arm Fast', 'Right-Arm Fast-Medium'],
+    'Medium Pacer': ['Right-Arm Medium Pace', 'Right-Arm Medium-Fast'],
+    'Spin Bowler': ['Off Spinner (Off Break)', 'Leg Spinner (Leg Break)']
+  },
+  'Left-arm': {
+    'Fast Bowler': ['Left-Arm Fast', 'Left-Arm Fast-Medium'],
+    'Medium Pacer': ['Left-Arm Medium Pace', 'Left-Arm Medium-Fast'],
+    'Spin Bowler': ['Left-Arm Orthodox (Finger Spin)', 'Left-Arm Chinaman (Wrist Spin)']
+  }
+};
+const SQUAD_ALL_BOWLING_STYLES = [
+  'None',
+  'Right-Arm Fast',
+  'Right-Arm Fast-Medium',
+  'Right-Arm Medium Pace',
+  'Right-Arm Medium-Fast',
+  'Off Spinner (Off Break)',
+  'Leg Spinner (Leg Break)',
+  'Left-Arm Fast',
+  'Left-Arm Fast-Medium',
+  'Left-Arm Medium Pace',
+  'Left-Arm Orthodox (Finger Spin)',
+  'Left-Arm Chinaman (Wrist Spin)'
+];
+
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
 
 const safeTeamName = (teamObjOrName: any, fallback = ''): string => {
@@ -157,6 +189,52 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
   const [editViceCaptain, setEditViceCaptain] = useState<string>('');
   const [isSavingProfile, setIsSavingProfile] = useState<boolean>(false);
   const [profileFeedback, setProfileFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // Player Add/Edit Modal States (Registration Style)
+  const [addPlayerModalVisible, setAddPlayerModalVisible] = useState<boolean>(false);
+  const [editPlayerModalVisible, setEditPlayerModalVisible] = useState<boolean>(false);
+  const [editingPlayer, setEditingPlayer] = useState<any | null>(null);
+  const [playerForm, setPlayerForm] = useState<{
+    name: string;
+    email: string;
+    role: string;
+    jerseyNumber: string;
+    battingStyle: string;
+    bowlingArm: string;
+    bowlingCategory: string;
+    bowlingStyle: string;
+    mobile: string;
+  }>({
+    name: '',
+    email: '',
+    role: 'Batsman',
+    jerseyNumber: '',
+    battingStyle: 'Right-Handed Batsman',
+    bowlingArm: 'Right-arm',
+    bowlingCategory: 'Fast Bowler',
+    bowlingStyle: 'None',
+    mobile: ''
+  });
+  const [pickerModalState, setPickerModalState] = useState<{
+    visible: boolean;
+    title: string;
+    options: string[];
+    selectedValue: string;
+    onSelect: (val: string) => void;
+  } | null>(null);
+  const [isSavingPlayer, setIsSavingPlayer] = useState<boolean>(false);
+  const [playerFormFeedback, setPlayerFormFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // Match Squad & Playing XI Allocation States
+  const [selectedMatchForAllocation, setSelectedMatchForAllocation] = useState<any | null>(null);
+  const [allocatedPlayingXI, setAllocatedPlayingXI] = useState<string[]>([]);
+  const [allocatedSubstitutes, setAllocatedSubstitutes] = useState<string[]>([]);
+  const [allocatedCaptainId, setAllocatedCaptainId] = useState<string>('');
+  const [allocatedKeeperId, setAllocatedKeeperId] = useState<string>('');
+  const [isSubmittingAllocation, setIsSubmittingAllocation] = useState<boolean>(false);
+  const [allocationFeedback, setAllocationFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [allocationFilterRole, setAllocationFilterRole] = useState<string>('ALL');
+  const [allocationSearch, setAllocationSearch] = useState<string>('');
 
   // Load All Team Data from MongoDB
   const loadTeamData = async () => {
@@ -484,6 +562,11 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
     });
   }, [matches]);
 
+  // Allocation pending count
+  const allocationPendingMatches = useMemo(() => {
+    return upcomingMatches.filter(m => m.myAllocationStatus !== 'SUBMITTED');
+  }, [upcomingMatches]);
+
   // Postponed matches involving this team
   const postponedMatches = useMemo(() => {
     return matches.filter(m => {
@@ -518,6 +601,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
       case 'team': return '🛡️ Official Club & Team Registration';
       case 'squad': return '👥 Official 15-Member Squad Roster';
       case 'tournaments': return '🏆 Tournament & Championship Directory';
+      case 'allocation': return '📋 Match Squad & Playing XI Allocation';
       case 'schedule': return '📅 Match Fixtures & Official Schedule';
       case 'matches': return '🏏 Match Results & Live Encounters';
       case 'postponed': return '⏸️ Postponed Matches';
@@ -535,6 +619,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
       case 'team': return `Official certification and administrative records for Team ID: ${teamId}`;
       case 'squad': return `Verified 15-member player lineup registered with the District Cricket Association`;
       case 'tournaments': return `Register your team for district championships and monitor Apex Council approval status`;
+      case 'allocation': return `Select and lock your 11 Playing XI players and substitutes before match toss`;
       case 'schedule': return `Upcoming association fixtures, ground venues, and reporting times`;
       case 'matches': return `Filter by LIVE, SCHEDULED, POSTPONED, and COMPLETED league encounters`;
       case 'postponed': return `Official fixtures involving ${teamName} that have been postponed or are awaiting rescheduling`;
@@ -543,6 +628,566 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
       case 'notifications': return `Official association communications, bulletins, and administrative advisories`;
       case 'profile': return `Manage permitted coach contact information, home ground, and captaincy`;
       default: return '';
+    }
+  };
+
+  // ── Player Add/Edit Handlers (Registration-Style Dynamic) ──────────────
+  const handleRoleChange = (newRole: string) => {
+    setPlayerForm((prev) => {
+      let arm = prev.bowlingArm || 'Right-arm';
+      let cat = prev.bowlingCategory || 'Fast Bowler';
+      let style = prev.bowlingStyle;
+
+      if (newRole === 'Bowler') {
+        cat = 'Fast Bowler';
+        style = SQUAD_BOWLING_ACTIONS_MAP[arm]?.[cat]?.[0] || 'Right-Arm Fast';
+      } else if (newRole === 'All-Rounder') {
+        cat = 'Medium Pacer';
+        style = SQUAD_BOWLING_ACTIONS_MAP[arm]?.[cat]?.[0] || 'Right-Arm Medium Pace';
+      } else {
+        style = 'None';
+      }
+
+      return {
+        ...prev,
+        role: newRole,
+        bowlingArm: arm,
+        bowlingCategory: cat,
+        bowlingStyle: style
+      };
+    });
+  };
+
+  const handleBowlingArmChange = (newArm: string) => {
+    setPlayerForm((prev) => {
+      const validOpts = SQUAD_BOWLING_ACTIONS_MAP[newArm]?.[prev.bowlingCategory] || ['Right-Arm Fast'];
+      const style = validOpts.includes(prev.bowlingStyle) ? prev.bowlingStyle : validOpts[0];
+      return {
+        ...prev,
+        bowlingArm: newArm,
+        bowlingStyle: style
+      };
+    });
+  };
+
+  const handleBowlingCategoryChange = (newCat: string) => {
+    setPlayerForm((prev) => {
+      const validOpts = SQUAD_BOWLING_ACTIONS_MAP[prev.bowlingArm]?.[newCat] || ['Right-Arm Fast'];
+      const style = validOpts.includes(prev.bowlingStyle) ? prev.bowlingStyle : validOpts[0];
+      return {
+        ...prev,
+        bowlingCategory: newCat,
+        bowlingStyle: style
+      };
+    });
+  };
+
+  const openAddPlayerModal = () => {
+    setPlayerForm({
+      name: '',
+      email: '',
+      role: 'Batsman',
+      jerseyNumber: '',
+      battingStyle: 'Right-Handed Batsman',
+      bowlingArm: 'Right-arm',
+      bowlingCategory: 'Fast Bowler',
+      bowlingStyle: 'None',
+      mobile: ''
+    });
+    setPlayerFormFeedback(null);
+    setAddPlayerModalVisible(true);
+  };
+
+  const openEditPlayerModal = (player: any) => {
+    setEditingPlayer(player);
+    const r = player.role || 'Batsman';
+    const batting = player.battingStyle || player.batting || player.batting_style || 'Right-Handed Batsman';
+    const bowling = player.bowlingStyle || player.bowling || player.bowling_style || 'None';
+
+    let arm = 'Right-arm';
+    let cat = 'Medium Pacer';
+    if (String(bowling).toLowerCase().includes('left')) arm = 'Left-arm';
+    if (String(bowling).toLowerCase().includes('spin') || String(bowling).toLowerCase().includes('break')) {
+      cat = 'Spin Bowler';
+    } else if (String(bowling).toLowerCase().includes('fast')) {
+      cat = 'Fast Bowler';
+    }
+
+    setPlayerForm({
+      name: player.name || '',
+      email: player.email || '',
+      role: r,
+      jerseyNumber: String(player.jerseyNumber || player.jersey || player.jersey_number || ''),
+      battingStyle: batting,
+      bowlingArm: arm,
+      bowlingCategory: cat,
+      bowlingStyle: bowling,
+      mobile: player.mobile || player.phone || ''
+    });
+    setPlayerFormFeedback(null);
+    setEditPlayerModalVisible(true);
+  };
+
+  const handleSaveNewPlayer = async () => {
+    if (!playerForm.name.trim()) {
+      setPlayerFormFeedback({ message: 'Player name is required.', type: 'error' });
+      return;
+    }
+    if (!playerForm.email.trim()) {
+      setPlayerFormFeedback({ message: 'Player email is required.', type: 'error' });
+      return;
+    }
+    setIsSavingPlayer(true);
+    setPlayerFormFeedback(null);
+    try {
+      const finalBowling = (playerForm.role === 'Bowler' || playerForm.role === 'All-Rounder')
+        ? playerForm.bowlingStyle
+        : (playerForm.bowlingStyle || 'None');
+
+      await TeamApi.addPlayer({
+        name: playerForm.name.trim(),
+        email: playerForm.email.trim(),
+        role: playerForm.role,
+        jerseyNumber: playerForm.jerseyNumber ? Number(playerForm.jerseyNumber) : undefined,
+        battingStyle: playerForm.battingStyle,
+        bowlingStyle: finalBowling,
+        mobile: playerForm.mobile
+      });
+      setPlayerFormFeedback({ message: 'Player added successfully!', type: 'success' });
+      const squadRes = await TeamApi.getSquad();
+      if (squadRes && squadRes.squad) setSquad(squadRes.squad);
+      else if (Array.isArray(squadRes)) setSquad(squadRes);
+      setTimeout(() => setAddPlayerModalVisible(false), 1000);
+    } catch (err: any) {
+      setPlayerFormFeedback({ message: err.message || 'Failed to add player.', type: 'error' });
+    } finally {
+      setIsSavingPlayer(false);
+    }
+  };
+
+  const handleUpdatePlayer = async () => {
+    if (!editingPlayer) return;
+    if (!playerForm.name.trim()) {
+      setPlayerFormFeedback({ message: 'Player name is required.', type: 'error' });
+      return;
+    }
+    setIsSavingPlayer(true);
+    setPlayerFormFeedback(null);
+    try {
+      const playerId = editingPlayer.id || String(editingPlayer._id);
+      const finalBowling = (playerForm.role === 'Bowler' || playerForm.role === 'All-Rounder')
+        ? playerForm.bowlingStyle
+        : (playerForm.bowlingStyle || 'None');
+
+      await TeamApi.updatePlayer(playerId, {
+        name: playerForm.name.trim(),
+        email: playerForm.email.trim(),
+        role: playerForm.role,
+        jerseyNumber: playerForm.jerseyNumber ? Number(playerForm.jerseyNumber) : undefined,
+        battingStyle: playerForm.battingStyle,
+        bowlingStyle: finalBowling,
+        mobile: playerForm.mobile
+      });
+      setPlayerFormFeedback({ message: 'Player updated successfully!', type: 'success' });
+      const squadRes = await TeamApi.getSquad();
+      if (squadRes && squadRes.squad) setSquad(squadRes.squad);
+      else if (Array.isArray(squadRes)) setSquad(squadRes);
+      setTimeout(() => setEditPlayerModalVisible(false), 1000);
+    } catch (err: any) {
+      setPlayerFormFeedback({ message: err.message || 'Failed to update player.', type: 'error' });
+    } finally {
+      setIsSavingPlayer(false);
+    }
+  };
+
+  const handleDeletePlayer = async (player?: any) => {
+    const target = player || editingPlayer;
+    if (!target) return;
+    const playerId = target.id || String(target._id);
+    const playerName = target.name || 'this player';
+    
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && !window.confirm(`Are you sure you want to remove "${playerName}" from the squad?`)) {
+        return;
+      }
+    }
+
+    setIsSavingPlayer(true);
+    try {
+      await TeamApi.deletePlayer(playerId);
+      const squadRes = await TeamApi.getSquad();
+      if (squadRes && squadRes.squad) setSquad(squadRes.squad);
+      else if (Array.isArray(squadRes)) setSquad(squadRes);
+      setEditPlayerModalVisible(false);
+    } catch (err: any) {
+      if (setPlayerFormFeedback) {
+        setPlayerFormFeedback({ message: err.message || 'Failed to delete player.', type: 'error' });
+      } else {
+        Alert.alert('Error', err.message || 'Failed to delete player.');
+      }
+    } finally {
+      setIsSavingPlayer(false);
+    }
+  };
+
+  // ── Registration-Style Form Select Field (Web & Mobile Hybrid) ─────────
+  const FormSelectField = ({
+    label,
+    value,
+    options,
+    onSelect,
+    required,
+    placeholder = 'Select...'
+  }: {
+    label: string;
+    value: string;
+    options: string[];
+    onSelect: (val: string) => void;
+    required?: boolean;
+    placeholder?: string;
+  }) => {
+    if (Platform.OS === 'web') {
+      return (
+        <View style={{ marginTop: 12, marginBottom: 4 }}>
+          <Text style={styles.playerFormLabel}>
+            {label} {required && <Text style={{ color: '#ef4444' }}>*</Text>}
+          </Text>
+          <View style={styles.selectWrapperWeb}>
+            {React.createElement(
+              'select',
+              {
+                value: value || '',
+                onChange: (e: any) => onSelect(e.target.value),
+                style: {
+                  width: '100%',
+                  backgroundColor: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: 8,
+                  padding: '11px 14px',
+                  paddingRight: '36px',
+                  fontSize: 13,
+                  color: value ? '#0f172a' : '#64748b',
+                  outline: 'none',
+                  cursor: 'pointer',
+                  appearance: 'none',
+                  WebkitAppearance: 'none',
+                  fontFamily: 'inherit',
+                  fontWeight: '500'
+                }
+              },
+              React.createElement('option', { value: '', disabled: true }, placeholder),
+              options.map((opt) =>
+                React.createElement('option', { key: opt, value: opt, style: { color: '#0f172a' } }, opt)
+              )
+            )}
+            <View style={styles.selectChevronWeb} pointerEvents="none">
+              <Text style={{ color: '#64748b', fontSize: 13, fontWeight: 'bold' }}>▾</Text>
+            </View>
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <View style={{ marginTop: 12, marginBottom: 4 }}>
+        <Text style={styles.playerFormLabel}>
+          {label} {required && <Text style={{ color: '#ef4444' }}>*</Text>}
+        </Text>
+        <TouchableOpacity
+          style={styles.dropdownSelectBox}
+          activeOpacity={0.7}
+          onPress={() =>
+            setPickerModalState({
+              visible: true,
+              title: `Select ${label.replace(' *', '')}`,
+              options,
+              selectedValue: value,
+              onSelect
+            })
+          }
+        >
+          <Text style={[styles.dropdownSelectText, !value && { color: '#94a3b8' }]} numberOfLines={1}>
+            {value || placeholder}
+          </Text>
+          <Text style={styles.dropdownSelectChevron}>▾</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  const renderPlayerFormFields = () => {
+    const isBowlerOrAllRounder = playerForm.role === 'Bowler' || playerForm.role === 'All-Rounder';
+    const validBowlingActions = SQUAD_BOWLING_ACTIONS_MAP[playerForm.bowlingArm]?.[playerForm.bowlingCategory] || [
+      'Right-Arm Fast'
+    ];
+
+    return (
+      <View>
+        {/* Full Name */}
+        <Text style={styles.playerFormLabel}>Full Name <Text style={{ color: '#ef4444' }}>*</Text></Text>
+        <TextInput
+          style={styles.playerFormInput}
+          placeholder="e.g. Ravi Kumar"
+          placeholderTextColor="#94a3b8"
+          value={playerForm.name}
+          onChangeText={v => setPlayerForm(f => ({ ...f, name: v }))}
+        />
+
+        {/* Email */}
+        <Text style={styles.playerFormLabel}>Email Address <Text style={{ color: '#ef4444' }}>*</Text></Text>
+        <TextInput
+          style={styles.playerFormInput}
+          placeholder="e.g. ravi@email.com"
+          placeholderTextColor="#94a3b8"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          value={playerForm.email}
+          onChangeText={v => setPlayerForm(f => ({ ...f, email: v }))}
+        />
+
+        {/* Role Select */}
+        <FormSelectField
+          label="Playing Role"
+          required
+          value={playerForm.role}
+          options={SQUAD_PLAYER_ROLES}
+          onSelect={handleRoleChange}
+        />
+
+        {/* Jersey Number */}
+        <Text style={styles.playerFormLabel}>Jersey Number</Text>
+        <TextInput
+          style={styles.playerFormInput}
+          placeholder="e.g. 7"
+          placeholderTextColor="#94a3b8"
+          keyboardType="numeric"
+          value={playerForm.jerseyNumber}
+          onChangeText={v => setPlayerForm(f => ({ ...f, jerseyNumber: v }))}
+        />
+
+        {/* Batting Style Select */}
+        <FormSelectField
+          label="Batting Style"
+          required
+          value={playerForm.battingStyle}
+          options={SQUAD_BATTING_STYLES}
+          onSelect={v => setPlayerForm(f => ({ ...f, battingStyle: v }))}
+        />
+
+        {/* Dynamic Bowling Fields like Registration */}
+        {isBowlerOrAllRounder ? (
+          <View style={styles.dynamicBowlingBox}>
+            <Text style={styles.dynamicBowlingTitle}>⚡ Bowling Specialization</Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <FormSelectField
+                  label="Bowling Arm"
+                  value={playerForm.bowlingArm}
+                  options={SQUAD_BOWLING_ARMS}
+                  onSelect={handleBowlingArmChange}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <FormSelectField
+                  label="Bowling Type"
+                  value={playerForm.bowlingCategory}
+                  options={SQUAD_BOWLING_CATEGORIES}
+                  onSelect={handleBowlingCategoryChange}
+                />
+              </View>
+            </View>
+            <FormSelectField
+              label="Bowling Action / Sub-Type"
+              value={playerForm.bowlingStyle}
+              options={validBowlingActions}
+              onSelect={v => setPlayerForm(f => ({ ...f, bowlingStyle: v }))}
+            />
+          </View>
+        ) : (
+          <FormSelectField
+            label="Bowling Style (Optional)"
+            value={playerForm.bowlingStyle}
+            options={SQUAD_ALL_BOWLING_STYLES}
+            onSelect={v => setPlayerForm(f => ({ ...f, bowlingStyle: v }))}
+          />
+        )}
+
+        {/* Mobile Number */}
+        <Text style={styles.playerFormLabel}>Mobile Number</Text>
+        <TextInput
+          style={styles.playerFormInput}
+          placeholder="e.g. 9876543210"
+          placeholderTextColor="#94a3b8"
+          keyboardType="phone-pad"
+          value={playerForm.mobile}
+          onChangeText={v => setPlayerForm(f => ({ ...f, mobile: v }))}
+        />
+      </View>
+    );
+  };
+
+  // ── Playing XI & Match Allocation Handlers ───────────────────────────
+  const handleSelectMatchForAllocation = (match: any) => {
+    setSelectedMatchForAllocation(match);
+    setAllocationFeedback(null);
+
+    const existingXI: string[] = Array.isArray(match.myPlayingXI) ? [...match.myPlayingXI] : [];
+    const existingSubs: string[] = Array.isArray(match.mySubstitutes) ? [...match.mySubstitutes] : [];
+    const lineup: any[] = Array.isArray(match.myLineup) ? match.myLineup : [];
+
+    setAllocatedPlayingXI(existingXI);
+    setAllocatedSubstitutes(existingSubs);
+
+    const lineupCap = lineup.find((l: any) => l.isCaptain || l.role === 'CAPTAIN')?.playerId;
+    const squadCap = squad.find(p => p.name === profile?.captain)?.id || (existingXI[0] || '');
+    setAllocatedCaptainId(lineupCap || squadCap || '');
+
+    const lineupWk = lineup.find((l: any) => l.isKeeper || l.role === 'WICKET_KEEPER')?.playerId;
+    const squadWk = squad.find(p => (p.role || '').toLowerCase().includes('keep'))?.id || '';
+    setAllocatedKeeperId(lineupWk || squadWk || '');
+  };
+
+  useEffect(() => {
+    if (!selectedMatchForAllocation && upcomingMatches.length > 0) {
+      handleSelectMatchForAllocation(upcomingMatches[0]);
+    } else if (selectedMatchForAllocation) {
+      const fresh = matches.find(m => m.id === selectedMatchForAllocation.id);
+      if (fresh) setSelectedMatchForAllocation(fresh);
+    }
+  }, [matches, upcomingMatches]);
+
+  const togglePlayingXI = (playerId: string) => {
+    setAllocationFeedback(null);
+    if (allocatedPlayingXI.includes(playerId)) {
+      setAllocatedPlayingXI(prev => prev.filter(id => id !== playerId));
+      if (allocatedCaptainId === playerId) setAllocatedCaptainId('');
+      if (allocatedKeeperId === playerId) setAllocatedKeeperId('');
+    } else {
+      if (allocatedPlayingXI.length >= 11) {
+        setAllocationFeedback({
+          message: 'Playing XI already has 11 players. Remove a player first before adding another.',
+          type: 'error'
+        });
+        return;
+      }
+      setAllocatedSubstitutes(prev => prev.filter(id => id !== playerId));
+      setAllocatedPlayingXI(prev => [...prev, playerId]);
+    }
+  };
+
+  const toggleSubstitute = (playerId: string) => {
+    setAllocationFeedback(null);
+    if (allocatedSubstitutes.includes(playerId)) {
+      setAllocatedSubstitutes(prev => prev.filter(id => id !== playerId));
+    } else {
+      if (allocatedSubstitutes.length >= 5) {
+        setAllocationFeedback({
+          message: 'Maximum 5 substitute players allowed.',
+          type: 'error'
+        });
+        return;
+      }
+      setAllocatedPlayingXI(prev => prev.filter(id => id !== playerId));
+      if (allocatedCaptainId === playerId) setAllocatedCaptainId('');
+      if (allocatedKeeperId === playerId) setAllocatedKeeperId('');
+      setAllocatedSubstitutes(prev => [...prev, playerId]);
+    }
+  };
+
+  const autoSelectFirst11 = () => {
+    if (squad.length < 11) {
+      setAllocationFeedback({
+        message: `Your squad only has ${squad.length} players. At least 11 players are needed to auto-fill Playing XI.`,
+        type: 'error'
+      });
+      return;
+    }
+    const xi = squad.slice(0, 11).map(p => p.id);
+    const subs = squad.slice(11, 13).map(p => p.id);
+    setAllocatedPlayingXI(xi);
+    setAllocatedSubstitutes(subs);
+
+    const cap = squad.find(p => p.name === profile?.captain)?.id || xi[0];
+    setAllocatedCaptainId(cap);
+
+    const wk = squad.find(p => (p.role || '').toLowerCase().includes('keep'))?.id || xi[1] || '';
+    setAllocatedKeeperId(wk);
+
+    setAllocationFeedback({
+      message: '⚡ Auto-selected first 11 players for Playing XI and 2 substitutes. Review and adjust as needed.',
+      type: 'success'
+    });
+  };
+
+  const resetAllocation = () => {
+    setAllocatedPlayingXI([]);
+    setAllocatedSubstitutes([]);
+    setAllocatedCaptainId('');
+    setAllocatedKeeperId('');
+    setAllocationFeedback(null);
+  };
+
+  const handleSubmitAllocation = async () => {
+    if (!selectedMatchForAllocation) {
+      setAllocationFeedback({ message: 'Please select a fixture first.', type: 'error' });
+      return;
+    }
+
+    if (allocatedPlayingXI.length !== 11) {
+      setAllocationFeedback({
+        message: `Exactly 11 players must be in the Playing XI. Currently selected: ${allocatedPlayingXI.length}/11.`,
+        type: 'error'
+      });
+      return;
+    }
+
+    if (allocatedSubstitutes.length < 1 || allocatedSubstitutes.length > 5) {
+      setAllocationFeedback({
+        message: `Please select between 1 and 5 substitute players. Currently selected: ${allocatedSubstitutes.length}.`,
+        type: 'error'
+      });
+      return;
+    }
+
+    try {
+      setIsSubmittingAllocation(true);
+      setAllocationFeedback(null);
+
+      const lineup = allocatedPlayingXI.map((pId, idx) => ({
+        playerId: pId,
+        battingOrder: idx + 1,
+        isCaptain: pId === allocatedCaptainId,
+        isKeeper: pId === allocatedKeeperId
+      }));
+
+      const res = await TeamApi.submitAllocation(selectedMatchForAllocation.id, {
+        playingXI: allocatedPlayingXI,
+        substitutes: allocatedSubstitutes,
+        lineup,
+        captainId: allocatedCaptainId || undefined,
+        wicketKeeperId: allocatedKeeperId || undefined
+      });
+
+      if (res && (res.success || res.match)) {
+        setAllocationFeedback({
+          message: '🎉 Playing XI & Substitutes successfully submitted! Match Officials and Admin have been notified.',
+          type: 'success'
+        });
+        showSuccess('Squad Allocation Submitted!', 'Official Playing XI is locked for this fixture.');
+        await loadTeamData();
+      } else {
+        setAllocationFeedback({
+          message: res?.message || 'Failed to submit allocation. Please try again.',
+          type: 'error'
+        });
+      }
+    } catch (err: any) {
+      setAllocationFeedback({
+        message: err?.message || 'Server error while submitting allocation.',
+        type: 'error'
+      });
+    } finally {
+      setIsSubmittingAllocation(false);
     }
   };
 
@@ -644,6 +1289,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
           taluk={division}
           squadCount={squad.length || 15}
           matchesCount={matches.length}
+          allocationPendingCount={allocationPendingMatches.length}
           upcomingCount={upcomingMatches.length}
           postponedCount={postponedMatches.length}
           registrationsCount={myRegistrations.length}
@@ -901,6 +1547,10 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                         <Text style={styles.actionBtnIcon}>👥</Text>
                         <Text style={styles.actionBtnText}>View Squad</Text>
                       </TouchableOpacity>
+                      <TouchableOpacity style={styles.actionBtn} onPress={() => setActiveTab('allocation')}>
+                        <Text style={styles.actionBtnIcon}>📋</Text>
+                        <Text style={styles.actionBtnText}>Allocation</Text>
+                      </TouchableOpacity>
                       <TouchableOpacity style={styles.actionBtn} onPress={() => setActiveTab('schedule')}>
                         <Text style={styles.actionBtnIcon}>📅</Text>
                         <Text style={styles.actionBtnText}>Schedule</Text>
@@ -1030,28 +1680,37 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                     {/* Squad Header & Role Summary */}
                     <View style={styles.card}>
                       <View style={styles.cardHeader}>
-                        <View>
-                          <Text style={styles.cardTitle}>Official 15-Member Squad</Text>
+                        <View style={{ flex: 1, marginRight: 12 }}>
+                          <Text style={styles.cardTitle}>Official Squad & Players</Text>
                           <Text style={styles.cardSubtitle}>Certified players registered under {teamName}</Text>
                         </View>
-                        <View style={styles.verifiedTag}>
-                          <Text style={styles.verifiedTagText}>✓ 15 Verified</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <View style={styles.verifiedTag}>
+                            <Text style={styles.verifiedTagText}>✓ {squad.length} Players</Text>
+                          </View>
+                          <TouchableOpacity
+                            style={styles.addPlayerBtn}
+                            onPress={openAddPlayerModal}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.addPlayerBtnText}>➕ New Player</Text>
+                          </TouchableOpacity>
                         </View>
                       </View>
 
                       {/* Role breakdown chips */}
                       <View style={styles.roleChipsRow}>
                         <View style={styles.roleChip}>
-                          <Text style={styles.roleChipText}>🏏 Batters: {batterCount || 5}</Text>
+                          <Text style={styles.roleChipText}>🏏 Batters: {batterCount}</Text>
                         </View>
                         <View style={styles.roleChip}>
-                          <Text style={styles.roleChipText}>⚡ Bowlers: {bowlerCount || 5}</Text>
+                          <Text style={styles.roleChipText}>⚡ Bowlers: {bowlerCount}</Text>
                         </View>
                         <View style={styles.roleChip}>
-                          <Text style={styles.roleChipText}>🌟 All-Rounders: {allRounderCount || 3}</Text>
+                          <Text style={styles.roleChipText}>🌟 All-Rounders: {allRounderCount}</Text>
                         </View>
                         <View style={styles.roleChip}>
-                          <Text style={styles.roleChipText}>🧤 Keepers: {keeperCount || 2}</Text>
+                          <Text style={styles.roleChipText}>🧤 Keepers: {keeperCount}</Text>
                         </View>
                       </View>
 
@@ -1076,7 +1735,18 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                     <View style={styles.card}>
                       {filteredSquad.length === 0 ? (
                         <View style={styles.emptyCard}>
-                          <Text style={styles.emptyText}>No players match your search filter.</Text>
+                          <Text style={styles.emptyText}>
+                            {squad.length === 0
+                              ? 'No players in your squad yet. Click "New Player" to add your team players.'
+                              : 'No players match your search filter.'}
+                          </Text>
+                          <TouchableOpacity
+                            style={[styles.addPlayerBtn, { marginTop: 12, alignSelf: 'center' }]}
+                            onPress={openAddPlayerModal}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.addPlayerBtnText}>➕ Add New Player</Text>
+                          </TouchableOpacity>
                         </View>
                       ) : (
                         filteredSquad.map((player, idx) => {
@@ -1086,7 +1756,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                           return (
                             <View key={player.id || idx} style={styles.squadPlayerCard}>
                               <View style={styles.squadJerseyCircle}>
-                                <Text style={styles.squadJerseyText}>{player.jersey || player.jerseyNumber || (idx + 1)}</Text>
+                                <Text style={styles.squadJerseyText}>{player.jersey || player.jerseyNumber || player.jersey_number || (idx + 1)}</Text>
                               </View>
                               <View style={{ flex: 1, marginLeft: 12 }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
@@ -1103,14 +1773,31 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                                   )}
                                 </View>
                                 <Text style={styles.squadPlayerMeta}>
-                                  {player.role || 'Batter'} • {player.batting || 'Right Hand Bat'}
+                                  {player.role ? String(player.role).replace(/_/g, ' ') : 'Batter'} • {player.battingStyle || player.batting || player.batting_style || 'Right-Handed Batsman'}
+                                  {player.bowlingStyle || player.bowling || player.bowling_style ? ` • ${player.bowlingStyle || player.bowling || player.bowling_style}` : ''}
                                 </Text>
                                 {player.email ? (
                                   <Text style={styles.squadPlayerEmail}>{player.email}</Text>
                                 ) : null}
+                                {player.mobile || player.phone ? (
+                                  <Text style={[styles.squadPlayerEmail, { color: '#64748b', fontSize: 11 }]}>📞 {player.mobile || player.phone}</Text>
+                                ) : null}
                               </View>
-                              <View style={styles.verifiedMiniBadge}>
-                                <Text style={styles.verifiedMiniBadgeText}>✓</Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <TouchableOpacity
+                                  style={styles.editPlayerBtn}
+                                  onPress={() => openEditPlayerModal(player)}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={styles.editPlayerBtnText}>✏️ Edit</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  style={styles.deletePlayerBtn}
+                                  onPress={() => handleDeletePlayer(player)}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={styles.deletePlayerBtnText}>🗑️</Text>
+                                </TouchableOpacity>
                               </View>
                             </View>
                           );
@@ -1395,6 +2082,509 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                           })
                         )}
                       </View>
+                    )}
+                  </View>
+                )}
+
+                {/* ══════════════════════════════════════════════════════════ */}
+                {/* 4.5. ALLOCATION TAB (Match Squad & Playing XI Allocation)  */}
+                {/* ══════════════════════════════════════════════════════════ */}
+                {activeTab === 'allocation' && (
+                  <View style={{ gap: 16 }}>
+                    {/* Header Banner */}
+                    <View style={styles.card}>
+                      <View style={styles.cardHeader}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.cardTitle}>📋 Official Playing XI & Squad Allocation</Text>
+                          <Text style={styles.cardSubtitle}>
+                            Select and lock your 11 Playing XI players and substitutes for upcoming association fixtures.
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                          <View style={styles.verifiedTag}>
+                            <Text style={styles.verifiedTagText}>
+                              📅 {upcomingMatches.length} Fixtures
+                            </Text>
+                          </View>
+                          {allocationPendingMatches.length > 0 ? (
+                            <View style={[styles.verifiedTag, { backgroundColor: '#fef3c7', borderColor: '#f59e0b' }]}>
+                              <Text style={[styles.verifiedTagText, { color: '#b45309' }]}>
+                                ⚠️ {allocationPendingMatches.length} Pending
+                              </Text>
+                            </View>
+                          ) : (
+                            <View style={[styles.verifiedTag, { backgroundColor: '#dcfce7', borderColor: '#16a34a' }]}>
+                              <Text style={[styles.verifiedTagText, { color: '#166534' }]}>
+                                ✅ All Allocated
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Step 1: Match Selector */}
+                    {upcomingMatches.length === 0 ? (
+                      <View style={styles.emptyCard}>
+                        <Text style={{ fontSize: 36, marginBottom: 8 }}>🏏</Text>
+                        <Text style={styles.emptyText}>No upcoming fixtures found for your team at this time.</Text>
+                        <Text style={[styles.emptyText, { fontSize: 13, color: '#64748b', marginTop: 4 }]}>
+                          Once fixtures are published by the District Cricket Association, you will be able to allocate your Playing XI here.
+                        </Text>
+                        <TouchableOpacity
+                          style={[styles.btnRegisterTeam, { marginTop: 16 }]}
+                          onPress={() => setActiveTab('tournaments')}
+                        >
+                          <Text style={styles.btnRegisterTeamText}>🏆 Browse Active Tournaments</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <>
+                        {/* Fixtures Selector Horizontal/List */}
+                        <View style={styles.allocFixtureSelectorCard}>
+                          <Text style={styles.allocSectionTitle}>1. Select Upcoming Fixture to Allocate</Text>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingVertical: 6 }}>
+                            {upcomingMatches.map((m) => {
+                              const isSelected = selectedMatchForAllocation?.id === m.id;
+                              const isAllocated = m.myAllocationStatus === 'SUBMITTED';
+                              const oppName = m.isCurrentTeamA ? (m.team_b_name || m.teamB?.name || 'Opponent') : (m.team_a_name || m.teamA?.name || 'Opponent');
+
+                              return (
+                                <TouchableOpacity
+                                  key={m.id}
+                                  style={[
+                                    styles.allocMatchPill,
+                                    isSelected && styles.allocMatchPillSelected,
+                                    isAllocated && styles.allocMatchPillDone
+                                  ]}
+                                  onPress={() => handleSelectMatchForAllocation(m)}
+                                  activeOpacity={0.8}
+                                >
+                                  <View style={styles.allocMatchPillTop}>
+                                    <Text style={[styles.allocMatchPillOpp, isSelected && { color: '#1d4ed8' }]}>
+                                      vs {oppName}
+                                    </Text>
+                                    <View style={[
+                                      styles.allocBadgeSmall,
+                                      isAllocated ? styles.allocBadgeDone : styles.allocBadgePending
+                                    ]}>
+                                      <Text style={[
+                                        styles.allocBadgeSmallText,
+                                        isAllocated ? styles.allocBadgeDoneText : styles.allocBadgePendingText
+                                      ]}>
+                                        {isAllocated ? '✓ Allocated' : '⚠️ Pending'}
+                                      </Text>
+                                    </View>
+                                  </View>
+                                  <Text style={styles.allocMatchPillTour}>{m.tournament || 'District Match'}</Text>
+                                  <Text style={styles.allocMatchPillDate}>📅 {m.date || 'TBD'} • ⏰ {m.time || 'TBD'}</Text>
+                                  <Text style={styles.allocMatchPillVenue} numberOfLines={1}>📍 {m.venue || 'Stadium'}</Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </ScrollView>
+                        </View>
+
+                        {/* Step 2: Allocation Workspace for the Selected Match */}
+                        {selectedMatchForAllocation && (
+                          <View style={styles.allocWorkspaceCard}>
+                            {/* Selected Match Summary Header */}
+                            <View style={styles.allocWorkspaceHeader}>
+                              <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                  <Text style={styles.allocWorkspaceTitle}>
+                                    vs {selectedMatchForAllocation.isCurrentTeamA
+                                      ? (selectedMatchForAllocation.team_b_name || selectedMatchForAllocation.teamB?.name || 'Opponent')
+                                      : (selectedMatchForAllocation.team_a_name || selectedMatchForAllocation.teamA?.name || 'Opponent')}
+                                  </Text>
+                                  <View style={[
+                                    styles.allocBadgeSmall,
+                                    selectedMatchForAllocation.myAllocationStatus === 'SUBMITTED' ? styles.allocBadgeDone : styles.allocBadgePending
+                                  ]}>
+                                    <Text style={[
+                                      styles.allocBadgeSmallText,
+                                      selectedMatchForAllocation.myAllocationStatus === 'SUBMITTED' ? styles.allocBadgeDoneText : styles.allocBadgePendingText
+                                    ]}>
+                                      {selectedMatchForAllocation.myAllocationStatus === 'SUBMITTED' ? '✅ Officially Allocated' : '⚠️ Allocation Required'}
+                                    </Text>
+                                  </View>
+                                </View>
+                                <Text style={styles.allocWorkspaceMeta}>
+                                  🏆 {selectedMatchForAllocation.tournament || 'Tournament'} • 📍 {selectedMatchForAllocation.venue || 'Venue'} • 📅 {selectedMatchForAllocation.date} {selectedMatchForAllocation.time}
+                                </Text>
+                              </View>
+
+                              {/* Quick Actions */}
+                              <View style={styles.allocWorkspaceQuickActions}>
+                                <TouchableOpacity
+                                  style={styles.allocBtnQuickFill}
+                                  onPress={autoSelectFirst11}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={styles.allocBtnQuickFillText}>⚡ Auto-Fill 11</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  style={styles.allocBtnReset}
+                                  onPress={resetAllocation}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={styles.allocBtnResetText}>🔄 Clear</Text>
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+
+                            {/* Counters Strip */}
+                            <View style={styles.allocCountersBar}>
+                              <View style={[
+                                styles.allocCounterBox,
+                                allocatedPlayingXI.length === 11 ? styles.allocCounterBoxValid : styles.allocCounterBoxIncomplete
+                              ]}>
+                                <Text style={styles.allocCounterLabel}>PLAYING XI</Text>
+                                <Text style={[
+                                  styles.allocCounterVal,
+                                  allocatedPlayingXI.length === 11 ? { color: '#16a34a' } : { color: '#d97706' }
+                                ]}>
+                                  {allocatedPlayingXI.length} / 11
+                                </Text>
+                                <Text style={styles.allocCounterHint}>
+                                  {allocatedPlayingXI.length === 11 ? '✓ Complete' : `Need ${11 - allocatedPlayingXI.length} more`}
+                                </Text>
+                              </View>
+
+                              <View style={[
+                                styles.allocCounterBox,
+                                allocatedSubstitutes.length >= 1 ? styles.allocCounterBoxValid : styles.allocCounterBoxIncomplete
+                              ]}>
+                                <Text style={styles.allocCounterLabel}>SUBSTITUTES</Text>
+                                <Text style={[
+                                  styles.allocCounterVal,
+                                  allocatedSubstitutes.length >= 1 ? { color: '#2563eb' } : { color: '#64748b' }
+                                ]}>
+                                  {allocatedSubstitutes.length} (Max 5)
+                                </Text>
+                                <Text style={styles.allocCounterHint}>
+                                  {allocatedSubstitutes.length >= 1 ? '✓ Added' : 'Min 1 required'}
+                                </Text>
+                              </View>
+
+                              <View style={styles.allocCounterBox}>
+                                <Text style={styles.allocCounterLabel}>CAPTAIN (C)</Text>
+                                <Text style={[styles.allocCounterVal, { fontSize: 13, color: allocatedCaptainId ? '#0f172a' : '#ef4444' }]} numberOfLines={1}>
+                                  {allocatedCaptainId ? (squad.find(p => p.id === allocatedCaptainId)?.name || 'Selected') : 'None'}
+                                </Text>
+                                <Text style={styles.allocCounterHint}>
+                                  {allocatedCaptainId ? '👑 Assigned' : '⚠️ Required'}
+                                </Text>
+                              </View>
+
+                              <View style={styles.allocCounterBox}>
+                                <Text style={styles.allocCounterLabel}>WICKET KEEPER (WK)</Text>
+                                <Text style={[styles.allocCounterVal, { fontSize: 13, color: allocatedKeeperId ? '#0f172a' : '#ef4444' }]} numberOfLines={1}>
+                                  {allocatedKeeperId ? (squad.find(p => p.id === allocatedKeeperId)?.name || 'Selected') : 'None'}
+                                </Text>
+                                <Text style={styles.allocCounterHint}>
+                                  {allocatedKeeperId ? '🧤 Assigned' : '⚠️ Required'}
+                                </Text>
+                              </View>
+                            </View>
+
+                            {/* Feedback Banner */}
+                            {allocationFeedback && (
+                              <View style={[
+                                styles.feedbackBanner,
+                                allocationFeedback.type === 'success' ? styles.feedbackSuccess : styles.feedbackError,
+                                { marginHorizontal: 16, marginTop: 12 }
+                              ]}>
+                                <Text style={styles.feedbackText}>{allocationFeedback.message}</Text>
+                              </View>
+                            )}
+
+                            {/* Player Filter and Search */}
+                            <View style={styles.allocSearchFilterBar}>
+                              <View style={{ flex: 1, minWidth: 200 }}>
+                                <TextInput
+                                  style={styles.allocSearchInput}
+                                  placeholder="Search squad player by name or jersey..."
+                                  placeholderTextColor="#94a3b8"
+                                  value={allocationSearch}
+                                  onChangeText={setAllocationSearch}
+                                />
+                              </View>
+                              <View style={styles.allocFilterPills}>
+                                {['ALL', 'BATSMAN', 'BOWLER', 'ALL-ROUNDER', 'WICKET KEEPER'].map((r) => (
+                                  <TouchableOpacity
+                                    key={r}
+                                    style={[
+                                      styles.allocRolePill,
+                                      allocationFilterRole === r && styles.allocRolePillActive
+                                    ]}
+                                    onPress={() => setAllocationFilterRole(r)}
+                                  >
+                                    <Text style={[
+                                      styles.allocRolePillText,
+                                      allocationFilterRole === r && styles.allocRolePillTextActive
+                                    ]}>
+                                      {r === 'ALL' ? 'All Squad' : r}
+                                    </Text>
+                                  </TouchableOpacity>
+                                ))}
+                              </View>
+                            </View>
+
+                            {/* Squad Player List */}
+                            <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+                              <Text style={styles.allocSectionTitle}>
+                                Squad Players ({squad.length}) • Click "+ Playing XI" or "+ Substitute"
+                              </Text>
+
+                              <View style={{ gap: 8, marginTop: 8 }}>
+                                {squad
+                                  .filter(p => {
+                                    if (allocationFilterRole !== 'ALL') {
+                                      const pRole = (p.role || '').toUpperCase();
+                                      if (!pRole.includes(allocationFilterRole.replace('-', ' '))) return false;
+                                    }
+                                    if (allocationSearch.trim()) {
+                                      const q = allocationSearch.toLowerCase();
+                                      return (p.name || '').toLowerCase().includes(q) ||
+                                        String(p.jerseyNumber || p.jersey || '').includes(q);
+                                    }
+                                    return true;
+                                  })
+                                  .map((p, idx) => {
+                                    const inXI = allocatedPlayingXI.includes(p.id);
+                                    const inSub = allocatedSubstitutes.includes(p.id);
+                                    const isCap = allocatedCaptainId === p.id;
+                                    const isWk = allocatedKeeperId === p.id;
+                                    const xiIndex = allocatedPlayingXI.indexOf(p.id);
+
+                                    return (
+                                      <View
+                                        key={p.id || idx}
+                                        style={[
+                                          styles.allocPlayerRow,
+                                          inXI && styles.allocPlayerRowXI,
+                                          inSub && styles.allocPlayerRowSub
+                                        ]}
+                                      >
+                                        {/* Jersey & Number */}
+                                        <View style={[
+                                          styles.allocJerseyCircle,
+                                          inXI ? styles.allocJerseyCircleXI : (inSub ? styles.allocJerseyCircleSub : {})
+                                        ]}>
+                                          <Text style={[
+                                            styles.allocJerseyText,
+                                            inXI ? styles.allocJerseyTextXI : {}
+                                          ]}>
+                                            {p.jerseyNumber || p.jersey || idx + 1}
+                                          </Text>
+                                        </View>
+
+                                        {/* Player Info */}
+                                        <View style={{ flex: 1, minWidth: 140 }}>
+                                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                            <Text style={styles.allocPlayerName}>{p.name}</Text>
+                                            {inXI && (
+                                              <View style={styles.allocTagXI}>
+                                                <Text style={styles.allocTagXIText}>XI #{xiIndex + 1}</Text>
+                                              </View>
+                                            )}
+                                            {inSub && (
+                                              <View style={styles.allocTagSub}>
+                                                <Text style={styles.allocTagSubText}>SUB</Text>
+                                              </View>
+                                            )}
+                                            {isCap && (
+                                              <View style={styles.allocTagCap}>
+                                                <Text style={styles.allocTagCapText}>👑 Captain</Text>
+                                              </View>
+                                            )}
+                                            {isWk && (
+                                              <View style={styles.allocTagWk}>
+                                                <Text style={styles.allocTagWkText}>🧤 Wicket Keeper</Text>
+                                              </View>
+                                            )}
+                                          </View>
+                                          <Text style={styles.allocPlayerStyles}>
+                                            {p.role || 'Player'} • Bat: {p.battingStyle || 'Right Hand'} • Bowl: {p.bowlingStyle || 'None'}
+                                          </Text>
+                                        </View>
+
+                                        {/* Leadership Options (If in Playing XI) */}
+                                        {inXI && (
+                                          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                                            <TouchableOpacity
+                                              style={[
+                                                styles.allocLeaderBtn,
+                                                isCap && styles.allocLeaderBtnActive
+                                              ]}
+                                              onPress={() => setAllocatedCaptainId(isCap ? '' : p.id)}
+                                              activeOpacity={0.7}
+                                            >
+                                              <Text style={[
+                                                styles.allocLeaderBtnText,
+                                                isCap && styles.allocLeaderBtnTextActive
+                                              ]}>
+                                                {isCap ? '👑 Captain' : '(C)'}
+                                              </Text>
+                                            </TouchableOpacity>
+
+                                            <TouchableOpacity
+                                              style={[
+                                                styles.allocLeaderBtn,
+                                                isWk && styles.allocLeaderBtnWkActive
+                                              ]}
+                                              onPress={() => setAllocatedKeeperId(isWk ? '' : p.id)}
+                                              activeOpacity={0.7}
+                                            >
+                                              <Text style={[
+                                                styles.allocLeaderBtnText,
+                                                isWk && styles.allocLeaderBtnTextActive
+                                              ]}>
+                                                {isWk ? '🧤 Keeper' : '(WK)'}
+                                              </Text>
+                                            </TouchableOpacity>
+                                          </View>
+                                        )}
+
+                                        {/* Action Buttons: Playing XI / Substitute */}
+                                        <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                                          <TouchableOpacity
+                                            style={[
+                                              styles.allocBtnToggleXI,
+                                              inXI && styles.allocBtnToggleXIActive
+                                            ]}
+                                            onPress={() => togglePlayingXI(p.id)}
+                                            activeOpacity={0.8}
+                                          >
+                                            <Text style={[
+                                              styles.allocBtnToggleXIText,
+                                              inXI && styles.allocBtnToggleXITextActive
+                                            ]}>
+                                              {inXI ? '✓ In XI' : '+ Playing XI'}
+                                            </Text>
+                                          </TouchableOpacity>
+
+                                          <TouchableOpacity
+                                            style={[
+                                              styles.allocBtnToggleSub,
+                                              inSub && styles.allocBtnToggleSubActive
+                                            ]}
+                                            onPress={() => toggleSubstitute(p.id)}
+                                            activeOpacity={0.8}
+                                          >
+                                            <Text style={[
+                                              styles.allocBtnToggleSubText,
+                                              inSub && styles.allocBtnToggleSubTextActive
+                                            ]}>
+                                              {inSub ? '✓ Sub' : '+ Sub'}
+                                            </Text>
+                                          </TouchableOpacity>
+                                        </View>
+                                      </View>
+                                    );
+                                  })}
+                              </View>
+                            </View>
+
+                            {/* Summary & Submission Footer Card */}
+                            <View style={styles.allocSubmitCard}>
+                              <View style={styles.allocSubmitCardHeader}>
+                                <Text style={styles.allocSubmitTitle}>Finalize & Transmit Allocation</Text>
+                                <Text style={styles.allocSubmitSub}>
+                                  Playing XI must have exactly 11 players. Substitutes must have 1-5 players.
+                                </Text>
+                              </View>
+
+                              {/* Leadership Dropdowns */}
+                              <View style={styles.allocLeadershipRow}>
+                                <View style={{ flex: 1, minWidth: 200 }}>
+                                  <Text style={styles.allocFormLabel}>Match Captain (C) *</Text>
+                                  <View style={styles.allocSelectWrap}>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingVertical: 4 }}>
+                                      {allocatedPlayingXI.length === 0 ? (
+                                        <Text style={{ fontSize: 13, color: '#94a3b8', fontStyle: 'italic', paddingVertical: 6 }}>
+                                          Add players to Playing XI first to choose captain
+                                        </Text>
+                                      ) : (
+                                        allocatedPlayingXI.map(pId => {
+                                          const pl = squad.find(s => s.id === pId);
+                                          const isSelected = allocatedCaptainId === pId;
+                                          return (
+                                            <TouchableOpacity
+                                              key={`cap-${pId}`}
+                                              style={[styles.allocSelectChip, isSelected && styles.allocSelectChipActive]}
+                                              onPress={() => setAllocatedCaptainId(pId)}
+                                            >
+                                              <Text style={[styles.allocSelectChipText, isSelected && styles.allocSelectChipTextActive]}>
+                                                👑 {pl?.name || pId}
+                                              </Text>
+                                            </TouchableOpacity>
+                                          );
+                                        })
+                                      )}
+                                    </ScrollView>
+                                  </View>
+                                </View>
+
+                                <View style={{ flex: 1, minWidth: 200 }}>
+                                  <Text style={styles.allocFormLabel}>Wicket Keeper (WK) *</Text>
+                                  <View style={styles.allocSelectWrap}>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingVertical: 4 }}>
+                                      {allocatedPlayingXI.length === 0 ? (
+                                        <Text style={{ fontSize: 13, color: '#94a3b8', fontStyle: 'italic', paddingVertical: 6 }}>
+                                          Add players to Playing XI first to choose keeper
+                                        </Text>
+                                      ) : (
+                                        allocatedPlayingXI.map(pId => {
+                                          const pl = squad.find(s => s.id === pId);
+                                          const isSelected = allocatedKeeperId === pId;
+                                          return (
+                                            <TouchableOpacity
+                                              key={`wk-${pId}`}
+                                              style={[styles.allocSelectChip, isSelected && styles.allocSelectChipActive]}
+                                              onPress={() => setAllocatedKeeperId(pId)}
+                                            >
+                                              <Text style={[styles.allocSelectChipText, isSelected && styles.allocSelectChipTextActive]}>
+                                                🧤 {pl?.name || pId}
+                                              </Text>
+                                            </TouchableOpacity>
+                                          );
+                                        })
+                                      )}
+                                    </ScrollView>
+                                  </View>
+                                </View>
+                              </View>
+
+                              {/* Submit Button */}
+                              <TouchableOpacity
+                                style={[
+                                  styles.allocSubmitBtn,
+                                  (allocatedPlayingXI.length !== 11 || allocatedSubstitutes.length === 0 || isSubmittingAllocation) && styles.allocSubmitBtnDisabled
+                                ]}
+                                onPress={handleSubmitAllocation}
+                                disabled={allocatedPlayingXI.length !== 11 || allocatedSubstitutes.length === 0 || isSubmittingAllocation}
+                                activeOpacity={0.85}
+                              >
+                                {isSubmittingAllocation ? (
+                                  <ActivityIndicator color="#ffffff" size="small" />
+                                ) : (
+                                  <Text style={styles.allocSubmitBtnText}>
+                                    📋 Lock & Transmit Official Match Allocation ({allocatedPlayingXI.length} XI + {allocatedSubstitutes.length} Subs)
+                                  </Text>
+                                )}
+                              </TouchableOpacity>
+
+                              {allocatedPlayingXI.length !== 11 && (
+                                <Text style={styles.allocSubmitHelp}>
+                                  ⚠️ You must select exactly 11 players for the Playing XI before submitting (Currently: {allocatedPlayingXI.length}/11).
+                                </Text>
+                              )}
+                            </View>
+                          </View>
+                        )}
+                      </>
                     )}
                   </View>
                 )}
@@ -1956,6 +3146,138 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
           )}
         </View>
       </View>
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* MODAL: ADD NEW PLAYER                                            */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      <Modal
+        visible={addPlayerModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setAddPlayerModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, { maxHeight: '92%', width: '95%', maxWidth: 500 }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalHeaderTitle}>➕ Add New Player</Text>
+              <TouchableOpacity onPress={() => setAddPlayerModalVisible(false)}>
+                <Text style={styles.modalCloseBtn}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ padding: 16 }}>
+              {renderPlayerFormFields()}
+
+              {/* Feedback */}
+              {playerFormFeedback ? (
+                <View style={[styles.feedbackBanner, playerFormFeedback.type === 'success' ? styles.feedbackSuccess : styles.feedbackError]}>
+                  <Text style={styles.feedbackText}>{playerFormFeedback.message}</Text>
+                </View>
+              ) : null}
+              <TouchableOpacity
+                style={[styles.playerSaveBtn, isSavingPlayer && { opacity: 0.5 }]}
+                onPress={handleSaveNewPlayer}
+                disabled={isSavingPlayer}
+              >
+                <Text style={styles.playerSaveBtnText}>{isSavingPlayer ? 'Adding...' : '➕ Add Player'}</Text>
+              </TouchableOpacity>
+              <View style={{ height: 24 }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* MODAL: EDIT PLAYER                                               */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      <Modal
+        visible={editPlayerModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setEditPlayerModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, { maxHeight: '92%', width: '95%', maxWidth: 500 }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalHeaderTitle}>✏️ Edit Player</Text>
+              <TouchableOpacity onPress={() => setEditPlayerModalVisible(false)}>
+                <Text style={styles.modalCloseBtn}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ padding: 16 }}>
+              {renderPlayerFormFields()}
+
+              {/* Feedback */}
+              {playerFormFeedback ? (
+                <View style={[styles.feedbackBanner, playerFormFeedback.type === 'success' ? styles.feedbackSuccess : styles.feedbackError]}>
+                  <Text style={styles.feedbackText}>{playerFormFeedback.message}</Text>
+                </View>
+              ) : null}
+              <View style={styles.playerActionRow}>
+                <TouchableOpacity
+                  style={[styles.playerSaveBtn, { flex: 2, marginTop: 0, marginBottom: 0 }, isSavingPlayer && { opacity: 0.5 }]}
+                  onPress={handleUpdatePlayer}
+                  disabled={isSavingPlayer}
+                >
+                  <Text style={styles.playerSaveBtnText}>{isSavingPlayer ? 'Saving...' : '💾 Save Changes'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.playerDeleteBtn, isSavingPlayer && { opacity: 0.5 }]}
+                  onPress={() => handleDeletePlayer()}
+                  disabled={isSavingPlayer}
+                >
+                  <Text style={styles.playerDeleteBtnText}>🗑️ Remove</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={{ height: 24 }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Global Option Picker Modal for Mobile */}
+      {pickerModalState && (
+        <Modal
+          visible={pickerModalState.visible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setPickerModalState(null)}
+        >
+          <TouchableOpacity
+            style={styles.pickerModalBackdrop}
+            activeOpacity={1}
+            onPress={() => setPickerModalState(null)}
+          >
+            <View style={styles.pickerModalCard} onStartShouldSetResponder={() => true}>
+              <View style={styles.pickerModalHeader}>
+                <Text style={styles.pickerModalTitle}>{pickerModalState.title}</Text>
+                <TouchableOpacity onPress={() => setPickerModalState(null)}>
+                  <Text style={styles.modalCloseBtn}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={{ maxHeight: 350 }} showsVerticalScrollIndicator={false}>
+                {pickerModalState.options.map((opt) => {
+                  const isSelected = opt === pickerModalState.selectedValue;
+                  return (
+                    <TouchableOpacity
+                      key={opt}
+                      style={[styles.pickerModalItem, isSelected && styles.pickerModalItemSelected]}
+                      onPress={() => {
+                        pickerModalState.onSelect(opt);
+                        setPickerModalState(null);
+                      }}
+                    >
+                      <Text style={[styles.pickerModalItemText, isSelected && styles.pickerModalItemTextSelected]}>
+                        {opt}
+                      </Text>
+                      {isSelected && <Text style={{ color: '#16a34a', fontWeight: 'bold' }}>✓</Text>}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      )}
 
       {/* ───────────────────────────────────────────────────────────── */}
       {/* MODAL 1: EDIT TEAM & COACH PROFILE                            */}
@@ -4045,5 +5367,688 @@ const styles: any = StyleSheet.create({
     color: '#ffffff',
     fontSize: 13,
     fontWeight: '800'
+  },
+
+  // ── Squad Player Add & Edit Styles (Registration-aligned) ─────────────
+  addPlayerBtn: {
+    backgroundColor: '#0a2540',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4
+  },
+  addPlayerBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  editPlayerBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    marginLeft: 6
+  },
+  editPlayerBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#16a34a'
+  },
+  deletePlayerBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    marginLeft: 4
+  },
+  deletePlayerBtnText: {
+    fontSize: 13,
+    color: '#ef4444'
+  },
+  playerActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 16,
+    marginBottom: 8
+  },
+  playerDeleteBtn: {
+    backgroundColor: '#ef4444',
+    padding: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    flex: 1
+  },
+  playerDeleteBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800'
+  },
+  playerSaveBtn: {
+    backgroundColor: '#0a2540',
+    padding: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 8
+  },
+  playerSaveBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800'
+  },
+  playerFormLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#374151',
+    marginTop: 12,
+    marginBottom: 4
+  },
+  playerFormInput: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: '#0f172a'
+  },
+  selectWrapperWeb: {
+    position: 'relative',
+    width: '100%'
+  },
+  selectChevronWeb: {
+    position: 'absolute',
+    right: 14,
+    top: 10,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  dropdownSelectBox: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  dropdownSelectText: {
+    fontSize: 13,
+    color: '#0f172a',
+    fontWeight: '500',
+    flex: 1
+  },
+  dropdownSelectChevron: {
+    color: '#64748b',
+    fontSize: 13,
+    marginLeft: 6
+  },
+  dynamicBowlingBox: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+    marginBottom: 4
+  },
+  dynamicBowlingTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#166534',
+    marginBottom: 4
+  },
+  pickerModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16
+  },
+  pickerModalCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    width: '100%',
+    maxWidth: 420,
+    maxHeight: '80%',
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 10
+  },
+  pickerModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    paddingBottom: 12,
+    marginBottom: 8
+  },
+  pickerModalTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  pickerModalItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 4
+  },
+  pickerModalItemSelected: {
+    backgroundColor: '#f0fdf4'
+  },
+  pickerModalItemText: {
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: '500'
+  },
+  pickerModalItemTextSelected: {
+    color: '#16a34a',
+    fontWeight: '800'
+  },
+
+  // ── Allocation Tab Styles ──────────────────────────────────────────────
+  allocFixtureSelectorCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2
+  },
+  allocSectionTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a',
+    letterSpacing: 0.3,
+    marginBottom: 8
+  },
+  allocMatchPill: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    padding: 12,
+    minWidth: 220,
+    maxWidth: 280
+  },
+  allocMatchPillSelected: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#2563eb'
+  },
+  allocMatchPillDone: {
+    borderColor: '#86efac'
+  },
+  allocMatchPillTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4
+  },
+  allocMatchPillOpp: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  allocMatchPillTour: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+    marginBottom: 4
+  },
+  allocMatchPillDate: {
+    fontSize: 11,
+    color: '#475569',
+    marginBottom: 2
+  },
+  allocMatchPillVenue: {
+    fontSize: 11,
+    color: '#64748b'
+  },
+  allocBadgeSmall: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 12
+  },
+  allocBadgePending: {
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#f59e0b'
+  },
+  allocBadgePendingText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#b45309'
+  },
+  allocBadgeDone: {
+    backgroundColor: '#dcfce7',
+    borderWidth: 1,
+    borderColor: '#16a34a'
+  },
+  allocBadgeDoneText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#166534'
+  },
+  allocWorkspaceCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    overflow: 'hidden'
+  },
+  allocWorkspaceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    backgroundColor: '#fafafa',
+    flexWrap: 'wrap',
+    gap: 12
+  },
+  allocWorkspaceTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#071026'
+  },
+  allocWorkspaceMeta: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 4
+  },
+  allocWorkspaceQuickActions: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center'
+  },
+  allocBtnQuickFill: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8
+  },
+  allocBtnQuickFillText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800'
+  },
+  allocBtnReset: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cbd5e1'
+  },
+  allocBtnResetText: {
+    color: '#475569',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  allocCountersBar: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 12,
+    gap: 8,
+    backgroundColor: '#f8fafc',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0'
+  },
+  allocCounterBox: {
+    flex: 1,
+    minWidth: 120,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center'
+  },
+  allocCounterBoxValid: {
+    borderColor: '#86efac',
+    backgroundColor: '#f0fdf4'
+  },
+  allocCounterBoxIncomplete: {
+    borderColor: '#fde68a',
+    backgroundColor: '#fffbeb'
+  },
+  allocCounterLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748b',
+    letterSpacing: 0.5,
+    marginBottom: 2
+  },
+  allocCounterVal: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0f172a'
+  },
+  allocCounterHint: {
+    fontSize: 10,
+    color: '#64748b',
+    marginTop: 2
+  },
+  allocSearchFilterBar: {
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    alignItems: 'center'
+  },
+  allocSearchInput: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: '#0f172a'
+  },
+  allocFilterPills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6
+  },
+  allocRolePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  allocRolePillActive: {
+    backgroundColor: '#071026',
+    borderColor: '#071026'
+  },
+  allocRolePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569'
+  },
+  allocRolePillTextActive: {
+    color: '#ffffff'
+  },
+  allocPlayerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 12,
+    flexWrap: 'wrap'
+  },
+  allocPlayerRowXI: {
+    borderColor: '#86efac',
+    backgroundColor: '#f0fdf4'
+  },
+  allocPlayerRowSub: {
+    borderColor: '#bfdbfe',
+    backgroundColor: '#eff6ff'
+  },
+  allocJerseyCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  allocJerseyCircleXI: {
+    backgroundColor: '#16a34a',
+    borderColor: '#15803d'
+  },
+  allocJerseyCircleSub: {
+    backgroundColor: '#2563eb',
+    borderColor: '#1d4ed8'
+  },
+  allocJerseyText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#334155'
+  },
+  allocJerseyTextXI: {
+    color: '#ffffff'
+  },
+  allocPlayerName: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  allocPlayerStyles: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2
+  },
+  allocTagXI: {
+    backgroundColor: '#16a34a',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10
+  },
+  allocTagXIText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#ffffff'
+  },
+  allocTagSub: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10
+  },
+  allocTagSubText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#ffffff'
+  },
+  allocTagCap: {
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10
+  },
+  allocTagCapText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#92400e'
+  },
+  allocTagWk: {
+    backgroundColor: '#e0f2fe',
+    borderWidth: 1,
+    borderColor: '#0284c7',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10
+  },
+  allocTagWkText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0369a1'
+  },
+  allocLeaderBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1'
+  },
+  allocLeaderBtnActive: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b'
+  },
+  allocLeaderBtnWkActive: {
+    backgroundColor: '#e0f2fe',
+    borderColor: '#0284c7'
+  },
+  allocLeaderBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#475569'
+  },
+  allocLeaderBtnTextActive: {
+    color: '#92400e'
+  },
+  allocBtnToggleXI: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1.5,
+    borderColor: '#16a34a'
+  },
+  allocBtnToggleXIActive: {
+    backgroundColor: '#16a34a',
+    borderColor: '#15803d'
+  },
+  allocBtnToggleXIText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#16a34a'
+  },
+  allocBtnToggleXITextActive: {
+    color: '#ffffff'
+  },
+  allocBtnToggleSub: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1.5,
+    borderColor: '#2563eb'
+  },
+  allocBtnToggleSubActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#1d4ed8'
+  },
+  allocBtnToggleSubText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#2563eb'
+  },
+  allocBtnToggleSubTextActive: {
+    color: '#ffffff'
+  },
+  allocSubmitCard: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+    gap: 12
+  },
+  allocSubmitCardHeader: {
+    marginBottom: 4
+  },
+  allocSubmitTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0f172a'
+  },
+  allocSubmitSub: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2
+  },
+  allocLeadershipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12
+  },
+  allocFormLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#334155',
+    marginBottom: 4
+  },
+  allocSelectWrap: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4
+  },
+  allocSelectChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  allocSelectChipActive: {
+    backgroundColor: '#071026',
+    borderColor: '#071026'
+  },
+  allocSelectChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155'
+  },
+  allocSelectChipTextActive: {
+    color: '#ffffff'
+  },
+  allocSubmitBtn: {
+    backgroundColor: '#071026',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  allocSubmitBtnDisabled: {
+    backgroundColor: '#94a3b8',
+    opacity: 0.7
+  },
+  allocSubmitBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 0.3
+  },
+  allocSubmitHelp: {
+    fontSize: 12,
+    color: '#b45309',
+    textAlign: 'center',
+    fontWeight: '600'
   }
 });

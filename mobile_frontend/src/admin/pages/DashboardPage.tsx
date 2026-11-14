@@ -295,6 +295,27 @@ export const DashboardPage: React.FC<Props> = ({ onNavigate }) => {
                   <Text style={styles.matchVenue}>
                     📍 {m.venue} • {m.date} at {m.time}
                   </Text>
+                  {(m.status || '').toUpperCase() === 'SCHEDULED' && (
+                    <View style={{ marginTop: 4, padding: 6, borderRadius: 6, backgroundColor: m.schedule_confirmation_status === 'CONFIRMED' ? '#ECFDF5' : '#FEF2F2', borderWidth: 1, borderColor: m.schedule_confirmation_status === 'CONFIRMED' ? '#86EFAC' : '#FECACA' }}>
+                      {m.schedule_confirmation_status === 'CONFIRMED' ? (
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#15803D' }}>
+                          ✓ Schedule Confirmed (Released to Scorer)
+                        </Text>
+                      ) : (
+                        <View style={{ gap: 2 }}>
+                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#DC2626' }}>
+                            ⚠️ Squad Selection Status:
+                          </Text>
+                          <Text style={{ fontSize: 10, fontWeight: '600', color: m.team_a_allocation_status === 'SUBMITTED' ? '#15803D' : '#B91C1C' }}>
+                            {m.team_a_allocation_status === 'SUBMITTED' ? '✅' : '❌'} {m.teamA}: {m.team_a_allocation_status === 'SUBMITTED' ? '11 Selected' : 'Pending Selection'}
+                          </Text>
+                          <Text style={{ fontSize: 10, fontWeight: '600', color: m.team_b_allocation_status === 'SUBMITTED' ? '#15803D' : '#B91C1C' }}>
+                            {m.team_b_allocation_status === 'SUBMITTED' ? '✅' : '❌'} {m.teamB}: {m.team_b_allocation_status === 'SUBMITTED' ? '11 Selected' : 'Pending Selection'}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
                   <View style={styles.matchFooter}>
                     <Text style={styles.matchResult}>{m.result}</Text>
                     <TouchableOpacity
