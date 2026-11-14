@@ -76,7 +76,7 @@ function BallFlight() {
   const left = anim.interpolate({ inputRange: [0, 1], outputRange: ['5%', '90%'] });
   const bottom = anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [8, 60, 8] });
   return (
-    <Animated.View style={[styles.ball, { left, bottom }]} pointerEvents="none">
+    <Animated.View style={[styles.ball, { left, bottom, pointerEvents: 'none' as const }]}>
       <Text style={{ fontSize: 18 }}>🏏</Text>
     </Animated.View>
   );
@@ -183,10 +183,9 @@ export function VPLEventBanner({
       style={[
         styles.wrapper,
         isBottom ? { bottom: bottomOffset } : { top: topOffset + 60 },
-        { transform: [{ translateY }, { translateX: shakeAnim }], opacity: slideAnim },
+        { transform: [{ translateY }, { translateX: shakeAnim }], opacity: slideAnim, pointerEvents: 'box-none' as const },
         style,
       ]}
-      pointerEvents="box-none"
       accessibilityLiveRegion="polite"
     >
       <View style={[styles.bannerInner, tierContainer]}>
@@ -228,11 +227,21 @@ export function VPLEventBanner({
 // ── Sound Controls ────────────────────────────────────────────────────
 export function useVPLSound() {
   const state = useSyncExternalStore(vplSound.subscribe, vplSound.getState, vplSound.getState);
+  const toggle = useCallback(() => {
+    vplSound.setMuted(!vplSound.getState().muted);
+  }, []);
+  const setVolume = useCallback((v: number) => {
+    vplSound.setVolume(v);
+  }, []);
+  const unlock = useCallback((play: boolean) => {
+    vplSound.unlock(play);
+  }, []);
+
   return {
     state,
-    toggle: () => vplSound.setMuted(!state.muted),
-    setVolume: vplSound.setVolume.bind(vplSound),
-    unlock: vplSound.unlock.bind(vplSound),
+    toggle,
+    setVolume,
+    unlock,
   };
 }
 
@@ -242,6 +251,10 @@ interface VPLSoundControlsProps {
 }
 
 export function VPLSoundControls({ role, style }: VPLSoundControlsProps) {
+  useEffect(() => {
+    vplSound.configure(role);
+  }, [role]);
+
   const { state, toggle, unlock } = useVPLSound();
 
   if (!state.supported) return null;

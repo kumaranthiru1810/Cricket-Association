@@ -572,7 +572,7 @@ export default function HomeScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#040a1b" />
 
       {/* FIXED BRIGHT ATMOSPHERIC BACKGROUND */}
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' as const }]}>
         <Image source={IMG_STADIUM} style={styles.bgStadiumImage} resizeMode="cover" />
         <LinearGradient
           colors={['rgba(246, 242, 233, 0.94)', 'rgba(252, 249, 244, 0.97)', '#f6f2e9']}

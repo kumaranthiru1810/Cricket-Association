@@ -11,49 +11,84 @@ export interface VPLSoundState {
 class VPLSoundEngine {
   private ctx: AudioContext | null = null;
   private role: VPLSoundRole = 'scorer';
+  private configured = false;
   private state: VPLSoundState = { supported: false, muted: true, unlocked: false, volume: 0.7 };
   private suspendTimer: ReturnType<typeof setTimeout> | null = null;
   private listeners = new Set<() => void>();
 
   configure(role: VPLSoundRole): void {
+    if (this.configured && this.role === role) return;
+    this.configured = true;
     this.role = role;
+
+    let muted = true;
+    let volume = 0.7;
+
     if (role === 'scorer') {
-      this.state.muted = true;
+      muted = true;
     } else {
       const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('vpl_sound_enabled') : null;
-      this.state.muted = saved === null ? false : saved !== 'true';
+      muted = saved === null ? false : saved !== 'true';
       const vol = typeof localStorage !== 'undefined' ? localStorage.getItem('vpl_sound_volume') : null;
-      this.state.volume = vol ? parseFloat(vol) : 0.7;
+      volume = vol ? parseFloat(vol) : 0.7;
     }
-    this.init();
+
+    let supported = this.state.supported;
+    let unlocked = this.state.unlocked;
+
+    if (typeof window !== 'undefined') {
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (AudioCtx) {
+        supported = true;
+        if (!this.ctx) {
+          try {
+            this.ctx = new AudioCtx();
+            if (this.ctx.state === 'running') {
+              unlocked = true;
+            }
+          } catch {}
+        } else if (this.ctx.state === 'running') {
+          unlocked = true;
+        }
+      }
+    }
+
+    this.state = {
+      supported,
+      muted,
+      unlocked,
+      volume,
+    };
     this.notify();
   }
 
-  private init() {
-    if (typeof window === 'undefined' || typeof AudioContext === 'undefined') {
-      this.state.supported = false;
-      return;
-    }
+  private initCtx() {
+    if (typeof window === 'undefined') return;
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (AudioCtx) {
-        this.ctx = new AudioCtx();
-        this.state.supported = true;
-        if (this.ctx.state === 'running') {
-          this.state.unlocked = true;
-        }
+        try {
+          this.ctx = new AudioCtx();
+          const unlocked = this.ctx.state === 'running';
+          if (!this.state.supported || this.state.unlocked !== unlocked) {
+            this.state = { ...this.state, supported: true, unlocked };
+            this.notify();
+          }
+        } catch {}
       }
     }
   }
 
   async unlock(play: boolean): Promise<void> {
-    this.init();
+    this.initCtx();
     if (!this.ctx) return;
     try {
       await this.ctx.resume();
-      this.state.unlocked = true;
+      if (!this.state.unlocked) {
+        this.state = { ...this.state, unlocked: true };
+        this.notify();
+      }
       if (play && !this.state.muted) this.play('tick');
-      this.notify();
     } catch {}
   }
 
@@ -142,7 +177,8 @@ class VPLSoundEngine {
   }
 
   setMuted(v: boolean) {
-    this.state.muted = v;
+    if (this.state.muted === v) return;
+    this.state = { ...this.state, muted: v };
     if (this.role === 'public' && typeof localStorage !== 'undefined') {
       localStorage.setItem('vpl_sound_enabled', String(!v));
     }
@@ -150,9 +186,11 @@ class VPLSoundEngine {
   }
 
   setVolume(v: number) {
-    this.state.volume = Math.max(0, Math.min(1, v));
+    const clamped = Math.max(0, Math.min(1, v));
+    if (this.state.volume === clamped) return;
+    this.state = { ...this.state, volume: clamped };
     if (this.role === 'public' && typeof localStorage !== 'undefined') {
-      localStorage.setItem('vpl_sound_volume', String(this.state.volume));
+      localStorage.setItem('vpl_sound_volume', String(clamped));
     }
     this.notify();
   }
@@ -162,7 +200,8 @@ class VPLSoundEngine {
     return () => this.listeners.delete(cb);
   };
 
-  getState = (): VPLSoundState => ({ ...this.state });
+  /** Returns immutable cached snapshot. Must NOT allocate new object reference on every call! */
+  getState = (): VPLSoundState => this.state;
 
   private notify() {
     this.listeners.forEach(cb => cb());
@@ -170,4 +209,3 @@ class VPLSoundEngine {
 }
 
 export const vplSound = new VPLSoundEngine();
-
