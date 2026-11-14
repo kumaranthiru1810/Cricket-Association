@@ -196,9 +196,6 @@ export function VPLEventBanner({
             <Text style={[styles.titleText, { fontSize: titleSize }]}>
               {current.titleEn}
             </Text>
-            {current.titleTa && current.tier !== 1 && (
-              <Text style={styles.tamilText}>{current.titleTa}</Text>
-            )}
             {current.detail && (
               <Text style={styles.detailText}>{current.detail}</Text>
             )}

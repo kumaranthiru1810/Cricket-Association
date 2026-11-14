@@ -1575,7 +1575,7 @@ class ScoringEngine {
         ballsInOver,
         remainingBalls,
         reason: reason || (isMidOver ? 'INJURY' : 'TACTICAL'),
-        situation: situation || (isMidOver ? 'காயம் (Injured)' : 'கேப்டன் மாற்றம் (Tactical)'),
+        situation: situation || (isMidOver ? 'Injured / Retired Hurt' : 'Tactical Change'),
         suspended: !!suspendCurrentBowler,
         overNumber: innings.overs || 0,
         timestamp: new Date()

@@ -7615,8 +7615,8 @@ export default function LiveScoringScreen() {
                         </Text>
                         <Text style={styles.keeperDismissalExplanation}>
                           {wicketType === 'STUMPED'
-                            ? 'பேட்டர் க்ரீஸை விட்டு வெளியே வந்ததும் கீப்பர் ஸ்டம்பைத் தட்டி அவுட் செய்தார்.'
-                            : 'பேட்டர் எட்ஜ் செய்த பந்தை விக்கெட் கீப்பர் கேட்ச் பிடித்தார்.'}
+                            ? 'Batter stepped out of crease and wicketkeeper broke the stumps.'
+                            : 'Batter edged delivery and wicketkeeper caught cleanly behind.'}
                         </Text>
                       </View>
                     </View>
@@ -7638,7 +7638,7 @@ export default function LiveScoringScreen() {
                         </View>
                         <Text style={styles.runOutDismissalTitle}>Run Out (Fielder Direct Hit / Throw)</Text>
                         <Text style={styles.runOutDismissalExplanation}>
-                          பேட்டர் க்ரீஸுக்குள் வருவதற்கு முன் பீல்டர் வீசிய பந்து ஸ்டம்பைத் தகர்த்தது.
+                          Fielder hit the stumps before the batter could ground their bat behind the crease line.
                         </Text>
                       </View>
                     </View>
