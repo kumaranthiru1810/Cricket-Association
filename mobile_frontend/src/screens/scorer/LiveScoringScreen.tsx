@@ -59,6 +59,49 @@ const STANDARD_BREAK_OPTIONS = [
   { label: 'Other / Custom Break', icon: '✏️', sub: 'Type custom break reason below' }
 ];
 
+export const RECENT_OVER_THEMES = [
+  {
+    name: 'amber',
+    badgeBg: '#fef3c7',
+    badgeBorder: '#f59e0b',
+    badgeText: '#b45309',
+    chipBg: '#fffdf5',
+    chipBorder: '#f59e0b',
+    subText: '#d97706',
+    dotText: '#78350f',
+  },
+  {
+    name: 'cyan',
+    badgeBg: '#e0f2fe',
+    badgeBorder: '#0284c7',
+    badgeText: '#0369a1',
+    chipBg: '#f0f9ff',
+    chipBorder: '#38bdf8',
+    subText: '#0284c7',
+    dotText: '#0c4a6e',
+  },
+  {
+    name: 'emerald',
+    badgeBg: '#d1fae5',
+    badgeBorder: '#059669',
+    badgeText: '#047857',
+    chipBg: '#f0fdf4',
+    chipBorder: '#34d399',
+    subText: '#059669',
+    dotText: '#064e3b',
+  },
+  {
+    name: 'purple',
+    badgeBg: '#ede9fe',
+    badgeBorder: '#7c3aed',
+    badgeText: '#6d28d9',
+    chipBg: '#faf5ff',
+    chipBorder: '#a855f7',
+    subText: '#7c3aed',
+    dotText: '#4c1d95',
+  },
+];
+
 const STANDARD_PENALTY_REASONS = [
   'Ball hit helmet in field of play (5 Penalty Runs)',
   'Player entering without permission touches ball in play',
@@ -6243,66 +6286,112 @@ export default function LiveScoringScreen() {
                     const isExtra = Boolean(del.extra);
                     const isDot = del.runs === 0 && !isExtra && !isWicket;
 
-                    return (
-                      <TouchableOpacity
-                        key={`del-${del.id || idx}`}
-                        style={[
-                          styles.ballChip,
-                          isWicket && styles.ballChipWicket,
-                          isFour && styles.ballChipFour,
-                          isSix && styles.ballChipSix,
-                          isExtra && styles.ballChipExtra,
-                          isDot && styles.ballChipDot,
-                          isEditMode && styles.ballChipEditMode
-                        ]}
-                        onPress={() => {
-                          if (isEditMode) {
-                            handleOpenEditDelivery(del);
-                          } else {
-                            // Check if delivery matches an official umpire signal
-                            const dt = (del.text || '').toUpperCase();
-                            let sigType: UmpireSignalType | null = null;
-                            if (isWicket || (dt.includes('W') && !dt.includes('WD'))) sigType = 'OUT';
-                            else if (dt.includes('WD')) sigType = 'WIDE';
-                            else if (dt.includes('NB')) sigType = 'NO_BALL';
-                            else if (dt.includes('DEAD')) sigType = 'DEAD_BALL';
-                            else if (dt.includes('LB')) sigType = 'LEG_BYE';
-                            else if (dt.includes('B') && !dt.includes('NB')) sigType = 'BYE';
-                            else if (isSix || dt === '6') sigType = 'SIX';
-                            else if (isFour || dt === '4') sigType = 'FOUR';
+                    const overIdx = typeof del.overNumber === 'number'
+                      ? del.overNumber
+                      : parseInt(String(del.ball || '0').split('.')[0], 10);
 
-                            if (sigType) {
-                              setActiveUmpireSignal({
-                                type: sigType,
-                                batterName: del.strikerName || striker?.name,
-                                bowlerName: del.bowlerName || bowler?.name,
-                                runs: del.runs,
-                                overText: `Ball ${del.ball}`,
-                                extraDetails: del.commentary || `Delivery ${del.ball}: ${del.text} • Click 'Edit Mode' to alter historical ball`
-                              });
-                            } else {
-                              const info = `Ball ${del.ball}: ${del.text} • ${del.commentary || 'Recorded delivery'}\n\nTip: Activate 'Edit Mode' in the sidebar or top banner to modify past deliveries directly.`;
-                              Platform.OS === 'web' ? window.alert(info) : Alert.alert('Delivery Details', info);
-                            }
-                          }
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        {isEditMode && <Text style={styles.ballChipPencil}>✏️</Text>}
-                        <Text
+                    const prevDel = idx > 0 ? recentDeliveries[idx - 1] : null;
+                    const prevOverIdx = prevDel
+                      ? (typeof prevDel.overNumber === 'number'
+                          ? prevDel.overNumber
+                          : parseInt(String(prevDel.ball || '0').split('.')[0], 10))
+                      : null;
+
+                    const isNewOverSection = idx === 0 || overIdx !== prevOverIdx;
+                    const theme = RECENT_OVER_THEMES[Math.abs(overIdx) % RECENT_OVER_THEMES.length];
+
+                    // Total runs scored in this over
+                    const overTotalRuns = recentDeliveries
+                      .filter(d => {
+                        const o = typeof d.overNumber === 'number'
+                          ? d.overNumber
+                          : parseInt(String(d.ball || '0').split('.')[0], 10);
+                        return o === overIdx;
+                      })
+                      .reduce((sum, d) => sum + (Number(d.runs) || 0) + (Number(d.runsExtras) || 0), 0);
+
+                    return (
+                      <React.Fragment key={`del-frag-${del.id || idx}`}>
+                        {isNewOverSection && (
+                          <View
+                            style={[
+                              styles.overDividerBadge,
+                              idx > 0 && { marginLeft: 10 },
+                              {
+                                backgroundColor: theme.badgeBg,
+                                borderColor: theme.badgeBorder,
+                              }
+                            ]}
+                          >
+                            <Text style={[styles.overDividerBadgeText, { color: theme.badgeText }]}>
+                              Ov {overIdx + 1}
+                            </Text>
+                            <Text style={[styles.overDividerRunsText, { color: theme.badgeText }]}>
+                              {overTotalRuns}r
+                            </Text>
+                          </View>
+                        )}
+
+                        <TouchableOpacity
+                          key={`del-${del.id || idx}`}
                           style={[
-                            styles.ballChipText,
-                            isWicket && styles.ballChipTextWicket,
-                            isFour && styles.ballChipTextFour,
-                            isSix && styles.ballChipTextSix,
-                            isExtra && styles.ballChipTextExtra,
-                            isDot && styles.ballChipTextDot
+                            styles.ballChip,
+                            {
+                              backgroundColor: isWicket ? '#fef2f2' : isFour ? '#ecfdf5' : isSix ? '#eff6ff' : isExtra ? '#fffbeb' : theme.chipBg,
+                              borderColor: isWicket ? '#ef4444' : isFour ? '#10b981' : isSix ? '#3b82f6' : isExtra ? '#f59e0b' : theme.chipBorder,
+                            },
+                            isEditMode && styles.ballChipEditMode
                           ]}
+                          onPress={() => {
+                            if (isEditMode) {
+                              handleOpenEditDelivery(del);
+                            } else {
+                              // Check if delivery matches an official umpire signal
+                              const dt = (del.text || '').toUpperCase();
+                              let sigType: UmpireSignalType | null = null;
+                              if (isWicket || (dt.includes('W') && !dt.includes('WD'))) sigType = 'OUT';
+                              else if (dt.includes('WD')) sigType = 'WIDE';
+                              else if (dt.includes('NB')) sigType = 'NO_BALL';
+                              else if (dt.includes('DEAD')) sigType = 'DEAD_BALL';
+                              else if (dt.includes('LB')) sigType = 'LEG_BYE';
+                              else if (dt.includes('B') && !dt.includes('NB')) sigType = 'BYE';
+                              else if (isSix || dt === '6') sigType = 'SIX';
+                              else if (isFour || dt === '4') sigType = 'FOUR';
+
+                              if (sigType) {
+                                setActiveUmpireSignal({
+                                  type: sigType,
+                                  batterName: del.strikerName || striker?.name,
+                                  bowlerName: del.bowlerName || bowler?.name,
+                                  runs: del.runs,
+                                  overText: `Ball ${del.ball}`,
+                                  extraDetails: del.commentary || `Delivery ${del.ball}: ${del.text} • Click 'Edit Mode' to alter historical ball`
+                                });
+                              } else {
+                                const info = `Ball ${del.ball}: ${del.text} • ${del.commentary || 'Recorded delivery'}\n\nTip: Activate 'Edit Mode' in the sidebar or top banner to modify past deliveries directly.`;
+                                Platform.OS === 'web' ? window.alert(info) : Alert.alert('Delivery Details', info);
+                              }
+                            }
+                          }}
+                          activeOpacity={0.7}
                         >
-                          {del.text}
-                        </Text>
-                        <Text style={styles.ballChipOverText}>{del.ball}</Text>
-                      </TouchableOpacity>
+                          {isEditMode && <Text style={styles.ballChipPencil}>✏️</Text>}
+                          <Text
+                            style={[
+                              styles.ballChipText,
+                              isWicket && styles.ballChipTextWicket,
+                              isFour && styles.ballChipTextFour,
+                              isSix && styles.ballChipTextSix,
+                              isExtra && styles.ballChipTextExtra,
+                              isDot && { color: theme.dotText },
+                              !isWicket && !isFour && !isSix && !isExtra && !isDot && { color: theme.dotText }
+                            ]}
+                          >
+                            {del.text}
+                          </Text>
+                          <Text style={[styles.ballChipOverText, { color: theme.subText }]}>{del.ball}</Text>
+                        </TouchableOpacity>
+                      </React.Fragment>
                     );
                   })
                 ) : (
@@ -12057,6 +12146,26 @@ const getStyles = (isDesktop: boolean) =>
       fontSize: 12,
       color: '#94a3b8',
       fontStyle: 'italic'
+    },
+    overDividerBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 8,
+      borderWidth: 1.5,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minWidth: 46,
+      height: 48
+    },
+    overDividerBadgeText: {
+      fontSize: 11,
+      fontWeight: '900',
+      letterSpacing: 0.3
+    },
+    overDividerRunsText: {
+      fontSize: 9.5,
+      fontWeight: '800',
+      marginTop: 1
     },
 
     // Direct Delivery Edit Modal Styles
