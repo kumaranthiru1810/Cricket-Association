@@ -6021,18 +6021,45 @@ export default function LiveScoringScreen() {
                     </Text>
                   </View>
                 )}
-                <Text style={styles.battingTeam}>
-                  {(matchInfo?.battingTeam || matchInfo?.teamA || 'BATTING TEAM').toUpperCase()}
-                  {allInningsList && allInningsList.length > 1 ? ' (2ND INNINGS)' : ' (1ST INNINGS)'}
-                </Text>
-                <View style={styles.scoreRow}>
-                  <Text style={styles.scoreText}>{runs}/{wickets}</Text>
-                  <Text style={styles.oversText}>({getOvers(balls)})</Text>
-                </View>
-                <Text style={styles.rrText}>
-                  CRR: {balls > 0 ? ((runs / balls) * 6).toFixed(2) : '0.00'}
-                  {targetRuns ? ` | Target: ${targetRuns} (Need ${Math.max(0, targetRuns - runs)} runs)` : ''}
-                </Text>
+                {(() => {
+                  const isSecondInnings = Boolean((allInningsList && allInningsList.length > 1) || matchInfo?.currentInningsNumber === 2);
+                  const totalMatchOvers = matchInfo?.revisedOvers || matchInfo?.overs || 20;
+                  const totalMatchBalls = Math.round(totalMatchOvers * 6);
+                  const remainingBalls = Math.max(0, totalMatchBalls - balls);
+                  const remOvers = `${Math.floor(remainingBalls / 6)}.${remainingBalls % 6}`;
+                  const crr = balls > 0 ? ((runs / balls) * 6).toFixed(2) : '0.00';
+                  const runsNeeded = targetRuns ? Math.max(0, targetRuns - runs) : 0;
+                  const rrr = remainingBalls > 0 && targetRuns && runsNeeded > 0
+                    ? (((runsNeeded) / remainingBalls) * 6).toFixed(2)
+                    : null;
+
+                  return (
+                    <>
+                      <Text style={styles.battingTeam}>
+                        {(matchInfo?.battingTeam || matchInfo?.teamA || 'BATTING TEAM').toUpperCase()}
+                        {isSecondInnings ? ' (2ND INNINGS)' : ' (1ST INNINGS)'}
+                      </Text>
+                      <View style={styles.scoreRow}>
+                        <Text style={styles.scoreText}>{runs}/{wickets}</Text>
+                        <Text style={styles.oversText}>
+                          ({getOvers(balls)} / {totalMatchOvers} Ov)
+                        </Text>
+                      </View>
+                      <Text style={styles.rrText}>
+                        CRR: {crr}
+                        {isSecondInnings && targetRuns ? (
+                          runs >= targetRuns ? (
+                            ` | Target: ${targetRuns} (Target Achieved!)`
+                          ) : (
+                            ` | Target: ${targetRuns} (Need ${runsNeeded} runs in ${remainingBalls} balls • RRR: ${rrr || '0.00'})`
+                          )
+                        ) : (
+                          ` • Remaining: ${remainingBalls} balls (${remOvers} Ov)`
+                        )}
+                      </Text>
+                    </>
+                  );
+                })()}
                 {lastDismissal ? (
                   <View style={styles.lastWicketChip}>
                     <Text style={styles.lastWicketTag}>⚡ LAST WICKET (Ov {lastDismissal.ball}):</Text>
@@ -6823,7 +6850,7 @@ export default function LiveScoringScreen() {
               <View style={[styles.previewBox, { padding: 8, marginTop: 4 }]}>
                 <Text style={[styles.previewBoxLabel, { fontSize: 9.5 }]}>RECORDING PREVIEW:</Text>
                 <Text style={[styles.previewBoxText, { fontSize: 12 }]}>
-                  {customRunsInput || '0'} Runs &bull; {customCategory.toUpperCase()} vs {bowler?.name || 'Bowler'}
+                  {customRunsInput || '0'} Runs • {customCategory.toUpperCase()} vs {bowler?.name || 'Bowler'}
                   {customRunsReason.trim() ? ` • [${customRunsReason.trim()}]` : ''}
                 </Text>
               </View>

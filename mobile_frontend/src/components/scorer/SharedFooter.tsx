@@ -36,17 +36,17 @@ export default function SharedFooter({ style }: Props) {
         {/* Right / Center: Copyright & Legal */}
         <View style={[styles.metaRow, !isDesktop && styles.metaRowMobile]}>
           <Text style={styles.copyrightText}>
-            © 2026 CFVD &bull; All Rights Reserved
+            © 2026 CFVD • All Rights Reserved
           </Text>
           <View style={styles.linksRow}>
             <TouchableOpacity activeOpacity={0.7}>
               <Text style={styles.linkText}>Privacy</Text>
             </TouchableOpacity>
-            <Text style={styles.bullet}>&bull;</Text>
+            <Text style={styles.bullet}>•</Text>
             <TouchableOpacity activeOpacity={0.7}>
               <Text style={styles.linkText}>Terms</Text>
             </TouchableOpacity>
-            <Text style={styles.bullet}>&bull;</Text>
+            <Text style={styles.bullet}>•</Text>
             <TouchableOpacity activeOpacity={0.7}>
               <Text style={styles.linkText}>Match Rules</Text>
             </TouchableOpacity>

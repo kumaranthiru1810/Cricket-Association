@@ -47,8 +47,8 @@ export function formatScoreWithTotalOvers(scoreStr?: string, maxOvers?: number):
   }
   if (!maxOvers) return scoreStr;
 
-  // Don't format if already has "/<number>" inside overs
-  if (/\/\d+(\.\d+)?\s*(Ov|ov|Overs)?/i.test(scoreStr)) return scoreStr;
+  // Don't format if the overs in parentheses already contains total overs e.g. "(12.1/20 Ov)"
+  if (/\([^)]*\/\s*\d+[^)]*\)/i.test(scoreStr)) return scoreStr;
 
   return scoreStr.replace(/\((\d+(\.\d+)?)\s*(Ov|ov|Overs)?\)/i, (_match, ov) => {
     return `(${ov}/${maxOvers} Ov)`;
