@@ -1245,7 +1245,9 @@ export default function HomeScreen() {
                                 isSmallMobile && { paddingHorizontal: 6, paddingVertical: 2 }
                               ]}
                             >
-                              <Text style={[styles.formatBadgeText, isSmallMobile && { fontSize: 9 }]}>{m.format || 'T20'}</Text>
+                              <Text style={[styles.formatBadgeText, isSmallMobile && { fontSize: 9 }]}>
+                                {m.format || 'T20'}{m.revisedOvers || m.revised_overs ? ` (${m.revisedOvers || m.revised_overs} Ov)` : (m.overs ? ` (${m.overs} Ov)` : ' (20 Ov)')}
+                              </Text>
                             </View>
                           </View>
                         </View>
