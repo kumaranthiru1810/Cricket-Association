@@ -736,21 +736,46 @@ class PlayerService {
     const runOuts = Number(fielding?.runOuts || 0);
     const stumpings = Number(fielding?.stumpings || 0);
 
-    // Official Federation Performance Point Formula:
-    // Runs: 1 pt each
-    // Boundary bonus: 4s = +1 pt, 6s = +2 pts
-    // Wickets: 25 pts each
-    // Fielding: Catches = 10 pts, Runouts/Stumpings = 15 pts
-    // Strike Rate bonus: +15 pts if SR >= 120 and runs >= 30
-    const srBonus = (strikeRate >= 120 && runs >= 30) ? 15 : 0;
+    // Official CricHeroes Standard Performance Point Formula:
+    // Batting Points:
+    const runsPts = runs * 1;
+    const boundaryFoursPts = fours * 1;
+    const boundarySixesPts = sixes * 2;
+    const thirtyBonus = (runs >= 30 && runs < 50) ? 4 : 0;
+    const fiftyBonus = (runs >= 50 && runs < 100) ? 8 : 0;
+    const centuryBonus = (runs >= 100) ? 16 : 0;
+    const srBonus = (strikeRate >= 130 && runs >= 25) ? 15 : (strikeRate >= 115 && runs >= 20 ? 8 : 0);
+
+    // Bowling Points:
+    const wicketsPts = wickets * 25;
+    const threeWktBonus = (wickets >= 3 && wickets < 5) ? 4 : 0;
+    const fiveWktBonus = (wickets >= 5) ? 16 : 0;
+    const maidens = Number(bowling?.maidens || 0);
+    const maidenPts = maidens * 12;
+    const economy = Number(bowling?.economy || (overs > 0 ? (Number(bowling?.runsConceded || 0) / overs) : 0));
+    const economyBonus = (overs >= 2 && economy > 0 && economy <= 6.0) ? 6 : 0;
+
+    // Fielding Points:
+    const catchPts = catches * 10;
+    const runOutPts = runOuts * 15;
+    const stumpingPts = stumpings * 15;
+
     const totalPoints = Math.round(
-      (runs * 1) +
-      (fours * 1) +
-      (sixes * 2) +
-      (wickets * 25) +
-      (catches * 10) +
-      ((runOuts + stumpings) * 15) +
-      srBonus
+      runsPts +
+      boundaryFoursPts +
+      boundarySixesPts +
+      thirtyBonus +
+      fiftyBonus +
+      centuryBonus +
+      srBonus +
+      wicketsPts +
+      threeWktBonus +
+      fiveWktBonus +
+      maidenPts +
+      economyBonus +
+      catchPts +
+      runOutPts +
+      stumpingPts
     );
 
     // Milestone Patches based on Runs, Wickets & Field Performance

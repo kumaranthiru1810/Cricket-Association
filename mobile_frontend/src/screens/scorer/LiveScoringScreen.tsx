@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -27,6 +27,9 @@ import CricketFigurine3D from '../../components/common/CricketFigurine3D';
 import InteractiveWagonWheelModal, { ShotDirectionResult } from '../../components/analytics/InteractiveWagonWheelModal';
 import UmpireSignalOverlay, { UmpireSignalEvent, UmpireSignalsGalleryModal, UmpireSignalType } from '../../components/common/UmpireSignalOverlay';
 import FieldingEventOverlay, { FieldingEventData, FieldingEventType } from '../../components/common/FieldingEventOverlay';
+import BroadcastLiveBallAction from '../../components/common/BroadcastLiveBallAction';
+import { VPLEventBanner, VPLSoundControls } from '../../components/common/VPLEventBanner';
+import { mapBallToEvents, normalizeExtraType, normalizeDismissal } from '../../utils/vplEventMapper';
 import CalculationSettingsManagement from '../../admin/components/CalculationSettingsManagement';
 
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
@@ -70,17 +73,6 @@ const STANDARD_PENALTY_REASONS = [
   'Dissent towards umpire decision'
 ];
 
-const STANDARD_SESSION_OPTIONS = [
-  { label: 'Morning Session', icon: '🌅', sub: 'Session 1' },
-  { label: 'Lunch', icon: '🍽️', sub: 'Lunch interval' },
-  { label: 'Afternoon Session', icon: '☀️', sub: 'Session 2' },
-  { label: 'Tea', icon: '☕', sub: 'Tea interval' },
-  { label: 'Evening Session', icon: '🌇', sub: 'Session 3' },
-  { label: 'End of Day', icon: '🌙', sub: 'Stumps' },
-  { label: 'Extended Session', icon: '⏱️', sub: 'Overs recovery' },
-  { label: 'Rain Delayed Session', icon: '🌧️', sub: 'Weather revised session' },
-  { label: 'Other / Custom Session', icon: '✏️', sub: 'Type custom session below' }
-];
 
 const BALL_TYPE_OPTIONS = [
   'Good Length',
@@ -117,6 +109,20 @@ const SHOT_TYPE_OPTIONS = [
   'No Shot'
 ];
 
+const LiveDrawerClock = React.memo(({ textStyle }: { textStyle: any }) => {
+  const [timeStr, setTimeStr] = useState<string>('');
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      setTimeStr(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }));
+    };
+    updateTime();
+    const timer = setInterval(updateTime, 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return <Text style={textStyle}>{timeStr || '11:34:00 am'}</Text>;
+});
+
 export default function LiveScoringScreen() {
   const { navigate, params, onExit } = useScorerNavigation();
   const { width } = useWindowDimensions();
@@ -126,7 +132,7 @@ export default function LiveScoringScreen() {
       ? (new URL(window.location.href).searchParams.get('matchId') || localStorage.getItem('cfvd_last_scorer_match_id'))
       : null) ||
     'M002';
-  const styles = getStyles(isDesktop);
+  const styles = useMemo(() => getStyles(isDesktop), [isDesktop]);
 
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -285,10 +291,6 @@ export default function LiveScoringScreen() {
   const [isFreeHitActive, setIsFreeHitActive] = useState<boolean>(false);
   const [consecutiveWidesCount, setConsecutiveWidesCount] = useState<number>(0);
 
-  // --- SCORER SIDE OPTIONS & DOCUMENT WORKFLOW STATES ---
-  // Live Clock for Slide Menu
-  const [currentTimeStr, setCurrentTimeStr] = useState<string>('');
-
   // Wi-Fi / Connectivity Status (New Feature from Manual)
   const [isOnline, setIsOnline] = useState<boolean>(true);
 
@@ -326,7 +328,7 @@ export default function LiveScoringScreen() {
 
   // Clock Picker Modal State
   const [clockPickerVisible, setClockPickerVisible] = useState<boolean>(false);
-  const [clockPickerTarget, setClockPickerTarget] = useState<'BREAK_START' | 'BREAK_END' | 'SESSION_START' | 'SESSION_END'>('BREAK_START');
+  const [clockPickerTarget, setClockPickerTarget] = useState<'BREAK_START' | 'BREAK_END'>('BREAK_START');
 
   // Open Breaks modal with current time and default duration
   const handleOpenBreaksModal = () => {
@@ -384,41 +386,11 @@ export default function LiveScoringScreen() {
         setBreakDuration(String(mins));
         setIsDurationAutoCalculated(true);
       }
-    } else if (clockPickerTarget === 'SESSION_START') {
-      setSessionStartTime(formattedTime);
-    } else if (clockPickerTarget === 'SESSION_END') {
-      setSessionEndTime(formattedTime);
     }
     setClockPickerVisible(false);
   };
 
-  // 2. Sessions Modal State
-  const [showSessionsModal, setShowSessionsModal] = useState<boolean>(false);
-  const [sessionsList, setSessionsList] = useState<any[]>([]);
-  const [sessionDayNo, setSessionDayNo] = useState<string>('1');
-  const [sessionType, setSessionType] = useState<string>('Lunch');
-  const [isSessionTypeDropdownOpen, setIsSessionTypeDropdownOpen] = useState<boolean>(false);
-  const [customSessionTypeInput, setCustomSessionTypeInput] = useState<string>('');
-  const [sessionStartInnings, setSessionStartInnings] = useState<string>('1');
-  const [sessionEndInnings, setSessionEndInnings] = useState<string>('1');
-  const [sessionStartOver, setSessionStartOver] = useState<string>('0.0');
-  const [sessionEndOver, setSessionEndOver] = useState<string>('25.0');
-  const [sessionStartTime, setSessionStartTime] = useState<string>('09:30 am');
-  const [sessionEndTime, setSessionEndTime] = useState<string>('12:30 pm');
-  const [sessionDuration, setSessionDuration] = useState<string>('180');
-  const [isSubmittingSession, setIsSubmittingSession] = useState<boolean>(false);
 
-  // 3. End Day Modal State
-  const [showEndDayModal, setShowEndDayModal] = useState<boolean>(false);
-  const [endDayNo, setEndDayNo] = useState<string>('1');
-  const [endDayStartInnings, setEndDayStartInnings] = useState<string>('1');
-  const [endDayEndInnings, setEndDayEndInnings] = useState<string>('1');
-  const [endDayOvers, setEndDayOvers] = useState<string>('90.0');
-  const [endDayStartTime, setEndDayStartTime] = useState<string>('09:30 am');
-  const [endDayEndTime, setEndDayEndTime] = useState<string>('05:30 pm');
-  const [endDayDuration, setEndDayDuration] = useState<string>('480');
-  const [endDayComments, setEndDayComments] = useState<string>('Day 1 Stumps');
-  const [isSubmittingEndDay, setIsSubmittingEndDay] = useState<boolean>(false);
 
   // 4. Declare Innings Modal State
   const [showDeclareModal, setShowDeclareModal] = useState<boolean>(false);
@@ -563,6 +535,7 @@ export default function LiveScoringScreen() {
   const [activeMilestone, setActiveMilestone] = useState<MilestoneCelebration | null>(null);
   const [showMilestoneModal, setShowMilestoneModal] = useState<boolean>(false);
   const shownMilestonesRef = useRef<Set<string>>(new Set());
+  const shownRulesRef = useRef<Set<string>>(new Set());
 
   // Broadcast Umpire Signal Overlay & Hand Signals Gallery State
   const [activeUmpireSignal, setActiveUmpireSignal] = useState<UmpireSignalEvent | null>(null);
@@ -842,17 +815,6 @@ export default function LiveScoringScreen() {
         window.removeEventListener('offline', handleOffline);
       };
     }
-  }, []);
-
-  // Live Digital Clock for Slide Menu
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setCurrentTimeStr(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }));
-    };
-    updateTime();
-    const timer = setInterval(updateTime, 1000);
-    return () => clearInterval(timer);
   }, []);
 
   const getWinnerInfo = () => {
@@ -1222,9 +1184,12 @@ export default function LiveScoringScreen() {
       setCurrentBreak(curBreak);
 
       const isBreak = curMatchStatus === 'INNINGS_BREAK';
-      const isCompleted = curMatchStatus === 'COMPLETED';
+      const targetVal = d.match?.revisedTarget || d.innings?.target || d.match?.targetRuns || 0;
+      const isTargetReached = (d.innings?.inningsNumber === 2 && targetVal > 0 && (d.innings?.runs || 0) >= targetVal);
+      const hasWinSummary = Boolean(d.match?.resultSummary && !d.match?.resultSummary.toLowerCase().includes('delayed') && (d.match?.resultSummary.toLowerCase().includes('won') || d.match?.resultSummary.toLowerCase().includes('tied')));
+      const isCompleted = curMatchStatus === 'COMPLETED' || isTargetReached || hasWinSummary;
       setIsInningsBreak(isBreak);
-      setIsMatchEnded(isCompleted);
+      setIsMatchEnded(Boolean(isCompleted));
 
       if (d.match) {
         const teamAName = d.match.teamA || d.innings?.battingTeam || 'Team A';
@@ -1480,17 +1445,21 @@ export default function LiveScoringScreen() {
       // Seamless background update without full page refresh
       await loadLiveState(false);
 
-      // Smart Rules Analysis: Free Hit status
+      // Smart Rules Analysis: Free Hit status (Rule modal triggers ONCE per match)
       if (res.isFreeHit || res.data?.isFreeHit || type === 'noball') {
         setIsFreeHitActive(true);
         if (type === 'noball') {
-          setActiveCricketRule('FREE_HIT');
-          setCricketRuleContext({
-            bowlerName: bowler?.name || 'Bowler',
-            strikerName: striker?.name || 'Striker',
-            nonStrikerName: nonStriker?.name || 'Non-Striker'
-          });
-          setShowCricketRulesModal(true);
+          const ruleKey = `${matchId}_FREE_HIT`;
+          if (!shownRulesRef.current.has(ruleKey)) {
+            shownRulesRef.current.add(ruleKey);
+            setActiveCricketRule('FREE_HIT');
+            setCricketRuleContext({
+              bowlerName: bowler?.name || 'Bowler',
+              strikerName: striker?.name || 'Striker',
+              nonStrikerName: nonStriker?.name || 'Non-Striker'
+            });
+            setShowCricketRulesModal(true);
+          }
         }
       } else if (isFreeHitActive && type === 'normal') {
         setIsFreeHitActive(false);
@@ -1562,18 +1531,22 @@ export default function LiveScoringScreen() {
         });
       }
 
-      // Smart Rules Analysis: Consecutive Wides
+      // Smart Rules Analysis: Consecutive Wides (Triggers rule modal only ONCE per match)
       if (type === 'wide') {
         const nextWides = consecutiveWidesCount + 1;
         setConsecutiveWidesCount(nextWides);
         if (nextWides >= 2) {
-          setActiveCricketRule('CONSECUTIVE_WIDES');
-          setCricketRuleContext({
-            bowlerName: bowler?.name || 'Bowler',
-            count: nextWides,
-            overNumber: Math.floor(balls / 6) + 1
-          });
-          setShowCricketRulesModal(true);
+          const ruleKey = `${matchId}_CONSECUTIVE_WIDES`;
+          if (!shownRulesRef.current.has(ruleKey)) {
+            shownRulesRef.current.add(ruleKey);
+            setActiveCricketRule('CONSECUTIVE_WIDES');
+            setCricketRuleContext({
+              bowlerName: bowler?.name || 'Bowler',
+              count: nextWides,
+              overNumber: Math.floor(balls / 6) + 1
+            });
+            setShowCricketRulesModal(true);
+          }
         }
       } else if (type === 'normal') {
         setConsecutiveWidesCount(0);
@@ -1581,34 +1554,46 @@ export default function LiveScoringScreen() {
 
       const cwWarn = res?.consecutiveWidesWarning || res?.data?.consecutiveWidesWarning;
       if (cwWarn) {
-        setActiveCricketRule('CONSECUTIVE_WIDES');
-        setCricketRuleContext({
-          bowlerName: cwWarn.bowlerName || bowler?.name || 'Bowler',
-          count: cwWarn.count || 2,
-          overNumber: cwWarn.overNumber
-        });
-        setShowCricketRulesModal(true);
+        const ruleKey = `${matchId}_CONSECUTIVE_WIDES`;
+        if (!shownRulesRef.current.has(ruleKey)) {
+          shownRulesRef.current.add(ruleKey);
+          setActiveCricketRule('CONSECUTIVE_WIDES');
+          setCricketRuleContext({
+            bowlerName: cwWarn.bowlerName || bowler?.name || 'Bowler',
+            count: cwWarn.count || 2,
+            overNumber: cwWarn.overNumber
+          });
+          setShowCricketRulesModal(true);
+        }
       }
 
-      // Smart Rules Analysis: Bowler Quota
+      // Smart Rules Analysis: Bowler Quota (Triggers rule modal only ONCE per match per bowler)
       const bqWarn = res?.bowlerQuotaWarning || res?.data?.bowlerQuotaWarning;
       if (bqWarn) {
-        setActiveCricketRule('OVER_QUOTA');
-        setCricketRuleContext({
-          bowlerName: bqWarn.bowlerName || bowler?.name || 'Bowler',
-          oversBowled: bqWarn.overs,
-          maxQuota: bqWarn.maxQuota
-        });
-        setShowCricketRulesModal(true);
+        const ruleKey = `${matchId}_OVER_QUOTA_${bqWarn.bowlerId || ''}`;
+        if (!shownRulesRef.current.has(ruleKey)) {
+          shownRulesRef.current.add(ruleKey);
+          setActiveCricketRule('OVER_QUOTA');
+          setCricketRuleContext({
+            bowlerName: bqWarn.bowlerName || bowler?.name || 'Bowler',
+            oversBowled: bqWarn.overs,
+            maxQuota: bqWarn.maxQuota
+          });
+          setShowCricketRulesModal(true);
+        }
       }
 
       // Check for 2 No-Balls dangerous bowling warning (MCC Law 41.7)
       const nbWarn = res?.noBallWarning || res?.data?.noBallWarning;
-      if (nbWarn && !dismissedNoBallBowlers.includes(nbWarn.bowlerId)) {
+      const currentBowlerNoBalls = (bowler?.no_balls || bowler?.noBalls || 0) + (type === 'noball' ? 1 : 0);
+      const isSecondNoBall = (nbWarn && (nbWarn.noBallCount >= 2 || nbWarn.beamerCount >= 2)) || (type === 'noball' && currentBowlerNoBalls >= 2);
+      const targetBowlerId = nbWarn?.bowlerId || bowler?.id || 'B1';
+
+      if (isSecondNoBall && !dismissedNoBallBowlers.includes(targetBowlerId)) {
         setNoBallAlert({
-          bowlerId: nbWarn.bowlerId,
-          bowlerName: nbWarn.bowlerName || bowler?.name || 'Current Bowler',
-          count: nbWarn.noBallCount || 2
+          bowlerId: targetBowlerId,
+          bowlerName: nbWarn?.bowlerName || bowler?.name || 'Current Bowler',
+          count: nbWarn?.noBallCount || currentBowlerNoBalls || 2
         });
       }
 
@@ -2447,61 +2432,6 @@ export default function LiveScoringScreen() {
     }
   };
 
-  // --- 2. SESSIONS HANDLER ---
-  const handleAddSessionSubmit = async () => {
-    setIsSubmittingSession(true);
-    try {
-      const finalSessionType = customSessionTypeInput.trim() || sessionType || 'Lunch';
-      await ScorerApi.addSession(matchId, {
-        dayNo: parseInt(sessionDayNo, 10) || 1,
-        type: finalSessionType,
-        startInningsNo: parseInt(sessionStartInnings, 10) || 1,
-        endInningsNo: parseInt(sessionEndInnings, 10) || 1,
-        startOver: sessionStartOver,
-        endOver: sessionEndOver,
-        startTime: sessionStartTime,
-        endTime: sessionEndTime,
-        duration: sessionDuration
-      });
-      setShowSessionsModal(false);
-      await loadLiveState(false);
-      const msg = `Session (${finalSessionType}) recorded successfully.`;
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Success', msg);
-    } catch (err: any) {
-      const msg = err.message || 'Failed to save session.';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
-    } finally {
-      setIsSubmittingSession(false);
-    }
-  };
-
-  // --- 3. END DAY HANDLER ---
-  const handleAddEndDaySubmit = async () => {
-    setIsSubmittingEndDay(true);
-    try {
-      await ScorerApi.addEndDay(matchId, {
-        dayNo: parseInt(endDayNo, 10) || 1,
-        startInningsNo: parseInt(endDayStartInnings, 10) || 1,
-        endInningsNo: parseInt(endDayEndInnings, 10) || 1,
-        startOver: '0.0',
-        endOver: endDayOvers,
-        startTime: endDayStartTime,
-        endTime: endDayEndTime,
-        duration: endDayDuration,
-        comments: endDayComments
-      });
-      setShowEndDayModal(false);
-      await loadLiveState(false);
-      const msg = 'Day concluded and saved successfully.';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Success', msg);
-    } catch (err: any) {
-      const msg = err.message || 'Failed to end day.';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
-    } finally {
-      setIsSubmittingEndDay(false);
-    }
-  };
-
   // --- 4. DECLARE INNINGS HANDLER ---
   const handleDeclareInningsSubmit = async () => {
     setIsSubmittingDeclare(true);
@@ -2995,37 +2925,7 @@ export default function LiveScoringScreen() {
                 <Text style={styles.drawerMenuChevron}>›</Text>
               </TouchableOpacity>
 
-              {/* 2. Sessions */}
-              <TouchableOpacity
-                style={styles.drawerMenuItem}
-                onPress={() => { setShowSideDrawer(false); setShowSessionsModal(true); }}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.drawerMenuIconBox, { backgroundColor: '#e0f2fe', borderColor: '#bae6fd' }]}>
-                  <Text style={styles.drawerMenuIconText}>⏱️</Text>
-                </View>
-                <View style={styles.drawerMenuTextBox}>
-                  <Text style={styles.drawerMenuLabel}>Sessions</Text>
-                  <Text style={styles.drawerMenuDesc}>Morning / Afternoon Session</Text>
-                </View>
-                <Text style={styles.drawerMenuChevron}>›</Text>
-              </TouchableOpacity>
 
-              {/* 3. End Day */}
-              <TouchableOpacity
-                style={styles.drawerMenuItem}
-                onPress={() => { setShowSideDrawer(false); setShowEndDayModal(true); }}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.drawerMenuIconBox, { backgroundColor: '#ffedd5', borderColor: '#fed7aa' }]}>
-                  <Text style={styles.drawerMenuIconText}>🌅</Text>
-                </View>
-                <View style={styles.drawerMenuTextBox}>
-                  <Text style={styles.drawerMenuLabel}>End Day</Text>
-                  <Text style={styles.drawerMenuDesc}>Stumps / Close of Play</Text>
-                </View>
-                <Text style={styles.drawerMenuChevron}>›</Text>
-              </TouchableOpacity>
 
               {/* 4. End Innings */}
               <TouchableOpacity
@@ -3179,7 +3079,7 @@ export default function LiveScoringScreen() {
 
             {/* Live Digital Clock at bottom of Slide Menu (Matches Screenshot) */}
             <View style={styles.drawerClockBox}>
-              <Text style={styles.drawerClockText}>{currentTimeStr || '11:34:00 am'}</Text>
+              <LiveDrawerClock textStyle={styles.drawerClockText} />
             </View>
           </View>
         </View>
@@ -3493,230 +3393,6 @@ export default function LiveScoringScreen() {
         </ScrollView>
       </Modal>
 
-      {/* 3. SESSIONS MODAL (Matches Manual Image 2) */}
-      <Modal
-        visible={showSessionsModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
-          setShowSessionsModal(false);
-          setIsSessionTypeDropdownOpen(false);
-        }}
-      >
-        <ScrollView
-          contentContainerStyle={styles.modalScrollOverlay}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={true}
-        >
-          <View style={[styles.modalContent, { maxWidth: 460 }]}>
-            <View style={styles.revisedModalHeader}>
-              <Text style={styles.revisedModalTitle}>END SESSION / SESSIONS</Text>
-              <TouchableOpacity
-                style={styles.redCloseBtn}
-                onPress={() => {
-                  setShowSessionsModal(false);
-                  setIsSessionTypeDropdownOpen(false);
-                }}
-              >
-                <Text style={styles.redCloseBtnText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.revisedModalInfo}>
-              Session type to be added as Lunch, Tea, or End of Day respectively. Fill respective list items.
-            </Text>
-
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.fieldSubLabel}>DAY NO:</Text>
-                <TextInput
-                  style={styles.customNameInput}
-                  keyboardType="numeric"
-                  value={sessionDayNo}
-                  onChangeText={setSessionDayNo}
-                />
-              </View>
-            </View>
-
-            {/* Session Type Dropdown & Custom Input */}
-            <View style={{ marginTop: 10, zIndex: 10 }}>
-              <Text style={styles.fieldSubLabel}>SESSION TYPE:</Text>
-
-              {/* Dropdown Trigger */}
-              <TouchableOpacity
-                style={[
-                  styles.fielderDropdownTrigger,
-                  isSessionTypeDropdownOpen && styles.fielderDropdownTriggerOpen,
-                  { borderColor: '#005960', backgroundColor: '#f0fdf4' }
-                ]}
-                onPress={() => setIsSessionTypeDropdownOpen(!isSessionTypeDropdownOpen)}
-                activeOpacity={0.7}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                  <Text style={{ fontSize: 16, marginRight: 8 }}>
-                    {STANDARD_SESSION_OPTIONS.find((o) => o.label === sessionType)?.icon || '⏱️'}
-                  </Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.fielderDropdownTriggerText, { color: '#005960', fontWeight: 'bold' }]}>
-                      {sessionType || 'Select Session Type'}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={[styles.fielderDropdownArrow, { color: '#005960' }]}>
-                  {isSessionTypeDropdownOpen ? '▲' : '▼'}
-                </Text>
-              </TouchableOpacity>
-
-              {/* Dropdown Menu List */}
-              {isSessionTypeDropdownOpen && (
-                <View style={[styles.fielderDropdownMenu, { borderColor: '#005960', maxHeight: 210, zIndex: 20 }]}>
-                  <ScrollView style={{ maxHeight: 190 }} nestedScrollEnabled showsVerticalScrollIndicator={true}>
-                    {STANDARD_SESSION_OPTIONS.map((opt) => {
-                      const isSelected = sessionType === opt.label && !customSessionTypeInput.trim();
-                      return (
-                        <TouchableOpacity
-                          key={opt.label}
-                          style={[
-                            styles.fielderDropdownItem,
-                            isSelected && { backgroundColor: '#e6f4f1' },
-                            { paddingVertical: 8, paddingHorizontal: 10, borderBottomWidth: 0.5, borderBottomColor: '#f1f5f9' }
-                          ]}
-                          onPress={() => {
-                            setSessionType(opt.label);
-                            if (opt.label === 'Other / Custom Session') {
-                              // keep custom input
-                            } else {
-                              setCustomSessionTypeInput('');
-                            }
-                            setIsSessionTypeDropdownOpen(false);
-                          }}
-                          activeOpacity={0.7}
-                        >
-                          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                            <Text style={{ fontSize: 16, marginRight: 8 }}>{opt.icon}</Text>
-                            <View style={{ flex: 1 }}>
-                              <Text style={{ fontSize: 13, fontWeight: isSelected ? 'bold' : '600', color: isSelected ? '#005960' : '#1e293b' }}>
-                                {opt.label}
-                              </Text>
-                              <Text style={{ fontSize: 10, color: '#64748b' }}>{opt.sub}</Text>
-                            </View>
-                          </View>
-                          {isSelected && <Text style={{ color: '#005960', fontWeight: 'bold', fontSize: 14 }}>✓</Text>}
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
-              )}
-
-              {/* Custom Session Type Input (athula illathatha type panura mari) */}
-              <View style={{ marginTop: 10 }}>
-                <Text style={[styles.fieldSubLabel, { color: '#b45309' }]}>
-                  OR TYPE CUSTOM SESSION:
-                </Text>
-                <TextInput
-                  style={[
-                    styles.customNameInput,
-                    customSessionTypeInput.trim().length > 0 && { borderColor: '#005960', backgroundColor: '#f0fdf4' }
-                  ]}
-                  placeholder="Type custom session name (e.g. Morning extended session, Rain session...)"
-                  placeholderTextColor="#94a3b8"
-                  value={customSessionTypeInput}
-                  onChangeText={(val) => {
-                    setCustomSessionTypeInput(val);
-                    if (val.trim()) {
-                      setSessionType(val);
-                    }
-                  }}
-                />
-              </View>
-            </View>
-
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.fieldSubLabel}>START OVER:</Text>
-                <TextInput
-                  style={styles.customNameInput}
-                  value={sessionStartOver}
-                  onChangeText={setSessionStartOver}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.fieldSubLabel}>END OVER:</Text>
-                <TextInput
-                  style={styles.customNameInput}
-                  value={sessionEndOver}
-                  onChangeText={setSessionEndOver}
-                />
-              </View>
-            </View>
-
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, marginBottom: 14 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.fieldSubLabel}>STARTS AT:</Text>
-                <View style={styles.timeInputContainer}>
-                  <TextInput
-                    style={[styles.customNameInput, { paddingRight: 74 }]}
-                    value={sessionStartTime}
-                    onChangeText={setSessionStartTime}
-                  />
-                  <TouchableOpacity
-                    style={styles.fieldClockBtn}
-                    onPress={() => {
-                      setClockPickerTarget('SESSION_START');
-                      setClockPickerVisible(true);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={{ fontSize: 13 }}>🕒</Text>
-                    <Text style={styles.fieldClockBtnText}>Clock</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.fieldSubLabel}>ENDS AT:</Text>
-                <View style={styles.timeInputContainer}>
-                  <TextInput
-                    style={[styles.customNameInput, { paddingRight: 74 }]}
-                    value={sessionEndTime}
-                    onChangeText={setSessionEndTime}
-                  />
-                  <TouchableOpacity
-                    style={styles.fieldClockBtn}
-                    onPress={() => {
-                      setClockPickerTarget('SESSION_END');
-                      setClockPickerVisible(true);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={{ fontSize: 13 }}>🕒</Text>
-                    <Text style={styles.fieldClockBtnText}>Clock</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => {
-                  setShowSessionsModal(false);
-                  setIsSessionTypeDropdownOpen(false);
-                }}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalConfirmBtn, { backgroundColor: '#d97706' }]}
-                disabled={isSubmittingSession}
-                onPress={handleAddSessionSubmit}
-              >
-                {isSubmittingSession ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.modalConfirmText}>DONE</Text>}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </ScrollView>
-      </Modal>
 
       {/* CLOCK PICKER MODAL (For Breaks & Sessions) */}
       <ClockPickerModal
@@ -3724,109 +3400,18 @@ export default function LiveScoringScreen() {
         title={
           clockPickerTarget === 'BREAK_START'
             ? 'Select Break Start Time'
-            : clockPickerTarget === 'BREAK_END'
-              ? 'Select Break End Time'
-              : clockPickerTarget === 'SESSION_START'
-                ? 'Select Session Start Time'
-                : 'Select Session End Time'
+            : 'Select Break End Time'
         }
         initialTime={
           clockPickerTarget === 'BREAK_START'
             ? breakStartTime
-            : clockPickerTarget === 'BREAK_END'
-              ? breakEndTime
-              : clockPickerTarget === 'SESSION_START'
-                ? sessionStartTime
-                : sessionEndTime
+            : breakEndTime
         }
         referenceStartTime={clockPickerTarget === 'BREAK_END' ? breakStartTime : undefined}
         onClose={() => setClockPickerVisible(false)}
         onSelectTime={handleClockPickerSelect}
       />
 
-      {/* 4. END DAY MODAL (Matches Manual Image 2) */}
-      <Modal
-        visible={showEndDayModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowEndDayModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxWidth: 460 }]}>
-            <View style={styles.revisedModalHeader}>
-              <Text style={styles.revisedModalTitle}>END DAY</Text>
-              <TouchableOpacity style={styles.redCloseBtn} onPress={() => setShowEndDayModal(false)}>
-                <Text style={styles.redCloseBtnText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.revisedModalInfo}>
-              To end a Day, fill the respective list items (Day, overs, times, and comments) then submit to save.
-            </Text>
-
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.fieldSubLabel}>DAY NO:</Text>
-                <TextInput
-                  style={styles.customNameInput}
-                  keyboardType="numeric"
-                  value={endDayNo}
-                  onChangeText={setEndDayNo}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.fieldSubLabel}>DAY END OVERS:</Text>
-                <TextInput
-                  style={styles.customNameInput}
-                  value={endDayOvers}
-                  onChangeText={setEndDayOvers}
-                />
-              </View>
-            </View>
-
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.fieldSubLabel}>DAY START TIME:</Text>
-                <TextInput
-                  style={styles.customNameInput}
-                  value={endDayStartTime}
-                  onChangeText={setEndDayStartTime}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.fieldSubLabel}>DAY END TIME:</Text>
-                <TextInput
-                  style={styles.customNameInput}
-                  value={endDayEndTime}
-                  onChangeText={setEndDayEndTime}
-                />
-              </View>
-            </View>
-
-            <View style={{ marginTop: 8, marginBottom: 14 }}>
-              <Text style={styles.fieldSubLabel}>COMMENTS:</Text>
-              <TextInput
-                style={styles.customNameInput}
-                value={endDayComments}
-                onChangeText={setEndDayComments}
-              />
-            </View>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowEndDayModal(false)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalConfirmBtn, { backgroundColor: '#d97706' }]}
-                disabled={isSubmittingEndDay}
-                onPress={handleAddEndDaySubmit}
-              >
-                {isSubmittingEndDay ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.modalConfirmText}>DONE</Text>}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* 5. DECLARE INNINGS MODAL (Matches Manual Image 4) */}
       <Modal
@@ -4710,6 +4295,32 @@ export default function LiveScoringScreen() {
                 '\n\n"Revised Target" Option will be available during second innings only. User can update the same many times and same will be replicated in both scoring engine and report brief scores accordingly.'
               ) : ''}
             </Text>
+
+            {/* Quick Switch to DLS & VJD Calculator */}
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#0891b2',
+                borderRadius: 8,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                marginTop: 10,
+                marginBottom: 4,
+              }}
+              onPress={() => {
+                setShowRevisedOversModal(false);
+                setShowDlsModal(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={{ fontSize: 16 }}>🧮</Text>
+              <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 12.5 }}>
+                OPEN DLS & VJD CALCULATOR (AUTO CALCULATE)
+              </Text>
+            </TouchableOpacity>
 
             <View style={{ marginTop: 12 }}>
               <Text style={styles.fieldSubLabel}>NUMBER OF OVERS:</Text>
@@ -6000,34 +5611,7 @@ export default function LiveScoringScreen() {
                 )}
               </TouchableOpacity>
 
-              {/* 5. Sessions */}
-              <TouchableOpacity
-                style={[styles.sidebarNavItem, isSidebarCollapsed && styles.sidebarNavItemCollapsed]}
-                onPress={() => setShowSessionsModal(true)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.sidebarNavIcon}>⏱️</Text>
-                {!isSidebarCollapsed && (
-                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Text style={styles.sidebarNavText}>Sessions</Text>
-                    {sessionsList.length > 0 && (
-                      <View style={styles.sidebarBadgeBlue}>
-                        <Text style={styles.sidebarBadgeBlueText}>{sessionsList.length}</Text>
-                      </View>
-                    )}
-                  </View>
-                )}
-              </TouchableOpacity>
 
-              {/* 6. End Day */}
-              <TouchableOpacity
-                style={[styles.sidebarNavItem, isSidebarCollapsed && styles.sidebarNavItemCollapsed]}
-                onPress={() => setShowEndDayModal(true)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.sidebarNavIcon}>🌙</Text>
-                {!isSidebarCollapsed && <Text style={styles.sidebarNavText}>End Day</Text>}
-              </TouchableOpacity>
 
               {/* 7. End Innings */}
               <TouchableOpacity
@@ -6564,6 +6148,60 @@ export default function LiveScoringScreen() {
               </View>
             </View>
 
+            {/* Broadcast Live Kinetic Ball Action Telemetry */}
+            {(() => {
+              const latest = recentDeliveries && recentDeliveries[0];
+              const rBatter = latest
+                ? (typeof latest.runs === 'number'
+                    ? latest.runs
+                    : typeof latest.runsBatter === 'number'
+                      ? latest.runsBatter
+                      : typeof latest.runs_batter === 'number'
+                        ? latest.runs_batter
+                        : 0)
+                : 0;
+              const rExtras = latest
+                ? (typeof latest.runsExtras === 'number'
+                    ? latest.runsExtras
+                    : typeof latest.runs_extras === 'number'
+                      ? latest.runs_extras
+                      : 0)
+                : 0;
+              const rTotal = latest
+                ? (typeof latest.total_runs === 'number'
+                    ? latest.total_runs
+                    : typeof latest.totalRuns === 'number'
+                      ? latest.totalRuns
+                      : (rBatter + rExtras))
+                : 0;
+
+              const runsBat = pendingBoundaryRun !== null ? pendingBoundaryRun : rBatter;
+              const rawExtra = normalizeExtraType(latest?.extraType || latest?.extra_type || latest?.extra || (latest?.is_wide ? 'wide' : (latest?.is_no_ball ? 'noball' : null)));
+              const ballEvents = latest ? mapBallToEvents({
+                ballId: `${latest.id || recentDeliveries.length}-${runsBat}-${runs}-${wickets}`,
+                runsOffBat: runsBat,
+                extraType: rawExtra,
+                extraRuns: rExtras > 0 ? rExtras : undefined,
+                isWicket: Boolean(latest?.wicket),
+                dismissal: normalizeDismissal(latest?.wicket?.type || latest?.dismissal_type),
+                dismissedName: latest?.wicket?.batter || latest?.dismissed_name,
+                batterName: striker?.name || 'Striker',
+                batterRunsAfter: striker?.runs,
+                batterBallsAfter: striker?.balls,
+                bowlerName: bowler?.name || 'Bowler',
+              }) : null;
+
+              return (
+                <View style={{ position: 'relative', minHeight: 48, marginVertical: 4 }}>
+                  <VPLEventBanner
+                    role="scorer"
+                    events={ballEvents}
+                    bottomOffset={0}
+                    style={{ position: 'relative', left: 0, right: 0, top: 0, bottom: 0 }}
+                  />
+                </View>
+              );
+            })()}
             {/* THIS OVER & RECENT DELIVERIES INTERACTIVE STRIP (CricHeroes Retroactive Ball Correction) */}
             <View style={[styles.recentDeliveriesCard, isEditMode && styles.recentDeliveriesCardEditMode]}>
               <View style={styles.recentDeliveriesHeader}>
@@ -7095,8 +6733,9 @@ export default function LiveScoringScreen() {
         onRequestClose={() => setShowCustomModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxWidth: 500 }]}>
-            <View style={styles.wicketModalHeader}>
+          <View style={[styles.modalContent, { maxWidth: 500, width: '92%', maxHeight: '88%', padding: 16, display: 'flex', flexDirection: 'column' }]}>
+            {/* Modal Header */}
+            <View style={[styles.wicketModalHeader, { marginBottom: 8 }]}>
               <View style={styles.modalTopHeaderRow}>
                 <Text style={styles.wicketModalTitle}>⚡ Custom Runs & Extras</Text>
                 <TouchableOpacity
@@ -7108,103 +6747,117 @@ export default function LiveScoringScreen() {
                   <Text style={styles.redCloseBtnText}>✕</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={styles.wicketModalSub}>
+              <Text style={[styles.wicketModalSub, { fontSize: 11, marginTop: 2 }]}>
                 Record any number of runs (e.g. 5 runs, overthrows, penalties, or custom extras).
               </Text>
             </View>
 
-            <Text style={styles.selectLabel}>QUICK RUNS OR ENTER NUMBER:</Text>
-            <View style={styles.customRunChipsRow}>
-              {['1', '2', '3', '4', '5', '6', '7'].map((r) => (
-                <TouchableOpacity
-                  key={r}
-                  style={[styles.customRunChip, customRunsInput === r && styles.customRunChipActive]}
-                  onPress={() => setCustomRunsInput(r)}
-                >
-                  <Text style={[styles.customRunChipText, customRunsInput === r && styles.customRunChipTextActive]}>{r}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={{ marginTop: 8, marginBottom: 12 }}>
-              <Text style={styles.fieldSubLabel}>NUMBER OF RUNS:</Text>
-              <TextInput
-                style={styles.customNameInput}
-                keyboardType="numeric"
-                placeholder="e.g. 5"
-                placeholderTextColor="#94a3b8"
-                value={customRunsInput}
-                onChangeText={(val) => setCustomRunsInput(val)}
-              />
-            </View>
-
-            <Text style={styles.selectLabel}>DELIVERY CATEGORY:</Text>
-            <View style={styles.categoryGrid}>
-              {[
-                { key: 'normal', label: 'Off Bat (Normal)', desc: 'Bat & Team' },
-                { key: 'wide', label: 'Wide + Runs', desc: 'Conceded Extra' },
-                { key: 'noball_bat', label: 'No Ball + Bat', desc: '1 Extra + Bat' },
-                { key: 'noball_extra', label: 'No Ball + Bye', desc: 'Total Extras' },
-                { key: 'bye', label: 'Byes', desc: 'Legal Extra' },
-                { key: 'legbye', label: 'Leg Byes', desc: 'Legal Extra' },
-                { key: 'penalty', label: 'Penalty Runs', desc: 'Team Total' }
-              ].map((cat) => (
-                <TouchableOpacity
-                  key={cat.key}
-                  style={[styles.categoryOption, customCategory === cat.key && styles.categoryOptionActive]}
-                  onPress={() => setCustomCategory(cat.key)}
-                >
-                  <Text style={[styles.categoryOptionText, customCategory === cat.key && styles.categoryOptionTextActive]}>
-                    {cat.label}
-                  </Text>
-                  <Text style={styles.categoryOptionDesc}>{cat.desc}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* REASON / RUN NOTE (WHY GIVING RUNS?) */}
-            <View style={{ marginTop: 6, marginBottom: 8 }}>
-              <Text style={styles.selectLabel}>REASON / RUN NOTE (WHY GIVING RUNS?):</Text>
-              <TextInput
-                style={[styles.customNameInput, customRunsReason.trim() ? styles.customNameInputActive : null]}
-                placeholder="✍️ Type reason: e.g. Overthrow, Helmet penalty, Misfield, Short run..."
-                placeholderTextColor="#94a3b8"
-                value={customRunsReason}
-                onChangeText={(val) => setCustomRunsReason(val)}
-              />
-              {/* Quick suggestion chips */}
-              <View style={styles.quickReasonsRow}>
-                {['Overthrow', 'Helmet Hit (5 Penalty)', 'Misfield', 'Short Run', 'Boundary Overthrow', 'Obstruction'].map((tag) => (
+            {/* Scrollable Form Body */}
+            <ScrollView
+              showsVerticalScrollIndicator={true}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingBottom: 10 }}
+            >
+              <Text style={styles.selectLabel}>QUICK RUNS OR ENTER NUMBER:</Text>
+              <View style={[styles.customRunChipsRow, { marginBottom: 6 }]}>
+                {['1', '2', '3', '4', '5', '6', '7'].map((r) => (
                   <TouchableOpacity
-                    key={tag}
-                    style={[
-                      styles.quickReasonChip,
-                      customRunsReason === tag && styles.quickReasonChipActive
-                    ]}
-                    onPress={() => setCustomRunsReason(customRunsReason === tag ? '' : tag)}
+                    key={r}
+                    style={[styles.customRunChip, customRunsInput === r && styles.customRunChipActive]}
+                    onPress={() => setCustomRunsInput(r)}
                   >
-                    <Text
-                      style={[
-                        styles.quickReasonChipText,
-                        customRunsReason === tag && styles.quickReasonChipTextActive
-                      ]}
-                    >
-                      {tag}
-                    </Text>
+                    <Text style={[styles.customRunChipText, customRunsInput === r && styles.customRunChipTextActive]}>{r}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
-            </View>
 
-            <View style={styles.previewBox}>
-              <Text style={styles.previewBoxLabel}>RECORDING PREVIEW:</Text>
-              <Text style={styles.previewBoxText}>
-                {customRunsInput || '0'} Runs &bull; {customCategory.toUpperCase()} vs {bowler?.name || 'Bowler'}
-                {customRunsReason.trim() ? ` • [${customRunsReason.trim()}]` : ''}
-              </Text>
-            </View>
+              <View style={{ marginTop: 4, marginBottom: 8 }}>
+                <Text style={styles.fieldSubLabel}>NUMBER OF RUNS:</Text>
+                <TextInput
+                  style={[styles.customNameInput, { height: 38, paddingVertical: 6 }]}
+                  keyboardType="numeric"
+                  placeholder="e.g. 5"
+                  placeholderTextColor="#94a3b8"
+                  value={customRunsInput}
+                  onChangeText={(val) => setCustomRunsInput(val)}
+                />
+              </View>
 
-            <View style={[styles.modalActions, { marginTop: 14 }]}>
+              <Text style={styles.selectLabel}>DELIVERY CATEGORY:</Text>
+              <View style={[styles.categoryGrid, { gap: 6, marginBottom: 8 }]}>
+                {[
+                  { key: 'normal', label: 'Off Bat (Normal)', desc: 'Bat & Team' },
+                  { key: 'wide', label: 'Wide + Runs', desc: 'Conceded Extra' },
+                  { key: 'noball_bat', label: 'No Ball + Bat', desc: '1 Extra + Bat' },
+                  { key: 'noball_extra', label: 'No Ball + Bye', desc: 'Total Extras' },
+                  { key: 'bye', label: 'Byes', desc: 'Legal Extra' },
+                  { key: 'legbye', label: 'Leg Byes', desc: 'Legal Extra' },
+                  { key: 'penalty', label: 'Penalty Runs', desc: 'Team Total' }
+                ].map((cat) => (
+                  <TouchableOpacity
+                    key={cat.key}
+                    style={[
+                      styles.categoryOption,
+                      { paddingVertical: 6, paddingHorizontal: 8 },
+                      customCategory === cat.key && styles.categoryOptionActive
+                    ]}
+                    onPress={() => setCustomCategory(cat.key)}
+                  >
+                    <Text style={[styles.categoryOptionText, { fontSize: 11.5 }, customCategory === cat.key && styles.categoryOptionTextActive]}>
+                      {cat.label}
+                    </Text>
+                    <Text style={[styles.categoryOptionDesc, { fontSize: 9.5 }]}>{cat.desc}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* REASON / RUN NOTE (WHY GIVING RUNS?) */}
+              <View style={{ marginTop: 2, marginBottom: 8 }}>
+                <Text style={styles.selectLabel}>REASON / RUN NOTE (WHY GIVING RUNS?):</Text>
+                <TextInput
+                  style={[styles.customNameInput, { height: 38, paddingVertical: 6 }, customRunsReason.trim() ? styles.customNameInputActive : null]}
+                  placeholder="✍️ Type reason: e.g. Overthrow, Helmet penalty, Misfield, Short run..."
+                  placeholderTextColor="#94a3b8"
+                  value={customRunsReason}
+                  onChangeText={(val) => setCustomRunsReason(val)}
+                />
+                {/* Quick suggestion chips */}
+                <View style={[styles.quickReasonsRow, { marginTop: 4, gap: 4 }]}>
+                  {['Overthrow', 'Helmet Hit (5 Penalty)', 'Misfield', 'Short Run', 'Boundary Overthrow', 'Obstruction'].map((tag) => (
+                    <TouchableOpacity
+                      key={tag}
+                      style={[
+                        styles.quickReasonChip,
+                        { paddingHorizontal: 7, paddingVertical: 3 },
+                        customRunsReason === tag && styles.quickReasonChipActive
+                      ]}
+                      onPress={() => setCustomRunsReason(customRunsReason === tag ? '' : tag)}
+                    >
+                      <Text
+                        style={[
+                          styles.quickReasonChipText,
+                          { fontSize: 10 },
+                          customRunsReason === tag && styles.quickReasonChipTextActive
+                        ]}
+                      >
+                        {tag}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={[styles.previewBox, { padding: 8, marginTop: 4 }]}>
+                <Text style={[styles.previewBoxLabel, { fontSize: 9.5 }]}>RECORDING PREVIEW:</Text>
+                <Text style={[styles.previewBoxText, { fontSize: 12 }]}>
+                  {customRunsInput || '0'} Runs &bull; {customCategory.toUpperCase()} vs {bowler?.name || 'Bowler'}
+                  {customRunsReason.trim() ? ` • [${customRunsReason.trim()}]` : ''}
+                </Text>
+              </View>
+            </ScrollView>
+
+            {/* Modal Actions - Fixed at Bottom */}
+            <View style={[styles.modalActions, { marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f1f5f9' }]}>
               <TouchableOpacity
                 style={styles.modalCancelBtn}
                 onPress={() => setShowCustomModal(false)}
@@ -8776,6 +8429,24 @@ export default function LiveScoringScreen() {
                   setShowDlsModal(false);
                   setDlsModalMinimized(false);
                   setDlsModalMaximized(false);
+                }}
+                onApplyRevisedTarget={async ({ revisedOvers, revisedTarget, method, reason }) => {
+                  try {
+                    await ScorerApi.setRevisedOvers(matchId, {
+                      totalOvers: revisedOvers,
+                      revisedTarget,
+                      comments: `${reason} [via ${method}]`
+                    });
+                    setShowDlsModal(false);
+                    setDlsModalMinimized(false);
+                    setDlsModalMaximized(false);
+                    await loadLiveState(false);
+                    const okMsg = `Successfully applied ${method} Revised Target: ${revisedTarget} runs in ${revisedOvers} overs!`;
+                    Platform.OS === 'web' ? window.alert(okMsg) : Alert.alert('Target Applied', okMsg);
+                  } catch (err: any) {
+                    const errMsg = 'Failed to apply revised target: ' + (err?.message || 'Unknown error');
+                    Platform.OS === 'web' ? window.alert(errMsg) : Alert.alert('Error', errMsg);
+                  }
                 }}
               />
             </ScrollView>

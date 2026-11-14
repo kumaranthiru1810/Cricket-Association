@@ -31,6 +31,9 @@ import { ScorerApi, PlayerApi, getCurrentUser, setCurrentUser, setAuthToken, log
 import { MatchHighlightsBanner } from '../src/components/common/MatchHighlightsBanner';
 import UmpireSignalOverlay, { UmpireSignalEvent, UmpireSignalsGalleryModal, UmpireSignalType } from '../src/components/common/UmpireSignalOverlay';
 import Header from '../src/layouts/Header';
+import BroadcastLiveBallAction from '../src/components/common/BroadcastLiveBallAction';
+import { VPLEventBanner, VPLSoundControls } from '../src/components/common/VPLEventBanner';
+import { mapBallToEvents, normalizeExtraType, normalizeDismissal } from '../src/utils/vplEventMapper';
 
 // ─── ASSET REFERENCES ──────────────────────────────────────────────────────────
 const IMG_LOGO = require('../assets/logo_transparent.png');
@@ -282,7 +285,7 @@ export default function HomeScreen() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // State: Match Centre Filter
-  const [matchFilter, setMatchFilter] = useState<'all' | 'live' | 'upcoming' | 'results'>('all');
+  const [matchFilter, setMatchFilter] = useState<'all' | 'live' | 'upcoming' | 'postponed' | 'results'>('all');
 
   // Dynamic Real Match State from MongoDB
   const [publicMatches, setPublicMatches] = useState<any[]>([]);
@@ -387,12 +390,16 @@ export default function HomeScreen() {
         if (payload?.matchId) {
           setPublicMatches(prev => prev.map(m => {
             if (m.id === payload.matchId) {
+              const latestDelivery = payload.lastDelivery || payload.lastEvent || m.lastDelivery;
               return {
                 ...m,
-                scoreA: payload.scoreA !== undefined ? payload.scoreA : m.scoreA,
-                scoreB: payload.scoreB !== undefined ? payload.scoreB : m.scoreB,
+                scoreA: payload.scoreA !== undefined ? payload.scoreA : (payload.battingTeamId === m.teamAId ? payload.score : m.scoreA),
+                scoreB: payload.scoreB !== undefined ? payload.scoreB : (payload.battingTeamId === m.teamBId ? payload.score : m.scoreB),
+                lastDelivery: latestDelivery,
+                lastEvent: latestDelivery,
                 currentInnings: payload.currentInnings || m.currentInnings,
                 status: payload.status || m.status,
+                rawStatus: payload.status || m.rawStatus,
                 statusText: payload.statusText || m.statusText,
                 liveText: payload.liveText || m.liveText
               };
@@ -407,10 +414,10 @@ export default function HomeScreen() {
       // Fallback to active interval
     }
 
-    // Silent background poll every 30 seconds for matches, 60s for portal
+    // High-speed realtime background poll: every 3 seconds for rapid live match sync
     const matchTimer = setInterval(() => {
       loadPublicMatches(false);
-    }, 30000);
+    }, 3000);
 
     const portalTimer = setInterval(() => {
       loadPortalData();
@@ -565,7 +572,7 @@ export default function HomeScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#040a1b" />
 
       {/* FIXED BRIGHT ATMOSPHERIC BACKGROUND */}
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' as const }]}>
         <Image source={IMG_STADIUM} style={styles.bgStadiumImage} resizeMode="cover" />
         <LinearGradient
           colors={['rgba(246, 242, 233, 0.94)', 'rgba(252, 249, 244, 0.97)', '#f6f2e9']}
@@ -1002,7 +1009,14 @@ export default function HomeScreen() {
               const upcomingCount = publicMatches.filter(m => {
                 const s = (m.status || '').toLowerCase();
                 const raw = (m.rawStatus || '').toUpperCase();
-                return s === 'upcoming' || raw === 'SCHEDULED';
+                const isPostponed = s === 'postponed' || raw === 'POSTPONED' || !!m.isPostponed || !!m.postponement?.is_postponed;
+                return !isPostponed && (s === 'upcoming' || raw === 'SCHEDULED');
+              }).length;
+
+              const postponedCount = publicMatches.filter(m => {
+                const s = (m.status || '').toLowerCase();
+                const raw = (m.rawStatus || '').toUpperCase();
+                return s === 'postponed' || raw === 'POSTPONED' || !!m.isPostponed || !!m.postponement?.is_postponed;
               }).length;
 
               const resultsCount = publicMatches.filter(m => {
@@ -1017,6 +1031,7 @@ export default function HomeScreen() {
                     { id: 'all', short: `All (${publicMatches.length})`, full: `All Matches (${publicMatches.length})` },
                     { id: 'live', short: `🔴 Live (${liveCount})`, full: `🔴 Live Matches (${liveCount})` },
                     { id: 'upcoming', short: `📅 Upcoming (${upcomingCount})`, full: `📅 Upcoming Fixtures (${upcomingCount})` },
+                    { id: 'postponed', short: `⏸️ Postponed (${postponedCount})`, full: `⏸️ Postponed (${postponedCount})` },
                     { id: 'results', short: `🏁 Results (${resultsCount})`, full: `🏁 Recent Results (${resultsCount})` }
                   ].map(f => (
                     <TouchableOpacity
@@ -1042,39 +1057,6 @@ export default function HomeScreen() {
                 </View>
               );
             })()}
-
-            {/* Official ICC & TNCA Umpire Hand Signals Showcase Button */}
-            <TouchableOpacity
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: '#0f172a',
-                borderWidth: 1.5,
-                borderColor: '#38bdf8',
-                paddingVertical: 9,
-                paddingHorizontal: 16,
-                borderRadius: 24,
-                marginBottom: 16,
-                gap: 8,
-                alignSelf: 'center',
-                shadowColor: '#38bdf8',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.25,
-                shadowRadius: 6,
-                elevation: 3
-              }}
-              onPress={() => setShowUmpireGallery(true)}
-              activeOpacity={0.8}
-            >
-              <Text style={{ fontSize: 15 }}>🏁</Text>
-              <Text style={{ color: '#38bdf8', fontSize: 13, fontWeight: '800' }}>
-                Official ICC & TNCA Umpire Signals (Live Animated Guide)
-              </Text>
-              <View style={{ backgroundColor: '#0284c7', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}>
-                <Text style={{ color: '#ffffff', fontSize: 10, fontWeight: '900' }}>17 GESTURES</Text>
-              </View>
-            </TouchableOpacity>
 
             {/* Loading State: Only show spinner if matches haven't loaded yet */}
             {isLoadingMatches && publicMatches.length === 0 && (
@@ -1118,8 +1100,10 @@ export default function HomeScreen() {
               const filteredList = publicMatches.filter(m => {
                 const s = (m.status || '').toLowerCase();
                 const raw = (m.rawStatus || '').toUpperCase();
+                const isPostponed = s === 'postponed' || raw === 'POSTPONED' || !!m.isPostponed || !!m.postponement?.is_postponed;
                 if (matchFilter === 'live') return s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK';
-                if (matchFilter === 'upcoming') return s === 'upcoming' || raw === 'SCHEDULED';
+                if (matchFilter === 'upcoming') return !isPostponed && (s === 'upcoming' || raw === 'SCHEDULED');
+                if (matchFilter === 'postponed') return isPostponed;
                 if (matchFilter === 'results') return s === 'completed' || raw === 'COMPLETED' || s === 'cancelled' || raw === 'CANCELLED';
                 return true;
               });
@@ -1157,8 +1141,10 @@ export default function HomeScreen() {
                   .filter(m => {
                     const s = (m.status || '').toLowerCase();
                     const raw = (m.rawStatus || '').toUpperCase();
+                    const isPostponed = s === 'postponed' || raw === 'POSTPONED' || !!m.isPostponed || !!m.postponement?.is_postponed;
                     if (matchFilter === 'live') return s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK';
-                    if (matchFilter === 'upcoming') return s === 'upcoming' || raw === 'SCHEDULED';
+                    if (matchFilter === 'upcoming') return !isPostponed && (s === 'upcoming' || raw === 'SCHEDULED');
+                    if (matchFilter === 'postponed') return isPostponed;
                     if (matchFilter === 'results') return s === 'completed' || raw === 'COMPLETED' || s === 'cancelled' || raw === 'CANCELLED';
                     return true;
                   })
@@ -1166,9 +1152,10 @@ export default function HomeScreen() {
                     const s = (m.status || '').toLowerCase();
                     const raw = (m.rawStatus || '').toUpperCase();
                     const isLive = s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK';
-                    const isUpcoming = s === 'upcoming' || raw === 'SCHEDULED';
+                    const isPostponed = s === 'postponed' || raw === 'POSTPONED' || !!m.isPostponed || !!m.postponement?.is_postponed;
+                    const isUpcoming = !isPostponed && (s === 'upcoming' || raw === 'SCHEDULED');
                     const isCompleted = s === 'completed' || raw === 'COMPLETED';
-                    const isCancelled = s === 'cancelled' || raw === 'CANCELLED' || raw === 'ABANDONED';
+                    const isCancelled = !isPostponed && (s === 'cancelled' || raw === 'CANCELLED' || raw === 'ABANDONED');
 
                     const teamAShort = m.teamAShort || (m.teamA ? m.teamA.slice(0, 3).toUpperCase() : 'TMA');
                     const teamBShort = m.teamBShort || (m.teamB ? m.teamB.slice(0, 3).toUpperCase() : 'TMB');
@@ -1191,6 +1178,7 @@ export default function HomeScreen() {
                           isLive && styles.matchCardLive,
                           isUpcoming && styles.matchCardUpcoming,
                           isCompleted && styles.matchCardResult,
+                          isPostponed && { borderColor: '#f59e0b', backgroundColor: '#fffdf5' },
                           isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' },
                           isSmallMobile && { padding: 12, borderRadius: 14 }
                         ]}
@@ -1206,6 +1194,10 @@ export default function HomeScreen() {
                             ) : isUpcoming ? (
                               <View style={[styles.upcomingIndicatorPill, isSmallMobile && { paddingHorizontal: 7, paddingVertical: 2.5 }]}>
                                 <Text style={[styles.upcomingIndicatorText, isSmallMobile && { fontSize: 9.5 }]}>⏰ UPCOMING</Text>
+                              </View>
+                            ) : isPostponed ? (
+                              <View style={[styles.upcomingIndicatorPill, { backgroundColor: '#fef3c7', borderColor: '#f59e0b' }, isSmallMobile && { paddingHorizontal: 7, paddingVertical: 2.5 }]}>
+                                <Text style={[styles.upcomingIndicatorText, { color: '#b45309' }, isSmallMobile && { fontSize: 9.5 }]}>⏸️ POSTPONED</Text>
                               </View>
                             ) : isCompleted ? (
                               <View style={[styles.resultIndicatorPill, isSmallMobile && { paddingHorizontal: 7, paddingVertical: 2.5 }]}>
@@ -1228,6 +1220,7 @@ export default function HomeScreen() {
                           </View>
 
                           <View style={styles.cardHeaderRightGroup}>
+                            {isLive && <VPLSoundControls role="public" style={{ marginRight: 6 }} />}
                             {isRain ? (
                               <View style={[styles.topRightRainPill, isSmallMobile && { paddingHorizontal: 6, paddingVertical: 2 }]}>
                                 <Text style={[styles.topRightRainPillText, isSmallMobile && { fontSize: 9 }]}>
@@ -1315,8 +1308,47 @@ export default function HomeScreen() {
                           </View>
                         </View>
 
+                        {/* VPL Broadcast Live Ball Action Overlay */}
+                        {isLive && (() => {
+                          const lastDel = m.lastDelivery || m.lastEvent;
+                          const rawExtra = normalizeExtraType(lastDel?.extraType || lastDel?.extra_type || lastDel?.extra);
+                          const runsBat = typeof lastDel?.runsBatter === 'number'
+                            ? lastDel.runsBatter
+                            : typeof lastDel?.runs_batter === 'number'
+                              ? lastDel.runs_batter
+                              : (typeof lastDel?.runs === 'number' && !rawExtra ? lastDel.runs : 0);
+                          const events = lastDel ? mapBallToEvents({
+                            ballId: `${m.id}-${lastDel.ball || lastDel.over || ''}-${lastDel.timestamp || Date.now()}`,
+                            runsOffBat: runsBat,
+                            extraType: rawExtra,
+                            extraRuns: typeof lastDel.extraRuns === 'number' ? lastDel.extraRuns : (typeof lastDel.runsExtras === 'number' ? lastDel.runsExtras : undefined),
+                            isWicket: Boolean(lastDel.isWicket || lastDel.wicket),
+                            dismissal: normalizeDismissal(lastDel.dismissal || lastDel.wicket?.type || lastDel.wicket_type),
+                            dismissedName: lastDel.dismissedName || lastDel.wicket?.batter,
+                            batterName: lastDel.batterName || m.teamA,
+                            bowlerName: lastDel.bowlerName,
+                          }) : null;
+
+                          return (
+                            <View style={{ position: 'relative', minHeight: 48, marginVertical: 4 }}>
+                              <VPLEventBanner
+                                role="public"
+                                events={events}
+                                bottomOffset={0}
+                                style={{ position: 'relative', left: 0, right: 0, top: 0, bottom: 0 }}
+                              />
+                            </View>
+                          );
+                        })()}
+
                         {/* 3. Status Note / Active Rain Delay Notice */}
-                        {m.result ? (
+                        {isPostponed ? (
+                          <View style={[styles.cardBreakBanner, { backgroundColor: '#fffbeb', borderColor: '#fde68a' }, isSmallMobile && { paddingVertical: 6, paddingHorizontal: 8 }]}>
+                            <Text style={[styles.cardBreakText, { color: '#b45309' }, isSmallMobile && { fontSize: 10.5 }]} numberOfLines={1}>
+                              ⏸️ POSTPONED{m.postponement?.reason ? ` • ${m.postponement.reason}` : (m.postponementReason ? ` • ${m.postponementReason}` : (m.result ? ` • ${m.result}` : ' • Fixture Rescheduling in Progress'))}
+                            </Text>
+                          </View>
+                        ) : m.result ? (
                           <Text style={[styles.matchStatusNoteGold, isSmallMobile && { fontSize: 11 }]}>🏆 {m.result}</Text>
                         ) : isRain ? (
                           <View style={[styles.cardRainBanner, isSmallMobile && { paddingVertical: 6, paddingHorizontal: 8 }]}>

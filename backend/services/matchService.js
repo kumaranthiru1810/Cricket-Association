@@ -56,7 +56,13 @@ class MatchService {
     match.toss_winner_id = winnerTeamId;
     match.toss_decision = decision;
     match.current_innings_number = 1;
+    match.result_summary = '';
+    match.target_runs = undefined;
     await match.save();
+
+    // Clean up any stale subsequent innings & deliveries from previous runs
+    await db.models.Innings.deleteMany({ match_id: matchId, innings_number: { $gt: 1 } });
+    await db.models.Delivery.deleteMany({ match_id: matchId });
 
     // Create or reset Innings 1
     const innId = `INN-${matchId}-1`;
@@ -73,12 +79,19 @@ class MatchService {
         overs: 0,
         balls: 0,
         is_completed: false,
+        is_over_complete: false,
         extras: { wides: 0, no_balls: 0, byes: 0, leg_byes: 0, total: 0 }
       });
     } else {
       inn1.batting_team_id = battingTeamId;
       inn1.bowling_team_id = bowlingTeamId;
+      inn1.total_runs = 0;
+      inn1.wickets = 0;
+      inn1.overs = 0;
+      inn1.balls = 0;
       inn1.is_completed = false;
+      inn1.is_over_complete = false;
+      inn1.extras = { wides: 0, no_balls: 0, byes: 0, leg_byes: 0, total: 0 };
       await inn1.save();
     }
 

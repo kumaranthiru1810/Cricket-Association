@@ -321,17 +321,18 @@ export const UmpireSignalOverlay: React.FC<UmpireSignalOverlayProps> = ({ event,
       opacityAnim.setValue(0);
       progressAnim.setValue(1);
 
+      const useNative = Platform.OS !== 'web';
       Animated.parallel([
         Animated.spring(scaleAnim, {
           toValue: 1,
           friction: 6,
           tension: 70,
-          useNativeDriver: true
+          useNativeDriver: useNative
         }),
         Animated.timing(opacityAnim, {
           toValue: 1,
           duration: 250,
-          useNativeDriver: true
+          useNativeDriver: useNative
         })
       ]).start();
 
@@ -341,13 +342,13 @@ export const UmpireSignalOverlay: React.FC<UmpireSignalOverlayProps> = ({ event,
             toValue: 1.05,
             duration: 800,
             easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true
+            useNativeDriver: useNative
           }),
           Animated.timing(pulseAnim, {
             toValue: 1,
             duration: 800,
             easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true
+            useNativeDriver: useNative
           })
         ])
       );
@@ -378,16 +379,17 @@ export const UmpireSignalOverlay: React.FC<UmpireSignalOverlayProps> = ({ event,
   const config = SIGNAL_CONFIGS[currentEvent.type] || SIGNAL_CONFIGS.OUT;
 
   const handleDismiss = () => {
+    const useNative = Platform.OS !== 'web';
     Animated.parallel([
       Animated.timing(scaleAnim, {
         toValue: 0.9,
         duration: 200,
-        useNativeDriver: true
+        useNativeDriver: useNative
       }),
       Animated.timing(opacityAnim, {
         toValue: 0,
         duration: 200,
-        useNativeDriver: true
+        useNativeDriver: useNative
       })
     ]).start(() => {
       onDismiss();
@@ -618,10 +620,6 @@ export const UmpireSignalsGalleryModal: React.FC<UmpireSignalsGalleryModalProps>
                     <Text style={styles.galleryCardDesc} numberOfLines={2}>
                       {cfg.gestureDescription}
                     </Text>
-
-                    <View style={[styles.galleryPlayBtn, { backgroundColor: cfg.primaryColor }]}>
-                      <Text style={styles.galleryPlayBtnText}>▶ Play Animation</Text>
-                    </View>
                   </View>
                 </TouchableOpacity>
               );
@@ -980,7 +978,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
     lineHeight: 14,
-    marginBottom: 8
+    marginBottom: 2
   },
   galleryPlayBtn: {
     paddingVertical: 6,
