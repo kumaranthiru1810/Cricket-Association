@@ -59,29 +59,30 @@ export const CricketFigurine3D: React.FC<CricketFigurine3DProps> = ({
   const [hasLanded, setHasLanded] = useState<boolean>(false);
 
   useEffect(() => {
+    const useNative = Platform.OS !== 'web';
     // 3D Drop animation sequence
     Animated.parallel([
       Animated.timing(opacityAnim, {
         toValue: 1,
         duration: 350,
-        useNativeDriver: true,
+        useNativeDriver: useNative,
       }),
       Animated.spring(dropAnim, {
         toValue: 0,
         friction: 5,
         tension: 40,
-        useNativeDriver: true,
+        useNativeDriver: useNative,
       }),
       Animated.spring(scaleAnim, {
         toValue: 1,
         friction: 5,
         tension: 40,
-        useNativeDriver: true,
+        useNativeDriver: useNative,
       }),
       Animated.timing(shadowScale, {
         toValue: 1,
         duration: 500,
-        useNativeDriver: true,
+        useNativeDriver: useNative,
       }),
     ]).start(() => {
       setHasLanded(true);
@@ -90,7 +91,7 @@ export const CricketFigurine3D: React.FC<CricketFigurine3DProps> = ({
         Animated.timing(shockwaveAnim, {
           toValue: 1,
           duration: 600,
-          useNativeDriver: true,
+          useNativeDriver: useNative,
         }),
       ]).start();
     });

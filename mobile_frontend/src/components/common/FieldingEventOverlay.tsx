@@ -169,17 +169,18 @@ export const FieldingEventOverlay: React.FC<FieldingEventOverlayProps> = ({ even
       opacityAnim.setValue(0);
       progressAnim.setValue(1);
 
+      const useNative = Platform.OS !== 'web';
       Animated.parallel([
         Animated.spring(scaleAnim, {
           toValue: 1,
           friction: 6,
           tension: 70,
-          useNativeDriver: true
+          useNativeDriver: useNative
         }),
         Animated.timing(opacityAnim, {
           toValue: 1,
           duration: 250,
-          useNativeDriver: true
+          useNativeDriver: useNative
         })
       ]).start();
 
@@ -189,13 +190,13 @@ export const FieldingEventOverlay: React.FC<FieldingEventOverlayProps> = ({ even
             toValue: 1.05,
             duration: 800,
             easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true
+            useNativeDriver: useNative
           }),
           Animated.timing(pulseAnim, {
             toValue: 1,
             duration: 800,
             easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true
+            useNativeDriver: useNative
           })
         ])
       );
@@ -226,16 +227,17 @@ export const FieldingEventOverlay: React.FC<FieldingEventOverlayProps> = ({ even
   const config = FIELDING_CONFIGS[currentEvent.type] || FIELDING_CONFIGS.CLEAN_COLLECT;
 
   const handleDismiss = () => {
+    const useNative = Platform.OS !== 'web';
     Animated.parallel([
       Animated.timing(scaleAnim, {
         toValue: 0.9,
         duration: 200,
-        useNativeDriver: true
+        useNativeDriver: useNative
       }),
       Animated.timing(opacityAnim, {
         toValue: 0,
         duration: 200,
-        useNativeDriver: true
+        useNativeDriver: useNative
       })
     ]).start(() => {
       onDismiss();

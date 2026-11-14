@@ -32,6 +32,8 @@ import { MatchHighlightsBanner } from '../src/components/common/MatchHighlightsB
 import UmpireSignalOverlay, { UmpireSignalEvent, UmpireSignalsGalleryModal, UmpireSignalType } from '../src/components/common/UmpireSignalOverlay';
 import Header from '../src/layouts/Header';
 import BroadcastLiveBallAction from '../src/components/common/BroadcastLiveBallAction';
+import { VPLEventBanner, VPLSoundControls } from '../src/components/common/VPLEventBanner';
+import { mapBallToEvents, normalizeExtraType, normalizeDismissal } from '../src/utils/vplEventMapper';
 
 // ─── ASSET REFERENCES ──────────────────────────────────────────────────────────
 const IMG_LOGO = require('../assets/logo_transparent.png');
@@ -570,7 +572,7 @@ export default function HomeScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#040a1b" />
 
       {/* FIXED BRIGHT ATMOSPHERIC BACKGROUND */}
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' as const }]}>
         <Image source={IMG_STADIUM} style={styles.bgStadiumImage} resizeMode="cover" />
         <LinearGradient
           colors={['rgba(246, 242, 233, 0.94)', 'rgba(252, 249, 244, 0.97)', '#f6f2e9']}
@@ -1218,6 +1220,7 @@ export default function HomeScreen() {
                           </View>
 
                           <View style={styles.cardHeaderRightGroup}>
+                            {isLive && <VPLSoundControls role="public" style={{ marginRight: 6 }} />}
                             {isRain ? (
                               <View style={[styles.topRightRainPill, isSmallMobile && { paddingHorizontal: 6, paddingVertical: 2 }]}>
                                 <Text style={[styles.topRightRainPillText, isSmallMobile && { fontSize: 9 }]}>
@@ -1305,27 +1308,36 @@ export default function HomeScreen() {
                           </View>
                         </View>
 
-                        {/* Broadcast Kinetic Delivery Action Telemetry for Live Matches */}
+                        {/* VPL Broadcast Live Ball Action Overlay */}
                         {isLive && (() => {
                           const lastDel = m.lastDelivery || m.lastEvent;
-                          const evt = lastDel ? {
-                            runs: typeof lastDel.runs === 'number' ? lastDel.runs : (lastDel.runsBatter ?? 0),
-                            isBoundary: Boolean(lastDel.isBoundary || lastDel.runs === 4 || lastDel.runsBatter === 4),
-                            isSix: Boolean(lastDel.isSix || lastDel.runs === 6 || lastDel.runsBatter === 6),
+                          const rawExtra = normalizeExtraType(lastDel?.extraType || lastDel?.extra_type || lastDel?.extra);
+                          const runsBat = typeof lastDel?.runsBatter === 'number'
+                            ? lastDel.runsBatter
+                            : typeof lastDel?.runs_batter === 'number'
+                              ? lastDel.runs_batter
+                              : (typeof lastDel?.runs === 'number' && !rawExtra ? lastDel.runs : 0);
+                          const events = lastDel ? mapBallToEvents({
+                            ballId: `${m.id}-${lastDel.ball || lastDel.over || ''}-${lastDel.timestamp || Date.now()}`,
+                            runsOffBat: runsBat,
+                            extraType: rawExtra,
+                            extraRuns: typeof lastDel.extraRuns === 'number' ? lastDel.extraRuns : (typeof lastDel.runsExtras === 'number' ? lastDel.runsExtras : undefined),
                             isWicket: Boolean(lastDel.isWicket || lastDel.wicket),
-                            extraType: lastDel.extraType || lastDel.extra_type,
-                            isExtra: Boolean(lastDel.extraType || lastDel.extra_type),
-                            batterName: lastDel.batterName || m.teamA || 'Striker',
-                            bowlerName: lastDel.bowlerName || 'Bowler',
-                            shotZone: lastDel.shotZone || 'Cover'
-                          } : null;
+                            dismissal: normalizeDismissal(lastDel.dismissal || lastDel.wicket?.type || lastDel.wicket_type),
+                            dismissedName: lastDel.dismissedName || lastDel.wicket?.batter,
+                            batterName: lastDel.batterName || m.teamA,
+                            bowlerName: lastDel.bowlerName,
+                          }) : null;
 
                           return (
-                            <BroadcastLiveBallAction
-                              triggerKey={lastDel ? `${m.id}-${lastDel.ball || ''}-${lastDel.runs ?? 0}-${lastDel.isWicket ? 'w' : 'r'}-${lastDel.timestamp || ''}` : `${m.id}-${m.scoreA || ''}-${m.scoreB || ''}`}
-                              autoPlay={true}
-                              lastEvent={evt}
-                            />
+                            <View style={{ position: 'relative', minHeight: 48, marginVertical: 4 }}>
+                              <VPLEventBanner
+                                role="public"
+                                events={events}
+                                bottomOffset={0}
+                                style={{ position: 'relative', left: 0, right: 0, top: 0, bottom: 0 }}
+                              />
+                            </View>
                           );
                         })()}
 
