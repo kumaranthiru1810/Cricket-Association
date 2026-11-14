@@ -87,6 +87,12 @@ export interface CalculationSettingsManagementProps {
   initialCurrentScore?: string;
   isModal?: boolean;
   onClose?: () => void;
+  onApplyRevisedTarget?: (data: {
+    revisedOvers: number;
+    revisedTarget: number;
+    method: 'DLS' | 'VJD';
+    reason: string;
+  }) => void;
 }
 
 export const CalculationSettingsManagement: React.FC<CalculationSettingsManagementProps> = ({
@@ -98,7 +104,8 @@ export const CalculationSettingsManagement: React.FC<CalculationSettingsManageme
   initialCurrentWickets = 3,
   initialCurrentScore = '84',
   isModal = false,
-  onClose
+  onClose,
+  onApplyRevisedTarget
 }) => {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
@@ -106,6 +113,7 @@ export const CalculationSettingsManagement: React.FC<CalculationSettingsManageme
   // Method selection
   const [selectedMethod, setSelectedMethod] = useState<'DLS' | 'VJD'>(initialMethod);
   const [selectedTournament, setSelectedTournament] = useState<string>('CFVD Premier League T20');
+  const [applyReason, setApplyReason] = useState<string>('Rain interruption - Revised Target');
 
   // Simulator Inputs
   const [team1Score, setTeam1Score] = useState<string>(initialTeam1Score);
@@ -521,6 +529,47 @@ export const CalculationSettingsManagement: React.FC<CalculationSettingsManageme
                 : `⚠️ Team is BEHIND ${selectedMethod} Par Score! If play stops now, defending team WINS by ${Math.abs(calculationResults.diffFromPar)} runs.`}
             </Text>
           </View>
+
+          {/* Apply To Match Button & Reason Input */}
+          {onApplyRevisedTarget && (
+            <View style={styles.applyBox}>
+              <View style={styles.applyHeaderRow}>
+                <Text style={styles.applyTitle}>🌧️ Apply To Live Match (போட்டியில் பொருத்து)</Text>
+                <View style={styles.applyBadge}>
+                  <Text style={styles.applyBadgeText}>{selectedMethod}</Text>
+                </View>
+              </View>
+              <Text style={styles.applyDesc}>
+                Directly apply {calculationResults.targetRuns} runs from {team2TargetOvers} overs to this match with reason.
+              </Text>
+              <View style={{ marginVertical: 6 }}>
+                <Text style={styles.applyInputLabel}>Interruption Reason / குறிப்பு:</Text>
+                <TextInput
+                  style={styles.applyInput}
+                  placeholder="e.g. Rain stopped play, match reduced to 16 overs"
+                  placeholderTextColor="#94a3b8"
+                  value={applyReason}
+                  onChangeText={setApplyReason}
+                />
+              </View>
+              <TouchableOpacity
+                style={styles.applySubmitBtn}
+                onPress={() => {
+                  onApplyRevisedTarget({
+                    revisedOvers: parseFloat(team2TargetOvers) || 20,
+                    revisedTarget: calculationResults.targetRuns,
+                    method: selectedMethod,
+                    reason: applyReason.trim() || `${selectedMethod} Rain Revised Target`
+                  });
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.applySubmitBtnText}>
+                  ✓ APPLY {calculationResults.targetRuns} RUNS ({team2TargetOvers} OVERS) TO MATCH
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </View>
     </View>
@@ -955,6 +1004,74 @@ const styles = StyleSheet.create({
   },
   statusTextBehind: {
     color: '#991b1b'
+  },
+  applyBox: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1.5,
+    borderColor: '#86efac',
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 6
+  },
+  applyHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4
+  },
+  applyTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#166534'
+  },
+  applyBadge: {
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#bbf7d0'
+  },
+  applyBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#15803d'
+  },
+  applyDesc: {
+    fontSize: 12,
+    color: '#334155',
+    lineHeight: 16
+  },
+  applyInputLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 4
+  },
+  applyInput: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: '#0f172a'
+  },
+  applySubmitBtn: {
+    backgroundColor: '#15803d',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6
+  },
+  applySubmitBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.5
   }
 });
 

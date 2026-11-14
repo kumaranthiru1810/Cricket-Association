@@ -4296,6 +4296,32 @@ export default function LiveScoringScreen() {
               ) : ''}
             </Text>
 
+            {/* Quick Switch to DLS & VJD Calculator */}
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#0891b2',
+                borderRadius: 8,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                marginTop: 10,
+                marginBottom: 4,
+              }}
+              onPress={() => {
+                setShowRevisedOversModal(false);
+                setShowDlsModal(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={{ fontSize: 16 }}>🧮</Text>
+              <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 12.5 }}>
+                OPEN DLS & VJD CALCULATOR (AUTO CALCULATE)
+              </Text>
+            </TouchableOpacity>
+
             <View style={{ marginTop: 12 }}>
               <Text style={styles.fieldSubLabel}>NUMBER OF OVERS:</Text>
               <TextInput
@@ -8403,6 +8429,24 @@ export default function LiveScoringScreen() {
                   setShowDlsModal(false);
                   setDlsModalMinimized(false);
                   setDlsModalMaximized(false);
+                }}
+                onApplyRevisedTarget={async ({ revisedOvers, revisedTarget, method, reason }) => {
+                  try {
+                    await ScorerApi.setRevisedOvers(matchId, {
+                      totalOvers: revisedOvers,
+                      revisedTarget,
+                      comments: `${reason} [via ${method}]`
+                    });
+                    setShowDlsModal(false);
+                    setDlsModalMinimized(false);
+                    setDlsModalMaximized(false);
+                    await loadLiveState(false);
+                    const okMsg = `Successfully applied ${method} Revised Target: ${revisedTarget} runs in ${revisedOvers} overs!`;
+                    Platform.OS === 'web' ? window.alert(okMsg) : Alert.alert('Target Applied', okMsg);
+                  } catch (err: any) {
+                    const errMsg = 'Failed to apply revised target: ' + (err?.message || 'Unknown error');
+                    Platform.OS === 'web' ? window.alert(errMsg) : Alert.alert('Error', errMsg);
+                  }
                 }}
               />
             </ScrollView>
