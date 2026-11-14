@@ -84,48 +84,50 @@ export default function BroadcastLiveBallAction({
     pulseScaleAnim.setValue(0.92);
     glowAnim.setValue(0);
 
+    const useNative = Platform.OS !== 'web';
+
     // Sequence 1: Ingress & Impact Shockwave
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 240,
-        useNativeDriver: true,
+        useNativeDriver: useNative,
         easing: Easing.out(Easing.cubic)
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
         duration: 280,
-        useNativeDriver: true,
+        useNativeDriver: useNative,
         easing: Easing.out(Easing.back(1.5))
       }),
       Animated.spring(pulseScaleAnim, {
         toValue: 1,
         friction: 5,
         tension: 80,
-        useNativeDriver: true
+        useNativeDriver: useNative
       }),
       Animated.timing(batRotateAnim, {
         toValue: 1,
         duration: 420,
-        useNativeDriver: true,
+        useNativeDriver: useNative,
         easing: Easing.bezier(0.2, 0.9, 0.3, 1)
       }),
       Animated.timing(ballTravelAnim, {
         toValue: 1,
         duration: 750,
-        useNativeDriver: true,
+        useNativeDriver: useNative,
         easing: Easing.out(Easing.quad)
       }),
       Animated.sequence([
         Animated.timing(glowAnim, {
           toValue: 1,
           duration: 350,
-          useNativeDriver: true
+          useNativeDriver: useNative
         }),
         Animated.timing(glowAnim, {
           toValue: 0.3,
           duration: 450,
-          useNativeDriver: true
+          useNativeDriver: useNative
         })
       ])
     ]).start();
@@ -135,7 +137,7 @@ export default function BroadcastLiveBallAction({
       Animated.timing(fadeAnim, {
         toValue: 0,
         duration: 300,
-        useNativeDriver: true,
+        useNativeDriver: useNative,
         easing: Easing.in(Easing.ease)
       }).start(() => {
         setVisible(false);

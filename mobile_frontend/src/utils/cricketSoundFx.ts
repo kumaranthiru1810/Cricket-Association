@@ -7,6 +7,7 @@
 
 class CricketSoundEngine {
   private ctx: AudioContext | null = null;
+  private suspendTimeout: any = null;
 
   private getContext(): AudioContext | null {
     if (typeof window === 'undefined') return null;
@@ -19,10 +20,23 @@ class CricketSoundEngine {
       if (this.ctx.state === 'suspended') {
         this.ctx.resume();
       }
+      this.scheduleSuspend();
       return this.ctx;
     } catch (_e) {
       return null;
     }
+  }
+
+  private scheduleSuspend() {
+    if (this.suspendTimeout) {
+      clearTimeout(this.suspendTimeout);
+    }
+    // Auto-suspend AudioContext after 1.8 seconds of silence to release Chrome's audio hardware thread
+    this.suspendTimeout = setTimeout(() => {
+      if (this.ctx && this.ctx.state === 'running') {
+        this.ctx.suspend().catch(() => {});
+      }
+    }, 1800);
   }
 
   /**

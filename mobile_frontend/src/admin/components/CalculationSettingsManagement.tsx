@@ -17,10 +17,65 @@ import {
   useWindowDimensions
 } from 'react-native';
 
-// Standard 20-over & 50-over resource curve approximation tables
-const DLS_RESOURCE_50 = [
-  100.0, 93.4, 85.1, 74.9, 62.7, 49.0, 34.9, 22.0, 11.9, 4.7
-];
+// ── DLS Resource Table (ICC T20, 20 overs) ──────────────────────────────────
+// 20 rows (index 0 = 1 over remaining … index 19 = 20 overs remaining)
+// 10 cols (index 0 = 1 wicket in hand … index 9 = 10 wickets in hand)
+// Anchor rows: 1, 5, 10, 15, 20 overs remaining; others linearly interpolated.
+
+const DLS_ANCHORS: Record<number, number[]> = {
+  1:  [0.3,  0.6,  1.1,  1.8,  2.6,  3.6,  4.6,  5.7,  6.7,  7.6],
+  5:  [1.9,  3.3,  5.3,  7.9, 10.9, 14.4, 17.9, 21.4, 24.6, 27.5],
+  10: [3.9,  6.7, 10.6, 15.4, 20.7, 26.5, 32.5, 38.3, 43.6, 48.3],
+  15: [6.3, 10.6, 16.3, 23.1, 30.5, 38.3, 46.4, 54.0, 61.0, 67.3],
+  20: [10.0, 17.0, 26.1, 36.5, 47.5, 58.9, 70.5, 81.6, 91.4, 100.0],
+};
+
+/** Build the full 20-row DLS resource table via linear interpolation between anchors. */
+function buildDlsTable(): number[][] {
+  const segments: Array<[number, number]> = [[1, 5], [5, 10], [10, 15], [15, 20]];
+  const table: number[][] = [];
+  for (let overs = 1; overs <= 20; overs++) {
+    if (DLS_ANCHORS[overs]) {
+      table[overs] = DLS_ANCHORS[overs];
+    } else {
+      // find surrounding anchors
+      const seg = segments.find(([lo, hi]) => overs > lo && overs < hi)!;
+      const [lo, hi] = seg;
+      const t = (overs - lo) / (hi - lo);
+      table[overs] = DLS_ANCHORS[lo].map((v, i) => v + t * (DLS_ANCHORS[hi][i] - v));
+    }
+  }
+  return table;
+}
+
+const DLS_TABLE = buildDlsTable();
+
+/**
+ * Returns the DLS resource percentage for the given situation.
+ * @param oversRemaining  Overs remaining, fractional (e.g. 8.4 means 8 overs + 4 balls)
+ * @param wicketsInHand   Wickets in hand, 1–10
+ */
+function dlsResource(oversRemaining: number, wicketsInHand: number): number {
+  const wIdx = Math.min(Math.max(Math.round(wicketsInHand), 1), 10) - 1; // 0-based col
+
+  // Clamp overs to [0, 20]
+  const ov = Math.min(Math.max(oversRemaining, 0), 20);
+  if (ov === 0) return 0;
+
+  const ovFloor = Math.floor(ov);
+  const ovCeil  = Math.ceil(ov);
+
+  if (ovFloor === ovCeil) {
+    // Integer overs — just look up
+    return DLS_TABLE[ovFloor]?.[wIdx] ?? 0;
+  }
+
+  // Fractional overs → interpolate between floor and ceil rows
+  const frac = ov - ovFloor;
+  const lo = DLS_TABLE[ovFloor]?.[wIdx] ?? 0;
+  const hi = DLS_TABLE[ovCeil]?.[wIdx] ?? 0;
+  return lo + frac * (hi - lo);
+}
 
 export interface CalculationSettingsManagementProps {
   initialMethod?: 'DLS' | 'VJD';
@@ -62,59 +117,89 @@ export const CalculationSettingsManagement: React.FC<CalculationSettingsManageme
 
   // Calculation Engine
   const calculationResults = useMemo(() => {
-    const s1 = parseFloat(team1Score) || 0;
-    const o1 = parseFloat(team1Overs) || 20;
-    const o2 = parseFloat(team2TargetOvers) || o1;
-    const curOv = parseFloat(currentOvers) || 0;
-    const curWkt = Math.min(Math.max(currentWickets, 0), 9);
+    const s1    = parseFloat(team1Score) || 0;
+    const o1    = parseFloat(team1Overs) || 20;          // T1 total overs
+    const o2    = parseFloat(team2TargetOvers) || o1;    // T2 allotted overs
+    const curOv = parseFloat(currentOvers) || 0;         // overs already bowled in T2 (e.g. 9.4)
+    const curWkt  = Math.min(Math.max(currentWickets, 0), 9);  // wickets LOST (0–9)
     const curRuns = parseFloat(currentScore) || 0;
 
-    // Resource percentage estimation
-    const fullResource1 = 100.0;
-    const fullResource2 = (o2 / o1) * 100.0;
+    // Convert "X.Y" over notation to real overs (Y balls out of 6)
+    const toRealOvers = (ov: number) =>
+      Math.floor(ov) + ((ov % 1) * 10) / 6;
 
-    let targetRuns = s1 + 1;
-    if (o2 < o1) {
-      if (selectedMethod === 'DLS') {
-        // DLS standard reduction
-        const resourceFactor = (o2 / o1) * 0.96;
-        targetRuns = Math.round(s1 * resourceFactor) + 1;
-      } else {
-        // VJD standard curve reduction
-        const vjdRatio = Math.pow(o2 / o1, 0.94);
-        targetRuns = Math.round(s1 * vjdRatio) + 1;
-      }
+    const t1OversReal   = toRealOvers(o1);  // normally 20
+    const t2AllocReal   = toRealOvers(o2);  // T2 allotted overs (real)
+    const bowledReal    = toRealOvers(curOv); // overs already bowled in T2
+
+    const wicketsInHand     = 10 - curWkt;              // 1–10
+    const t2OversRemaining  = Math.max(t2AllocReal - bowledReal, 0);
+
+    // ── DLS ENGINE ───────────────────────────────────────────────────────────
+    // R1: resource for T1 (full 10 wickets, their full allocation)
+    const R1        = dlsResource(t1OversReal, 10);
+    // R2_full: total resource available to T2 at start of their innings
+    const R2_full   = dlsResource(t2AllocReal, 10);
+    // R2_remaining: resource T2 still has at this live moment
+    const R2_remaining = dlsResource(t2OversRemaining, wicketsInHand);
+    // R2_used: resource T2 has consumed so far
+    const R2_used   = Math.max(R2_full - R2_remaining, 0);
+
+    let dlsTarget: number;
+    if (R2_full >= R1) {
+      dlsTarget = Math.round(s1 * R2_full / R1) + 1;
+    } else {
+      dlsTarget = Math.round(s1 * (R2_full / R1)) + 1;
+    }
+    const dlsParScore = Math.round(s1 * R2_used / (R1 || 1));
+
+    // ── VJD 4-PHASE ENGINE ───────────────────────────────────────────────────
+    const t1Balls       = Math.round(t1OversReal * 6);
+    const t2BallsAlloc  = Math.round(t2AllocReal * 6);
+    // Convert current overs-bowled (X.Y notation) to balls bowled
+    const ballsBowled   = Math.floor(curOv) * 6 + Math.round((curOv % 1) * 10);
+
+    // Phase coefficient based on balls already bowled
+    let k: number;
+    if (ballsBowled <= 30) {
+      k = 0.70;  // Phase 1: Settling (overs 0–5)
+    } else if (ballsBowled <= 60) {
+      k = 0.85;  // Phase 2: Exploitation (overs 5–10)
+    } else if (ballsBowled <= 90) {
+      k = 0.95;  // Phase 3: Intermediate (overs 10–15)
+    } else {
+      k = 1.08;  // Phase 4: Slog (overs 15–20)
     }
 
-    // Par score at current over and wickets
-    const completedOversFloat = Math.floor(curOv) + ((curOv % 1) * 10) / 6;
-    const oversLeft = Math.max(o2 - completedOversFloat, 0);
-    const fractionCompleted = completedOversFloat / (o2 || 1);
+    const vjdRatioUsed = Math.min(
+      k * Math.pow((t2BallsAlloc > 0 ? ballsBowled / t2BallsAlloc : 0), 1.5),
+      1.0
+    );
+    const vjdTarget = Math.round(s1 * (t2BallsAlloc / (t1Balls || 1)) * (1 / k)) + 1;
+    const vjdPar    = Math.round(s1 * vjdRatioUsed);
 
-    // Par score formula
-    const baseExpected = targetRuns * fractionCompleted;
-    const wicketAdjustment = curWkt * 4.8;
-    const parScore = Math.max(Math.round(baseExpected + wicketAdjustment), 0);
+    // ── ACTIVE-METHOD OUTPUT ─────────────────────────────────────────────────
+    const targetRuns = selectedMethod === 'DLS' ? dlsTarget : vjdTarget;
+    const parScore   = selectedMethod === 'DLS' ? dlsParScore : vjdPar;
+
+    const oversLeft      = t2OversRemaining;
+    const ballsRemaining = Math.max(Math.round(oversLeft * 6), 0);
+    const runsNeeded     = Math.max(targetRuns - curRuns, 0);
+    const crr = bowledReal > 0 ? (curRuns / bowledReal).toFixed(2) : '0.00';
+    const rrr = oversLeft  > 0 ? (runsNeeded / oversLeft).toFixed(2) : '0.00';
 
     const diffFromPar = curRuns - parScore;
-    const isAhead = diffFromPar >= 0;
-
-    // Run rates
-    const crr = completedOversFloat > 0 ? (curRuns / completedOversFloat).toFixed(2) : '0.00';
-    const ballsRemaining = Math.max(Math.round(oversLeft * 6), 0);
-    const runsNeeded = Math.max(targetRuns - curRuns, 0);
-    const rrr = oversLeft > 0 ? (runsNeeded / oversLeft).toFixed(2) : '0.00';
+    const isAhead     = diffFromPar >= 0;
 
     // Win probability (estimate based on RRR vs CRR and wickets left)
-    const wicketsLeft = 10 - curWkt;
     let winProb = 50;
     if (runsNeeded <= 0) {
       winProb = 100;
-    } else if (wicketsLeft <= 0 || ballsRemaining <= 0) {
+    } else if (wicketsInHand <= 0 || ballsRemaining <= 0) {
       winProb = 0;
     } else {
       const runRatePressure = parseFloat(rrr) - parseFloat(crr);
-      const wicketBonus = (wicketsLeft - 5) * 6;
+      const wicketBonus = (wicketsInHand - 5) * 6;
       const calculatedProb = 50 - (runRatePressure * 7) + wicketBonus;
       winProb = Math.min(Math.max(Math.round(calculatedProb), 5), 95);
     }
