@@ -1597,7 +1597,7 @@ class AuthService {
   /**
    * Register Scorer
    */
-  async registerScorer({ name, full_name, email, password, mobile, taluk, certificationLevel, pin, association }) {
+  async registerScorer({ name, full_name, email, password, mobile, phone, aadhaar, aadhaarNumber, taluk, certificationLevel, pin, association }) {
     const scorerName = (name || full_name || '').trim();
     if (!scorerName) {
       throw { status: 400, message: 'Scorer name is required.' };
@@ -1607,6 +1607,8 @@ class AuthService {
     }
 
     const cleanEmail = email.trim().toLowerCase();
+    const cleanMobile = String(mobile || phone || '').replace(/\D/g, '');
+    const cleanAadhaar = String(aadhaar || aadhaarNumber || '').replace(/\D/g, '');
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(cleanEmail)) {
       throw { status: 400, message: 'Invalid email address format.' };
@@ -1668,7 +1670,8 @@ class AuthService {
               $set: {
                 name: scorerName,
                 password_hash: passwordHash,
-                mobile: mobile || undefined,
+                mobile: cleanMobile || undefined,
+                aadhaar: cleanAadhaar || undefined,
                 taluk: taluk || 'Virudhunagar',
                 certificationLevel: certificationLevel || 'District Certified',
                 'scorer_details.certification_level': certificationLevel || 'District Certified',
@@ -1679,7 +1682,7 @@ class AuthService {
           if (existingScorer) {
             await db.models.Scorer.updateOne(
               { email: cleanEmail },
-              { $set: { full_name: scorerName, mobile: mobile || existingScorer.mobile } }
+              { $set: { full_name: scorerName, mobile: cleanMobile || existingScorer.mobile, ...(cleanAadhaar && { aadhaar: cleanAadhaar }) } }
             );
           }
           return {
@@ -1703,7 +1706,8 @@ class AuthService {
         name: scorerName,
         role: isAutoApproved ? (existingUser.role === 'ADMIN' ? 'ADMIN' : 'SCORER') : 'SCORER',
         status: targetStatus,
-        mobile: mobile || existingUser.mobile || null,
+        mobile: cleanMobile || existingUser.mobile || null,
+        aadhaar: cleanAadhaar || existingUser.aadhaar || null,
         taluk: taluk || 'Virudhunagar',
         certificationLevel: certificationLevel || 'District Certified',
         scoringPin: pin || '1234',
@@ -1727,7 +1731,8 @@ class AuthService {
             id: scorerId,
             full_name: scorerName,
             email: cleanEmail,
-            mobile: mobile || existingUser.mobile || '',
+            mobile: cleanMobile || existingUser.mobile || '',
+            aadhaar: cleanAadhaar || '',
             association: association || 'Virudhunagar District Cricket Association',
             certification_level: certificationLevel || 'District Certified',
             taluk: taluk || 'Virudhunagar',
@@ -1767,7 +1772,8 @@ class AuthService {
       id: userId,
       name: scorerName,
       email: cleanEmail,
-      mobile: mobile || null,
+      mobile: cleanMobile || null,
+      aadhaar: cleanAadhaar || null,
       password_hash: passwordHash,
       role: 'SCORER',
       status: 'PENDING',
@@ -1785,7 +1791,8 @@ class AuthService {
         id: userId,
         full_name: scorerName,
         email: cleanEmail,
-        mobile: mobile || '',
+        mobile: cleanMobile || '',
+        aadhaar: cleanAadhaar || '',
         association: association || 'Virudhunagar District Cricket Association',
         status: 'PENDING'
       });
@@ -1858,7 +1865,10 @@ class AuthService {
       additional_info,
       password,
       pin,
-      otp
+      otp,
+      aadhaar,
+      aadhaarNumber,
+      aadhaar_number
     } = payload;
 
     const cleanName = (name || umpireName || '').trim();
@@ -1873,6 +1883,7 @@ class AuthService {
     }
 
     const cleanMobile = String(mobile || phone || mobileNumber || '').trim();
+    const cleanAadhaar = String(aadhaar || aadhaarNumber || aadhaar_number || '').replace(/\D/g, '');
 
     const cleanDob = String(dateOfBirth || date_of_birth || dob || '').trim();
 
@@ -1971,11 +1982,13 @@ class AuthService {
       name: cleanName,
       email: cleanEmail,
       mobile: cleanMobile,
+      aadhaar: cleanAadhaar || null,
       password_hash: passwordHash,
       role: 'UMPIRE',
       status: 'PENDING',
       umpire_details: {
         certification_level: cleanQualification,
+        aadhaar: cleanAadhaar || '',
         taluk: cleanTaluk,
         date_of_birth: cleanDob,
         gender: cleanGender,
@@ -2188,7 +2201,7 @@ class AuthService {
    * Register a new Team with Coach and 15 Squad Players
    * Stored in MongoDB as PENDING.
    */
-  async registerTeam({ teamName, coachName, coachEmail, password, city, taluk, players = [] }) {
+  async registerTeam({ teamName, coachName, coachEmail, coachPhone, coachMobile, phone, mobile, coachAadhaar, aadhaar, password, city, taluk, players = [] }) {
     if (!teamName || !teamName.trim()) {
       throw { status: 400, message: 'Team Name is required.' };
     }
@@ -2198,6 +2211,9 @@ class AuthService {
     if (!coachEmail || !coachEmail.trim() || !coachEmail.includes('@')) {
       throw { status: 400, message: 'Valid Coach Email address is required.' };
     }
+
+    const cleanCoachPhone = String(coachPhone || coachMobile || phone || mobile || '').replace(/\D/g, '');
+    const cleanCoachAadhaar = String(coachAadhaar || aadhaar || '').replace(/\D/g, '');
 
     if (!Array.isArray(players) || players.length === 0) {
       throw { status: 400, message: 'Squad list of 15 players with names and emails is required.' };
@@ -2231,6 +2247,8 @@ class AuthService {
       teamName: teamName.trim(),
       coachName: coachName.trim(),
       coachEmail: cleanCoachEmail,
+      coachPhone: cleanCoachPhone,
+      coachAadhaar: cleanCoachAadhaar,
       city: city || taluk || 'Virudhunagar',
       taluk: taluk || 'Virudhunagar',
       players
@@ -2243,6 +2261,8 @@ class AuthService {
         id: `COACH-${Date.now()}`,
         name: coachName.trim(),
         email: cleanCoachEmail,
+        mobile: cleanCoachPhone || null,
+        aadhaar: cleanCoachAadhaar || null,
         role: 'COACH',
         password_hash: passwordHash,
         status: 'PENDING'
@@ -2250,7 +2270,16 @@ class AuthService {
     } else {
       await db.models.User.updateOne(
         { email: cleanCoachEmail },
-        { $set: { ...(passwordHash ? { password_hash: passwordHash } : {}), role: 'COACH', status: 'PENDING' } }
+        {
+          $set: {
+            name: coachName.trim(),
+            ...(cleanCoachPhone && { mobile: cleanCoachPhone }),
+            ...(cleanCoachAadhaar && { aadhaar: cleanCoachAadhaar }),
+            ...(passwordHash ? { password_hash: passwordHash } : {}),
+            role: 'COACH',
+            status: 'PENDING'
+          }
+        }
       );
     }
 

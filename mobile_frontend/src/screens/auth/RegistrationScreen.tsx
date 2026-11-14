@@ -299,7 +299,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
         try {
           localStorage.removeItem(`mset_added_${key}`);
           localStorage.removeItem(`mset_del_${key}`);
-        } catch (e) {}
+        } catch (e) { }
       }
 
       let dbNames: string[] = [];
@@ -326,8 +326,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
           const flatList: any[] = Array.isArray(res)
             ? res
             : Array.isArray(res?.data)
-            ? res.data
-            : [];
+              ? res.data
+              : [];
           const g = res && res.grouped ? res.grouped : {};
 
           const extractItemsForCategory = (catKey: string): any[] => {
@@ -472,6 +472,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   const [teamName, setTeamName] = useState<string>('');
   const [coachName, setCoachName] = useState<string>('');
   const [coachEmail, setCoachEmail] = useState<string>('');
+  const [coachMobile, setCoachMobile] = useState<string>('');
+  const [coachAadhaar, setCoachAadhaar] = useState<string>('');
   const [teamTaluk, setTeamTaluk] = useState<string>('Virudhunagar');
   const [teamCustomTaluk, setTeamCustomTaluk] = useState<string>('');
   const [squadPlayerName, setSquadPlayerName] = useState<string>('');
@@ -485,6 +487,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   const [sName, setSName] = useState<string>('');
   const [sEmail, setSEmail] = useState<string>('');
   const [sMobile, setSMobile] = useState<string>('');
+  const [sAadhaar, setSAadhaar] = useState<string>('');
   const [sTaluk, setSTaluk] = useState<string>('Virudhunagar');
   const [sCustomTaluk, setSCustomTaluk] = useState<string>('');
   const [sLevel, setSLevel] = useState<string>('District Certified');
@@ -494,6 +497,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   const [uName, setUName] = useState<string>('');
   const [uEmail, setUEmail] = useState<string>('');
   const [uMobile, setUMobile] = useState<string>('');
+  const [uAadhaar, setUAadhaar] = useState<string>('');
   const [uDob, setUDob] = useState<string>('');
   const [uGender, setUGender] = useState<string>('Male');
   const [uExperience, setUExperience] = useState<string>('');
@@ -620,6 +624,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setTeamName('Virudhunagar Super Strikers CC');
       setCoachName('Coach S. Murugan');
       setCoachEmail('coach.murugan@strikerscc.org');
+      setCoachMobile('9876543213');
+      setCoachAadhaar('5432 9876 1235');
       setTeamTaluk('Virudhunagar');
       const squad: SquadPlayer[] = SAMPLE_15_SQUAD.map((item, idx) => ({
         id: `sample-${idx + 1}-${Date.now()}`,
@@ -635,6 +641,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setSName('K. Ramesh Kumar');
       setSEmail('ramesh.scorer@cfvd.org');
       setSMobile('9876543211');
+      setSAadhaar('5432 9876 1236');
       setSTaluk('Virudhunagar');
       setSLevel('District Certified');
       setSAgreed(true);
@@ -644,6 +651,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setUName('Thiru. K. Sundaram');
       setUEmail('sundaram.umpire@cfvd.org');
       setUMobile('9876543212');
+      setUAadhaar('5432 9876 1237');
       setUDob('1985-05-15');
       setUGender('Male');
       setUExperience('10 years officiating senior district & TNCA league tournaments');
@@ -1113,10 +1121,16 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     setStatusType(null);
 
     const targetTaluk = teamTaluk === 'Other' ? teamCustomTaluk.trim() : teamTaluk;
+    const cleanCoachPhone = coachMobile.replace(/\D/g, '');
+    const cleanCoachAadhaar = coachAadhaar.trim().replace(/\D/g, '');
 
     const teamNameErr = validateNameValue(teamName, 'Team Name');
     const coachNameErr = validateNameValue(coachName, 'Coach Name');
     const coachEmailErr = validateEmailValue(coachEmail, 'Coach Official Email Address');
+    const phoneRes = validatePhone(coachMobile, 'Coach Phone Number');
+    const mobileErr = phoneRes.isValid ? null : phoneRes.error;
+    const aadhaarRes = validateAadhaar(coachAadhaar);
+    const aadhaarErr = aadhaarRes.isValid ? null : aadhaarRes.error;
     let talukErr: string | null = null;
     if (teamTaluk === 'Other' && !targetTaluk) talukErr = 'Please enter your team Taluk name.';
 
@@ -1124,6 +1138,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     if (teamNameErr) errs.teamName = teamNameErr;
     if (coachNameErr) errs.name = coachNameErr;
     if (coachEmailErr) errs.email = coachEmailErr;
+    if (mobileErr) errs.mobile = mobileErr;
+    if (aadhaarErr) errs.aadhaar = aadhaarErr;
     if (talukErr) errs.taluk = talukErr;
 
     if (Object.keys(errs).length > 0) {
@@ -1192,6 +1208,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
         teamName: teamName.trim(),
         coachName: coachName.trim(),
         coachEmail: coachEmail.trim().toLowerCase(),
+        coachPhone: cleanCoachPhone,
+        coachMobile: cleanCoachPhone,
+        phone: cleanCoachPhone,
+        coachAadhaar: cleanCoachAadhaar,
+        aadhaar: cleanCoachAadhaar,
         password,
         taluk: targetTaluk,
         city: 'Virudhunagar',
@@ -1233,11 +1254,16 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const name = sName.trim();
     const email = sEmail.trim().toLowerCase();
     const mobile = sMobile.trim();
+    const cleanPhone = mobile.replace(/\D/g, '');
+    const cleanAadhaar = sAadhaar.trim().replace(/\D/g, '');
     const targetTaluk = sTaluk === 'Other' ? sCustomTaluk.trim() : sTaluk;
 
     const nameErr = validateNameValue(name, 'Scorer Full Name');
     const emailErr = validateEmailValue(email, 'Official Scorer Email');
-    const mobileErr = validateMobileValue(mobile);
+    const phoneRes = validatePhone(mobile, 'Scorer Phone Number');
+    const mobileErr = phoneRes.isValid ? null : phoneRes.error;
+    const aadhaarRes = validateAadhaar(sAadhaar);
+    const aadhaarErr = aadhaarRes.isValid ? null : aadhaarRes.error;
     let talukErr: string | null = null;
     if (sTaluk === 'Other' && !targetTaluk) talukErr = 'Please enter your Taluk name.';
 
@@ -1245,6 +1271,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     if (nameErr) errs.name = nameErr;
     if (emailErr) errs.email = emailErr;
     if (mobileErr) errs.mobile = mobileErr;
+    if (aadhaarErr) errs.aadhaar = aadhaarErr;
     if (talukErr) errs.taluk = talukErr;
 
     if (Object.keys(errs).length > 0) {
@@ -1310,7 +1337,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
         name,
         email,
         password,
-        mobile,
+        mobile: cleanPhone,
+        phone: cleanPhone,
+        aadhaar: cleanAadhaar,
+        aadhaarNumber: cleanAadhaar,
         taluk: targetTaluk,
         certificationLevel: sLevel,
         otp: otpCode.trim()
@@ -1343,11 +1373,17 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
     const name = uName.trim();
     const email = uEmail.trim().toLowerCase();
+    const mobile = uMobile.trim();
+    const cleanPhone = mobile.replace(/\D/g, '');
+    const cleanAadhaar = uAadhaar.trim().replace(/\D/g, '');
     const targetDistrict = uDistrict === 'Other' ? uCustomDistrict.trim() : uDistrict;
 
     const nameErr = validateNameValue(name, 'Umpire Full Name');
     const emailErr = validateEmailValue(email, 'Official Umpire Email');
-    const mobileErr = validateMobileValue(uMobile);
+    const phoneRes = validatePhone(mobile, 'Umpire Phone Number');
+    const mobileErr = phoneRes.isValid ? null : phoneRes.error;
+    const aadhaarRes = validateAadhaar(uAadhaar);
+    const aadhaarErr = aadhaarRes.isValid ? null : aadhaarRes.error;
     let expErr: string | null = null;
     if (!uExperience.trim()) expErr = 'Please enter Umpire Experience.';
     let distErr: string | null = null;
@@ -1357,6 +1393,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     if (nameErr) errs.name = nameErr;
     if (emailErr) errs.email = emailErr;
     if (mobileErr) errs.mobile = mobileErr;
+    if (aadhaarErr) errs.aadhaar = aadhaarErr;
     if (expErr) errs.experience = expErr;
     if (distErr) errs.district = distErr;
 
@@ -1422,7 +1459,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       const resp = await ScorerApi.registerUmpire({
         name,
         email,
-        mobile: uMobile.trim().replace(/\D/g, '') || undefined,
+        mobile: cleanPhone || undefined,
+        phone: cleanPhone || undefined,
+        aadhaar: cleanAadhaar || undefined,
+        aadhaarNumber: cleanAadhaar || undefined,
         password,
         experience: uExperience.trim(),
         experienceYears: uYearsOfExperience.trim() ? parseInt(uYearsOfExperience.trim(), 10) : undefined,
@@ -1763,1081 +1803,1365 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                   </View>
                 </View>
 
-              {/* Status Banner */}
-              {statusMessage && (
-                <View
-                  style={[
-                    styles.statusBanner,
-                    statusType === 'error' && styles.statusError,
-                    statusType === 'success' && styles.statusSuccess,
-                    statusType === 'info' && styles.statusInfo
-                  ]}
-                >
-                  <Text
+                {/* Status Banner */}
+                {statusMessage && (
+                  <View
                     style={[
-                      styles.statusText,
-                      statusType === 'error' && styles.statusTextError,
-                      statusType === 'success' && styles.statusTextSuccess,
-                      statusType === 'info' && styles.statusTextInfo
+                      styles.statusBanner,
+                      statusType === 'error' && styles.statusError,
+                      statusType === 'success' && styles.statusSuccess,
+                      statusType === 'info' && styles.statusInfo
                     ]}
                   >
-                    {statusMessage}
-                  </Text>
-                </View>
-              )}
-
-              {/* ========================================================= */}
-              {/* 1. PLAYER FORM */}
-              {/* ========================================================= */}
-              {activeRole === 'PLAYER' && (
-                <>
-                  <View style={styles.sectionHeaderBox}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={styles.sectionHeaderText}>🏏 PLAYER PERSONAL & CRICKETING PROFILE</Text>
-                      <TouchableOpacity onPress={handleDemoFill}>
-                        <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
-                      </TouchableOpacity>
-                    </View>
+                    <Text
+                      style={[
+                        styles.statusText,
+                        statusType === 'error' && styles.statusTextError,
+                        statusType === 'success' && styles.statusTextSuccess,
+                        statusType === 'info' && styles.statusTextInfo
+                      ]}
+                    >
+                      {statusMessage}
+                    </Text>
                   </View>
+                )}
 
-                  {/* Row 1: Player Full Name (left) & Player Email Address (right) */}
-                  <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.label}>Player Full Name *</Text>
-                      <TextInput
-                        style={[styles.input, fieldErrors.name && styles.inputError]}
-                        value={pName}
-                        onChangeText={(val) => {
-                          setPName(val);
-                          const err = validateNameValue(val, 'Player Name');
-                          setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
-                        }}
-                        placeholder="e.g. R. Saravanan"
-                        placeholderTextColor="#94a3b8"
-                        autoCapitalize="words"
-                      />
-                      {fieldErrors.name && (
-                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.name}</Text>
-                      )}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.label}>Player Email Address *</Text>
-                      <TextInput
-                        style={[styles.input, fieldErrors.email && styles.inputError]}
-                        value={pEmail}
-                        onChangeText={(val) => {
-                          setPEmail(val);
-                          if (isEmailVerified) {
-                            setIsEmailVerified(false);
-                            setOtpSent(false);
-                          }
-                          const err = validateEmailValue(val, 'Player Email Address');
-                          setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
-                        }}
-                        placeholder="e.g. saravanan@example.com"
-                        keyboardType="email-address"
-                        placeholderTextColor="#94a3b8"
-                        autoCapitalize="none"
-                      />
-                      {fieldErrors.email && (
-                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.email}</Text>
-                      )}
-                    </View>
-                  </View>
-
-                  {/* Row 2: Phone Number (10 Digits) & Aadhaar Number (12 Digits) */}
-                  <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
-                    {/* Phone Number Input */}
-                    <View style={{ flex: 1 }}>
+                {/* ========================================================= */}
+                {/* 1. PLAYER FORM */}
+                {/* ========================================================= */}
+                {activeRole === 'PLAYER' && (
+                  <>
+                    <View style={styles.sectionHeaderBox}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <FontAwesome name="phone" size={13} color="#0284c7" />
-                          <Text style={styles.label}>Phone Number (10 Digits) *</Text>
-                        </View>
-                        <Text style={{ fontSize: 10, color: pMobile.replace(/\D/g, '').length === 10 ? '#16a34a' : '#64748b', fontWeight: '700' }}>
-                          {pMobile.replace(/\D/g, '').length === 10 ? '✓ 10/10 Digits' : `(${pMobile.replace(/\D/g, '').length}/10)`}
-                        </Text>
-                      </View>
-                      <View style={[styles.dynamicInputWrap, fieldErrors.mobile ? styles.inputError : (pMobile.replace(/\D/g, '').length === 10 ? styles.dynamicInputSuccess : null)]}>
-                        <View style={styles.phonePrefixBox}>
-                          <Text style={styles.phonePrefixText}>🇮🇳 +91</Text>
-                        </View>
-                        <TextInput
-                          style={styles.dynamicInputCore}
-                          value={pMobile}
-                          onChangeText={(val) => {
-                            const cleaned = formatPhone(val);
-                            setPMobile(cleaned);
-                            if (cleaned.length === 10) {
-                              const res = validatePhone(cleaned, 'Player Phone Number');
-                              setFieldErrors((prev) => ({ ...prev, mobile: res.isValid ? undefined : res.error }));
-                            } else {
-                              setFieldErrors((prev) => ({ ...prev, mobile: undefined }));
-                            }
-                          }}
-                          onBlur={() => {
-                            if (pMobile.trim()) {
-                              const res = validatePhone(pMobile, 'Player Phone Number');
-                              setFieldErrors((prev) => ({ ...prev, mobile: res.isValid ? undefined : res.error }));
-                            }
-                          }}
-                          placeholder="9876543210"
-                          keyboardType="phone-pad"
-                          placeholderTextColor="#94a3b8"
-                          maxLength={10}
-                        />
-                        {pMobile.replace(/\D/g, '').length === 10 && (
-                          <View style={styles.validCheckBadge}>
-                            <Text style={styles.validCheckText}>✓</Text>
-                          </View>
-                        )}
-                      </View>
-                      {fieldErrors.mobile ? (
-                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.mobile}</Text>
-                      ) : (
-                        <Text style={styles.helperText}>Used for official match alerts & communication</Text>
-                      )}
-                    </View>
-
-                    {/* Aadhaar Number Input */}
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <FontAwesome name="id-card" size={13} color="#b91c1c" />
-                          <Text style={styles.label}>Aadhaar Number (12 Digits) *</Text>
-                        </View>
-                        <Text style={{ fontSize: 10, color: pAadhaar.replace(/\D/g, '').length === 12 ? '#16a34a' : '#64748b', fontWeight: '700' }}>
-                          {pAadhaar.replace(/\D/g, '').length === 12 ? '✓ 12/12 Digits' : `(${pAadhaar.replace(/\D/g, '').length}/12)`}
-                        </Text>
-                      </View>
-                      <View style={[styles.dynamicInputWrap, fieldErrors.aadhaar ? styles.inputError : (pAadhaar.replace(/\D/g, '').length === 12 ? styles.dynamicInputSuccess : null)]}>
-                        <View style={styles.aadhaarIconBox}>
-                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#b91c1c' }}>UIDAI</Text>
-                        </View>
-                        <TextInput
-                          style={styles.dynamicInputCore}
-                          value={pAadhaar}
-                          onChangeText={(val) => {
-                            const formatted = formatAadhaar(val);
-                            setPAadhaar(formatted);
-                            const rawDigits = formatted.replace(/\D/g, '');
-                            if (rawDigits.length === 12) {
-                              const res = validateAadhaar(rawDigits);
-                              setFieldErrors((prev) => ({ ...prev, aadhaar: res.isValid ? undefined : res.error }));
-                            } else if (rawDigits.length > 0 && (rawDigits[0] === '0' || rawDigits[0] === '1')) {
-                              setFieldErrors((prev) => ({ ...prev, aadhaar: 'Aadhaar number cannot start with 0 or 1.' }));
-                            } else {
-                              setFieldErrors((prev) => ({ ...prev, aadhaar: undefined }));
-                            }
-                          }}
-                          onBlur={() => {
-                            if (pAadhaar.trim()) {
-                              const res = validateAadhaar(pAadhaar);
-                              setFieldErrors((prev) => ({ ...prev, aadhaar: res.isValid ? undefined : res.error }));
-                            }
-                          }}
-                          placeholder="5432 9876 1234"
-                          keyboardType="number-pad"
-                          placeholderTextColor="#94a3b8"
-                          maxLength={14}
-                        />
-                        {pAadhaar.replace(/\D/g, '').length === 12 && (
-                          <View style={[styles.validCheckBadge, { backgroundColor: '#16a34a' }]}>
-                            <Text style={styles.validCheckText}>✓</Text>
-                          </View>
-                        )}
-                      </View>
-                      {fieldErrors.aadhaar ? (
-                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.aadhaar}</Text>
-                      ) : (
-                        <Text style={styles.helperText}>Indian 12-digit National Identification Number</Text>
-                      )}
-                    </View>
-                  </View>
-
-                  {/* Row 3: Playing Role (left) & Taluk Jurisdiction (right) Dropdowns */}
-                  <View style={styles.formRow}>
-                    <DropdownField
-                      label="Playing Role"
-                      value={pRole}
-                      options={dynamicPlayerRoles}
-                      onSelect={handleRoleChange}
-                    />
-                    <DropdownField
-                      label="Taluk Jurisdiction"
-                      value={pTaluk}
-                      options={dynamicTaluks}
-                      onSelect={(val) => {
-                        setPTaluk(val);
-                        if (val !== 'Other') setPCustomTaluk('');
-                        setFieldErrors((prev) => ({ ...prev, taluk: undefined }));
-                      }}
-                    />
-                  </View>
-
-                  {/* Custom Taluk Input if "Other" is chosen */}
-                  {pTaluk === 'Other' && (
-                    <View style={styles.formRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.label}>Specify Taluk Name *</Text>
-                        <TextInput
-                          style={[styles.input, fieldErrors.taluk && styles.inputError]}
-                          value={pCustomTaluk}
-                          onChangeText={(val) => {
-                            setPCustomTaluk(val);
-                            setFieldErrors((prev) => ({ ...prev, taluk: val.trim() ? undefined : 'Please enter your Taluk name.' }));
-                          }}
-                          placeholder="Type your taluk name here..."
-                          placeholderTextColor="#94a3b8"
-                          autoCapitalize="words"
-                        />
-                        {fieldErrors.taluk && (
-                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.taluk}</Text>
-                        )}
-                      </View>
-                    </View>
-                  )}
-
-                  {/* Common Cricketing Attributes: Batting Style & Age Category */}
-                  <View style={styles.formRow}>
-                    <DropdownField
-                      label="Batting Style"
-                      value={pBattingStyle}
-                      options={dynamicBattingStyles}
-                      onSelect={setPBattingStyle}
-                    />
-                    <DropdownField
-                      label="Age Category"
-                      value={pCategory}
-                      options={dynamicAgeCategories}
-                      onSelect={setPCategory}
-                    />
-                  </View>
-
-                  {/* Dynamic Role Specialization Columns */}
-                  {/* Case 1: Bowler Additional Fields */}
-                  {isBowler && (
-                    <>
-                      <View style={styles.formRow}>
-                        <DropdownField
-                          label="Bowling Arm"
-                          value={pBowlingArm}
-                          options={BOWLING_ARMS}
-                          onSelect={handleBowlingArmChange}
-                        />
-                        <DropdownField
-                          label="Bowling Type"
-                          value={pBowlingCategory}
-                          options={BOWLING_CATEGORIES}
-                          onSelect={handleBowlingCategoryChange}
-                        />
-                      </View>
-                      <View style={styles.formRow}>
-                        <DropdownField
-                          label="Bowling Action / Sub-Type"
-                          value={pBowlingAction}
-                          options={getBowlingActionOptions(pBowlingArm, pBowlingCategory)}
-                          onSelect={setPBowlingAction}
-                        />
-                      </View>
-                    </>
-                  )}
-
-                  {/* Case 2: All-Rounder Additional Fields */}
-                  {isAllRounder && (
-                    <>
-                      <View style={styles.formRow}>
-                        <DropdownField
-                          label="Bowling Arm"
-                          value={pBowlingArm}
-                          options={BOWLING_ARMS}
-                          onSelect={handleBowlingArmChange}
-                        />
-                        <DropdownField
-                          label="Bowling Type"
-                          value={pBowlingCategory}
-                          options={BOWLING_CATEGORIES}
-                          onSelect={handleBowlingCategoryChange}
-                        />
-                      </View>
-                      <View style={styles.formRow}>
-                        <DropdownField
-                          label="Bowling Action / Sub-Type"
-                          value={pBowlingAction}
-                          options={getBowlingActionOptions(pBowlingArm, pBowlingCategory)}
-                          onSelect={setPBowlingAction}
-                        />
-                      </View>
-                    </>
-                  )}
-
-                  {/* Case 3: Wicket Keeper Additional Fields */}
-                  {isWicketKeeper && (
-                    <View style={styles.formRow}>
-                      <DropdownField
-                        label="Keeper Specialization"
-                        value={pKeeperSpec}
-                        options={WICKET_KEEPER_SPECIALIZATIONS}
-                        onSelect={setPKeeperSpec}
-                      />
-                    </View>
-                  )}
-
-                  {/* Dynamic Cricketing Profile Summary Pill */}
-                  <View style={styles.cricketSummaryBadge}>
-                    <Text style={styles.cricketSummaryText}>
-                      🏏 <Text style={{ fontWeight: '800', color: '#b45309' }}>Role Specification:</Text>{' '}
-                      {(isBatsman || isOtherOrBatsman) && `${pBattingStyle} • ${pCategory}`}
-                      {isBowler && `${pBowlingAction} (${pBowlingArm} ${pBowlingCategory}) • Bat: ${pBattingStyle}`}
-                      {isAllRounder && `Bat: ${pBattingStyle} • Bowl: ${pBowlingAction}`}
-                      {isWicketKeeper && `${pBattingStyle} • ${pKeeperSpec}`}
-                    </Text>
-                  </View>
-
-                  {/* Verification & Password Setup */}
-                  {renderVerificationAndPasswordBlock()}
-
-                  <TouchableOpacity
-                    style={styles.checkboxRow}
-                    onPress={() => {
-                      const next = !pAgreed;
-                      setPAgreed(next);
-                      setFieldErrors((prev) => ({ ...prev, agree: next ? undefined : 'Please accept the declaration to proceed.' }));
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <View style={[styles.checkbox, pAgreed && styles.checkboxChecked]}>
-                      {pAgreed && <Text style={styles.checkmark}>✓</Text>}
-                    </View>
-                    <Text style={styles.checkboxLabel}>
-                      I hereby declare that all information furnished is true and accurate according to association guidelines.
-                    </Text>
-                  </TouchableOpacity>
-                  {fieldErrors.agree && (
-                    <Text style={[styles.fieldErrorText, { marginTop: -4, marginBottom: 6 }]}>⚠️ {fieldErrors.agree}</Text>
-                  )}
-
-                  <TouchableOpacity
-                    style={[styles.submitBtn, isLoading && styles.submitBtnDisabled]}
-                    onPress={handlePlayerSubmit}
-                    disabled={isLoading}
-                  >
-                    {isLoading ? (
-                      <ActivityIndicator color="#000000" size="small" />
-                    ) : (
-                      <Text style={styles.submitBtnText}>
-                        {isEmailVerified ? 'Submit Player Registration' : 'Verify Email & Submit Registration'}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                </>
-              )}
-
-              {/* ========================================================= */}
-              {/* 2. TEAM & COACH FORM */}
-              {/* ========================================================= */}
-              {activeRole === 'TEAM' && (
-                <>
-                  <View style={styles.sectionHeaderBox}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={styles.sectionHeaderText}>🛡️ TEAM CLUB & COACH PROFILE</Text>
-                      <TouchableOpacity onPress={handleDemoFill}>
-                        <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  {/* Row 1: Team Name (left) & Coach Name (right) */}
-                  <View style={styles.formRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.label}>Official Club / Team Name *</Text>
-                      <TextInput
-                        style={[styles.input, fieldErrors.teamName && styles.inputError]}
-                        value={teamName}
-                        onChangeText={(val) => {
-                          setTeamName(val);
-                          const err = validateNameValue(val, 'Team Name');
-                          setFieldErrors((prev) => ({ ...prev, teamName: err || undefined }));
-                        }}
-                        placeholder="e.g. Sivakasi Super Strikers"
-                        placeholderTextColor="#94a3b8"
-                      />
-                      {fieldErrors.teamName && (
-                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.teamName}</Text>
-                      )}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.label}>Head Coach / Manager Name *</Text>
-                      <TextInput
-                        style={[styles.input, fieldErrors.name && styles.inputError]}
-                        value={coachName}
-                        onChangeText={(val) => {
-                          setCoachName(val);
-                          const err = validateNameValue(val, 'Coach Name');
-                          setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
-                        }}
-                        placeholder="e.g. Coach S. Murugan"
-                        placeholderTextColor="#94a3b8"
-                      />
-                      {fieldErrors.name && (
-                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.name}</Text>
-                      )}
-                    </View>
-                  </View>
-
-                  {/* Row 2: Coach Email (left) & Team Taluk (right) */}
-                  <View style={styles.formRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.label}>Coach Official Email Address *</Text>
-                      <TextInput
-                        style={[styles.input, fieldErrors.email && styles.inputError]}
-                        value={coachEmail}
-                        onChangeText={(val) => {
-                          setCoachEmail(val);
-                          if (isEmailVerified) {
-                            setIsEmailVerified(false);
-                            setOtpSent(false);
-                          }
-                          const err = validateEmailValue(val, 'Coach Official Email Address');
-                          setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
-                        }}
-                        placeholder="e.g. coach@strikerscc.org"
-                        keyboardType="email-address"
-                        placeholderTextColor="#94a3b8"
-                        autoCapitalize="none"
-                      />
-                      {fieldErrors.email && (
-                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.email}</Text>
-                      )}
-                    </View>
-                    <DropdownField
-                      label="Team Taluk Jurisdiction"
-                      value={teamTaluk}
-                      options={dynamicTaluks}
-                      onSelect={(val) => {
-                        setTeamTaluk(val);
-                        if (val !== 'Other') setTeamCustomTaluk('');
-                        setFieldErrors((prev) => ({ ...prev, taluk: undefined }));
-                      }}
-                    />
-                  </View>
-
-                  {/* Custom Taluk Input if "Other" is chosen */}
-                  {teamTaluk === 'Other' && (
-                    <View style={styles.formRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.label}>Specify Team Taluk Name *</Text>
-                        <TextInput
-                          style={[styles.input, fieldErrors.taluk && styles.inputError]}
-                          value={teamCustomTaluk}
-                          onChangeText={(val) => {
-                            setTeamCustomTaluk(val);
-                            setFieldErrors((prev) => ({ ...prev, taluk: val.trim() ? undefined : 'Please enter your team Taluk name.' }));
-                          }}
-                          placeholder="Type your team's taluk name here..."
-                          placeholderTextColor="#94a3b8"
-                          autoCapitalize="words"
-                        />
-                        {fieldErrors.taluk && (
-                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.taluk}</Text>
-                        )}
-                      </View>
-                    </View>
-                  )}
-
-                  {/* 15 Squad Players Builder */}
-                  <View style={styles.squadHeaderRow}>
-                    <Text style={styles.squadSectionTitle}>
-                      Squad Players ({players.length} added)
-                    </Text>
-                    <TouchableOpacity style={styles.autoFillBtn} onPress={handleAutoFillSampleSquad}>
-                      <Text style={styles.autoFillBtnText}>⚡ Fill Sample Squad</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <View style={styles.addPlayerContainer}>
-                    {editingPlayerId && (
-                      <View style={{ backgroundColor: '#fef3c7', borderRadius: 5, padding: 6, marginBottom: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text style={{ color: '#92400e', fontSize: 11, fontWeight: '700' }}>✏️ Editing player — make changes and click Update</Text>
-                        <TouchableOpacity onPress={handleCancelEdit}>
-                          <Text style={{ color: '#dc2626', fontSize: 11, fontWeight: '800' }}>✕ Cancel</Text>
+                        <Text style={styles.sectionHeaderText}>🏏 PLAYER PERSONAL & CRICKETING PROFILE</Text>
+                        <TouchableOpacity onPress={handleDemoFill}>
+                          <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
                         </TouchableOpacity>
                       </View>
-                    )}
-                    <View style={styles.formRow}>
+                    </View>
+
+                    {/* Row 1: Player Full Name (left) & Player Email Address (right) */}
+                    <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
                       <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Player Full Name *</Text>
                         <TextInput
-                          style={[styles.input, { marginBottom: 0 }, fieldErrors.squadPlayerName && styles.inputError]}
-                          value={squadPlayerName}
+                          style={[styles.input, fieldErrors.name && styles.inputError]}
+                          value={pName}
                           onChangeText={(val) => {
-                            setSquadPlayerName(val);
-                            const err = validateNameValue(val, 'Squad Player Name');
-                            setFieldErrors((prev) => ({ ...prev, squadPlayerName: err || undefined }));
+                            setPName(val);
+                            const err = validateNameValue(val, 'Player Name');
+                            setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
                           }}
-                          placeholder="Player Full Name"
+                          placeholder="e.g. R. Saravanan"
                           placeholderTextColor="#94a3b8"
+                          autoCapitalize="words"
                         />
-                        {fieldErrors.squadPlayerName && (
-                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.squadPlayerName}</Text>
+                        {fieldErrors.name && (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.name}</Text>
                         )}
                       </View>
                       <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Player Email Address *</Text>
                         <TextInput
-                          style={[styles.input, { marginBottom: 0 }, fieldErrors.squadPlayerEmail && styles.inputError]}
-                          value={squadPlayerEmail}
+                          style={[styles.input, fieldErrors.email && styles.inputError]}
+                          value={pEmail}
                           onChangeText={(val) => {
-                            setSquadPlayerEmail(val);
-                            const err = validateEmailValue(val, 'Squad Player Email');
-                            setFieldErrors((prev) => ({ ...prev, squadPlayerEmail: err || undefined }));
+                            setPEmail(val);
+                            if (isEmailVerified) {
+                              setIsEmailVerified(false);
+                              setOtpSent(false);
+                            }
+                            const err = validateEmailValue(val, 'Player Email Address');
+                            setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
                           }}
-                          placeholder="Player Email Address"
+                          placeholder="e.g. saravanan@example.com"
                           keyboardType="email-address"
                           placeholderTextColor="#94a3b8"
                           autoCapitalize="none"
                         />
-                        {fieldErrors.squadPlayerEmail && (
-                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.squadPlayerEmail}</Text>
+                        {fieldErrors.email && (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.email}</Text>
                         )}
                       </View>
                     </View>
-                    <View style={[styles.formRow, { marginTop: 8, marginBottom: 0 }]}>
+
+                    {/* Row 2: Phone Number (10 Digits) & Aadhaar Number (12 Digits) */}
+                    <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                      {/* Phone Number Input */}
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <FontAwesome name="phone" size={13} color="#0284c7" />
+                            <Text style={styles.label}>Phone Number (10 Digits) *</Text>
+                          </View>
+                          <Text style={{ fontSize: 10, color: pMobile.replace(/\D/g, '').length === 10 ? '#16a34a' : '#64748b', fontWeight: '700' }}>
+                            {pMobile.replace(/\D/g, '').length === 10 ? '✓ 10/10 Digits' : `(${pMobile.replace(/\D/g, '').length}/10)`}
+                          </Text>
+                        </View>
+                        <View style={[styles.dynamicInputWrap, fieldErrors.mobile ? styles.inputError : (pMobile.replace(/\D/g, '').length === 10 ? styles.dynamicInputSuccess : null)]}>
+                          <View style={styles.phonePrefixBox}>
+                            <Text style={styles.phonePrefixText}>🇮🇳 +91</Text>
+                          </View>
+                          <TextInput
+                            style={styles.dynamicInputCore}
+                            value={pMobile}
+                            onChangeText={(val) => {
+                              const cleaned = formatPhone(val);
+                              setPMobile(cleaned);
+                              if (cleaned.length === 10) {
+                                const res = validatePhone(cleaned, 'Player Phone Number');
+                                setFieldErrors((prev) => ({ ...prev, mobile: res.isValid ? undefined : res.error }));
+                              } else {
+                                setFieldErrors((prev) => ({ ...prev, mobile: undefined }));
+                              }
+                            }}
+                            onBlur={() => {
+                              if (pMobile.trim()) {
+                                const res = validatePhone(pMobile, 'Player Phone Number');
+                                setFieldErrors((prev) => ({ ...prev, mobile: res.isValid ? undefined : res.error }));
+                              }
+                            }}
+                            placeholder="9876543210"
+                            keyboardType="phone-pad"
+                            placeholderTextColor="#94a3b8"
+                            maxLength={10}
+                          />
+                          {pMobile.replace(/\D/g, '').length === 10 && (
+                            <View style={styles.validCheckBadge}>
+                              <Text style={styles.validCheckText}>✓</Text>
+                            </View>
+                          )}
+                        </View>
+                        {fieldErrors.mobile ? (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.mobile}</Text>
+                        ) : (
+                          <Text style={styles.helperText}>Used for official match alerts & communication</Text>
+                        )}
+                      </View>
+
+                      {/* Aadhaar Number Input */}
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <FontAwesome name="id-card" size={13} color="#b91c1c" />
+                            <Text style={styles.label}>Aadhaar Number (12 Digits) *</Text>
+                          </View>
+                          <Text style={{ fontSize: 10, color: pAadhaar.replace(/\D/g, '').length === 12 ? '#16a34a' : '#64748b', fontWeight: '700' }}>
+                            {pAadhaar.replace(/\D/g, '').length === 12 ? '✓ 12/12 Digits' : `(${pAadhaar.replace(/\D/g, '').length}/12)`}
+                          </Text>
+                        </View>
+                        <View style={[styles.dynamicInputWrap, fieldErrors.aadhaar ? styles.inputError : (pAadhaar.replace(/\D/g, '').length === 12 ? styles.dynamicInputSuccess : null)]}>
+                          <View style={styles.aadhaarIconBox}>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#b91c1c' }}>UIDAI</Text>
+                          </View>
+                          <TextInput
+                            style={styles.dynamicInputCore}
+                            value={pAadhaar}
+                            onChangeText={(val) => {
+                              const formatted = formatAadhaar(val);
+                              setPAadhaar(formatted);
+                              const rawDigits = formatted.replace(/\D/g, '');
+                              if (rawDigits.length === 12) {
+                                const res = validateAadhaar(rawDigits);
+                                setFieldErrors((prev) => ({ ...prev, aadhaar: res.isValid ? undefined : res.error }));
+                              } else if (rawDigits.length > 0 && (rawDigits[0] === '0' || rawDigits[0] === '1')) {
+                                setFieldErrors((prev) => ({ ...prev, aadhaar: 'Aadhaar number cannot start with 0 or 1.' }));
+                              } else {
+                                setFieldErrors((prev) => ({ ...prev, aadhaar: undefined }));
+                              }
+                            }}
+                            onBlur={() => {
+                              if (pAadhaar.trim()) {
+                                const res = validateAadhaar(pAadhaar);
+                                setFieldErrors((prev) => ({ ...prev, aadhaar: res.isValid ? undefined : res.error }));
+                              }
+                            }}
+                            placeholder="5432 9876 1234"
+                            keyboardType="number-pad"
+                            placeholderTextColor="#94a3b8"
+                            maxLength={14}
+                          />
+                          {pAadhaar.replace(/\D/g, '').length === 12 && (
+                            <View style={[styles.validCheckBadge, { backgroundColor: '#16a34a' }]}>
+                              <Text style={styles.validCheckText}>✓</Text>
+                            </View>
+                          )}
+                        </View>
+                        {fieldErrors.aadhaar ? (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.aadhaar}</Text>
+                        ) : (
+                          <Text style={styles.helperText}>Indian 12-digit National Identification Number</Text>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Row 3: Playing Role (left) & Taluk Jurisdiction (right) Dropdowns */}
+                    <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
                       <DropdownField
-                        label="Squad Role"
-                        value={squadPlayerRole}
+                        label="Playing Role"
+                        value={pRole}
                         options={dynamicPlayerRoles}
-                        onSelect={setSquadPlayerRole}
+                        onSelect={handleRoleChange}
                       />
-                      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-                        <TouchableOpacity style={[styles.addPlayerBtn, editingPlayerId && { backgroundColor: '#0284c7' }]} onPress={handleAddPlayer}>
-                          <Text style={styles.addPlayerBtnText}>{editingPlayerId ? '✓ Update Player' : '+ Add to Squad'}</Text>
+                      <DropdownField
+                        label="Taluk Jurisdiction"
+                        value={pTaluk}
+                        options={dynamicTaluks}
+                        onSelect={(val) => {
+                          setPTaluk(val);
+                          if (val !== 'Other') setPCustomTaluk('');
+                          setFieldErrors((prev) => ({ ...prev, taluk: undefined }));
+                        }}
+                      />
+                    </View>
+
+                    {/* Custom Taluk Input if "Other" is chosen */}
+                    {pTaluk === 'Other' && (
+                      <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.label}>Specify Taluk Name *</Text>
+                          <TextInput
+                            style={[styles.input, fieldErrors.taluk && styles.inputError]}
+                            value={pCustomTaluk}
+                            onChangeText={(val) => {
+                              setPCustomTaluk(val);
+                              setFieldErrors((prev) => ({ ...prev, taluk: val.trim() ? undefined : 'Please enter your Taluk name.' }));
+                            }}
+                            placeholder="Type your taluk name here..."
+                            placeholderTextColor="#94a3b8"
+                            autoCapitalize="words"
+                          />
+                          {fieldErrors.taluk && (
+                            <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.taluk}</Text>
+                          )}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Common Cricketing Attributes: Batting Style & Age Category */}
+                    <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                      <DropdownField
+                        label="Batting Style"
+                        value={pBattingStyle}
+                        options={dynamicBattingStyles}
+                        onSelect={setPBattingStyle}
+                      />
+                      <DropdownField
+                        label="Age Category"
+                        value={pCategory}
+                        options={dynamicAgeCategories}
+                        onSelect={setPCategory}
+                      />
+                    </View>
+
+                    {/* Dynamic Role Specialization Columns */}
+                    {/* Case 1: Bowler Additional Fields */}
+                    {isBowler && (
+                      <>
+                        <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                          <DropdownField
+                            label="Bowling Arm"
+                            value={pBowlingArm}
+                            options={BOWLING_ARMS}
+                            onSelect={handleBowlingArmChange}
+                          />
+                          <DropdownField
+                            label="Bowling Type"
+                            value={pBowlingCategory}
+                            options={BOWLING_CATEGORIES}
+                            onSelect={handleBowlingCategoryChange}
+                          />
+                        </View>
+                        <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                          <DropdownField
+                            label="Bowling Action / Sub-Type"
+                            value={pBowlingAction}
+                            options={getBowlingActionOptions(pBowlingArm, pBowlingCategory)}
+                            onSelect={setPBowlingAction}
+                          />
+                        </View>
+                      </>
+                    )}
+
+                    {/* Case 2: All-Rounder Additional Fields */}
+                    {isAllRounder && (
+                      <>
+                        <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                          <DropdownField
+                            label="Bowling Arm"
+                            value={pBowlingArm}
+                            options={BOWLING_ARMS}
+                            onSelect={handleBowlingArmChange}
+                          />
+                          <DropdownField
+                            label="Bowling Type"
+                            value={pBowlingCategory}
+                            options={BOWLING_CATEGORIES}
+                            onSelect={handleBowlingCategoryChange}
+                          />
+                        </View>
+                        <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                          <DropdownField
+                            label="Bowling Action / Sub-Type"
+                            value={pBowlingAction}
+                            options={getBowlingActionOptions(pBowlingArm, pBowlingCategory)}
+                            onSelect={setPBowlingAction}
+                          />
+                        </View>
+                      </>
+                    )}
+
+                    {/* Case 3: Wicket Keeper Additional Fields */}
+                    {isWicketKeeper && (
+                      <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                        <DropdownField
+                          label="Keeper Specialization"
+                          value={pKeeperSpec}
+                          options={WICKET_KEEPER_SPECIALIZATIONS}
+                          onSelect={setPKeeperSpec}
+                        />
+                      </View>
+                    )}
+
+                    {/* Dynamic Cricketing Profile Summary Pill */}
+                    <View style={styles.cricketSummaryBadge}>
+                      <Text style={styles.cricketSummaryText}>
+                        🏏 <Text style={{ fontWeight: '800', color: '#b45309' }}>Role Specification:</Text>{' '}
+                        {(isBatsman || isOtherOrBatsman) && `${pBattingStyle} • ${pCategory}`}
+                        {isBowler && `${pBowlingAction} (${pBowlingArm} ${pBowlingCategory}) • Bat: ${pBattingStyle}`}
+                        {isAllRounder && `Bat: ${pBattingStyle} • Bowl: ${pBowlingAction}`}
+                        {isWicketKeeper && `${pBattingStyle} • ${pKeeperSpec}`}
+                      </Text>
+                    </View>
+
+                    {/* Verification & Password Setup */}
+                    {renderVerificationAndPasswordBlock()}
+
+                    <TouchableOpacity
+                      style={styles.checkboxRow}
+                      onPress={() => {
+                        const next = !pAgreed;
+                        setPAgreed(next);
+                        setFieldErrors((prev) => ({ ...prev, agree: next ? undefined : 'Please accept the declaration to proceed.' }));
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.checkbox, pAgreed && styles.checkboxChecked]}>
+                        {pAgreed && <Text style={styles.checkmark}>✓</Text>}
+                      </View>
+                      <Text style={styles.checkboxLabel}>
+                        I hereby declare that all information furnished is true and accurate according to association guidelines.
+                      </Text>
+                    </TouchableOpacity>
+                    {fieldErrors.agree && (
+                      <Text style={[styles.fieldErrorText, { marginTop: -4, marginBottom: 6 }]}>⚠️ {fieldErrors.agree}</Text>
+                    )}
+
+                    <TouchableOpacity
+                      style={[styles.submitBtn, isLoading && styles.submitBtnDisabled]}
+                      onPress={handlePlayerSubmit}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <ActivityIndicator color="#000000" size="small" />
+                      ) : (
+                        <Text style={styles.submitBtnText}>
+                          {isEmailVerified ? 'Submit Player Registration' : 'Verify Email & Submit Registration'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                {/* ========================================================= */}
+                {/* 2. TEAM & COACH FORM */}
+                {/* ========================================================= */}
+                {activeRole === 'TEAM' && (
+                  <>
+                    <View style={styles.sectionHeaderBox}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={styles.sectionHeaderText}>🛡️ TEAM CLUB & COACH PROFILE</Text>
+                        <TouchableOpacity onPress={handleDemoFill}>
+                          <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
-                  </View>
 
-                  {players.length > 0 && (
-                    <View style={styles.playerListContainer}>
-                      {players.map((p, index) => (
-                        <View key={p.id} style={styles.playerItemRow}>
-                          <View style={styles.playerNumBadge}>
-                            <Text style={styles.playerNumText}>#{index + 1}</Text>
+                    {/* Row 1: Team Name (left) & Coach Name (right) */}
+                    <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Official Club / Team Name *</Text>
+                        <TextInput
+                          style={[styles.input, fieldErrors.teamName && styles.inputError]}
+                          value={teamName}
+                          onChangeText={(val) => {
+                            setTeamName(val);
+                            const err = validateNameValue(val, 'Team Name');
+                            setFieldErrors((prev) => ({ ...prev, teamName: err || undefined }));
+                          }}
+                          placeholder="e.g. Sivakasi Super Strikers"
+                          placeholderTextColor="#94a3b8"
+                        />
+                        {fieldErrors.teamName && (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.teamName}</Text>
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Head Coach / Manager Name *</Text>
+                        <TextInput
+                          style={[styles.input, fieldErrors.name && styles.inputError]}
+                          value={coachName}
+                          onChangeText={(val) => {
+                            setCoachName(val);
+                            const err = validateNameValue(val, 'Coach Name');
+                            setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
+                          }}
+                          placeholder="e.g. Coach S. Murugan"
+                          placeholderTextColor="#94a3b8"
+                        />
+                        {fieldErrors.name && (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.name}</Text>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Row 2: Coach Email (left) & Team Taluk (right) */}
+                    <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Coach Official Email Address *</Text>
+                        <TextInput
+                          style={[styles.input, fieldErrors.email && styles.inputError]}
+                          value={coachEmail}
+                          onChangeText={(val) => {
+                            setCoachEmail(val);
+                            if (isEmailVerified) {
+                              setIsEmailVerified(false);
+                              setOtpSent(false);
+                            }
+                            const err = validateEmailValue(val, 'Coach Official Email Address');
+                            setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+                          }}
+                          placeholder="e.g. coach@strikerscc.org"
+                          keyboardType="email-address"
+                          placeholderTextColor="#94a3b8"
+                          autoCapitalize="none"
+                        />
+                        {fieldErrors.email && (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.email}</Text>
+                        )}
+                      </View>
+                      <DropdownField
+                        label="Team Taluk Jurisdiction"
+                        value={teamTaluk}
+                        options={dynamicTaluks}
+                        onSelect={(val) => {
+                          setTeamTaluk(val);
+                          if (val !== 'Other') setTeamCustomTaluk('');
+                          setFieldErrors((prev) => ({ ...prev, taluk: undefined }));
+                        }}
+                      />
+                    </View>
+
+                    {/* Row 3: Coach Phone Number (10 Digits) & Coach Aadhaar Number (12 Digits) */}
+                    <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                      {/* Coach Phone Number Input */}
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <FontAwesome name="phone" size={13} color="#0284c7" />
+                            <Text style={styles.label}>Coach Phone Number (10 Digits) *</Text>
                           </View>
-                          <View style={styles.playerItemDetails}>
-                            <View style={styles.playerNameRoleRow}>
-                              <Text style={styles.playerItemName}>{p.name}</Text>
-                              <View style={styles.playerItemRoleBadge}>
-                                <Text style={styles.playerItemRoleText}>{p.role}</Text>
-                              </View>
+                          <Text style={{ fontSize: 10, color: coachMobile.replace(/\D/g, '').length === 10 ? '#16a34a' : '#64748b', fontWeight: '700' }}>
+                            {coachMobile.replace(/\D/g, '').length === 10 ? '✓ 10/10 Digits' : `(${coachMobile.replace(/\D/g, '').length}/10)`}
+                          </Text>
+                        </View>
+                        <View style={[styles.dynamicInputWrap, fieldErrors.mobile ? styles.inputError : (coachMobile.replace(/\D/g, '').length === 10 ? styles.dynamicInputSuccess : null)]}>
+                          <View style={styles.phonePrefixBox}>
+                            <Text style={styles.phonePrefixText}>🇮🇳 +91</Text>
+                          </View>
+                          <TextInput
+                            style={styles.dynamicInputCore}
+                            value={coachMobile}
+                            onChangeText={(val) => {
+                              const cleaned = formatPhone(val);
+                              setCoachMobile(cleaned);
+                              if (cleaned.length === 10) {
+                                const res = validatePhone(cleaned, 'Coach Phone Number');
+                                setFieldErrors((prev) => ({ ...prev, mobile: res.isValid ? undefined : res.error }));
+                              } else {
+                                setFieldErrors((prev) => ({ ...prev, mobile: undefined }));
+                              }
+                            }}
+                            onBlur={() => {
+                              if (coachMobile.trim()) {
+                                const res = validatePhone(coachMobile, 'Coach Phone Number');
+                                setFieldErrors((prev) => ({ ...prev, mobile: res.isValid ? undefined : res.error }));
+                              }
+                            }}
+                            placeholder="9876543210"
+                            keyboardType="phone-pad"
+                            placeholderTextColor="#94a3b8"
+                            maxLength={10}
+                          />
+                          {coachMobile.replace(/\D/g, '').length === 10 && (
+                            <View style={styles.validCheckBadge}>
+                              <Text style={styles.validCheckText}>✓</Text>
                             </View>
-                            <Text style={styles.playerItemEmail}>{p.email}</Text>
+                          )}
+                        </View>
+                        {fieldErrors.mobile ? (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.mobile}</Text>
+                        ) : (
+                          <Text style={styles.helperText}>Used for official match alerts & communication</Text>
+                        )}
+                      </View>
+
+                      {/* Coach Aadhaar Number Input */}
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <FontAwesome name="id-card" size={13} color="#b91c1c" />
+                            <Text style={styles.label}>Coach Aadhaar Number (12 Digits) *</Text>
                           </View>
-                          <TouchableOpacity onPress={() => handleEditPlayer(p)} style={[styles.editBtn, editingPlayerId === p.id && styles.editBtnActive]}>
-                            <Text style={styles.editBtnText}>✏️</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => handleRemovePlayer(p.id)} style={styles.removeBtn}>
-                            <Text style={styles.removeBtnText}>✕</Text>
-                          </TouchableOpacity>
+                          <Text style={{ fontSize: 10, color: coachAadhaar.replace(/\D/g, '').length === 12 ? '#16a34a' : '#64748b', fontWeight: '700' }}>
+                            {coachAadhaar.replace(/\D/g, '').length === 12 ? '✓ 12/12 Digits' : `(${coachAadhaar.replace(/\D/g, '').length}/12)`}
+                          </Text>
                         </View>
-                      ))}
-                    </View>
-                  )}
-                  {fieldErrors.squad && (
-                    <Text style={[styles.fieldErrorText, { marginBottom: 6 }]}>⚠️ {fieldErrors.squad}</Text>
-                  )}
-
-                  {/* Verification & Password Setup */}
-                  {renderVerificationAndPasswordBlock()}
-
-                  <TouchableOpacity
-                    style={styles.checkboxRow}
-                    onPress={() => {
-                      const next = !teamAgreed;
-                      setTeamAgreed(next);
-                      setFieldErrors((prev) => ({ ...prev, agree: next ? undefined : 'Please accept the declaration to proceed.' }));
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <View style={[styles.checkbox, teamAgreed && styles.checkboxChecked]}>
-                      {teamAgreed && <Text style={styles.checkmark}>✓</Text>}
-                    </View>
-                    <Text style={styles.checkboxLabel}>
-                      I confirm that all squad players have verified identity documents.
-                    </Text>
-                  </TouchableOpacity>
-                  {fieldErrors.agree && (
-                    <Text style={[styles.fieldErrorText, { marginTop: -4, marginBottom: 6 }]}>⚠️ {fieldErrors.agree}</Text>
-                  )}
-
-                  <TouchableOpacity
-                    style={[styles.submitBtn, (players.length === 0 || isLoading) && styles.submitBtnDisabled]}
-                    onPress={handleTeamSubmit}
-                    disabled={players.length === 0 || isLoading}
-                  >
-                    {isLoading ? (
-                      <ActivityIndicator color="#000000" size="small" />
-                    ) : (
-                      <Text style={styles.submitBtnText}>
-                        {isEmailVerified ? 'Submit Team & Coach Registration' : 'Verify Email & Submit Registration'}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                </>
-              )}
-
-              {/* ========================================================= */}
-              {/* 3. SCORER FORM */}
-              {/* ========================================================= */}
-              {activeRole === 'SCORER' && (
-                <>
-                  <View style={styles.sectionHeaderBox}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={styles.sectionHeaderText}>📋 OFFICIAL SCORER ENROLLMENT</Text>
-                      <TouchableOpacity onPress={handleDemoFill}>
-                        <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  {/* Row 1: Scorer Full Name (left) & Mobile Number (right) */}
-                  <View style={styles.formRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.label}>Scorer Full Name *</Text>
-                      <TextInput
-                        style={[styles.input, fieldErrors.name && styles.inputError]}
-                        value={sName}
-                        onChangeText={(val) => {
-                          setSName(val);
-                          const err = validateNameValue(val, 'Scorer Name');
-                          setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
-                        }}
-                        placeholder="e.g. S. Ramesh"
-                        placeholderTextColor="#94a3b8"
-                        autoCapitalize="words"
-                      />
-                      {fieldErrors.name && (
-                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.name}</Text>
-                      )}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.label}>Mobile Number *</Text>
-                      <TextInput
-                        style={[styles.input, fieldErrors.mobile && styles.inputError]}
-                        value={sMobile}
-                        onChangeText={(val) => {
-                          setSMobile(val);
-                          const err = validateMobileValue(val);
-                          setFieldErrors((prev) => ({ ...prev, mobile: err || undefined }));
-                        }}
-                        placeholder="e.g. 9876543210"
-                        keyboardType="phone-pad"
-                        placeholderTextColor="#94a3b8"
-                        maxLength={10}
-                      />
-                      {fieldErrors.mobile && (
-                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.mobile}</Text>
-                      )}
-                    </View>
-                  </View>
-
-                  {/* Row 2: Official Scorer Email */}
-                  <View style={styles.formRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.label}>Official Scorer Email *</Text>
-                      <TextInput
-                        style={[styles.input, fieldErrors.email && styles.inputError]}
-                        value={sEmail}
-                        onChangeText={(val) => {
-                          setSEmail(val);
-                          if (isEmailVerified) {
-                            setIsEmailVerified(false);
-                            setOtpSent(false);
-                          }
-                          const err = validateEmailValue(val, 'Official Scorer Email');
-                          setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
-                        }}
-                        placeholder="e.g. ramesh.scorer@cfvd.org"
-                        keyboardType="email-address"
-                        placeholderTextColor="#94a3b8"
-                        autoCapitalize="none"
-                      />
-                      {fieldErrors.email && (
-                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.email}</Text>
-                      )}
-                    </View>
-                  </View>
-
-                  {/* Row 3: Certification Level (left) & Taluk Jurisdiction (right) Dropdowns */}
-                  <View style={styles.formRow}>
-                    <DropdownField
-                      label="Certification Level"
-                      value={sLevel}
-                      options={dynamicScorerLevels}
-                      onSelect={setSLevel}
-                    />
-                    <DropdownField
-                      label="Taluk Jurisdiction"
-                      value={sTaluk}
-                      options={dynamicTaluks}
-                      onSelect={(val) => {
-                        setSTaluk(val);
-                        if (val !== 'Other') setSCustomTaluk('');
-                        setFieldErrors((prev) => ({ ...prev, taluk: undefined }));
-                      }}
-                    />
-                  </View>
-
-                  {/* Custom Taluk Input if "Other" is chosen */}
-                  {sTaluk === 'Other' && (
-                    <View style={styles.formRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.label}>Specify Scorer Taluk Name *</Text>
-                        <TextInput
-                          style={[styles.input, fieldErrors.taluk && styles.inputError]}
-                          value={sCustomTaluk}
-                          onChangeText={(val) => {
-                            setSCustomTaluk(val);
-                            setFieldErrors((prev) => ({ ...prev, taluk: val.trim() ? undefined : 'Please enter your Taluk name.' }));
-                          }}
-                          placeholder="Type your taluk name here..."
-                          placeholderTextColor="#94a3b8"
-                          autoCapitalize="words"
-                        />
-                        {fieldErrors.taluk && (
-                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.taluk}</Text>
+                        <View style={[styles.dynamicInputWrap, fieldErrors.aadhaar ? styles.inputError : (coachAadhaar.replace(/\D/g, '').length === 12 ? styles.dynamicInputSuccess : null)]}>
+                          <View style={styles.aadhaarIconBox}>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#b91c1c' }}>UIDAI</Text>
+                          </View>
+                          <TextInput
+                            style={styles.dynamicInputCore}
+                            value={coachAadhaar}
+                            onChangeText={(val) => {
+                              const formatted = formatAadhaar(val);
+                              setCoachAadhaar(formatted);
+                              const rawDigits = formatted.replace(/\D/g, '');
+                              if (rawDigits.length === 12) {
+                                const res = validateAadhaar(rawDigits);
+                                setFieldErrors((prev) => ({ ...prev, aadhaar: res.isValid ? undefined : res.error }));
+                              } else if (rawDigits.length > 0 && (rawDigits[0] === '0' || rawDigits[0] === '1')) {
+                                setFieldErrors((prev) => ({ ...prev, aadhaar: 'Aadhaar number cannot start with 0 or 1.' }));
+                              } else {
+                                setFieldErrors((prev) => ({ ...prev, aadhaar: undefined }));
+                              }
+                            }}
+                            onBlur={() => {
+                              if (coachAadhaar.trim()) {
+                                const res = validateAadhaar(coachAadhaar);
+                                setFieldErrors((prev) => ({ ...prev, aadhaar: res.isValid ? undefined : res.error }));
+                              }
+                            }}
+                            placeholder="5432 9876 1234"
+                            keyboardType="numeric"
+                            placeholderTextColor="#94a3b8"
+                            maxLength={14}
+                          />
+                          {coachAadhaar.replace(/\D/g, '').length === 12 && (
+                            <View style={styles.validCheckBadge}>
+                              <Text style={styles.validCheckText}>✓</Text>
+                            </View>
+                          )}
+                        </View>
+                        {fieldErrors.aadhaar ? (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.aadhaar}</Text>
+                        ) : (
+                          <Text style={styles.helperText}>Indian 12-digit National Identification Number</Text>
                         )}
                       </View>
                     </View>
-                  )}
 
-                  {/* Verification & Password Setup */}
-                  {renderVerificationAndPasswordBlock()}
-
-                  <TouchableOpacity
-                    style={styles.checkboxRow}
-                    onPress={() => {
-                      const next = !sAgreed;
-                      setSAgreed(next);
-                      setFieldErrors((prev) => ({ ...prev, agree: next ? undefined : 'Please accept the declaration to proceed.' }));
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <View style={[styles.checkbox, sAgreed && styles.checkboxChecked]}>
-                      {sAgreed && <Text style={styles.checkmark}>✓</Text>}
-                    </View>
-                    <Text style={styles.checkboxLabel}>
-                      I agree to abide by the official BCCI / TNCA and District Scorer Code of Conduct.
-                    </Text>
-                  </TouchableOpacity>
-                  {fieldErrors.agree && (
-                    <Text style={[styles.fieldErrorText, { marginTop: -4, marginBottom: 6 }]}>⚠️ {fieldErrors.agree}</Text>
-                  )}
-
-                  <TouchableOpacity
-                    style={[styles.submitBtn, isLoading && styles.submitBtnDisabled]}
-                    onPress={handleScorerSubmit}
-                    disabled={isLoading}
-                  >
-                    {isLoading ? (
-                      <ActivityIndicator color="#000000" size="small" />
-                    ) : (
-                      <Text style={styles.submitBtnText}>
-                        {isEmailVerified ? 'Submit Scorer Registration' : 'Verify Email & Submit Registration'}
-                      </Text>
+                    {/* Custom Taluk Input if "Other" is chosen */}
+                    {teamTaluk === 'Other' && (
+                      <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.label}>Specify Team Taluk Name *</Text>
+                          <TextInput
+                            style={[styles.input, fieldErrors.taluk && styles.inputError]}
+                            value={teamCustomTaluk}
+                            onChangeText={(val) => {
+                              setTeamCustomTaluk(val);
+                              setFieldErrors((prev) => ({ ...prev, taluk: val.trim() ? undefined : 'Please enter your team Taluk name.' }));
+                            }}
+                            placeholder="Type your team's taluk name here..."
+                            placeholderTextColor="#94a3b8"
+                            autoCapitalize="words"
+                          />
+                          {fieldErrors.taluk && (
+                            <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.taluk}</Text>
+                          )}
+                        </View>
+                      </View>
                     )}
-                  </TouchableOpacity>
-                </>
-              )}
 
-              {/* ========================================================= */}
-              {/* 4. UMPIRE FORM */}
-              {/* ========================================================= */}
-              {activeRole === 'UMPIRE' && (
-                <>
-                  <View style={styles.sectionHeaderBox}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={styles.sectionHeaderText}>⚖️ OFFICIAL UMPIRE REGISTRATION & ACCREDITATION</Text>
-                      <TouchableOpacity onPress={handleDemoFill}>
-                        <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
+                    {/* 15 Squad Players Builder */}
+                    <View style={styles.squadHeaderRow}>
+                      <Text style={styles.squadSectionTitle}>
+                        Squad Players ({players.length} added)
+                      </Text>
+                      <TouchableOpacity style={styles.autoFillBtn} onPress={handleAutoFillSampleSquad}>
+                        <Text style={styles.autoFillBtnText}>⚡ Fill Sample Squad</Text>
                       </TouchableOpacity>
                     </View>
-                  </View>
 
-                  {/* Row 1: Umpire Full Name (left) & Mobile Number (right) */}
-                  <View style={styles.formRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.label}>Umpire Full Name *</Text>
-                      <TextInput
-                        style={[styles.input, fieldErrors.name && styles.inputError]}
-                        value={uName}
-                        onChangeText={(val) => {
-                          setUName(val);
-                          const err = validateNameValue(val, 'Umpire Name');
-                          setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
-                        }}
-                        placeholder="e.g. K. Sundararajan"
-                        placeholderTextColor="#94a3b8"
-                        autoCapitalize="words"
-                      />
-                      {fieldErrors.name && (
-                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.name}</Text>
+                    <View style={styles.addPlayerContainer}>
+                      {editingPlayerId && (
+                        <View style={{ backgroundColor: '#fef3c7', borderRadius: 5, padding: 6, marginBottom: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Text style={{ color: '#92400e', fontSize: 11, fontWeight: '700' }}>✏️ Editing player — make changes and click Update</Text>
+                          <TouchableOpacity onPress={handleCancelEdit}>
+                            <Text style={{ color: '#dc2626', fontSize: 11, fontWeight: '800' }}>✕ Cancel</Text>
+                          </TouchableOpacity>
+                        </View>
                       )}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.label}>Mobile Number (10 Digits) *</Text>
-                      <TextInput
-                        style={[styles.input, fieldErrors.mobile && styles.inputError]}
-                        value={uMobile}
-                        onChangeText={(val) => {
-                          setUMobile(val);
-                          const err = validateMobileValue(val);
-                          setFieldErrors((prev) => ({ ...prev, mobile: err || undefined }));
-                        }}
-                        placeholder="e.g. 9876543210"
-                        keyboardType="phone-pad"
-                        placeholderTextColor="#94a3b8"
-                        maxLength={10}
-                      />
-                      {fieldErrors.mobile && (
-                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.mobile}</Text>
-                      )}
-                    </View>
-                  </View>
-
-                  {/* Row 2: Official Umpire Email */}
-                  <View style={styles.formRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.label}>Official Umpire Email *</Text>
-                      <TextInput
-                        style={[styles.input, fieldErrors.email && styles.inputError]}
-                        value={uEmail}
-                        onChangeText={(val) => {
-                          setUEmail(val);
-                          if (isEmailVerified) {
-                            setIsEmailVerified(false);
-                            setOtpSent(false);
-                          }
-                          const err = validateEmailValue(val, 'Official Umpire Email');
-                          setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
-                        }}
-                        placeholder="e.g. sundararajan.umpire@cfvd.org"
-                        keyboardType="email-address"
-                        placeholderTextColor="#94a3b8"
-                        autoCapitalize="none"
-                      />
-                      {fieldErrors.email && (
-                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.email}</Text>
-                      )}
-                    </View>
-                  </View>
-
-                  {/* Row 3: Certification/Qualification & Umpire Experience */}
-                  <View style={styles.formRow}>
-                    <DropdownField
-                      label="Umpire Certification / Qualification *"
-                      value={uQualification}
-                      options={dynamicUmpireQualifications}
-                      onSelect={setUQualification}
-                    />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.label}>Umpire Experience *</Text>
-                      <TextInput
-                        style={[styles.input, fieldErrors.experience && styles.inputError]}
-                        value={uExperience}
-                        onChangeText={(val) => {
-                          setUExperience(val);
-                          setFieldErrors((prev) => ({ ...prev, experience: val.trim() ? undefined : 'Please enter Umpire Experience.' }));
-                        }}
-                        placeholder="e.g. 6 Years / Senior Panel"
-                        placeholderTextColor="#94a3b8"
-                      />
-                      {fieldErrors.experience && (
-                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.experience}</Text>
-                      )}
-                    </View>
-                  </View>
-
-                  {/* Row 4: District & State */}
-                  <View style={styles.formRow}>
-                    <DropdownField
-                      label="District / Taluk *"
-                      value={uDistrict}
-                      options={dynamicTaluks}
-                      onSelect={(val) => {
-                        setUDistrict(val);
-                        if (val !== 'Other') setUCustomDistrict('');
-                        setFieldErrors((prev) => ({ ...prev, district: undefined }));
-                      }}
-                    />
-                    <DropdownField
-                      label="State *"
-                      value={uState}
-                      options={dynamicStates}
-                      onSelect={setUState}
-                    />
-                  </View>
-
-                  {/* Custom District Input if "Other" is chosen */}
-                  {uDistrict === 'Other' && (
-                    <View style={styles.formRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.label}>Specify District Name *</Text>
-                        <TextInput
-                          style={[styles.input, fieldErrors.district && styles.inputError]}
-                          value={uCustomDistrict}
-                          onChangeText={(val) => {
-                            setUCustomDistrict(val);
-                            setFieldErrors((prev) => ({ ...prev, district: val.trim() ? undefined : 'Please specify your District name.' }));
-                          }}
-                          placeholder="Type your district name here..."
-                          placeholderTextColor="#94a3b8"
-                          autoCapitalize="words"
-                        />
-                        {fieldErrors.district && (
-                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.district}</Text>
-                        )}
-                      </View>
-                    </View>
-                  )}
-
-                  {/* Toggle Optional Fields Button */}
-                  <TouchableOpacity
-                    style={styles.optionalToggleBtn}
-                    onPress={() => setShowOptionalUmpireFields(!showOptionalUmpireFields)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.optionalToggleText}>
-                      {showOptionalUmpireFields ? '▾ Hide Optional Profile Information' : '▸ Add Optional Profile Information (ID, Bio, Photos, Org)'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {/* Optional Fields Section */}
-                  {showOptionalUmpireFields && (
-                    <View style={styles.optionalContainer}>
-                      <View style={styles.formRow}>
+                      <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.label}>Umpire ID / Certification Number</Text>
                           <TextInput
-                            style={styles.input}
-                            value={uCertNumber}
-                            onChangeText={setUCertNumber}
-                            placeholder="e.g. TNCA-UMP-2024-042"
+                            style={[styles.input, { marginBottom: 0 }, fieldErrors.squadPlayerName && styles.inputError]}
+                            value={squadPlayerName}
+                            onChangeText={(val) => {
+                              setSquadPlayerName(val);
+                              const err = validateNameValue(val, 'Squad Player Name');
+                              setFieldErrors((prev) => ({ ...prev, squadPlayerName: err || undefined }));
+                            }}
+                            placeholder="Player Full Name"
                             placeholderTextColor="#94a3b8"
                           />
+                          {fieldErrors.squadPlayerName && (
+                            <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.squadPlayerName}</Text>
+                          )}
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.label}>Years of Experience (Numeric)</Text>
                           <TextInput
-                            style={styles.input}
-                            value={uYearsOfExperience}
-                            onChangeText={setUYearsOfExperience}
-                            placeholder="e.g. 6"
-                            keyboardType="number-pad"
-                            placeholderTextColor="#94a3b8"
-                            maxLength={2}
-                          />
-                        </View>
-                      </View>
-
-                      <View style={styles.formRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.label}>Previous Association / Organization</Text>
-                          <TextInput
-                            style={styles.input}
-                            value={uPrevOrg}
-                            onChangeText={setUPrevOrg}
-                            placeholder="e.g. Tamil Nadu Cricket Association"
-                            placeholderTextColor="#94a3b8"
-                          />
-                        </View>
-                        <DropdownField
-                          label="Specialization"
-                          value={uSpecialization}
-                          options={UMPIRE_SPECIALIZATIONS}
-                          onSelect={setUSpecialization}
-                        />
-                      </View>
-
-                      <View style={styles.formRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.label}>Profile Photo URL</Text>
-                          <TextInput
-                            style={styles.input}
-                            value={uProfilePhoto}
-                            onChangeText={setUProfilePhoto}
-                            placeholder="https://example.com/photo.jpg"
+                            style={[styles.input, { marginBottom: 0 }, fieldErrors.squadPlayerEmail && styles.inputError]}
+                            value={squadPlayerEmail}
+                            onChangeText={(val) => {
+                              setSquadPlayerEmail(val);
+                              const err = validateEmailValue(val, 'Squad Player Email');
+                              setFieldErrors((prev) => ({ ...prev, squadPlayerEmail: err || undefined }));
+                            }}
+                            placeholder="Player Email Address"
+                            keyboardType="email-address"
                             placeholderTextColor="#94a3b8"
                             autoCapitalize="none"
                           />
+                          {fieldErrors.squadPlayerEmail && (
+                            <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.squadPlayerEmail}</Text>
+                          )}
                         </View>
                       </View>
+                      <View style={[styles.formRow, isMobile && { flexDirection: 'column' }, { marginTop: 8, marginBottom: 0 }]}>
+                        <DropdownField
+                          label="Squad Role"
+                          value={squadPlayerRole}
+                          options={dynamicPlayerRoles}
+                          onSelect={setSquadPlayerRole}
+                        />
+                        <View style={{ flex: 1, justifyContent: 'flex-end', marginTop: isMobile ? 8 : 0 }}>
+                          <TouchableOpacity style={[styles.addPlayerBtn, editingPlayerId && { backgroundColor: '#0284c7' }]} onPress={handleAddPlayer}>
+                            <Text style={styles.addPlayerBtnText}>{editingPlayerId ? '✓ Update Player' : '+ Add to Squad'}</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
 
-                      <View style={styles.formRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.label}>Additional Information / Officiating Bio</Text>
+                    {players.length > 0 && (
+                      <View style={styles.playerListContainer}>
+                        {players.map((p, index) => (
+                          <View key={p.id} style={styles.playerItemRow}>
+                            <View style={styles.playerNumBadge}>
+                              <Text style={styles.playerNumText}>#{index + 1}</Text>
+                            </View>
+                            <View style={styles.playerItemDetails}>
+                              <View style={styles.playerNameRoleRow}>
+                                <Text style={styles.playerItemName}>{p.name}</Text>
+                                <View style={styles.playerItemRoleBadge}>
+                                  <Text style={styles.playerItemRoleText}>{p.role}</Text>
+                                </View>
+                              </View>
+                              <Text style={styles.playerItemEmail}>{p.email}</Text>
+                            </View>
+                            <TouchableOpacity onPress={() => handleEditPlayer(p)} style={[styles.editBtn, editingPlayerId === p.id && styles.editBtnActive]}>
+                              <Text style={styles.editBtnText}>✏️</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => handleRemovePlayer(p.id)} style={styles.removeBtn}>
+                              <Text style={styles.removeBtnText}>✕</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                    {fieldErrors.squad && (
+                      <Text style={[styles.fieldErrorText, { marginBottom: 6 }]}>⚠️ {fieldErrors.squad}</Text>
+                    )}
+
+                    {/* Verification & Password Setup */}
+                    {renderVerificationAndPasswordBlock()}
+
+                    <TouchableOpacity
+                      style={styles.checkboxRow}
+                      onPress={() => {
+                        const next = !teamAgreed;
+                        setTeamAgreed(next);
+                        setFieldErrors((prev) => ({ ...prev, agree: next ? undefined : 'Please accept the declaration to proceed.' }));
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.checkbox, teamAgreed && styles.checkboxChecked]}>
+                        {teamAgreed && <Text style={styles.checkmark}>✓</Text>}
+                      </View>
+                      <Text style={styles.checkboxLabel}>
+                        I confirm that all squad players have verified identity documents.
+                      </Text>
+                    </TouchableOpacity>
+                    {fieldErrors.agree && (
+                      <Text style={[styles.fieldErrorText, { marginTop: -4, marginBottom: 6 }]}>⚠️ {fieldErrors.agree}</Text>
+                    )}
+
+                    <TouchableOpacity
+                      style={[styles.submitBtn, (players.length === 0 || isLoading) && styles.submitBtnDisabled]}
+                      onPress={handleTeamSubmit}
+                      disabled={players.length === 0 || isLoading}
+                    >
+                      {isLoading ? (
+                        <ActivityIndicator color="#000000" size="small" />
+                      ) : (
+                        <Text style={styles.submitBtnText}>
+                          {isEmailVerified ? 'Submit Team & Coach Registration' : 'Verify Email & Submit Registration'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                {/* ========================================================= */}
+                {/* 3. SCORER FORM */}
+                {/* ========================================================= */}
+                {activeRole === 'SCORER' && (
+                  <>
+                    <View style={styles.sectionHeaderBox}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={styles.sectionHeaderText}>📋 OFFICIAL SCORER ENROLLMENT</Text>
+                        <TouchableOpacity onPress={handleDemoFill}>
+                          <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {/* Row 1: Scorer Full Name (left) & Official Scorer Email (right) */}
+                    <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Scorer Full Name *</Text>
+                        <TextInput
+                          style={[styles.input, fieldErrors.name && styles.inputError]}
+                          value={sName}
+                          onChangeText={(val) => {
+                            setSName(val);
+                            const err = validateNameValue(val, 'Scorer Name');
+                            setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
+                          }}
+                          placeholder="e.g. S. Ramesh"
+                          placeholderTextColor="#94a3b8"
+                          autoCapitalize="words"
+                        />
+                        {fieldErrors.name && (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.name}</Text>
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Official Scorer Email *</Text>
+                        <TextInput
+                          style={[styles.input, fieldErrors.email && styles.inputError]}
+                          value={sEmail}
+                          onChangeText={(val) => {
+                            setSEmail(val);
+                            if (isEmailVerified) {
+                              setIsEmailVerified(false);
+                              setOtpSent(false);
+                            }
+                            const err = validateEmailValue(val, 'Official Scorer Email');
+                            setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+                          }}
+                          placeholder="e.g. ramesh.scorer@cfvd.org"
+                          keyboardType="email-address"
+                          placeholderTextColor="#94a3b8"
+                          autoCapitalize="none"
+                        />
+                        {fieldErrors.email && (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.email}</Text>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Row 2: Phone Number (10 Digits) & Aadhaar Number (12 Digits) */}
+                    <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                      {/* Scorer Phone Number Input */}
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <FontAwesome name="phone" size={13} color="#0284c7" />
+                            <Text style={styles.label}>Scorer Phone Number (10 Digits) *</Text>
+                          </View>
+                          <Text style={{ fontSize: 10, color: sMobile.replace(/\D/g, '').length === 10 ? '#16a34a' : '#64748b', fontWeight: '700' }}>
+                            {sMobile.replace(/\D/g, '').length === 10 ? '✓ 10/10 Digits' : `(${sMobile.replace(/\D/g, '').length}/10)`}
+                          </Text>
+                        </View>
+                        <View style={[styles.dynamicInputWrap, fieldErrors.mobile ? styles.inputError : (sMobile.replace(/\D/g, '').length === 10 ? styles.dynamicInputSuccess : null)]}>
+                          <View style={styles.phonePrefixBox}>
+                            <Text style={styles.phonePrefixText}>🇮🇳 +91</Text>
+                          </View>
                           <TextInput
-                            style={[styles.input, { height: 60, textAlignVertical: 'top', paddingTop: 8 }]}
-                            value={uAdditionalInfo}
-                            onChangeText={setUAdditionalInfo}
-                            placeholder="Tournaments officiated, awards, or special credentials..."
+                            style={styles.dynamicInputCore}
+                            value={sMobile}
+                            onChangeText={(val) => {
+                              const cleaned = formatPhone(val);
+                              setSMobile(cleaned);
+                              if (cleaned.length === 10) {
+                                const res = validatePhone(cleaned, 'Scorer Phone Number');
+                                setFieldErrors((prev) => ({ ...prev, mobile: res.isValid ? undefined : res.error }));
+                              } else {
+                                setFieldErrors((prev) => ({ ...prev, mobile: undefined }));
+                              }
+                            }}
+                            onBlur={() => {
+                              if (sMobile.trim()) {
+                                const res = validatePhone(sMobile, 'Scorer Phone Number');
+                                setFieldErrors((prev) => ({ ...prev, mobile: res.isValid ? undefined : res.error }));
+                              }
+                            }}
+                            placeholder="9876543210"
+                            keyboardType="phone-pad"
                             placeholderTextColor="#94a3b8"
-                            multiline
+                            maxLength={10}
+                          />
+                          {sMobile.replace(/\D/g, '').length === 10 && (
+                            <View style={styles.validCheckBadge}>
+                              <Text style={styles.validCheckText}>✓</Text>
+                            </View>
+                          )}
+                        </View>
+                        {fieldErrors.mobile ? (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.mobile}</Text>
+                        ) : (
+                          <Text style={styles.helperText}>Used for official match alerts & communication</Text>
+                        )}
+                      </View>
+
+                      {/* Scorer Aadhaar Number Input */}
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <FontAwesome name="id-card" size={13} color="#b91c1c" />
+                            <Text style={styles.label}>Scorer Aadhaar Number (12 Digits) *</Text>
+                          </View>
+                          <Text style={{ fontSize: 10, color: sAadhaar.replace(/\D/g, '').length === 12 ? '#16a34a' : '#64748b', fontWeight: '700' }}>
+                            {sAadhaar.replace(/\D/g, '').length === 12 ? '✓ 12/12 Digits' : `(${sAadhaar.replace(/\D/g, '').length}/12)`}
+                          </Text>
+                        </View>
+                        <View style={[styles.dynamicInputWrap, fieldErrors.aadhaar ? styles.inputError : (sAadhaar.replace(/\D/g, '').length === 12 ? styles.dynamicInputSuccess : null)]}>
+                          <View style={styles.aadhaarIconBox}>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#b91c1c' }}>UIDAI</Text>
+                          </View>
+                          <TextInput
+                            style={styles.dynamicInputCore}
+                            value={sAadhaar}
+                            onChangeText={(val) => {
+                              const formatted = formatAadhaar(val);
+                              setSAadhaar(formatted);
+                              const rawDigits = formatted.replace(/\D/g, '');
+                              if (rawDigits.length === 12) {
+                                const res = validateAadhaar(rawDigits);
+                                setFieldErrors((prev) => ({ ...prev, aadhaar: res.isValid ? undefined : res.error }));
+                              } else if (rawDigits.length > 0 && (rawDigits[0] === '0' || rawDigits[0] === '1')) {
+                                setFieldErrors((prev) => ({ ...prev, aadhaar: 'Aadhaar number cannot start with 0 or 1.' }));
+                              } else {
+                                setFieldErrors((prev) => ({ ...prev, aadhaar: undefined }));
+                              }
+                            }}
+                            onBlur={() => {
+                              if (sAadhaar.trim()) {
+                                const res = validateAadhaar(sAadhaar);
+                                setFieldErrors((prev) => ({ ...prev, aadhaar: res.isValid ? undefined : res.error }));
+                              }
+                            }}
+                            placeholder="5432 9876 1234"
+                            keyboardType="numeric"
+                            placeholderTextColor="#94a3b8"
+                            maxLength={14}
+                          />
+                          {sAadhaar.replace(/\D/g, '').length === 12 && (
+                            <View style={styles.validCheckBadge}>
+                              <Text style={styles.validCheckText}>✓</Text>
+                            </View>
+                          )}
+                        </View>
+                        {fieldErrors.aadhaar ? (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.aadhaar}</Text>
+                        ) : (
+                          <Text style={styles.helperText}>Indian 12-digit National Identification Number</Text>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Row 3: Certification Level (left) & Taluk Jurisdiction (right) Dropdowns */}
+                    <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                      <DropdownField
+                        label="Certification Level"
+                        value={sLevel}
+                        options={dynamicScorerLevels}
+                        onSelect={setSLevel}
+                      />
+                      <DropdownField
+                        label="Taluk Jurisdiction"
+                        value={sTaluk}
+                        options={dynamicTaluks}
+                        onSelect={(val) => {
+                          setSTaluk(val);
+                          if (val !== 'Other') setSCustomTaluk('');
+                          setFieldErrors((prev) => ({ ...prev, taluk: undefined }));
+                        }}
+                      />
+                    </View>
+
+                    {/* Custom Taluk Input if "Other" is chosen */}
+                    {sTaluk === 'Other' && (
+                      <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.label}>Specify Scorer Taluk Name *</Text>
+                          <TextInput
+                            style={[styles.input, fieldErrors.taluk && styles.inputError]}
+                            value={sCustomTaluk}
+                            onChangeText={(val) => {
+                              setSCustomTaluk(val);
+                              setFieldErrors((prev) => ({ ...prev, taluk: val.trim() ? undefined : 'Please enter your Taluk name.' }));
+                            }}
+                            placeholder="Type your taluk name here..."
+                            placeholderTextColor="#94a3b8"
+                            autoCapitalize="words"
+                          />
+                          {fieldErrors.taluk && (
+                            <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.taluk}</Text>
+                          )}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Verification & Password Setup */}
+                    {renderVerificationAndPasswordBlock()}
+
+                    <TouchableOpacity
+                      style={styles.checkboxRow}
+                      onPress={() => {
+                        const next = !sAgreed;
+                        setSAgreed(next);
+                        setFieldErrors((prev) => ({ ...prev, agree: next ? undefined : 'Please accept the declaration to proceed.' }));
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.checkbox, sAgreed && styles.checkboxChecked]}>
+                        {sAgreed && <Text style={styles.checkmark}>✓</Text>}
+                      </View>
+                      <Text style={styles.checkboxLabel}>
+                        I agree to abide by the official BCCI / TNCA and District Scorer Code of Conduct.
+                      </Text>
+                    </TouchableOpacity>
+                    {fieldErrors.agree && (
+                      <Text style={[styles.fieldErrorText, { marginTop: -4, marginBottom: 6 }]}>⚠️ {fieldErrors.agree}</Text>
+                    )}
+
+                    <TouchableOpacity
+                      style={[styles.submitBtn, isLoading && styles.submitBtnDisabled]}
+                      onPress={handleScorerSubmit}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <ActivityIndicator color="#000000" size="small" />
+                      ) : (
+                        <Text style={styles.submitBtnText}>
+                          {isEmailVerified ? 'Submit Scorer Registration' : 'Verify Email & Submit Registration'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                {/* ========================================================= */}
+                {/* 4. UMPIRE FORM */}
+                {/* ========================================================= */}
+                {activeRole === 'UMPIRE' && (
+                  <>
+                    <View style={styles.sectionHeaderBox}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={styles.sectionHeaderText}>⚖️ OFFICIAL UMPIRE REGISTRATION & ACCREDITATION</Text>
+                        <TouchableOpacity onPress={handleDemoFill}>
+                          <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {/* Row 1: Umpire Full Name (left) & Official Umpire Email (right) */}
+                    <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Umpire Full Name *</Text>
+                        <TextInput
+                          style={[styles.input, fieldErrors.name && styles.inputError]}
+                          value={uName}
+                          onChangeText={(val) => {
+                            setUName(val);
+                            const err = validateNameValue(val, 'Umpire Name');
+                            setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
+                          }}
+                          placeholder="e.g. K. Sundararajan"
+                          placeholderTextColor="#94a3b8"
+                          autoCapitalize="words"
+                        />
+                        {fieldErrors.name && (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.name}</Text>
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Official Umpire Email *</Text>
+                        <TextInput
+                          style={[styles.input, fieldErrors.email && styles.inputError]}
+                          value={uEmail}
+                          onChangeText={(val) => {
+                            setUEmail(val);
+                            if (isEmailVerified) {
+                              setIsEmailVerified(false);
+                              setOtpSent(false);
+                            }
+                            const err = validateEmailValue(val, 'Official Umpire Email');
+                            setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+                          }}
+                          placeholder="e.g. sundararajan.umpire@cfvd.org"
+                          keyboardType="email-address"
+                          placeholderTextColor="#94a3b8"
+                          autoCapitalize="none"
+                        />
+                        {fieldErrors.email && (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.email}</Text>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Row 2: Phone Number (10 Digits) & Aadhaar Number (12 Digits) */}
+                    <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                      {/* Umpire Phone Number Input */}
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <FontAwesome name="phone" size={13} color="#0284c7" />
+                            <Text style={styles.label}>Umpire Phone Number (10 Digits) *</Text>
+                          </View>
+                          <Text style={{ fontSize: 10, color: uMobile.replace(/\D/g, '').length === 10 ? '#16a34a' : '#64748b', fontWeight: '700' }}>
+                            {uMobile.replace(/\D/g, '').length === 10 ? '✓ 10/10 Digits' : `(${uMobile.replace(/\D/g, '').length}/10)`}
+                          </Text>
+                        </View>
+                        <View style={[styles.dynamicInputWrap, fieldErrors.mobile ? styles.inputError : (uMobile.replace(/\D/g, '').length === 10 ? styles.dynamicInputSuccess : null)]}>
+                          <View style={styles.phonePrefixBox}>
+                            <Text style={styles.phonePrefixText}>🇮🇳 +91</Text>
+                          </View>
+                          <TextInput
+                            style={styles.dynamicInputCore}
+                            value={uMobile}
+                            onChangeText={(val) => {
+                              const cleaned = formatPhone(val);
+                              setUMobile(cleaned);
+                              if (cleaned.length === 10) {
+                                const res = validatePhone(cleaned, 'Umpire Phone Number');
+                                setFieldErrors((prev) => ({ ...prev, mobile: res.isValid ? undefined : res.error }));
+                              } else {
+                                setFieldErrors((prev) => ({ ...prev, mobile: undefined }));
+                              }
+                            }}
+                            onBlur={() => {
+                              if (uMobile.trim()) {
+                                const res = validatePhone(uMobile, 'Umpire Phone Number');
+                                setFieldErrors((prev) => ({ ...prev, mobile: res.isValid ? undefined : res.error }));
+                              }
+                            }}
+                            placeholder="9876543210"
+                            keyboardType="phone-pad"
+                            placeholderTextColor="#94a3b8"
+                            maxLength={10}
+                          />
+                          {uMobile.replace(/\D/g, '').length === 10 && (
+                            <View style={styles.validCheckBadge}>
+                              <Text style={styles.validCheckText}>✓</Text>
+                            </View>
+                          )}
+                        </View>
+                        {fieldErrors.mobile ? (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.mobile}</Text>
+                        ) : (
+                          <Text style={styles.helperText}>Used for official match alerts & communication</Text>
+                        )}
+                      </View>
+
+                      {/* Umpire Aadhaar Number Input */}
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <FontAwesome name="id-card" size={13} color="#b91c1c" />
+                            <Text style={styles.label}>Umpire Aadhaar Number (12 Digits) *</Text>
+                          </View>
+                          <Text style={{ fontSize: 10, color: uAadhaar.replace(/\D/g, '').length === 12 ? '#16a34a' : '#64748b', fontWeight: '700' }}>
+                            {uAadhaar.replace(/\D/g, '').length === 12 ? '✓ 12/12 Digits' : `(${uAadhaar.replace(/\D/g, '').length}/12)`}
+                          </Text>
+                        </View>
+                        <View style={[styles.dynamicInputWrap, fieldErrors.aadhaar ? styles.inputError : (uAadhaar.replace(/\D/g, '').length === 12 ? styles.dynamicInputSuccess : null)]}>
+                          <View style={styles.aadhaarIconBox}>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#b91c1c' }}>UIDAI</Text>
+                          </View>
+                          <TextInput
+                            style={styles.dynamicInputCore}
+                            value={uAadhaar}
+                            onChangeText={(val) => {
+                              const formatted = formatAadhaar(val);
+                              setUAadhaar(formatted);
+                              const rawDigits = formatted.replace(/\D/g, '');
+                              if (rawDigits.length === 12) {
+                                const res = validateAadhaar(rawDigits);
+                                setFieldErrors((prev) => ({ ...prev, aadhaar: res.isValid ? undefined : res.error }));
+                              } else if (rawDigits.length > 0 && (rawDigits[0] === '0' || rawDigits[0] === '1')) {
+                                setFieldErrors((prev) => ({ ...prev, aadhaar: 'Aadhaar number cannot start with 0 or 1.' }));
+                              } else {
+                                setFieldErrors((prev) => ({ ...prev, aadhaar: undefined }));
+                              }
+                            }}
+                            onBlur={() => {
+                              if (uAadhaar.trim()) {
+                                const res = validateAadhaar(uAadhaar);
+                                setFieldErrors((prev) => ({ ...prev, aadhaar: res.isValid ? undefined : res.error }));
+                              }
+                            }}
+                            placeholder="5432 9876 1234"
+                            keyboardType="numeric"
+                            placeholderTextColor="#94a3b8"
+                            maxLength={14}
+                          />
+                          {uAadhaar.replace(/\D/g, '').length === 12 && (
+                            <View style={styles.validCheckBadge}>
+                              <Text style={styles.validCheckText}>✓</Text>
+                            </View>
+                          )}
+                        </View>
+                        {fieldErrors.aadhaar ? (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.aadhaar}</Text>
+                        ) : (
+                          <Text style={styles.helperText}>Indian 12-digit National Identification Number</Text>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Row 3: Certification/Qualification & Umpire Experience */}
+                    <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                      <DropdownField
+                        label="Umpire Certification / Qualification *"
+                        value={uQualification}
+                        options={dynamicUmpireQualifications}
+                        onSelect={setUQualification}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Umpire Experience *</Text>
+                        <TextInput
+                          style={[styles.input, fieldErrors.experience && styles.inputError]}
+                          value={uExperience}
+                          onChangeText={(val) => {
+                            setUExperience(val);
+                            setFieldErrors((prev) => ({ ...prev, experience: val.trim() ? undefined : 'Please enter Umpire Experience.' }));
+                          }}
+                          placeholder="e.g. 6 Years / Senior Panel"
+                          placeholderTextColor="#94a3b8"
+                        />
+                        {fieldErrors.experience && (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.experience}</Text>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Row 4: District & State */}
+                    <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                      <DropdownField
+                        label="District / Taluk *"
+                        value={uDistrict}
+                        options={dynamicTaluks}
+                        onSelect={(val) => {
+                          setUDistrict(val);
+                          if (val !== 'Other') setUCustomDistrict('');
+                          setFieldErrors((prev) => ({ ...prev, district: undefined }));
+                        }}
+                      />
+                      <DropdownField
+                        label="State *"
+                        value={uState}
+                        options={dynamicStates}
+                        onSelect={setUState}
+                      />
+                    </View>
+
+                    {/* Custom District Input if "Other" is chosen */}
+                    {uDistrict === 'Other' && (
+                      <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.label}>Specify District Name *</Text>
+                          <TextInput
+                            style={[styles.input, fieldErrors.district && styles.inputError]}
+                            value={uCustomDistrict}
+                            onChangeText={(val) => {
+                              setUCustomDistrict(val);
+                              setFieldErrors((prev) => ({ ...prev, district: val.trim() ? undefined : 'Please specify your District name.' }));
+                            }}
+                            placeholder="Type your district name here..."
+                            placeholderTextColor="#94a3b8"
+                            autoCapitalize="words"
+                          />
+                          {fieldErrors.district && (
+                            <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.district}</Text>
+                          )}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Toggle Optional Fields Button */}
+                    <TouchableOpacity
+                      style={styles.optionalToggleBtn}
+                      onPress={() => setShowOptionalUmpireFields(!showOptionalUmpireFields)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.optionalToggleText}>
+                        {showOptionalUmpireFields ? '▾ Hide Optional Profile Information' : '▸ Add Optional Profile Information (ID, Bio, Photos, Org)'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* Optional Fields Section */}
+                    {showOptionalUmpireFields && (
+                      <View style={styles.optionalContainer}>
+                        <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.label}>Umpire ID / Certification Number</Text>
+                            <TextInput
+                              style={styles.input}
+                              value={uCertNumber}
+                              onChangeText={setUCertNumber}
+                              placeholder="e.g. TNCA-UMP-2024-042"
+                              placeholderTextColor="#94a3b8"
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.label}>Years of Experience (Numeric)</Text>
+                            <TextInput
+                              style={styles.input}
+                              value={uYearsOfExperience}
+                              onChangeText={setUYearsOfExperience}
+                              placeholder="e.g. 6"
+                              keyboardType="number-pad"
+                              placeholderTextColor="#94a3b8"
+                              maxLength={2}
+                            />
+                          </View>
+                        </View>
+
+                        <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.label}>Previous Association / Organization</Text>
+                            <TextInput
+                              style={styles.input}
+                              value={uPrevOrg}
+                              onChangeText={setUPrevOrg}
+                              placeholder="e.g. Tamil Nadu Cricket Association"
+                              placeholderTextColor="#94a3b8"
+                            />
+                          </View>
+                          <DropdownField
+                            label="Specialization"
+                            value={uSpecialization}
+                            options={UMPIRE_SPECIALIZATIONS}
+                            onSelect={setUSpecialization}
                           />
                         </View>
+
+                        <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.label}>Profile Photo URL</Text>
+                            <TextInput
+                              style={styles.input}
+                              value={uProfilePhoto}
+                              onChangeText={setUProfilePhoto}
+                              placeholder="https://example.com/photo.jpg"
+                              placeholderTextColor="#94a3b8"
+                              autoCapitalize="none"
+                            />
+                          </View>
+                        </View>
+
+                        <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.label}>Additional Information / Officiating Bio</Text>
+                            <TextInput
+                              style={[styles.input, { height: 60, textAlignVertical: 'top', paddingTop: 8 }]}
+                              value={uAdditionalInfo}
+                              onChangeText={setUAdditionalInfo}
+                              placeholder="Tournaments officiated, awards, or special credentials..."
+                              placeholderTextColor="#94a3b8"
+                              multiline
+                            />
+                          </View>
+                        </View>
                       </View>
-                    </View>
-                  )}
-
-                  {/* Verification & Password Setup */}
-                  {renderVerificationAndPasswordBlock()}
-
-                  <TouchableOpacity
-                    style={styles.checkboxRow}
-                    onPress={() => {
-                      const next = !uAgreed;
-                      setUAgreed(next);
-                      setFieldErrors((prev) => ({ ...prev, agree: next ? undefined : 'Please accept the declaration to proceed.' }));
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <View style={[styles.checkbox, uAgreed && styles.checkboxChecked]}>
-                      {uAgreed && <Text style={styles.checkmark}>✓</Text>}
-                    </View>
-                    <Text style={styles.checkboxLabel}>
-                      I hereby declare that all information furnished is true and I agree to abide by the official ICC / BCCI / TNCA and District Umpires Code of Conduct & Ethics.
-                    </Text>
-                  </TouchableOpacity>
-                  {fieldErrors.agree && (
-                    <Text style={[styles.fieldErrorText, { marginTop: -4, marginBottom: 6 }]}>⚠️ {fieldErrors.agree}</Text>
-                  )}
-
-                  <TouchableOpacity
-                    style={[styles.submitBtn, isLoading && styles.submitBtnDisabled]}
-                    onPress={handleUmpireSubmit}
-                    disabled={isLoading}
-                  >
-                    {isLoading ? (
-                      <ActivityIndicator color="#000000" size="small" />
-                    ) : (
-                      <Text style={styles.submitBtnText}>
-                        {isEmailVerified ? 'Submit Umpire Registration' : 'Verify Email & Submit Registration'}
-                      </Text>
                     )}
+
+                    {/* Verification & Password Setup */}
+                    {renderVerificationAndPasswordBlock()}
+
+                    <TouchableOpacity
+                      style={styles.checkboxRow}
+                      onPress={() => {
+                        const next = !uAgreed;
+                        setUAgreed(next);
+                        setFieldErrors((prev) => ({ ...prev, agree: next ? undefined : 'Please accept the declaration to proceed.' }));
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.checkbox, uAgreed && styles.checkboxChecked]}>
+                        {uAgreed && <Text style={styles.checkmark}>✓</Text>}
+                      </View>
+                      <Text style={styles.checkboxLabel}>
+                        I hereby declare that all information furnished is true and I agree to abide by the official ICC / BCCI / TNCA and District Umpires Code of Conduct & Ethics.
+                      </Text>
+                    </TouchableOpacity>
+                    {fieldErrors.agree && (
+                      <Text style={[styles.fieldErrorText, { marginTop: -4, marginBottom: 6 }]}>⚠️ {fieldErrors.agree}</Text>
+                    )}
+
+                    <TouchableOpacity
+                      style={[styles.submitBtn, isLoading && styles.submitBtnDisabled]}
+                      onPress={handleUmpireSubmit}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <ActivityIndicator color="#000000" size="small" />
+                      ) : (
+                        <Text style={styles.submitBtnText}>
+                          {isEmailVerified ? 'Submit Umpire Registration' : 'Verify Email & Submit Registration'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                {/* Login link */}
+                <View style={styles.loginPromptRow}>
+                  <Text style={styles.promptNormalText}>Already registered? </Text>
+                  <TouchableOpacity onPress={() => navigate('Login', { initialRole: activeRole })}>
+                    <Text style={styles.loginLinkText}>Login Here →</Text>
                   </TouchableOpacity>
-                </>
-              )}
+                </View>
 
-              {/* Login link */}
-              <View style={styles.loginPromptRow}>
-                <Text style={styles.promptNormalText}>Already registered? </Text>
-                <TouchableOpacity onPress={() => navigate('Login', { initialRole: activeRole })}>
-                  <Text style={styles.loginLinkText}>Login Here →</Text>
-                </TouchableOpacity>
               </View>
-
             </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
 
         {/* Global Reusable Dropdown Modal */}
         {pickerState && (
@@ -3025,8 +3349,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                           {isSendingOtp
                             ? 'Sending code...'
                             : resendCooldown > 0
-                            ? `Resend in ${resendCooldown}s`
-                            : 'Resend OTP ↻'}
+                              ? `Resend in ${resendCooldown}s`
+                              : 'Resend OTP ↻'}
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -3149,8 +3473,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                           {isSendingOtp
                             ? 'Sending...'
                             : resendCooldown > 0
-                            ? `Resend in ${resendCooldown}s`
-                            : 'Resend OTP ↻'}
+                              ? `Resend in ${resendCooldown}s`
+                              : 'Resend OTP ↻'}
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -3261,6 +3585,14 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                               <Text style={styles.flowStepIcon}>✓</Text>
                             </View>
                             <Text style={styles.flowStepNum}>STEP 1</Text>
+                            <Text style={styles.flowStepLabel}>
+                              {pendingApprovalData?.role?.includes('Umpire')
+                                ? 'Umpire Registration'
+                                : pendingApprovalData?.role?.includes('Team')
+                                  ? 'Team Registration'
+                                  : 'Scorer Registration'}
+                            </Text>
+                            <Text style={styles.flowStepStatusGreen}>Submitted</Text>
                             <Text style={styles.flowStepLabel}>Form Sent</Text>
                             <Text style={styles.flowStepStatusGreen}>Done</Text>
                           </View>
@@ -3303,6 +3635,14 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                               <Text style={styles.flowStepIcon}>🔑</Text>
                             </View>
                             <Text style={styles.flowStepNum}>STEP 4</Text>
+                            <Text style={styles.flowStepLabel}>Portal Login</Text>
+                            <Text style={styles.flowStepStatusMuted}>
+                              {pendingApprovalData?.role?.includes('Umpire')
+                                ? 'Access Umpire'
+                                : pendingApprovalData?.role?.includes('Team')
+                                  ? 'Access Team'
+                                  : 'Access Scorer'}
+                            </Text>
                             <Text style={styles.flowStepLabel}>Login & Play</Text>
                             <Text style={styles.flowStepStatusMuted}>Ready 🏏</Text>
                           </View>
@@ -3446,6 +3786,14 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                             <Text style={styles.flowStepIcon}>✓</Text>
                           </View>
                           <Text style={styles.flowStepNum}>STEP 1</Text>
+                          <Text style={styles.flowStepLabel}>
+                            {pendingApprovalData?.role?.includes('Umpire')
+                              ? 'Umpire Registration'
+                              : pendingApprovalData?.role?.includes('Team')
+                                ? 'Team Registration'
+                                : 'Scorer Registration'}
+                          </Text>
+                          <Text style={styles.flowStepStatusGreen}>Submitted</Text>
                           <Text style={styles.flowStepLabel}>Form Sent</Text>
                           <Text style={styles.flowStepStatusGreen}>Done</Text>
                         </View>
@@ -3488,6 +3836,14 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                             <Text style={styles.flowStepIcon}>🔑</Text>
                           </View>
                           <Text style={styles.flowStepNum}>STEP 4</Text>
+                          <Text style={styles.flowStepLabel}>Portal Login</Text>
+                          <Text style={styles.flowStepStatusMuted}>
+                            {pendingApprovalData?.role?.includes('Umpire')
+                              ? 'Access Umpire'
+                              : pendingApprovalData?.role?.includes('Team')
+                                ? 'Access Team'
+                                : 'Access Scorer'}
+                          </Text>
                           <Text style={styles.flowStepLabel}>Login & Play</Text>
                           <Text style={styles.flowStepStatusMuted}>Ready 🏏</Text>
                         </View>

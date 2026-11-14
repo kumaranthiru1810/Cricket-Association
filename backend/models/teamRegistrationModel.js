@@ -17,7 +17,7 @@ class TeamRegistrationModel {
    * Create a new Team Registration in PENDING status
    * Strictly validates exactly 15 squad players, email formats, and duplicates.
    */
-  async create({ teamId, teamName, coachName, coachEmail, password, password_hash, passkey, city, taluk, players }) {
+  async create({ teamId, teamName, coachName, coachEmail, coachPhone, coachMobile, phone, mobile, coachAadhaar, aadhaar, password, password_hash, passkey, city, taluk, players }) {
     await db.initDb();
 
     // 1. Validate Coach & Team Info
@@ -102,11 +102,16 @@ class TeamRegistrationModel {
       } catch (_e) {}
     }
 
+    const cleanCoachPhone = String(coachPhone || coachMobile || phone || mobile || '').replace(/\D/g, '');
+    const cleanCoachAadhaar = String(coachAadhaar || aadhaar || '').replace(/\D/g, '');
+
     const reg = await this.Model.create({
       id: regId,
       team_name: teamName.trim(),
       coach_name: coachName.trim(),
       coach_email: cleanCoachEmail,
+      coach_phone: cleanCoachPhone || null,
+      coach_aadhaar: cleanCoachAadhaar || null,
       password_hash: computedPasswordHash,
       passkey: secretPasskey,
       city: city || taluk || 'Virudhunagar',
@@ -123,6 +128,8 @@ class TeamRegistrationModel {
         id: `COACH-${Date.now()}`,
         name: coachName.trim(),
         email: cleanCoachEmail,
+        mobile: cleanCoachPhone || null,
+        aadhaar: cleanCoachAadhaar || null,
         role: 'COACH',
         status: 'PENDING',
         password_hash: computedPasswordHash
@@ -133,6 +140,8 @@ class TeamRegistrationModel {
         {
           $set: {
             name: coachName.trim(),
+            ...(cleanCoachPhone && { mobile: cleanCoachPhone }),
+            ...(cleanCoachAadhaar && { aadhaar: cleanCoachAadhaar }),
             role: 'COACH',
             status: 'PENDING',
             ...(computedPasswordHash && { password_hash: computedPasswordHash }),
