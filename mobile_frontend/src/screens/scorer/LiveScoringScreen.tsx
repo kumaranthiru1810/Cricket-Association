@@ -6228,6 +6228,12 @@ export default function LiveScoringScreen() {
 
               const runsBat = pendingBoundaryRun !== null ? pendingBoundaryRun : rBatter;
               const rawExtra = normalizeExtraType(latest?.extraType || latest?.extra_type || latest?.extra || (latest?.is_wide ? 'wide' : (latest?.is_no_ball ? 'noball' : null)));
+
+              // Resolve the exact batter who actually faced this delivery
+              const facedBatter = (latest?.strikerId
+                ? (striker?.id === latest.strikerId ? striker : (nonStriker?.id === latest.strikerId ? nonStriker : null))
+                : null) || (runsBat % 2 === 1 ? nonStriker : striker) || striker;
+
               const ballEvents = latest ? mapBallToEvents({
                 ballId: `${latest.id || recentDeliveries.length}-${runsBat}-${runs}-${wickets}`,
                 runsOffBat: runsBat,
@@ -6236,9 +6242,9 @@ export default function LiveScoringScreen() {
                 isWicket: Boolean(latest?.wicket),
                 dismissal: normalizeDismissal(latest?.wicket?.type || latest?.dismissal_type),
                 dismissedName: latest?.wicket?.batter || latest?.dismissed_name,
-                batterName: striker?.name || 'Striker',
-                batterRunsAfter: striker?.runs,
-                batterBallsAfter: striker?.balls,
+                batterName: facedBatter?.name || striker?.name || 'Striker',
+                batterRunsAfter: facedBatter?.runs,
+                batterBallsAfter: facedBatter?.balls,
                 bowlerName: bowler?.name || 'Bowler',
               }) : null;
 
@@ -6247,6 +6253,25 @@ export default function LiveScoringScreen() {
                   <VPLEventBanner
                     role="scorer"
                     events={ballEvents}
+                    onMilestonePress={(event) => {
+                      const isHundred = event.kind === 'hundred';
+                      const targetBatter = (striker?.name === event.primary ? striker : (nonStriker?.name === event.primary ? nonStriker : null)) || facedBatter || striker;
+                      triggerMilestone({
+                        type: isHundred ? 'BATTER_100' : 'BATTER_50',
+                        title: isHundred ? 'MAGNIFICENT CENTURY!' : 'HALF-CENTURY!',
+                        badge: isHundred ? '👑 100 RUNS CENTURY 👑' : '⭐ 50 RUNS MILESTONE ⭐',
+                        subtitle: isHundred
+                          ? 'Outstanding masterclass ton! Raises the bat to a standing ovation.'
+                          : 'Splendid half-century under pressure! A crucial innings for the team.',
+                        playerName: event.primary || targetBatter?.name || 'Champion',
+                        teamName: matchInfo?.battingTeam || 'Batting Team',
+                        scoreText: `${targetBatter?.runs || 50}*`,
+                        ballsText: `${targetBatter?.balls || 0} Balls`,
+                        strikeRateText: targetBatter?.strikeRate || (targetBatter?.balls ? ((targetBatter.runs / targetBatter.balls) * 100).toFixed(1) : '0.0'),
+                        fours: targetBatter?.fours || 0,
+                        sixes: targetBatter?.sixes || 0
+                      });
+                    }}
                     bottomOffset={0}
                     style={{ position: 'relative', left: 0, right: 0, top: 0, bottom: 0 }}
                   />

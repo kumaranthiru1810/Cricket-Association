@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
   Animated,
+  Image,
   Platform,
   Pressable,
   StyleSheet,
@@ -11,6 +12,9 @@ import {
 } from 'react-native';
 import type { VPLEvent } from '../../utils/vplEventMapper';
 import { vplSound, type VPLSoundRole, type VPLSoundState } from '../../utils/vplSoundEngine';
+
+const milestoneBatsmanImage = require('../../../assets/milestone_batsman.png');
+const centuryBatsmanImage = require('../../../assets/century_batsman.jpg');
 
 // ── Theme ──────────────────────────────────────────────────────────────
 const C = {
@@ -88,6 +92,7 @@ interface VPLEventBannerProps {
   events: VPLEvent[] | null;
   skipInitial?: boolean;
   onImpact?: (event: VPLEvent) => void;
+  onMilestonePress?: (event: VPLEvent) => void;
   topOffset?: number;
   bottomOffset?: number;
   style?: StyleProp<ViewStyle>;
@@ -98,6 +103,7 @@ export function VPLEventBanner({
   events,
   skipInitial = false,
   onImpact,
+  onMilestonePress,
   topOffset = 0,
   bottomOffset = 80,
   style,
@@ -191,6 +197,23 @@ export function VPLEventBanner({
       <View style={[styles.bannerInner, tierContainer]}>
         <KolamBorder horizontal />
         <View style={styles.bannerBody}>
+          {/* Milestone Batsman Celebration Image Badge */}
+          {(current.kind === 'fifty' || current.kind === 'hundred') && (
+            <Pressable
+              onPress={() => onMilestonePress?.(current)}
+              style={styles.milestoneImageWrapper}
+            >
+              <Image
+                source={current.kind === 'hundred' ? centuryBatsmanImage : milestoneBatsmanImage}
+                style={styles.milestoneImage}
+                resizeMode="cover"
+              />
+              <View style={styles.milestoneTrophyBadge}>
+                <Text style={styles.milestoneTrophyText}>🏆</Text>
+              </View>
+            </Pressable>
+          )}
+
           {/* Left: title + detail */}
           <View style={styles.bannerLeft}>
             <Text style={[styles.titleText, { fontSize: titleSize }]}>
@@ -198,6 +221,14 @@ export function VPLEventBanner({
             </Text>
             {current.detail && (
               <Text style={styles.detailText}>{current.detail}</Text>
+            )}
+            {(current.kind === 'fifty' || current.kind === 'hundred') && onMilestonePress && (
+              <Pressable
+                onPress={() => onMilestonePress(current)}
+                style={styles.view3DBtn}
+              >
+                <Text style={styles.view3DBtnText}>★ Tap to Open 3D Celebration</Text>
+              </Pressable>
             )}
           </View>
           {/* Right: batter/stats */}
@@ -317,6 +348,48 @@ const styles = StyleSheet.create({
   ball: { position: 'absolute', zIndex: 10 },
   dismissBtn: { padding: 6, marginLeft: 4 },
   dismissText: { color: C.ivory, opacity: 0.7, fontSize: 14 },
+  milestoneImageWrapper: {
+    position: 'relative',
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: C.gold,
+    overflow: 'hidden',
+    backgroundColor: '#0a192f',
+    marginRight: 6,
+  },
+  milestoneImage: {
+    width: '100%',
+    height: '100%',
+  },
+  milestoneTrophyBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 6,
+    paddingHorizontal: 2,
+  },
+  milestoneTrophyText: {
+    fontSize: 9,
+  },
+  view3DBtn: {
+    marginTop: 4,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(212, 167, 44, 0.22)',
+    borderWidth: 1,
+    borderColor: C.gold,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  view3DBtnText: {
+    color: C.gold,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
   muteBtn: { backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 20, padding: 8 },
   muteText: { fontSize: 16 },
   unlockPrompt: { backgroundColor: C.maroon, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'center' },

@@ -282,6 +282,7 @@ export default function WagonWheel({
       if (runFilter === '1' && runs !== 1) return false;
       if (runFilter === '0' && runs !== 0) return false;
       if (runFilter === 'BOUNDARIES' && runs !== 4 && runs !== 6) return false;
+      if (runFilter === 'RUNNING' && runs !== 1 && runs !== 2 && runs !== 3) return false;
 
       if (sectorFilter) {
         const s = SECTORS.find(sec => sec.key === sectorFilter);
@@ -314,6 +315,8 @@ export default function WagonWheel({
     });
     return counts;
   }, [batterDeliveries]);
+
+  const hasNoBoundaries = (runCounts.fours === 0 && runCounts.sixes === 0);
 
   // Scoring Breakdown with Run Multipliers (e.g. 3s: 3 × 3 = 9 runs)
   const scoringBreakdown = useMemo(() => {
@@ -530,11 +533,11 @@ export default function WagonWheel({
               </Text>
               <View style={[styles.slidePillBadge, activeSlide === 'wheel' && styles.slidePillBadgeActive]}>
                 <Text style={[styles.slidePillBadgeText, activeSlide === 'wheel' && styles.slidePillBadgeTextActive]}>
-                  {displayedDeliveries.length} Boundaries
+                  {displayedDeliveries.length} {runFilter === 'ALL' ? 'Shots' : runFilter === 'BOUNDARIES' || runFilter === '4' || runFilter === '6' ? 'Boundaries' : 'Shots'}
                 </Text>
               </View>
             </View>
-            <Text style={styles.slideTabSubtitle}>Boundary Trajectories (4s & 6s) on Ground</Text>
+            <Text style={styles.slideTabSubtitle}>Shot Trajectories & Ground Locations</Text>
           </View>
         </TouchableOpacity>
 
@@ -564,9 +567,24 @@ export default function WagonWheel({
           ───────────────────────────────────────────────────────────── */}
       {activeSlide === 'wheel' && (
         <View style={styles.slideContent}>
-          {/* Shot Run Filter Bar - Only Boundaries (4s & 6s) */}
+          {/* Prominent English notice when batter has no 4s and no 6s */}
+          {hasNoBoundaries && (
+            <View style={styles.noBoundariesBanner}>
+              <Text style={styles.noBoundariesIcon}>ℹ️</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.noBoundariesTitle}>
+                  This player has not hit any boundaries (4s or 6s) in this innings.
+                </Text>
+                <Text style={styles.noBoundariesSubtitle}>
+                  All {currentBatter?.runs || 0} runs were scored through running between wickets (1s, 2s & 3s). Shot trajectories for running runs are shown on the ground below.
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Shot Run Filter Bar */}
           <View style={styles.filterBar}>
-            <Text style={styles.filterLabel}>BOUNDARY SHOT FILTER:</Text>
+            <Text style={styles.filterLabel}>SHOT RUN FILTER:</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <TouchableOpacity
                 style={[styles.filterPill, runFilter === 'ALL' && styles.filterPillActive]}
@@ -574,7 +592,17 @@ export default function WagonWheel({
                 activeOpacity={0.7}
               >
                 <Text style={[styles.filterPillText, runFilter === 'ALL' && styles.filterPillTextActive]}>
-                  All Boundaries ({runCounts.fours + runCounts.sixes})
+                  All Shots ({runCounts.total})
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.filterPill, runFilter === 'BOUNDARIES' && styles.filterPillActiveBoundary]}
+                onPress={() => setRunFilter(runFilter === 'BOUNDARIES' ? 'ALL' : 'BOUNDARIES')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.filterPillText, runFilter === 'BOUNDARIES' && styles.filterPillTextActive]}>
+                  Boundaries ({runCounts.fours + runCounts.sixes})
                 </Text>
               </TouchableOpacity>
 
@@ -599,6 +627,30 @@ export default function WagonWheel({
                   4s ({runCounts.fours} × 4 = {scoringBreakdown.fours.runs}r)
                 </Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.filterPill, runFilter === 'RUNNING' && styles.filterPillActiveRunning]}
+                onPress={() => setRunFilter(runFilter === 'RUNNING' ? 'ALL' : 'RUNNING')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.dotMarker, { backgroundColor: '#38bdf8' }]} />
+                <Text style={[styles.filterPillText, runFilter === 'RUNNING' && styles.filterPillTextActive]}>
+                  1s, 2s & 3s ({runCounts.ones + runCounts.twos + runCounts.threes})
+                </Text>
+              </TouchableOpacity>
+
+              {runCounts.dots > 0 && (
+                <TouchableOpacity
+                  style={[styles.filterPill, runFilter === '0' && styles.filterPillActiveDot]}
+                  onPress={() => setRunFilter(runFilter === '0' ? 'ALL' : '0')}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.dotMarker, { backgroundColor: '#94a3b8' }]} />
+                  <Text style={[styles.filterPillText, runFilter === '0' && styles.filterPillTextActive]}>
+                    Dots ({runCounts.dots})
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -835,6 +887,50 @@ export default function WagonWheel({
                     </g>
                   );
                 })}
+
+                {/* In-Wheel Notice when no shots match current filter */}
+                {displayedDeliveries.length === 0 && (
+                  <g transform={`translate(${cx}, ${cy})`}>
+                    <rect
+                      x="-145"
+                      y="-32"
+                      width="290"
+                      height="64"
+                      rx="12"
+                      fill="rgba(15, 23, 42, 0.92)"
+                      stroke="#f59e0b"
+                      strokeWidth="1.5"
+                    />
+                    <text
+                      x="0"
+                      y="-8"
+                      fill="#fef08a"
+                      fontSize="12"
+                      fontWeight="800"
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      style={{ pointerEvents: 'none', userSelect: 'none' }}
+                    >
+                      {hasNoBoundaries
+                        ? 'No boundaries (4s or 6s) scored'
+                        : 'No shots match selected filter'}
+                    </text>
+                    <text
+                      x="0"
+                      y="14"
+                      fill="#e2e8f0"
+                      fontSize="10"
+                      fontWeight="600"
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      style={{ pointerEvents: 'none', userSelect: 'none' }}
+                    >
+                      {hasNoBoundaries
+                        ? "Select 'All Shots' or '1s, 2s & 3s' to view running shots"
+                        : "Tap 'All Shots' above to view full wagon wheel"}
+                    </text>
+                  </g>
+                )}
               </svg>
 
               {/* Hovered / Tapped Shot Detail Tooltip Card */}
@@ -869,7 +965,9 @@ export default function WagonWheel({
             {displayedDeliveries.length === 0 && (
               <View style={styles.emptyWagonNotice}>
                 <Text style={styles.emptyWagonText}>
-                  🏏 No {runFilter === '6' ? 'sixes (6s)' : runFilter === '4' ? 'fours (4s)' : runFilter === '0' ? 'dot balls' : 'deliveries'} match filter for {currentBatter?.name || 'this batsman'}.
+                  🏏 {hasNoBoundaries
+                    ? `This player has not scored any boundaries (4s or 6s) in this innings. All ${currentBatter?.runs || 0} runs were scored through running between wickets (1s, 2s & 3s). Switch to 'All Shots' or '1s, 2s & 3s' to view shot directions on the field.`
+                    : `No ${runFilter === '6' ? 'sixes (6s)' : runFilter === '4' ? 'fours (4s)' : runFilter === '0' ? 'dot balls' : 'deliveries'} match filter for ${currentBatter?.name || 'this batsman'}. Switch to 'All Shots' to see all deliveries.`}
                 </Text>
               </View>
             )}
@@ -1595,6 +1693,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#d97706',
     borderColor: '#b45309'
   },
+  filterPillActiveBoundary: {
+    backgroundColor: '#b45309',
+    borderColor: '#d97706'
+  },
+  filterPillActiveRunning: {
+    backgroundColor: '#0284c7',
+    borderColor: '#0ea5e9'
+  },
   filterPillActiveSix: {
     backgroundColor: '#be185d',
     borderColor: '#ec4899'
@@ -1618,6 +1724,31 @@ const styles = StyleSheet.create({
   filterPillActiveDot: {
     backgroundColor: '#64748b',
     borderColor: '#94a3b8'
+  },
+  noBoundariesBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#fffbeb',
+    borderWidth: 1.5,
+    borderColor: '#fde68a',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+    gap: 10
+  },
+  noBoundariesIcon: {
+    fontSize: 20
+  },
+  noBoundariesTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#92400e',
+    marginBottom: 2
+  },
+  noBoundariesSubtitle: {
+    fontSize: 11.5,
+    color: '#b45309',
+    lineHeight: 16
   },
   dotMarker: {
     width: 7,
