@@ -126,6 +126,7 @@ export function VPLEventBanner({
     if (!events || events.length === 0) return;
     if (isFirst.current && skipInitial) {
       isFirst.current = false;
+      events.forEach(e => seenIds.current.add(e.id));
       return;
     }
     isFirst.current = false;

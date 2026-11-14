@@ -1130,14 +1130,27 @@ class ScoringEngine {
       });
     } catch (e) {}
 
+    const reversedDeliveryInfo = {
+      id: lastDelivery.id,
+      ball: `${lastDelivery.over_number}.${lastDelivery.ball_number}`,
+      runsBatter: lastDelivery.runs_batter || 0,
+      runsExtras: lastDelivery.runs_extras || 0,
+      totalRuns: (lastDelivery.runs_batter || 0) + (lastDelivery.runs_extras || 0),
+      extraType: lastDelivery.extra_type,
+      wicket: Boolean(lastDelivery.wicket),
+      wicketType: lastDelivery.wicket_type
+    };
+
     return {
       success: true,
       message: 'Last delivery successfully undone.',
       undoneDeliveryId: lastDelivery.id,
+      reversedDelivery: reversedDeliveryInfo,
       score: `${innings ? innings.total_runs : 0}/${innings ? innings.wickets : 0}`,
       overs: `${innings ? innings.overs : 0}.${innings ? innings.balls : 0}`,
       data: {
         undoneDeliveryId: lastDelivery.id,
+        reversedDelivery: reversedDeliveryInfo,
         score: `${innings ? innings.total_runs : 0}/${innings ? innings.wickets : 0}`,
         overs: `${innings ? innings.overs : 0}.${innings ? innings.balls : 0}`
       }

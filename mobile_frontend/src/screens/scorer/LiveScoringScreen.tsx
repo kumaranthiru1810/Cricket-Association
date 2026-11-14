@@ -579,6 +579,8 @@ export default function LiveScoringScreen() {
   const [showMilestoneModal, setShowMilestoneModal] = useState<boolean>(false);
   const shownMilestonesRef = useRef<Set<string>>(new Set());
   const shownRulesRef = useRef<Set<string>>(new Set());
+  const initialDeliveryIdRef = useRef<string | null>(null);
+  const hasRecordedNewBallRef = useRef<boolean>(false);
 
   // Broadcast Umpire Signal Overlay & Hand Signals Gallery State
   const [activeUmpireSignal, setActiveUmpireSignal] = useState<UmpireSignalEvent | null>(null);
@@ -1367,6 +1369,10 @@ export default function LiveScoringScreen() {
       }
       if (d.recentDeliveries && Array.isArray(d.recentDeliveries)) {
         setRecentDeliveries(d.recentDeliveries);
+        if (isInitial && d.recentDeliveries.length > 0) {
+          initialDeliveryIdRef.current = String(d.recentDeliveries[0].id || `${d.recentDeliveries[0].ball || '0'}`);
+          hasRecordedNewBallRef.current = false;
+        }
       }
       if (ScorerApi.getOfflineQueueCount) {
         setOfflineQueueCount(ScorerApi.getOfflineQueueCount());
@@ -1477,6 +1483,7 @@ export default function LiveScoringScreen() {
         throw new Error(res?.message || 'Failed to record delivery.');
       }
 
+      hasRecordedNewBallRef.current = true;
       setIsBallInProgress(false);
       if (res.commentary) {
         setAiCommentary(res.commentary);
@@ -1858,6 +1865,7 @@ export default function LiveScoringScreen() {
 
     try {
       const res = await ScorerApi.recordDelivery(matchId, payload);
+      hasRecordedNewBallRef.current = true;
       if (res && res.commentary) {
         setAiCommentary(res.commentary);
       }
@@ -2039,6 +2047,7 @@ export default function LiveScoringScreen() {
 
     try {
       const res = await ScorerApi.recordDelivery(matchId, payload);
+      hasRecordedNewBallRef.current = true;
       if (res && res.commentary) {
         setAiCommentary(res.commentary);
       }
@@ -2645,14 +2654,40 @@ export default function LiveScoringScreen() {
   // --- 10. UNDO LAST DELIVERY HANDLER (Edit Mode) ---
   const [isUndoingDelivery, setIsUndoingDelivery] = useState(false);
   const handleUndoLastDelivery = async () => {
+    const lastDel = recentDeliveries && recentDeliveries.length > 0 ? recentDeliveries[0] : null;
     setIsUndoingDelivery(true);
     try {
       setShowMilestoneModal(false);
       setActiveMilestone(null);
-      await ScorerApi.undoDelivery(matchId);
+      hasRecordedNewBallRef.current = false;
+      const res = await ScorerApi.undoDelivery(matchId);
       await loadLiveState(false);
-      const msg = 'Last delivery successfully reversed and match state restored.';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Undo Successful', msg);
+
+      if (recentDeliveries && recentDeliveries.length > 1) {
+        initialDeliveryIdRef.current = String(recentDeliveries[1].id || `${recentDeliveries[1].ball || '0'}`);
+      } else {
+        initialDeliveryIdRef.current = null;
+      }
+
+      // Identify the reversed ball details (Ball number, runs, extras, wickets)
+      const ballNum = res?.reversedDelivery?.ball || lastDel?.ball || (lastDel?.overNumber !== undefined ? `${lastDel.overNumber}.${lastDel.ballNumber}` : 'Last Ball');
+      const totalRuns = res?.reversedDelivery?.totalRuns !== undefined
+        ? res.reversedDelivery.totalRuns
+        : (lastDel ? (Number(lastDel.runsBatter || lastDel.runs || 0) + Number(lastDel.runsExtras || 0)) : 0);
+      const isWicket = res?.reversedDelivery?.wicket !== undefined ? res.reversedDelivery.wicket : Boolean(lastDel?.wicket);
+      const wktType = res?.reversedDelivery?.wicketType || lastDel?.wicketType || (lastDel?.wicket?.type ? lastDel.wicket.type : 'Wicket');
+      const extra = res?.reversedDelivery?.extraType || lastDel?.extraType || (lastDel?.extra ? lastDel.extra : null);
+
+      let actionDesc = `${totalRuns} run${totalRuns !== 1 ? 's' : ''}`;
+      if (extra && extra !== 'NONE') {
+        actionDesc += ` (${extra})`;
+      }
+      if (isWicket) {
+        actionDesc += ` + WICKET (${wktType})`;
+      }
+
+      const msg = `Ball ${ballNum} Successfully Undone!\n\nReversed: ${actionDesc}\nMatch score, overs & player statistics restored.`;
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Undo Delivery Success', msg);
     } catch (err: any) {
       const msg = err.message || 'Failed to undo last delivery.';
       Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
@@ -6234,7 +6269,13 @@ export default function LiveScoringScreen() {
                 ? (striker?.id === latest.strikerId ? striker : (nonStriker?.id === latest.strikerId ? nonStriker : null))
                 : null) || (runsBat % 2 === 1 ? nonStriker : striker) || striker;
 
-              const ballEvents = latest ? mapBallToEvents({
+              // Check if latest delivery is from initial page load / refresh (should NOT popup)
+              const latestId = latest ? String(latest.id || `${latest.ball || '0'}`) : null;
+              const isInitialLoadBall = !hasRecordedNewBallRef.current && (
+                !latest || (initialDeliveryIdRef.current !== null && latestId === initialDeliveryIdRef.current)
+              );
+
+              const ballEvents = (latest && !isInitialLoadBall) ? mapBallToEvents({
                 ballId: `${latest.id || recentDeliveries.length}-${runsBat}-${runs}-${wickets}`,
                 runsOffBat: runsBat,
                 extraType: rawExtra,
@@ -6253,6 +6294,7 @@ export default function LiveScoringScreen() {
                   <VPLEventBanner
                     role="scorer"
                     events={ballEvents}
+                    skipInitial={true}
                     onMilestonePress={(event) => {
                       const isHundred = event.kind === 'hundred';
                       const targetBatter = (striker?.name === event.primary ? striker : (nonStriker?.name === event.primary ? nonStriker : null)) || facedBatter || striker;
