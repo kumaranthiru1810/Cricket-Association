@@ -1449,17 +1449,12 @@ export default function LiveScoringScreen() {
       if (res.isFreeHit || res.data?.isFreeHit || type === 'noball') {
         setIsFreeHitActive(true);
         if (type === 'noball') {
-          const ruleKey = `${matchId}_FREE_HIT`;
-          if (!shownRulesRef.current.has(ruleKey)) {
-            shownRulesRef.current.add(ruleKey);
-            setActiveCricketRule('FREE_HIT');
-            setCricketRuleContext({
-              bowlerName: bowler?.name || 'Bowler',
-              strikerName: striker?.name || 'Striker',
-              nonStrikerName: nonStriker?.name || 'Non-Striker'
-            });
-            setShowCricketRulesModal(true);
-          }
+          setActiveCricketRule('FREE_HIT');
+          setCricketRuleContext({
+            bowlerName: bowler?.name || 'Bowler',
+            strikerName: striker?.name || 'Striker',
+            nonStrikerName: nonStriker?.name || 'Non-Striker'
+          });
         }
       } else if (isFreeHitActive && type === 'normal') {
         setIsFreeHitActive(false);
@@ -1531,22 +1526,17 @@ export default function LiveScoringScreen() {
         });
       }
 
-      // Smart Rules Analysis: Consecutive Wides (Triggers rule modal only ONCE per match)
+      // Smart Rules Analysis: Consecutive Wides
       if (type === 'wide') {
         const nextWides = consecutiveWidesCount + 1;
         setConsecutiveWidesCount(nextWides);
         if (nextWides >= 2) {
-          const ruleKey = `${matchId}_CONSECUTIVE_WIDES`;
-          if (!shownRulesRef.current.has(ruleKey)) {
-            shownRulesRef.current.add(ruleKey);
-            setActiveCricketRule('CONSECUTIVE_WIDES');
-            setCricketRuleContext({
-              bowlerName: bowler?.name || 'Bowler',
-              count: nextWides,
-              overNumber: Math.floor(balls / 6) + 1
-            });
-            setShowCricketRulesModal(true);
-          }
+          setActiveCricketRule('CONSECUTIVE_WIDES');
+          setCricketRuleContext({
+            bowlerName: bowler?.name || 'Bowler',
+            count: nextWides,
+            overNumber: Math.floor(balls / 6) + 1
+          });
         }
       } else if (type === 'normal') {
         setConsecutiveWidesCount(0);
@@ -1554,33 +1544,23 @@ export default function LiveScoringScreen() {
 
       const cwWarn = res?.consecutiveWidesWarning || res?.data?.consecutiveWidesWarning;
       if (cwWarn) {
-        const ruleKey = `${matchId}_CONSECUTIVE_WIDES`;
-        if (!shownRulesRef.current.has(ruleKey)) {
-          shownRulesRef.current.add(ruleKey);
-          setActiveCricketRule('CONSECUTIVE_WIDES');
-          setCricketRuleContext({
-            bowlerName: cwWarn.bowlerName || bowler?.name || 'Bowler',
-            count: cwWarn.count || 2,
-            overNumber: cwWarn.overNumber
-          });
-          setShowCricketRulesModal(true);
-        }
+        setActiveCricketRule('CONSECUTIVE_WIDES');
+        setCricketRuleContext({
+          bowlerName: cwWarn.bowlerName || bowler?.name || 'Bowler',
+          count: cwWarn.count || 2,
+          overNumber: cwWarn.overNumber
+        });
       }
 
-      // Smart Rules Analysis: Bowler Quota (Triggers rule modal only ONCE per match per bowler)
+      // Smart Rules Analysis: Bowler Quota
       const bqWarn = res?.bowlerQuotaWarning || res?.data?.bowlerQuotaWarning;
       if (bqWarn) {
-        const ruleKey = `${matchId}_OVER_QUOTA_${bqWarn.bowlerId || ''}`;
-        if (!shownRulesRef.current.has(ruleKey)) {
-          shownRulesRef.current.add(ruleKey);
-          setActiveCricketRule('OVER_QUOTA');
-          setCricketRuleContext({
-            bowlerName: bqWarn.bowlerName || bowler?.name || 'Bowler',
-            oversBowled: bqWarn.overs,
-            maxQuota: bqWarn.maxQuota
-          });
-          setShowCricketRulesModal(true);
-        }
+        setActiveCricketRule('OVER_QUOTA');
+        setCricketRuleContext({
+          bowlerName: bqWarn.bowlerName || bowler?.name || 'Bowler',
+          oversBowled: bqWarn.overs,
+          maxQuota: bqWarn.maxQuota
+        });
       }
 
       // Check for 2 No-Balls dangerous bowling warning (MCC Law 41.7)
@@ -3476,6 +3456,7 @@ export default function LiveScoringScreen() {
                 { label: 'Other Wickets (Retired Hurt/Out, Timed Out)', icon: '🏏', action: () => { setShowMatchEventsModal(false); setShowOtherWicketModal(true); } },
                 { label: 'Change Ball (New / Old Ball)', icon: '⚾', action: () => { setShowMatchEventsModal(false); setShowChangeBallModal(true); } },
                 { label: 'Playing XI Edit', icon: '👥', action: () => { setShowMatchEventsModal(false); openPlayingXIModal(); } },
+                { label: 'Fielding Action / Highlight', icon: '🧤', action: () => { setShowMatchEventsModal(false); setShowFieldingModal(true); } },
                 { label: 'Revised Overs & Target (Rain / DLS)', icon: '🌧️', action: () => { setShowMatchEventsModal(false); setShowRevisedOversModal(true); } }
               ].map((ev, idx) => (
                 <TouchableOpacity
@@ -6512,7 +6493,7 @@ export default function LiveScoringScreen() {
                     </TouchableOpacity>
                   </View>
 
-                  {/* Row 4: WICKET & FIELDING */}
+                  {/* Row 4: WICKET */}
                   <View style={styles.engineKeypadRow}>
                     <TouchableOpacity
                       disabled={
@@ -6526,21 +6507,13 @@ export default function LiveScoringScreen() {
                       style={[
                         styles.engineKeypadBtn,
                         styles.wicketBtn,
-                        { flex: 2 },
+                        { flex: 1 },
                         (isOverComplete || isSubmittingDelivery || matchStatus !== 'LIVE' || isInningsBreak || isMatchEnded) && styles.btnDisabled
                       ]}
                       onPress={handleWicketClick}
                       activeOpacity={0.7}
                     >
                       <Text style={[styles.engineKeypadText, styles.wicketBtnText]}>🛑 WICKET</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.engineKeypadBtn, { flex: 1, backgroundColor: '#005960', borderColor: '#0d9488' }]}
-                      onPress={() => setShowFieldingModal(true)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.engineAuxKeypadText, { color: '#fef3c7' }]}>FIELDING</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
