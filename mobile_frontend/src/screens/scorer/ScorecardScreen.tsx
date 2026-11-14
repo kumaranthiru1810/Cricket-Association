@@ -522,8 +522,8 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
 
   return (
     <View style={styles.container}>
-      {/* 1. RESPONSIVE HEADER WITH SAFE AREA INSETS */}
-      <View style={[styles.header, { paddingTop: ((styles.header as any)?.paddingTop || 16) + insetsTop }]}>
+      {/* 1. UNIFIED RESPONSIVE HEADER WITH SAFE AREA INSETS */}
+      <View style={[styles.header, { paddingTop: ((styles.header as any)?.paddingTop || 14) + insetsTop }]}>
         <View style={styles.headerTopRow}>
           <TouchableOpacity onPress={handleBack} style={styles.backBtn} activeOpacity={0.8}>
             <Text style={styles.backText}>
@@ -535,9 +535,10 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
             </Text>
           </TouchableOpacity>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <View style={styles.badgeLive}>
+            <View style={[styles.badgeLive, { flexDirection: 'row', alignItems: 'center', gap: 5 }]}>
+              <View style={[styles.championPulsingDot, { backgroundColor: '#10b981', width: 6, height: 6 }]} />
               <Text style={styles.badgeLiveText}>
-                {match.status || 'Match Scorecard'}
+                {match.status === 'Live' || match.status === 'LIVE' ? 'LIVE' : (match.status || 'SCORECARD')}
               </Text>
             </View>
             <TouchableOpacity
@@ -549,15 +550,18 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
             </TouchableOpacity>
           </View>
         </View>
-        <Text style={styles.title}>Match Scorecard & Statistics</Text>
+
+        <Text style={styles.title}>
+          {match.teamA && match.teamB ? `${match.teamA} vs ${match.teamB}` : 'Match Scorecard & Statistics'}
+        </Text>
         <Text style={styles.subtitle}>
-          {match.tournament || 'Virudhunagar District Championship 2026'} • {match.venue || 'Kamarajar Stadium'}
+          🏏 {match.tournament || 'Virudhunagar Premier League 2026'} • {match.venue || 'ANJAC Pavilion Ground, Sivakasi'}
         </Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.contentWrapper}>
-          {/* Match Result / Status Card */}
+          {/* Match Result / Champions Card (Only for Completed Matches) */}
           {match.result && (() => {
             const summary = (match.result || '').trim();
             const isCompleted =
@@ -568,28 +572,7 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
               (summary.toLowerCase().includes('won') && !summary.toLowerCase().includes('toss'));
 
             if (!isCompleted) {
-              return (
-                <View style={[styles.championsCelebrationCard, { borderColor: '#3b82f6', backgroundColor: '#0b192c', marginBottom: 16 }]}>
-                  <View style={[styles.championTopHeader, { backgroundColor: '#1e3a8a', borderBottomColor: 'rgba(59, 130, 246, 0.4)' }]}>
-                    <View style={[styles.championPulsingDot, { backgroundColor: '#38bdf8' }]} />
-                    <Text style={[styles.championTopHeaderText, { color: '#93c5fd' }]}>
-                      ⚡ LIVE OFFICIAL MATCH SCORECARD ⚡
-                    </Text>
-                    <View style={[styles.championPulsingDot, { backgroundColor: '#38bdf8' }]} />
-                  </View>
-                  <View style={{ padding: 16, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 18, fontWeight: '900', color: '#ffffff', textAlign: 'center', marginBottom: 6 }}>
-                      {match.teamA} vs {match.teamB}
-                    </Text>
-                    <View style={[styles.winMarginChip, { backgroundColor: '#1e3a8a', borderColor: '#60a5fa' }]}>
-                      <Text style={styles.winMarginText}>Status: {summary || match.status || 'Match in progress'}</Text>
-                    </View>
-                    <Text style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
-                      🏏 {match.tournament || 'Virudhunagar District Cricket'} • {match.venue || 'CFVD Ground'}
-                    </Text>
-                  </View>
-                </View>
-              );
+              return null;
             }
 
             let winnerName = '';
