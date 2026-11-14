@@ -77,6 +77,24 @@ function dlsResource(oversRemaining: number, wicketsInHand: number): number {
   return lo + frac * (hi - lo);
 }
 
+export interface InterruptionReasonOption {
+  label: string;
+  icon: string;
+  defaultText: string;
+}
+
+export const INTERRUPTION_REASONS: InterruptionReasonOption[] = [
+  { label: 'Rain Interruption', icon: '🌧️', defaultText: 'Rain interruption reduced match overs' },
+  { label: 'Wet Outfield / Unfit Ground', icon: '🌱', defaultText: 'Wet outfield delay curtailed innings' },
+  { label: 'Bad Light / Low Visibility', icon: '⛅', defaultText: 'Bad light stopped play, target adjusted' },
+  { label: 'Floodlight Technical Failure', icon: '💡', defaultText: 'Stadium floodlight power outage delay' },
+  { label: 'Innings Delay / Late Start', icon: '⏱️', defaultText: 'Match start delayed due to logistical/weather issues' },
+  { label: 'Slow Over Rate / Time Penalty', icon: '⏳', defaultText: 'Over quota curtailed due to session cutoff time' },
+  { label: 'Player Injury Delay', icon: '🚑', defaultText: 'Extended on-field medical emergency delay' },
+  { label: 'Security / Crowd Stoppage', icon: '🛡️', defaultText: 'Play suspended temporarily due to security protocol' },
+  { label: 'Custom / Other Reason', icon: '✏️', defaultText: '' }
+];
+
 export interface CalculationSettingsManagementProps {
   initialMethod?: 'DLS' | 'VJD';
   initialTeam1Score?: string;
@@ -113,7 +131,9 @@ export const CalculationSettingsManagement: React.FC<CalculationSettingsManageme
   // Method selection
   const [selectedMethod, setSelectedMethod] = useState<'DLS' | 'VJD'>(initialMethod);
   const [selectedTournament, setSelectedTournament] = useState<string>('CFVD Premier League T20');
-  const [applyReason, setApplyReason] = useState<string>('Rain interruption - Revised Target');
+  const [selectedReasonCategory, setSelectedReasonCategory] = useState<string>('Rain Interruption');
+  const [isReasonDropdownOpen, setIsReasonDropdownOpen] = useState<boolean>(false);
+  const [customReasonDetails, setCustomReasonDetails] = useState<string>('Rain interruption reduced match overs');
 
   // Simulator Inputs
   const [team1Score, setTeam1Score] = useState<string>(initialTeam1Score);
@@ -530,11 +550,11 @@ export const CalculationSettingsManagement: React.FC<CalculationSettingsManageme
             </Text>
           </View>
 
-          {/* Apply To Match Button & Reason Input */}
+          {/* Apply To Match Button, Category Dropdown & Custom Reason Input */}
           {onApplyRevisedTarget && (
             <View style={styles.applyBox}>
               <View style={styles.applyHeaderRow}>
-                <Text style={styles.applyTitle}>🌧️ Apply To Live Match (போட்டியில் பொருத்து)</Text>
+                <Text style={styles.applyTitle}>🌧️ Apply Revised Target To Live Match</Text>
                 <View style={styles.applyBadge}>
                   <Text style={styles.applyBadgeText}>{selectedMethod}</Text>
                 </View>
@@ -542,24 +562,81 @@ export const CalculationSettingsManagement: React.FC<CalculationSettingsManageme
               <Text style={styles.applyDesc}>
                 Directly apply {calculationResults.targetRuns} runs from {team2TargetOvers} overs to this match with reason.
               </Text>
-              <View style={{ marginVertical: 6 }}>
-                <Text style={styles.applyInputLabel}>Interruption Reason / குறிப்பு:</Text>
+
+              {/* 1. Category Dropdown Selector */}
+              <View style={{ marginTop: 10, marginBottom: 4 }}>
+                <Text style={styles.applyInputLabel}>Interruption Reason Category:</Text>
+                <TouchableOpacity
+                  style={styles.reasonDropdownTrigger}
+                  onPress={() => setIsReasonDropdownOpen(!isReasonDropdownOpen)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.reasonDropdownTriggerText}>
+                    {INTERRUPTION_REASONS.find(r => r.label === selectedReasonCategory)?.icon || '📋'}{' '}
+                    {selectedReasonCategory}
+                  </Text>
+                  <Text style={styles.reasonDropdownChevron}>{isReasonDropdownOpen ? '▲' : '▼'}</Text>
+                </TouchableOpacity>
+
+                {isReasonDropdownOpen && (
+                  <View style={styles.reasonDropdownMenu}>
+                    {INTERRUPTION_REASONS.map((item, idx) => (
+                      <TouchableOpacity
+                        key={idx}
+                        style={[
+                          styles.reasonDropdownItem,
+                          selectedReasonCategory === item.label && styles.reasonDropdownItemActive
+                        ]}
+                        onPress={() => {
+                          setSelectedReasonCategory(item.label);
+                          if (item.defaultText) {
+                            setCustomReasonDetails(item.defaultText);
+                          } else {
+                            setCustomReasonDetails('');
+                          }
+                          setIsReasonDropdownOpen(false);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={{ fontSize: 15, marginRight: 8 }}>{item.icon}</Text>
+                        <Text style={[
+                          styles.reasonDropdownItemText,
+                          selectedReasonCategory === item.label && styles.reasonDropdownItemTextActive
+                        ]}>
+                          {item.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              {/* 2. Custom Detailed Notes Input */}
+              <View style={{ marginBottom: 10 }}>
+                <Text style={styles.applyInputLabel}>Detailed Notes / Custom Reason:</Text>
                 <TextInput
                   style={styles.applyInput}
-                  placeholder="e.g. Rain stopped play, match reduced to 16 overs"
+                  placeholder="e.g. Play stopped at over 11.0 due to rain, match reduced to 16 overs"
                   placeholderTextColor="#94a3b8"
-                  value={applyReason}
-                  onChangeText={setApplyReason}
+                  value={customReasonDetails}
+                  onChangeText={setCustomReasonDetails}
                 />
               </View>
+
+              {/* 3. Apply Action Button */}
               <TouchableOpacity
                 style={styles.applySubmitBtn}
                 onPress={() => {
+                  const finalReason = customReasonDetails.trim()
+                    ? (customReasonDetails.trim().toLowerCase().includes(selectedReasonCategory.toLowerCase())
+                        ? customReasonDetails.trim()
+                        : `${selectedReasonCategory} - ${customReasonDetails.trim()}`)
+                    : selectedReasonCategory;
                   onApplyRevisedTarget({
                     revisedOvers: parseFloat(team2TargetOvers) || 20,
                     revisedTarget: calculationResults.targetRuns,
                     method: selectedMethod,
-                    reason: applyReason.trim() || `${selectedMethod} Rain Revised Target`
+                    reason: finalReason
                   });
                 }}
                 activeOpacity={0.8}
@@ -1072,6 +1149,56 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     letterSpacing: 0.5
+  },
+  reasonDropdownTrigger: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6
+  },
+  reasonDropdownTriggerText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  reasonDropdownChevron: {
+    fontSize: 11,
+    color: '#64748b'
+  },
+  reasonDropdownMenu: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    marginBottom: 8,
+    overflow: 'hidden',
+    elevation: 4,
+    ...(Platform.OS === 'web' ? { boxShadow: '0 4px 12px rgba(0,0,0,0.1)' } : {})
+  },
+  reasonDropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9'
+  },
+  reasonDropdownItemActive: {
+    backgroundColor: '#ecfdf5'
+  },
+  reasonDropdownItemText: {
+    fontSize: 13,
+    color: '#334155'
+  },
+  reasonDropdownItemTextActive: {
+    color: '#15803d',
+    fontWeight: '700'
   }
 });
 
