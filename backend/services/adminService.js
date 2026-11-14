@@ -63,7 +63,12 @@ async function getUsers(role = null) {
   await db.initDb();
   const query = {};
   if (role && role !== 'ALL') query.role = role.toUpperCase();
-  return db.models.User.find(query).sort({ created_at: -1 }).lean();
+  const users = await db.models.User.find(query).sort({ created_at: -1 }).lean();
+  return users.map(u => ({
+    ...u,
+    is_permanent_super_admin: (u.email || '').toLowerCase().trim() === 'admin@cfvd.org',
+    admin_tier: (u.email || '').toLowerCase().trim() === 'admin@cfvd.org' ? 'Permanent Super Administrator' : (u.role === 'ADMIN' ? 'Dynamic Administrator' : u.role)
+  }));
 }
 
 /**
@@ -71,6 +76,13 @@ async function getUsers(role = null) {
  */
 async function updateUserStatus(userId, status, adminEmail) {
   await db.initDb();
+  const existing = await db.models.User.findOne({ id: userId }).lean();
+  if (!existing) throw new Error('User not found');
+
+  if ((existing.email || '').toLowerCase().trim() === 'admin@cfvd.org' && status !== 'ACTIVE') {
+    throw new Error('Forbidden: The permanent Super Administrator account (admin@cfvd.org) cannot be suspended or deactivated.');
+  }
+
   const updated = await db.models.User.findOneAndUpdate(
     { id: userId },
     { $set: { status, updated_at: new Date() } },

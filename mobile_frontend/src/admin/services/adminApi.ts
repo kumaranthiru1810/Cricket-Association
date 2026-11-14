@@ -139,7 +139,58 @@ export const adminApi = {
     });
   },
 
-  // Dual-Admin Security Authorization (Super-Admin Protocol)
+  // Super Admin Nodemailer Email OTP Security Verification & Dynamic Admin Management
+  sendSuperAdminOtp: async (action: string, targetData?: any, targetId?: string, targetEmail?: string) => {
+    return adminRequest('/admin/otp/send', {
+      method: 'POST',
+      body: JSON.stringify({ action, targetData, targetId, targetEmail })
+    });
+  },
+
+  resendSuperAdminOtp: async (sessionId: string) => {
+    return adminRequest('/admin/otp/resend', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId })
+    });
+  },
+
+  verifySuperAdminOtp: async (sessionId: string, otp: string) => {
+    return adminRequest('/admin/otp/verify', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId, otp })
+    });
+  },
+
+  approveAdmin: async (payload: { targetId?: string; targetEmail?: string; targetName?: string; sessionId?: string; otp?: string }) => {
+    return adminRequest('/admin/approve', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  rejectAdmin: async (payload: { targetId?: string; targetEmail?: string; targetName?: string; sessionId?: string; otp?: string }) => {
+    return adminRequest('/admin/reject', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  createAdminAccount: async (payload: { name: string; email: string; mobile?: string; password?: string; roleLevel?: string; sessionId?: string; otp?: string }) => {
+    return adminRequest('/admin/create', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  getAdministrators: async () => {
+    return adminRequest('/admin/administrators');
+  },
+
+  getSmtpStatus: async () => {
+    return adminRequest('/admin/smtp/status');
+  },
+
+  // Dual-Admin Security Authorization (Super-Admin Protocol fallback)
   requestDualAdminOtp: async (action: 'CREATE_ADMIN' | 'PROMOTE_ADMIN', targetData: any) => {
     return adminRequest('/admin/dual-auth/request', {
       method: 'POST',
@@ -147,10 +198,10 @@ export const adminApi = {
     });
   },
 
-  verifyDualAdminAuth: async (authSessionId: string, admin1Otp: string, admin2Otp: string) => {
+  verifyDualAdminAuth: async (authSessionId: string, admin1Otp: string, admin2Otp?: string) => {
     return adminRequest('/admin/dual-auth/verify', {
       method: 'POST',
-      body: JSON.stringify({ authSessionId, admin1Otp, admin2Otp })
+      body: JSON.stringify({ authSessionId, admin1Otp, otp: admin1Otp, admin2Otp })
     });
   },
 

@@ -418,18 +418,183 @@ router.post('/admins/add/verify-target', async (req, res) => {
 });
 
 /**
- * Super Admin Dual-Admin Authorization Endpoints
+ * Super Admin Nodemailer Email OTP Verification & Dynamic Admin Management Endpoints
+ * Invariant: Permanent Super Admin is admin@cfvd.org. All other admins are dynamic.
  */
+const superAdminOtpService = require('../services/superAdminOtpService');
+const { verifySmtpConnection } = require('../config/mailer');
+
+// SMTP Diagnostic Connection Status
+router.get('/smtp/status', async (req, res) => {
+  try {
+    const status = await verifySmtpConnection();
+    res.json({ success: true, ...status });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// List all administrators with Permanent Super Admin vs Dynamic status
+router.get('/administrators', async (req, res) => {
+  try {
+    const list = await superAdminOtpService.getAdministratorsList();
+    res.json({ success: true, administrators: list, permanentSuperAdmin: 'admin@cfvd.org' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 1. Send / Request Super Admin Verification OTP
+router.post('/otp/send', async (req, res) => {
+  try {
+    const { action, targetId, targetEmail, targetData } = req.body;
+    const requesterEmail = req.user?.email || 'admin@cfvd.org';
+    const result = await superAdminOtpService.requestSuperAdminOtp({
+      requesterEmail,
+      action: action || 'ADMIN_OPERATION',
+      targetId,
+      targetEmail,
+      targetData
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// 2. Resend Super Admin Verification OTP
+router.post('/otp/resend', async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    const requesterEmail = req.user?.email || 'admin@cfvd.org';
+    const result = await superAdminOtpService.resendSuperAdminOtp({
+      sessionId,
+      requesterEmail
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// 3. Verify OTP & Execute Action
+router.post('/otp/verify', async (req, res) => {
+  try {
+    const { sessionId, otp } = req.body;
+    const requesterEmail = req.user?.email || 'admin@cfvd.org';
+    const result = await superAdminOtpService.verifyAndExecuteSuperAdminAction({
+      sessionId,
+      otp,
+      requesterEmail
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// 4. Create New Administrator Account (Initiate or Execute with OTP)
+router.post('/create', async (req, res) => {
+  try {
+    const { sessionId, otp, name, email, mobile, password, roleLevel } = req.body;
+    const requesterEmail = req.user?.email || 'admin@cfvd.org';
+
+    if (sessionId && otp) {
+      const result = await superAdminOtpService.verifyAndExecuteSuperAdminAction({
+        sessionId,
+        otp,
+        requesterEmail
+      });
+      return res.json(result);
+    }
+
+    // Initiate OTP request for creating admin
+    const result = await superAdminOtpService.requestSuperAdminOtp({
+      requesterEmail,
+      action: 'CREATE_ADMIN',
+      targetEmail: email,
+      targetData: { name, email, mobile, password, roleLevel }
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// 5. Approve Pending Administrator Account (Initiate or Execute with OTP)
+router.post('/approve', async (req, res) => {
+  try {
+    const { targetId, targetEmail, targetName, sessionId, otp } = req.body;
+    const requesterEmail = req.user?.email || 'admin@cfvd.org';
+
+    if (sessionId && otp) {
+      const result = await superAdminOtpService.verifyAndExecuteSuperAdminAction({
+        sessionId,
+        otp,
+        requesterEmail
+      });
+      return res.json(result);
+    }
+
+    const result = await superAdminOtpService.requestSuperAdminOtp({
+      requesterEmail,
+      action: 'APPROVE_ADMIN',
+      targetId,
+      targetEmail,
+      targetData: { name: targetName, email: targetEmail }
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// 6. Reject Pending Administrator Account (Initiate or Execute with OTP)
+router.post('/reject', async (req, res) => {
+  try {
+    const { targetId, targetEmail, targetName, sessionId, otp } = req.body;
+    const requesterEmail = req.user?.email || 'admin@cfvd.org';
+
+    if (sessionId && otp) {
+      const result = await superAdminOtpService.verifyAndExecuteSuperAdminAction({
+        sessionId,
+        otp,
+        requesterEmail
+      });
+      return res.json(result);
+    }
+
+    const result = await superAdminOtpService.requestSuperAdminOtp({
+      requesterEmail,
+      action: 'REJECT_ADMIN',
+      targetId,
+      targetEmail,
+      targetData: { name: targetName }
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Backward-compatible routes
 router.post('/dual-auth/request', async (req, res) => {
   try {
     const { action, targetData } = req.body;
-    const initiatorEmail = req.adminUser?.email || 'admin@cfvd.org';
-    const result = await adminService.requestDualAdminOtp({
-      initiatorEmail,
-      action,
+    const requesterEmail = req.user?.email || 'admin@cfvd.org';
+    const result = await superAdminOtpService.requestSuperAdminOtp({
+      requesterEmail,
+      action: action || 'CREATE_ADMIN',
+      targetEmail: targetData?.email,
       targetData
     });
-    res.json({ success: true, ...result });
+    res.json({
+      success: true,
+      authSessionId: result.sessionId,
+      admin1Email: result.superAdminEmail,
+      demoOtps: result.demoOtp ? { admin1: result.demoOtp } : null,
+      ...result
+    });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
   }
@@ -437,15 +602,15 @@ router.post('/dual-auth/request', async (req, res) => {
 
 router.post('/dual-auth/verify', async (req, res) => {
   try {
-    const { authSessionId, admin1Otp, admin2Otp } = req.body;
-    const initiatorEmail = req.adminUser?.email || 'admin@cfvd.org';
-    const result = await adminService.verifyAndExecuteDualAdmin({
-      authSessionId,
-      admin1Otp,
-      admin2Otp,
-      initiatorEmail
+    const { authSessionId, sessionId, admin1Otp, otp } = req.body;
+    const requesterEmail = req.user?.email || 'admin@cfvd.org';
+    const activeOtp = otp || admin1Otp;
+    const result = await superAdminOtpService.verifyAndExecuteSuperAdminAction({
+      sessionId: sessionId || authSessionId,
+      otp: activeOtp,
+      requesterEmail
     });
-    res.json({ success: true, ...result });
+    res.json(result);
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
   }

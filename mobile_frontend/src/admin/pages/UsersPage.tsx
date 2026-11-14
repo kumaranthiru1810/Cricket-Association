@@ -1,6 +1,13 @@
 /**
  * src/admin/pages/UsersPage.tsx
- * Users Management Page for Cricket Association Professional Admin Panel.
+ * 
+ * Users & Dynamic Administrator Management Page for Cricket Association Admin Panel.
+ * Implements strict Nodemailer Email OTP verification for Super Administrator (admin@cfvd.org).
+ * 
+ * Invariants:
+ * 1. Single Permanent Super Admin: admin@cfvd.org (Apex Authority).
+ * 2. Dynamic Administrators: created, approved, activated, suspended, or removed via Super Admin OTP.
+ * 3. Responsive for Android, iPhone, tablet, and desktop viewports.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -9,9 +16,11 @@ import PageHeader from '../components/PageHeader';
 import DataTable, { ColumnDef } from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
 import ConfirmDialog from '../components/ConfirmDialog';
-import { EditIcon, CheckIcon, CloseIcon, EyeIcon, ShieldIcon, PlusIcon, RefreshIcon } from '../components/Icons';
+import { EditIcon, CheckIcon, CloseIcon, EyeIcon, ShieldIcon } from '../components/Icons';
 import { adminApi } from '../services/adminApi';
 import { useAdminLayout } from '../components/AdminLayout';
+
+const PERMANENT_SUPER_ADMIN = 'admin@cfvd.org';
 
 export const UsersPage: React.FC = () => {
   const { showToast } = useAdminLayout();
@@ -35,22 +44,22 @@ export const UsersPage: React.FC = () => {
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [newAdminMobile, setNewAdminMobile] = useState('');
   const [newAdminPassword, setNewAdminPassword] = useState('Admin@2026!');
-  const [newAdminRoleLevel, setNewAdminRoleLevel] = useState('Apex Super Administrator');
+  const [newAdminRoleLevel, setNewAdminRoleLevel] = useState('Match & Scoring Administrator');
   const [isRequestingAuth, setIsRequestingAuth] = useState(false);
 
-  // Dual-Admin Security Authorization Modal State (CloudCrackers Two-Admin Approval)
-  const [showDualAuthModal, setShowDualAuthModal] = useState(false);
-  const [authSessionId, setAuthSessionId] = useState('');
-  const [authAction, setAuthAction] = useState<'CREATE_ADMIN' | 'PROMOTE_ADMIN'>('CREATE_ADMIN');
-  const [authAdmin1Email, setAuthAdmin1Email] = useState('admin@cfvd.org');
-  const [authAdmin2Email, setAuthAdmin2Email] = useState('athilingam3336@gmail.com');
-  const [authAdmin1Otp, setAuthAdmin1Otp] = useState('');
-  const [authAdmin2Otp, setAuthAdmin2Otp] = useState('');
-  const [authDemoOtps, setAuthDemoOtps] = useState<{ admin1: string; admin2: string } | null>(null);
-  const [authCountdown, setAuthCountdown] = useState(600);
-  const [isVerifyingAuth, setIsVerifyingAuth] = useState(false);
+  // Super Admin Nodemailer OTP Modal State
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otpSessionId, setOtpSessionId] = useState('');
+  const [otpAction, setOtpAction] = useState('CREATE_ADMIN');
+  const [otpActionTitle, setOtpActionTitle] = useState('Onboard New Administrator');
+  const [otpActionDesc, setOtpActionDesc] = useState('');
+  const [otpInput, setOtpInput] = useState('');
+  const [demoOtp, setDemoOtp] = useState<string | null>(null);
+  const [otpCountdown, setOtpCountdown] = useState(600); // 10 minutes
+  const [resendCooldown, setResendCooldown] = useState(60); // 60s cooldown
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
 
-  // Confirm Status Toggle
+  // Status toggle confirmation
   const [confirmToggle, setConfirmToggle] = useState<{
     visible: boolean;
     user: any;
@@ -82,16 +91,27 @@ export const UsersPage: React.FC = () => {
     loadUsers();
   }, [roleFilter, statusFilter]);
 
-  // Dual-Admin Timer Effect (10 minutes countdown)
+  // 10-Minute Countdown Timer Effect
   useEffect(() => {
     let timer: any;
-    if (showDualAuthModal && authCountdown > 0) {
+    if (showOtpModal && otpCountdown > 0) {
       timer = setInterval(() => {
-        setAuthCountdown(prev => (prev > 0 ? prev - 1 : 0));
+        setOtpCountdown(prev => (prev > 0 ? prev - 1 : 0));
       }, 1000);
     }
     return () => clearInterval(timer);
-  }, [showDualAuthModal, authCountdown]);
+  }, [showOtpModal, otpCountdown]);
+
+  // 60-Second Resend Cooldown Effect
+  useEffect(() => {
+    let cooldownTimer: any;
+    if (showOtpModal && resendCooldown > 0) {
+      cooldownTimer = setInterval(() => {
+        setResendCooldown(prev => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => clearInterval(cooldownTimer);
+  }, [showOtpModal, resendCooldown]);
 
   const formatCountdown = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -114,7 +134,7 @@ export const UsersPage: React.FC = () => {
     setIsEditMode(true);
   };
 
-  // 1. Request Dual-Admin Authorization for adding new Admin
+  // 1. Initiate Add New Administrator (Triggers Nodemailer OTP to admin@cfvd.org)
   const handleInitiateAddAdmin = async () => {
     if (!newAdminName.trim() || !newAdminEmail.trim()) {
       showToast('Administrator Name and Email are required.', 'error');
@@ -122,7 +142,7 @@ export const UsersPage: React.FC = () => {
     }
     setIsRequestingAuth(true);
     try {
-      const res = await adminApi.requestDualAdminOtp('CREATE_ADMIN', {
+      const res = await adminApi.createAdminAccount({
         name: newAdminName.trim(),
         email: newAdminEmail.trim().toLowerCase(),
         mobile: newAdminMobile.trim(),
@@ -131,118 +151,181 @@ export const UsersPage: React.FC = () => {
       });
 
       if (res && res.success) {
-        setAuthSessionId(res.authSessionId);
-        setAuthAction('CREATE_ADMIN');
-        setAuthAdmin1Email(res.admin1Email || 'admin@cfvd.org');
-        setAuthAdmin2Email(res.admin2Email || 'athilingam3336@gmail.com');
-        setAuthDemoOtps(res.demoOtps || null);
-        setAuthAdmin1Otp('');
-        setAuthAdmin2Otp('');
-        setAuthCountdown(res.validitySeconds || 600);
+        setOtpSessionId(res.sessionId);
+        setOtpAction('CREATE_ADMIN');
+        setOtpActionTitle(res.actionTitle || 'Onboard New Administrator');
+        setOtpActionDesc(`Create and activate administrator "${newAdminName}" (${newAdminEmail})`);
+        setDemoOtp(res.demoOtp || null);
+        setOtpInput('');
+        setOtpCountdown(res.validitySeconds || 600);
+        setResendCooldown(60);
         setShowAddAdminModal(false);
-        setShowDualAuthModal(true);
-        showToast('Dual-Admin security OTPs dispatched to Super Admins.', 'info');
+        setShowOtpModal(true);
+        showToast('Nodemailer verification code dispatched to admin@cfvd.org', 'info');
       } else {
-        showToast(res.message || 'Failed to request Dual-Admin OTP.', 'error');
+        showToast(res.message || 'Failed to dispatch Super Admin OTP.', 'error');
       }
     } catch (err: any) {
-      showToast(err.message || 'Error initiating Dual-Admin Authorization.', 'error');
+      showToast(err.message || 'Error requesting Super Admin authorization.', 'error');
     } finally {
       setIsRequestingAuth(false);
     }
   };
 
-  // 2. Resend Dual-Admin OTPs
-  const handleResendDualAuthOtp = async () => {
+  // 2. Approve Pending Dynamic Administrator
+  const handleInitiateApproveAdmin = async (user: any) => {
     try {
-      const res = await adminApi.requestDualAdminOtp(authAction, {
-        name: newAdminName.trim(),
-        email: newAdminEmail.trim().toLowerCase(),
-        mobile: newAdminMobile.trim(),
-        password: newAdminPassword,
-        roleLevel: newAdminRoleLevel,
-        userId: activeUser?.id
+      const res = await adminApi.approveAdmin({
+        targetId: user.id,
+        targetEmail: user.email,
+        targetName: user.name
       });
       if (res && res.success) {
-        setAuthSessionId(res.authSessionId);
-        setAuthDemoOtps(res.demoOtps || null);
-        setAuthCountdown(600);
-        showToast('Fresh Dual-Admin OTPs dispatched via email.', 'success');
+        setOtpSessionId(res.sessionId);
+        setOtpAction('APPROVE_ADMIN');
+        setOtpActionTitle(res.actionTitle || 'Approve Pending Administrator');
+        setOtpActionDesc(`Authorize and activate account for ${user.name} (${user.email})`);
+        setDemoOtp(res.demoOtp || null);
+        setOtpInput('');
+        setOtpCountdown(600);
+        setResendCooldown(60);
+        setShowOtpModal(true);
+        showToast(`Verification code sent to ${PERMANENT_SUPER_ADMIN}`, 'info');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Approval initiation failed.', 'error');
+    }
+  };
+
+  // 3. Reject Pending Administrator
+  const handleInitiateRejectAdmin = async (user: any) => {
+    try {
+      const res = await adminApi.rejectAdmin({
+        targetId: user.id,
+        targetEmail: user.email,
+        targetName: user.name
+      });
+      if (res && res.success) {
+        setOtpSessionId(res.sessionId);
+        setOtpAction('REJECT_ADMIN');
+        setOtpActionTitle(res.actionTitle || 'Reject Pending Administrator');
+        setOtpActionDesc(`Reject administrative application for ${user.name}`);
+        setDemoOtp(res.demoOtp || null);
+        setOtpInput('');
+        setOtpCountdown(600);
+        setResendCooldown(60);
+        setShowOtpModal(true);
+        showToast(`Verification code sent to ${PERMANENT_SUPER_ADMIN}`, 'info');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Rejection initiation failed.', 'error');
+    }
+  };
+
+  // 4. Suspend / Activate / Remove Dynamic Administrator via Super Admin OTP
+  const handleInitiateAdminStatusAction = async (user: any, action: 'ACTIVATE_ADMIN' | 'SUSPEND_ADMIN' | 'REMOVE_ADMIN') => {
+    if ((user.email || '').toLowerCase().trim() === PERMANENT_SUPER_ADMIN) {
+      showToast('Permanent Super Administrator account cannot be suspended or removed.', 'error');
+      return;
+    }
+    try {
+      const res = await adminApi.sendSuperAdminOtp(action, {}, user.id, user.email);
+      if (res && res.success) {
+        setOtpSessionId(res.sessionId);
+        setOtpAction(action);
+        setOtpActionTitle(res.actionTitle || action.replace(/_/g, ' '));
+        setOtpActionDesc(`Target: ${user.name} (${user.email})`);
+        setDemoOtp(res.demoOtp || null);
+        setOtpInput('');
+        setOtpCountdown(600);
+        setResendCooldown(60);
+        setShowOtpModal(true);
+        showToast(`Verification code sent to ${PERMANENT_SUPER_ADMIN}`, 'info');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Action initiation failed.', 'error');
+    }
+  };
+
+  // 5. Resend Super Admin OTP
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0) {
+      showToast(`Please wait ${resendCooldown}s before requesting a new code.`, 'info');
+      return;
+    }
+    try {
+      const res = await adminApi.resendSuperAdminOtp(otpSessionId);
+      if (res && res.success) {
+        setDemoOtp(res.demoOtp || null);
+        setOtpCountdown(600);
+        setResendCooldown(60);
+        showToast(`Fresh verification code sent to ${PERMANENT_SUPER_ADMIN}`, 'success');
       }
     } catch (err: any) {
       showToast(`Resend failed: ${err.message}`, 'error');
     }
   };
 
-  // 3. Verify Dual OTPs & Execute Action
-  const handleVerifyDualAuth = async () => {
-    if (!authAdmin1Otp.trim() || !authAdmin2Otp.trim()) {
-      showToast('Both Admin 1 and Admin 2 OTPs are strictly required.', 'error');
+  // 6. Verify Super Admin OTP & Execute Operation
+  const handleVerifyOtp = async () => {
+    if (otpInput.trim().length !== 6) {
+      showToast('Please enter the complete 6-digit verification code.', 'error');
       return;
     }
-    setIsVerifyingAuth(true);
+    setIsVerifyingOtp(true);
     try {
-      const res = await adminApi.verifyDualAdminAuth(authSessionId, authAdmin1Otp.trim(), authAdmin2Otp.trim());
+      const res = await adminApi.verifySuperAdminOtp(otpSessionId, otpInput.trim());
       if (res && res.success) {
-        showToast(res.message || 'Dual-Admin Authorization Verified! Administrator Activated.', 'success');
-        setShowDualAuthModal(false);
+        showToast(res.message || 'Verification successful! Action executed.', 'success');
+        setShowOtpModal(false);
+        setOtpInput('');
         setNewAdminName('');
         setNewAdminEmail('');
         setNewAdminMobile('');
         setActiveUser(null);
-        loadUsers();
+        await loadUsers();
       } else {
-        showToast(res.message || 'Dual-Admin verification failed.', 'error');
+        showToast(res.message || 'Verification failed.', 'error');
       }
     } catch (err: any) {
-      showToast(err.message || 'Invalid OTPs. Dual-Admin Authorization rejected.', 'error');
+      showToast(err.message || 'Invalid verification code. Authorization rejected.', 'error');
     } finally {
-      setIsVerifyingAuth(false);
+      setIsVerifyingOtp(false);
     }
   };
 
-  const handleAutoFillDemoOtps = () => {
-    if (authDemoOtps) {
-      setAuthAdmin1Otp(authDemoOtps.admin1);
-      setAuthAdmin2Otp(authDemoOtps.admin2);
-      showToast('Demo OTPs auto-filled for testing.', 'info');
-    } else {
-      setAuthAdmin1Otp('123456');
-      setAuthAdmin2Otp('123456');
-    }
-  };
-
+  // Edit user submission handler
   const handleSaveEdit = async () => {
     if (!editName.trim() || !editEmail.trim()) {
       showToast('Name and Email are required.', 'error');
       return;
     }
 
-    // High security check: Promoting a non-admin to ADMIN requires Dual-Admin Authorization!
+    // Role Promotion check: Promoting to ADMIN requires Super Admin OTP
     if (editRole === 'ADMIN' && activeUser.role !== 'ADMIN') {
       try {
-        const res = await adminApi.requestDualAdminOtp('PROMOTE_ADMIN', {
-          userId: activeUser.id,
-          name: editName.trim(),
-          email: editEmail.trim(),
-          mobile: editMobile.trim()
-        });
+        const res = await adminApi.sendSuperAdminOtp(
+          'CHANGE_ROLE',
+          { newRole: 'ADMIN' },
+          activeUser.id,
+          activeUser.email
+        );
         if (res && res.success) {
-          setAuthSessionId(res.authSessionId);
-          setAuthAction('PROMOTE_ADMIN');
-          setAuthAdmin1Email(res.admin1Email || 'admin@cfvd.org');
-          setAuthAdmin2Email(res.admin2Email || 'athilingam3336@gmail.com');
-          setAuthDemoOtps(res.demoOtps || null);
-          setAuthAdmin1Otp('');
-          setAuthAdmin2Otp('');
-          setAuthCountdown(600);
+          setOtpSessionId(res.sessionId);
+          setOtpAction('CHANGE_ROLE');
+          setOtpActionTitle('Promote User to Administrator');
+          setOtpActionDesc(`Promoting ${activeUser.name} to ADMIN privileges`);
+          setDemoOtp(res.demoOtp || null);
+          setOtpInput('');
+          setOtpCountdown(600);
+          setResendCooldown(60);
           setActiveUser(null);
-          setShowDualAuthModal(true);
-          showToast('Promoting user to ADMIN requires Dual-Admin Authorization.', 'info');
+          setShowOtpModal(true);
+          showToast(`Super Admin verification required. Code sent to ${PERMANENT_SUPER_ADMIN}`, 'info');
           return;
         }
       } catch (err: any) {
-        showToast(err.message || 'Dual-Admin authorization request failed.', 'error');
+        showToast(err.message || 'Elevation authorization failed.', 'error');
         return;
       }
     }
@@ -278,15 +361,25 @@ export const UsersPage: React.FC = () => {
   const columns: ColumnDef<any>[] = [
     {
       key: 'name',
-      header: 'Name',
+      header: 'Name & Authority',
       sortable: true,
-      width: 220,
-      render: item => (
-        <View>
-          <Text style={styles.userNameText}>{item.name}</Text>
-          <Text style={styles.userIdSub}>{item.id}</Text>
-        </View>
-      )
+      width: 230,
+      render: item => {
+        const isSuperAdmin = (item.email || '').toLowerCase().trim() === PERMANENT_SUPER_ADMIN;
+        return (
+          <View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <Text style={styles.userNameText}>{item.name}</Text>
+              {isSuperAdmin && (
+                <View style={styles.superAdminCrownBadge}>
+                  <Text style={styles.superAdminCrownText}>👑 Super Admin</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.userIdSub}>{item.id}</Text>
+          </View>
+        );
+      }
     },
     {
       key: 'email',
@@ -302,34 +395,56 @@ export const UsersPage: React.FC = () => {
     },
     {
       key: 'role',
-      header: 'Role',
+      header: 'Clearance Tier',
       sortable: true,
-      width: 140,
-      render: item => (
-        <View
-          style={[
-            styles.rolePill,
-            item.role === 'ADMIN' && styles.roleAdmin,
-            item.role === 'SCORER' && styles.roleScorer,
-            item.role === 'PLAYER' && styles.rolePlayer
-          ]}
-        >
-          <Text style={styles.rolePillText}>{item.role}</Text>
-        </View>
-      )
+      width: 170,
+      render: item => {
+        const isSuperAdmin = (item.email || '').toLowerCase().trim() === PERMANENT_SUPER_ADMIN;
+        const isDynamicAdmin = item.role === 'ADMIN' && !isSuperAdmin;
+        return (
+          <View>
+            <View
+              style={[
+                styles.rolePill,
+                item.role === 'ADMIN' && (isSuperAdmin ? styles.roleSuperAdmin : styles.roleAdmin),
+                item.role === 'SCORER' && styles.roleScorer,
+                item.role === 'PLAYER' && styles.rolePlayer
+              ]}
+            >
+              <Text style={styles.rolePillText}>
+                {isSuperAdmin ? 'SUPER ADMIN' : (isDynamicAdmin ? 'DYNAMIC ADMIN' : item.role)}
+              </Text>
+            </View>
+            {isDynamicAdmin && (
+              <Text style={{ fontSize: 10, color: '#64748b', marginTop: 3, fontWeight: '600' }}>
+                {item.admin_level || 'Dynamic Admin'}
+              </Text>
+            )}
+          </View>
+        );
+      }
     },
     {
       key: 'status',
       header: 'Status',
       sortable: true,
-      width: 130,
-      render: item => <StatusBadge status={item.status || 'ACTIVE'} size="sm" />
+      width: 140,
+      render: item => {
+        if (item.status === 'PENDING') {
+          return (
+            <View style={styles.pendingBadge}>
+              <Text style={styles.pendingBadgeText}>⏳ PENDING APPROVAL</Text>
+            </View>
+          );
+        }
+        return <StatusBadge status={item.status || 'ACTIVE'} size="sm" />;
+      }
     },
     {
       key: 'created_at',
       header: 'Registered Date',
       sortable: true,
-      width: 150,
+      width: 140,
       render: item => (
         <Text style={styles.dateText}>
           {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'N/A'}
@@ -339,63 +454,117 @@ export const UsersPage: React.FC = () => {
     {
       key: 'actions',
       header: 'Actions',
-      width: 160,
-      render: item => (
-        <View style={styles.actionsRow}>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => handleOpenView(item)}
-            accessibilityLabel="View Details"
-          >
-            <EyeIcon size={14} color="#0f2452" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => handleOpenEdit(item)}
-            accessibilityLabel="Edit User"
-          >
-            <EditIcon size={14} color="#2563eb" />
-          </TouchableOpacity>
-          {item.status === 'ACTIVE' ? (
+      width: 180,
+      render: item => {
+        const isSuperAdmin = (item.email || '').toLowerCase().trim() === PERMANENT_SUPER_ADMIN;
+        if (isSuperAdmin) {
+          return (
+            <View style={styles.permanentSuperAdminTag}>
+              <ShieldIcon size={12} color="#0f2452" />
+              <Text style={styles.permanentSuperAdminTagText}>Permanent Super Admin</Text>
+            </View>
+          );
+        }
+
+        const isPendingAdmin = item.role === 'ADMIN' && item.status === 'PENDING';
+
+        if (isPendingAdmin) {
+          return (
+            <View style={styles.actionsRow}>
+              <TouchableOpacity
+                style={styles.btnApproveCompact}
+                onPress={() => handleInitiateApproveAdmin(item)}
+              >
+                <Text style={styles.btnApproveCompactText}>✓ Approve</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.btnRejectCompact}
+                onPress={() => handleInitiateRejectAdmin(item)}
+              >
+                <Text style={styles.btnRejectCompactText}>✕ Reject</Text>
+              </TouchableOpacity>
+            </View>
+          );
+        }
+
+        const isDynamicAdmin = item.role === 'ADMIN';
+
+        return (
+          <View style={styles.actionsRow}>
             <TouchableOpacity
-              style={[styles.actionBtn, styles.actionBtnDanger]}
-              onPress={() =>
-                setConfirmToggle({
-                  visible: true,
-                  user: item,
-                  targetStatus: 'INACTIVE'
-                })
-              }
-              accessibilityLabel="Deactivate Account"
+              style={styles.actionBtn}
+              onPress={() => handleOpenView(item)}
+              accessibilityLabel="View Details"
             >
-              <CloseIcon size={14} color="#dc2626" />
+              <EyeIcon size={14} color="#0f2452" />
             </TouchableOpacity>
-          ) : (
             <TouchableOpacity
-              style={[styles.actionBtn, styles.actionBtnSuccess]}
-              onPress={() =>
-                setConfirmToggle({
-                  visible: true,
-                  user: item,
-                  targetStatus: 'ACTIVE'
-                })
-              }
-              accessibilityLabel="Activate Account"
+              style={styles.actionBtn}
+              onPress={() => handleOpenEdit(item)}
+              accessibilityLabel="Edit User"
             >
-              <CheckIcon size={14} color="#059669" />
+              <EditIcon size={14} color="#2563eb" />
             </TouchableOpacity>
-          )}
-        </View>
-      )
+
+            {item.status === 'ACTIVE' ? (
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionBtnDanger]}
+                onPress={() => {
+                  if (isDynamicAdmin) {
+                    handleInitiateAdminStatusAction(item, 'SUSPEND_ADMIN');
+                  } else {
+                    setConfirmToggle({
+                      visible: true,
+                      user: item,
+                      targetStatus: 'INACTIVE'
+                    });
+                  }
+                }}
+                accessibilityLabel="Suspend Account"
+              >
+                <CloseIcon size={14} color="#dc2626" />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionBtnSuccess]}
+                onPress={() => {
+                  if (isDynamicAdmin) {
+                    handleInitiateAdminStatusAction(item, 'ACTIVATE_ADMIN');
+                  } else {
+                    setConfirmToggle({
+                      visible: true,
+                      user: item,
+                      targetStatus: 'ACTIVE'
+                    });
+                  }
+                }}
+                accessibilityLabel="Activate Account"
+              >
+                <CheckIcon size={14} color="#059669" />
+              </TouchableOpacity>
+            )}
+
+            {isDynamicAdmin && (
+              <TouchableOpacity
+                style={[styles.actionBtn, { borderColor: '#fca5a5', backgroundColor: '#fef2f2' }]}
+                onPress={() => handleInitiateAdminStatusAction(item, 'REMOVE_ADMIN')}
+                accessibilityLabel="Remove Administrator"
+              >
+                <Text style={{ fontSize: 11 }}>🗑️</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        );
+      }
     }
   ];
 
   return (
     <View style={styles.container}>
       <PageHeader
-        title="Users Management"
-        subtitle="View, filter, edit, and control account permissions for federation portal users."
-        breadcrumbs={[{ label: 'Admin' }, { label: 'Users' }]}
+        title="Users & Dynamic Administrator Management"
+        subtitle="Manage federation accounts. Super Administrator (admin@cfvd.org) exercises cryptographic OTP approval over all dynamic admins."
+        breadcrumbs={[{ label: 'Admin' }, { label: 'Users & Admins' }]}
         actions={
           <TouchableOpacity
             style={styles.addAdminBtn}
@@ -408,10 +577,10 @@ export const UsersPage: React.FC = () => {
         }
       />
 
-      {/* Role Filter Tabs */}
+      {/* Role Filter Bar */}
       <View style={styles.filtersBar}>
         <View style={styles.filterGroup}>
-          <Text style={styles.filterLabel}>Role:</Text>
+          <Text style={styles.filterLabel}>Role Filter:</Text>
           {['ALL', 'ADMIN', 'SCORER', 'PLAYER', 'USER'].map(r => (
             <TouchableOpacity
               key={r}
@@ -419,7 +588,7 @@ export const UsersPage: React.FC = () => {
               onPress={() => setRoleFilter(r)}
             >
               <Text style={[styles.filterChipText, roleFilter === r && styles.filterChipTextActive]}>
-                {r}
+                {r === 'ADMIN' ? 'ADMINISTRATORS' : r}
               </Text>
             </TouchableOpacity>
           ))}
@@ -427,7 +596,7 @@ export const UsersPage: React.FC = () => {
 
         <View style={styles.filterGroup}>
           <Text style={styles.filterLabel}>Status:</Text>
-          {['ALL', 'ACTIVE', 'INACTIVE'].map(s => (
+          {['ALL', 'ACTIVE', 'PENDING', 'SUSPENDED'].map(s => (
             <TouchableOpacity
               key={s}
               style={[styles.filterChip, statusFilter === s && styles.filterChipActive]}
@@ -448,9 +617,9 @@ export const UsersPage: React.FC = () => {
         keyExtractor={item => item.id}
         loading={loading}
         searchPlaceholder="Search by name, email, or mobile..."
-        searchFields={['name', 'email', 'mobile', 'role']}
-        emptyTitle="No users found"
-        emptyDescription="No registered users match the specified search or filter criteria."
+        searchFields={['name', 'email', 'mobile', 'role', 'admin_level']}
+        emptyTitle="No accounts found"
+        emptyDescription="No registered users or administrators match the specified search or filter criteria."
       />
 
       {/* View / Edit Modal */}
@@ -460,7 +629,7 @@ export const UsersPage: React.FC = () => {
             <View style={styles.modalDialog}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>
-                  {isEditMode ? 'Edit User Record' : 'User Details'}
+                  {isEditMode ? 'Edit User Record' : 'User Account Details'}
                 </Text>
                 <TouchableOpacity onPress={() => setActiveUser(null)}>
                   <CloseIcon size={20} color="#64748b" />
@@ -500,7 +669,7 @@ export const UsersPage: React.FC = () => {
                   <View style={styles.fieldGroup}>
                     <Text style={styles.fieldLabel}>Account Status</Text>
                     <View style={styles.roleSelectRow}>
-                      {['ACTIVE', 'INACTIVE'].map(s => (
+                      {['ACTIVE', 'INACTIVE', 'SUSPENDED'].map(s => (
                         <TouchableOpacity
                           key={s}
                           style={[styles.roleSelectChip, editStatus === s && styles.roleSelectChipActive]}
@@ -531,8 +700,10 @@ export const UsersPage: React.FC = () => {
                     <Text style={styles.infoVal}>{activeUser.mobile || 'Not specified'}</Text>
                   </View>
                   <View style={styles.infoRow}>
-                    <Text style={styles.infoKey}>Role:</Text>
-                    <Text style={styles.infoVal}>{activeUser.role}</Text>
+                    <Text style={styles.infoKey}>Role & Tier:</Text>
+                    <Text style={styles.infoVal}>
+                      {activeUser.email === PERMANENT_SUPER_ADMIN ? 'Permanent Super Administrator' : activeUser.role}
+                    </Text>
                   </View>
                   <View style={styles.infoRow}>
                     <Text style={styles.infoKey}>Status:</Text>
@@ -598,9 +769,9 @@ export const UsersPage: React.FC = () => {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <ShieldIcon size={20} color="#0f2452" />
                   <View>
-                    <Text style={styles.modalTitle}>Onboard Administrator</Text>
+                    <Text style={styles.modalTitle}>Onboard Dynamic Administrator</Text>
                     <Text style={{ fontSize: 11, color: '#64748b' }}>
-                      Assign executive association management credentials
+                      Assign association management credentials under Super Admin oversight
                     </Text>
                   </View>
                 </View>
@@ -664,9 +835,9 @@ export const UsersPage: React.FC = () => {
                   <Text style={styles.fieldLabel}>Clearance & Responsibility Level</Text>
                   <View style={styles.roleSelectRow}>
                     {[
-                      'Apex Super Administrator',
-                      'Match & Scoring Admin',
-                      'Association Operations Admin'
+                      'Match & Scoring Administrator',
+                      'Operations Administrator',
+                      'Financial & Registrar Administrator'
                     ].map(lvl => (
                       <TouchableOpacity
                         key={lvl}
@@ -690,9 +861,9 @@ export const UsersPage: React.FC = () => {
                 </View>
 
                 <View style={styles.securityNoticeCard}>
-                  <Text style={styles.securityNoticeTitle}>🛡️ Two-Admin Approval Policy</Text>
+                  <Text style={styles.securityNoticeTitle}>🛡️ Super Administrator Oversight Policy</Text>
                   <Text style={styles.securityNoticeText}>
-                    Adding or promoting an administrator grants executive control over tournament fixtures, user data, and live scoring. This operation strictly requires simultaneous authorization from two Super Administrators via OTP.
+                    New administrators have dynamic privileges and strictly require Nodemailer 6-digit OTP verification from the permanent Super Administrator (<Text style={{ fontWeight: '800', color: '#991b1b' }}>admin@cfvd.org</Text>). Upon approval, an activation link is automatically emailed to the new administrator.
                   </Text>
                 </View>
               </ScrollView>
@@ -705,7 +876,7 @@ export const UsersPage: React.FC = () => {
                   <Text style={styles.btnCancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.btnProceedDual, isRequestingAuth && { opacity: 0.7 }]}
+                  style={[styles.btnProceedSuperAdmin, isRequestingAuth && { opacity: 0.7 }]}
                   onPress={handleInitiateAddAdmin}
                   disabled={isRequestingAuth}
                 >
@@ -714,8 +885,8 @@ export const UsersPage: React.FC = () => {
                   ) : (
                     <>
                       <ShieldIcon size={15} color="#ffffff" style={{ marginRight: 6 }} />
-                      <Text style={styles.btnProceedDualText}>
-                        Request Dual-Admin Authorization →
+                      <Text style={styles.btnProceedSuperAdminText}>
+                        Request Super Admin OTP →
                       </Text>
                     </>
                   )}
@@ -726,150 +897,115 @@ export const UsersPage: React.FC = () => {
         </Modal>
       )}
 
-      {/* 2. Dual-Admin Authorization Modal (CloudCrackers Style) */}
-      {showDualAuthModal && (
+      {/* 2. Super Administrator Nodemailer Security OTP Verification Modal */}
+      {showOtpModal && (
         <Modal
-          visible={showDualAuthModal}
+          visible={showOtpModal}
           transparent
           animationType="fade"
-          onRequestClose={() => setShowDualAuthModal(false)}
+          onRequestClose={() => setShowOtpModal(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={[styles.modalDialog, styles.dualAuthDialog]}>
+            <View style={[styles.modalDialog, styles.superAdminOtpDialog]}>
               {/* Header */}
-              <View style={styles.dualAuthHeader}>
+              <View style={styles.superAdminOtpHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <View style={styles.dualAuthIconCircle}>
-                    <ShieldIcon size={18} color="#b91c1c" />
+                  <View style={styles.superAdminOtpIconCircle}>
+                    <ShieldIcon size={18} color="#0f2452" />
                   </View>
                   <View>
-                    <Text style={styles.dualAuthTitle}>Dual-Admin Authorization</Text>
-                    <Text style={styles.dualAuthSubtitle}>
-                      High Security Data Ops & Super-Admin Elevation Forge
+                    <Text style={styles.superAdminOtpTitle}>Super Administrator Security Verification</Text>
+                    <Text style={styles.superAdminOtpSubtitle}>
+                      Nodemailer SMTP Verification to {PERMANENT_SUPER_ADMIN}
                     </Text>
                   </View>
                 </View>
-                <TouchableOpacity onPress={() => setShowDualAuthModal(false)}>
+                <TouchableOpacity onPress={() => setShowOtpModal(false)}>
                   <CloseIcon size={18} color="#64748b" />
                 </TouchableOpacity>
               </View>
 
-              {/* Warning Alert Banner (matching uploaded image) */}
-              <View style={styles.dualAuthAlertBox}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <Text style={{ fontSize: 13 }}>⚠️</Text>
-                  <Text style={styles.dualAuthAlertHeading}>
-                    {authAction === 'CREATE_ADMIN'
-                      ? 'SUPER-ADMIN PRIVILEGE ELEVATION'
-                      : 'ROLE PROMOTION AUTHORIZATION'}
-                  </Text>
-                </View>
-                <Text style={styles.dualAuthAlertDesc}>
-                  {authAction === 'CREATE_ADMIN'
-                    ? `This action will permanently create and activate Administrator "${newAdminName}" (${newAdminEmail}) with full access to association records, match arbitrator rules, and user management.`
-                    : 'This action will elevate the selected user to full Administrator clearance with association management privileges.'}
+              {/* Action Banner */}
+              <View style={styles.superAdminActionBanner}>
+                <Text style={styles.superAdminActionTitle}>
+                  🔒 {otpActionTitle || 'Administrative Operation'}
                 </Text>
+                {otpActionDesc ? (
+                  <Text style={styles.superAdminActionDesc}>{otpActionDesc}</Text>
+                ) : null}
               </View>
 
-              {/* Timer Bar */}
-              <View style={styles.dualAuthTimerRow}>
-                <Text style={styles.dualAuthTimerText}>
-                  ⏳ Valid for: <Text style={{ fontWeight: '800' }}>{formatCountdown(authCountdown)}</Text>
+              {/* Timer & Resend Row */}
+              <View style={styles.otpTimerRow}>
+                <Text style={styles.otpTimerText}>
+                  ⏳ Code valid for: <Text style={{ fontWeight: '800' }}>{formatCountdown(otpCountdown)}</Text>
                 </Text>
-                <TouchableOpacity onPress={handleResendDualAuthOtp}>
-                  <Text style={styles.dualAuthResendLink}>🔄 Resend OTPs</Text>
+                <TouchableOpacity
+                  onPress={handleResendOtp}
+                  disabled={resendCooldown > 0}
+                >
+                  <Text style={[styles.otpResendText, resendCooldown > 0 && { color: '#94a3b8' }]}>
+                    {resendCooldown > 0 ? `⏳ Resend OTP (${resendCooldown}s)` : '🔄 Resend OTP'}
+                  </Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Admin 1 OTP Section */}
-              <View style={styles.otpCard}>
-                <View style={styles.otpCardHeader}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <View style={[styles.adminBadgeCircle, { backgroundColor: '#ef4444' }]}>
-                      <Text style={styles.adminBadgeNum}>1</Text>
-                    </View>
-                    <Text style={styles.otpLabel}>
-                      Admin 1 OTP: <Text style={styles.otpEmailText}>{authAdmin1Email}</Text>
+              {/* Single Super Admin OTP Input Card */}
+              <View style={styles.superAdminOtpCard}>
+                <View style={styles.superAdminOtpCardHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontSize: 13 }}>👑</Text>
+                    <Text style={styles.superAdminOtpLabel}>
+                      Enter 6-Digit OTP sent to <Text style={{ fontWeight: '800', color: '#0f2452' }}>{PERMANENT_SUPER_ADMIN}</Text>:
                     </Text>
                   </View>
-                  {authDemoOtps?.admin1 && (
+                  {demoOtp && (
                     <TouchableOpacity
                       style={styles.demoFillChip}
-                      onPress={() => setAuthAdmin1Otp(authDemoOtps.admin1)}
+                      onPress={() => setOtpInput(demoOtp)}
                     >
-                      <Text style={styles.demoFillText}>⚡ Demo: {authDemoOtps.admin1}</Text>
+                      <Text style={styles.demoFillText}>⚡ Demo OTP: {demoOtp}</Text>
                     </TouchableOpacity>
                   )}
                 </View>
                 <TextInput
-                  style={[styles.otpInput, authAdmin1Otp.length === 6 && styles.otpInputValid]}
-                  value={authAdmin1Otp}
-                  onChangeText={setAuthAdmin1Otp}
-                  placeholder="Enter 6-digit OTP"
+                  style={[styles.otpLargeInput, otpInput.length === 6 && styles.otpLargeInputValid]}
+                  value={otpInput}
+                  onChangeText={setOtpInput}
+                  placeholder="Enter 6-digit code"
                   keyboardType="numeric"
                   maxLength={6}
                   placeholderTextColor="#94a3b8"
+                  autoFocus
                 />
               </View>
 
-              {/* Admin 2 OTP Section */}
-              <View style={styles.otpCard}>
-                <View style={styles.otpCardHeader}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <View style={[styles.adminBadgeCircle, { backgroundColor: '#2563eb' }]}>
-                      <Text style={styles.adminBadgeNum}>2</Text>
-                    </View>
-                    <Text style={styles.otpLabel}>
-                      Admin 2 OTP: <Text style={styles.otpEmailText}>{authAdmin2Email}</Text>
-                    </Text>
-                  </View>
-                  {authDemoOtps?.admin2 && (
-                    <TouchableOpacity
-                      style={styles.demoFillChip}
-                      onPress={() => setAuthAdmin2Otp(authDemoOtps.admin2)}
-                    >
-                      <Text style={styles.demoFillText}>⚡ Demo: {authDemoOtps.admin2}</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-                <TextInput
-                  style={[styles.otpInput, authAdmin2Otp.length === 6 && styles.otpInputValid]}
-                  value={authAdmin2Otp}
-                  onChangeText={setAuthAdmin2Otp}
-                  placeholder="Enter 6-digit OTP"
-                  keyboardType="numeric"
-                  maxLength={6}
-                  placeholderTextColor="#94a3b8"
-                />
-              </View>
-
-              {/* Helper disclaimer */}
-              <Text style={styles.dualAuthDisclaimer}>
-                🔒 Both Super Admins (Admin 1 & Admin 2) must enter the correct 6-digit OTP. Otherwise, the elevation action is rejected.
+              {/* Security Policy Reminder */}
+              <Text style={styles.securityPolicyNote}>
+                🛡️ Single-use cryptographically secure OTP. All newly created or modified administrators remain under dynamic management of the permanent Super Administrator.
               </Text>
 
-              {/* Action Buttons */}
-              <View style={styles.dualAuthActions}>
+              {/* Modal Actions */}
+              <View style={styles.superAdminOtpFooter}>
                 <TouchableOpacity
-                  style={styles.btnAutoFillBoth}
-                  onPress={handleAutoFillDemoOtps}
+                  style={styles.btnCancel}
+                  onPress={() => setShowOtpModal(false)}
                 >
-                  <Text style={styles.btnAutoFillBothText}>⚡ Auto-Fill Both Demo OTPs</Text>
+                  <Text style={styles.btnCancelText}>Cancel</Text>
                 </TouchableOpacity>
-
                 <TouchableOpacity
                   style={[
-                    styles.btnVerifyDual,
-                    (!authAdmin1Otp || !authAdmin2Otp || isVerifyingAuth) && { opacity: 0.7 }
+                    styles.btnVerifySuperAdmin,
+                    (otpInput.length !== 6 || isVerifyingOtp) && { opacity: 0.6 }
                   ]}
-                  onPress={handleVerifyDualAuth}
-                  disabled={!authAdmin1Otp || !authAdmin2Otp || isVerifyingAuth}
+                  onPress={handleVerifyOtp}
+                  disabled={otpInput.length !== 6 || isVerifyingOtp}
                 >
-                  {isVerifyingAuth ? (
+                  {isVerifyingOtp ? (
                     <ActivityIndicator size="small" color="#ffffff" />
                   ) : (
-                    <Text style={styles.btnVerifyDualText}>
-                      ✓ Verify Dual OTPs & Authorize Administrator
+                    <Text style={styles.btnVerifySuperAdminText}>
+                      ✓ Verify OTP & Authorize Action
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -922,7 +1058,7 @@ const styles = StyleSheet.create({
     borderColor: '#0f2452'
   },
   filterChipText: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '700',
     color: '#475569'
   },
@@ -934,13 +1070,28 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0f172a'
   },
+  superAdminCrownBadge: {
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 1
+  },
+  superAdminCrownText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#92400e'
+  },
   userIdSub: {
     fontSize: 11,
-    color: '#94a3b8'
+    color: '#94a3b8',
+    marginTop: 2
   },
   userEmailText: {
     fontSize: 12.5,
-    color: '#334155'
+    color: '#334155',
+    fontWeight: '600'
   },
   userMobileSub: {
     fontSize: 11,
@@ -948,25 +1099,84 @@ const styles = StyleSheet.create({
     marginTop: 2
   },
   rolePill: {
+    alignSelf: 'flex-start',
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 6,
-    backgroundColor: '#f1f5f9',
-    alignSelf: 'flex-start'
+    backgroundColor: '#f1f5f9'
+  },
+  roleSuperAdmin: {
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#f59e0b'
   },
   roleAdmin: {
-    backgroundColor: '#fef3c7'
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe'
   },
   roleScorer: {
-    backgroundColor: '#e0e7ff'
+    backgroundColor: '#fef3c7'
   },
   rolePlayer: {
-    backgroundColor: '#dcfce7'
+    backgroundColor: '#ecfdf5'
   },
   rolePillText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '800',
-    color: '#334155'
+    color: '#0f2452'
+  },
+  pendingBadge: {
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fcd34d',
+    borderRadius: 6,
+    paddingVertical: 3,
+    paddingHorizontal: 7,
+    alignSelf: 'flex-start'
+  },
+  pendingBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#b45309'
+  },
+  permanentSuperAdminTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4
+  },
+  permanentSuperAdminTagText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#1e3a8a'
+  },
+  btnApproveCompact: {
+    backgroundColor: '#059669',
+    borderRadius: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 5
+  },
+  btnApproveCompactText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '800'
+  },
+  btnRejectCompact: {
+    backgroundColor: '#dc2626',
+    borderRadius: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 5
+  },
+  btnRejectCompactText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '800'
   },
   dateText: {
     fontSize: 12,
@@ -982,34 +1192,33 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#f8fafc',
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center'
+    backgroundColor: '#ffffff'
   },
   actionBtnDanger: {
-    borderColor: '#fecaca',
+    borderColor: '#fca5a5',
     backgroundColor: '#fef2f2'
   },
   actionBtnSuccess: {
-    borderColor: '#a7f3d0',
-    backgroundColor: '#ecfdf5'
+    borderColor: '#86efac',
+    backgroundColor: '#f0fdf4'
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.6)',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     padding: 16
   },
   modalDialog: {
     width: '100%',
-    maxWidth: 500,
-    backgroundColor: '#ffffff',
+    maxWidth: 480,
     borderRadius: 14,
-    padding: 24,
+    backgroundColor: '#ffffff',
+    overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.15,
     shadowRadius: 20,
     elevation: 8
@@ -1018,18 +1227,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-    paddingBottom: 12
+    borderBottomColor: '#f1f5f9'
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '800',
     color: '#0f172a'
   },
   modalBody: {
-    marginBottom: 20
+    padding: 20,
+    maxHeight: 520
   },
   fieldGroup: {
     marginBottom: 14
@@ -1039,10 +1249,12 @@ const styles = StyleSheet.create({
     gap: 12
   },
   fieldLabel: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '700',
-    color: '#334155',
-    marginBottom: 6
+    color: '#475569',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3
   },
   fieldInput: {
     height: 40,
@@ -1100,7 +1312,11 @@ const styles = StyleSheet.create({
   modalFooter: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: 10
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9'
   },
   btnCancel: {
     paddingVertical: 8,
@@ -1148,139 +1364,121 @@ const styles = StyleSheet.create({
     marginTop: 8
   },
   securityNoticeTitle: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '800',
     color: '#991b1b',
     marginBottom: 4
   },
   securityNoticeText: {
-    fontSize: 11.5,
+    fontSize: 11,
     color: '#7f1d1d',
-    lineHeight: 16
+    lineHeight: 15
   },
-  btnProceedDual: {
+  btnProceedSuperAdmin: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 9,
     paddingHorizontal: 18,
     borderRadius: 8,
-    backgroundColor: '#b91c1c'
+    backgroundColor: '#0f2452'
   },
-  btnProceedDualText: {
+  btnProceedSuperAdminText: {
     color: '#ffffff',
     fontSize: 13,
     fontWeight: '700'
   },
-  dualAuthDialog: {
-    maxWidth: 560,
-    width: '100%',
-    borderRadius: 16,
-    backgroundColor: '#ffffff',
-    overflow: 'hidden'
+  // Super Admin OTP Modal Styles
+  superAdminOtpDialog: {
+    maxWidth: 520,
+    borderRadius: 16
   },
-  dualAuthHeader: {
+  superAdminOtpHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 18,
+    paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9'
+    borderBottomColor: '#f1f5f9',
+    backgroundColor: '#ffffff'
   },
-  dualAuthIconCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#fee2e2',
+  superAdminOtpIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
     alignItems: 'center',
     justifyContent: 'center'
   },
-  dualAuthTitle: {
-    fontSize: 16,
+  superAdminOtpTitle: {
+    fontSize: 15,
     fontWeight: '800',
     color: '#0f172a'
   },
-  dualAuthSubtitle: {
+  superAdminOtpSubtitle: {
     fontSize: 11,
     color: '#64748b'
   },
-  dualAuthAlertBox: {
-    flexDirection: 'row',
-    gap: 10,
-    backgroundColor: '#fef2f2',
-    borderWidth: 1,
-    borderColor: '#fca5a5',
-    borderRadius: 8,
+  superAdminActionBanner: {
+    backgroundColor: '#f8fafc',
+    borderLeftWidth: 4,
+    borderLeftColor: '#0f2452',
     padding: 12,
-    marginHorizontal: 18,
-    marginTop: 14
+    marginHorizontal: 20,
+    marginTop: 14,
+    borderRadius: 6
   },
-  dualAuthAlertHeading: {
-    fontSize: 12,
+  superAdminActionTitle: {
+    fontSize: 13,
     fontWeight: '800',
-    color: '#991b1b',
-    marginBottom: 2
+    color: '#0f2452'
   },
-  dualAuthAlertDesc: {
-    fontSize: 11,
-    color: '#7f1d1d',
-    lineHeight: 15
+  superAdminActionDesc: {
+    fontSize: 11.5,
+    color: '#475569',
+    marginTop: 3
   },
-  dualAuthTimerRow: {
+  otpTimerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginHorizontal: 18,
+    marginHorizontal: 20,
     marginTop: 12,
-    marginBottom: 8
+    marginBottom: 6
   },
-  dualAuthTimerText: {
+  otpTimerText: {
     fontSize: 12,
-    color: '#dc2626',
-    fontWeight: '600'
+    color: '#d97706',
+    fontWeight: '700'
   },
-  dualAuthResendLink: {
+  otpResendText: {
     fontSize: 12,
     color: '#2563eb',
     fontWeight: '700'
   },
-  otpCard: {
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
+  superAdminOtpCard: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
     borderColor: '#e2e8f0',
     borderRadius: 10,
-    padding: 12,
-    marginHorizontal: 18,
-    marginBottom: 10
+    padding: 14,
+    marginHorizontal: 20,
+    marginVertical: 10
   },
-  otpCardHeader: {
+  superAdminOtpCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
     flexWrap: 'wrap',
     gap: 6
   },
-  adminBadgeCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  adminBadgeNum: {
-    color: '#ffffff',
-    fontSize: 11,
-    fontWeight: '800'
-  },
-  otpLabel: {
+  superAdminOtpLabel: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#334155'
-  },
-  otpEmailText: {
-    color: '#0f2452',
-    fontWeight: '800'
+    color: '#334155',
+    fontWeight: '600'
   },
   demoFillChip: {
     backgroundColor: '#eff6ff',
@@ -1295,66 +1493,52 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1d4ed8'
   },
-  otpInput: {
-    height: 42,
-    borderWidth: 1.5,
+  otpLargeInput: {
+    height: 48,
+    borderWidth: 2,
     borderColor: '#cbd5e1',
     borderRadius: 8,
-    paddingHorizontal: 14,
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 4,
-    color: '#0f172a',
-    backgroundColor: '#ffffff'
+    paddingHorizontal: 16,
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: 6,
+    color: '#0f2452',
+    backgroundColor: '#f8fafc',
+    textAlign: 'center'
   },
-  otpInputValid: {
+  otpLargeInputValid: {
     borderColor: '#10b981',
     backgroundColor: '#f0fdf4'
   },
-  dualAuthDisclaimer: {
+  securityPolicyNote: {
     fontSize: 11,
     color: '#64748b',
-    marginHorizontal: 18,
-    marginVertical: 6,
+    marginHorizontal: 20,
+    marginBottom: 10,
     lineHeight: 15
   },
-  dualAuthActions: {
+  superAdminOtpFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     gap: 10,
-    paddingHorizontal: 18,
+    paddingHorizontal: 20,
     paddingVertical: 14,
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-    flexWrap: 'wrap'
+    borderTopColor: '#f1f5f9'
   },
-  btnAutoFillBoth: {
-    backgroundColor: '#eff6ff',
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
+  btnVerifySuperAdmin: {
+    backgroundColor: '#0f2452',
     paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 8
-  },
-  btnAutoFillBothText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1d4ed8'
-  },
-  btnVerifyDual: {
-    backgroundColor: '#991b1b',
-    paddingVertical: 10,
-    paddingHorizontal: 18,
+    paddingHorizontal: 20,
     borderRadius: 8,
-    flex: 1,
-    minWidth: 220,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    minWidth: 180
   },
-  btnVerifyDualText: {
+  btnVerifySuperAdminText: {
     color: '#ffffff',
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: '800'
   }
 });
