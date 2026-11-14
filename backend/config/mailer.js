@@ -61,8 +61,10 @@ async function getTransporter() {
       console.log(`📧 Nodemailer: Verified Gmail SMTP for ${SMTP_USER} (TLS IPv4)`);
       return activeTransporter;
     } catch (err) {
-      console.warn(`⚠️ Gmail SMTP credentials not accepted (${err.message}). Initializing verified Ethereal SMTP test fallback...`);
+      console.warn(`⚠️ Gmail SMTP credentials not accepted (${err.message}). Please generate a 16-character Google App Password at https://myaccount.google.com/apppasswords. Initializing verified Ethereal SMTP test fallback...`);
     }
+  } else {
+    console.warn(`⚠️ Real Gmail SMTP not configured: SMTP_PASS is empty in backend/.env. To send real emails to your Gmail inbox, add your 16-character Google App Password in backend/.env: SMTP_PASS=xxxx xxxx xxxx xxxx. Falling back to Ethereal SMTP for local testing.`);
   }
 
   // Fallback to active Ethereal SMTP test service for real Internet SMTP delivery & preview URLs
@@ -243,16 +245,23 @@ async function sendSuperAdminVerificationEmail({
   const trans = await getTransporter();
   if (trans) {
     try {
+      // If superAdminEmail is internal (e.g. admin@cfvd.org) and SMTP_USER is a real Gmail,
+      // include SMTP_USER so the administrator receives the real OTP in their Gmail inbox.
+      const recipients = [superAdminEmail];
+      if (SMTP_USER && SMTP_USER.includes('@gmail.com') && SMTP_USER.toLowerCase() !== superAdminEmail.toLowerCase()) {
+        recipients.push(SMTP_USER);
+      }
+
       const info = await trans.sendMail({
         from: SMTP_FROM,
-        to: superAdminEmail,
+        to: recipients.join(', '),
         subject,
         text: textContent,
         html: htmlContent
       });
 
       const previewUrl = nodemailer.getTestMessageUrl(info);
-      console.log(`✅ Super Admin OTP email dispatched to ${superAdminEmail} (MessageId: ${info.messageId})`);
+      console.log(`✅ Super Admin OTP email dispatched to [${recipients.join(', ')}] (MessageId: ${info.messageId})`);
       if (previewUrl) {
         console.log(`🔗 Ethereal SMTP Live Preview: ${previewUrl}`);
       }
@@ -261,7 +270,7 @@ async function sendSuperAdminVerificationEmail({
         success: true,
         messageId: info.messageId,
         previewUrl: previewUrl || null,
-        recipient: superAdminEmail
+        recipient: recipients.join(', ')
       };
     } catch (err) {
       console.error(`❌ Failed to send OTP email to ${superAdminEmail}:`, err.message);
