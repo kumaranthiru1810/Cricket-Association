@@ -120,14 +120,14 @@ export function normalizeDismissal(raw: unknown): VPLDismissal | undefined {
 
 function dismissalLabel(d?: VPLDismissal): { en: string; ta: string } {
   switch (d) {
-    case 'bowled': return { en: 'BOWLED', ta: 'போல்டு' };
-    case 'caught': return { en: 'CAUGHT', ta: 'கேட்ச்' };
-    case 'caught_and_bowled': return { en: 'C&B', ta: 'சி & பி' };
-    case 'lbw': return { en: 'LBW', ta: 'எல்பிடபிள்யூ' };
-    case 'run_out': return { en: 'RUN OUT', ta: 'ரன் அவுட்' };
-    case 'stumped': return { en: 'STUMPED', ta: 'ஸ்டம்ப்டு' };
-    case 'hit_wicket': return { en: 'HIT WICKET', ta: 'ஹிட் விக்கெட்' };
-    default: return { en: 'OUT', ta: 'அவுட்' };
+    case 'bowled': return { en: 'BOWLED', ta: '' };
+    case 'caught': return { en: 'CAUGHT', ta: '' };
+    case 'caught_and_bowled': return { en: 'C&B', ta: '' };
+    case 'lbw': return { en: 'LBW', ta: '' };
+    case 'run_out': return { en: 'RUN OUT', ta: '' };
+    case 'stumped': return { en: 'STUMPED', ta: '' };
+    case 'hit_wicket': return { en: 'HIT WICKET', ta: '' };
+    default: return { en: 'OUT', ta: '' };
   }
 }
 
@@ -139,7 +139,7 @@ export function mapBallToEvents(ball: VPLBallInput): VPLEvent[] {
   // 1. WICKET
   if (ball.isWicket) {
     const dl = dismissalLabel(ball.dismissal);
-    const detailParts = [dl.en + ' | ' + dl.ta];
+    const detailParts = [dl.en];
     if (ball.bowlerName) detailParts.push('b ' + ball.bowlerName);
     if (ball.fielderName && (ball.dismissal === 'caught' || ball.dismissal === 'run_out' || ball.dismissal === 'stumped')) {
       detailParts.push('c ' + ball.fielderName);
@@ -154,7 +154,7 @@ export function mapBallToEvents(ball: VPLBallInput): VPLEvent[] {
       sound: 'wicket',
       durationMs: DURATION_MS.wicket,
       titleEn: 'WICKET',
-      titleTa: 'விக்கெட்',
+      titleTa: '',
       primary: ball.dismissedName || ball.batterName,
       secondary: scoreStr,
       detail: detailParts.join(' · '),
@@ -169,7 +169,7 @@ export function mapBallToEvents(ball: VPLBallInput): VPLEvent[] {
         sound: 'milestone',
         durationMs: DURATION_MS.milestone,
         titleEn: 'HAT-TRICK!',
-        titleTa: 'ஹேட்-ட்ரிக்!',
+        titleTa: '',
         primary: ball.bowlerName,
       });
     }
@@ -183,8 +183,8 @@ export function mapBallToEvents(ball: VPLBallInput): VPLEvent[] {
       tier: 3,
       sound: 'six',
       durationMs: DURATION_MS.six,
-      titleEn: 'SIX | ஆறு',
-      titleTa: 'சிக்ஸர்!',
+      titleEn: 'SIX',
+      titleTa: '',
       primary: ball.batterName,
     });
   }
@@ -197,8 +197,8 @@ export function mapBallToEvents(ball: VPLBallInput): VPLEvent[] {
       tier: 2,
       sound: 'four',
       durationMs: DURATION_MS.four,
-      titleEn: 'FOUR | நான்கு',
-      titleTa: 'பவுண்டரி!',
+      titleEn: 'FOUR',
+      titleTa: '',
       primary: ball.batterName,
     });
   }
@@ -206,11 +206,11 @@ export function mapBallToEvents(ball: VPLBallInput): VPLEvent[] {
   // 4. EXTRAS
   if (isValidExtra) {
     const extraLabels: Record<VPLExtraType, { en: string; ta: string }> = {
-      wide: { en: 'WIDE | வைடு', ta: 'வைடு பால்' },
-      noball: { en: 'NO BALL | நோ பால்', ta: 'நோ பால்' },
-      bye: { en: 'BYE | பை', ta: 'பை ரன்ஸ்' },
-      legbye: { en: 'LEG BYE | லெக் பை', ta: 'லெக் பை' },
-      penalty: { en: 'PENALTY | பெனால்டி', ta: 'பெனால்டி ரன்ஸ்' },
+      wide: { en: 'WIDE', ta: '' },
+      noball: { en: 'NO BALL', ta: '' },
+      bye: { en: 'BYE', ta: '' },
+      legbye: { en: 'LEG BYE', ta: '' },
+      penalty: { en: 'PENALTY', ta: '' },
     };
     const lbl = extraLabels[extra!];
     events.push({
@@ -236,7 +236,7 @@ export function mapBallToEvents(ball: VPLBallInput): VPLEvent[] {
         sound: null,
         durationMs: DURATION_MS.runs,
         titleEn: 'DOT',
-        titleTa: 'டாட்',
+        titleTa: '',
         primary: ball.batterName,
       });
     } else {
@@ -247,7 +247,7 @@ export function mapBallToEvents(ball: VPLBallInput): VPLEvent[] {
         sound: ball.runsOffBat >= 2 ? 'tick' : null,
         durationMs: DURATION_MS.runs,
         titleEn: `+${ball.runsOffBat} RUN${ball.runsOffBat > 1 ? 'S' : ''}`,
-        titleTa: `${ball.runsOffBat} ரன்`,
+        titleTa: '',
         primary: ball.batterName,
       });
     }
@@ -262,8 +262,8 @@ export function mapBallToEvents(ball: VPLBallInput): VPLEvent[] {
         tier: 5,
         sound: 'milestone',
         durationMs: DURATION_MS.milestone,
-        titleEn: 'CENTURY! | நூறு!',
-        titleTa: 'சதம்!',
+        titleEn: 'CENTURY!',
+        titleTa: '',
         primary: ball.batterName,
         secondary: `${ball.batterRunsAfter} (${ball.batterBallsAfter})`,
       });
@@ -274,8 +274,8 @@ export function mapBallToEvents(ball: VPLBallInput): VPLEvent[] {
         tier: 5,
         sound: 'milestone',
         durationMs: DURATION_MS.milestone,
-        titleEn: 'HALF-CENTURY! | ஐம்பது!',
-        titleTa: 'அரைசதம்!',
+        titleEn: 'HALF-CENTURY!',
+        titleTa: '',
         primary: ball.batterName,
         secondary: `${ball.batterRunsAfter} (${ball.batterBallsAfter})`,
       });
@@ -292,7 +292,7 @@ export function mapBallToEvents(ball: VPLBallInput): VPLEvent[] {
         sound: 'milestone',
         durationMs: DURATION_MS.milestone,
         titleEn: '100 PARTNERSHIP',
-        titleTa: '100 கூட்டு ரன்',
+        titleTa: '',
         primary: ball.batterName && ball.nonStrikerName ? `${ball.batterName} & ${ball.nonStrikerName}` : undefined,
         secondary: `${ball.partnershipRunsAfter} runs`,
       });
@@ -304,7 +304,7 @@ export function mapBallToEvents(ball: VPLBallInput): VPLEvent[] {
         sound: 'milestone',
         durationMs: DURATION_MS.milestone,
         titleEn: '50 PARTNERSHIP',
-        titleTa: '50 கூட்டு ரன்',
+        titleTa: '',
         primary: ball.batterName && ball.nonStrikerName ? `${ball.batterName} & ${ball.nonStrikerName}` : undefined,
         secondary: `${ball.partnershipRunsAfter} runs`,
       });
@@ -325,7 +325,7 @@ export function mapOverEnd(over: VPLOverInput): VPLEvent[] {
       sound: 'milestone',
       durationMs: DURATION_MS.milestone,
       titleEn: 'MAIDEN OVER!',
-      titleTa: 'மெய்டன் ஓவர்!',
+      titleTa: '',
       primary: over.bowlerName,
       secondary: over.bowlerFigures,
     });
@@ -337,7 +337,7 @@ export function mapOverEnd(over: VPLOverInput): VPLEvent[] {
     sound: 'over',
     durationMs: DURATION_MS.runs,
     titleEn: `OVER ${over.overNumber}`,
-    titleTa: `ஓவர் ${over.overNumber}`,
+    titleTa: '',
     primary: over.scoreText,
     secondary: over.bowlerName ? `b: ${over.bowlerName}` : undefined,
   });

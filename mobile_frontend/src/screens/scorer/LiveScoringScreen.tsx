@@ -59,6 +59,49 @@ const STANDARD_BREAK_OPTIONS = [
   { label: 'Other / Custom Break', icon: '✏️', sub: 'Type custom break reason below' }
 ];
 
+export const RECENT_OVER_THEMES = [
+  {
+    name: 'amber',
+    badgeBg: '#fef3c7',
+    badgeBorder: '#f59e0b',
+    badgeText: '#b45309',
+    chipBg: '#fffdf5',
+    chipBorder: '#f59e0b',
+    subText: '#d97706',
+    dotText: '#78350f',
+  },
+  {
+    name: 'cyan',
+    badgeBg: '#e0f2fe',
+    badgeBorder: '#0284c7',
+    badgeText: '#0369a1',
+    chipBg: '#f0f9ff',
+    chipBorder: '#38bdf8',
+    subText: '#0284c7',
+    dotText: '#0c4a6e',
+  },
+  {
+    name: 'emerald',
+    badgeBg: '#d1fae5',
+    badgeBorder: '#059669',
+    badgeText: '#047857',
+    chipBg: '#f0fdf4',
+    chipBorder: '#34d399',
+    subText: '#059669',
+    dotText: '#064e3b',
+  },
+  {
+    name: 'purple',
+    badgeBg: '#ede9fe',
+    badgeBorder: '#7c3aed',
+    badgeText: '#6d28d9',
+    chipBg: '#faf5ff',
+    chipBorder: '#a855f7',
+    subText: '#7c3aed',
+    dotText: '#4c1d95',
+  },
+];
+
 const STANDARD_PENALTY_REASONS = [
   'Ball hit helmet in field of play (5 Penalty Runs)',
   'Player entering without permission touches ball in play',
@@ -536,6 +579,8 @@ export default function LiveScoringScreen() {
   const [showMilestoneModal, setShowMilestoneModal] = useState<boolean>(false);
   const shownMilestonesRef = useRef<Set<string>>(new Set());
   const shownRulesRef = useRef<Set<string>>(new Set());
+  const initialDeliveryIdRef = useRef<string | null>(null);
+  const hasRecordedNewBallRef = useRef<boolean>(false);
 
   // Broadcast Umpire Signal Overlay & Hand Signals Gallery State
   const [activeUmpireSignal, setActiveUmpireSignal] = useState<UmpireSignalEvent | null>(null);
@@ -1324,6 +1369,10 @@ export default function LiveScoringScreen() {
       }
       if (d.recentDeliveries && Array.isArray(d.recentDeliveries)) {
         setRecentDeliveries(d.recentDeliveries);
+        if (isInitial && d.recentDeliveries.length > 0) {
+          initialDeliveryIdRef.current = String(d.recentDeliveries[0].id || `${d.recentDeliveries[0].ball || '0'}`);
+          hasRecordedNewBallRef.current = false;
+        }
       }
       if (ScorerApi.getOfflineQueueCount) {
         setOfflineQueueCount(ScorerApi.getOfflineQueueCount());
@@ -1434,6 +1483,7 @@ export default function LiveScoringScreen() {
         throw new Error(res?.message || 'Failed to record delivery.');
       }
 
+      hasRecordedNewBallRef.current = true;
       setIsBallInProgress(false);
       if (res.commentary) {
         setAiCommentary(res.commentary);
@@ -1449,17 +1499,12 @@ export default function LiveScoringScreen() {
       if (res.isFreeHit || res.data?.isFreeHit || type === 'noball') {
         setIsFreeHitActive(true);
         if (type === 'noball') {
-          const ruleKey = `${matchId}_FREE_HIT`;
-          if (!shownRulesRef.current.has(ruleKey)) {
-            shownRulesRef.current.add(ruleKey);
-            setActiveCricketRule('FREE_HIT');
-            setCricketRuleContext({
-              bowlerName: bowler?.name || 'Bowler',
-              strikerName: striker?.name || 'Striker',
-              nonStrikerName: nonStriker?.name || 'Non-Striker'
-            });
-            setShowCricketRulesModal(true);
-          }
+          setActiveCricketRule('FREE_HIT');
+          setCricketRuleContext({
+            bowlerName: bowler?.name || 'Bowler',
+            strikerName: striker?.name || 'Striker',
+            nonStrikerName: nonStriker?.name || 'Non-Striker'
+          });
         }
       } else if (isFreeHitActive && type === 'normal') {
         setIsFreeHitActive(false);
@@ -1531,22 +1576,17 @@ export default function LiveScoringScreen() {
         });
       }
 
-      // Smart Rules Analysis: Consecutive Wides (Triggers rule modal only ONCE per match)
+      // Smart Rules Analysis: Consecutive Wides
       if (type === 'wide') {
         const nextWides = consecutiveWidesCount + 1;
         setConsecutiveWidesCount(nextWides);
         if (nextWides >= 2) {
-          const ruleKey = `${matchId}_CONSECUTIVE_WIDES`;
-          if (!shownRulesRef.current.has(ruleKey)) {
-            shownRulesRef.current.add(ruleKey);
-            setActiveCricketRule('CONSECUTIVE_WIDES');
-            setCricketRuleContext({
-              bowlerName: bowler?.name || 'Bowler',
-              count: nextWides,
-              overNumber: Math.floor(balls / 6) + 1
-            });
-            setShowCricketRulesModal(true);
-          }
+          setActiveCricketRule('CONSECUTIVE_WIDES');
+          setCricketRuleContext({
+            bowlerName: bowler?.name || 'Bowler',
+            count: nextWides,
+            overNumber: Math.floor(balls / 6) + 1
+          });
         }
       } else if (type === 'normal') {
         setConsecutiveWidesCount(0);
@@ -1554,33 +1594,23 @@ export default function LiveScoringScreen() {
 
       const cwWarn = res?.consecutiveWidesWarning || res?.data?.consecutiveWidesWarning;
       if (cwWarn) {
-        const ruleKey = `${matchId}_CONSECUTIVE_WIDES`;
-        if (!shownRulesRef.current.has(ruleKey)) {
-          shownRulesRef.current.add(ruleKey);
-          setActiveCricketRule('CONSECUTIVE_WIDES');
-          setCricketRuleContext({
-            bowlerName: cwWarn.bowlerName || bowler?.name || 'Bowler',
-            count: cwWarn.count || 2,
-            overNumber: cwWarn.overNumber
-          });
-          setShowCricketRulesModal(true);
-        }
+        setActiveCricketRule('CONSECUTIVE_WIDES');
+        setCricketRuleContext({
+          bowlerName: cwWarn.bowlerName || bowler?.name || 'Bowler',
+          count: cwWarn.count || 2,
+          overNumber: cwWarn.overNumber
+        });
       }
 
-      // Smart Rules Analysis: Bowler Quota (Triggers rule modal only ONCE per match per bowler)
+      // Smart Rules Analysis: Bowler Quota
       const bqWarn = res?.bowlerQuotaWarning || res?.data?.bowlerQuotaWarning;
       if (bqWarn) {
-        const ruleKey = `${matchId}_OVER_QUOTA_${bqWarn.bowlerId || ''}`;
-        if (!shownRulesRef.current.has(ruleKey)) {
-          shownRulesRef.current.add(ruleKey);
-          setActiveCricketRule('OVER_QUOTA');
-          setCricketRuleContext({
-            bowlerName: bqWarn.bowlerName || bowler?.name || 'Bowler',
-            oversBowled: bqWarn.overs,
-            maxQuota: bqWarn.maxQuota
-          });
-          setShowCricketRulesModal(true);
-        }
+        setActiveCricketRule('OVER_QUOTA');
+        setCricketRuleContext({
+          bowlerName: bqWarn.bowlerName || bowler?.name || 'Bowler',
+          oversBowled: bqWarn.overs,
+          maxQuota: bqWarn.maxQuota
+        });
       }
 
       // Check for 2 No-Balls dangerous bowling warning (MCC Law 41.7)
@@ -1835,6 +1865,7 @@ export default function LiveScoringScreen() {
 
     try {
       const res = await ScorerApi.recordDelivery(matchId, payload);
+      hasRecordedNewBallRef.current = true;
       if (res && res.commentary) {
         setAiCommentary(res.commentary);
       }
@@ -2016,6 +2047,7 @@ export default function LiveScoringScreen() {
 
     try {
       const res = await ScorerApi.recordDelivery(matchId, payload);
+      hasRecordedNewBallRef.current = true;
       if (res && res.commentary) {
         setAiCommentary(res.commentary);
       }
@@ -2622,14 +2654,40 @@ export default function LiveScoringScreen() {
   // --- 10. UNDO LAST DELIVERY HANDLER (Edit Mode) ---
   const [isUndoingDelivery, setIsUndoingDelivery] = useState(false);
   const handleUndoLastDelivery = async () => {
+    const lastDel = recentDeliveries && recentDeliveries.length > 0 ? recentDeliveries[0] : null;
     setIsUndoingDelivery(true);
     try {
       setShowMilestoneModal(false);
       setActiveMilestone(null);
-      await ScorerApi.undoDelivery(matchId);
+      hasRecordedNewBallRef.current = false;
+      const res = await ScorerApi.undoDelivery(matchId);
       await loadLiveState(false);
-      const msg = 'Last delivery successfully reversed and match state restored.';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Undo Successful', msg);
+
+      if (recentDeliveries && recentDeliveries.length > 1) {
+        initialDeliveryIdRef.current = String(recentDeliveries[1].id || `${recentDeliveries[1].ball || '0'}`);
+      } else {
+        initialDeliveryIdRef.current = null;
+      }
+
+      // Identify the reversed ball details (Ball number, runs, extras, wickets)
+      const ballNum = res?.reversedDelivery?.ball || lastDel?.ball || (lastDel?.overNumber !== undefined ? `${lastDel.overNumber}.${lastDel.ballNumber}` : 'Last Ball');
+      const totalRuns = res?.reversedDelivery?.totalRuns !== undefined
+        ? res.reversedDelivery.totalRuns
+        : (lastDel ? (Number(lastDel.runsBatter || lastDel.runs || 0) + Number(lastDel.runsExtras || 0)) : 0);
+      const isWicket = res?.reversedDelivery?.wicket !== undefined ? res.reversedDelivery.wicket : Boolean(lastDel?.wicket);
+      const wktType = res?.reversedDelivery?.wicketType || lastDel?.wicketType || (lastDel?.wicket?.type ? lastDel.wicket.type : 'Wicket');
+      const extra = res?.reversedDelivery?.extraType || lastDel?.extraType || (lastDel?.extra ? lastDel.extra : null);
+
+      let actionDesc = `${totalRuns} run${totalRuns !== 1 ? 's' : ''}`;
+      if (extra && extra !== 'NONE') {
+        actionDesc += ` (${extra})`;
+      }
+      if (isWicket) {
+        actionDesc += ` + WICKET (${wktType})`;
+      }
+
+      const msg = `Ball ${ballNum} Successfully Undone!\n\nReversed: ${actionDesc}\nMatch score, overs & player statistics restored.`;
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Undo Delivery Success', msg);
     } catch (err: any) {
       const msg = err.message || 'Failed to undo last delivery.';
       Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
@@ -3476,6 +3534,7 @@ export default function LiveScoringScreen() {
                 { label: 'Other Wickets (Retired Hurt/Out, Timed Out)', icon: '🏏', action: () => { setShowMatchEventsModal(false); setShowOtherWicketModal(true); } },
                 { label: 'Change Ball (New / Old Ball)', icon: '⚾', action: () => { setShowMatchEventsModal(false); setShowChangeBallModal(true); } },
                 { label: 'Playing XI Edit', icon: '👥', action: () => { setShowMatchEventsModal(false); openPlayingXIModal(); } },
+                { label: 'Fielding Action / Highlight', icon: '🧤', action: () => { setShowMatchEventsModal(false); setShowFieldingModal(true); } },
                 { label: 'Revised Overs & Target (Rain / DLS)', icon: '🌧️', action: () => { setShowMatchEventsModal(false); setShowRevisedOversModal(true); } }
               ].map((ev, idx) => (
                 <TouchableOpacity
@@ -6040,18 +6099,45 @@ export default function LiveScoringScreen() {
                     </Text>
                   </View>
                 )}
-                <Text style={styles.battingTeam}>
-                  {(matchInfo?.battingTeam || matchInfo?.teamA || 'BATTING TEAM').toUpperCase()}
-                  {allInningsList && allInningsList.length > 1 ? ' (2ND INNINGS)' : ' (1ST INNINGS)'}
-                </Text>
-                <View style={styles.scoreRow}>
-                  <Text style={styles.scoreText}>{runs}/{wickets}</Text>
-                  <Text style={styles.oversText}>({getOvers(balls)})</Text>
-                </View>
-                <Text style={styles.rrText}>
-                  CRR: {balls > 0 ? ((runs / balls) * 6).toFixed(2) : '0.00'}
-                  {targetRuns ? ` | Target: ${targetRuns} (Need ${Math.max(0, targetRuns - runs)} runs)` : ''}
-                </Text>
+                {(() => {
+                  const isSecondInnings = Boolean((allInningsList && allInningsList.length > 1) || matchInfo?.currentInningsNumber === 2);
+                  const totalMatchOvers = matchInfo?.revisedOvers || matchInfo?.overs || 20;
+                  const totalMatchBalls = Math.round(totalMatchOvers * 6);
+                  const remainingBalls = Math.max(0, totalMatchBalls - balls);
+                  const remOvers = `${Math.floor(remainingBalls / 6)}.${remainingBalls % 6}`;
+                  const crr = balls > 0 ? ((runs / balls) * 6).toFixed(2) : '0.00';
+                  const runsNeeded = targetRuns ? Math.max(0, targetRuns - runs) : 0;
+                  const rrr = remainingBalls > 0 && targetRuns && runsNeeded > 0
+                    ? (((runsNeeded) / remainingBalls) * 6).toFixed(2)
+                    : null;
+
+                  return (
+                    <>
+                      <Text style={styles.battingTeam}>
+                        {(matchInfo?.battingTeam || matchInfo?.teamA || 'BATTING TEAM').toUpperCase()}
+                        {isSecondInnings ? ' (2ND INNINGS)' : ' (1ST INNINGS)'}
+                      </Text>
+                      <View style={styles.scoreRow}>
+                        <Text style={styles.scoreText}>{runs}/{wickets}</Text>
+                        <Text style={styles.oversText}>
+                          ({getOvers(balls)} / {totalMatchOvers} Ov)
+                        </Text>
+                      </View>
+                      <Text style={styles.rrText}>
+                        CRR: {crr}
+                        {isSecondInnings && targetRuns ? (
+                          runs >= targetRuns ? (
+                            ` | Target: ${targetRuns} (Target Achieved!)`
+                          ) : (
+                            ` | Target: ${targetRuns} (Need ${runsNeeded} runs in ${remainingBalls} balls • RRR: ${rrr || '0.00'})`
+                          )
+                        ) : (
+                          ` • Remaining: ${remainingBalls} balls (${remOvers} Ov)`
+                        )}
+                      </Text>
+                    </>
+                  );
+                })()}
                 {lastDismissal ? (
                   <View style={styles.lastWicketChip}>
                     <Text style={styles.lastWicketTag}>⚡ LAST WICKET (Ov {lastDismissal.ball}):</Text>
@@ -6177,7 +6263,19 @@ export default function LiveScoringScreen() {
 
               const runsBat = pendingBoundaryRun !== null ? pendingBoundaryRun : rBatter;
               const rawExtra = normalizeExtraType(latest?.extraType || latest?.extra_type || latest?.extra || (latest?.is_wide ? 'wide' : (latest?.is_no_ball ? 'noball' : null)));
-              const ballEvents = latest ? mapBallToEvents({
+
+              // Resolve the exact batter who actually faced this delivery
+              const facedBatter = (latest?.strikerId
+                ? (striker?.id === latest.strikerId ? striker : (nonStriker?.id === latest.strikerId ? nonStriker : null))
+                : null) || (runsBat % 2 === 1 ? nonStriker : striker) || striker;
+
+              // Check if latest delivery is from initial page load / refresh (should NOT popup)
+              const latestId = latest ? String(latest.id || `${latest.ball || '0'}`) : null;
+              const isInitialLoadBall = !hasRecordedNewBallRef.current && (
+                !latest || (initialDeliveryIdRef.current !== null && latestId === initialDeliveryIdRef.current)
+              );
+
+              const ballEvents = (latest && !isInitialLoadBall) ? mapBallToEvents({
                 ballId: `${latest.id || recentDeliveries.length}-${runsBat}-${runs}-${wickets}`,
                 runsOffBat: runsBat,
                 extraType: rawExtra,
@@ -6185,9 +6283,9 @@ export default function LiveScoringScreen() {
                 isWicket: Boolean(latest?.wicket),
                 dismissal: normalizeDismissal(latest?.wicket?.type || latest?.dismissal_type),
                 dismissedName: latest?.wicket?.batter || latest?.dismissed_name,
-                batterName: striker?.name || 'Striker',
-                batterRunsAfter: striker?.runs,
-                batterBallsAfter: striker?.balls,
+                batterName: facedBatter?.name || striker?.name || 'Striker',
+                batterRunsAfter: facedBatter?.runs,
+                batterBallsAfter: facedBatter?.balls,
                 bowlerName: bowler?.name || 'Bowler',
               }) : null;
 
@@ -6196,6 +6294,26 @@ export default function LiveScoringScreen() {
                   <VPLEventBanner
                     role="scorer"
                     events={ballEvents}
+                    skipInitial={true}
+                    onMilestonePress={(event) => {
+                      const isHundred = event.kind === 'hundred';
+                      const targetBatter = (striker?.name === event.primary ? striker : (nonStriker?.name === event.primary ? nonStriker : null)) || facedBatter || striker;
+                      triggerMilestone({
+                        type: isHundred ? 'BATTER_100' : 'BATTER_50',
+                        title: isHundred ? 'MAGNIFICENT CENTURY!' : 'HALF-CENTURY!',
+                        badge: isHundred ? '👑 100 RUNS CENTURY 👑' : '⭐ 50 RUNS MILESTONE ⭐',
+                        subtitle: isHundred
+                          ? 'Outstanding masterclass ton! Raises the bat to a standing ovation.'
+                          : 'Splendid half-century under pressure! A crucial innings for the team.',
+                        playerName: event.primary || targetBatter?.name || 'Champion',
+                        teamName: matchInfo?.battingTeam || 'Batting Team',
+                        scoreText: `${targetBatter?.runs || 50}*`,
+                        ballsText: `${targetBatter?.balls || 0} Balls`,
+                        strikeRateText: targetBatter?.strikeRate || (targetBatter?.balls ? ((targetBatter.runs / targetBatter.balls) * 100).toFixed(1) : '0.0'),
+                        fours: targetBatter?.fours || 0,
+                        sixes: targetBatter?.sixes || 0
+                      });
+                    }}
                     bottomOffset={0}
                     style={{ position: 'relative', left: 0, right: 0, top: 0, bottom: 0 }}
                   />
@@ -6235,66 +6353,112 @@ export default function LiveScoringScreen() {
                     const isExtra = Boolean(del.extra);
                     const isDot = del.runs === 0 && !isExtra && !isWicket;
 
-                    return (
-                      <TouchableOpacity
-                        key={`del-${del.id || idx}`}
-                        style={[
-                          styles.ballChip,
-                          isWicket && styles.ballChipWicket,
-                          isFour && styles.ballChipFour,
-                          isSix && styles.ballChipSix,
-                          isExtra && styles.ballChipExtra,
-                          isDot && styles.ballChipDot,
-                          isEditMode && styles.ballChipEditMode
-                        ]}
-                        onPress={() => {
-                          if (isEditMode) {
-                            handleOpenEditDelivery(del);
-                          } else {
-                            // Check if delivery matches an official umpire signal
-                            const dt = (del.text || '').toUpperCase();
-                            let sigType: UmpireSignalType | null = null;
-                            if (isWicket || (dt.includes('W') && !dt.includes('WD'))) sigType = 'OUT';
-                            else if (dt.includes('WD')) sigType = 'WIDE';
-                            else if (dt.includes('NB')) sigType = 'NO_BALL';
-                            else if (dt.includes('DEAD')) sigType = 'DEAD_BALL';
-                            else if (dt.includes('LB')) sigType = 'LEG_BYE';
-                            else if (dt.includes('B') && !dt.includes('NB')) sigType = 'BYE';
-                            else if (isSix || dt === '6') sigType = 'SIX';
-                            else if (isFour || dt === '4') sigType = 'FOUR';
+                    const overIdx = typeof del.overNumber === 'number'
+                      ? del.overNumber
+                      : parseInt(String(del.ball || '0').split('.')[0], 10);
 
-                            if (sigType) {
-                              setActiveUmpireSignal({
-                                type: sigType,
-                                batterName: del.strikerName || striker?.name,
-                                bowlerName: del.bowlerName || bowler?.name,
-                                runs: del.runs,
-                                overText: `Ball ${del.ball}`,
-                                extraDetails: del.commentary || `Delivery ${del.ball}: ${del.text} • Click 'Edit Mode' to alter historical ball`
-                              });
-                            } else {
-                              const info = `Ball ${del.ball}: ${del.text} • ${del.commentary || 'Recorded delivery'}\n\nTip: Activate 'Edit Mode' in the sidebar or top banner to modify past deliveries directly.`;
-                              Platform.OS === 'web' ? window.alert(info) : Alert.alert('Delivery Details', info);
-                            }
-                          }
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        {isEditMode && <Text style={styles.ballChipPencil}>✏️</Text>}
-                        <Text
+                    const prevDel = idx > 0 ? recentDeliveries[idx - 1] : null;
+                    const prevOverIdx = prevDel
+                      ? (typeof prevDel.overNumber === 'number'
+                          ? prevDel.overNumber
+                          : parseInt(String(prevDel.ball || '0').split('.')[0], 10))
+                      : null;
+
+                    const isNewOverSection = idx === 0 || overIdx !== prevOverIdx;
+                    const theme = RECENT_OVER_THEMES[Math.abs(overIdx) % RECENT_OVER_THEMES.length];
+
+                    // Total runs scored in this over
+                    const overTotalRuns = recentDeliveries
+                      .filter(d => {
+                        const o = typeof d.overNumber === 'number'
+                          ? d.overNumber
+                          : parseInt(String(d.ball || '0').split('.')[0], 10);
+                        return o === overIdx;
+                      })
+                      .reduce((sum, d) => sum + (Number(d.runs) || 0) + (Number(d.runsExtras) || 0), 0);
+
+                    return (
+                      <React.Fragment key={`del-frag-${del.id || idx}`}>
+                        {isNewOverSection && (
+                          <View
+                            style={[
+                              styles.overDividerBadge,
+                              idx > 0 && { marginLeft: 10 },
+                              {
+                                backgroundColor: theme.badgeBg,
+                                borderColor: theme.badgeBorder,
+                              }
+                            ]}
+                          >
+                            <Text style={[styles.overDividerBadgeText, { color: theme.badgeText }]}>
+                              Ov {overIdx + 1}
+                            </Text>
+                            <Text style={[styles.overDividerRunsText, { color: theme.badgeText }]}>
+                              {overTotalRuns}r
+                            </Text>
+                          </View>
+                        )}
+
+                        <TouchableOpacity
+                          key={`del-${del.id || idx}`}
                           style={[
-                            styles.ballChipText,
-                            isWicket && styles.ballChipTextWicket,
-                            isFour && styles.ballChipTextFour,
-                            isSix && styles.ballChipTextSix,
-                            isExtra && styles.ballChipTextExtra,
-                            isDot && styles.ballChipTextDot
+                            styles.ballChip,
+                            {
+                              backgroundColor: isWicket ? '#fef2f2' : isFour ? '#ecfdf5' : isSix ? '#eff6ff' : isExtra ? '#fffbeb' : theme.chipBg,
+                              borderColor: isWicket ? '#ef4444' : isFour ? '#10b981' : isSix ? '#3b82f6' : isExtra ? '#f59e0b' : theme.chipBorder,
+                            },
+                            isEditMode && styles.ballChipEditMode
                           ]}
+                          onPress={() => {
+                            if (isEditMode) {
+                              handleOpenEditDelivery(del);
+                            } else {
+                              // Check if delivery matches an official umpire signal
+                              const dt = (del.text || '').toUpperCase();
+                              let sigType: UmpireSignalType | null = null;
+                              if (isWicket || (dt.includes('W') && !dt.includes('WD'))) sigType = 'OUT';
+                              else if (dt.includes('WD')) sigType = 'WIDE';
+                              else if (dt.includes('NB')) sigType = 'NO_BALL';
+                              else if (dt.includes('DEAD')) sigType = 'DEAD_BALL';
+                              else if (dt.includes('LB')) sigType = 'LEG_BYE';
+                              else if (dt.includes('B') && !dt.includes('NB')) sigType = 'BYE';
+                              else if (isSix || dt === '6') sigType = 'SIX';
+                              else if (isFour || dt === '4') sigType = 'FOUR';
+
+                              if (sigType) {
+                                setActiveUmpireSignal({
+                                  type: sigType,
+                                  batterName: del.strikerName || striker?.name,
+                                  bowlerName: del.bowlerName || bowler?.name,
+                                  runs: del.runs,
+                                  overText: `Ball ${del.ball}`,
+                                  extraDetails: del.commentary || `Delivery ${del.ball}: ${del.text} • Click 'Edit Mode' to alter historical ball`
+                                });
+                              } else {
+                                const info = `Ball ${del.ball}: ${del.text} • ${del.commentary || 'Recorded delivery'}\n\nTip: Activate 'Edit Mode' in the sidebar or top banner to modify past deliveries directly.`;
+                                Platform.OS === 'web' ? window.alert(info) : Alert.alert('Delivery Details', info);
+                              }
+                            }
+                          }}
+                          activeOpacity={0.7}
                         >
-                          {del.text}
-                        </Text>
-                        <Text style={styles.ballChipOverText}>{del.ball}</Text>
-                      </TouchableOpacity>
+                          {isEditMode && <Text style={styles.ballChipPencil}>✏️</Text>}
+                          <Text
+                            style={[
+                              styles.ballChipText,
+                              isWicket && styles.ballChipTextWicket,
+                              isFour && styles.ballChipTextFour,
+                              isSix && styles.ballChipTextSix,
+                              isExtra && styles.ballChipTextExtra,
+                              isDot && { color: theme.dotText },
+                              !isWicket && !isFour && !isSix && !isExtra && !isDot && { color: theme.dotText }
+                            ]}
+                          >
+                            {del.text}
+                          </Text>
+                          <Text style={[styles.ballChipOverText, { color: theme.subText }]}>{del.ball}</Text>
+                        </TouchableOpacity>
+                      </React.Fragment>
                     );
                   })
                 ) : (
@@ -6512,7 +6676,7 @@ export default function LiveScoringScreen() {
                     </TouchableOpacity>
                   </View>
 
-                  {/* Row 4: WICKET & FIELDING */}
+                  {/* Row 4: WICKET */}
                   <View style={styles.engineKeypadRow}>
                     <TouchableOpacity
                       disabled={
@@ -6526,21 +6690,13 @@ export default function LiveScoringScreen() {
                       style={[
                         styles.engineKeypadBtn,
                         styles.wicketBtn,
-                        { flex: 2 },
+                        { flex: 1 },
                         (isOverComplete || isSubmittingDelivery || matchStatus !== 'LIVE' || isInningsBreak || isMatchEnded) && styles.btnDisabled
                       ]}
                       onPress={handleWicketClick}
                       activeOpacity={0.7}
                     >
                       <Text style={[styles.engineKeypadText, styles.wicketBtnText]}>🛑 WICKET</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.engineKeypadBtn, { flex: 1, backgroundColor: '#005960', borderColor: '#0d9488' }]}
-                      onPress={() => setShowFieldingModal(true)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.engineAuxKeypadText, { color: '#fef3c7' }]}>FIELDING</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -6850,7 +7006,7 @@ export default function LiveScoringScreen() {
               <View style={[styles.previewBox, { padding: 8, marginTop: 4 }]}>
                 <Text style={[styles.previewBoxLabel, { fontSize: 9.5 }]}>RECORDING PREVIEW:</Text>
                 <Text style={[styles.previewBoxText, { fontSize: 12 }]}>
-                  {customRunsInput || '0'} Runs &bull; {customCategory.toUpperCase()} vs {bowler?.name || 'Bowler'}
+                  {customRunsInput || '0'} Runs • {customCategory.toUpperCase()} vs {bowler?.name || 'Bowler'}
                   {customRunsReason.trim() ? ` • [${customRunsReason.trim()}]` : ''}
                 </Text>
               </View>
@@ -7642,8 +7798,8 @@ export default function LiveScoringScreen() {
                         </Text>
                         <Text style={styles.keeperDismissalExplanation}>
                           {wicketType === 'STUMPED'
-                            ? 'பேட்டர் க்ரீஸை விட்டு வெளியே வந்ததும் கீப்பர் ஸ்டம்பைத் தட்டி அவுட் செய்தார்.'
-                            : 'பேட்டர் எட்ஜ் செய்த பந்தை விக்கெட் கீப்பர் கேட்ச் பிடித்தார்.'}
+                            ? 'Batter stepped out of crease and wicketkeeper broke the stumps.'
+                            : 'Batter edged delivery and wicketkeeper caught cleanly behind.'}
                         </Text>
                       </View>
                     </View>
@@ -7665,7 +7821,7 @@ export default function LiveScoringScreen() {
                         </View>
                         <Text style={styles.runOutDismissalTitle}>Run Out (Fielder Direct Hit / Throw)</Text>
                         <Text style={styles.runOutDismissalExplanation}>
-                          பேட்டர் க்ரீஸுக்குள் வருவதற்கு முன் பீல்டர் வீசிய பந்து ஸ்டம்பைத் தகர்த்தது.
+                          Fielder hit the stumps before the batter could ground their bat behind the crease line.
                         </Text>
                       </View>
                     </View>
@@ -12057,6 +12213,26 @@ const getStyles = (isDesktop: boolean) =>
       fontSize: 12,
       color: '#94a3b8',
       fontStyle: 'italic'
+    },
+    overDividerBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 8,
+      borderWidth: 1.5,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minWidth: 46,
+      height: 48
+    },
+    overDividerBadgeText: {
+      fontSize: 11,
+      fontWeight: '900',
+      letterSpacing: 0.3
+    },
+    overDividerRunsText: {
+      fontSize: 9.5,
+      fontWeight: '800',
+      marginTop: 1
     },
 
     // Direct Delivery Edit Modal Styles

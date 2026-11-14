@@ -1111,11 +1111,13 @@ export default function CricketRulesModal({
   const [selectedCategory, setSelectedCategory] = useState<CricketRuleCategory>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [competitionFormat, setCompetitionFormat] = useState<CompetitionFormat>('ICC_T20');
+  const [mobileTab, setMobileTab] = useState<'LIST' | 'DETAIL'>('DETAIL');
 
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       (window as any).__SELECT_RULE__ = (ruleId: string) => {
         setSelectedRuleId(ruleId);
+        setMobileTab('DETAIL');
       };
     }
   }, []);
@@ -1141,6 +1143,7 @@ export default function CricketRulesModal({
       const match = ALL_RULES_CATALOG.find(r => r.id === activeRule || r.id.toLowerCase() === activeRule.toLowerCase());
       if (match) {
         setSelectedRuleId(match.id);
+        setMobileTab('DETAIL');
       }
     }
   }, [activeRule]);
@@ -1267,52 +1270,56 @@ export default function CricketRulesModal({
       <View style={styles.backdrop}>
         <View style={[styles.modalCard, isMobile && { width: '96%', maxHeight: '94%' }]}>
           {/* HEADER */}
-          <View style={styles.headerRow}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-              <View style={styles.headerIconBadge}>
-                <Text style={{ fontSize: 20 }}>⚖️</Text>
+          <View style={[styles.headerRow, isMobile && { paddingHorizontal: 10, paddingVertical: 8 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: isMobile ? 6 : 10, flex: 1 }}>
+              <View style={[styles.headerIconBadge, isMobile && { width: 28, height: 28, borderRadius: 14 }]}>
+                <Text style={{ fontSize: isMobile ? 15 : 20 }}>⚖️</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.headerTitle}>Cricket Umpire Decision-Support System</Text>
-                <Text style={styles.headerSubtitle}>
-                  MCC Laws of Cricket (4th Ed. 2026) • ICC & BCCI Professional Match Engine
+                <Text style={[styles.headerTitle, isMobile && { fontSize: 13 }]} numberOfLines={1}>
+                  {isMobile ? 'Cricket Rules' : 'Cricket Umpire Decision-Support System'}
                 </Text>
+                {!isMobile && (
+                  <Text style={styles.headerSubtitle}>
+                    MCC Laws of Cricket (4th Ed. 2026) • ICC & BCCI Professional Match Engine
+                  </Text>
+                )}
               </View>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <TouchableOpacity
-                style={[styles.historyPillBtn, showHistoryView && styles.historyPillBtnActive]}
+                style={[styles.historyPillBtn, showHistoryView && styles.historyPillBtnActive, isMobile && { paddingHorizontal: 6, paddingVertical: 4 }]}
                 onPress={() => setShowHistoryView(prev => !prev)}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.historyPillBtnText, showHistoryView && styles.historyPillBtnTextActive]}>
-                  {showHistoryView ? '📖 View Rules' : '📋 Decision Audit History'}
+                <Text style={[styles.historyPillBtnText, showHistoryView && styles.historyPillBtnTextActive, isMobile && { fontSize: 10 }]}>
+                  {showHistoryView ? (isMobile ? '📖 Rules' : '📖 View Rules') : (isMobile ? '📋 History' : '📋 Decision Audit History')}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
-                <Text style={styles.closeBtnText}>✕</Text>
+              <TouchableOpacity onPress={onClose} style={[styles.closeBtn, isMobile && { width: 26, height: 26, borderRadius: 13 }]} activeOpacity={0.7}>
+                <Text style={[styles.closeBtnText, isMobile && { fontSize: 12 }]}>✕</Text>
               </TouchableOpacity>
             </View>
           </View>
 
           {/* PLAYING CONDITIONS SELECTOR & LIVE MONITOR */}
-          <View style={styles.monitorBar}>
+          <View style={[styles.monitorBar, isMobile && { paddingHorizontal: 8, paddingVertical: 6 }]}>
             <View style={styles.competitionRow}>
-              <Text style={styles.monitorLabel}>PLAYING CONDITIONS:</Text>
-              <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+              <Text style={styles.monitorLabel}>{isMobile ? 'CONDITIONS:' : 'PLAYING CONDITIONS:'}</Text>
+              <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}>
                 {[
-                  { key: 'ICC_T20', label: 'ICC T20 International' },
-                  { key: 'BCCI_DOMESTIC', label: 'BCCI Domestic (SMAT)' },
-                  { key: 'MCC_TRADITIONAL', label: 'MCC 42 Laws' },
-                  { key: 'TNCA_LEAGUE', label: 'TNCA League Conditions' }
+                  { key: 'ICC_T20', label: isMobile ? 'T20I' : 'ICC T20 International' },
+                  { key: 'BCCI_DOMESTIC', label: isMobile ? 'BCCI' : 'BCCI Domestic (SMAT)' },
+                  { key: 'MCC_TRADITIONAL', label: isMobile ? 'MCC 42' : 'MCC 42 Laws' },
+                  { key: 'TNCA_LEAGUE', label: isMobile ? 'TNCA' : 'TNCA League Conditions' }
                 ].map(comp => (
                   <TouchableOpacity
                     key={comp.key}
-                    style={[styles.compChip, competitionFormat === comp.key && styles.compChipActive]}
+                    style={[styles.compChip, competitionFormat === comp.key && styles.compChipActive, isMobile && { paddingHorizontal: 6, paddingVertical: 2 }]}
                     onPress={() => setCompetitionFormat(comp.key as CompetitionFormat)}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.compChipText, competitionFormat === comp.key && styles.compChipTextActive]}>
+                    <Text style={[styles.compChipText, competitionFormat === comp.key && styles.compChipTextActive, isMobile && { fontSize: 9.5 }]}>
                       {comp.label}
                     </Text>
                   </TouchableOpacity>
@@ -1320,40 +1327,42 @@ export default function CricketRulesModal({
               </View>
             </View>
 
-            {/* ACTIVE COMPETITION REGULATIONS SUMMARY BANNER */}
-            <View style={styles.competitionSummaryBar}>
-              <View style={styles.competitionBadgeTag}>
-                <Text style={styles.competitionBadgeTagText}>
-                  {COMPETITION_CONFIGS[competitionFormat].badge}
+            {/* ACTIVE COMPETITION REGULATIONS SUMMARY BANNER (Desktop only to prevent clutter on mobile) */}
+            {!isMobile && (
+              <View style={styles.competitionSummaryBar}>
+                <View style={styles.competitionBadgeTag}>
+                  <Text style={styles.competitionBadgeTagText}>
+                    {COMPETITION_CONFIGS[competitionFormat].badge}
+                  </Text>
+                </View>
+                <Text style={styles.competitionSummaryText}>
+                  {COMPETITION_CONFIGS[competitionFormat].description}
                 </Text>
               </View>
-              <Text style={styles.competitionSummaryText}>
-                {COMPETITION_CONFIGS[competitionFormat].description}
-              </Text>
-            </View>
+            )}
 
             {/* REAL-TIME MATCH CONTEXT STRIP */}
-            <View style={styles.liveMatchContextStrip}>
+            <View style={[styles.liveMatchContextStrip, isMobile && { padding: 4, gap: 8, marginTop: 4 }]}>
               <View style={styles.contextItem}>
                 <Text style={styles.contextLabel}>FORMAT:</Text>
                 <Text style={styles.contextValue}>
-                  {COMPETITION_CONFIGS[competitionFormat].formatTitle}
+                  {isMobile
+                    ? (competitionFormat === 'ICC_T20' ? 'T20 (20 Ov)' : competitionFormat === 'BCCI_DOMESTIC' ? 'SMAT (20 Ov)' : competitionFormat === 'MCC_TRADITIONAL' ? 'MCC' : 'TNCA')
+                    : COMPETITION_CONFIGS[competitionFormat].formatTitle}
                 </Text>
               </View>
               {ruleContext.bowlerName && (
                 <View style={styles.contextItem}>
                   <Text style={styles.contextLabel}>BOWLER:</Text>
                   <Text style={styles.contextValue}>
-                    {ruleContext.bowlerName} ({ruleContext.oversBowled || '0.0'}
-                    {competitionFormat === 'MCC_TRADITIONAL'
+                    {ruleContext.bowlerName} ({ruleContext.oversBowled || '0.0'}{isMobile ? '' : (competitionFormat === 'MCC_TRADITIONAL'
                       ? ' Ov • Unlimited'
-                      : `/${COMPETITION_CONFIGS[competitionFormat].bowlerMaxQuota}`}
-                    )
+                      : `/${COMPETITION_CONFIGS[competitionFormat].bowlerMaxQuota}`)})
                   </Text>
                 </View>
               )}
               <View style={styles.contextItem}>
-                <Text style={styles.contextLabel}>BOUNCER LIMIT:</Text>
+                <Text style={styles.contextLabel}>{isMobile ? 'BOUNCER:' : 'BOUNCER LIMIT:'}</Text>
                 <Text
                   style={[
                     styles.contextValue,
@@ -1367,7 +1376,9 @@ export default function CricketRulesModal({
                     }
                   ]}
                 >
-                  {COMPETITION_CONFIGS[competitionFormat].bouncerLimit}
+                  {isMobile
+                    ? (competitionFormat === 'BCCI_DOMESTIC' ? '2 / Over' : competitionFormat === 'MCC_TRADITIONAL' ? 'No Limit' : '1 / Over')
+                    : COMPETITION_CONFIGS[competitionFormat].bouncerLimit}
                 </Text>
               </View>
               <View style={styles.contextItem}>
@@ -1384,11 +1395,13 @@ export default function CricketRulesModal({
                     }
                   ]}
                 >
-                  {!COMPETITION_CONFIGS[competitionFormat].freeHitActive
-                    ? '🚫 Inactive (Not in MCC Code)'
-                    : ruleContext.count
-                    ? '⚡ Active'
-                    : 'Normal (Active on NB)'}
+                  {isMobile
+                    ? (!COMPETITION_CONFIGS[competitionFormat].freeHitActive ? 'No' : ruleContext.count ? 'Active' : 'On NB')
+                    : (!COMPETITION_CONFIGS[competitionFormat].freeHitActive
+                      ? '🚫 Inactive (Not in MCC Code)'
+                      : ruleContext.count
+                      ? '⚡ Active'
+                      : 'Normal (Active on NB)')}
                 </Text>
               </View>
               {Array.isArray(ruleContext.suspendedBowlers) && ruleContext.suspendedBowlers.length > 0 && (
@@ -1452,201 +1465,268 @@ export default function CricketRulesModal({
           ) : (
             /* ─── RULES DECISION SUPPORT CATALOG ─── */
             <View style={{ flex: 1, minHeight: 0 }}>
-              {/* SEARCH & CATEGORY FILTER BAR */}
-              <View style={styles.searchCategorySection}>
-                <View style={styles.searchBox}>
-                  <Text style={{ fontSize: 15 }}>🔍</Text>
-                  <TextInput
-                    style={styles.searchInput}
-                    placeholder="Search by rule, Law number (e.g. Law 36, Beamer, LBW, Helmet)..."
-                    placeholderTextColor="#94a3b8"
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                  />
-                  {searchQuery ? (
-                    <TouchableOpacity onPress={() => setSearchQuery('')}>
-                      <Text style={{ fontSize: 14, color: '#94a3b8' }}>✕</Text>
-                    </TouchableOpacity>
-                  ) : null}
+              {/* MOBILE SEGMENTED TAB SWITCH: BROWSE LIST vs VIEW DETAILS */}
+              {isMobile && (
+                <View style={styles.mobileTabBar}>
+                  <TouchableOpacity
+                    style={[styles.mobileTabBtn, mobileTab === 'LIST' && styles.mobileTabBtnActive]}
+                    onPress={() => setMobileTab('LIST')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.mobileTabBtnText, mobileTab === 'LIST' && styles.mobileTabBtnTextActive]}>
+                      📋 Rules List ({filteredRules.length})
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.mobileTabBtn, mobileTab === 'DETAIL' && styles.mobileTabBtnActive]}
+                    onPress={() => setMobileTab('DETAIL')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.mobileTabBtnText, mobileTab === 'DETAIL' && styles.mobileTabBtnTextActive]} numberOfLines={1}>
+                      📖 {selectedRule.name}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
+              )}
 
-                {/* CATEGORY TABS */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>
-                  {[
-                    { key: 'ALL', label: `All Rules (${ALL_RULES_CATALOG.length})` },
-                    { key: 'BOWLING', label: '1. Bowling (7)' },
-                    { key: 'BATTING', label: '2. Batting (9)' },
-                    { key: 'FIELDING', label: '3. Fielding (7)' },
-                    { key: 'UMPIRE', label: '4. Umpire (6)' },
-                    { key: 'MATCH', label: '5. Match (6)' }
-                  ].map(cat => (
-                    <TouchableOpacity
-                      key={cat.key}
-                      style={[styles.categoryTabPill, selectedCategory === cat.key && styles.categoryTabPillActive]}
-                      onPress={() => setSelectedCategory(cat.key as CricketRuleCategory)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.categoryTabLabel, selectedCategory === cat.key && styles.categoryTabLabelActive]}>
-                        {cat.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
+              {/* SEARCH & CATEGORY FILTER BAR (Shown on desktop, or on mobile only when browsing LIST) */}
+              {(!isMobile || mobileTab === 'LIST') && (
+                <View style={[styles.searchCategorySection, isMobile && { paddingHorizontal: 8, paddingVertical: 6 }]}>
+                  <View style={styles.searchBox}>
+                    <Text style={{ fontSize: 14 }}>🔍</Text>
+                    <TextInput
+                      style={styles.searchInput}
+                      placeholder={isMobile ? "Search rules (LBW, Beamer, No Ball)..." : "Search by rule, Law number (e.g. Law 36, Beamer, LBW, Helmet)..."}
+                      placeholderTextColor="#94a3b8"
+                      value={searchQuery}
+                      onChangeText={setSearchQuery}
+                    />
+                    {searchQuery ? (
+                      <TouchableOpacity onPress={() => setSearchQuery('')}>
+                        <Text style={{ fontSize: 14, color: '#94a3b8' }}>✕</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
 
-              {/* TWO COLUMN / MAIN LAYOUT */}
-              <View style={styles.catalogMainRow}>
-                {/* LEFT LIST: RULES SELECTOR */}
-                <View style={[styles.rulesListPanel, isMobile && { width: '35%' }]}>
-                  <ScrollView showsVerticalScrollIndicator={false}>
-                    {filteredRules.map(rule => {
-                      const isSelected = selectedRule.id === rule.id;
-                      const compMod = COMPETITION_CONFIGS[competitionFormat]?.rulesModifications?.[rule.id];
-                      return (
-                        <TouchableOpacity
-                          key={rule.id}
-                          style={[styles.ruleListItem, isSelected && styles.ruleListItemActive]}
-                          onPress={() => setSelectedRuleId(rule.id)}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={{ fontSize: 16 }}>{rule.icon}</Text>
-                          <View style={{ flex: 1, minWidth: 0 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                              <Text style={[styles.ruleListItemName, isSelected && styles.ruleListItemNameActive]} numberOfLines={1}>
-                                {rule.name}
-                              </Text>
-                              {compMod?.listTag && (
-                                <View style={styles.compModTag}>
-                                  <Text style={styles.compModTagText}>{compMod.listTag}</Text>
-                                </View>
-                              )}
-                            </View>
-                            <Text style={styles.ruleListItemLaw} numberOfLines={1}>
-                              {compMod?.law ? compMod.law.split('/')[0] : rule.law.split('/')[0]}
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
-
-                {/* RIGHT PANEL: COMPREHENSIVE DECISION SUPPORT VIEW */}
-                <View style={[styles.ruleDetailPanel, isMobile && { width: '65%' }]}>
-                  <ScrollView contentContainerStyle={styles.detailScrollContent} showsVerticalScrollIndicator={false}>
-                    {/* TITLE & OFFICIAL BADGES */}
-                    <View style={styles.detailHeaderCard}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <Text style={{ fontSize: 24 }}>{selectedRule.icon}</Text>
-                        <Text style={styles.detailRuleTitle}>{selectedRule.name}</Text>
-                        <View style={styles.lawRefBadge}>
-                          <Text style={styles.lawRefBadgeText}>{selectedRule.law}</Text>
-                        </View>
-                      </View>
-
-                      {/* UMPIRE REQUIREMENT PILL & ACTIVE COMPETITION BADGE */}
-                      <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                        <View
-                          style={[
-                            styles.requirementBadge,
-                            selectedRule.umpireRequirement === 'AUTOMATIC_DETECTION'
-                              ? styles.badgeAuto
-                              : styles.badgeUmpire
-                          ]}
-                        >
-                          <Text style={styles.requirementBadgeText}>
-                            {selectedRule.umpireRequirement === 'AUTOMATIC_DETECTION'
-                              ? '⚡ AUTOMATIC SYSTEM DETECTION'
-                              : '⚖️ UMPIRE CONFIRMATION REQUIRED'}
-                          </Text>
-                        </View>
-                        <View style={styles.categoryBadge}>
-                          <Text style={styles.categoryBadgeText}>{selectedRule.category}</Text>
-                        </View>
-                        <View style={styles.activeCompBadge}>
-                          <Text style={styles.activeCompBadgeText}>
-                            🏆 {COMPETITION_CONFIGS[competitionFormat].name}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* COMPETITION VARIATION NOTICE BANNER (if modified) */}
-                      {selectedRule.competitionVariation && (
-                        <View style={styles.compVariationBanner}>
-                          <Text style={styles.compVariationIcon}>⚡</Text>
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.compVariationTitle}>
-                              {COMPETITION_CONFIGS[competitionFormat].name.toUpperCase()} RULE ADAPTATION:
-                            </Text>
-                            <Text style={styles.compVariationDesc}>{selectedRule.competitionVariation}</Text>
-                          </View>
-                        </View>
-                      )}
-
-                      <Text style={styles.detailSummary}>{selectedRule.summary}</Text>
-                    </View>
-
-                    {/* VISUAL CRICKET FIELD DIAGRAM (Positioned immediately after heading & summary) */}
-                    <View style={styles.diagramWrapper}>
-                      <Text style={styles.diagramHeaderTitle}>🎨 OFFICIAL VISUAL DECISION DIAGRAM</Text>
-                      {renderRuleDiagram(selectedRule.diagramType, isMobile, {
-                        brokenEnd,
-                        setBrokenEnd,
-                        didBattersCross,
-                        setDidBattersCross,
-                        calculateRunOutVictim,
-                        timedOutSeconds,
-                        competitionFormat,
-                        ruleContext
-                      })}
-                    </View>
-
-                    {/* WHEN THE RULE APPLIES */}
-                    <View style={styles.specBox}>
-                      <Text style={styles.specBoxTitle}>📌 WHEN THIS RULE APPLIES:</Text>
-                      <Text style={styles.specBoxText}>{selectedRule.whenApplies}</Text>
-                    </View>
-
-                    {/* STEP-BY-STEP DECISION SEQUENCE */}
-                    <View style={styles.decisionSequenceCard}>
-                      <Text style={styles.sequenceCardTitle}>📋 STEP-BY-STEP DECISION PROCESS:</Text>
-                      {selectedRule.decisionProcess.map((step, sIdx) => (
-                        <View key={sIdx} style={styles.sequenceStepRow}>
-                          <Text style={styles.stepBulletText}>{step}</Text>
-                        </View>
-                      ))}
-                    </View>
-
-                    {/* SPECIFICATIONS GRID */}
-                    <View style={styles.specsGrid}>
-                      <View style={styles.specGridItem}>
-                        <Text style={styles.specItemLabel}>RUNS & EXTRAS:</Text>
-                        <Text style={styles.specItemValue}>{selectedRule.runsExtras}</Text>
-                      </View>
-                      <View style={styles.specGridItem}>
-                        <Text style={styles.specItemLabel}>LEGAL DELIVERY:</Text>
-                        <Text style={styles.specItemValue}>{selectedRule.legalBall}</Text>
-                      </View>
-                      <View style={[styles.specGridItem, { width: '100%' }]}>
-                        <Text style={styles.specItemLabel}>DISMISSAL CONSEQUENCES:</Text>
-                        <Text style={styles.specItemValue}>{selectedRule.dismissalConsequences}</Text>
-                      </View>
-                    </View>
-
-                    {/* ACTION CONFIRMATION TRIGGER BUTTON */}
-                    {selectedRule.actionPayload && (
+                  {/* CATEGORY TABS */}
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>
+                    {[
+                      { key: 'ALL', label: isMobile ? `All (${ALL_RULES_CATALOG.length})` : `All Rules (${ALL_RULES_CATALOG.length})` },
+                      { key: 'BOWLING', label: isMobile ? 'Bowling' : '1. Bowling (7)' },
+                      { key: 'BATTING', label: isMobile ? 'Batting' : '2. Batting (9)' },
+                      { key: 'FIELDING', label: isMobile ? 'Fielding' : '3. Fielding (7)' },
+                      { key: 'UMPIRE', label: isMobile ? 'Umpire' : '4. Umpire (6)' },
+                      { key: 'MATCH', label: isMobile ? 'Match' : '5. Match (6)' }
+                    ].map(cat => (
                       <TouchableOpacity
-                        style={styles.applyActionBtn}
-                        onPress={() => setPendingActionRule(selectedRule)}
-                        activeOpacity={0.8}
+                        key={cat.key}
+                        style={[styles.categoryTabPill, selectedCategory === cat.key && styles.categoryTabPillActive, isMobile && { paddingHorizontal: 8, paddingVertical: 4 }]}
+                        onPress={() => setSelectedCategory(cat.key as CricketRuleCategory)}
+                        activeOpacity={0.7}
                       >
-                        <Text style={styles.applyActionBtnText}>
-                          ⚖️ Apply Umpire Decision: {selectedRule.name}
+                        <Text style={[styles.categoryTabLabel, selectedCategory === cat.key && styles.categoryTabLabelActive, isMobile && { fontSize: 10 }]}>
+                          {cat.label}
                         </Text>
                       </TouchableOpacity>
-                    )}
+                    ))}
                   </ScrollView>
                 </View>
+              )}
+
+              {/* TWO COLUMN (DESKTOP) OR FULL-WIDTH SINGLE PANEL (MOBILE) */}
+              <View style={styles.catalogMainRow}>
+                {/* RULES LIST PANEL: Desktop or Mobile in LIST tab */}
+                {(!isMobile || mobileTab === 'LIST') && (
+                  <View style={[styles.rulesListPanel, isMobile && { width: '100%', maxWidth: '100%', borderRightWidth: 0 }]}>
+                    <ScrollView showsVerticalScrollIndicator={false}>
+                      {filteredRules.map(rule => {
+                        const isSelected = selectedRule.id === rule.id;
+                        const compMod = COMPETITION_CONFIGS[competitionFormat]?.rulesModifications?.[rule.id];
+                        return (
+                          <TouchableOpacity
+                            key={rule.id}
+                            style={[styles.ruleListItem, isSelected && styles.ruleListItemActive]}
+                            onPress={() => {
+                              setSelectedRuleId(rule.id);
+                              if (isMobile) {
+                                setMobileTab('DETAIL');
+                              }
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={{ fontSize: 16 }}>{rule.icon}</Text>
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                                <Text style={[styles.ruleListItemName, isSelected && styles.ruleListItemNameActive]} numberOfLines={1}>
+                                  {rule.name}
+                                </Text>
+                                {compMod?.listTag && (
+                                  <View style={styles.compModTag}>
+                                    <Text style={styles.compModTagText}>{compMod.listTag}</Text>
+                                  </View>
+                                )}
+                              </View>
+                              <Text style={styles.ruleListItemLaw} numberOfLines={1}>
+                                {compMod?.law ? compMod.law.split('/')[0] : rule.law.split('/')[0]}
+                              </Text>
+                            </View>
+                            {isMobile && (
+                              <Text style={{ fontSize: 16, color: '#94a3b8', fontWeight: 'bold' }}>›</Text>
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {/* RULES DETAIL PANEL: Desktop or Mobile in DETAIL tab */}
+                {(!isMobile || mobileTab === 'DETAIL') && (
+                  <View style={[styles.ruleDetailPanel, isMobile && { width: '100%' }]}>
+                    <ScrollView contentContainerStyle={[styles.detailScrollContent, isMobile && { padding: 10 }]} showsVerticalScrollIndicator={false}>
+                      {/* Mobile Back Button to Rules List */}
+                      {isMobile && (
+                        <TouchableOpacity
+                          style={styles.mobileBackBtn}
+                          onPress={() => setMobileTab('LIST')}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.mobileBackBtnText}>‹ Back to Rules List</Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* TITLE & OFFICIAL BADGES */}
+                      <View style={styles.detailHeaderCard}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <Text style={{ fontSize: isMobile ? 20 : 24 }}>{selectedRule.icon}</Text>
+                          <Text style={[styles.detailRuleTitle, isMobile && { fontSize: 14 }]}>{selectedRule.name}</Text>
+                          <View style={styles.lawRefBadge}>
+                            <Text style={styles.lawRefBadgeText}>{selectedRule.law}</Text>
+                          </View>
+                        </View>
+
+                        {/* UMPIRE REQUIREMENT PILL & ACTIVE COMPETITION BADGE */}
+                        <View style={{ marginTop: 6, flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <View
+                            style={[
+                              styles.requirementBadge,
+                              selectedRule.umpireRequirement === 'AUTOMATIC_DETECTION'
+                                ? styles.badgeAuto
+                                : styles.badgeUmpire
+                            ]}
+                          >
+                            <Text style={styles.requirementBadgeText}>
+                              {selectedRule.umpireRequirement === 'AUTOMATIC_DETECTION'
+                                ? (isMobile ? '⚡ AUTO DETECT' : '⚡ AUTOMATIC SYSTEM DETECTION')
+                                : (isMobile ? '⚖️ UMPIRE CONFIRM' : '⚖️ UMPIRE CONFIRMATION REQUIRED')}
+                            </Text>
+                          </View>
+                          <View style={styles.categoryBadge}>
+                            <Text style={styles.categoryBadgeText}>{selectedRule.category}</Text>
+                          </View>
+                          <View style={styles.activeCompBadge}>
+                            <Text style={styles.activeCompBadgeText}>
+                              🏆 {isMobile
+                                ? (competitionFormat === 'ICC_T20' ? 'T20I' : competitionFormat === 'BCCI_DOMESTIC' ? 'BCCI' : competitionFormat === 'MCC_TRADITIONAL' ? 'MCC' : 'TNCA')
+                                : COMPETITION_CONFIGS[competitionFormat].name}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* COMPETITION VARIATION NOTICE BANNER (if modified) */}
+                        {selectedRule.competitionVariation && (
+                          <View style={styles.compVariationBanner}>
+                            <Text style={styles.compVariationIcon}>⚡</Text>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.compVariationTitle}>
+                                {isMobile
+                                  ? 'RULE ADAPTATION:'
+                                  : `${COMPETITION_CONFIGS[competitionFormat].name.toUpperCase()} RULE ADAPTATION:`}
+                              </Text>
+                              <Text style={styles.compVariationDesc}>{selectedRule.competitionVariation}</Text>
+                            </View>
+                          </View>
+                        )}
+
+                        <Text style={[styles.detailSummary, isMobile && { fontSize: 11.5, lineHeight: 16 }]}>{selectedRule.summary}</Text>
+                      </View>
+
+                      {/* VISUAL CRICKET FIELD DIAGRAM */}
+                      <View style={styles.diagramWrapper}>
+                        <Text style={styles.diagramHeaderTitle}>
+                          {isMobile ? '🎨 VISUAL DECISION GUIDE' : '🎨 OFFICIAL VISUAL DECISION DIAGRAM'}
+                        </Text>
+                        {renderRuleDiagram(selectedRule.diagramType, isMobile, {
+                          brokenEnd,
+                          setBrokenEnd,
+                          didBattersCross,
+                          setDidBattersCross,
+                          calculateRunOutVictim,
+                          timedOutSeconds,
+                          competitionFormat,
+                          ruleContext
+                        })}
+                      </View>
+
+                      {/* WHEN THE RULE APPLIES */}
+                      <View style={styles.specBox}>
+                        <Text style={styles.specBoxTitle}>
+                          {isMobile ? '📌 WHEN RULE APPLIES:' : '📌 WHEN THIS RULE APPLIES:'}
+                        </Text>
+                        <Text style={[styles.specBoxText, isMobile && { fontSize: 11, lineHeight: 15 }]}>{selectedRule.whenApplies}</Text>
+                      </View>
+
+                      {/* STEP-BY-STEP DECISION SEQUENCE */}
+                      <View style={styles.decisionSequenceCard}>
+                        <Text style={styles.sequenceCardTitle}>
+                          {isMobile ? '📋 DECISION PROCESS:' : '📋 STEP-BY-STEP DECISION PROCESS:'}
+                        </Text>
+                        {selectedRule.decisionProcess.map((step, sIdx) => (
+                          <View key={sIdx} style={styles.sequenceStepRow}>
+                            <Text style={[styles.stepBulletText, isMobile && { fontSize: 11, lineHeight: 15 }]}>{step}</Text>
+                          </View>
+                        ))}
+                      </View>
+
+                      {/* SPECIFICATIONS GRID */}
+                      <View style={styles.specsGrid}>
+                        <View style={styles.specGridItem}>
+                          <Text style={styles.specItemLabel}>
+                            {isMobile ? 'RUNS / EXTRAS:' : 'RUNS & EXTRAS:'}
+                          </Text>
+                          <Text style={[styles.specItemValue, isMobile && { fontSize: 11 }]}>{selectedRule.runsExtras}</Text>
+                        </View>
+                        <View style={styles.specGridItem}>
+                          <Text style={styles.specItemLabel}>
+                            {isMobile ? 'LEGAL BALL:' : 'LEGAL DELIVERY:'}
+                          </Text>
+                          <Text style={[styles.specItemValue, isMobile && { fontSize: 11 }]}>{selectedRule.legalBall}</Text>
+                        </View>
+                        <View style={[styles.specGridItem, { width: '100%' }]}>
+                          <Text style={styles.specItemLabel}>
+                            {isMobile ? 'DISMISSAL:' : 'DISMISSAL CONSEQUENCES:'}
+                          </Text>
+                          <Text style={[styles.specItemValue, isMobile && { fontSize: 11 }]}>{selectedRule.dismissalConsequences}</Text>
+                        </View>
+                      </View>
+
+                      {/* ACTION CONFIRMATION TRIGGER BUTTON */}
+                      {selectedRule.actionPayload && (
+                        <TouchableOpacity
+                          style={styles.applyActionBtn}
+                          onPress={() => setPendingActionRule(selectedRule)}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.applyActionBtnText}>
+                            {isMobile
+                              ? `⚖️ Apply Decision`
+                              : `⚖️ Apply Umpire Decision: ${selectedRule.name}`}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
             </View>
           )}
@@ -3294,5 +3374,49 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#94a3b8',
     marginTop: 4
+  },
+  mobileTabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#e2e8f0',
+    borderRadius: 8,
+    padding: 3,
+    marginHorizontal: 10,
+    marginTop: 6,
+    marginBottom: 4
+  },
+  mobileTabBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6
+  },
+  mobileTabBtnActive: {
+    backgroundColor: '#005960'
+  },
+  mobileTabBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#475569'
+  },
+  mobileTabBtnTextActive: {
+    color: '#ffffff',
+    fontWeight: '800'
+  },
+  mobileBackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#e2e8f0',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    marginBottom: 8
+  },
+  mobileBackBtnText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#005960'
   }
 });

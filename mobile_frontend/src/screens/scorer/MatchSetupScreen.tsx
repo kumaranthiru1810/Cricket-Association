@@ -131,7 +131,7 @@ export default function MatchSetupScreen() {
         <View style={styles.headerRight}>
           <View style={styles.matchPill}>
             <Text style={styles.matchPillText} numberOfLines={1}>
-              {setupData?.tournament || 'VPL 2026'} &bull; <Text style={{ color: '#facc15' }}>{teamA.name}</Text> vs <Text style={{ color: '#facc15' }}>{teamB.name}</Text>
+              {setupData?.tournament || 'VPL 2026'} • <Text style={{ color: '#facc15' }}>{teamA.name}</Text> vs <Text style={{ color: '#facc15' }}>{teamB.name}</Text>
             </Text>
           </View>
           <View style={styles.statusBadge}>
