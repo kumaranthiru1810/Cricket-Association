@@ -263,6 +263,13 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   });
 
   useEffect(() => {
+    const targetTab = (initialParams?.tab || initialParams?.activeTab) as AdminTab;
+    if (targetTab && targetTab !== activeTab) {
+      setActiveTab(targetTab);
+    }
+  }, [initialParams?.tab, initialParams?.activeTab]);
+
+  useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       try {
         localStorage.setItem('cfvd_admin_active_tab', activeTab);
@@ -611,6 +618,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
   // Match Inspection, Cancel, Postpone & Reschedule Modals
   const [selectedMatchModal, setSelectedMatchModal] = useState<any | null>(null);
+  const [isConfirmingScheduleId, setIsConfirmingScheduleId] = useState<string | null>(null);
   const [cancelMatchModal, setCancelMatchModal] = useState<{ id: string; teamA: string; teamB: string } | null>(null);
   const [cancelReasonInput, setCancelReasonInput] = useState<string>('Inclement weather / ground unplayable');
   const [isCancellingMatch, setIsCancellingMatch] = useState<boolean>(false);
@@ -889,33 +897,50 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       { id: 'VEN-10', name: 'Watrap Taluk Sports Arena Ground', location: 'Main Road, Watrap', capacity: 2000, floodlights: false, description: 'Taluk arena with newly relaid central pitch.' }
     ];
 
-    const list = (venuesList || []).map((v: any, idx: number) => {
-      const vName = typeof v === 'string' ? v : v.name;
-      const vLoc = typeof v === 'object' ? (v.location || v.address || 'Virudhunagar District') : 'Ground';
-      const vCap = typeof v === 'object' ? (v.capacity || '5,000') : '5,000';
-      const vLights = typeof v === 'object' ? (v.floodlights !== false) : true;
-      const vDesc = typeof v === 'object' ? (v.description || '') : '';
-      return {
-        id: v.id || v._id || `VEN-${idx + 1}`,
+    const list: any[] = [];
+    const ids = new Set<string>();
+    const names = new Set<string>();
+
+    const safeList = Array.isArray(venuesList) ? venuesList.filter(Boolean) : [];
+    safeList.forEach((v: any, idx: number) => {
+      const vName = typeof v === 'string' ? v : (v?.name || '');
+      if (!vName) return;
+      const vId = String(v?.id || v?._id || `VEN-${idx + 1}`);
+      const vLoc = typeof v === 'object' && v ? (v.location || v.address || 'Virudhunagar District') : 'Ground';
+      const vCap = typeof v === 'object' && v ? (v.capacity || '5,000') : '5,000';
+      const vLights = typeof v === 'object' && v ? (v.floodlights !== false) : true;
+      const vDesc = typeof v === 'object' && v ? (v.description || '') : '';
+
+      const normName = vName.toLowerCase().trim();
+      names.add(normName);
+      ids.add(vId);
+      list.push({
+        id: vId,
         name: vName,
         location: vLoc,
         capacity: vCap,
         floodlights: vLights,
         description: vDesc
-      };
+      });
     });
 
-    const existingNames = new Set(list.map(v => (v.name || '').toLowerCase().trim()));
     for (const dg of defaultGrounds) {
-      if (!existingNames.has(dg.name.toLowerCase().trim())) {
-        list.push(dg);
-        existingNames.add(dg.name.toLowerCase().trim());
+      const normName = dg.name.toLowerCase().trim();
+      if (!names.has(normName)) {
+        let uniqueId = dg.id;
+        if (ids.has(uniqueId)) {
+          uniqueId = `${dg.id}-DEF-${list.length + 1}`;
+        }
+        ids.add(uniqueId);
+        names.add(normName);
+        list.push({ ...dg, id: uniqueId });
       }
     }
 
-    if (scheduleForm.venue && !existingNames.has(scheduleForm.venue.toLowerCase().trim())) {
+    if (scheduleForm?.venue && !names.has(scheduleForm.venue.toLowerCase().trim())) {
+      const customId = 'VEN-CUSTOM';
       list.push({
-        id: `VEN-CUSTOM-${Date.now()}`,
+        id: ids.has(customId) ? `${customId}-${Date.now()}` : customId,
         name: scheduleForm.venue,
         location: 'Custom Google Maps Location',
         capacity: 1000,
@@ -925,7 +950,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     }
 
     return list;
-  }, [venuesList, scheduleForm.venue]);
+  }, [venuesList, scheduleForm?.venue]);
 
   // Dynamic Time Delay calculator for Weather / Rain adjustments
   const applyDynamicTimeDelay = (minutesToAdd: number) => {
@@ -1547,6 +1572,48 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       await loadMatchesAndLogistics();
     } catch (err: any) {
       await showError('Review Failed', err.message || 'Failed to review postponement request.');
+    }
+  };
+
+  const handleConfirmMatchSchedule = async (match: any) => {
+    const isA = match.team_a_allocation_status === 'SUBMITTED';
+    const isB = match.team_b_allocation_status === 'SUBMITTED';
+    const teamAName = match.team_a_name || match.team_a_id || 'Team 1';
+    const teamBName = match.team_b_name || match.team_b_id || 'Team 2';
+
+    if (!isA || !isB) {
+      const pending: string[] = [];
+      if (!isA) pending.push(teamAName);
+      if (!isB) pending.push(teamBName);
+      showWarning(
+        'Squad Allocations Pending',
+        `Both teams must submit their 11 Playing XI + substitutes before you can confirm and release this fixture to Scorer.\n\nPending: ${pending.join(', ')}`
+      );
+      return;
+    }
+
+    const confirmed = await showConfirm(
+      'Confirm Match Schedule',
+      `Are you sure you want to officially confirm the fixture between ${teamAName} and ${teamBName}?\n\nOnce confirmed, this match will immediately become active and visible in the Official Scorer Portal for toss and live scoring.`
+    );
+    if (!confirmed) return;
+
+    try {
+      setIsConfirmingScheduleId(match.id);
+      const res = await ScorerApi.confirmMatchSchedule(match.id);
+      if (res && (res.success || res.match)) {
+        showSuccess('Schedule Confirmed!', `Fixture ${match.id} has been officially confirmed and released to Scorer.`);
+        await loadMatchesAndLogistics();
+        if (selectedMatchModal?.id === match.id) {
+          setSelectedMatchModal((prev: any) => prev ? { ...prev, schedule_confirmation_status: 'CONFIRMED' } : null);
+        }
+      } else {
+        showError('Confirmation Failed', res?.message || 'Could not confirm match schedule.');
+      }
+    } catch (err: any) {
+      showError('Error', err?.message || 'Failed to confirm match schedule.');
+    } finally {
+      setIsConfirmingScheduleId(null);
     }
   };
 
@@ -2241,7 +2308,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         >
           <View style={styles.contentConstrained}>
             {/* Success Notification Banner */}
-            {notification && (
+            {Boolean(notification) && (
               <View style={styles.notificationBanner}>
                 <Text style={styles.notificationText}>{notification}</Text>
               </View>
@@ -2618,7 +2685,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               </TouchableOpacity>
                             )}
 
-                            {s.email && (
+                            {Boolean(s.email) && (
                               <TouchableOpacity
                                 style={styles.btnActionEmail}
                                 onPress={() => handleEmailContact(s.email, s.scorerName)}
@@ -3389,7 +3456,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                           {/* Action Buttons */}
                           <View style={[styles.itemActionsRow, { flexWrap: 'wrap' }]}>
-                            {t.coach?.email && (
+                            {Boolean(t.coach?.email) && (
                               <TouchableOpacity
                                 style={styles.btnActionEmail}
                                 onPress={() => handleEmailContact(t.coach.email, t.coach?.name || t.teamName)}
@@ -4400,7 +4467,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                             <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 12 }}>
                               ⏸️ Match Postponed: {m.postponement?.reason || 'Reason not specified'}
                             </Text>
-                            {m.postponement?.original_date && (
+                            {Boolean(m.postponement?.original_date) && (
                               <Text style={{ color: '#78350f', fontSize: 11, marginTop: 3 }}>
                                 Original Schedule: {m.postponement.original_date} • {m.postponement.original_time || '09:30 AM'}
                               </Text>
@@ -4449,9 +4516,82 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                         )}
 
                         {/* Result / Score Note if present */}
-                        {m.result_summary && (
+                        {Boolean(m.result_summary) && (
                           <View style={styles.resultNoticeBox}>
                             <Text style={styles.resultNoticeText}>ℹ️ {m.result_summary}</Text>
+                          </View>
+                        )}
+
+                        {/* Squad Allocation & Schedule Confirmation Banner */}
+                        {isScheduled && (
+                          <View style={{
+                            marginTop: 10,
+                            padding: 10,
+                            borderRadius: 8,
+                            backgroundColor: m.schedule_confirmation_status === 'CONFIRMED' ? '#ecfdf5' : ((m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#eff6ff' : '#f8fafc'),
+                            borderWidth: 1,
+                            borderColor: m.schedule_confirmation_status === 'CONFIRMED' ? '#a7f3d0' : ((m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#bfdbfe' : '#e2e8f0')
+                          }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Squad Allocations:</Text>
+                                <View style={{
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 3,
+                                  borderRadius: 4,
+                                  backgroundColor: m.team_a_allocation_status === 'SUBMITTED' ? '#dcfce7' : '#fee2e2',
+                                  borderWidth: 1,
+                                  borderColor: m.team_a_allocation_status === 'SUBMITTED' ? '#86efac' : '#fca5a5'
+                                }}>
+                                  <Text style={{ fontSize: 11, fontWeight: '700', color: m.team_a_allocation_status === 'SUBMITTED' ? '#166534' : '#991b1b' }}>
+                                    {m.team_a_allocation_status === 'SUBMITTED' ? '✓' : '⏳'} {m.team_a_name || 'Team 1'}: {m.team_a_allocation_status === 'SUBMITTED' ? 'Playing XI Locked' : 'Pending'}
+                                  </Text>
+                                </View>
+                                <View style={{
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 3,
+                                  borderRadius: 4,
+                                  backgroundColor: m.team_b_allocation_status === 'SUBMITTED' ? '#dcfce7' : '#fee2e2',
+                                  borderWidth: 1,
+                                  borderColor: m.team_b_allocation_status === 'SUBMITTED' ? '#86efac' : '#fca5a5'
+                                }}>
+                                  <Text style={{ fontSize: 11, fontWeight: '700', color: m.team_b_allocation_status === 'SUBMITTED' ? '#166534' : '#991b1b' }}>
+                                    {m.team_b_allocation_status === 'SUBMITTED' ? '✓' : '⏳'} {m.team_b_name || 'Team 2'}: {m.team_b_allocation_status === 'SUBMITTED' ? 'Playing XI Locked' : 'Pending'}
+                                  </Text>
+                                </View>
+                              </View>
+
+                              {m.schedule_confirmation_status === 'CONFIRMED' ? (
+                                <View style={{ backgroundColor: '#10b981', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}>
+                                  <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: '800' }}>✓ Confirmed & Live to Scorer</Text>
+                                </View>
+                              ) : (
+                                <TouchableOpacity
+                                  style={{
+                                    backgroundColor: (m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#16a34a' : '#94a3b8',
+                                    paddingHorizontal: 14,
+                                    paddingVertical: 6,
+                                    borderRadius: 6,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 6
+                                  }}
+                                  onPress={() => handleConfirmMatchSchedule(m)}
+                                  activeOpacity={0.8}
+                                  disabled={isConfirmingScheduleId === m.id}
+                                >
+                                  {isConfirmingScheduleId === m.id ? (
+                                    <ActivityIndicator size="small" color="#ffffff" />
+                                  ) : (
+                                    <Text style={{ color: '#ffffff', fontSize: 12, fontWeight: '800' }}>
+                                      {(m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED')
+                                        ? '✓ Confirm Match Schedule'
+                                        : '⏳ Confirm (Pending Squads)'}
+                                    </Text>
+                                  )}
+                                </TouchableOpacity>
+                              )}
+                            </View>
                           </View>
                         )}
 
@@ -4467,6 +4607,31 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                           {isScheduled && (
                             <>
+                              {m.schedule_confirmation_status !== 'CONFIRMED' && (
+                                <TouchableOpacity
+                                  style={[
+                                    styles.btnOutlineEdit,
+                                    {
+                                      borderColor: (m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#16a34a' : '#94a3b8',
+                                      backgroundColor: (m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#ecfdf5' : '#f1f5f9'
+                                    }
+                                  ]}
+                                  onPress={() => handleConfirmMatchSchedule(m)}
+                                  activeOpacity={0.8}
+                                  disabled={isConfirmingScheduleId === m.id}
+                                >
+                                  <Text style={[
+                                    styles.btnOutlineEditText,
+                                    {
+                                      color: (m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#16a34a' : '#64748b',
+                                      fontWeight: '800'
+                                    }
+                                  ]}>
+                                    {(m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '✓ Confirm' : '⏳ Confirm'}
+                                  </Text>
+                                </TouchableOpacity>
+                              )}
+
                               <TouchableOpacity
                                 style={styles.btnOutlineEdit}
                                 onPress={() => handleOpenScheduleModal(m)}
@@ -4809,7 +4974,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   {selectedUmpireForView?.status}
                 </Text>
               </View>
-              {selectedUmpireForView?.rejectionReason && (
+              {Boolean(selectedUmpireForView?.rejectionReason) && (
                 <View style={[styles.detailRow, { flexDirection: 'column', alignItems: 'flex-start' }]}>
                   <Text style={[styles.detailKey, { color: '#dc2626' }]}>Rejection Reason:</Text>
                   <Text style={[styles.detailVal, { color: '#dc2626', marginTop: 4 }]}>
@@ -5067,7 +5232,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
             {/* Scrollable Form Body */}
             <ScrollView style={styles.scheduleModalBodyScroll} showsVerticalScrollIndicator={true}>
-              {scheduleFormError && (
+              {Boolean(scheduleFormError) && (
                 <View style={styles.formErrorBoxCompact}>
                   <Text style={styles.formErrorText}>⚠️ {scheduleFormError}</Text>
                 </View>
@@ -5403,11 +5568,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     {Platform.OS === 'web' ? (
                       <select
                         aria-label="Select Ground"
-                        value={availableVenues.some(v => v.name === scheduleForm.venue) ? scheduleForm.venue : (scheduleForm.venue ? '__custom__' : '')}
+                        value={availableVenues.some(v => v?.name === scheduleForm.venue) ? scheduleForm.venue : (scheduleForm.venue ? '__custom__' : '')}
                         onChange={(e) => {
                           const val = e.target.value;
                           if (val === '__custom__') return;
-                          const found = availableVenues.find(v => v.name === val);
+                          const found = availableVenues.find(v => v?.name === val);
                           const groundName = found ? found.name : val;
                           const mapsLoc = found && found.location ? `${found.name} ${found.location}` : groundName;
                           setScheduleForm(prev => ({
@@ -5432,13 +5597,17 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                         }}
                       >
                         <option value="" disabled>Select Ground</option>
-                        {availableVenues.map((v) => (
-                          <option key={v.id} value={v.name}>
-                            {v.name}
-                          </option>
-                        ))}
-                        {scheduleForm.venue && !availableVenues.some(v => v.name === scheduleForm.venue) && (
-                          <option value="__custom__">
+                        {availableVenues.filter(Boolean).map((v, idx) => {
+                          const venueName = typeof v === 'string' ? v : (v?.name || '');
+                          const venueKey = String(v?.id || v?._id || venueName || `venue-${idx}`);
+                          return (
+                            <option key={venueKey} value={venueName}>
+                              {venueName}
+                            </option>
+                          );
+                        })}
+                        {scheduleForm.venue && !availableVenues.some(v => v?.name === scheduleForm.venue) && (
+                          <option key="__custom__" value="__custom__">
                             Custom: {scheduleForm.venue}
                           </option>
                         )}
@@ -5459,24 +5628,28 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     {venueDropdownOpen && (
                       <View style={[styles.dropdownTablePanelCompact, { marginBottom: 8 }]}>
                         <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
-                          {availableVenues.map(v => (
-                            <TouchableOpacity
-                              key={v.id}
-                              style={styles.dropdownTableRowCompact}
-                              onPress={() => {
-                                setScheduleForm(prev => ({
-                                  ...prev,
-                                  venue: v.name,
-                                  venue_maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.name + ' ' + (v.location || ''))}`
-                                }));
-                                setVenueDropdownOpen(false);
-                                setScheduleFormError(null);
-                              }}
-                            >
-                              <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>{v.name}</Text>
-                              <Text style={{ fontSize: 11, color: '#64748b' }}>{v.location} • {v.capacity}</Text>
-                            </TouchableOpacity>
-                          ))}
+                          {availableVenues.filter(Boolean).map((v, idx) => {
+                            const venueName = typeof v === 'string' ? v : (v?.name || '');
+                            const venueKey = String(v?.id || v?._id || venueName || `venue-m-${idx}`);
+                            return (
+                              <TouchableOpacity
+                                key={venueKey}
+                                style={styles.dropdownTableRowCompact}
+                                onPress={() => {
+                                  setScheduleForm(prev => ({
+                                    ...prev,
+                                    venue: venueName,
+                                    venue_maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venueName + ' ' + (v?.location || ''))}`
+                                  }));
+                                  setVenueDropdownOpen(false);
+                                  setScheduleFormError(null);
+                                }}
+                              >
+                                <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>{venueName}</Text>
+                                <Text style={{ fontSize: 11, color: '#64748b' }}>{v?.location || 'Ground'} • {v?.capacity || '5,000'}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
                         </ScrollView>
                       </View>
                     )}
@@ -5531,7 +5704,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     {/* Selected Ground Details & Google Maps Live Link Card */}
                     {(() => {
                       if (!scheduleForm.venue) return null;
-                      const matchedVenue = availableVenues.find(v => (v.name || '').toLowerCase().trim() === scheduleForm.venue.toLowerCase().trim());
+                      const matchedVenue = availableVenues.find(v => (v?.name || '').toLowerCase().trim() === (scheduleForm?.venue || '').toLowerCase().trim());
                       const isDbGround = Boolean(matchedVenue && !matchedVenue.id?.startsWith('VEN-CUSTOM'));
                       const locationDisplay = matchedVenue?.location || 'Virudhunagar District, Tamil Nadu';
                       const capacityDisplay = matchedVenue?.capacity || '1,500+ spectators';
@@ -6502,7 +6675,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               <Text style={{ fontWeight: '700' }}>{rescheduleModalMatch?.teamB}</Text> (ID: {rescheduleModalMatch?.id}).
             </Text>
 
-            {rescheduleErrors.generalError && (
+            {Boolean(rescheduleErrors.generalError) && (
               <View style={{ backgroundColor: '#fee2e2', borderColor: '#ef4444', borderWidth: 1, padding: 8, borderRadius: 6, marginVertical: 8 }}>
                 <Text style={{ color: '#b91c1c', fontSize: 12 }}>⚠️ {rescheduleErrors.generalError}</Text>
               </View>
@@ -6520,7 +6693,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               placeholder="YYYY-MM-DD"
               placeholderTextColor="#94a3b8"
             />
-            {rescheduleErrors.dateError && (
+            {Boolean(rescheduleErrors.dateError) && (
               <Text style={{ color: '#ef4444', fontSize: 11, marginTop: 2 }}>{rescheduleErrors.dateError}</Text>
             )}
 
@@ -6554,7 +6727,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               placeholder="e.g. 09:30 AM"
               placeholderTextColor="#94a3b8"
             />
-            {rescheduleErrors.timeError && (
+            {Boolean(rescheduleErrors.timeError) && (
               <Text style={{ color: '#ef4444', fontSize: 11, marginTop: 2 }}>{rescheduleErrors.timeError}</Text>
             )}
 
@@ -6659,7 +6832,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     </Text>
                   </TouchableOpacity>
                 </View>
-                {(selectedMatchModal?.umpire1_name || selectedMatchModal?.umpire2_name) && (
+                {Boolean(selectedMatchModal?.umpire1_name || selectedMatchModal?.umpire2_name) && (
                   <View style={styles.detailsRow}>
                     <Text style={styles.detailsKey}>⚖️ Match Umpires:</Text>
                     <Text style={styles.detailsVal}>
@@ -6683,16 +6856,56 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   <Text style={styles.detailsKey}>📊 Current Status:</Text>
                   <Text style={[styles.detailsVal, { fontWeight: '700', color: '#1e3a8a' }]}>{selectedMatchModal?.status || 'SCHEDULED'}</Text>
                 </View>
-                {selectedMatchModal?.toss_winner_id && (
+                {Boolean(selectedMatchModal?.toss_winner_id) && (
                   <View style={styles.detailsRow}>
                     <Text style={styles.detailsKey}>🪙 Toss Decision:</Text>
                     <Text style={styles.detailsVal}>Toss won by {selectedMatchModal.toss_winner_id}, elected to {selectedMatchModal.toss_decision}</Text>
                   </View>
                 )}
-                {selectedMatchModal?.result_summary && (
+                {Boolean(selectedMatchModal?.result_summary) && (
                   <View style={styles.detailsRow}>
                     <Text style={styles.detailsKey}>🏁 Result / Notes:</Text>
                     <Text style={[styles.detailsVal, { color: '#b45309', fontWeight: '700' }]}>{selectedMatchModal.result_summary}</Text>
+                  </View>
+                )}
+
+                {/* Squad Allocation & Confirmation Status Details */}
+                {(selectedMatchModal?.status || '').toUpperCase() === 'SCHEDULED' && (
+                  <View style={{
+                    marginTop: 14,
+                    padding: 12,
+                    borderRadius: 8,
+                    backgroundColor: selectedMatchModal?.schedule_confirmation_status === 'CONFIRMED' ? '#ecfdf5' : '#f8fafc',
+                    borderWidth: 1.5,
+                    borderColor: selectedMatchModal?.schedule_confirmation_status === 'CONFIRMED' ? '#86efac' : '#cbd5e1'
+                  }}>
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#1e293b', marginBottom: 6 }}>
+                      📋 Squad Allocation & Scorer Release Status
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                      <Text style={{ fontSize: 11, color: '#475569' }}>
+                        {selectedMatchModal?.team_a_name || 'Team 1'}:{' '}
+                        <Text style={{ fontWeight: '700', color: selectedMatchModal?.team_a_allocation_status === 'SUBMITTED' ? '#166534' : '#b91c1c' }}>
+                          {selectedMatchModal?.team_a_allocation_status === 'SUBMITTED' ? '✓ Playing XI Locked' : '⏳ Pending'}
+                        </Text>
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#94a3b8' }}>•</Text>
+                      <Text style={{ fontSize: 11, color: '#475569' }}>
+                        {selectedMatchModal?.team_b_name || 'Team 2'}:{' '}
+                        <Text style={{ fontWeight: '700', color: selectedMatchModal?.team_b_allocation_status === 'SUBMITTED' ? '#166534' : '#b91c1c' }}>
+                          {selectedMatchModal?.team_b_allocation_status === 'SUBMITTED' ? '✓ Playing XI Locked' : '⏳ Pending'}
+                        </Text>
+                      </Text>
+                    </View>
+                    <Text style={{
+                      fontSize: 11,
+                      fontWeight: '700',
+                      color: selectedMatchModal?.schedule_confirmation_status === 'CONFIRMED' ? '#059669' : '#d97706'
+                    }}>
+                      {selectedMatchModal?.schedule_confirmation_status === 'CONFIRMED'
+                        ? '✓ Schedule Confirmed by Admin (Fixture is active in Official Scorer Portal)'
+                        : '⚠️ Awaiting Admin confirmation to release this match to Scorer.'}
+                    </Text>
                   </View>
                 )}
               </View>
@@ -6705,6 +6918,26 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               >
                 <Text style={styles.modalCancelBtnText}>Close Details</Text>
               </TouchableOpacity>
+              {(selectedMatchModal?.status || '').toUpperCase() === 'SCHEDULED' && selectedMatchModal?.schedule_confirmation_status !== 'CONFIRMED' && (
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: (selectedMatchModal.team_a_allocation_status === 'SUBMITTED' && selectedMatchModal.team_b_allocation_status === 'SUBMITTED') ? '#16a34a' : '#94a3b8',
+                    paddingVertical: 10,
+                    paddingHorizontal: 16,
+                    borderRadius: 8,
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  onPress={() => handleConfirmMatchSchedule(selectedMatchModal)}
+                  disabled={isConfirmingScheduleId === selectedMatchModal?.id}
+                >
+                  <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 13 }}>
+                    {(selectedMatchModal.team_a_allocation_status === 'SUBMITTED' && selectedMatchModal.team_b_allocation_status === 'SUBMITTED')
+                      ? '✓ Confirm Schedule & Release to Scorer'
+                      : '⏳ Confirm (Pending Squads)'}
+                  </Text>
+                </TouchableOpacity>
+              )}
               {(selectedMatchModal?.status || '').toUpperCase() === 'SCHEDULED' && (
                 <TouchableOpacity
                   style={styles.modalApproveBtn}

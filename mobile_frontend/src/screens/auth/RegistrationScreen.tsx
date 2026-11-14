@@ -145,7 +145,6 @@ const SAMPLE_15_SQUAD: Array<{ name: string; email: string; role: string }> = [
 ];
 
 export const REGISTRATION_ROLES: { key: RegistrationRole; label: string; icon: string; desc: string }[] = [
-  { key: 'PLAYER', label: 'Player', icon: '🏏', desc: 'District player profile & trial enrollment' },
   { key: 'TEAM', label: 'Team & Coach', icon: '🛡️', desc: 'Club & institution team squad registration' },
   { key: 'SCORER', label: 'Scorer', icon: '📋', desc: 'Certified match scorer accreditation' },
   { key: 'UMPIRE', label: 'Umpire', icon: '⚖️', desc: 'Official umpire panel accreditation' }
@@ -198,11 +197,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
   const getInitialRole = (): RegistrationRole => {
     const r = (params?.initialRole as string)?.toUpperCase();
-    if (r === 'PLAYER') return 'PLAYER';
     if (r === 'TEAM' || r === 'COACH') return 'TEAM';
     if (r === 'SCORER') return 'SCORER';
     if (r === 'UMPIRE') return 'UMPIRE';
-    return 'PLAYER';
+    return 'TEAM';
   };
 
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -535,7 +533,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   const validatePasswordValue = (val: string): string | null => {
     const res = validatePassword(val);
     if (!res.isValid) {
-      return res.error || 'Password must be at least 8 characters, with 1 uppercase letter and 2 special characters.';
+      return res.error || 'Password must be at least 8 characters, with 1 uppercase letter, 1 special character, and 2 numbers.';
     }
     return null;
   };
@@ -1545,7 +1543,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       }));
                     }}
                     secureTextEntry={!showPassword}
-                    placeholder="Enter password (e.g. User@2026#)"
+                    placeholder="Enter password (e.g. User12@26)"
                     placeholderTextColor="#94a3b8"
                   />
                   <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
@@ -2132,6 +2130,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                   </TouchableOpacity>
                 </>
               )}
+              {/* PLAYER REGISTRATION - COMMENTED OUT */}
 
               {/* ========================================================= */}
               {/* 2. TEAM & COACH FORM */}

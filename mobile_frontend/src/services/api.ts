@@ -831,6 +831,12 @@ export const ScorerApi = {
     });
   },
 
+  confirmMatchSchedule: async (matchId: string) => {
+    return request(`/admin/matches/${matchId}/confirm-schedule`, {
+      method: 'POST'
+    });
+  },
+
   cancelMatch: async (matchId: string, reason?: string) => {
     return request(`/admin/matches/${matchId}/cancel`, {
       method: 'PATCH',
@@ -1489,10 +1495,66 @@ export const TeamApi = {
     captain?: string;
     viceCaptain?: string;
     teamLogo?: string;
+    photo?: string | null;
+    image_path?: string | null;
+    logo?: string | null;
   }) => {
     return request('/team/profile', {
       method: 'PUT',
       body: JSON.stringify(updates)
+    });
+  },
+
+  submitAllocation: async (matchId: string, payload: {
+    playingXI: string[];
+    substitutes: string[];
+    lineup?: any[];
+    captainId?: string;
+    viceCaptainId?: string;
+    wicketKeeperId?: string;
+  }) => {
+    return request(`/team/matches/${matchId}/allocate`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+
+  addPlayer: async (payload: {
+    name: string;
+    email: string;
+    role?: string;
+    jerseyNumber?: number;
+    battingStyle?: string;
+    bowlingStyle?: string;
+    mobile?: string;
+    aadhaar?: string;
+  }) => {
+    return request('/team/players', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  updatePlayer: async (playerId: string, payload: {
+    name?: string;
+    email?: string;
+    role?: string;
+    jerseyNumber?: number;
+    battingStyle?: string;
+    bowlingStyle?: string;
+    mobile?: string;
+    aadhaar?: string;
+  }) => {
+    return request(`/team/players/${playerId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  deletePlayer: async (playerId: string) => {
+    return request(`/team/players/${playerId}`, {
+      method: 'DELETE'
     });
   },
 

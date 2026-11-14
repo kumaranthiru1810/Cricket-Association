@@ -124,9 +124,9 @@ router.get('/matches/:matchId', async (req, res) => {
 });
 
 // Match Setup before match starts
-router.get('/matches/:matchId/setup', async (req, res) => {
+router.get('/matches/:matchId/setup', verifyMatchPermission, async (req, res) => {
   try {
-    const setup = await matchService.getMatchSetup(req.params.matchId);
+    const setup = await matchService.getMatchSetup(req.params.matchId, req.user);
     res.json({ success: true, data: setup });
   } catch (err) {
     res.status(err.status || 500).json({ success: false, error: err.message });
@@ -136,7 +136,7 @@ router.get('/matches/:matchId/setup', async (req, res) => {
 // Start Match (Toss, Playing XI)
 router.post('/matches/:matchId/start', verifyMatchPermission, async (req, res) => {
   try {
-    const result = await matchService.startMatch(req.params.matchId, req.body);
+    const result = await matchService.startMatch(req.params.matchId, req.body, req.user);
     res.json(result);
   } catch (err) {
     res.status(err.status || 500).json({ success: false, error: err.message });

@@ -158,58 +158,32 @@ app.use((err, req, res, next) => {
 });
 
 if (require.main === module) {
-  let isRetrying = false;
+  // Gracefully ensure port is free before starting
+  if (process.platform === 'win32') {
+    try {
+      const { execSync } = require('child_process');
+      const output = execSync(`netstat -ano | findstr :${PORT}`).toString();
+      const lines = output.split('\n');
+      const pids = new Set();
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 5 && parts[1].includes(`:${PORT}`) && parts[3] === 'LISTENING') {
+          const pid = parts[4];
+          if (pid && pid !== String(process.pid) && pid !== '0') {
+            pids.add(pid);
+          }
+        }
+      }
+      pids.forEach((pid) => {
+        try {
+          execSync(`taskkill /F /PID ${pid}`);
+        } catch (_e) {}
+      });
+    } catch (_e) {}
+  }
 
   server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-      if (!isRetrying) {
-        isRetrying = true;
-        console.warn(`\n⚠️ [PORT ${PORT} OCCUPIED] A previous server process is holding port ${PORT}.`);
-        console.log(`🔄 Attempting to automatically terminate the old process and free port ${PORT}...`);
-
-        try {
-          const { execSync } = require('child_process');
-          if (process.platform === 'win32') {
-            const output = execSync(`netstat -ano | findstr :${PORT}`).toString();
-            const lines = output.split('\n');
-            const pids = new Set();
-            for (const line of lines) {
-              const parts = line.trim().split(/\s+/);
-              if (parts.length >= 5 && parts[1].includes(`:${PORT}`) && parts[3] === 'LISTENING') {
-                const pid = parts[4];
-                if (pid && pid !== String(process.pid) && pid !== '0') {
-                  pids.add(pid);
-                }
-              }
-            }
-
-            if (pids.size > 0) {
-              pids.forEach((pid) => {
-                try {
-                  console.log(`🧹 Freeing port ${PORT} by stopping process PID ${pid}...`);
-                  execSync(`taskkill /F /PID ${pid}`);
-                } catch (_e) {}
-              });
-
-              setTimeout(() => {
-                console.log(`🚀 Retrying server start on port ${PORT}...`);
-                server.listen(PORT, '0.0.0.0', () => {
-                  console.log(`🏏 Cricket Express & Socket.IO Server running on http://localhost:${PORT}`);
-                });
-              }, 1200);
-              return;
-            }
-          }
-        } catch (_killErr) {}
-      }
-
-      console.error(`\n❌ Could not automatically free port ${PORT}.`);
-      console.error(`💡 Please run this command in PowerShell to kill it manually:`);
-      console.error(`   Stop-Process -Id (Get-NetTCPConnection -LocalPort ${PORT}).OwningProcess -Force\n`);
-      process.exit(1);
-    } else {
-      console.error('Server error:', err);
-    }
+    console.error('Server error:', err);
   });
 
   server.listen(PORT, '0.0.0.0', () => {

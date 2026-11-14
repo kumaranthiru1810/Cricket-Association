@@ -455,6 +455,12 @@ class PlayerService {
       userEmail?.toLowerCase()
     ].filter(Boolean);
 
+    const candidateNames = [
+      profile?.name,
+      playerDoc?.name,
+      userDoc?.name
+    ].filter(Boolean).map(n => n.toLowerCase());
+
     const formattedMatches = await Promise.all((matches || []).map(async (m) => {
       const teamA = teamMap[m.team_a_id] || { id: m.team_a_id, name: m.team_a_name || m.team_a_id, short_name: m.team_a_short || m.team_a_id };
       const teamB = teamMap[m.team_b_id] || { id: m.team_b_id, name: m.team_b_name || m.team_b_id, short_name: m.team_b_short || m.team_b_id };
@@ -497,6 +503,36 @@ class PlayerService {
         ))
       );
 
+      // Determine if player has been selected in Playing XI
+      const teamAPlayingXI = Array.isArray(m.team_a_playing_xi) ? m.team_a_playing_xi : [];
+      const teamBPlayingXI = Array.isArray(m.team_b_playing_xi) ? m.team_b_playing_xi : [];
+      const allPlayingXI = [...teamAPlayingXI, ...teamBPlayingXI];
+
+      const teamALineup = Array.isArray(m.team_a_lineup) ? m.team_a_lineup : [];
+      const teamBLineup = Array.isArray(m.team_b_lineup) ? m.team_b_lineup : [];
+      const allLineupPlayers = [...teamALineup, ...teamBLineup];
+
+      const isSelectedInPlayingXI = allPlayingXI.some(idOrName => {
+        if (candidateIds.includes(idOrName)) return true;
+        if (candidateNames && candidateNames.some(cn => cn === String(idOrName).toLowerCase())) return true;
+        return false;
+      }) || allLineupPlayers.some(p => {
+        if (candidateIds.includes(p.id)) return true;
+        if (candidateNames && candidateNames.some(cn => cn === String(p.name).toLowerCase())) return true;
+        return false;
+      });
+
+      // Determine if player has been selected as Substitute
+      const teamASubs = Array.isArray(m.team_a_substitutes) ? m.team_a_substitutes : [];
+      const teamBSubs = Array.isArray(m.team_b_substitutes) ? m.team_b_substitutes : [];
+      const allSubs = [...teamASubs, ...teamBSubs];
+
+      const isSelectedAsSubstitute = allSubs.some(idOrName => {
+        if (candidateIds.includes(idOrName)) return true;
+        if (candidateNames && candidateNames.some(cn => cn === String(idOrName).toLowerCase())) return true;
+        return false;
+      });
+
       return {
         id: m.id,
         tournament: m.tournament_name || tournamentMap[m.tournament_id]?.name || '',
@@ -511,7 +547,13 @@ class PlayerService {
         scoreA,
         scoreB,
         result: m.result_summary || (isLive ? (statusUpper === 'INNINGS_BREAK' ? 'Innings Break' : 'Match in Progress') : (isCompleted ? 'Match Completed' : 'Scheduled Match')),
-        isMyTeamMatch
+        isMyTeamMatch,
+        isPlayerSelectedInPlayingXI: isSelectedInPlayingXI,
+        isPlayerSelectedAsSubstitute: isSelectedAsSubstitute,
+        schedule_confirmation_status: m.schedule_confirmation_status || 'PENDING',
+        is_schedule_confirmed: m.schedule_confirmation_status === 'CONFIRMED',
+        team_a_allocation_status: m.team_a_allocation_status || 'PENDING',
+        team_b_allocation_status: m.team_b_allocation_status || 'PENDING'
       };
     }));
 
@@ -937,7 +979,21 @@ class PlayerService {
     await db.initDb();
     const profile = await this.getProfile(userId, userEmail);
 
-    const notifications = await db.models.Notification.find({}).sort({ created_at: -1 }).limit(20).lean();
+    const playerIds = [userId, profile?.id, profile?.playerId].filter(Boolean);
+    const playerEmails = [userEmail, profile?.email].filter(Boolean).map(e => e.toLowerCase());
+    const teamId = profile?.teamId || profile?.team_id;
+
+    const query = {
+      type: { $in: ['MATCH_SCHEDULED', 'MATCH_RESCHEDULED'] },
+      recipient_role: 'PLAYER',
+      $or: [
+        { recipient_id: { $in: playerIds } },
+        { recipient_email: { $in: playerEmails } },
+        ...(teamId ? [{ team_id: teamId, recipient_role: 'PLAYER' }] : [])
+      ]
+    };
+
+    const notifications = await db.models.Notification.find(query).sort({ created_at: -1 }).limit(30).lean();
 
     return notifications.map(n => ({
       id: n.id,
