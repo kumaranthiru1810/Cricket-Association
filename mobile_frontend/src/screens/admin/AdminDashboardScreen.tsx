@@ -40,6 +40,7 @@ import TournamentManagement from '../../admin/components/TournamentManagement';
 import CricketLawsManagement from '../../admin/components/CricketLawsManagement';
 import CalculationSettingsManagement from '../../admin/components/CalculationSettingsManagement';
 import SettingsPage from '../../admin/pages/SettingsPage';
+import UsersPage from '../../admin/pages/UsersPage';
 import {
   getKolkataNow,
   getTodayKolkata,
@@ -61,7 +62,7 @@ export interface AdminDashboardProps {
   initialParams?: any;
 }
 
-type AdminTab = 'overview' | 'teams' | 'scorers' | 'umpires' | 'content' | 'schedules' | 'tournaments' | 'laws' | 'calculations' | 'master_settings' | 'settings';
+type AdminTab = 'overview' | 'users' | 'teams' | 'scorers' | 'umpires' | 'content' | 'schedules' | 'tournaments' | 'laws' | 'calculations' | 'master_settings' | 'settings';
 type FilterStatus = 'all' | 'Pending' | 'Approved' | 'Rejected';
 type MatchFilterStatus = 'all' | 'SCHEDULED' | 'LIVE' | 'COMPLETED' | 'CANCELLED' | 'POSTPONED' | 'REQUESTS';
 
@@ -250,7 +251,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       try {
         const q = new URL(window.location.href).searchParams.get('tab') as AdminTab;
-        if (q && ['overview', 'teams', 'scorers', 'umpires', 'content', 'schedules', 'tournaments', 'laws', 'calculations'].includes(q)) {
+        if (q && ['overview', 'users', 'teams', 'scorers', 'umpires', 'content', 'schedules', 'tournaments', 'laws', 'calculations', 'master_settings', 'settings'].includes(q)) {
           return q;
         }
         const saved = localStorage.getItem('cfvd_admin_active_tab') as AdminTab;
@@ -1925,6 +1926,27 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             )}
           </TouchableOpacity>
 
+          {/* Users & Dynamic Admins */}
+          <TouchableOpacity
+            style={[
+              styles.sidebarNavItem,
+              activeTab === 'users' && styles.sidebarNavItemUsersActive,
+              isCollapsed && styles.sidebarNavItemCollapsed
+            ]}
+            onPress={() => {
+              setActiveTab('users');
+              if (isMobileDrawer) setMobileSidebarOpen(false);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.sidebarNavIcon, activeTab === 'users' && styles.sidebarNavIconActive]}>🛡️</Text>
+            {!isCollapsed && (
+              <Text style={[styles.sidebarNavLabel, activeTab === 'users' && styles.sidebarNavLabelActive]}>
+                Users & Admins
+              </Text>
+            )}
+          </TouchableOpacity>
+
           {/* Team Registrations */}
           <TouchableOpacity
             style={[
@@ -2253,6 +2275,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                   <Text style={styles.pageHeaderTitle}>
                     {activeTab === 'overview' && '⊞ Command Center Overview'}
+                    {activeTab === 'users' && '🛡️ Users & Dynamic Administrator Governance'}
                     {activeTab === 'teams' && '👥 Team Registrations'}
                     {activeTab === 'scorers' && '📋 Scorer Management'}
                     {activeTab === 'umpires' && '⚖️ Umpires Management'}
@@ -2264,6 +2287,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   {activeTab === 'overview' && (
                     <View style={[styles.pageThemeBadge, { backgroundColor: '#0f172a', borderColor: '#d4af37' }]}>
                       <Text style={[styles.pageThemeBadgeText, { color: '#fbbf24' }]}>🏛️ MISSION CONTROL</Text>
+                    </View>
+                  )}
+                  {activeTab === 'users' && (
+                    <View style={[styles.pageThemeBadge, { backgroundColor: '#eff6ff', borderColor: '#1e3a8a' }]}>
+                      <Text style={[styles.pageThemeBadgeText, { color: '#1e3a8a' }]}>🛡️ DYNAMIC ADMIN & OTP GOVERNANCE</Text>
                     </View>
                   )}
                   {activeTab === 'teams' && (
@@ -4553,6 +4581,15 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   })
                 )}
               </View>
+            </View>
+          )}
+
+          {/* ─────────────────────────────────────────────────────────────
+              USERS & DYNAMIC ADMINISTRATOR GOVERNANCE (NODEMAILER OTP)
+              ───────────────────────────────────────────────────────────── */}
+          {activeTab === 'users' && (
+            <View style={{ flex: 1, width: '100%' }}>
+              <UsersPage />
             </View>
           )}
 
@@ -6893,6 +6930,13 @@ const styles: any = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#d4af37',
     boxShadow: '0 4px 14px rgba(212, 175, 55, 0.35)',
+    elevation: 3
+  },
+  sidebarNavItemUsersActive: {
+    backgroundColor: '#1e3a8a',
+    borderWidth: 1.5,
+    borderColor: '#60a5fa',
+    boxShadow: '0 4px 14px rgba(30, 58, 138, 0.4)',
     elevation: 3
   },
   sidebarNavItemTeamsActive: {
