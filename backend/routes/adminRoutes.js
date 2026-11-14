@@ -418,6 +418,40 @@ router.post('/admins/add/verify-target', async (req, res) => {
 });
 
 /**
+ * Super Admin Dual-Admin Authorization Endpoints
+ */
+router.post('/dual-auth/request', async (req, res) => {
+  try {
+    const { action, targetData } = req.body;
+    const initiatorEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const result = await adminService.requestDualAdminOtp({
+      initiatorEmail,
+      action,
+      targetData
+    });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+router.post('/dual-auth/verify', async (req, res) => {
+  try {
+    const { authSessionId, admin1Otp, admin2Otp } = req.body;
+    const initiatorEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const result = await adminService.verifyAndExecuteDualAdmin({
+      authSessionId,
+      admin1Otp,
+      admin2Otp,
+      initiatorEmail
+    });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+/**
  * --------------------------------------------------------------------------
  * Content, News & Notices Management (Admin Only)
  * --------------------------------------------------------------------------

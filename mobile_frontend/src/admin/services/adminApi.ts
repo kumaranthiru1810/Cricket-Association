@@ -139,6 +139,21 @@ export const adminApi = {
     });
   },
 
+  // Dual-Admin Security Authorization (Super-Admin Protocol)
+  requestDualAdminOtp: async (action: 'CREATE_ADMIN' | 'PROMOTE_ADMIN', targetData: any) => {
+    return adminRequest('/admin/dual-auth/request', {
+      method: 'POST',
+      body: JSON.stringify({ action, targetData })
+    });
+  },
+
+  verifyDualAdminAuth: async (authSessionId: string, admin1Otp: string, admin2Otp: string) => {
+    return adminRequest('/admin/dual-auth/verify', {
+      method: 'POST',
+      body: JSON.stringify({ authSessionId, admin1Otp, admin2Otp })
+    });
+  },
+
   // 4. Players Management
   getPlayers: async (params?: { search?: string; team?: string; role?: string; status?: string }) => {
     const query = new URLSearchParams(params as any).toString();
