@@ -77,6 +77,13 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
   });
 
   useEffect(() => {
+    const targetTab = (initialParams?.tab || initialParams?.initialTab) as TabType;
+    if (targetTab && targetTab !== activeTab) {
+      setActiveTab(targetTab);
+    }
+  }, [initialParams?.tab, initialParams?.initialTab]);
+
+  useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       try {
         localStorage.setItem('cfvd_player_active_tab', activeTab);
@@ -1428,6 +1435,33 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                                   <Text style={styles.badgeGoldText}>Your Match</Text>
                                 </View>
                               </View>
+                              {matchItem.isPlayerSelectedInPlayingXI && (
+                                <View style={[styles.badgeBase, { backgroundColor: '#dcfce7', borderColor: '#86efac', borderWidth: 1 }]}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                                    <Ionicons name="shield-checkmark" size={10} color="#166534" />
+                                    <Text style={[styles.badgeBaseText, { color: '#166534', fontWeight: '800' }]}>PLAYING XI</Text>
+                                  </View>
+                                </View>
+                              )}
+                              {matchItem.isPlayerSelectedAsSubstitute && (
+                                <View style={[styles.badgeBase, { backgroundColor: '#dbeafe', borderColor: '#93c5fd', borderWidth: 1 }]}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                                    <Ionicons name="swap-horizontal" size={10} color="#1d4ed8" />
+                                    <Text style={[styles.badgeBaseText, { color: '#1d4ed8', fontWeight: '800' }]}>SUBSTITUTE</Text>
+                                  </View>
+                                </View>
+                              )}
+                              {!isLive && (
+                                (matchItem.schedule_confirmation_status === 'CONFIRMED' || matchItem.is_schedule_confirmed) ? (
+                                  <View style={[styles.badgeBase, { backgroundColor: '#dcfce7', borderColor: '#86efac', borderWidth: 1 }]}>
+                                    <Text style={[styles.badgeBaseText, { color: '#166534', fontWeight: '700' }]}>✓ Schedule Confirmed</Text>
+                                  </View>
+                                ) : (
+                                  <View style={[styles.badgeBase, { backgroundColor: '#fef3c7', borderColor: '#fde68a', borderWidth: 1 }]}>
+                                    <Text style={[styles.badgeBaseText, { color: '#b45309', fontWeight: '700' }]}>⏳ Pending Allocation</Text>
+                                  </View>
+                                )
+                              )}
                             </View>
                             <Text style={styles.itemIdGradeText}>
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}><Ionicons name="location-outline" size={11} color="#94a3b8" /><Text style={styles.itemIdGradeText}>{matchItem.venue || 'Venue TBA'}</Text><Ionicons name="calendar-outline" size={11} color="#94a3b8" /><Text style={styles.itemIdGradeText}>{formattedDate}{matchItem.time ? ` • ${matchItem.time}` : ''} • {matchItem.format || 'T20'}</Text></View>
@@ -1891,10 +1925,33 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                           <Text style={styles.matchCardTournament}>{m.tournament || 'Tournament Fixture'}</Text>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}><Ionicons name="location-outline" size={11} color="#94a3b8" /><Text style={styles.matchCardLocation}>{m.venue || 'Venue TBA'}</Text><Ionicons name="calendar-outline" size={11} color="#94a3b8" /><Text style={styles.matchCardLocation}>{m.date || 'TBA'}{m.time ? ` • ${m.time}` : ''}</Text></View>
                         </View>
-                        <View style={[styles.badgeBase, isLive ? styles.badgeLive : isCompleted ? styles.badgeCompleted : styles.badgeScheduled]}>
-                          <Text style={[styles.badgeBaseText, isLive ? styles.badgeLiveText : isCompleted ? styles.badgeCompletedText : styles.badgeScheduledText]}>
-                            {statusUpper}
-                          </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          {m.isPlayerSelectedInPlayingXI && (
+                            <View style={[styles.badgeBase, { backgroundColor: '#dcfce7', borderColor: '#86efac', borderWidth: 1 }]}>
+                              <Text style={[styles.badgeBaseText, { color: '#166534', fontWeight: '800' }]}>⭐ Playing XI</Text>
+                            </View>
+                          )}
+                          {m.isPlayerSelectedAsSubstitute && (
+                            <View style={[styles.badgeBase, { backgroundColor: '#dbeafe', borderColor: '#93c5fd', borderWidth: 1 }]}>
+                              <Text style={[styles.badgeBaseText, { color: '#1d4ed8', fontWeight: '800' }]}>🔄 Substitute</Text>
+                            </View>
+                          )}
+                          {!isLive && !isCompleted && (
+                            (m.schedule_confirmation_status === 'CONFIRMED' || m.is_schedule_confirmed) ? (
+                              <View style={[styles.badgeBase, { backgroundColor: '#dcfce7', borderColor: '#86efac', borderWidth: 1 }]}>
+                                <Text style={[styles.badgeBaseText, { color: '#166534', fontWeight: '700' }]}>✓ Confirmed</Text>
+                              </View>
+                            ) : (
+                              <View style={[styles.badgeBase, { backgroundColor: '#fef3c7', borderColor: '#fde68a', borderWidth: 1 }]}>
+                                <Text style={[styles.badgeBaseText, { color: '#b45309', fontWeight: '700' }]}>⏳ Allocation Pending</Text>
+                              </View>
+                            )
+                          )}
+                          <View style={[styles.badgeBase, isLive ? styles.badgeLive : isCompleted ? styles.badgeCompleted : styles.badgeScheduled]}>
+                            <Text style={[styles.badgeBaseText, isLive ? styles.badgeLiveText : isCompleted ? styles.badgeCompletedText : styles.badgeScheduledText]}>
+                              {statusUpper}
+                            </Text>
+                          </View>
                         </View>
                       </View>
 

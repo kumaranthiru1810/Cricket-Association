@@ -68,6 +68,13 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
   });
 
   useEffect(() => {
+    const targetTab = (initialParams?.tab || initialParams?.initialTab) as TabType;
+    if (targetTab && targetTab !== activeTab) {
+      setActiveTab(targetTab);
+    }
+  }, [initialParams?.tab, initialParams?.initialTab]);
+
+  useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       try {
         localStorage.setItem('cfvd_umpire_active_tab', activeTab);

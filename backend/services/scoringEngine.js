@@ -263,8 +263,9 @@ class ScoringEngine {
     if (!activeStrikerId || !activeNonStrikerId || !activeBowlerId) {
       try {
         const scorerService = require('./scorerService');
-        const battingSquad = await scorerService.getSquadForTeam(innings.batting_team_id);
-        const bowlingSquad = await scorerService.getSquadForTeam(innings.bowling_team_id);
+        const matchDoc = await db.models.Match.findOne({ id: innings.match_id }).lean();
+        const battingSquad = await scorerService.getSquadForTeam(innings.batting_team_id, matchDoc);
+        const bowlingSquad = await scorerService.getSquadForTeam(innings.bowling_team_id, matchDoc);
         if (!activeStrikerId) activeStrikerId = battingSquad[0]?.id || 'P101';
         if (!activeNonStrikerId) activeNonStrikerId = battingSquad.find(p => p.id !== activeStrikerId)?.id || battingSquad[1]?.id || 'P102';
         if (!activeBowlerId) activeBowlerId = bowlingSquad.find(p => p.role === 'BOWLER')?.id || bowlingSquad[0]?.id || 'P201';

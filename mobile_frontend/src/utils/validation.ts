@@ -51,7 +51,8 @@ export function validateEmail(email: string, customEmptyMessage?: string): Valid
  * Validates password strength:
  * 1. Min 8 characters
  * 2. At least 1 uppercase letter (A-Z)
- * 3. At least 2 special characters
+ * 3. At least 1 special character (e.g. !@#$%)
+ * 4. At least 2 numeric digits (0-9)
  */
 export function validatePassword(password: string): ValidationResult {
   const clean = password || '';
@@ -78,10 +79,18 @@ export function validatePassword(password: string): ValidationResult {
   }
 
   const specialMatches = clean.match(/[^A-Za-z0-9\s]/g) || [];
-  if (specialMatches.length < 2) {
+  if (specialMatches.length < 1) {
     return {
       isValid: false,
-      error: `Password must contain at least 2 special characters (e.g. !@#$%). Currently found: ${specialMatches.length}.`
+      error: 'Password must contain at least 1 special character (e.g. !@#$%).'
+    };
+  }
+
+  const digitMatches = clean.match(/[0-9]/g) || [];
+  if (digitMatches.length < 2) {
+    return {
+      isValid: false,
+      error: `Password must contain at least 2 numbers (0-9). Currently found: ${digitMatches.length}.`
     };
   }
 

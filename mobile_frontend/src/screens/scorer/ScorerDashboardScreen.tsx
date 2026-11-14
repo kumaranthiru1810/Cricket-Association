@@ -90,10 +90,11 @@ export default function ScorerDashboardScreen() {
       }
     }
 
-    // Ensure all upcoming association matches are accessible to scorers for governance & coverage
+    // Ensure only matches confirmed by Admin in match schedules are visible to scorers
     const allUpcoming = loadedMatches.filter((m: any) => {
-      const s = (m.status || '').toLowerCase();
-      return s === 'upcoming' || s === 'scheduled';
+      const s = (m.status || '').toUpperCase();
+      const conf = m.schedule_confirmation_status || m.scheduleConfirmationStatus;
+      return (s === 'UPCOMING' || s === 'SCHEDULED') && conf === 'CONFIRMED';
     });
     for (const upMatch of allUpcoming) {
       if (!assignedMatches.some((m: any) => m.id === upMatch.id)) {
@@ -101,56 +102,15 @@ export default function ScorerDashboardScreen() {
       }
     }
 
-    if (allUpcoming.length === 0 && !assignedMatches.some((m: any) => (m.status || '').toLowerCase() === 'upcoming')) {
-      // District Sanctioned Upcoming Fixtures fallback
-      const defaultUpcoming = [
-          {
-            id: 'M004',
-            tournament_name: 'Virudhunagar Premier League 2026',
-            tournament: 'Virudhunagar Premier League 2026',
-            team_a_name: 'Virudhunagar Spartans',
-            team_b_name: 'Rajapalayam Royals',
-            teamA: 'Virudhunagar Spartans',
-            teamB: 'Rajapalayam Royals',
-            venue: 'Kamarajar District Stadium',
-            match_date: '2026-11-08',
-            match_time: '02:30 PM',
-            match_type: 'T20',
-            overs: 20,
-            overs_per_side: 20,
-            status: 'SCHEDULED',
-            assigned_scorer_id: 'SCR-101',
-            assigned_scorer: 'Athi Lingam',
-            umpire1_id: 'UMP-101',
-            umpire2_id: 'UMP-102',
-            umpire1_name: 'Thiru. K. Sundaram',
-            umpire2_name: 'Thiru. M. Ramanathan'
-          },
-          {
-            id: 'M005',
-            tournament_name: 'Virudhunagar Premier League 2026',
-            tournament: 'Virudhunagar Premier League 2026',
-            team_a_name: 'Sivakasi Strikers',
-            team_b_name: 'Aruppukottai Aces',
-            teamA: 'Sivakasi Strikers',
-            teamB: 'Aruppukottai Aces',
-            venue: 'ANJAC Pavilion Ground, Sivakasi',
-            match_date: '2026-11-12',
-            match_time: '09:30 AM',
-            match_type: 'T20',
-            overs: 20,
-            overs_per_side: 20,
-            status: 'SCHEDULED',
-            assigned_scorer_id: 'SCR-101',
-            assigned_scorer: 'Athi Lingam',
-            umpire1_id: 'UMP-101',
-            umpire2_id: 'UMP-102',
-            umpire1_name: 'Thiru. K. Sundaram',
-            umpire2_name: 'Thiru. M. Ramanathan'
-          }
-        ];
-        assignedMatches = [...assignedMatches, ...defaultUpcoming];
+    // Filter out any scheduled matches that are not yet confirmed by Admin
+    assignedMatches = assignedMatches.filter((m: any) => {
+      const s = (m.status || '').toUpperCase();
+      if (s === 'SCHEDULED' || s === 'UPCOMING') {
+        const conf = m.schedule_confirmation_status || m.scheduleConfirmationStatus;
+        return conf === 'CONFIRMED';
       }
+      return true;
+    });
 
     setMatches(assignedMatches);
     setIsLoading(false);

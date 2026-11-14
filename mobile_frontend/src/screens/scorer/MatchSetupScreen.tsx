@@ -101,8 +101,8 @@ export default function MatchSetupScreen() {
 
   // Render a player item row
   const renderPlayerRow = (p: any, idx: number) => {
-    const isWk = p.role === 'WICKET_KEEPER' || p.role === 'Wicket Keeper';
-    const isCap = idx === 0 || p.is_captain;
+    const isWk = Boolean(p.is_wicket_keeper) || p.role === 'WICKET_KEEPER' || p.role === 'Wicket Keeper';
+    const isCap = Boolean(p.is_captain) || (idx === 0 && p.is_captain === undefined);
     return (
       <View key={p.id || idx} style={styles.playerItem}>
         <View style={styles.playerNumBadge}>
@@ -300,7 +300,7 @@ export default function MatchSetupScreen() {
                   </View>
                   <View style={styles.xiMainBadge}>
                     <Text style={styles.xiMainBadgeText}>
-                      {teamAPlayers.length} vs {teamBPlayers.length} Registered
+                      {setupData?.teamAAllocationStatus === 'SUBMITTED' ? '✅ Allocated Playing XI (11)' : `${teamAPlayers.length} Players`} vs {setupData?.teamBAllocationStatus === 'SUBMITTED' ? '✅ Allocated Playing XI (11)' : `${teamBPlayers.length} Players`}
                     </Text>
                   </View>
                 </View>
@@ -334,7 +334,11 @@ export default function MatchSetupScreen() {
                     <View style={styles.squadColumn}>
                       <View style={styles.teamColHeader}>
                         <Text style={styles.teamColTitle} numberOfLines={1}>{teamA.name}</Text>
-                        <Text style={styles.teamColSub}>{teamAPlayers.length} Registered Players</Text>
+                        <Text style={styles.teamColSub}>
+                          {setupData?.teamAAllocationStatus === 'SUBMITTED' || teamAPlayers.some((p: any) => p.is_playing_xi)
+                            ? '✅ Official Playing XI (11 Allocated)'
+                            : `${teamAPlayers.length} Registered Players`}
+                        </Text>
                       </View>
                       <View style={styles.playersScrollBox}>
                         {teamAPlayers.length > 0 ? (
@@ -353,7 +357,11 @@ export default function MatchSetupScreen() {
                     <View style={styles.squadColumn}>
                       <View style={[styles.teamColHeader, styles.teamColHeaderB]}>
                         <Text style={styles.teamColTitle} numberOfLines={1}>{teamB.name}</Text>
-                        <Text style={styles.teamColSub}>{teamBPlayers.length} Registered Players</Text>
+                        <Text style={styles.teamColSub}>
+                          {setupData?.teamBAllocationStatus === 'SUBMITTED' || teamBPlayers.some((p: any) => p.is_playing_xi)
+                            ? '✅ Official Playing XI (11 Allocated)'
+                            : `${teamBPlayers.length} Registered Players`}
+                        </Text>
                       </View>
                       <View style={styles.playersScrollBox}>
                         {teamBPlayers.length > 0 ? (

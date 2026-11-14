@@ -28,7 +28,7 @@ if (SMTP_USER && SMTP_PASSWORD) {
   });
   console.log(`📧 Nodemailer SMTP initialized for: ${SMTP_USER} (IPv4 direct TLS)`);
 } else {
-  console.log('ℹ️ Nodemailer: SMTP credentials not set.');
+  console.log('ℹ️ Nodematiler: SMTP credentials not set.');
 }
 
 async function sendOtpEmail({ toEmail, userName, otp }) {

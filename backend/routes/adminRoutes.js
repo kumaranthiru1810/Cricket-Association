@@ -300,6 +300,18 @@ const handlePostponeMatch = async (req, res) => {
 router.post('/matches/:id/postpone', handlePostponeMatch);
 router.patch('/matches/:id/postpone', handlePostponeMatch);
 
+const handleConfirmSchedule = async (req, res) => {
+  try {
+    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const match = await adminService.confirmMatchSchedule(req.params.id, adminEmail);
+    res.json({ success: true, message: 'Match schedule confirmed successfully', match });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message, message: err.message });
+  }
+};
+router.post('/matches/:id/confirm-schedule', handleConfirmSchedule);
+router.patch('/matches/:id/confirm-schedule', handleConfirmSchedule);
+
 const handleRescheduleMatch = async (req, res) => {
   try {
     const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
