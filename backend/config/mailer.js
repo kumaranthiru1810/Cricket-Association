@@ -285,6 +285,244 @@ async function sendSuperAdminVerificationEmail({
 }
 
 /**
+
+  const primary = createPrimaryTransporter();
+  if (primary) {
+    try {
+      await primary.verify();
+      activeTransporter = primary;
+      transporterType = 'GMAIL';
+      console.log(`📧 Nodemailer: Verified Gmail SMTP for ${SMTP_USER} (TLS IPv4)`);
+      return activeTransporter;
+    } catch (err) {
+      console.warn(`⚠️ Gmail SMTP credentials not accepted (${err.message}). Please generate a 16-character Google App Password at https://myaccount.google.com/apppasswords. Initializing verified Ethereal SMTP test fallback...`);
+    }
+  } else {
+    console.warn(`⚠️ Real Gmail SMTP not configured: SMTP_PASS is empty in backend/.env. To send real emails to your Gmail inbox, add your 16-character Google App Password in backend/.env: SMTP_PASS=xxxx xxxx xxxx xxxx. Falling back to Ethereal SMTP for local testing.`);
+  }
+
+  // Fallback to active Ethereal SMTP test service for real Internet SMTP delivery & preview URLs
+  try {
+    const testAccount = await nodemailer.createTestAccount();
+    activeTransporter = nodemailer.createTransport({
+      host: testAccount.smtp.host,
+      port: testAccount.smtp.port,
+      secure: testAccount.smtp.secure,
+      auth: {
+        user: testAccount.user,
+        pass: testAccount.pass
+      }
+    });
+    transporterType = 'ETHEREAL';
+    console.log(`📧 Nodemailer: Initialized real SMTP test service (${testAccount.user})`);
+    return activeTransporter;
+  } catch (etherealErr) {
+    console.error('❌ Failed to initialize fallback SMTP:', etherealErr.message);
+    return null;
+  }
+  });
+  console.log(`📧 Nodemailer SMTP initialized for: ${SMTP_USER} (IPv4 direct TLS)`);
+} else {
+  console.log('ℹ️ Nodematiler: SMTP credentials not set.');
+}
+
+/**
+ * Verify SMTP connection and return diagnostic report
+ */
+async function verifySmtpConnection() {
+  const trans = await getTransporter();
+  if (!trans) {
+    return {
+      connected: false,
+      type: 'NONE',
+      error: 'No active SMTP transporter available. Please configure SMTP_USER and SMTP_PASS in backend/.env'
+    };
+  }
+
+  try {
+    await trans.verify();
+    return {
+      connected: true,
+      type: transporterType,
+      host: trans.options?.host || SMTP_HOST,
+      port: trans.options?.port || SMTP_PORT,
+      secure: trans.options?.secure || SMTP_SECURE,
+      user: transporterType === 'GMAIL' ? SMTP_USER : trans.options?.auth?.user
+    };
+  } catch (err) {
+    return {
+      connected: false,
+      type: transporterType,
+      error: err.message
+    };
+  }
+}
+
+/**
+ * Send Super Admin Security Verification OTP Email
+ * Professional Royal Blue (#0a192f), Gold (#d97706), and White design.
+ */
+async function sendSuperAdminVerificationEmail({
+  superAdminEmail = SUPER_ADMIN_EMAIL,
+  actionTitle = 'Administrative Operation',
+  actionDescription = '',
+  otp,
+  requestedAt = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+}) {
+  const subject = `Cricket Association – Security Verification [Code: ${otp}]`;
+  const textContent = `CRICKET FEDERATION OF VIRUDHUNAGAR DISTRICT\nSUPER ADMINISTRATOR SECURITY VERIFICATION\n\nAction: ${actionTitle}\nDetails: ${actionDescription}\nRequested At: ${requestedAt}\n\nYour 6-Digit OTP: ${otp}\n\nThis code expires in 10 minutes. If you did not initiate this request, immediately secure your console.\n\nCricket Federation of Virudhunagar District (TNCA Affiliated)`;
+
+  const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cricket Association – Security Verification</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; padding: 30px 10px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 580px; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(15, 36, 82, 0.08); border: 1px solid #e2e8f0;">
+          
+          <!-- Header Banner (Royal Blue & Gold) -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #0a192f 0%, #0f2452 60%, #1e3a8a 100%); padding: 32px 28px; text-align: center; border-bottom: 3px solid #f59e0b;">
+              <div style="display: inline-block; background-color: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; color: #fbbf24; padding: 4px 14px; border-radius: 20px; font-size: 11px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 12px;">
+                SECURITY VERIFICATION
+              </div>
+              <h1 style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase;">
+                CRICKET FEDERATION OF VIRUDHUNAGAR DISTRICT
+              </h1>
+              <div style="margin-top: 4px; color: #cbd5e1; font-size: 12px; font-weight: 600; letter-spacing: 0.5px;">
+                Affiliated to Tamil Nadu Cricket Association (TNCA)
+              </div>
+            </td>
+          </tr>
+
+          <!-- Body Content -->
+          <tr>
+            <td style="padding: 32px 28px 24px 28px; color: #1e293b;">
+              <h2 style="margin: 0 0 14px 0; color: #0a192f; font-size: 17px; font-weight: 700;">
+                Super Administrator Authorization Request
+              </h2>
+              
+              <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #475569;">
+                A sensitive administrative action has been requested on the association management portal. As the permanent Super Administrator (<strong style="color: #0f2452;">${superAdminEmail}</strong>), your explicit verification is required to authorize this operation.
+              </p>
+
+              <!-- Requested Action Box -->
+              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; border-left: 4px solid #1e3a8a; border-radius: 6px; margin: 18px 0; padding: 14px 18px;">
+                <tr>
+                  <td>
+                    <div style="font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px;">
+                      Requested Administrative Action:
+                    </div>
+                    <div style="font-size: 15px; font-weight: 800; color: #0f2452; margin-top: 4px;">
+                      ${actionTitle}
+                    </div>
+                    ${actionDescription ? `
+                    <div style="font-size: 12.5px; color: #334155; margin-top: 4px; line-height: 1.4;">
+                      ${actionDescription}
+                    </div>` : ''}
+                    <div style="font-size: 11px; color: #64748b; margin-top: 8px;">
+                      📅 Requested on: <strong>${requestedAt}</strong>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- OTP Display Box (Gold & Royal Blue) -->
+              <div style="text-align: center; margin: 26px 0 22px 0;">
+                <div style="font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">
+                  Your Six-Digit Security Verification Code:
+                </div>
+                <div style="display: inline-block; background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); border: 2px dashed #d97706; border-radius: 12px; padding: 16px 36px; box-shadow: 0 4px 12px rgba(217, 119, 6, 0.12);">
+                  <span style="font-family: 'Courier New', Courier, monospace; font-size: 34px; font-weight: 900; letter-spacing: 8px; color: #92400e;">
+                    ${otp}
+                  </span>
+                </div>
+                <div style="margin-top: 10px; font-size: 12px; font-weight: 700; color: #b45309;">
+                  ⏳ Valid for 10 minutes only • Single-use code
+                </div>
+              </div>
+
+              <!-- Security Notice -->
+              <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px 16px; margin-top: 20px;">
+                <div style="font-size: 12px; font-weight: 800; color: #991b1b; margin-bottom: 3px;">
+                  🔒 Security Notice:
+                </div>
+                <div style="font-size: 11.5px; color: #7f1d1d; line-height: 1.5;">
+                  If you did not initiate this administrative action, please do not share this code with anyone. Immediately access the Super Admin Portal to secure administrative credentials and review audit logs.
+                </div>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #0a192f; padding: 20px 28px; text-align: center; color: #94a3b8; font-size: 11px; border-top: 1px solid #1e293b;">
+              <p style="margin: 0 0 6px 0; color: #cbd5e1; font-weight: 600;">
+                Cricket Federation of Virudhunagar District (CFVD)
+              </p>
+              <p style="margin: 0; color: #64748b; font-size: 10.5px;">
+                This is an automated security transmission. Never reply to this email or forward your OTP.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+
+  const trans = await getTransporter();
+  if (trans) {
+    try {
+      // If superAdminEmail is internal (e.g. admin@cfvd.org) and SMTP_USER is a real Gmail,
+      // include SMTP_USER so the administrator receives the real OTP in their Gmail inbox.
+      const recipients = [superAdminEmail];
+      if (SMTP_USER && SMTP_USER.includes('@gmail.com') && SMTP_USER.toLowerCase() !== superAdminEmail.toLowerCase()) {
+        recipients.push(SMTP_USER);
+      }
+
+      const info = await trans.sendMail({
+        from: SMTP_FROM,
+        to: recipients.join(', '),
+        subject,
+        text: textContent,
+        html: htmlContent
+      });
+
+      const previewUrl = nodemailer.getTestMessageUrl(info);
+      console.log(`✅ Super Admin OTP email dispatched to [${recipients.join(', ')}] (MessageId: ${info.messageId})`);
+      if (previewUrl) {
+        console.log(`🔗 Ethereal SMTP Live Preview: ${previewUrl}`);
+      }
+
+      return {
+        success: true,
+        messageId: info.messageId,
+        previewUrl: previewUrl || null,
+        recipient: recipients.join(', ')
+      };
+    } catch (err) {
+      console.error(`❌ Failed to send OTP email to ${superAdminEmail}:`, err.message);
+      return {
+        success: false,
+        error: err.message
+      };
+    }
+  }
+
+  return { success: false, error: 'No active SMTP transporter' };
+}
+
+/**
  * Send Account Approval & Password Setup Email to newly approved Administrator
  */
 async function sendAdminApprovalEmail({
@@ -622,12 +860,15 @@ async function sendCandidateVerificationEmail({
       if (SMTP_USER && SMTP_USER.includes('@gmail.com') && SMTP_USER.toLowerCase() !== toEmail.toLowerCase()) {
         recipients.push(SMTP_USER);
       }
+
+  const trans = await getTransporter();
+  if (trans) {
+    try {
       await trans.sendMail({
         from: SMTP_FROM,
         to: recipients.join(', '),
         subject,
-        text: textContent,
-        html: htmlContent
+        text: textContent
       });
       console.log(`✅ Candidate verification OTP email dispatched to [${recipients.join(', ')}]`);
       return { success: true };
@@ -637,6 +878,10 @@ async function sendCandidateVerificationEmail({
     }
   }
   return { success: false, error: 'No active SMTP transporter' };
+      return { success: true, message: `Team details dispatched` };
+    }
+  }
+  return { success: true, message: `Dispatched` };
 }
 
 module.exports = {

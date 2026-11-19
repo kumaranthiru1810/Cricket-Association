@@ -9,6 +9,7 @@ import {
   Dimensions
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideoPlayer, VideoView } from 'expo-video';
 
 const LOCAL_PRELOADER_VIDEO = require('../../../assets/videos/preloader.mp4');
@@ -43,9 +44,16 @@ function NativeVideoComponent({ onProgress, onEnded }: NativeVideoComponentProps
       onEnded();
     });
 
+    const statusSub = (player as any).addListener?.('statusChange', (event: any) => {
+      if (event?.status === 'error') {
+        onEnded();
+      }
+    });
+
     return () => {
       timeSub.remove();
       endSub.remove();
+      if (statusSub) statusSub.remove();
     };
   }, [player, onProgress, onEnded]);
 
@@ -65,6 +73,7 @@ interface VideoPreloaderProps {
 }
 
 export default function VideoPreloader({ onComplete }: VideoPreloaderProps) {
+  const insets = useSafeAreaInsets();
   const [isDismissed, setIsDismissed] = useState<boolean>(false);
   const [showHint, setShowHint] = useState<boolean>(false);
   const [progress, setProgress] = useState<number>(0);
@@ -126,7 +135,7 @@ export default function VideoPreloader({ onComplete }: VideoPreloaderProps) {
     }, 9500);
 
     // Try unmuted audio on web immediately, register gesture listeners if blocked
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       const activateSound = () => {
         if (webVideoRef.current) {
           webVideoRef.current.muted = false;
@@ -227,7 +236,7 @@ export default function VideoPreloader({ onComplete }: VideoPreloaderProps) {
       </View>
 
       {/* Floating Top Header Bar */}
-      <View style={[styles.topBar, { pointerEvents: 'box-none' as any }]}>
+      <View style={[styles.topBar, { top: Math.max(insets.top + 8, 20), pointerEvents: 'box-none' as any }]}>
         <View style={styles.brandBadge}>
           <Text style={{ fontSize: 13 }}>🏏</Text>
           <Text style={styles.brandText}>CRICKET FEDERATION</Text>
@@ -244,6 +253,7 @@ export default function VideoPreloader({ onComplete }: VideoPreloaderProps) {
           <TouchableOpacity
             style={styles.skipBtn}
             onPress={() => handleDismiss()}
+            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
             // @ts-ignore
             onClick={() => handleDismiss()}
             // @ts-ignore

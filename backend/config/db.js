@@ -2293,5 +2293,6 @@ module.exports = {
     MasterSetting,
     AdminActionOtp,
     AdminRequest
+    AdminActionOtp
   }
 };

@@ -1434,13 +1434,18 @@ class ScoringEngine {
   async updateMatchStatus(matchId, status) {
     await db.initDb();
     const normalized = String(status).toUpperCase();
-    const validStatuses = ['SCHEDULED', 'LIVE', 'INNINGS_BREAK', 'COMPLETED', 'ABANDONED'];
+    const validStatuses = ['SCHEDULED', 'LIVE', 'INNINGS_BREAK', 'COMPLETED', 'ABANDONED', 'POSTPONED'];
     if (!validStatuses.includes(normalized)) {
       throw { status: 400, message: `Invalid match status. Must be one of: ${validStatuses.join(', ')}` };
     }
 
     const match = await db.models.Match.findOne({ id: matchId });
     if (!match) throw { status: 404, message: 'Match not found.' };
+
+    if (normalized === 'LIVE' && match.postponement && match.postponement.is_postponed) {
+      match.postponement.is_postponed = false;
+      match.status_comment = 'Resumed live by official scorer';
+    }
 
     // When moving to LIVE, if 1st innings is completed, activate 2nd innings
     if (normalized === 'LIVE') {

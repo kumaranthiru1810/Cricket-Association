@@ -899,10 +899,11 @@ export const ScorerApi = {
     });
   },
 
-  postponeMatch: async (matchId: string, reason: string) => {
-    return request(`/admin/matches/${matchId}/postpone`, {
+  postponeMatch: async (matchId: string, payloadOrReason: string | { reason: string; notes?: string; rescheduledDate?: string; rescheduledTime?: string }) => {
+    const payload = typeof payloadOrReason === 'string' ? { reason: payloadOrReason } : payloadOrReason;
+    return request(`/scorer/matches/${matchId}/postpone`, {
       method: 'POST',
-      body: JSON.stringify({ reason })
+      body: JSON.stringify(payload)
     });
   },
 
@@ -1224,6 +1225,13 @@ export const ScorerApi = {
     return request(`/scorer/matches/${matchId}/revised-overs`, {
       method: 'POST',
       body: JSON.stringify(payload)
+    });
+  },
+
+  resumeMatch: async (matchId: string) => {
+    return request(`/scorer/matches/${matchId}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: 'LIVE' })
     });
   },
 

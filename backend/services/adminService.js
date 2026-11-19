@@ -618,8 +618,11 @@ async function updateMatch(matchId, fixtureData, adminEmail) {
 /**
  * Postpone a match fixture with a mandatory reason
  */
-async function postponeMatch(matchId, { reason }, adminEmail = 'admin@cfvd.org') {
+async function postponeMatch(matchId, optionsOrReason, adminEmail = 'admin@cfvd.org') {
   await db.initDb();
+
+  const options = (typeof optionsOrReason === 'object' && optionsOrReason !== null) ? optionsOrReason : { reason: optionsOrReason };
+  const reason = options.reason;
 
   if (!reason || !String(reason).trim()) {
     throw new Error('A mandatory reason is required to postpone a match fixture.');
@@ -639,6 +642,11 @@ async function postponeMatch(matchId, { reason }, adminEmail = 'admin@cfvd.org')
   const origDate = (match.postponement && match.postponement.original_date) || match.match_date;
   const origTime = (match.postponement && match.postponement.original_time) || match.match_time;
 
+  const actorRole = options.actorRole || 'ADMIN';
+  const actorName = options.actorName || (actorRole === 'SCORER' ? 'Official District Scorer' : 'Administrator');
+  const rescheduledDate = options.rescheduledDate || null;
+  const rescheduledTime = options.rescheduledTime || null;
+
   match.status = 'POSTPONED';
   match.status_comment = `Postponed: ${cleanReason}`;
   match.result_summary = `Postponed: ${cleanReason}`;
@@ -649,15 +657,15 @@ async function postponeMatch(matchId, { reason }, adminEmail = 'admin@cfvd.org')
     postponed_at: new Date(),
     postponed_by: {
       user_id: adminEmail,
-      role: 'ADMIN',
-      name: 'Administrator'
+      role: actorRole,
+      name: actorName
     },
     original_date: origDate,
     original_time: origTime,
-    rescheduled_date: null,
-    rescheduled_time: null,
-    rescheduled_at: null,
-    rescheduled_by: null
+    rescheduled_date: rescheduledDate,
+    rescheduled_time: rescheduledTime,
+    rescheduled_at: (rescheduledDate || rescheduledTime) ? new Date() : null,
+    rescheduled_by: (rescheduledDate || rescheduledTime) ? adminEmail : null
   };
 
   // If there was an umpire postponement request pending, mark it approved
@@ -674,13 +682,13 @@ async function postponeMatch(matchId, { reason }, adminEmail = 'admin@cfvd.org')
     reason: cleanReason,
     from_date: match.match_date,
     from_time: match.match_time,
-    to_date: '',
-    to_time: '',
+    to_date: rescheduledDate || '',
+    to_time: rescheduledTime || '',
     actor_id: adminEmail,
-    actor_name: 'Administrator',
-    actor_role: 'ADMIN',
+    actor_name: actorName,
+    actor_role: actorRole,
     timestamp: new Date(),
-    notes: cleanReason
+    notes: options.notes ? `${cleanReason} • ${options.notes}` : cleanReason
   });
 
   match.updated_at = new Date();
@@ -836,6 +844,43 @@ async function rescheduleMatch(matchId, { newDate, newTime, reason }, adminEmail
     details: `Rescheduled from ${prevDate} ${prevTime} to ${cleanDate} ${cleanTime}. Reason: ${cleanReason}`
   });
 
+  // Dispatch Notifications to Team A, Team B, Scorer, and Umpires
+  if (db.models.Notification) {
+    const notifs = [
+      {
+        recipient_role: 'TEAM',
+        recipient_id: match.team_a_id,
+        title: '📅 Match Rescheduled',
+        message: `Your fixture vs ${match.team_b_name || match.team_b_id} has been rescheduled to ${cleanDate} at ${cleanTime} at ${match.venue}.`
+      },
+      {
+        recipient_role: 'TEAM',
+        recipient_id: match.team_b_id,
+        title: '📅 Match Rescheduled',
+        message: `Your fixture vs ${match.team_a_name || match.team_a_id} has been rescheduled to ${cleanDate} at ${cleanTime} at ${match.venue}.`
+      },
+      {
+        recipient_role: 'SCORER',
+        recipient_id: match.assigned_scorer_id,
+        title: '📅 Fixture Rescheduled',
+        message: `Match #${match.id} (${match.team_a_name} vs ${match.team_b_name}) has been rescheduled to ${cleanDate} at ${cleanTime}.`
+      }
+    ];
+
+    for (const n of notifs) {
+      try {
+        await db.models.Notification.create({
+          id: `NOTIF-RESCHED-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          type: 'MATCH_RESCHEDULED',
+          recipient_role: n.recipient_role,
+          recipient_id: n.recipient_id,
+          title: n.title,
+          message: n.message,
+          reference_id: match.id,
+          status: 'UNREAD'
+        });
+      } catch (_e) { }
+    }
   // Dispatch targeted Notifications strictly to Team A, Team B, and their squad players
   try {
     await dispatchMatchScheduleNotifications(db, match, {

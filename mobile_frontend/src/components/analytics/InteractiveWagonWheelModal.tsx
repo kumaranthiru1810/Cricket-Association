@@ -9,6 +9,19 @@ import {
   ScrollView,
   useWindowDimensions
 } from 'react-native';
+import Svg, {
+  Defs,
+  RadialGradient,
+  LinearGradient,
+  Stop,
+  Circle,
+  Ellipse,
+  Line,
+  Rect,
+  Path,
+  G,
+  Text as SvgText
+} from 'react-native-svg';
 
 export interface ShotDirectionResult {
   zone: string;
@@ -358,64 +371,55 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
               style={[styles.groundBox, { width: renderSize, height: renderSize }]}
               onPress={handleGroundPress}
             >
-              <svg
+              <Svg
                 width={renderSize}
                 height={renderSize}
                 viewBox={`0 0 ${size} ${size}`}
-                style={{ width: '100%', height: '100%', display: 'block', cursor: 'crosshair', userSelect: 'none' }}
+                style={{ width: '100%', height: '100%' }}
               >
-                <defs>
+                <Defs>
                   {/* Natural Sunlight Outfield Turf Gradients (Bright, lush green for daytime play) */}
-                  <radialGradient id="fieldGrassDay" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor="#22c55e" />
-                    <stop offset="55%" stopColor="#16a34a" />
-                    <stop offset="88%" stopColor="#15803d" />
-                    <stop offset="100%" stopColor="#166534" />
-                  </radialGradient>
+                  <RadialGradient id="fieldGrassDay" cx="50%" cy="50%" r="50%">
+                    <Stop offset="0%" stopColor="#22c55e" />
+                    <Stop offset="55%" stopColor="#16a34a" />
+                    <Stop offset="88%" stopColor="#15803d" />
+                    <Stop offset="100%" stopColor="#166534" />
+                  </RadialGradient>
 
                   {/* Concentric Mower Stripes */}
-                  <radialGradient id="lawnPatternDay" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor="rgba(255, 255, 255, 0.08)" />
-                    <stop offset="25%" stopColor="rgba(0, 0, 0, 0.06)" />
-                    <stop offset="50%" stopColor="rgba(255, 255, 255, 0.08)" />
-                    <stop offset="75%" stopColor="rgba(0, 0, 0, 0.06)" />
-                    <stop offset="100%" stopColor="rgba(255, 255, 255, 0.08)" />
-                  </radialGradient>
+                  <RadialGradient id="lawnPatternDay" cx="50%" cy="50%" r="50%">
+                    <Stop offset="0%" stopColor="rgba(255, 255, 255, 0.08)" />
+                    <Stop offset="25%" stopColor="rgba(0, 0, 0, 0.06)" />
+                    <Stop offset="50%" stopColor="rgba(255, 255, 255, 0.08)" />
+                    <Stop offset="75%" stopColor="rgba(0, 0, 0, 0.06)" />
+                    <Stop offset="100%" stopColor="rgba(255, 255, 255, 0.08)" />
+                  </RadialGradient>
 
                   {/* Pitch Texture Gradient: Authentic Clay Strip */}
-                  <linearGradient id="pitchTextureDay" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#d97706" />
-                    <stop offset="35%" stopColor="#fef08a" />
-                    <stop offset="65%" stopColor="#fde047" />
-                    <stop offset="100%" stopColor="#b45309" />
-                  </linearGradient>
-
-                  {/* Trajectory Glow Filter */}
-                  <filter id="trajGlowDay" x="-30%" y="-30%" width="160%" height="160%">
-                    <feGaussianBlur stdDeviation="3" result="blur" />
-                    <feMerge>
-                      <feMergeNode in="blur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
+                  <LinearGradient id="pitchTextureDay" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <Stop offset="0%" stopColor="#d97706" />
+                    <Stop offset="35%" stopColor="#fef08a" />
+                    <Stop offset="65%" stopColor="#fde047" />
+                    <Stop offset="100%" stopColor="#b45309" />
+                  </LinearGradient>
 
                   {/* Ball 3D Shading */}
-                  <radialGradient id="cricketBallDay" cx="35%" cy="35%" r="65%">
-                    <stop offset="0%" stopColor="#ff4d4d" />
-                    <stop offset="50%" stopColor="#dc2626" />
-                    <stop offset="100%" stopColor="#7f1d1d" />
-                  </radialGradient>
+                  <RadialGradient id="cricketBallDay" cx="35%" cy="35%" r="65%">
+                    <Stop offset="0%" stopColor="#ff4d4d" />
+                    <Stop offset="50%" stopColor="#dc2626" />
+                    <Stop offset="100%" stopColor="#7f1d1d" />
+                  </RadialGradient>
 
                   {/* Landing Ripple Glow */}
-                  <radialGradient id="rippleGlowDay" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor={runs === 6 ? '#f59e0b' : (runs === 4 ? '#0284c7' : '#10b981')} stopOpacity="0.8" />
-                    <stop offset="60%" stopColor={runs === 6 ? '#f59e0b' : (runs === 4 ? '#0284c7' : '#10b981')} stopOpacity="0.3" />
-                    <stop offset="100%" stopColor={runs === 6 ? '#f59e0b' : (runs === 4 ? '#0284c7' : '#10b981')} stopOpacity="0" />
-                  </radialGradient>
-                </defs>
+                  <RadialGradient id="rippleGlowDay" cx="50%" cy="50%" r="50%">
+                    <Stop offset="0%" stopColor={runs === 6 ? '#f59e0b' : (runs === 4 ? '#0284c7' : '#10b981')} stopOpacity="0.8" />
+                    <Stop offset="60%" stopColor={runs === 6 ? '#f59e0b' : (runs === 4 ? '#0284c7' : '#10b981')} stopOpacity="0.3" />
+                    <Stop offset="100%" stopColor={runs === 6 ? '#f59e0b' : (runs === 4 ? '#0284c7' : '#10b981')} stopOpacity="0" />
+                  </RadialGradient>
+                </Defs>
 
                 {/* 1. Main Outfield Oval Circle */}
-                <circle
+                <Circle
                   cx={cx}
                   cy={cy}
                   r={groundRadius}
@@ -425,20 +429,19 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
                 />
 
                 {/* 2. Concentric Mowing Grass Rings Overlay */}
-                <circle
+                <Circle
                   cx={cx}
                   cy={cy}
                   r={groundRadius}
                   fill="url(#lawnPatternDay)"
-                  style={{ pointerEvents: 'none' }}
                 />
 
                 {/* Distance Circles (25m, 50m, 75m) */}
-                <circle cx={cx} cy={cy} r={groundRadius * 0.35} fill="none" stroke="rgba(255, 255, 255, 0.25)" strokeWidth="1" strokeDasharray="3 3" />
-                <circle cx={cx} cy={cy} r={groundRadius * 0.70} fill="none" stroke="rgba(255, 255, 255, 0.25)" strokeWidth="1" strokeDasharray="3 3" />
+                <Circle cx={cx} cy={cy} r={groundRadius * 0.35} fill="none" stroke="rgba(255, 255, 255, 0.25)" strokeWidth="1" strokeDasharray="3 3" />
+                <Circle cx={cx} cy={cy} r={groundRadius * 0.70} fill="none" stroke="rgba(255, 255, 255, 0.25)" strokeWidth="1" strokeDasharray="3 3" />
 
                 {/* 3. 30-Yard Inner Field Circle (Crisp White Dashed Ring) */}
-                <circle
+                <Circle
                   cx={cx}
                   cy={cy}
                   r={innerCircleRadius}
@@ -449,7 +452,7 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
                 />
 
                 {/* 4. White Boundary Rope with Clean Rim */}
-                <circle
+                <Circle
                   cx={cx}
                   cy={cy}
                   r={groundRadius}
@@ -473,9 +476,9 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
                   const isZoneActive = selectedZone.id === zone.id;
 
                   return (
-                    <g key={zone.id}>
+                    <G key={zone.id}>
                       {/* Radial boundary ray */}
-                      <line
+                      <Line
                         x1={strikerX}
                         y1={strikerY}
                         x2={borderX}
@@ -485,25 +488,22 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
                         strokeDasharray={isZoneActive ? 'none' : '3 3'}
                       />
                       {/* Floating Zone Name Label (White with dark shadow for outdoor sun visibility) */}
-                      <text
+                      <SvgText
                         x={labelX}
                         y={labelY}
                         fill={isZoneActive ? '#fef08a' : '#ffffff'}
                         fontSize={isZoneActive ? 10.5 : 8.5}
                         fontWeight="900"
                         textAnchor="middle"
-                        dominantBaseline="central"
-                        filter="drop-shadow(0 1px 2px rgba(0,0,0,0.85))"
-                        style={{ pointerEvents: 'none', userSelect: 'none' }}
                       >
                         {zone.shortName}
-                      </text>
-                    </g>
+                      </SvgText>
+                    </G>
                   );
                 })}
 
                 {/* 6. Realistic Cricket Pitch in the Center (Clay Strip with Popping Creases) */}
-                <rect
+                <Rect
                   x={cx - 8}
                   y={cy - 24}
                   width="16"
@@ -516,26 +516,26 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
 
                 {/* Bowling Creases & Popping Creases */}
                 {/* Non-Striker Crease (Top) */}
-                <line x1={cx - 12} y1={cy - 17} x2={cx + 12} y2={cy - 17} stroke="#ffffff" strokeWidth="1.2" />
+                <Line x1={cx - 12} y1={cy - 17} x2={cx + 12} y2={cy - 17} stroke="#ffffff" strokeWidth="1.2" />
                 {/* Non-Striker Stumps */}
-                <line x1={cx - 3.5} y1={cy - 20} x2={cx + 3.5} y2={cy - 20} stroke="#fef08a" strokeWidth="2.5" strokeLinecap="round" />
+                <Line x1={cx - 3.5} y1={cy - 20} x2={cx + 3.5} y2={cy - 20} stroke="#fef08a" strokeWidth="2.5" strokeLinecap="round" />
 
                 {/* Striker Crease (Bottom) */}
-                <line x1={cx - 12} y1={cy + 17} x2={cx + 12} y2={cy + 17} stroke="#ffffff" strokeWidth="1.2" />
+                <Line x1={cx - 12} y1={cy + 17} x2={cx + 12} y2={cy + 17} stroke="#ffffff" strokeWidth="1.2" />
                 {/* Striker Stumps */}
-                <line x1={cx - 3.5} y1={cy + 20} x2={cx + 3.5} y2={cy + 20} stroke="#fef08a" strokeWidth="2.5" strokeLinecap="round" />
+                <Line x1={cx - 3.5} y1={cy + 20} x2={cx + 3.5} y2={cy + 20} stroke="#fef08a" strokeWidth="2.5" strokeLinecap="round" />
 
                 {/* ─── 7. PROMINENT BATSMAN FIGURINE AT STRIKER'S CREASE ─── */}
-                <g transform={`translate(${strikerX}, ${strikerY})`}>
+                <G transform={`translate(${strikerX}, ${strikerY})`}>
                   {/* Shadow under batsman */}
-                  <ellipse cx="0" cy="5" rx="9" ry="3.5" fill="rgba(0,0,0,0.3)" />
+                  <Ellipse cx="0" cy="5" rx="9" ry="3.5" fill="rgba(0,0,0,0.3)" />
 
                   {/* Batting Pads on Legs */}
-                  <rect x="-4.5" y="1" width="3.2" height="6" rx="1.5" fill="#ffffff" stroke="#94a3b8" strokeWidth="0.6" />
-                  <rect x="1.3" y="1" width="3.2" height="6" rx="1.5" fill="#ffffff" stroke="#94a3b8" strokeWidth="0.6" />
+                  <Rect x="-4.5" y="1" width="3.2" height="6" rx="1.5" fill="#ffffff" stroke="#94a3b8" strokeWidth="0.6" />
+                  <Rect x="1.3" y="1" width="3.2" height="6" rx="1.5" fill="#ffffff" stroke="#94a3b8" strokeWidth="0.6" />
 
                   {/* Body / Jersey (TNCA Royal Navy with Golden Trim) */}
-                  <path
+                  <Path
                     d="M -4.5 1 L -5 -6 L 5 -6 L 4.5 1 Z"
                     fill="#1e3a8a"
                     stroke="#f59e0b"
@@ -543,9 +543,9 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
                   />
 
                   {/* Batting Helmet with Visor */}
-                  <circle cx="0" cy="-9" r="4.2" fill="#0f172a" stroke="#f59e0b" strokeWidth="0.8" />
+                  <Circle cx="0" cy="-9" r="4.2" fill="#0f172a" stroke="#f59e0b" strokeWidth="0.8" />
                   {/* Visor Grill pointing in batting stance */}
-                  <path
+                  <Path
                     d={battingHand === 'RIGHT' ? 'M 0 -8.5 L 3.5 -7' : 'M 0 -8.5 L -3.5 -7'}
                     stroke="#ffffff"
                     strokeWidth="1"
@@ -553,7 +553,7 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
                   />
 
                   {/* Cricket Bat in Batting Stance (Tilted toward slips/sweet-spot) */}
-                  <line
+                  <Line
                     x1={battingHand === 'RIGHT' ? '-2' : '2'}
                     y1="-3"
                     x2={battingHand === 'RIGHT' ? '-11' : '11'}
@@ -563,7 +563,7 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
                     strokeLinecap="round"
                   />
                   {/* Bat Willow Blade Highlight */}
-                  <line
+                  <Line
                     x1={battingHand === 'RIGHT' ? '-4' : '4'}
                     y1="-1"
                     x2={battingHand === 'RIGHT' ? '-10' : '10'}
@@ -572,27 +572,26 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
                     strokeWidth="1.5"
                     strokeLinecap="round"
                   />
-                </g>
+                </G>
 
                 {/* Floating Batsman Indicator Tag */}
-                <g transform={`translate(${strikerX}, ${strikerY - 22})`}>
-                  <rect x="-38" y="-7" width="76" height="14" rx="7" fill="#0f172a" stroke="#f59e0b" strokeWidth="1" />
-                  <text
+                <G transform={`translate(${strikerX}, ${strikerY - 22})`}>
+                  <Rect x="-38" y="-7" width="76" height="14" rx="7" fill="#0f172a" stroke="#f59e0b" strokeWidth="1" />
+                  <SvgText
                     x="0"
                     y="0"
                     fill="#fef08a"
                     fontSize="7.5"
                     fontWeight="900"
                     textAnchor="middle"
-                    dominantBaseline="central"
                   >
                     🏏 {batterName.split(' ')[0]} ({battingHand})
-                  </text>
-                </g>
+                  </SvgText>
+                </G>
 
                 {/* 8. Trajectory Line: Glowing Line from Striker to Target */}
                 {/* Outer Glow Line */}
-                <line
+                <Line
                   x1={strikerX}
                   y1={strikerY}
                   x2={currentBallX}
@@ -601,10 +600,9 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
                   strokeWidth="5"
                   strokeOpacity="0.45"
                   strokeLinecap="round"
-                  filter="url(#trajGlowDay)"
                 />
                 {/* Core Trajectory Line */}
-                <line
+                <Line
                   x1={strikerX}
                   y1={strikerY}
                   x2={currentBallX}
@@ -616,12 +614,12 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
 
                 {/* 9. Landing Marker: Pulsing Beacon & Target Pin */}
                 {animProgress >= 0.85 && (
-                  <g transform={`translate(${landingX}, ${landingY})`}>
+                  <G transform={`translate(${landingX}, ${landingY})`}>
                     {/* Animated Ripple Waves */}
-                    <circle cx="0" cy="0" r="16" fill="url(#rippleGlowDay)" />
-                    <circle cx="0" cy="0" r="10" fill="none" stroke="#ffffff" strokeWidth="1.5" strokeOpacity="0.75" />
+                    <Circle cx="0" cy="0" r="16" fill="url(#rippleGlowDay)" />
+                    <Circle cx="0" cy="0" r="10" fill="none" stroke="#ffffff" strokeWidth="1.5" strokeOpacity="0.75" />
                     {/* Center Landing Pin */}
-                    <circle
+                    <Circle
                       cx="0"
                       cy="0"
                       r="5.5"
@@ -630,23 +628,22 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
                       strokeWidth="2"
                     />
                     {/* Run Number Inside Landing Pin */}
-                    <text
+                    <SvgText
                       x="0"
                       y="0.5"
                       fill="#ffffff"
                       fontSize="6.5"
                       fontWeight="900"
                       textAnchor="middle"
-                      dominantBaseline="central"
                     >
                       {runs}
-                    </text>
-                  </g>
+                    </SvgText>
+                  </G>
                 )}
 
                 {/* 10. Flying Cricket Ball */}
                 {animProgress < 1 && (
-                  <circle
+                  <Circle
                     cx={currentBallX}
                     cy={currentBallY}
                     r={4 * ballScale}
@@ -655,7 +652,7 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
                     strokeWidth="0.8"
                   />
                 )}
-              </svg>
+              </Svg>
             </TouchableOpacity>
 
             <Text style={styles.groundHint}>

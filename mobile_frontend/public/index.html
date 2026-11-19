@@ -820,6 +820,13 @@
           }
         });
 
+        video.addEventListener('error', function() {
+          if (!transitionTriggered) {
+            transitionTriggered = true;
+            window.__dismissCfvdPreloader(true);
+          }
+        });
+
         // Safety fallback timeout after 9.5s
         setTimeout(function() {
           if (!transitionTriggered) {

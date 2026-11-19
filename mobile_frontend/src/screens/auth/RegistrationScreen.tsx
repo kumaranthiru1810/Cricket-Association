@@ -388,7 +388,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
     // Listen to window focus or storage/custom events to automatically pick up admin updates
     let syncHandler: any = null;
-    if (typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       syncHandler = () => loadDynamicMasterOptions();
       window.addEventListener('focus', syncHandler);
       window.addEventListener('storage', syncHandler);
@@ -397,7 +397,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
     return () => {
       isMounted = false;
-      if (typeof window !== 'undefined' && syncHandler) {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.removeEventListener === 'function' && syncHandler) {
         window.removeEventListener('focus', syncHandler);
         window.removeEventListener('storage', syncHandler);
         window.removeEventListener('master_settings_updated', syncHandler);
@@ -1453,6 +1453,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const aadhaarErr = aadhaarRes.isValid ? null : aadhaarRes.error;
     let expErr: string | null = null;
     if (!uExperience.trim()) expErr = 'Please enter Umpire Experience.';
+    const mobileErr = validateMobileValue(uMobile);
+    const expErr = validateExperienceValue(uExperience, 'Umpire Experience');
     let distErr: string | null = null;
     if (uDistrict === 'Other' && !targetDistrict) distErr = 'Please specify your District name.';
 
@@ -1890,6 +1892,70 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     >
                       {statusMessage}
                     </Text>
+                    {statusMessage}
+                  </Text>
+                </View>
+              )}
+
+              {/* ========================================================= */}
+              {/* 1. PLAYER FORM */}
+              {/* ========================================================= */}
+              {activeRole === 'PLAYER' && (
+                <>
+                  <View style={styles.sectionHeaderBox}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.sectionHeaderText}>🏏 PLAYER PERSONAL & CRICKETING PROFILE</Text>
+                      <TouchableOpacity onPress={handleDemoFill}>
+                        <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Row 1: Player Full Name (left) & Player Email Address (right) */}
+                  <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Player Full Name *</Text>
+                      <TextInput
+                        style={[styles.input, fieldErrors.name && styles.inputError]}
+                        value={pName}
+                        onChangeText={(val) => {
+                          const sanitized = val.replace(/[^a-zA-Z\s]/g, '');
+                          setPName(sanitized);
+                          const err = validateNameValue(sanitized, 'Player Name');
+                          setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
+                        }}
+                        placeholder="e.g. Saravanan"
+                        placeholderTextColor="#94a3b8"
+                        autoCapitalize="words"
+                      />
+                      {fieldErrors.name && (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.name}</Text>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Player Email Address *</Text>
+                      <TextInput
+                        style={[styles.input, fieldErrors.email && styles.inputError]}
+                        value={pEmail}
+                        onChangeText={(val) => {
+                          const sanitized = val.replace(/[^a-zA-Z0-9_.@]/g, '');
+                          setPEmail(sanitized);
+                          if (isEmailVerified) {
+                            setIsEmailVerified(false);
+                            setOtpSent(false);
+                          }
+                          const err = validateEmailValue(sanitized, 'Player Email Address');
+                          setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+                        }}
+                        placeholder="e.g. saravanan@example.com"
+                        keyboardType="email-address"
+                        placeholderTextColor="#94a3b8"
+                        autoCapitalize="none"
+                      />
+                      {fieldErrors.email && (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.email}</Text>
+                      )}
+                    </View>
                   </View>
                 )}
 
@@ -2224,6 +2290,57 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       <Text style={[styles.fieldErrorText, { marginTop: -4, marginBottom: 6 }]}>⚠️ {fieldErrors.agree}</Text>
                     )}
 
+
+                    {/* Case 3: Wicket Keeper Additional Fields */}
+                    {isWicketKeeper && (
+                      <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                        <DropdownField
+                          label="Keeper Specialization"
+                          value={pKeeperSpec}
+                          options={WICKET_KEEPER_SPECIALIZATIONS}
+                          onSelect={setPKeeperSpec}
+                        />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+              {/* PLAYER REGISTRATION - COMMENTED OUT */}
+
+                    {/* Dynamic Cricketing Profile Summary Pill */}
+                    <View style={styles.cricketSummaryBadge}>
+                      <Text style={styles.cricketSummaryText}>
+                        🏏 <Text style={{ fontWeight: '800', color: '#b45309' }}>Role Specification:</Text>{' '}
+                        {(isBatsman || isOtherOrBatsman) && `${pBattingStyle} • ${pCategory}`}
+                        {isBowler && `${pBowlingAction} (${pBowlingArm} ${pBowlingCategory}) • Bat: ${pBattingStyle}`}
+                        {isAllRounder && `Bat: ${pBattingStyle} • Bowl: ${pBowlingAction}`}
+                        {isWicketKeeper && `${pBattingStyle} • ${pKeeperSpec}`}
+                      </Text>
+                    </View>
+
+                    {/* Verification & Password Setup */}
+                    {renderVerificationAndPasswordBlock()}
+
+                    <TouchableOpacity
+                      style={styles.checkboxRow}
+                      onPress={() => {
+                        const next = !pAgreed;
+                        setPAgreed(next);
+                        setFieldErrors((prev) => ({ ...prev, agree: next ? undefined : 'Please accept the declaration to proceed.' }));
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.checkbox, pAgreed && styles.checkboxChecked]}>
+                        {pAgreed && <Text style={styles.checkmark}>✓</Text>}
+                      </View>
+                      <Text style={styles.checkboxLabel}>
+                        I hereby declare that all information furnished is true and accurate according to association guidelines.
+                      </Text>
+                    </TouchableOpacity>
+                    {fieldErrors.agree && (
+                      <Text style={[styles.fieldErrorText, { marginTop: -4, marginBottom: 6 }]}>⚠️ {fieldErrors.agree}</Text>
+                    )}
+
                     <TouchableOpacity
                       style={[styles.submitBtn, isLoading && styles.submitBtnDisabled]}
                       onPress={handlePlayerSubmit}
@@ -2235,6 +2352,71 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         <Text style={styles.submitBtnText}>
                           {isEmailVerified ? 'Submit Player Registration' : 'Verify Email & Submit Registration'}
                         </Text>
+                  {/* Row 1: Team Name (left) & Coach Name (right) */}
+                  <View style={styles.formRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Official Club / Team Name *</Text>
+                      <TextInput
+                        style={[styles.input, fieldErrors.teamName && styles.inputError]}
+                        value={teamName}
+                        onChangeText={(val) => {
+                          const sanitized = val.replace(/[^a-zA-Z0-9_\s]/g, '');
+                          setTeamName(sanitized);
+                          const err = validateTeamNameValue(sanitized, 'Team Name');
+                          setFieldErrors((prev) => ({ ...prev, teamName: err || undefined }));
+                        }}
+                        placeholder="e.g. Sivakasi Super_Strikers"
+                        placeholderTextColor="#94a3b8"
+                      />
+                      {fieldErrors.teamName && (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.teamName}</Text>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Head Coach / Manager Name *</Text>
+                      <TextInput
+                        style={[styles.input, fieldErrors.name && styles.inputError]}
+                        value={coachName}
+                        onChangeText={(val) => {
+                          const sanitized = val.replace(/[^a-zA-Z\s]/g, '');
+                          setCoachName(sanitized);
+                          const err = validateNameValue(sanitized, 'Coach Name');
+                          setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
+                        }}
+                        placeholder="e.g. Murugan"
+                        placeholderTextColor="#94a3b8"
+                      />
+                      {fieldErrors.name && (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.name}</Text>
+                      )}
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                  {/* Row 2: Coach Email (left) & Team Taluk (right) */}
+                  <View style={styles.formRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Coach Official Email Address *</Text>
+                      <TextInput
+                        style={[styles.input, fieldErrors.email && styles.inputError]}
+                        value={coachEmail}
+                        onChangeText={(val) => {
+                          const sanitized = val.replace(/[^a-zA-Z0-9_.@]/g, '');
+                          setCoachEmail(sanitized);
+                          if (isEmailVerified) {
+                            setIsEmailVerified(false);
+                            setOtpSent(false);
+                          }
+                          const err = validateEmailValue(sanitized, 'Coach Official Email Address');
+                          setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+                        }}
+                        placeholder="e.g. coach@strikerscc.org"
+                        keyboardType="email-address"
+                        placeholderTextColor="#94a3b8"
+                        autoCapitalize="none"
+                      />
+                      {fieldErrors.email && (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.email}</Text>
                       )}
                     </TouchableOpacity>
                   </>
@@ -2282,6 +2464,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                             setCoachName(val);
                             const err = validateNameValue(val, 'Coach Name');
                             setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
+                            const sanitized = val.replace(/[^a-zA-Z\s]/g, '');
+                            setSquadPlayerName(sanitized);
+                            const err = validateNameValue(sanitized, 'Squad Player Name');
+                            setFieldErrors((prev) => ({ ...prev, squadPlayerName: err || undefined }));
                           }}
                           placeholder="e.g. Coach S. Murugan"
                           placeholderTextColor="#94a3b8"
@@ -2307,6 +2493,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                             }
                             const err = validateEmailValue(val, 'Coach Official Email Address');
                             setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+                            const sanitized = val.replace(/[^a-zA-Z0-9_.@]/g, '');
+                            setSquadPlayerEmail(sanitized);
+                            const err = validateEmailValue(sanitized, 'Squad Player Email');
+                            setFieldErrors((prev) => ({ ...prev, squadPlayerEmail: err || undefined }));
                           }}
                           placeholder="e.g. coach@strikerscc.org"
                           keyboardType="email-address"
@@ -2729,6 +2919,356 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       </View>
                     </View>
 
+                    {/* Row 3: Coach Phone Number (10 Digits) & Coach Aadhaar Number (12 Digits) */}
+                    <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                      {/* Coach Phone Number Input */}
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <FontAwesome name="phone" size={13} color="#0284c7" />
+                            <Text style={styles.label}>Coach Phone Number (10 Digits) *</Text>
+                          </View>
+                          <Text style={{ fontSize: 10, color: coachMobile.replace(/\D/g, '').length === 10 ? '#16a34a' : '#64748b', fontWeight: '700' }}>
+                            {coachMobile.replace(/\D/g, '').length === 10 ? '✓ 10/10 Digits' : `(${coachMobile.replace(/\D/g, '').length}/10)`}
+                          </Text>
+                        </View>
+                        <View style={[styles.dynamicInputWrap, fieldErrors.mobile ? styles.inputError : (coachMobile.replace(/\D/g, '').length === 10 ? styles.dynamicInputSuccess : null)]}>
+                          <View style={styles.phonePrefixBox}>
+                            <Text style={styles.phonePrefixText}>🇮🇳 +91</Text>
+                          </View>
+                          <TextInput
+                            style={styles.dynamicInputCore}
+                            value={coachMobile}
+                            onChangeText={(val) => {
+                              const cleaned = formatPhone(val);
+                              setCoachMobile(cleaned);
+                              if (cleaned.length === 10) {
+                                const res = validatePhone(cleaned, 'Coach Phone Number');
+                                setFieldErrors((prev) => ({ ...prev, mobile: res.isValid ? undefined : res.error }));
+                              } else {
+                                setFieldErrors((prev) => ({ ...prev, mobile: undefined }));
+                              }
+                            }}
+                            onBlur={() => {
+                              if (coachMobile.trim()) {
+                                const res = validatePhone(coachMobile, 'Coach Phone Number');
+                                setFieldErrors((prev) => ({ ...prev, mobile: res.isValid ? undefined : res.error }));
+                              }
+                            }}
+                            placeholder="9876543210"
+                            keyboardType="phone-pad"
+                            placeholderTextColor="#94a3b8"
+                            maxLength={10}
+                          />
+                          {coachMobile.replace(/\D/g, '').length === 10 && (
+                            <View style={styles.validCheckBadge}>
+                              <Text style={styles.validCheckText}>✓</Text>
+                            </View>
+                          )}
+                        </View>
+                        {fieldErrors.mobile ? (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.mobile}</Text>
+                        ) : (
+                          <Text style={styles.helperText}>Used for official match alerts & communication</Text>
+                        )}
+                      </View>
+
+                      {/* Coach Aadhaar Number Input */}
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <FontAwesome name="id-card" size={13} color="#b91c1c" />
+                            <Text style={styles.label}>Coach Aadhaar Number (12 Digits) *</Text>
+                          </View>
+                          <Text style={{ fontSize: 10, color: coachAadhaar.replace(/\D/g, '').length === 12 ? '#16a34a' : '#64748b', fontWeight: '700' }}>
+                            {coachAadhaar.replace(/\D/g, '').length === 12 ? '✓ 12/12 Digits' : `(${coachAadhaar.replace(/\D/g, '').length}/12)`}
+                          </Text>
+                        </View>
+                        <View style={[styles.dynamicInputWrap, fieldErrors.aadhaar ? styles.inputError : (coachAadhaar.replace(/\D/g, '').length === 12 ? styles.dynamicInputSuccess : null)]}>
+                          <View style={styles.aadhaarIconBox}>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#b91c1c' }}>UIDAI</Text>
+                          </View>
+                          <TextInput
+                            style={styles.dynamicInputCore}
+                            value={coachAadhaar}
+                            onChangeText={(val) => {
+                              const formatted = formatAadhaar(val);
+                              setCoachAadhaar(formatted);
+                              const rawDigits = formatted.replace(/\D/g, '');
+                              if (rawDigits.length === 12) {
+                                const res = validateAadhaar(rawDigits);
+                                setFieldErrors((prev) => ({ ...prev, aadhaar: res.isValid ? undefined : res.error }));
+                              } else if (rawDigits.length > 0 && (rawDigits[0] === '0' || rawDigits[0] === '1')) {
+                                setFieldErrors((prev) => ({ ...prev, aadhaar: 'Aadhaar number cannot start with 0 or 1.' }));
+                              } else {
+                                setFieldErrors((prev) => ({ ...prev, aadhaar: undefined }));
+                              }
+                            }}
+                            onBlur={() => {
+                              if (coachAadhaar.trim()) {
+                                const res = validateAadhaar(coachAadhaar);
+                                setFieldErrors((prev) => ({ ...prev, aadhaar: res.isValid ? undefined : res.error }));
+                              }
+                            }}
+                            placeholder="5432 9876 1234"
+                            keyboardType="numeric"
+                            placeholderTextColor="#94a3b8"
+                            maxLength={14}
+                          />
+                          {coachAadhaar.replace(/\D/g, '').length === 12 && (
+                            <View style={styles.validCheckBadge}>
+                              <Text style={styles.validCheckText}>✓</Text>
+                            </View>
+                          )}
+                        </View>
+                        {fieldErrors.aadhaar ? (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.aadhaar}</Text>
+                        ) : (
+                          <Text style={styles.helperText}>Indian 12-digit National Identification Number</Text>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Custom Taluk Input if "Other" is chosen */}
+                    {teamTaluk === 'Other' && (
+                      <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.label}>Specify Team Taluk Name *</Text>
+                          <TextInput
+                            style={[styles.input, fieldErrors.taluk && styles.inputError]}
+                            value={teamCustomTaluk}
+                            onChangeText={(val) => {
+                              setTeamCustomTaluk(val);
+                              setFieldErrors((prev) => ({ ...prev, taluk: val.trim() ? undefined : 'Please enter your team Taluk name.' }));
+                            }}
+                            placeholder="Type your team's taluk name here..."
+                            placeholderTextColor="#94a3b8"
+                            autoCapitalize="words"
+                          />
+                          {fieldErrors.taluk && (
+                            <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.taluk}</Text>
+                          )}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* 15 Squad Players Builder */}
+                    <View style={styles.squadHeaderRow}>
+                      <Text style={styles.squadSectionTitle}>
+                        Squad Players ({players.length} added)
+                      </Text>
+                      <TouchableOpacity style={styles.autoFillBtn} onPress={handleAutoFillSampleSquad}>
+                        <Text style={styles.autoFillBtnText}>⚡ Fill Sample Squad</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.addPlayerContainer}>
+                      {editingPlayerId && (
+                        <View style={{ backgroundColor: '#fef3c7', borderRadius: 5, padding: 6, marginBottom: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Text style={{ color: '#92400e', fontSize: 11, fontWeight: '700' }}>✏️ Editing player — make changes and click Update</Text>
+                          <TouchableOpacity onPress={handleCancelEdit}>
+                            <Text style={{ color: '#dc2626', fontSize: 11, fontWeight: '800' }}>✕ Cancel</Text>
+                          </TouchableOpacity>
+                        </View>
+                  {/* Row 1: Scorer Full Name (left) & Mobile Number (right) */}
+                  <View style={styles.formRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Scorer Full Name *</Text>
+                      <TextInput
+                        style={[styles.input, fieldErrors.name && styles.inputError]}
+                        value={sName}
+                        onChangeText={(val) => {
+                          const sanitized = val.replace(/[^a-zA-Z\s]/g, '');
+                          setSName(sanitized);
+                          const err = validateNameValue(sanitized, 'Scorer Name');
+                          setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
+                        }}
+                        placeholder="e.g. Ramesh"
+                        placeholderTextColor="#94a3b8"
+                        autoCapitalize="words"
+                      />
+                      {fieldErrors.name && (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.name}</Text>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Mobile Number *</Text>
+                      <TextInput
+                        style={[styles.input, fieldErrors.mobile && styles.inputError]}
+                        value={sMobile}
+                        onChangeText={(val) => {
+                          setSMobile(val);
+                          const err = validateMobileValue(val);
+                          setFieldErrors((prev) => ({ ...prev, mobile: err || undefined }));
+                        }}
+                        placeholder="e.g. 9876543210"
+                        keyboardType="phone-pad"
+                        placeholderTextColor="#94a3b8"
+                        maxLength={10}
+                      />
+                      {fieldErrors.mobile && (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.mobile}</Text>
+                      )}
+                      <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                        <View style={{ flex: 1 }}>
+                          <TextInput
+                            style={[styles.input, { marginBottom: 0 }, fieldErrors.squadPlayerName && styles.inputError]}
+                            value={squadPlayerName}
+                            onChangeText={(val) => {
+                              setSquadPlayerName(val);
+                              const err = validateNameValue(val, 'Squad Player Name');
+                              setFieldErrors((prev) => ({ ...prev, squadPlayerName: err || undefined }));
+                            }}
+                            placeholder="Player Full Name"
+                            placeholderTextColor="#94a3b8"
+                          />
+                          {fieldErrors.squadPlayerName && (
+                            <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.squadPlayerName}</Text>
+                          )}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <TextInput
+                            style={[styles.input, { marginBottom: 0 }, fieldErrors.squadPlayerEmail && styles.inputError]}
+                            value={squadPlayerEmail}
+                            onChangeText={(val) => {
+                              setSquadPlayerEmail(val);
+                              const err = validateEmailValue(val, 'Squad Player Email');
+                              setFieldErrors((prev) => ({ ...prev, squadPlayerEmail: err || undefined }));
+                            }}
+                            placeholder="Player Email Address"
+                            keyboardType="email-address"
+                            placeholderTextColor="#94a3b8"
+                            autoCapitalize="none"
+                          />
+                          {fieldErrors.squadPlayerEmail && (
+                            <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.squadPlayerEmail}</Text>
+                          )}
+                        </View>
+                      </View>
+                      <View style={[styles.formRow, isMobile && { flexDirection: 'column' }, { marginTop: 8, marginBottom: 0 }]}>
+                        <DropdownField
+                          label="Squad Role"
+                          value={squadPlayerRole}
+                          options={dynamicPlayerRoles}
+                          onSelect={setSquadPlayerRole}
+                        />
+                        <View style={{ flex: 1, justifyContent: 'flex-end', marginTop: isMobile ? 8 : 0 }}>
+                          <TouchableOpacity style={[styles.addPlayerBtn, editingPlayerId && { backgroundColor: '#0284c7' }]} onPress={handleAddPlayer}>
+                            <Text style={styles.addPlayerBtnText}>{editingPlayerId ? '✓ Update Player' : '+ Add to Squad'}</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+
+                    {players.length > 0 && (
+                      <View style={styles.playerListContainer}>
+                        {players.map((p, index) => (
+                          <View key={p.id} style={styles.playerItemRow}>
+                            <View style={styles.playerNumBadge}>
+                              <Text style={styles.playerNumText}>#{index + 1}</Text>
+                            </View>
+                            <View style={styles.playerItemDetails}>
+                              <View style={styles.playerNameRoleRow}>
+                                <Text style={styles.playerItemName}>{p.name}</Text>
+                                <View style={styles.playerItemRoleBadge}>
+                                  <Text style={styles.playerItemRoleText}>{p.role}</Text>
+                                </View>
+                              </View>
+                              <Text style={styles.playerItemEmail}>{p.email}</Text>
+                            </View>
+                            <TouchableOpacity onPress={() => handleEditPlayer(p)} style={[styles.editBtn, editingPlayerId === p.id && styles.editBtnActive]}>
+                              <Text style={styles.editBtnText}>✏️</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => handleRemovePlayer(p.id)} style={styles.removeBtn}>
+                              <Text style={styles.removeBtnText}>✕</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                    {fieldErrors.squad && (
+                      <Text style={[styles.fieldErrorText, { marginBottom: 6 }]}>⚠️ {fieldErrors.squad}</Text>
+                    )}
+                  {/* Row 2: Official Scorer Email */}
+                  <View style={styles.formRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Official Scorer Email *</Text>
+                      <TextInput
+                        style={[styles.input, fieldErrors.email && styles.inputError]}
+                        value={sEmail}
+                        onChangeText={(val) => {
+                          const sanitized = val.replace(/[^a-zA-Z0-9_.@]/g, '');
+                          setSEmail(sanitized);
+                          if (isEmailVerified) {
+                            setIsEmailVerified(false);
+                            setOtpSent(false);
+                          }
+                          const err = validateEmailValue(sanitized, 'Official Scorer Email');
+                          setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+                        }}
+                        placeholder="e.g. ramesh.scorer@cfvd.org"
+                        keyboardType="email-address"
+                        placeholderTextColor="#94a3b8"
+                        autoCapitalize="none"
+                      />
+                      {fieldErrors.email && (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.email}</Text>
+                      )}
+                    </View>
+
+                    {/* Verification & Password Setup */}
+                    {renderVerificationAndPasswordBlock()}
+
+                    <TouchableOpacity
+                      style={styles.checkboxRow}
+                      onPress={() => {
+                        const next = !teamAgreed;
+                        setTeamAgreed(next);
+                        setFieldErrors((prev) => ({ ...prev, agree: next ? undefined : 'Please accept the declaration to proceed.' }));
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.checkbox, teamAgreed && styles.checkboxChecked]}>
+                        {teamAgreed && <Text style={styles.checkmark}>✓</Text>}
+                      </View>
+                      <Text style={styles.checkboxLabel}>
+                        I confirm that all squad players have verified identity documents.
+                      </Text>
+                    </TouchableOpacity>
+                    {fieldErrors.agree && (
+                      <Text style={[styles.fieldErrorText, { marginTop: -4, marginBottom: 6 }]}>⚠️ {fieldErrors.agree}</Text>
+                    )}
+
+                    <TouchableOpacity
+                      style={[styles.submitBtn, (players.length === 0 || isLoading) && styles.submitBtnDisabled]}
+                      onPress={handleTeamSubmit}
+                      disabled={players.length === 0 || isLoading}
+                    >
+                      {isLoading ? (
+                        <ActivityIndicator color="#000000" size="small" />
+                      ) : (
+                        <Text style={styles.submitBtnText}>
+                          {isEmailVerified ? 'Submit Team & Coach Registration' : 'Verify Email & Submit Registration'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                {/* ========================================================= */}
+                {/* 3. SCORER FORM */}
+                {/* ========================================================= */}
+                {activeRole === 'SCORER' && (
+                  <>
+                    <View style={styles.sectionHeaderBox}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={styles.sectionHeaderText}>📋 OFFICIAL SCORER ENROLLMENT</Text>
+                        <TouchableOpacity onPress={handleDemoFill}>
+                          <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
                     {/* Row 1: Scorer Full Name (left) & Official Scorer Email (right) */}
                     <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
                       <View style={{ flex: 1 }}>
@@ -2891,6 +3431,22 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         value={sLevel}
                         options={dynamicScorerLevels}
                         onSelect={setSLevel}
+                  {/* Row 1: Umpire Full Name (left) & Mobile Number (right) */}
+                  <View style={styles.formRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Umpire Full Name *</Text>
+                      <TextInput
+                        style={[styles.input, fieldErrors.name && styles.inputError]}
+                        value={uName}
+                        onChangeText={(val) => {
+                          const sanitized = val.replace(/[^a-zA-Z\s]/g, '');
+                          setUName(sanitized);
+                          const err = validateNameValue(sanitized, 'Umpire Name');
+                          setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
+                        }}
+                        placeholder="e.g. Sundararajan"
+                        placeholderTextColor="#94a3b8"
+                        autoCapitalize="words"
                       />
                       <DropdownField
                         label="Taluk Jurisdiction"
@@ -2929,6 +3485,36 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
                     {/* Verification & Password Setup */}
                     {renderVerificationAndPasswordBlock()}
+                  {/* Row 2: Official Umpire Email */}
+                  <View style={styles.formRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Official Umpire Email *</Text>
+                      <TextInput
+                        style={[styles.input, fieldErrors.email && styles.inputError]}
+                        value={uEmail}
+                        onChangeText={(val) => {
+                          const sanitized = val.replace(/[^a-zA-Z0-9_.@]/g, '');
+                          setUEmail(sanitized);
+                          if (isEmailVerified) {
+                            setIsEmailVerified(false);
+                            setOtpSent(false);
+                          }
+                          const err = validateEmailValue(sanitized, 'Official Umpire Email');
+                          setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+                        }}
+                        placeholder="e.g. sundararajan.umpire@cfvd.org"
+                        keyboardType="email-address"
+                        placeholderTextColor="#94a3b8"
+                        autoCapitalize="none"
+                      />
+                      {fieldErrors.email && (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.email}</Text>
+                      )}
+                    </View>
+                  </View>
+
+                    {/* Verification & Password Setup */}
+                    {renderVerificationAndPasswordBlock()}
 
                     <TouchableOpacity
                       style={styles.checkboxRow}
@@ -2949,6 +3535,37 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     {fieldErrors.agree && (
                       <Text style={[styles.fieldErrorText, { marginTop: -4, marginBottom: 6 }]}>⚠️ {fieldErrors.agree}</Text>
                     )}
+
+                    <TouchableOpacity
+                      style={[styles.submitBtn, isLoading && styles.submitBtnDisabled]}
+                      onPress={handleScorerSubmit}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <ActivityIndicator color="#000000" size="small" />
+                      ) : (
+                        <Text style={styles.submitBtnText}>
+                          {isEmailVerified ? 'Submit Scorer Registration' : 'Verify Email & Submit Registration'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                {/* ========================================================= */}
+                {/* 4. UMPIRE FORM */}
+                {/* ========================================================= */}
+                {activeRole === 'UMPIRE' && (
+                  <>
+                    <View style={styles.sectionHeaderBox}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={styles.sectionHeaderText}>⚖️ OFFICIAL UMPIRE REGISTRATION & ACCREDITATION</Text>
+                        <TouchableOpacity onPress={handleDemoFill}>
+                          <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
 
                     <TouchableOpacity
                       style={[styles.submitBtn, isLoading && styles.submitBtnDisabled]}
@@ -3063,6 +3680,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                             }}
                             placeholder="9876543210"
                             keyboardType="phone-pad"
+                            style={styles.input}
+                            value={uYearsOfExperience}
+                            onChangeText={(val) => setUYearsOfExperience(val.replace(/\D/g, ''))}
+                            placeholder="e.g. 6"
+                            keyboardType="number-pad"
                             placeholderTextColor="#94a3b8"
                             maxLength={10}
                           />

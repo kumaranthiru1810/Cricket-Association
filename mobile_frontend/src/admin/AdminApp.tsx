@@ -45,7 +45,7 @@ const AdminRoutingShell: React.FC<{ onExitAdmin?: () => void }> = ({ onExitAdmin
   const [currentPath, setCurrentPath] = useState<string>(getBrowserPath());
 
   useEffect(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       const handlePopState = () => {
         const path = window.location.pathname;
         if (path.startsWith('/admin')) {

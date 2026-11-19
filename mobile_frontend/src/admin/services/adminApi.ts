@@ -11,51 +11,73 @@ export { API_URL };
 const ADMIN_TOKEN_KEY = 'cfvd_admin_token';
 const ADMIN_USER_KEY = 'cfvd_admin_user';
 
+let memoryAdminToken: string | null = null;
+let memoryAdminUser: any | null = null;
+
 export const getStoredAdminToken = (): string | null => {
-  if (typeof window === 'undefined') return null;
-  return (
-    localStorage.getItem(ADMIN_TOKEN_KEY) ||
-    sessionStorage.getItem(ADMIN_TOKEN_KEY) ||
-    localStorage.getItem('auth_token') ||
-    sessionStorage.getItem('auth_token')
-  );
+  if (memoryAdminToken) return memoryAdminToken;
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+    try {
+      return (
+        localStorage.getItem(ADMIN_TOKEN_KEY) ||
+        (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(ADMIN_TOKEN_KEY) : null) ||
+        localStorage.getItem('auth_token') ||
+        (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('auth_token') : null)
+      );
+    } catch (_e) {
+      return null;
+    }
+  }
+  return null;
 };
 
 export const setStoredAdminToken = (token: string | null, remember = true) => {
-  if (typeof window === 'undefined') return;
-  if (!token) {
-    localStorage.removeItem(ADMIN_TOKEN_KEY);
-    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
-  } else if (remember) {
-    localStorage.setItem(ADMIN_TOKEN_KEY, token);
-  } else {
-    sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
+  memoryAdminToken = token;
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+    try {
+      if (!token) {
+        localStorage.removeItem(ADMIN_TOKEN_KEY);
+        if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+      } else if (remember) {
+        localStorage.setItem(ADMIN_TOKEN_KEY, token);
+      } else if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
+      }
+    } catch (_e) {}
   }
 };
 
 export const getStoredAdminUser = (): any | null => {
-  if (typeof window === 'undefined') return null;
-  const str = localStorage.getItem(ADMIN_USER_KEY) || sessionStorage.getItem(ADMIN_USER_KEY);
-  if (!str) return null;
-  try {
-    return JSON.parse(str);
-  } catch (e) {
-    return null;
+  if (memoryAdminUser) return memoryAdminUser;
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+    try {
+      const str = localStorage.getItem(ADMIN_USER_KEY) || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(ADMIN_USER_KEY) : null);
+      if (!str) return null;
+      memoryAdminUser = JSON.parse(str);
+      return memoryAdminUser;
+    } catch (e) {
+      return null;
+    }
   }
+  return null;
 };
 
 export const setStoredAdminUser = (user: any | null, remember = true) => {
-  if (typeof window === 'undefined') return;
-  if (!user) {
-    localStorage.removeItem(ADMIN_USER_KEY);
-    sessionStorage.removeItem(ADMIN_USER_KEY);
-  } else {
-    const str = JSON.stringify(user);
-    if (remember) {
-      localStorage.setItem(ADMIN_USER_KEY, str);
-    } else {
-      sessionStorage.setItem(ADMIN_USER_KEY, str);
-    }
+  memoryAdminUser = user;
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+    try {
+      if (!user) {
+        localStorage.removeItem(ADMIN_USER_KEY);
+        if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(ADMIN_USER_KEY);
+      } else {
+        const str = JSON.stringify(user);
+        if (remember) {
+          localStorage.setItem(ADMIN_USER_KEY, str);
+        } else if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem(ADMIN_USER_KEY, str);
+        }
+      }
+    } catch (_e) {}
   }
 };
 

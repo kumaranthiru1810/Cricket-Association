@@ -8,6 +8,19 @@ import {
   Platform,
   useWindowDimensions
 } from 'react-native';
+import Svg, {
+  Defs,
+  RadialGradient,
+  LinearGradient,
+  Stop,
+  Circle,
+  Ellipse,
+  Line,
+  Rect,
+  Path,
+  G,
+  Text as SvgText
+} from 'react-native-svg';
 
 export interface ShotDelivery {
   id?: string;
@@ -658,34 +671,28 @@ export default function WagonWheel({
           <View style={styles.wheelWrapper}>
             <View style={[styles.groundContainer, { width: displaySize, height: displaySize }]}>
               {/* Standard SVG Rendering (Works flawlessly on React Native Web & Native) */}
-              <svg
+              <Svg
                 width={displaySize}
                 height={displaySize}
                 viewBox={`0 0 ${baseSize} ${baseSize}`}
-                style={{ width: '100%', height: '100%', display: 'block', overflow: 'visible' }}
               >
-                <defs>
+                <Defs>
                   {/* Stadium Grass Gradient - Vibrant Daylight Turf */}
-                  <radialGradient id="turfGradient" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stopColor="#22c55e" />
-                    <stop offset="65%" stopColor="#16a34a" />
-                    <stop offset="100%" stopColor="#15803d" />
-                  </radialGradient>
+                  <RadialGradient id="turfGradient" cx="50%" cy="50%" rx="50%" ry="50%">
+                    <Stop offset="0%" stopColor="#22c55e" />
+                    <Stop offset="65%" stopColor="#16a34a" />
+                    <Stop offset="100%" stopColor="#15803d" />
+                  </RadialGradient>
                   {/* Pitch Texture */}
-                  <linearGradient id="pitchGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#d97706" />
-                    <stop offset="50%" stopColor="#f59e0b" />
-                    <stop offset="100%" stopColor="#d97706" />
-                  </linearGradient>
-                  {/* Glow Filter for Boundaries */}
-                  <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feGaussianBlur stdDeviation="3" result="blur" />
-                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                  </filter>
-                </defs>
+                  <LinearGradient id="pitchGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <Stop offset="0%" stopColor="#d97706" />
+                    <Stop offset="50%" stopColor="#f59e0b" />
+                    <Stop offset="100%" stopColor="#d97706" />
+                  </LinearGradient>
+                </Defs>
 
                 {/* 1. Main Outfield Circle - Natural Daylight Turf */}
-                <circle
+                <Circle
                   cx={cx}
                   cy={cy}
                   r={radius}
@@ -695,7 +702,7 @@ export default function WagonWheel({
                 />
 
                 {/* 2. Outer Boundary Rope Border */}
-                <circle
+                <Circle
                   cx={cx}
                   cy={cy}
                   r={radius + 3}
@@ -712,9 +719,9 @@ export default function WagonWheel({
                   const isSelected = sectorFilter === s.key;
 
                   return (
-                    <g key={s.key}>
+                    <G key={s.key}>
                       {/* Radial divider */}
-                      <line
+                      <Line
                         x1={cx}
                         y1={cy}
                         x2={borderCoord.x}
@@ -724,24 +731,23 @@ export default function WagonWheel({
                         strokeDasharray="4 3"
                       />
                       {/* Sector Name Watermark inside field */}
-                      <text
+                      <SvgText
                         x={labelCoord.x}
                         y={labelCoord.y}
                         fill={isSelected ? '#fef08a' : '#ffffff'}
                         fontSize={isDesktop ? 10.5 : 9.5}
                         fontWeight="800"
                         textAnchor="middle"
-                        dominantBaseline="central"
-                        style={{ pointerEvents: 'none', userSelect: 'none', filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,0.85))' }}
+                        alignmentBaseline="central"
                       >
                         {s.name.split(' / ')[0]}
-                      </text>
-                    </g>
+                      </SvgText>
+                    </G>
                   );
                 })}
 
                 {/* 4. 30-Yard Infield Circle */}
-                <circle
+                <Circle
                   cx={cx}
                   cy={cy}
                   r={innerCircleR}
@@ -752,8 +758,8 @@ export default function WagonWheel({
                 />
 
                 {/* Clean Infield Off / Leg Badges (Zero text collision) */}
-                <g transform={`translate(${cx - 52}, ${cy - 8})`}>
-                  <rect
+                <G x={cx - 52} y={cy - 8}>
+                  <Rect
                     x="-22"
                     y="-8"
                     width="44"
@@ -763,7 +769,7 @@ export default function WagonWheel({
                     stroke="rgba(56, 189, 248, 0.65)"
                     strokeWidth="1"
                   />
-                  <text
+                  <SvgText
                     x="0"
                     y="1"
                     fill="#a5f3fc"
@@ -771,15 +777,14 @@ export default function WagonWheel({
                     fontWeight="800"
                     letterSpacing="0.5"
                     textAnchor="middle"
-                    dominantBaseline="central"
-                    style={{ pointerEvents: 'none', userSelect: 'none' }}
+                    alignmentBaseline="central"
                   >
                     OFF
-                  </text>
-                </g>
+                  </SvgText>
+                </G>
 
-                <g transform={`translate(${cx + 52}, ${cy - 8})`}>
-                  <rect
+                <G x={cx + 52} y={cy - 8}>
+                  <Rect
                     x="-22"
                     y="-8"
                     width="44"
@@ -789,7 +794,7 @@ export default function WagonWheel({
                     stroke="rgba(245, 158, 11, 0.65)"
                     strokeWidth="1"
                   />
-                  <text
+                  <SvgText
                     x="0"
                     y="1"
                     fill="#fef08a"
@@ -797,15 +802,14 @@ export default function WagonWheel({
                     fontWeight="800"
                     letterSpacing="0.5"
                     textAnchor="middle"
-                    dominantBaseline="central"
-                    style={{ pointerEvents: 'none', userSelect: 'none' }}
+                    alignmentBaseline="central"
                   >
                     LEG
-                  </text>
-                </g>
+                  </SvgText>
+                </G>
 
                 {/* 5. Central Cricket Pitch */}
-                <rect
+                <Rect
                   x={cx - pitchW / 2}
                   y={cy - pitchH / 2}
                   width={pitchW}
@@ -816,21 +820,21 @@ export default function WagonWheel({
                   strokeWidth="1"
                 />
                 {/* Bowling Crease & Stumps */}
-                <line x1={cx - pitchW / 2} y1={cy - pitchH / 2 + 5} x2={cx + pitchW / 2} y2={cy - pitchH / 2 + 5} stroke="#ffffff" strokeWidth="1" />
+                <Line x1={cx - pitchW / 2} y1={cy - pitchH / 2 + 5} x2={cx + pitchW / 2} y2={cy - pitchH / 2 + 5} stroke="#ffffff" strokeWidth="1" />
                 {/* Batting Crease (Striker) */}
-                <line x1={cx - pitchW / 2} y1={cy + pitchH / 2 - 5} x2={cx + pitchW / 2} y2={cy + pitchH / 2 - 5} stroke="#ffffff" strokeWidth="1" />
+                <Line x1={cx - pitchW / 2} y1={cy + pitchH / 2 - 5} x2={cx + pitchW / 2} y2={cy + pitchH / 2 - 5} stroke="#ffffff" strokeWidth="1" />
                 {/* Stumps Marker */}
-                <circle cx={cx} cy={cy + pitchH / 2 - 3} r="1.5" fill="#e11d48" />
+                <Circle cx={cx} cy={cy + pitchH / 2 - 3} r="1.5" fill="#e11d48" />
 
                 {/* Batsman Figurine at Batting Crease */}
-                <g transform={`translate(${cx}, ${cy + pitchH / 2 - 4})`}>
-                  <ellipse cx="0" cy="1" rx="5" ry="2" fill="rgba(0,0,0,0.3)" />
-                  <rect x="-3" y="-5" width="2.5" height="5" rx="1" fill="#f8fafc" stroke="#94a3b8" strokeWidth="0.5" />
-                  <rect x="0.5" y="-5" width="2.5" height="5" rx="1" fill="#f8fafc" stroke="#94a3b8" strokeWidth="0.5" />
-                  <path d="M-3,-5 L-4,-10 L4,-10 L3,-5 Z" fill="#1e3a8a" />
-                  <circle cx="0" cy="-12" r="2.8" fill="#d97706" />
-                  <line x1="2" y1="-7" x2="6" y2="-2" stroke="#b45309" strokeWidth="1.6" strokeLinecap="round" />
-                </g>
+                <G x={cx} y={cy + pitchH / 2 - 4}>
+                  <Ellipse cx="0" cy="1" rx="5" ry="2" fill="rgba(0,0,0,0.3)" />
+                  <Rect x="-3" y="-5" width="2.5" height="5" rx="1" fill="#f8fafc" stroke="#94a3b8" strokeWidth="0.5" />
+                  <Rect x="0.5" y="-5" width="2.5" height="5" rx="1" fill="#f8fafc" stroke="#94a3b8" strokeWidth="0.5" />
+                  <Path d="M-3,-5 L-4,-10 L4,-10 L3,-5 Z" fill="#1e3a8a" />
+                  <Circle cx="0" cy="-12" r="2.8" fill="#d97706" />
+                  <Line x1="2" y1="-7" x2="6" y2="-2" stroke="#b45309" strokeWidth="1.6" strokeLinecap="round" />
+                </G>
 
                 {/* 6. Wagon Wheel Shot Trajectory Lines */}
                 {displayedDeliveries.map((del, idx) => {
@@ -842,19 +846,18 @@ export default function WagonWheel({
                   const isCurrentActive = activeShot?.id === del.id;
 
                   const strokeWidth = runs === 6 ? 2.8 : (runs === 4 ? 2.2 : (runs >= 2 ? 1.6 : 1.2));
-                  const strokeDash = runs === 6 ? 'none' : (runs === 3 ? '4 2' : (runs === 0 ? '2 2' : 'none'));
+                  const strokeDash = runs === 6 ? undefined : (runs === 3 ? '4 2' : (runs === 0 ? '2 2' : undefined));
                   const markerRadius = runs === 6 ? 4.5 : (runs === 4 ? 3.5 : (runs >= 2 ? 2.8 : (runs === 1 ? 2.2 : 1.8)));
                   const startY = cy + pitchH / 2 - 5; // From striker crease
 
                   return (
-                    <g
+                    <G
                       key={del.id || `shot-${idx}`}
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => setActiveShot(del)}
+                      onPress={() => setActiveShot(del)}
                     >
                       {/* Glow backdrop on hover */}
                       {isCurrentActive && (
-                        <line
+                        <Line
                           x1={cx}
                           y1={startY}
                           x2={end.x}
@@ -865,7 +868,7 @@ export default function WagonWheel({
                         />
                       )}
                       {/* The Shot Line */}
-                      <line
+                      <Line
                         x1={cx}
                         y1={startY}
                         x2={end.x}
@@ -876,7 +879,7 @@ export default function WagonWheel({
                         opacity={isCurrentActive ? 1.0 : (runs === 0 ? 0.6 : 0.88)}
                       />
                       {/* Terminal Landing Marker */}
-                      <circle
+                      <Circle
                         cx={end.x}
                         cy={end.y}
                         r={markerRadius}
@@ -884,14 +887,14 @@ export default function WagonWheel({
                         stroke="#ffffff"
                         strokeWidth={isCurrentActive ? 1.5 : 0.8}
                       />
-                    </g>
+                    </G>
                   );
                 })}
 
                 {/* In-Wheel Notice when no shots match current filter */}
                 {displayedDeliveries.length === 0 && (
-                  <g transform={`translate(${cx}, ${cy})`}>
-                    <rect
+                  <G x={cx} y={cy}>
+                    <Rect
                       x="-145"
                       y="-32"
                       width="290"
@@ -901,37 +904,35 @@ export default function WagonWheel({
                       stroke="#f59e0b"
                       strokeWidth="1.5"
                     />
-                    <text
+                    <SvgText
                       x="0"
                       y="-8"
                       fill="#fef08a"
                       fontSize="12"
                       fontWeight="800"
                       textAnchor="middle"
-                      dominantBaseline="central"
-                      style={{ pointerEvents: 'none', userSelect: 'none' }}
+                      alignmentBaseline="central"
                     >
                       {hasNoBoundaries
                         ? 'No boundaries (4s or 6s) scored'
                         : 'No shots match selected filter'}
-                    </text>
-                    <text
+                    </SvgText>
+                    <SvgText
                       x="0"
                       y="14"
                       fill="#e2e8f0"
                       fontSize="10"
                       fontWeight="600"
                       textAnchor="middle"
-                      dominantBaseline="central"
-                      style={{ pointerEvents: 'none', userSelect: 'none' }}
+                      alignmentBaseline="central"
                     >
                       {hasNoBoundaries
                         ? "Select 'All Shots' or '1s, 2s & 3s' to view running shots"
                         : "Tap 'All Shots' above to view full wagon wheel"}
-                    </text>
-                  </g>
+                    </SvgText>
+                  </G>
                 )}
-              </svg>
+              </Svg>
 
               {/* Hovered / Tapped Shot Detail Tooltip Card */}
               {activeShot && (
