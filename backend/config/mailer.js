@@ -860,15 +860,12 @@ async function sendCandidateVerificationEmail({
       if (SMTP_USER && SMTP_USER.includes('@gmail.com') && SMTP_USER.toLowerCase() !== toEmail.toLowerCase()) {
         recipients.push(SMTP_USER);
       }
-
-  const trans = await getTransporter();
-  if (trans) {
-    try {
       await trans.sendMail({
         from: SMTP_FROM,
         to: recipients.join(', '),
         subject,
-        text: textContent
+        text: textContent,
+        html: htmlContent
       });
       console.log(`✅ Candidate verification OTP email dispatched to [${recipients.join(', ')}]`);
       return { success: true };
@@ -878,10 +875,6 @@ async function sendCandidateVerificationEmail({
     }
   }
   return { success: false, error: 'No active SMTP transporter' };
-      return { success: true, message: `Team details dispatched` };
-    }
-  }
-  return { success: true, message: `Dispatched` };
 }
 
 module.exports = {
