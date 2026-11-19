@@ -19,11 +19,13 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import { EditIcon, CheckIcon, CloseIcon, EyeIcon, ShieldIcon } from '../components/Icons';
 import { adminApi } from '../services/adminApi';
 import { useAdminLayout } from '../components/AdminLayout';
+import DualAdminSecurityModal from '../../components/admin/DualAdminSecurityModal';
 
 const PERMANENT_SUPER_ADMIN = 'admin@cfvd.org';
 
 export const UsersPage: React.FC = () => {
   const { showToast } = useAdminLayout();
+  const [showDualSecurityModal, setShowDualSecurityModal] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [roleFilter, setRoleFilter] = useState('ALL');
@@ -566,14 +568,24 @@ export const UsersPage: React.FC = () => {
         subtitle="Manage federation accounts. Super Administrator (admin@cfvd.org) exercises cryptographic OTP approval over all dynamic admins."
         breadcrumbs={[{ label: 'Admin' }, { label: 'Users & Admins' }]}
         actions={
-          <TouchableOpacity
-            style={styles.addAdminBtn}
-            onPress={() => setShowAddAdminModal(true)}
-            activeOpacity={0.8}
-          >
-            <ShieldIcon size={16} color="#ffffff" style={{ marginRight: 6 }} />
-            <Text style={styles.addAdminBtnText}>+ Add New Administrator</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+            <TouchableOpacity
+              style={[styles.addAdminBtn, { backgroundColor: '#b91c1c' }]}
+              onPress={() => setShowDualSecurityModal(true)}
+              activeOpacity={0.8}
+            >
+              <ShieldIcon size={16} color="#ffffff" style={{ marginRight: 6 }} />
+              <Text style={styles.addAdminBtnText}>🛡️ Dual-Admin Security</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.addAdminBtn}
+              onPress={() => setShowAddAdminModal(true)}
+              activeOpacity={0.8}
+            >
+              <ShieldIcon size={16} color="#ffffff" style={{ marginRight: 6 }} />
+              <Text style={styles.addAdminBtnText}>+ Add New Administrator</Text>
+            </TouchableOpacity>
+          </View>
         }
       />
 
@@ -1014,6 +1026,16 @@ export const UsersPage: React.FC = () => {
           </View>
         </Modal>
       )}
+
+      {/* High-Security Dual-Admin Approval & Revocation Modal */}
+      <DualAdminSecurityModal
+        visible={showDualSecurityModal}
+        onClose={() => setShowDualSecurityModal(false)}
+        onSuccess={() => {
+          loadUsers();
+          showToast('Dual-admin operation completed successfully.', 'success');
+        }}
+      />
     </View>
   );
 };
