@@ -2342,9 +2342,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             <Text style={styles.hamburgerIcon}>☰</Text>
           </TouchableOpacity>
           <Image source={IMG_LOGO} style={styles.adminMinimalLogo} resizeMode="contain" />
-          <View style={{ marginLeft: 12, flex: 1 }}>
-            <Text style={[styles.adminMinimalTitle, !isDesktop && { fontSize: 12.5 }]} numberOfLines={!isDesktop ? 1 : 2}>CRICKET FEDERATION OF VIRUDHUNAGAR DISTRICT</Text>
-            <Text style={[styles.adminMinimalSub, !isDesktop && { fontSize: 10 }]} numberOfLines={1}>Official Administrator Management Console</Text>
+          <View style={{ marginLeft: 10, flex: 1, minWidth: 0 }}>
+            <Text style={[styles.adminMinimalTitle, !isDesktop && { fontSize: 12 }]} numberOfLines={1} ellipsizeMode="tail">CRICKET FEDERATION OF VIRUDHUNAGAR</Text>
+            <Text style={[styles.adminMinimalSub, !isDesktop && { fontSize: 9.5 }]} numberOfLines={1} ellipsizeMode="tail">Official Admin Console</Text>
           </View>
         </View>
         {isDesktop ? (
@@ -2436,9 +2436,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
             {/* MODERN PAGE HEADER ROW */}
             <View style={styles.pageHeaderRow}>
-              <View>
+              <View style={{ flex: 1, minWidth: 200 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <Text style={styles.pageHeaderTitle}>
+                  <Text style={[styles.pageHeaderTitle, !isDesktop && { fontSize: 17 }]}>
                     {activeTab === 'overview' && '⊞ Command Center Overview'}
                     {activeTab === 'users' && '🛡️ Users & Dynamic Administrator Governance'}
                     {activeTab === 'teams' && '👥 Team Registrations'}
@@ -5432,7 +5432,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           backgroundColor: '#ffffff',
                           color: '#0f172a',
                           width: '100%',
-                          outline: 'none',
+                          outlineStyle: 'none' as any,
                           cursor: 'pointer'
                         }}
                       >
@@ -5739,7 +5739,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           backgroundColor: '#ffffff',
                           color: '#0f172a',
                           width: '100%',
-                          outline: 'none',
+                          outlineStyle: 'none' as any,
                           cursor: 'pointer',
                           marginBottom: 8
                         }}
@@ -5969,7 +5969,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                             backgroundColor: '#ffffff',
                             color: '#0f172a',
                             width: '100%',
-                            outline: 'none',
+                            outlineStyle: 'none' as any,
                             boxSizing: 'border-box'
                           }}
                         />
@@ -6044,7 +6044,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                             backgroundColor: '#ffffff',
                             color: '#0f172a',
                             width: '100%',
-                            outline: 'none',
+                            outlineStyle: 'none' as any,
                             boxSizing: 'border-box'
                           }}
                         />
@@ -9005,7 +9005,10 @@ const styles: any = StyleSheet.create({
   },
   adminMinimalBrandCol: {
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8
   },
   adminMinimalLogo: {
     width: 38,

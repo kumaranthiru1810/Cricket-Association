@@ -11,7 +11,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ActivityIndicator, ScrollView, useWindowDimensions } from 'react-native';
 import PageHeader from '../components/PageHeader';
 import DataTable, { ColumnDef } from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
@@ -24,6 +24,9 @@ import DualAdminSecurityModal from '../../components/admin/DualAdminSecurityModa
 const PERMANENT_SUPER_ADMIN = 'admin@cfvd.org';
 
 export const UsersPage: React.FC = () => {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+  const isSmall = width < 480;
   const { showToast } = useAdminLayout();
   const [showDualSecurityModal, setShowDualSecurityModal] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
@@ -568,22 +571,29 @@ export const UsersPage: React.FC = () => {
         subtitle="Manage federation accounts. Super Administrator (admin@cfvd.org) exercises cryptographic OTP approval over all dynamic admins."
         breadcrumbs={[{ label: 'Admin' }, { label: 'Users & Admins' }]}
         actions={
-          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+          <View style={[styles.headerActionsWrap, isMobile && { width: '100%', gap: 8 }]}>
             <TouchableOpacity
-              style={[styles.addAdminBtn, { backgroundColor: '#b91c1c' }]}
+              style={[
+                styles.addAdminBtn,
+                { backgroundColor: '#b91c1c' },
+                isMobile && { flex: 1, minWidth: 140, justifyContent: 'center', paddingHorizontal: 10 }
+              ]}
               onPress={() => setShowDualSecurityModal(true)}
               activeOpacity={0.8}
             >
-              <ShieldIcon size={16} color="#ffffff" style={{ marginRight: 6 }} />
-              <Text style={styles.addAdminBtnText}>🛡️ Dual-Admin Security</Text>
+              <ShieldIcon size={15} color="#ffffff" style={{ marginRight: 6 }} />
+              <Text style={styles.addAdminBtnText} numberOfLines={1}>🛡️ Dual-Admin Security</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.addAdminBtn}
+              style={[
+                styles.addAdminBtn,
+                isMobile && { flex: 1, minWidth: 140, justifyContent: 'center', paddingHorizontal: 10 }
+              ]}
               onPress={() => setShowAddAdminModal(true)}
               activeOpacity={0.8}
             >
-              <ShieldIcon size={16} color="#ffffff" style={{ marginRight: 6 }} />
-              <Text style={styles.addAdminBtnText}>+ Add New Administrator</Text>
+              <ShieldIcon size={15} color="#ffffff" style={{ marginRight: 6 }} />
+              <Text style={styles.addAdminBtnText} numberOfLines={1}>+ Add Administrator</Text>
             </TouchableOpacity>
           </View>
         }
@@ -593,32 +603,36 @@ export const UsersPage: React.FC = () => {
       <View style={styles.filtersBar}>
         <View style={styles.filterGroup}>
           <Text style={styles.filterLabel}>Role Filter:</Text>
-          {['ALL', 'ADMIN', 'SCORER', 'PLAYER', 'USER'].map(r => (
-            <TouchableOpacity
-              key={r}
-              style={[styles.filterChip, roleFilter === r && styles.filterChipActive]}
-              onPress={() => setRoleFilter(r)}
-            >
-              <Text style={[styles.filterChipText, roleFilter === r && styles.filterChipTextActive]}>
-                {r === 'ADMIN' ? 'ADMINISTRATORS' : r}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipsRow}>
+            {['ALL', 'ADMIN', 'SCORER', 'PLAYER', 'USER'].map(r => (
+              <TouchableOpacity
+                key={r}
+                style={[styles.filterChip, roleFilter === r && styles.filterChipActive]}
+                onPress={() => setRoleFilter(r)}
+              >
+                <Text style={[styles.filterChipText, roleFilter === r && styles.filterChipTextActive]}>
+                  {r === 'ADMIN' ? 'ADMINISTRATORS' : r}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
 
         <View style={styles.filterGroup}>
           <Text style={styles.filterLabel}>Status:</Text>
-          {['ALL', 'ACTIVE', 'PENDING', 'SUSPENDED'].map(s => (
-            <TouchableOpacity
-              key={s}
-              style={[styles.filterChip, statusFilter === s && styles.filterChipActive]}
-              onPress={() => setStatusFilter(s)}
-            >
-              <Text style={[styles.filterChipText, statusFilter === s && styles.filterChipTextActive]}>
-                {s}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipsRow}>
+            {['ALL', 'ACTIVE', 'PENDING', 'SUSPENDED'].map(s => (
+              <TouchableOpacity
+                key={s}
+                style={[styles.filterChip, statusFilter === s && styles.filterChipActive]}
+                onPress={() => setStatusFilter(s)}
+              >
+                <Text style={[styles.filterChipText, statusFilter === s && styles.filterChipTextActive]}>
+                  {s}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
       </View>
 
@@ -817,7 +831,7 @@ export const UsersPage: React.FC = () => {
                   />
                 </View>
 
-                <View style={styles.fieldRow}>
+                <View style={[styles.fieldRow, isMobile && { flexDirection: 'column', gap: 12 }]}>
                   <View style={[styles.fieldGroup, { flex: 1 }]}>
                     <Text style={styles.fieldLabel}>Mobile Number (10 Digits)</Text>
                     <TextInput
@@ -1044,28 +1058,37 @@ const styles = StyleSheet.create({
   container: {
     flex: 1
   },
-  filtersBar: {
+  headerActionsWrap: {
     flexDirection: 'row',
-    alignItems: 'center',
+    gap: 8,
     flexWrap: 'wrap',
-    gap: 20,
+    alignItems: 'center'
+  },
+  filtersBar: {
     backgroundColor: '#ffffff',
-    padding: 14,
+    padding: 12,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    marginBottom: 16
+    marginBottom: 16,
+    gap: 12
   },
   filterGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap'
+    gap: 8
+  },
+  filterChipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingRight: 8
   },
   filterLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#64748b'
+    color: '#64748b',
+    minWidth: 70
   },
   filterChip: {
     paddingVertical: 5,
@@ -1229,27 +1252,30 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    backgroundColor: 'rgba(15, 23, 42, 0.68)',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16
+    padding: 12,
+    width: '100%'
   },
   modalDialog: {
     width: '100%',
-    maxWidth: 480,
-    borderRadius: 14,
+    maxWidth: 520,
+    borderRadius: 16,
     backgroundColor: '#ffffff',
     overflow: 'hidden',
+    maxHeight: '92%',
     shadowColor: '#000',
     shadowOpacity: 0.15,
     shadowRadius: 20,
-    elevation: 8
+    elevation: 8,
+    alignSelf: 'center'
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9'
@@ -1260,7 +1286,7 @@ const styles = StyleSheet.create({
     color: '#0f172a'
   },
   modalBody: {
-    padding: 20,
+    padding: 16,
     maxHeight: 520
   },
   fieldGroup: {
@@ -1279,7 +1305,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3
   },
   fieldInput: {
-    height: 40,
+    height: 42,
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderRadius: 8,
@@ -1329,23 +1355,28 @@ const styles = StyleSheet.create({
   infoVal: {
     fontSize: 13,
     color: '#0f172a',
-    fontWeight: '600'
+    fontWeight: '600',
+    flex: 1
   },
   modalFooter: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
+    alignItems: 'center',
     gap: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9'
+    borderTopColor: '#f1f5f9',
+    flexWrap: 'wrap'
   },
   btnCancel: {
-    paddingVertical: 8,
+    paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#cbd5e1'
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   btnCancelText: {
     fontSize: 13,
@@ -1353,10 +1384,12 @@ const styles = StyleSheet.create({
     color: '#475569'
   },
   btnSave: {
-    paddingVertical: 8,
+    paddingVertical: 9,
     paddingHorizontal: 18,
     borderRadius: 8,
-    backgroundColor: '#0f2452'
+    backgroundColor: '#0f2452',
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   btnSaveText: {
     fontSize: 13,
@@ -1368,13 +1401,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     backgroundColor: '#0f2452',
-    paddingVertical: 8,
+    paddingVertical: 9,
     paddingHorizontal: 14,
     borderRadius: 8
   },
   addAdminBtnText: {
     color: '#ffffff',
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700'
   },
   securityNoticeCard: {
@@ -1399,8 +1432,9 @@ const styles = StyleSheet.create({
   btnProceedSuperAdmin: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 9,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     borderRadius: 8,
     backgroundColor: '#0f2452'
   },

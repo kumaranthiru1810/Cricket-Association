@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { ChevronRightIcon } from './Icons';
 
 export interface BreadcrumbItem {
@@ -26,8 +26,11 @@ export const PageHeader: React.FC<Props> = ({
   breadcrumbs = [{ label: 'Admin' }, { label: title }],
   actions
 }) => {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isMobile && styles.containerMobile]}>
       <View style={styles.titleArea}>
         {breadcrumbs && breadcrumbs.length > 0 && (
           <View style={styles.breadcrumbRow}>
@@ -50,11 +53,11 @@ export const PageHeader: React.FC<Props> = ({
             })}
           </View>
         )}
-        <Text style={styles.title}>{title}</Text>
-        {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+        <Text style={[styles.title, isMobile && { fontSize: 18, lineHeight: 24 }]}>{title}</Text>
+        {subtitle && <Text style={[styles.subtitle, isMobile && { fontSize: 12, lineHeight: 16 }]}>{subtitle}</Text>}
       </View>
 
-      {actions && <View style={styles.actionsArea}>{actions}</View>}
+      {actions && <View style={[styles.actionsArea, isMobile && styles.actionsAreaMobile]}>{actions}</View>}
     </View>
   );
 };
@@ -66,16 +69,26 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     flexWrap: 'wrap',
     gap: 16,
-    marginBottom: 24
+    marginBottom: 20,
+    width: '100%',
+    maxWidth: '100%'
+  },
+  containerMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 12,
+    marginBottom: 16
   },
   titleArea: {
     flex: 1,
-    minWidth: 200
+    minWidth: 200,
+    maxWidth: '100%'
   },
   breadcrumbRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6
+    marginBottom: 6,
+    flexWrap: 'wrap'
   },
   breadcrumbItem: {
     flexDirection: 'row',
@@ -109,7 +122,12 @@ const styles = StyleSheet.create({
   actionsArea: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 10
+  },
+  actionsAreaMobile: {
+    width: '100%',
+    justifyContent: 'flex-start'
   }
 });
 

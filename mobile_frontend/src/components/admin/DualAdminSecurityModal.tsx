@@ -395,41 +395,43 @@ export default function DualAdminSecurityModal({
         <View style={styles.modalCard}>
           {/* HEADER TOP NAV TABS */}
           <View style={styles.navTabsWrapper}>
-            <TouchableOpacity
-              style={[styles.navTabBtn, activeTab === 'promote' && styles.navTabBtnActive]}
-              onPress={() => {
-                setActiveTab('promote');
-                resetFlows();
-              }}
-            >
-              <Text style={[styles.navTabBtnText, activeTab === 'promote' && styles.navTabBtnTextActive]}>
-                + Promote Admin
-              </Text>
-            </TouchableOpacity>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.navTabsScroll}>
+              <TouchableOpacity
+                style={[styles.navTabBtn, activeTab === 'promote' && styles.navTabBtnActive]}
+                onPress={() => {
+                  setActiveTab('promote');
+                  resetFlows();
+                }}
+              >
+                <Text style={[styles.navTabBtnText, activeTab === 'promote' && styles.navTabBtnTextActive]}>
+                  + Promote Admin
+                </Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.navTabBtn, activeTab === 'remove' && styles.navTabBtnActive]}
-              onPress={() => {
-                setActiveTab('remove');
-                resetFlows();
-              }}
-            >
-              <Text style={[styles.navTabBtnText, activeTab === 'remove' && styles.navTabBtnTextActive]}>
-                - Remove Admin
-              </Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.navTabBtn, activeTab === 'remove' && styles.navTabBtnActive]}
+                onPress={() => {
+                  setActiveTab('remove');
+                  resetFlows();
+                }}
+              >
+                <Text style={[styles.navTabBtnText, activeTab === 'remove' && styles.navTabBtnTextActive]}>
+                  - Remove Admin
+                </Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.navTabBtn, activeTab === 'audit' && styles.navTabBtnActive]}
-              onPress={() => {
-                setActiveTab('audit');
-                resetFlows();
-              }}
-            >
-              <Text style={[styles.navTabBtnText, activeTab === 'audit' && styles.navTabBtnTextActive]}>
-                🛡️ Security Audit
-              </Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.navTabBtn, activeTab === 'audit' && styles.navTabBtnActive]}
+                onPress={() => {
+                  setActiveTab('audit');
+                  resetFlows();
+                }}
+              >
+                <Text style={[styles.navTabBtnText, activeTab === 'audit' && styles.navTabBtnTextActive]}>
+                  🛡️ Security Audit
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
 
             <TouchableOpacity style={styles.closeBtn} onPress={onClose} accessibilityLabel="Close Security Modal">
               <Text style={styles.closeBtnText}>✕</Text>
@@ -1009,14 +1011,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(2, 6, 18, 0.72)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 16
+    padding: 10,
+    width: '100%',
+    height: '100%'
   },
   modalCard: {
     backgroundColor: '#ffffff',
     borderRadius: 20,
     width: '100%',
-    maxWidth: 540,
-    maxHeight: '92%',
+    maxWidth: 520,
+    maxHeight: '94%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.25,
@@ -1024,7 +1028,8 @@ const styles = StyleSheet.create({
     elevation: 16,
     overflow: 'hidden',
     display: 'flex',
-    flexDirection: 'column'
+    flexDirection: 'column',
+    alignSelf: 'center'
   },
   navTabsWrapper: {
     flexDirection: 'row',
@@ -1032,10 +1037,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
-    paddingHorizontal: 12,
-    paddingTop: 12,
+    paddingHorizontal: 10,
+    paddingTop: 10,
     paddingBottom: 8,
-    gap: 8
+    gap: 6
+  },
+  navTabsScroll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingRight: 6
   },
   navTabBtn: {
     paddingVertical: 8,
