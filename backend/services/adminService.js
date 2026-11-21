@@ -881,6 +881,7 @@ async function rescheduleMatch(matchId, { newDate, newTime, reason }, adminEmail
         });
       } catch (_e) { }
     }
+  }
   // Dispatch targeted Notifications strictly to Team A, Team B, and their squad players
   try {
     await dispatchMatchScheduleNotifications(db, match, {
