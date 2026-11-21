@@ -21,6 +21,7 @@ import Svg, {
   Path,
   G,
   Text as SvgText
+
 } from 'react-native-svg';
 
 export interface ShotDirectionResult {
@@ -437,6 +438,7 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
                 />
 
                 {/* Distance Circles (25m, 50m, 75m) */}
+
                 <Circle cx={cx} cy={cy} r={groundRadius * 0.35} fill="none" stroke="rgba(255, 255, 255, 0.25)" strokeWidth="1" strokeDasharray="3 3" />
                 <Circle cx={cx} cy={cy} r={groundRadius * 0.70} fill="none" stroke="rgba(255, 255, 255, 0.25)" strokeWidth="1" strokeDasharray="3 3" />
 
@@ -448,7 +450,7 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
                   fill="none"
                   stroke="#ffffff"
                   strokeWidth="2"
-                  strokeDasharray="6 4"
+                  strokeDasharray={[6, 4]}
                 />
 
                 {/* 4. White Boundary Rope with Clean Rim */}
@@ -485,7 +487,7 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
                         y2={borderY}
                         stroke={isZoneActive ? '#fef08a' : 'rgba(255, 255, 255, 0.25)'}
                         strokeWidth={isZoneActive ? 2 : 1}
-                        strokeDasharray={isZoneActive ? 'none' : '3 3'}
+                        strokeDasharray={isZoneActive ? undefined : [3, 3]}
                       />
                       {/* Floating Zone Name Label (White with dark shadow for outdoor sun visibility) */}
                       <SvgText
@@ -495,6 +497,7 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
                         fontSize={isZoneActive ? 10.5 : 8.5}
                         fontWeight="900"
                         textAnchor="middle"
+                        alignmentBaseline="central"
                       >
                         {zone.shortName}
                       </SvgText>
@@ -584,6 +587,7 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
                     fontSize="7.5"
                     fontWeight="900"
                     textAnchor="middle"
+                    alignmentBaseline="central"
                   >
                     🏏 {batterName.split(' ')[0]} ({battingHand})
                   </SvgText>
@@ -635,6 +639,7 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
                       fontSize="6.5"
                       fontWeight="900"
                       textAnchor="middle"
+                      alignmentBaseline="central"
                     >
                       {runs}
                     </SvgText>

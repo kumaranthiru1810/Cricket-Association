@@ -25,8 +25,10 @@ import {
   Platform,
   Linking,
   useWindowDimensions,
-  PanResponder
+  PanResponder,
+  StatusBar as RNStatusBar
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -149,9 +151,16 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
 
   // Responsive sidebar states
   const { width } = useWindowDimensions();
-  const isDesktop = width >= 768;
-  const isTabletOrMobile = width < 1024;
+  const insets = useSafeAreaInsets();
+  const isDesktop = width >= 900;
+  const isTabletOrMobile = width < 900;
+  const isMobile = width < 768;
   const isMobileS = width <= 375;
+  const insetsTop = Platform.OS === 'web'
+    ? 0
+    : Platform.OS === 'android'
+      ? Math.max(insets.top, RNStatusBar.currentHeight || 0, 24)
+      : Math.max(insets.top, 20);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [logoutModalOpen, setLogoutModalOpen] = useState<boolean>(false);
@@ -1449,7 +1458,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
       {/* ───────────────────────────────────────────────────────────── */}
       {/* 1. TOP HEADER BAR (Full width across top of viewport)          */}
       {/* ───────────────────────────────────────────────────────────── */}
-      <View style={styles.topHeaderBar}>
+      <View style={[styles.topHeaderBar, { paddingTop: insetsTop + (isDesktop ? 10 : 8) }]}>
         <View style={styles.brandRow}>
           {!isDesktop && (
             <TouchableOpacity
@@ -1461,33 +1470,35 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
               <MenuIcon size={20} color="#f59e0b" />
             </TouchableOpacity>
           )}
-          <Image source={IMG_LOGO} style={styles.brandLogo} resizeMode="contain" />
-          <View style={{ marginLeft: 10, flexShrink: 1 }}>
-            <Text style={styles.brandTitleMain} numberOfLines={1}>
-              CRICKET ASSOCIATION
+          <Image source={IMG_LOGO} style={[styles.brandLogo, !isDesktop && { width: 34, height: 34 }]} resizeMode="contain" />
+          <View style={{ marginLeft: !isDesktop ? 8 : 10, flexShrink: 1 }}>
+            <Text style={[styles.brandTitleMain, !isDesktop && { fontSize: 13 }]} numberOfLines={1}>
+              {!isDesktop ? 'CRICKET ASSOC.' : 'CRICKET ASSOCIATION'}
             </Text>
-            <Text style={styles.brandTitleSub} numberOfLines={1}>
-              Official Team & Coach Portal • {teamName}
+            <Text style={[styles.brandTitleSub, !isDesktop && { fontSize: 9.5 }]} numberOfLines={1}>
+              {!isDesktop ? `Team • ${teamName}` : `Official Team & Coach Portal • ${teamName}`}
             </Text>
           </View>
         </View>
 
-        <View style={styles.headerRightActions}>
+        <View style={[styles.headerRightActions, !isDesktop && { gap: 6 }]}>
           <TouchableOpacity
-            style={styles.refreshPillBtn}
+            style={[styles.refreshPillBtn, !isDesktop && { paddingHorizontal: 9, paddingVertical: 9 }]}
             onPress={() => { setIsRefreshing(true); loadTeamData(); }}
             disabled={isRefreshing}
             activeOpacity={0.7}
             accessibilityLabel="Refresh Data"
           >
             <RefreshIcon size={14} color="#334155" />
-            <Text style={styles.refreshPillBtnText}>
-              {isRefreshing ? 'Refreshing...' : 'Refresh'}
-            </Text>
+            {isDesktop && (
+              <Text style={styles.refreshPillBtnText}>
+                {isRefreshing ? 'Refreshing...' : 'Refresh'}
+              </Text>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.coachBadgeHeader}
+            style={[styles.coachBadgeHeader, !isDesktop && { paddingHorizontal: 3, paddingVertical: 3, borderRadius: 16 }]}
             onPress={() => setActiveTab('profile')}
             activeOpacity={0.8}
             accessibilityLabel="Coach Profile"
@@ -1496,7 +1507,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
               {resolvePhotoUrl(profile?.photo || profile?.logo || profile?.image_path) ? (
                 <Image
                   source={{ uri: resolvePhotoUrl(profile.photo || profile.logo || profile.image_path)! }}
-                  style={{ width: 34, height: 34, borderRadius: 17 }}
+                  style={{ width: 28, height: 28, borderRadius: 14 }}
                   resizeMode="cover"
                 />
               ) : (
@@ -1519,7 +1530,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
 
           {onExit && (
             <TouchableOpacity
-              style={styles.exitBtnPill}
+              style={[styles.exitBtnPill, !isDesktop && { paddingHorizontal: 9, paddingVertical: 9 }]}
               onPress={() => setLogoutModalOpen(true)}
               activeOpacity={0.8}
               accessibilityLabel="Logout"
@@ -1575,20 +1586,47 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
           ) : (
             <ScrollView
               style={styles.rightContentScrollView}
-              contentContainerStyle={styles.scrollContentContainer}
+              contentContainerStyle={[
+                styles.scrollContentContainer,
+                !isDesktop && { paddingHorizontal: 12, paddingVertical: 14 }
+              ]}
               showsVerticalScrollIndicator={true}
             >
               <View style={styles.contentConstrained}>
                 {/* Global Page Header Banner */}
-                <View style={styles.pageHeaderBanner}>
-                  <View style={{ flex: 1, minWidth: 200 }}>
-                    <Text style={styles.pageHeaderTitle}>{getPageTitle(activeTab)}</Text>
+                <View style={[styles.pageHeaderBanner, !isDesktop && { paddingHorizontal: 14, paddingVertical: 10, gap: 8 }]}>
+                  <View style={{ flex: 1, minWidth: !isDesktop ? 160 : 200 }}>
+                    <Text style={[styles.pageHeaderTitle, !isDesktop && { fontSize: 15 }]}>{getPageTitle(activeTab)}</Text>
                     <Text style={styles.pageHeaderSubtitle}>{getPageSubtitle(activeTab)}</Text>
                   </View>
-                  <View style={styles.pageHeaderRightPill}>
-                    <Text style={styles.pageHeaderRightPillText}>
-                      🛡️ {teamName} • #{teamId}
-                    </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    {activeTab === 'allocation' && upcomingMatches.length > 0 && (
+                      <>
+                        <View style={styles.verifiedTag}>
+                          <Text style={styles.verifiedTagText}>
+                            📅 {upcomingMatches.length} Fixture{upcomingMatches.length !== 1 ? 's' : ''}
+                          </Text>
+                        </View>
+                        {allocationPendingMatches.length > 0 ? (
+                          <View style={[styles.verifiedTag, { backgroundColor: '#fef3c7', borderColor: '#f59e0b' }]}>
+                            <Text style={[styles.verifiedTagText, { color: '#b45309' }]}>
+                              ⚠️ {allocationPendingMatches.length} Pending
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={[styles.verifiedTag, { backgroundColor: '#dcfce7', borderColor: '#16a34a' }]}>
+                            <Text style={[styles.verifiedTagText, { color: '#166534' }]}>
+                              ✅ All Allocated
+                            </Text>
+                          </View>
+                        )}
+                      </>
+                    )}
+                    <View style={styles.pageHeaderRightPill}>
+                      <Text style={styles.pageHeaderRightPillText}>
+                        🛡️ {teamName} • #{teamId}
+                      </Text>
+                    </View>
                   </View>
                 </View>
 
@@ -2361,38 +2399,6 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                 {/* ══════════════════════════════════════════════════════════ */}
                 {activeTab === 'allocation' && (
                   <View style={{ gap: 16 }}>
-                    {/* Header Banner */}
-                    <View style={styles.card}>
-                      <View style={styles.cardHeader}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.cardTitle}>📋 Official Playing XI & Squad Allocation</Text>
-                          <Text style={styles.cardSubtitle}>
-                            Select and lock your 11 Playing XI players and substitutes for upcoming association fixtures.
-                          </Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-                          <View style={styles.verifiedTag}>
-                            <Text style={styles.verifiedTagText}>
-                              📅 {upcomingMatches.length} Fixtures
-                            </Text>
-                          </View>
-                          {allocationPendingMatches.length > 0 ? (
-                            <View style={[styles.verifiedTag, { backgroundColor: '#fef3c7', borderColor: '#f59e0b' }]}>
-                              <Text style={[styles.verifiedTagText, { color: '#b45309' }]}>
-                                ⚠️ {allocationPendingMatches.length} Pending
-                              </Text>
-                            </View>
-                          ) : (
-                            <View style={[styles.verifiedTag, { backgroundColor: '#dcfce7', borderColor: '#16a34a' }]}>
-                              <Text style={[styles.verifiedTagText, { color: '#166534' }]}>
-                                ✅ All Allocated
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                      </View>
-                    </View>
-
                     {/* Step 1: Match Selector */}
                     {upcomingMatches.length === 0 ? (
                       <View style={styles.emptyCard}>
@@ -4489,7 +4495,7 @@ const styles: any = StyleSheet.create({
   },
   kpiCard: {
     flex: 1,
-    minWidth: 160,
+    minWidth: 140,
     backgroundColor: '#ffffff',
     borderRadius: 12,
     padding: 14,
@@ -6260,7 +6266,7 @@ const styles: any = StyleSheet.create({
   },
   allocCounterBox: {
     flex: 1,
-    minWidth: 120,
+    minWidth: 105,
     backgroundColor: '#ffffff',
     borderRadius: 8,
     padding: 10,
