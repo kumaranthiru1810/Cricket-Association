@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
   useWindowDimensions,
   Image,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ScorerApi, resolveImageUrl } from '../../services/api';
@@ -53,8 +55,9 @@ export default function GlobalSearchModal({
   onSelectTeam,
   onSelectPlayer,
 }: GlobalSearchModalProps) {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const isMobile = width < 768;
+  const modalHeight = Math.min(isMobile ? Math.round(height * 0.82) : 620, Math.max(380, height - 60));
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'teams' | 'players'>('all');
@@ -121,7 +124,7 @@ export default function GlobalSearchModal({
           setTeamResults(fbTeams);
           setPlayerResults(fbPlayers);
         }
-      } catch (_err) {
+      } catch {
         if (isMounted) {
           const fbTeams = FALLBACK_TEAMS.filter(
             t => t.name.toLowerCase().includes(q) || (t.taluk && t.taluk.toLowerCase().includes(q))
@@ -169,8 +172,22 @@ export default function GlobalSearchModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalCard, isMobile && styles.modalCardMobile]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.modalOverlay}
+      >
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={onClose}
+        />
+        <View
+          style={[
+            styles.modalCard,
+            isMobile && styles.modalCardMobile,
+            { height: modalHeight },
+          ]}
+        >
           {/* Modal Header & Search Bar */}
           <View style={styles.headerArea}>
             <View style={styles.searchBarContainer}>
@@ -198,62 +215,68 @@ export default function GlobalSearchModal({
           </View>
 
           {/* Filter Pills */}
-          <View style={styles.filterPillsRow}>
-            <TouchableOpacity
-              style={[styles.filterPill, filterType === 'all' && styles.filterPillActive]}
-              onPress={() => setFilterType('all')}
+          <View style={styles.filterPillsContainer}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterPillsRow}
             >
-              <Text
-                style={[
-                  styles.filterPillText,
-                  filterType === 'all' && styles.filterPillTextActive,
-                ]}
+              <TouchableOpacity
+                style={[styles.filterPill, filterType === 'all' && styles.filterPillActive]}
+                onPress={() => setFilterType('all')}
               >
-                All Results
-              </Text>
-            </TouchableOpacity>
+                <Text
+                  style={[
+                    styles.filterPillText,
+                    filterType === 'all' && styles.filterPillTextActive,
+                  ]}
+                >
+                  All Results
+                </Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.filterPill, filterType === 'teams' && styles.filterPillActive]}
-              onPress={() => setFilterType('teams')}
-            >
-              <MaterialCommunityIcons
-                name="shield-crown"
-                size={14}
-                color={filterType === 'teams' ? '#ffffff' : '#64748b'}
-                style={{ marginRight: 4 }}
-              />
-              <Text
-                style={[
-                  styles.filterPillText,
-                  filterType === 'teams' && styles.filterPillTextActive,
-                ]}
+              <TouchableOpacity
+                style={[styles.filterPill, filterType === 'teams' && styles.filterPillActive]}
+                onPress={() => setFilterType('teams')}
               >
-                Teams ({teamResults.length})
-              </Text>
-            </TouchableOpacity>
+                <MaterialCommunityIcons
+                  name="shield-crown"
+                  size={14}
+                  color={filterType === 'teams' ? '#ffffff' : '#64748b'}
+                  style={{ marginRight: 4 }}
+                />
+                <Text
+                  style={[
+                    styles.filterPillText,
+                    filterType === 'teams' && styles.filterPillTextActive,
+                  ]}
+                >
+                  Teams ({teamResults.length})
+                </Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.filterPill, filterType === 'players' && styles.filterPillActive]}
-              onPress={() => setFilterType('players')}
-            >
-              <Ionicons
-                name="person"
-                size={13}
-                color={filterType === 'players' ? '#ffffff' : '#64748b'}
-                style={{ marginRight: 4 }}
-              />
-              <Text
-                style={[
-                  styles.filterPillText,
-                  filterType === 'players' && styles.filterPillTextActive,
-                ]}
+              <TouchableOpacity
+                style={[styles.filterPill, filterType === 'players' && styles.filterPillActive]}
+                onPress={() => setFilterType('players')}
               >
-                Players ({playerResults.length})
-              </Text>
-            </TouchableOpacity>
+                <Ionicons
+                  name="person"
+                  size={13}
+                  color={filterType === 'players' ? '#ffffff' : '#64748b'}
+                  style={{ marginRight: 4 }}
+                />
+                <Text
+                  style={[
+                    styles.filterPillText,
+                    filterType === 'players' && styles.filterPillTextActive,
+                  ]}
+                >
+                  Players ({playerResults.length})
+                </Text>
+              </TouchableOpacity>
 
-            {loading && <ActivityIndicator size="small" color="#0a2540" style={{ marginLeft: 8 }} />}
+              {loading && <ActivityIndicator size="small" color="#0a2540" style={{ marginLeft: 8 }} />}
+            </ScrollView>
           </View>
 
           {/* Results List */}
@@ -434,7 +457,7 @@ export default function GlobalSearchModal({
             )}
           </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -450,7 +473,7 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 680,
-    maxHeight: '85%',
+    minHeight: 380,
     backgroundColor: '#f6f2e9',
     borderRadius: 16,
     borderWidth: 1.5,
@@ -461,9 +484,10 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 10 },
     elevation: 16,
+    flexDirection: 'column',
   },
   modalCardMobile: {
-    maxHeight: '92%',
+    maxHeight: '90%',
   },
   headerArea: {
     flexDirection: 'row',
@@ -508,15 +532,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  filterPillsContainer: {
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
   filterPillsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 10,
     gap: 8,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
   },
   filterPill: {
     flexDirection: 'row',
@@ -542,10 +568,12 @@ const styles = StyleSheet.create({
   },
   resultsScroll: {
     flex: 1,
+    minHeight: 200,
     backgroundColor: '#f6f2e9',
   },
   resultsContent: {
     padding: 16,
+    flexGrow: 1,
   },
   promptStateContainer: {
     alignItems: 'center',

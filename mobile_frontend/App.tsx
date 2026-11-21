@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, Platform } from 'react-native';
+import { StyleSheet, Platform, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator, { useAppNavigation, AppScreenName, checkScreenAccess } from './src/navigation/AppNavigator';
 import { getCurrentUser } from './src/services/api';
 import HomeScreen from './screens/Home';
@@ -232,10 +232,10 @@ function MainAppShell() {
 
   // Home Screen rendered as pure React Native component (no iframe, no bundled.html)
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <View style={styles.container}>
       <StatusBar style="light" />
       <HomeScreen />
-    </SafeAreaView>
+    </View>
   );
 }
 

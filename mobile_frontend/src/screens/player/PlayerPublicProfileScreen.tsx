@@ -8,7 +8,10 @@ import {
   ActivityIndicator,
   useWindowDimensions,
   Image,
+  Platform,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ScorerApi, resolveImageUrl } from '../../services/api';
 import { useAppNavigation } from '../../navigation/AppNavigator';
@@ -25,8 +28,15 @@ export default function PlayerPublicProfileScreen({
   onExit,
 }: PlayerPublicProfileProps) {
   const { navigate, goBack, params } = useAppNavigation();
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+
+  const topInset = Platform.OS === 'web'
+    ? 0
+    : Platform.OS === 'android'
+      ? Math.max(insets.top, StatusBar.currentHeight || 0, 24)
+      : Math.max(insets.top, 20);
 
   const playerId = initialPlayerId || params?.playerId || params?.id || '';
   const playerNameParam = initialPlayerName || params?.playerName || params?.name || '';
@@ -133,7 +143,7 @@ export default function PlayerPublicProfileScreen({
   return (
     <View style={styles.screenContainer}>
       {/* Top Header Bar */}
-      <View style={styles.navBar}>
+      <View style={[styles.navBar, { paddingTop: topInset, minHeight: 56 + topInset }]}>
         <TouchableOpacity style={styles.backBtn} onPress={handleBack} activeOpacity={0.8}>
           <Ionicons name="arrow-back" size={20} color="#f5c43d" />
           <Text style={styles.backBtnText}>Back</Text>
@@ -492,12 +502,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#f6f2e9',
   },
   navBar: {
-    height: 60,
     backgroundColor: '#040a1b',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
+    paddingBottom: 6,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(245, 196, 61, 0.2)',
   },

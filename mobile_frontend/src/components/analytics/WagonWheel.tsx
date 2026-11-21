@@ -672,6 +672,7 @@ export default function WagonWheel({
           <View style={styles.wheelWrapper}>
             <View style={[styles.groundContainer, { width: displaySize, height: displaySize }]}>
               {/* Standard SVG Rendering (Works flawlessly on React Native Web & Native) */}
+              {/* Standard SVG Rendering via react-native-svg (Works flawlessly on Native & Web) */}
               <Svg
                 width={displaySize}
                 height={displaySize}
@@ -710,7 +711,7 @@ export default function WagonWheel({
                   fill="none"
                   stroke="#b8860b"
                   strokeWidth="2"
-                  strokeDasharray="6 3"
+                  strokeDasharray={[6, 3]}
                 />
 
                 {/* 3. 8 Sector Divider Lines & Sector Labels */}
@@ -729,7 +730,7 @@ export default function WagonWheel({
                         y2={borderCoord.y}
                         stroke="rgba(255, 255, 255, 0.45)"
                         strokeWidth="1.2"
-                        strokeDasharray="4 3"
+                        strokeDasharray={[4, 3]}
                       />
                       {/* Sector Name Watermark inside field */}
                       <SvgText
@@ -755,7 +756,7 @@ export default function WagonWheel({
                   fill="none"
                   stroke="rgba(255, 255, 255, 0.28)"
                   strokeWidth="1.5"
-                  strokeDasharray="5 4"
+                  strokeDasharray={[5, 4]}
                 />
 
                 {/* Clean Infield Off / Leg Badges (Zero text collision) */}
@@ -865,7 +866,7 @@ export default function WagonWheel({
                           y2={end.y}
                           stroke="#ffffff"
                           strokeWidth={strokeWidth + 4}
-                          opacity="0.5"
+                          opacity={0.5}
                         />
                       )}
                       {/* The Shot Line */}
@@ -876,7 +877,7 @@ export default function WagonWheel({
                         y2={end.y}
                         stroke={color}
                         strokeWidth={isCurrentActive ? strokeWidth + 1.5 : strokeWidth}
-                        strokeDasharray={strokeDash}
+                        strokeDasharray={runs === 6 ? undefined : (runs === 3 ? [4, 2] : (runs === 0 ? [2, 2] : undefined))}
                         opacity={isCurrentActive ? 1.0 : (runs === 0 ? 0.6 : 0.88)}
                       />
                       {/* Terminal Landing Marker */}
@@ -909,7 +910,7 @@ export default function WagonWheel({
                       x="0"
                       y="-8"
                       fill="#fef08a"
-                      fontSize="12"
+                      fontSize={12}
                       fontWeight="800"
                       textAnchor="middle"
                       alignmentBaseline="central"
@@ -922,7 +923,7 @@ export default function WagonWheel({
                       x="0"
                       y="14"
                       fill="#e2e8f0"
-                      fontSize="10"
+                      fontSize={10}
                       fontWeight="600"
                       textAnchor="middle"
                       alignmentBaseline="central"
