@@ -242,11 +242,7 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
   });
 
   const sidebarContent = (
-    <View style={[
-      styles.sidebarContainer,
-      !isDesktop && styles.sidebarContainerMobile,
-      isCollapsed && styles.sidebarCollapsed
-    ]}>
+    <View style={[styles.sidebarContainer, isCollapsed && styles.sidebarCollapsed]}>
       {/* 1. Team Profile Header Card */}
       <View style={[styles.sidebarTeamCard, isCollapsed && styles.sidebarTeamCardCollapsed]}>
         <View style={styles.teamAvatarCircle}>
@@ -425,7 +421,7 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
               <CloseIcon size={18} color="#e2e8f0" />
             </TouchableOpacity>
           </View>
-          <View style={{ flex: 1, minHeight: 0, width: '100%' }}>
+          <View style={{ flex: 1, minHeight: 0 }}>
             {sidebarContent}
           </View>
         </View>
@@ -743,10 +739,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(7, 16, 38, 0.65)'
   },
   mobileDrawerContainer: {
-    width: 280,
+    width: 270,
     maxWidth: '85%',
     height: '100%',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#071026',
     flexDirection: 'column',
     zIndex: 1000,
     shadowColor: '#000',

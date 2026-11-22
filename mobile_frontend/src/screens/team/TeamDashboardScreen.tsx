@@ -25,10 +25,8 @@ import {
   Platform,
   Linking,
   useWindowDimensions,
-  PanResponder,
-  StatusBar as RNStatusBar
+  PanResponder
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -156,11 +154,6 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
   const isTabletOrMobile = width < 900;
   const isMobile = width < 768;
   const isMobileS = width <= 375;
-  const insetsTop = Platform.OS === 'web'
-    ? 0
-    : Platform.OS === 'android'
-      ? Math.max(insets.top, RNStatusBar.currentHeight || 0, 24)
-      : Math.max(insets.top, 20);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [logoutModalOpen, setLogoutModalOpen] = useState<boolean>(false);
@@ -1458,7 +1451,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
       {/* ───────────────────────────────────────────────────────────── */}
       {/* 1. TOP HEADER BAR (Full width across top of viewport)          */}
       {/* ───────────────────────────────────────────────────────────── */}
-      <View style={[styles.topHeaderBar, { paddingTop: insetsTop + (isDesktop ? 10 : 8) }]}>
+      <View style={styles.topHeaderBar}>
         <View style={styles.brandRow}>
           {!isDesktop && (
             <TouchableOpacity
@@ -1470,35 +1463,33 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
               <MenuIcon size={20} color="#f59e0b" />
             </TouchableOpacity>
           )}
-          <Image source={IMG_LOGO} style={[styles.brandLogo, !isDesktop && { width: 34, height: 34 }]} resizeMode="contain" />
-          <View style={{ marginLeft: !isDesktop ? 8 : 10, flexShrink: 1 }}>
-            <Text style={[styles.brandTitleMain, !isDesktop && { fontSize: 13 }]} numberOfLines={1}>
-              {!isDesktop ? 'CRICKET ASSOC.' : 'CRICKET ASSOCIATION'}
+          <Image source={IMG_LOGO} style={styles.brandLogo} resizeMode="contain" />
+          <View style={{ marginLeft: 10, flexShrink: 1 }}>
+            <Text style={styles.brandTitleMain} numberOfLines={1}>
+              CRICKET ASSOCIATION
             </Text>
-            <Text style={[styles.brandTitleSub, !isDesktop && { fontSize: 9.5 }]} numberOfLines={1}>
-              {!isDesktop ? `Team • ${teamName}` : `Official Team & Coach Portal • ${teamName}`}
+            <Text style={styles.brandTitleSub} numberOfLines={1}>
+              Official Team & Coach Portal • {teamName}
             </Text>
           </View>
         </View>
 
-        <View style={[styles.headerRightActions, !isDesktop && { gap: 6 }]}>
+        <View style={styles.headerRightActions}>
           <TouchableOpacity
-            style={[styles.refreshPillBtn, !isDesktop && { paddingHorizontal: 9, paddingVertical: 9 }]}
+            style={styles.refreshPillBtn}
             onPress={() => { setIsRefreshing(true); loadTeamData(); }}
             disabled={isRefreshing}
             activeOpacity={0.7}
             accessibilityLabel="Refresh Data"
           >
             <RefreshIcon size={14} color="#334155" />
-            {isDesktop && (
-              <Text style={styles.refreshPillBtnText}>
-                {isRefreshing ? 'Refreshing...' : 'Refresh'}
-              </Text>
-            )}
+            <Text style={styles.refreshPillBtnText}>
+              {isRefreshing ? 'Refreshing...' : 'Refresh'}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.coachBadgeHeader, !isDesktop && { paddingHorizontal: 3, paddingVertical: 3, borderRadius: 16 }]}
+            style={styles.coachBadgeHeader}
             onPress={() => setActiveTab('profile')}
             activeOpacity={0.8}
             accessibilityLabel="Coach Profile"
@@ -1507,7 +1498,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
               {resolvePhotoUrl(profile?.photo || profile?.logo || profile?.image_path) ? (
                 <Image
                   source={{ uri: resolvePhotoUrl(profile.photo || profile.logo || profile.image_path)! }}
-                  style={{ width: 28, height: 28, borderRadius: 14 }}
+                  style={{ width: 34, height: 34, borderRadius: 17 }}
                   resizeMode="cover"
                 />
               ) : (
@@ -1530,7 +1521,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
 
           {onExit && (
             <TouchableOpacity
-              style={[styles.exitBtnPill, !isDesktop && { paddingHorizontal: 9, paddingVertical: 9 }]}
+              style={styles.exitBtnPill}
               onPress={() => setLogoutModalOpen(true)}
               activeOpacity={0.8}
               accessibilityLabel="Logout"

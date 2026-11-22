@@ -8,10 +8,8 @@ import {
   ActivityIndicator,
   useWindowDimensions,
   Platform,
-  StatusBar,
   Image,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ScorerApi, resolveImageUrl } from '../../services/api';
 import { useAppNavigation } from '../../navigation/AppNavigator';
@@ -28,15 +26,8 @@ export default function TeamPublicProfileScreen({
   onExit,
 }: TeamPublicProfileProps) {
   const { navigate, goBack, params } = useAppNavigation();
-  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
-
-  const topInset = Platform.OS === 'web'
-    ? 0
-    : Platform.OS === 'android'
-      ? Math.max(insets.top, StatusBar.currentHeight || 0, 24)
-      : Math.max(insets.top, 20);
 
   const teamId = initialTeamId || params?.teamId || params?.id || '';
   const teamNameParam = initialTeamName || params?.teamName || params?.name || '';
@@ -121,7 +112,7 @@ export default function TeamPublicProfileScreen({
   return (
     <View style={styles.screenContainer}>
       {/* Top Header Bar */}
-      <View style={[styles.navBar, { paddingTop: topInset, minHeight: 56 + topInset }]}>
+      <View style={styles.navBar}>
         <TouchableOpacity style={styles.backBtn} onPress={handleBack} activeOpacity={0.8}>
           <Ionicons name="arrow-back" size={20} color="#f5c43d" />
           <Text style={styles.backBtnText}>Back to Portal</Text>
@@ -457,12 +448,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#f6f2e9',
   },
   navBar: {
+    height: 60,
     backgroundColor: '#040a1b',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingBottom: 6,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(212, 175, 55, 0.25)',
   },

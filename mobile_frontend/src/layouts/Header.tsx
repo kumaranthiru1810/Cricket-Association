@@ -15,9 +15,7 @@ import {
   TouchableOpacity,
   Platform,
   Dimensions,
-  StatusBar,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppNavigation } from '../navigation/AppNavigator';
 import { ScorerApi, getCurrentUser, setCurrentUser, setAuthToken, logoutAndClearAllSessions } from '../services/api';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -53,12 +51,6 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectNav: propOnSelectNav,
 }) => {
   const { navigate } = useAppNavigation();
-  const insets = useSafeAreaInsets();
-  const topInset = Platform.OS === 'web'
-    ? 0
-    : Platform.OS === 'android'
-      ? Math.max(insets.top, StatusBar.currentHeight || 0, 24)
-      : Math.max(insets.top, 20);
 
   // Active Nav State (Underline style)
   const [internalActiveNav, setInternalActiveNav] = useState<string>('home');
@@ -170,7 +162,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <View style={[styles.header, { paddingTop: topInset }]}>
+    <View style={styles.header}>
       <View style={[styles.headerInner, isMobile && styles.headerInnerMobile]}>
         {/* Brand Block */}
         <TouchableOpacity
