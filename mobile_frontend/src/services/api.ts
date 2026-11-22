@@ -251,7 +251,7 @@ async function request(endpoint: string, options: RequestInit = {}) {
   };
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 12000);
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
 
   try {
     const res = await fetch(url, {
@@ -292,7 +292,7 @@ async function request(endpoint: string, options: RequestInit = {}) {
     }
     if (err.name === 'AbortError' || err.message?.includes('aborted')) {
       const timeoutErr = new Error(
-        `Connection timed out (${getBackendHost()}:5000). Please check if your mobile and computer are on the same Wi-Fi network.`
+        `Connection timed out. Please check your internet connection or server status.`
       );
       (timeoutErr as any).isNetworkError = true;
       throw timeoutErr;
@@ -304,7 +304,7 @@ async function request(endpoint: string, options: RequestInit = {}) {
       err.message?.includes('ECONNREFUSED')
     ) {
       const friendly = new Error(
-        `Cannot connect to backend (${getBackendHost()}:5000). Ensure the backend server is running and your mobile is on the same Wi-Fi.`
+        `Cannot connect to server. Please check your network connection and try again.`
       );
       (friendly as any).isNetworkError = true;
       throw friendly;
@@ -601,6 +601,9 @@ export const ScorerApi = {
     email: string;
     password?: string;
     mobile?: string;
+    phone?: string;
+    aadhaar?: string;
+    aadhaarNumber?: string;
     taluk?: string;
     certificationLevel?: string;
     pin?: string;
@@ -623,6 +626,9 @@ export const ScorerApi = {
     email: string;
     password?: string;
     mobile?: string;
+    phone?: string;
+    aadhaar?: string;
+    aadhaarNumber?: string;
     dateOfBirth?: string;
     gender?: string;
     experience?: string;
@@ -678,10 +684,16 @@ export const ScorerApi = {
     teamName: string;
     coachName: string;
     coachEmail: string;
+    coachPhone?: string;
+    coachMobile?: string;
+    phone?: string;
+    mobile?: string;
+    coachAadhaar?: string;
+    aadhaar?: string;
     password?: string;
     taluk?: string;
     city?: string;
-    players: Array<{ name: string; email: string; role?: string; jerseyNumber?: number }>;
+    players: Array<{ name: string; email: string; role?: string; jerseyNumber?: number; phone?: string; aadhaar?: string }>;
     otp?: string;
   }) => {
     const res = await request('/auth/register-team', {
@@ -887,10 +899,11 @@ export const ScorerApi = {
     });
   },
 
-  postponeMatch: async (matchId: string, reason: string) => {
-    return request(`/admin/matches/${matchId}/postpone`, {
+  postponeMatch: async (matchId: string, payloadOrReason: string | { reason: string; notes?: string; rescheduledDate?: string; rescheduledTime?: string }) => {
+    const payload = typeof payloadOrReason === 'string' ? { reason: payloadOrReason } : payloadOrReason;
+    return request(`/scorer/matches/${matchId}/postpone`, {
       method: 'POST',
-      body: JSON.stringify({ reason })
+      body: JSON.stringify(payload)
     });
   },
 
@@ -1212,6 +1225,13 @@ export const ScorerApi = {
     return request(`/scorer/matches/${matchId}/revised-overs`, {
       method: 'POST',
       body: JSON.stringify(payload)
+    });
+  },
+
+  resumeMatch: async (matchId: string) => {
+    return request(`/scorer/matches/${matchId}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: 'LIVE' })
     });
   },
 

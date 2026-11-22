@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ScorerApi } from '../../services/api';
 import { showSuccess, showError, showWarning } from '../../utils/sweetalert';
 import { validateEmail, validatePassword, getPasswordCriteria } from '../../utils/validation';
+import EmailDomainSuggestions from '../common/EmailDomainSuggestions';
 
 export interface ForgotPasswordModalProps {
   visible: boolean;
@@ -384,6 +385,13 @@ export default function ForgotPasswordModal({
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
+                <EmailDomainSuggestions
+                  value={email}
+                  onSelectDomain={(completed) => {
+                    setEmail(completed);
+                    if (errorMessage) setErrorMessage(null);
+                  }}
+                />
                 <Text style={styles.inputHint}>
                   A 4-digit One-Time Password (OTP) will be sent to this email via the Association mail server.
                 </Text>
@@ -485,7 +493,7 @@ export default function ForgotPasswordModal({
                 </View>
 
                 {/* OLD / CURRENT PASSWORD DISPLAY CARD */}
-                {/* <View style={styles.oldPasswordCard}>
+                <View style={styles.oldPasswordCard}>
                   <View style={styles.oldPasswordHeaderRow}>
                     <View style={styles.oldPasswordHeaderLeft}>
                       <Text style={styles.oldPasswordIcon}>🔑</Text>
@@ -535,7 +543,7 @@ export default function ForgotPasswordModal({
                     </View>
                   </View>
 
-                  {/* Keep Old Password & Log In Button 
+                  {/* Keep Old Password & Log In Button */}
                   <TouchableOpacity
                     style={styles.keepPasswordBtn}
                     onPress={handleKeepOldPassword}
@@ -547,14 +555,14 @@ export default function ForgotPasswordModal({
                   </TouchableOpacity>
                 </View>
 
-                {/* OR DIVIDER 
+                {/* OR DIVIDER */}
                 <View style={styles.orDividerContainer}>
                   <View style={styles.orLine} />
                   <View style={styles.orBadge}>
                     <Text style={styles.orText}>OR CHANGE TO A NEW PASSWORD</Text>
                   </View>
                   <View style={styles.orLine} />
-                </View> */}
+                </View>
 
                 {/* NEW PASSWORD SECTION */}
                 <Text style={styles.inputLabel}>NEW PASSWORD</Text>

@@ -26,11 +26,13 @@ import {
   ViewStyle,
   DimensionValue,
 } from 'react-native';
+import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { io } from 'socket.io-client';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppNavigation } from '../src/navigation/AppNavigator';
 import { ScorerApi, PlayerApi, getCurrentUser, setCurrentUser, setAuthToken, logoutAndClearAllSessions, SOCKET_URL, resolveImageUrl } from '../src/services/api';
+import { getStoredAdminToken, getStoredAdminUser } from '../src/admin/services/adminApi';
 import { MatchHighlightsBanner } from '../src/components/common/MatchHighlightsBanner';
 import {
   bsColors,
@@ -213,19 +215,21 @@ export default function HomeScreen() {
   useEffect(() => {
     // 1. Check local session cache
     const cached = getCurrentUser();
-    if (cached) setSessionUser(cached);
+    if (cached) {
+      setSessionUser(cached);
 
-    // 2. Validate session with backend /api/auth/me (validates Bearer token or HttpOnly Cookie)
-    ScorerApi.getMe()
-      .then((res: any) => {
-        if (res && res.success && res.user) {
-          setCurrentUser(res.user);
-          setSessionUser(res.user);
-        }
-      })
-      .catch(() => {
-        // Unauthenticated or expired session
-      });
+      // 2. Validate session with backend /api/auth/me (validates Bearer token or HttpOnly Cookie)
+      ScorerApi.getMe()
+        .then((res: any) => {
+          if (res && res.success && res.user) {
+            setCurrentUser(res.user);
+            setSessionUser(res.user);
+          }
+        })
+        .catch(() => {
+          // Unauthenticated or expired session
+        });
+    }
   }, []);
 
   const handleLogout = async () => {
@@ -255,6 +259,79 @@ export default function HomeScreen() {
       navigate('Team', { user: sessionUser, teamName: sessionUser.teamName });
     } else {
       navigate('Login');
+    }
+  };
+
+  // ─── ADMIN DEVELOPER EASTER EGG (STEALTH LOGO BALLS PATTERN) ────────────
+  // Pattern: LEFT -> RIGHT -> LEFT -> RIGHT -> CENTER (Strictly 5 taps in order)
+  const secretTapHistory = useRef<string[]>([]);
+  const secretTimeoutRef = useRef<any>(null);
+
+  const handleSecretBallTap = (ball: 'LEFT' | 'RIGHT' | 'CENTER') => {
+    if (secretTimeoutRef.current) {
+      clearTimeout(secretTimeoutRef.current);
+    }
+
+    const EXPECTED_SEQUENCE = ['LEFT', 'RIGHT', 'LEFT', 'RIGHT', 'CENTER'];
+    const currentStep = secretTapHistory.current.length;
+    const expected = EXPECTED_SEQUENCE[currentStep];
+
+    if (ball === expected) {
+      const nextHistory = [...secretTapHistory.current, ball];
+      secretTapHistory.current = nextHistory;
+
+      // When all 5 taps match perfectly:
+      if (nextHistory.length === 5) {
+        secretTapHistory.current = [];
+        // Check if user has an active authenticated admin session on this device/mobile
+        const existingToken = getStoredAdminToken();
+        const existingAdminUser = getStoredAdminUser();
+        const activeUser = getCurrentUser();
+        const isAdmin =
+          (existingAdminUser && (existingAdminUser.role || '').toUpperCase() === 'ADMIN') ||
+          (activeUser && (activeUser.role || '').toUpperCase() === 'ADMIN');
+
+        if (existingToken && isAdmin) {
+          // Already logged in previously on this device
+          try {
+            router.push('/admin');
+          } catch {
+            navigate('Admin', { user: existingAdminUser || activeUser });
+          }
+        } else {
+          // First time or not authenticated -> MUST go to Admin Login to enter credentials
+          try {
+            router.push('/admin-login');
+          } catch {
+            try {
+              router.push('/admin/login');
+            } catch {
+              navigate('AdminLogin');
+            }
+          }
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            try {
+              window.location.href = '/admin-login';
+            } catch {}
+          }
+        }
+        return;
+      }
+
+      // If user pauses or stops before reaching 5, reset sequence after 4.5s
+      secretTimeoutRef.current = setTimeout(() => {
+        secretTapHistory.current = [];
+      }, 4500);
+    } else {
+      // Wrong tap or out of sequence -> reset immediately!
+      secretTapHistory.current = [];
+      // If the wrong tap happened to be 'LEFT', it starts a fresh attempt at step 1
+      if (ball === 'LEFT') {
+        secretTapHistory.current = ['LEFT'];
+        secretTimeoutRef.current = setTimeout(() => {
+          secretTapHistory.current = [];
+        }, 4500);
+      }
     }
   };
 
@@ -509,10 +586,10 @@ export default function HomeScreen() {
       // Fallback to active interval
     }
 
-    // High-speed realtime background poll: every 3 seconds for rapid live match sync
+    // Background match sync poll (Socket.IO already handles real-time live events)
     const matchTimer = setInterval(() => {
       loadPublicMatches(false);
-    }, 3000);
+    }, 20000);
 
     const portalTimer = setInterval(() => {
       loadPortalData();
@@ -897,9 +974,11 @@ export default function HomeScreen() {
                   style={[
                     styles.heroButtonsRow,
                     isMobile && {
+                      flexDirection: 'row',
+                      flexWrap: 'wrap',
                       justifyContent: 'center',
                       alignSelf: 'center',
-                      gap: 10,
+                      gap: 8,
                       marginBottom: 20,
                       width: '100%',
                     }
@@ -910,9 +989,10 @@ export default function HomeScreen() {
                     style={[
                       styles.oasoBtnPrimary,
                       isMobile && {
-                        flex: 1,
-                        minWidth: 140,
-                        maxWidth: 200,
+                        flex: isSmallMobile ? 0 : 1,
+                        width: isSmallMobile ? '100%' : undefined,
+                        minWidth: isSmallMobile ? '100%' : 130,
+                        maxWidth: isSmallMobile ? '100%' : 200,
                         justifyContent: 'center',
                       }
                     ]}
@@ -928,9 +1008,10 @@ export default function HomeScreen() {
                     style={[
                       styles.oasoBtnSecondary,
                       isMobile && {
-                        flex: 1,
-                        minWidth: 140,
-                        maxWidth: 200,
+                        flex: isSmallMobile ? 0 : 1,
+                        width: isSmallMobile ? '100%' : undefined,
+                        minWidth: isSmallMobile ? '100%' : 130,
+                        maxWidth: isSmallMobile ? '100%' : 200,
                         justifyContent: 'center',
                       }
                     ]}
@@ -949,9 +1030,10 @@ export default function HomeScreen() {
                     style={[
                       styles.oasoBtnTertiary,
                       isMobile && {
-                        flex: 1,
-                        minWidth: 140,
-                        maxWidth: 200,
+                        flex: isSmallMobile ? 0 : 1,
+                        width: isSmallMobile ? '100%' : undefined,
+                        minWidth: isSmallMobile ? '100%' : 130,
+                        maxWidth: isSmallMobile ? '100%' : 200,
                         justifyContent: 'center',
                       }
                     ]}
@@ -967,19 +1049,89 @@ export default function HomeScreen() {
 
               {/* Right Column: CFVD Crest inside Container */}
               <View style={[styles.oasoHeroCrestCol, isMobile && styles.oasoHeroCrestColMobile]}>
-                <View style={styles.oasoCrestAuraRing} />
-                <View style={styles.oasoCrestAuraRingInner} />
-                <Image
-                  source={IMG_LOGO}
+                <View
                   style={[
-                    styles.oasoCrestImage,
+                    styles.oasoCrestAuraRing,
                     isMobile && {
-                      width: Math.min(windowWidth * 0.88, 360),
-                      height: Math.min(windowWidth * 0.88, 360),
+                      width: Math.min(windowWidth * 0.88, 340),
+                      height: Math.min(windowWidth * 0.88, 340),
+                      borderRadius: Math.min(windowWidth * 0.88, 340) / 2
                     }
                   ]}
-                  resizeMode="contain"
                 />
+                <View
+                  pointerEvents="none"
+                  style={[
+                    styles.oasoCrestAuraRing,
+                    isMobile && {
+                      width: Math.min(windowWidth * 0.88, 340),
+                      height: Math.min(windowWidth * 0.88, 340),
+                      borderRadius: Math.min(windowWidth * 0.88, 340) / 2
+                    }
+                  ]}
+                />
+                <View
+                  pointerEvents="none"
+                  style={[
+                    styles.oasoCrestAuraRingInner,
+                    isMobile && {
+                      width: Math.min(windowWidth * 0.72, 260),
+                      height: Math.min(windowWidth * 0.72, 260),
+                      borderRadius: Math.min(windowWidth * 0.72, 260) / 2
+                    }
+                  ]}
+                />
+                
+                {/* Crest Wrapper with Stealth Hotspots */}
+                <View
+                  style={[
+                    styles.stealthCrestWrapper,
+                    {
+                      width: isMobile ? Math.min(windowWidth * 0.88, 360) : 460,
+                      height: isMobile ? Math.min(windowWidth * 0.88, 360) : 460,
+                    }
+                  ]}
+                >
+                  <Image
+                    source={IMG_LOGO}
+                    style={[
+                      styles.oasoCrestImage,
+                      {
+                        width: isMobile ? Math.min(windowWidth * 0.88, 360) : 460,
+                        height: isMobile ? Math.min(windowWidth * 0.88, 360) : 460,
+                      }
+                    ]}
+                    resizeMode="contain"
+                  />
+
+                  {/* Stealth Developer Mode Hotspot: Left Ball (9 o'clock position on crest) */}
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => handleSecretBallTap('LEFT')}
+                    style={[styles.stealthBallHotspot, { left: '0%', top: '35%', width: '28%', height: '28%' }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Crest emblem left"
+                  />
+
+                  {/* Stealth Developer Mode Hotspot: Right Ball (3 o'clock position on crest) */}
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => handleSecretBallTap('RIGHT')}
+                    style={[styles.stealthBallHotspot, { right: '0%', top: '35%', width: '28%', height: '28%' }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Crest emblem right"
+                  />
+
+                  {/* Stealth Developer Mode Hotspot: Center Ball (in flight near batsman swing) */}
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => handleSecretBallTap('CENTER')}
+                    style={[styles.stealthBallHotspot, { left: '52%', top: '23%', width: '28%', height: '26%' }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Crest emblem center"
+                  />
+                </View>
+
                 <View style={styles.oasoCrestFloatingBadge}>
                   <Ionicons name="shield-checkmark" size={13} color="#059669" style={{ marginRight: 5 }} />
                   <Text style={styles.oasoCrestFloatingText}>Official District Governing Body • CFVD</Text>
@@ -1868,37 +2020,56 @@ export default function HomeScreen() {
             </View>
 
             {/* Table Selection Tabs */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subTabsScroll}>
-              {[
-                { id: 'div1', label: 'First Division (3-Day)' },
-                { id: 'college', label: 'Inter-College Trophy' },
-                { id: 't20', label: 'Kamarajar T20 Cup' },
-                { id: 'school', label: 'Inter-School Shield' }
-              ].map(t => (
-                <TouchableOpacity
-                  key={t.id}
-                  style={[styles.switchTabBtn, pointsTableKey === t.id && styles.switchTabBtnActive]}
-                  onPress={() => {
-                    setPointsTableKey(t.id);
-                    setStandingsPage(1);
-                  }}
-                >
-                  <Text style={[styles.switchTabBtnText, pointsTableKey === t.id && styles.switchTabBtnTextActive]}>
-                    {t.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            {/* Standings Table */}
-            {isMobile && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-                <Ionicons name="swap-horizontal" size={14} color="#b45309" style={{ marginRight: 4 }} />
-                <Text style={{ fontSize: 11, color: '#b45309', fontWeight: '700', textAlign: 'center' }}>
-                  Swipe horizontally to view full table (P, W, L, NR, NRR, PTS, Form)
-                </Text>
+            {isMobile ? (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                {[
+                  { id: 'div1', label: 'First Division (3-Day)' },
+                  { id: 'college', label: 'Inter-College Trophy' },
+                  { id: 't20', label: 'Kamarajar T20 Cup' },
+                  { id: 'school', label: 'Inter-School Shield' }
+                ].map(t => (
+                  <TouchableOpacity
+                    key={t.id}
+                    style={[
+                      styles.switchTabBtn,
+                      pointsTableKey === t.id && styles.switchTabBtnActive,
+                      { marginRight: 0, paddingHorizontal: 10, paddingVertical: 6 }
+                    ]}
+                    onPress={() => {
+                      setPointsTableKey(t.id);
+                      setStandingsPage(1);
+                    }}
+                  >
+                    <Text style={[styles.switchTabBtnText, pointsTableKey === t.id && styles.switchTabBtnTextActive, { fontSize: 11 }]}>
+                      {t.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subTabsScroll}>
+                {[
+                  { id: 'div1', label: 'First Division (3-Day)' },
+                  { id: 'college', label: 'Inter-College Trophy' },
+                  { id: 't20', label: 'Kamarajar T20 Cup' },
+                  { id: 'school', label: 'Inter-School Shield' }
+                ].map(t => (
+                  <TouchableOpacity
+                    key={t.id}
+                    style={[styles.switchTabBtn, pointsTableKey === t.id && styles.switchTabBtnActive]}
+                    onPress={() => {
+                      setPointsTableKey(t.id);
+                      setStandingsPage(1);
+                    }}
+                  >
+                    <Text style={[styles.switchTabBtnText, pointsTableKey === t.id && styles.switchTabBtnTextActive]}>
+                      {t.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             )}
+
             {/* Standings Table with Reusable Pagination (8 teams per page) */}
             {(() => {
               const fullStandingsList = portalPointsTable.length > 0 ? portalPointsTable : (TABLE_DATA[pointsTableKey] || []);
@@ -1910,10 +2081,115 @@ export default function HomeScreen() {
               );
 
               return (
-                <View>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{ width: '100%' }}>
-                    <View style={styles.tableBox}>
-                      <View style={styles.tableHeaderRow}>
+                <View style={{ width: '100%' }}>
+                  {isMobile ? (
+                    /* Mobile Responsive Standings View - 100% Screen Width, Zero Horizontal Scroll */
+                    <View style={styles.mobileStandingsBox}>
+                      {paginatedStandings.map((row: any, idx: number) => {
+                        const globalIdx = (safeStandingsPage - 1) * STANDINGS_PER_PAGE + idx;
+                        const standNum = row.pos || row.stand || (globalIdx + 1);
+                        const isGold = standNum === 1;
+                        const isSilver = standNum === 2;
+                        const isBronze = standNum === 3;
+                        const teamTitle = row.teamName || row.name || 'District Club';
+                        const teamSubtitle = row.sub || (standNum <= 2 ? 'Qualified for Knockouts' : 'In Contention');
+                        const pPlayed = row.played ?? row.p ?? 5;
+                        const pWon = row.won ?? row.w ?? 0;
+                        const pLost = row.lost ?? row.l ?? 0;
+                        const pNr = row.nr ?? row.tied ?? 0;
+                        const pNrr = row.nrr ?? '+0.000';
+                        const pPts = row.points ?? row.pts ?? 0;
+                        const pForm = Array.isArray(row.form) ? row.form : ['W', 'L', 'W', 'W'];
+
+                        return (
+                          <View key={row.teamId || idx} style={[styles.mobileStandingsCard, standNum <= 2 && styles.mobileStandingsCardQualified]}>
+                            <View style={styles.mobileStandingsCardTop}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                                <View
+                                  style={[
+                                    styles.rankBadge,
+                                    isGold
+                                      ? styles.rankBadgeGold
+                                      : isSilver
+                                        ? styles.rankBadgeSilver
+                                        : isBronze
+                                          ? styles.rankBadgeBronze
+                                          : null,
+                                    { marginRight: 8, width: 24, height: 24, borderRadius: 12 }
+                                  ]}
+                                >
+                                  <Text style={styles.rankBadgeText}>{standNum}</Text>
+                                </View>
+                                {resolveImageUrl(row.logo || row.photo || row.image_path) ? (
+                                  <Image
+                                    source={{ uri: resolveImageUrl(row.logo || row.photo || row.image_path)! }}
+                                    style={{ width: 24, height: 24, borderRadius: 4, marginRight: 8, resizeMode: 'cover' }}
+                                  />
+                                ) : null}
+                                <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                                  <Text style={styles.pointsTeamName} numberOfLines={1}>{teamTitle}</Text>
+                                  <Text style={styles.pointsTeamSub} numberOfLines={1}>{teamSubtitle}</Text>
+                                </View>
+                              </View>
+                              <View style={styles.mobilePtsBadge}>
+                                <Text style={styles.mobilePtsBadgeNum}>{pPts}</Text>
+                                <Text style={styles.mobilePtsBadgeLabel}>PTS</Text>
+                              </View>
+                            </View>
+
+                            <View style={styles.mobileStandingsCardDivider} />
+
+                            <View style={styles.mobileStandingsCardStatsRow}>
+                              <View style={styles.mobileStandingsStatItem}>
+                                <Text style={styles.mobileStatLabel}>P</Text>
+                                <Text style={styles.mobileStatVal}>{pPlayed}</Text>
+                              </View>
+                              <View style={styles.mobileStandingsStatItem}>
+                                <Text style={styles.mobileStatLabel}>W</Text>
+                                <Text style={[styles.mobileStatVal, { color: '#16a34a', fontWeight: '800' }]}>{pWon}</Text>
+                              </View>
+                              <View style={styles.mobileStandingsStatItem}>
+                                <Text style={styles.mobileStatLabel}>L</Text>
+                                <Text style={[styles.mobileStatVal, { color: '#dc2626' }]}>{pLost}</Text>
+                              </View>
+                              <View style={styles.mobileStandingsStatItem}>
+                                <Text style={styles.mobileStatLabel}>NR</Text>
+                                <Text style={styles.mobileStatVal}>{pNr}</Text>
+                              </View>
+                              <View style={[styles.mobileStandingsStatItem, { flex: 1.3 }]}>
+                                <Text style={styles.mobileStatLabel}>NRR</Text>
+                                <Text style={[styles.mobileStatVal, { color: '#0284c7', fontWeight: '700' }]}>{pNrr}</Text>
+                              </View>
+                              <View style={styles.mobileStandingsFormCol}>
+                                <Text style={[styles.mobileStatLabel, { textAlign: 'right', marginBottom: 2 }]}>FORM</Text>
+                                <View style={{ flexDirection: 'row', gap: 3, justifyContent: 'flex-end' }}>
+                                  {pForm.slice(0, 4).map((f: string, fi: number) => (
+                                    <View
+                                      key={fi}
+                                      style={[
+                                        styles.formPillSm,
+                                        String(f).toLowerCase() === 'w'
+                                          ? styles.formPillW
+                                          : String(f).toLowerCase() === 'l'
+                                            ? styles.formPillL
+                                            : styles.formPillNR
+                                      ]}
+                                    >
+                                      <Text style={styles.formPillTextSm}>{String(f).toUpperCase()}</Text>
+                                    </View>
+                                  ))}
+                                </View>
+                              </View>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ) : (
+                    /* Desktop Wide Tabular View */
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ width: '100%' }}>
+                      <View style={styles.tableBox}>
+                        <View style={styles.tableHeaderRow}>
                         <Text style={[styles.tableTh, { width: 50, textAlign: 'center' }]}>Stand</Text>
                         <Text style={[styles.tableTh, { width: 230 }]}>Team / Club / College</Text>
                         <Text style={[styles.tableTh, { width: 45, textAlign: 'center' }]}>P</Text>
@@ -2006,6 +2282,7 @@ export default function HomeScreen() {
                       })}
                     </View>
                   </ScrollView>
+                )}
 
                   {/* Reusable Bootstrap Pagination Component */}
                   <BootstrapPagination
@@ -2216,8 +2493,231 @@ export default function HomeScreen() {
               );
 
               return (
-                <View>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{ width: '100%' }}>
+                <View style={{ width: '100%' }}>
+                  {isMobile ? (
+                    <View style={styles.mobilePerfContainer}>
+                      {perfTab === 'ratings' && (
+                        isLoadingLeaders ? (
+                          <View style={{ padding: 24, alignItems: 'center' }}>
+                            <ActivityIndicator size="small" color="#f59e0b" />
+                            <Text style={{ color: '#94a3b8', fontSize: 11, marginTop: 8 }}>Computing Player Ratings...</Text>
+                          </View>
+                        ) : paginatedRatings.map((p: any, idx: number) => {
+                          const globalIdx = (safeRatingsPage - 1) * PERF_PER_PAGE + idx;
+                          const rank = globalIdx + 1;
+                          const score = ratingCategory === 'batting' ? p.battingRating : (ratingCategory === 'bowling' ? p.bowlingRating : p.overallRating);
+                          return (
+                            <View key={p.playerId || idx} style={styles.mobilePerfCard}>
+                              <View style={styles.mobilePerfCardTop}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                                  <View style={[styles.rankBadge, rank === 1 ? styles.rankBadgeGold : rank === 2 ? styles.rankBadgeSilver : rank === 3 ? styles.rankBadgeBronze : null, { marginRight: 8, width: 24, height: 24, borderRadius: 12 }]}>
+                                    <Text style={styles.rankBadgeText}>{rank}</Text>
+                                  </View>
+                                  <View style={{ flex: 1, minWidth: 0, paddingRight: 6 }}>
+                                    <Text style={styles.pointsTeamName} numberOfLines={1}>{p.playerName}</Text>
+                                    <Text style={styles.playerSubRole} numberOfLines={1}>{p.role || 'Player'}</Text>
+                                  </View>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fef3c7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: '#fde68a' }}>
+                                  <Text style={{ color: '#0e184e', fontWeight: '900', fontSize: 13 }}>
+                                    {score !== null && score !== undefined ? `${Number(score).toFixed(1)}` : '—'}
+                                  </Text>
+                                  <Ionicons name="star" size={11} color="#d97706" style={{ marginLeft: 3 }} />
+                                </View>
+                              </View>
+                              <View style={styles.mobileStandingsCardDivider} />
+                              <View style={styles.mobileStandingsCardStatsRow}>
+                                <View style={styles.mobileStandingsStatItem}>
+                                  <Text style={styles.mobileStatLabel}>MAT</Text>
+                                  <Text style={styles.mobileStatVal}>{p.matchesCount || 1}</Text>
+                                </View>
+                                <View style={styles.mobileStandingsStatItem}>
+                                  <Text style={styles.mobileStatLabel}>CONF</Text>
+                                  <Text style={[styles.mobileStatVal, { fontSize: 10, color: p.confidence === 'Established' ? '#15803d' : '#b45309' }]}>
+                                    {p.confidence || 'Prov'}
+                                  </Text>
+                                </View>
+                                <View style={styles.mobileStandingsStatItem}>
+                                  <Text style={styles.mobileStatLabel}>BAT</Text>
+                                  <Text style={styles.mobileStatVal}>{p.battingRating !== null && p.battingRating !== undefined ? `${Number(p.battingRating).toFixed(1)}` : '—'}</Text>
+                                </View>
+                                <View style={styles.mobileStandingsStatItem}>
+                                  <Text style={styles.mobileStatLabel}>BOWL</Text>
+                                  <Text style={styles.mobileStatVal}>{p.bowlingRating !== null && p.bowlingRating !== undefined ? `${Number(p.bowlingRating).toFixed(1)}` : '—'}</Text>
+                                </View>
+                                <View style={styles.mobileStandingsStatItem}>
+                                  <Text style={styles.mobileStatLabel}>FIELD</Text>
+                                  <Text style={styles.mobileStatVal}>{p.fieldingRating !== null && p.fieldingRating !== undefined ? `${Number(p.fieldingRating).toFixed(1)}` : '—'}</Text>
+                                </View>
+                              </View>
+                            </View>
+                          );
+                        })
+                      )}
+
+                      {perfTab === 'batting' && (
+                        paginatedBatting.map((p: any, idx: number) => {
+                          const globalIdx = (safeBattingPage - 1) * PERF_PER_PAGE + idx;
+                          const rank = p.stand || (globalIdx + 1);
+                          return (
+                            <View key={p.id || idx} style={styles.mobilePerfCard}>
+                              <View style={styles.mobilePerfCardTop}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                                  <View style={[styles.rankBadge, rank === 1 ? styles.rankBadgeGold : rank === 2 ? styles.rankBadgeSilver : rank === 3 ? styles.rankBadgeBronze : null, { marginRight: 8, width: 24, height: 24, borderRadius: 12 }]}>
+                                    <Text style={styles.rankBadgeText}>{rank}</Text>
+                                  </View>
+                                  {resolveImageUrl(p.photo || p.image || p.image_path) ? (
+                                    <Image
+                                      source={{ uri: resolveImageUrl(p.photo || p.image || p.image_path)! }}
+                                      style={{ width: 24, height: 24, borderRadius: 12, marginRight: 8, resizeMode: 'cover' }}
+                                    />
+                                  ) : null}
+                                  <View style={{ flex: 1, minWidth: 0, paddingRight: 6 }}>
+                                    <Text style={styles.pointsTeamName} numberOfLines={1}>{p.name}</Text>
+                                    <Text style={styles.pointsTeamSub} numberOfLines={1}>{p.team || 'District Club'}</Text>
+                                  </View>
+                                </View>
+                                <View style={styles.mobileRunsBadge}>
+                                  <Text style={styles.mobileRunsBadgeNum}>{p.runs || 0}</Text>
+                                  <Text style={styles.mobileRunsBadgeLabel}>RUNS</Text>
+                                </View>
+                              </View>
+                              <View style={styles.mobileStandingsCardDivider} />
+                              <View style={styles.mobileStandingsCardStatsRow}>
+                                <View style={styles.mobileStandingsStatItem}>
+                                  <Text style={styles.mobileStatLabel}>M / INN</Text>
+                                  <Text style={styles.mobileStatVal}>{p.mat || 5}/{p.inns || 5}</Text>
+                                </View>
+                                <View style={styles.mobileStandingsStatItem}>
+                                  <Text style={styles.mobileStatLabel}>HS</Text>
+                                  <Text style={[styles.mobileStatVal, { color: '#b45309', fontWeight: '800' }]}>{p.hs || (p.runs ? p.runs + '*' : '50*')}</Text>
+                                </View>
+                                <View style={styles.mobileStandingsStatItem}>
+                                  <Text style={styles.mobileStatLabel}>AVG</Text>
+                                  <Text style={styles.mobileStatVal}>{p.average || p.avg || '35.0'}</Text>
+                                </View>
+                                <View style={styles.mobileStandingsStatItem}>
+                                  <Text style={styles.mobileStatLabel}>SR</Text>
+                                  <Text style={styles.mobileStatVal}>{p.strikeRate || p.sr || '135.0'}</Text>
+                                </View>
+                                <View style={styles.mobileStandingsStatItem}>
+                                  <Text style={styles.mobileStatLabel}>50/100</Text>
+                                  <Text style={styles.mobileStatVal}>{p.fifties ?? (p.runs >= 100 ? 1 : 0)}/{p.hundreds ?? 0}</Text>
+                                </View>
+                              </View>
+                            </View>
+                          );
+                        })
+                      )}
+
+                      {perfTab === 'bowling' && (
+                        paginatedBowling.map((p: any, idx: number) => {
+                          const globalIdx = (safeBowlingPage - 1) * PERF_PER_PAGE + idx;
+                          const rank = p.stand || (globalIdx + 1);
+                          return (
+                            <View key={p.id || idx} style={styles.mobilePerfCard}>
+                              <View style={styles.mobilePerfCardTop}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                                  <View style={[styles.rankBadge, rank === 1 ? styles.rankBadgeGold : rank === 2 ? styles.rankBadgeSilver : rank === 3 ? styles.rankBadgeBronze : null, { marginRight: 8, width: 24, height: 24, borderRadius: 12 }]}>
+                                    <Text style={styles.rankBadgeText}>{rank}</Text>
+                                  </View>
+                                  {resolveImageUrl(p.photo || p.image || p.image_path) ? (
+                                    <Image
+                                      source={{ uri: resolveImageUrl(p.photo || p.image || p.image_path)! }}
+                                      style={{ width: 24, height: 24, borderRadius: 12, marginRight: 8, resizeMode: 'cover' }}
+                                    />
+                                  ) : null}
+                                  <View style={{ flex: 1, minWidth: 0, paddingRight: 6 }}>
+                                    <Text style={styles.pointsTeamName} numberOfLines={1}>{p.name}</Text>
+                                    <Text style={styles.pointsTeamSub} numberOfLines={1}>{p.team || 'District Club'}</Text>
+                                  </View>
+                                </View>
+                                <View style={[styles.mobileRunsBadge, { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }]}>
+                                  <Text style={[styles.mobileRunsBadgeNum, { color: '#16a34a' }]}>{p.wickets || 0}</Text>
+                                  <Text style={[styles.mobileRunsBadgeLabel, { color: '#15803d' }]}>WKTS</Text>
+                                </View>
+                              </View>
+                              <View style={styles.mobileStandingsCardDivider} />
+                              <View style={styles.mobileStandingsCardStatsRow}>
+                                <View style={styles.mobileStandingsStatItem}>
+                                  <Text style={styles.mobileStatLabel}>M / INN</Text>
+                                  <Text style={styles.mobileStatVal}>{p.mat || 5}/{p.inns || 5}</Text>
+                                </View>
+                                <View style={styles.mobileStandingsStatItem}>
+                                  <Text style={styles.mobileStatLabel}>OVERS</Text>
+                                  <Text style={styles.mobileStatVal}>{p.overs || '20.0'}</Text>
+                                </View>
+                                <View style={styles.mobileStandingsStatItem}>
+                                  <Text style={styles.mobileStatLabel}>RUNS</Text>
+                                  <Text style={styles.mobileStatVal}>{p.runs_conceded || p.runs || 120}</Text>
+                                </View>
+                                <View style={styles.mobileStandingsStatItem}>
+                                  <Text style={styles.mobileStatLabel}>ECON</Text>
+                                  <Text style={[styles.mobileStatVal, { color: '#0369a1', fontWeight: '700' }]}>{p.economy || p.econ || '6.50'}</Text>
+                                </View>
+                                <View style={styles.mobileStandingsStatItem}>
+                                  <Text style={styles.mobileStatLabel}>3W / 5W</Text>
+                                  <Text style={styles.mobileStatVal}>{p.threeWkts ?? (p.wickets >= 3 ? 1 : 0)}/{p.fiveWkts ?? (p.wickets >= 5 ? 1 : 0)}</Text>
+                                </View>
+                              </View>
+                            </View>
+                          );
+                        })
+                      )}
+
+                      {perfTab === 'fielding' && (
+                        paginatedFielding.map((p: any, idx: number) => {
+                          const globalIdx = (safeFieldingPage - 1) * PERF_PER_PAGE + idx;
+                          const rank = p.stand || (globalIdx + 1);
+                          return (
+                            <View key={p.id || idx} style={styles.mobilePerfCard}>
+                              <View style={styles.mobilePerfCardTop}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                                  <View style={[styles.rankBadge, rank === 1 ? styles.rankBadgeGold : rank === 2 ? styles.rankBadgeSilver : rank === 3 ? styles.rankBadgeBronze : null, { marginRight: 8, width: 24, height: 24, borderRadius: 12 }]}>
+                                    <Text style={styles.rankBadgeText}>{rank}</Text>
+                                  </View>
+                                  {resolveImageUrl(p.photo || p.image || p.image_path) ? (
+                                    <Image
+                                      source={{ uri: resolveImageUrl(p.photo || p.image || p.image_path)! }}
+                                      style={{ width: 24, height: 24, borderRadius: 12, marginRight: 8, resizeMode: 'cover' }}
+                                    />
+                                  ) : null}
+                                  <View style={{ flex: 1, minWidth: 0, paddingRight: 6 }}>
+                                    <Text style={styles.pointsTeamName} numberOfLines={1}>{p.name}</Text>
+                                    <Text style={styles.pointsTeamSub} numberOfLines={1}>{p.team || 'District Club'}</Text>
+                                  </View>
+                                </View>
+                                <View style={[styles.mobileRunsBadge, { backgroundColor: '#faf5ff', borderColor: '#e9d5ff' }]}>
+                                  <Text style={[styles.mobileRunsBadgeNum, { color: '#7e22ce' }]}>{p.dismissals || (p.catches || 0) + (p.stumpings || 0) + (p.runOuts || 0)}</Text>
+                                  <Text style={[styles.mobileRunsBadgeLabel, { color: '#6b21a8' }]}>TOTAL</Text>
+                                </View>
+                              </View>
+                              <View style={styles.mobileStandingsCardDivider} />
+                              <View style={styles.mobileStandingsCardStatsRow}>
+                                <View style={styles.mobileStandingsStatItem}>
+                                  <Text style={styles.mobileStatLabel}>M / INN</Text>
+                                  <Text style={styles.mobileStatVal}>{p.mat || 5}/{p.inns || 5}</Text>
+                                </View>
+                                <View style={styles.mobileStandingsStatItem}>
+                                  <Text style={styles.mobileStatLabel}>CATCHES</Text>
+                                  <Text style={[styles.mobileStatVal, { color: '#0284c7' }]}>{p.catches || 0}</Text>
+                                </View>
+                                <View style={styles.mobileStandingsStatItem}>
+                                  <Text style={styles.mobileStatLabel}>STUMPINGS</Text>
+                                  <Text style={styles.mobileStatVal}>{p.stumpings || 0}</Text>
+                                </View>
+                                <View style={styles.mobileStandingsStatItem}>
+                                  <Text style={styles.mobileStatLabel}>RUN OUTS</Text>
+                                  <Text style={styles.mobileStatVal}>{p.runOuts || 0}</Text>
+                                </View>
+                              </View>
+                            </View>
+                          );
+                        })
+                      )}
+                    </View>
+                  ) : (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ width: '100%' }}>
                     <View style={styles.tableBox}>
                       {perfTab === 'ratings' && (
                         <View>
@@ -2463,6 +2963,7 @@ export default function HomeScreen() {
                       )}
                     </View>
                   </ScrollView>
+                )}
 
                   {/* Reusable Bootstrap Pagination Component for Performance Lists */}
                   {perfTab === 'ratings' && (
@@ -2557,35 +3058,71 @@ export default function HomeScreen() {
             </View>
 
             {/* Category Filter Pills */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subTabsScroll}>
-              {[
-                { id: 'all', label: `All Records (${filteredPlayers.length})`, icon: 'trophy-outline', iconColor: '#b45309' },
-                { id: 'century', label: 'Centuries (100+)', icon: 'ribbon-outline', iconColor: '#b45309' },
-                { id: 'fifty', label: 'Half-Centuries (50+)', icon: 'medal-outline', iconColor: '#c2410c' },
-                { id: 'bowler', label: 'Bowling Hauls (3W+ / 5W)', icon: 'disc-outline', iconColor: '#7e22ce' },
-                { id: 'womens', label: "Women's Milestones", icon: 'female-outline', iconColor: '#db2777' }
-              ].map(f => (
-                <TouchableOpacity
-                  key={f.id}
-                  style={[styles.playerPillBtn, playerFilter === f.id && styles.playerPillBtnActive]}
-                  onPress={() => {
-                    setPlayerFilter(f.id);
-                    setMilestonePage(1);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons
-                    name={f.icon as any}
-                    size={13}
-                    color={playerFilter === f.id ? '#ffffff' : f.iconColor}
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text style={[styles.playerPillBtnText, playerFilter === f.id && styles.playerPillBtnTextActive]}>
-                    {f.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            {isMobile ? (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                {[
+                  { id: 'all', label: `All Records (${filteredPlayers.length})`, icon: 'trophy-outline', iconColor: '#b45309' },
+                  { id: 'century', label: 'Centuries (100+)', icon: 'ribbon-outline', iconColor: '#b45309' },
+                  { id: 'fifty', label: 'Half-Centuries (50+)', icon: 'medal-outline', iconColor: '#c2410c' },
+                  { id: 'bowler', label: 'Bowling Hauls (3W+ / 5W)', icon: 'disc-outline', iconColor: '#7e22ce' },
+                  { id: 'womens', label: "Women's Milestones", icon: 'female-outline', iconColor: '#db2777' }
+                ].map(f => (
+                  <TouchableOpacity
+                    key={f.id}
+                    style={[
+                      styles.playerPillBtn,
+                      playerFilter === f.id && styles.playerPillBtnActive,
+                      { marginRight: 0, paddingHorizontal: 10, paddingVertical: 6 }
+                    ]}
+                    onPress={() => {
+                      setPlayerFilter(f.id);
+                      setMilestonePage(1);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons
+                      name={f.icon as any}
+                      size={12}
+                      color={playerFilter === f.id ? '#ffffff' : f.iconColor}
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text style={[styles.playerPillBtnText, playerFilter === f.id && styles.playerPillBtnTextActive, { fontSize: 11 }]}>
+                      {f.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subTabsScroll}>
+                {[
+                  { id: 'all', label: `All Records (${filteredPlayers.length})`, icon: 'trophy-outline', iconColor: '#b45309' },
+                  { id: 'century', label: 'Centuries (100+)', icon: 'ribbon-outline', iconColor: '#b45309' },
+                  { id: 'fifty', label: 'Half-Centuries (50+)', icon: 'medal-outline', iconColor: '#c2410c' },
+                  { id: 'bowler', label: 'Bowling Hauls (3W+ / 5W)', icon: 'disc-outline', iconColor: '#7e22ce' },
+                  { id: 'womens', label: "Women's Milestones", icon: 'female-outline', iconColor: '#db2777' }
+                ].map(f => (
+                  <TouchableOpacity
+                    key={f.id}
+                    style={[styles.playerPillBtn, playerFilter === f.id && styles.playerPillBtnActive]}
+                    onPress={() => {
+                      setPlayerFilter(f.id);
+                      setMilestonePage(1);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons
+                      name={f.icon as any}
+                      size={13}
+                      color={playerFilter === f.id ? '#ffffff' : f.iconColor}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={[styles.playerPillBtnText, playerFilter === f.id && styles.playerPillBtnTextActive]}>
+                      {f.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
 
             {/* Empty State */}
             {filteredPlayers.length === 0 && (
@@ -4142,19 +4679,29 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   rootContainer: {
     flex: 1,
-    backgroundColor: '#f6f2e9'
+    backgroundColor: '#f6f2e9',
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
   },
   mainScroll: {
-    flex: 1
+    flex: 1,
+    width: '100%',
+    maxWidth: '100%',
+    ...(Platform.OS === 'web' ? ({ overflowX: 'hidden' } as any) : {}),
   },
   mainScrollContent: {
-    paddingBottom: 0 // No extra space below footer
+    paddingBottom: 0, // No extra space below footer
+    width: '100%',
+    maxWidth: '100%',
+    ...(Platform.OS === 'web' ? ({ overflowX: 'hidden' } as any) : {}),
   },
   container: {
     width: '100%',
     maxWidth: 1320, // Bootstrap 5 container-xxl max-width
     alignSelf: 'center',
-    paddingHorizontal: 16
+    paddingHorizontal: 16,
+    overflow: 'hidden',
   },
 
   // Atmospheric Background with Deep Soft Blur
@@ -4435,7 +4982,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(184, 134, 11, 0.25)',
     paddingVertical: 2,
-    zIndex: 90
+    zIndex: 90,
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
   },
   liveTickerInner: {
     width: '100%',
@@ -4445,7 +4995,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between'
+    justifyContent: 'space-between',
+    overflow: 'hidden',
   },
   liveTickerBadge: {
     backgroundColor: '#881337',
@@ -4454,7 +5005,8 @@ const styles = StyleSheet.create({
     paddingVertical: 3.5,
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 12
+    marginRight: 12,
+    flexShrink: 0,
   },
   liveTickerDot: {
     width: 6,
@@ -4470,7 +5022,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6
   },
   liveTickerScrollView: {
-    flex: 1
+    flex: 1,
+    minWidth: 0,
+    maxWidth: '100%',
   },
   liveTickerScrollContent: {
     alignItems: 'center',
@@ -4739,8 +5293,12 @@ const styles = StyleSheet.create({
   },
   oasoHeroCrestColMobile: {
     width: '100%',
+    maxWidth: '100%',
     marginTop: 24,
     paddingVertical: 0,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   oasoCrestAuraRing: {
     position: 'absolute',
@@ -4786,6 +5344,20 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: '700',
     color: '#334155',
+  },
+  stealthCrestWrapper: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+    maxWidth: '100%',
+  },
+  stealthBallHotspot: {
+    position: 'absolute',
+    borderRadius: 9999,
+    backgroundColor: 'transparent',
+    zIndex: 99,
+    elevation: 20,
+    ...(Platform.OS === 'web' ? ({ cursor: 'pointer', outline: 'none', WebkitTapHighlightColor: 'transparent' } as any) : {}),
   },
 
   // Hero Section (Prestigious Athletic Federation Atmosphere)
@@ -8190,5 +8762,151 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
     marginBottom: 16
+  },
+
+  // Mobile Standings & Leaderboard Cards (Zero Horizontal Scroll on Mobile)
+  mobileStandingsBox: {
+    width: '100%',
+    gap: 8,
+    marginBottom: 12
+  },
+  mobileStandingsCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 10,
+    width: '100%',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1
+  },
+  mobileStandingsCardQualified: {
+    borderColor: '#fef08a',
+    backgroundColor: '#fffdfa'
+  },
+  mobileStandingsCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%'
+  },
+  mobilePtsBadge: {
+    backgroundColor: '#0e184e',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 42
+  },
+  mobilePtsBadgeNum: {
+    color: '#f5c43d',
+    fontSize: 13,
+    fontWeight: '900',
+    lineHeight: 15
+  },
+  mobilePtsBadgeLabel: {
+    color: '#ffffff',
+    fontSize: 8,
+    fontWeight: '700',
+    letterSpacing: 0.5
+  },
+  mobileRunsBadge: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde68a',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 46
+  },
+  mobileRunsBadgeNum: {
+    color: '#b45309',
+    fontSize: 12.5,
+    fontWeight: '900',
+    lineHeight: 14
+  },
+  mobileRunsBadgeLabel: {
+    color: '#92400e',
+    fontSize: 7.5,
+    fontWeight: '700',
+    letterSpacing: 0.4
+  },
+  mobileStandingsCardDivider: {
+    height: 1,
+    backgroundColor: '#f1f5f9',
+    marginVertical: 8,
+    width: '100%'
+  },
+  mobileStandingsCardStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%'
+  },
+  mobileStandingsStatItem: {
+    alignItems: 'center',
+    flex: 1
+  },
+  mobileStatLabel: {
+    color: '#94a3b8',
+    fontSize: 9,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    marginBottom: 2
+  },
+  mobileStatVal: {
+    color: '#1e293b',
+    fontSize: 11.5,
+    fontWeight: '700'
+  },
+  mobileStandingsFormCol: {
+    flex: 1.5,
+    alignItems: 'flex-end'
+  },
+  formPillSm: {
+    width: 17,
+    height: 17,
+    borderRadius: 8.5,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  formPillTextSm: {
+    color: '#ffffff',
+    fontSize: 8.5,
+    fontWeight: '900'
+  },
+  mobilePerfContainer: {
+    width: '100%',
+    gap: 8,
+    marginBottom: 12
+  },
+  mobilePerfCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 10,
+    width: '100%',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1
+  },
+  mobilePerfCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%'
+  },
+  subTabsContainer: {
+    width: '100%',
+    marginBottom: 12
   }
 });

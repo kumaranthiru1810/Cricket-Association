@@ -529,7 +529,7 @@ export default function AppNavigator({
 
   // Sync browser back/forward buttons on Web with authentication guards
   useEffect(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       const handlePopState = (e: PopStateEvent) => {
         let requested: AppScreenName = 'Home';
         if (e.state && e.state.appScreen) {

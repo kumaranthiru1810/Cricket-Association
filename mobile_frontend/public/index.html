@@ -88,6 +88,9 @@
         margin: 0;
         padding: 0;
         background-color: #020612;
+        max-width: 100vw;
+        overflow-x: hidden !important;
+        position: relative;
         /* Prevent font size inflation on mobile Safari when orientation changes */
         -webkit-text-size-adjust: 100%;
         text-size-adjust: 100%;
@@ -106,7 +109,9 @@
         background-color: #020612;
         color: #f8fafc;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        overflow-x: hidden;
+        max-width: 100vw;
+        overflow-x: hidden !important;
+        position: relative;
         /* Smooth native touch momentum scrolling for iOS Safari */
         -webkit-overflow-scrolling: touch;
       }
@@ -130,7 +135,8 @@
         min-height: 100%;
         min-height: 100dvh;
         max-width: 100vw;
-        overflow-x: hidden;
+        overflow-x: hidden !important;
+        position: relative;
       }
 
       /* Fix iOS Safari auto-zoom behavior on form inputs */
@@ -312,43 +318,27 @@
         }
       }
 
-      /* Full Mobile & Responsive Screen Video Coverage */
+      /* Full Responsive Screen Video Coverage - Zero Hidden Content */
       #cfvd-preloader-video {
         width: 100% !important;
         height: 100% !important;
-        object-fit: cover !important;
+        max-width: 100vw !important;
+        max-height: 100vh !important;
+        max-height: 100dvh !important;
+        object-fit: contain !important;
         object-position: center center !important;
-        background-color: #020612 !important;
+        background-color: transparent !important;
       }
 
       @media (max-width: 768px), (orientation: portrait), (max-aspect-ratio: 1/1) {
         #cfvd-preloader-video {
-          width: 100vw !important;
-          height: 100vh !important;
-          height: 100dvh !important;
-          object-fit: cover !important;
+          width: 100% !important;
+          height: 100% !important;
+          max-width: 100vw !important;
+          max-height: 100vh !important;
+          max-height: 100dvh !important;
+          object-fit: contain !important;
           object-position: center center !important;
-        }
-        .cfvd-top-bar-responsive {
-          top: 14px !important;
-          left: 12px !important;
-          right: 12px !important;
-        }
-        .cfvd-brand-badge-responsive {
-          padding: 6px 12px !important;
-        }
-        .cfvd-brand-title-responsive {
-          font-size: 10px !important;
-          letter-spacing: 0.8px !important;
-        }
-        .cfvd-sound-badge-responsive {
-          padding: 6px 12px !important;
-          font-size: 10.5px !important;
-        }
-        .cfvd-skip-btn-responsive {
-          padding: 8px 16px !important;
-          font-size: 11px !important;
-          min-height: 40px !important;
         }
       }
     </style>
@@ -366,7 +356,10 @@
     <!-- ============================================================ -->
     <!-- CRICKET FEDERATION OFFICIAL VIDEO PRELOADER (WEB & MOBILE)    -->
     <!-- ============================================================ -->
-    <div id="cfvd-preloader-root" style="
+    <div id="cfvd-preloader-root"
+      onclick="window.__dismissCfvdPreloader && window.__dismissCfvdPreloader(false)"
+      ontouchend="window.__dismissCfvdPreloader && window.__dismissCfvdPreloader(false)"
+      style="
       position: fixed;
       top: 0;
       left: 0;
@@ -384,6 +377,7 @@
       visibility: visible;
       transform: scale(1);
       filter: blur(0px);
+      cursor: pointer;
       transition: opacity 0.85s cubic-bezier(0.16, 1, 0.3, 1),
                   transform 0.85s cubic-bezier(0.16, 1, 0.3, 1),
                   filter 0.85s cubic-bezier(0.16, 1, 0.3, 1);
@@ -397,13 +391,41 @@
         bottom: 0;
         background: radial-gradient(circle at center, rgba(15, 23, 42, 0) 55%, rgba(2, 6, 18, 0.9) 100%);
         pointer-events: none;
-        z-index: 2;
+        z-index: 1;
       "></div>
 
-      <!-- Main Video Container -->
+      <!-- Ambient Blurred Background for Seamless Full Screen Immersion -->
+      <video
+        id="cfvd-preloader-backdrop"
+        autoplay
+        muted
+        loop
+        playsinline
+        webkit-playsinline
+        aria-hidden="true"
+        style="
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          height: 100dvh;
+          object-fit: cover;
+          object-position: center center;
+          filter: blur(35px) brightness(0.4) saturate(1.4);
+          transform: scale(1.15);
+          pointer-events: none;
+          z-index: 1;
+        "
+      >
+        <source src="/preloader.mp4" type="video/mp4" />
+      </video>
+
+      <!-- Main Video Container - 100% Contained, Nothing Hidden -->
       <div style="
-        width: 100%;
-        height: 100%;
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -412,21 +434,26 @@
         left: 0;
         right: 0;
         bottom: 0;
-        background-color: #020612;
+        background-color: transparent;
         overflow: hidden;
+        z-index: 2;
       ">
         <video
           id="cfvd-preloader-video"
           autoplay
+          muted
           playsinline
           webkit-playsinline
           preload="auto"
           style="
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            max-width: 100vw;
+            max-height: 100vh;
+            max-height: 100dvh;
+            object-fit: contain;
             object-position: center center;
-            background: #020612;
+            background: transparent;
           "
         >
           <source src="/preloader.mp4" type="video/mp4" />
@@ -434,140 +461,6 @@
           <source src="/assets/preloader.mp4" type="video/mp4" />
           <source src="http://localhost:5000/uploads/preloader.mp4" type="video/mp4" />
         </video>
-      </div>
-
-      <!-- Floating Controls: Top Bar -->
-      <div class="cfvd-top-bar-responsive" style="
-        position: absolute;
-        top: 24px;
-        left: 20px;
-        right: 20px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        z-index: 2147483647;
-        pointer-events: auto;
-      ">
-        <!-- Brand Badge -->
-        <div class="cfvd-brand-badge-responsive" style="
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          background: rgba(2, 6, 18, 0.75);
-          backdrop-filter: blur(14px);
-          -webkit-backdrop-filter: blur(14px);
-          border: 1px solid rgba(245, 158, 11, 0.35);
-          padding: 7px 16px;
-          border-radius: 9999px;
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-          user-select: none;
-        ">
-          <span style="font-size: 14px;">🏏</span>
-          <span class="cfvd-brand-title-responsive" style="
-            font-size: 11px;
-            font-weight: 800;
-            letter-spacing: 1.1px;
-            color: #f59e0b;
-            text-transform: uppercase;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          ">CRICKET FEDERATION</span>
-        </div>
-
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <!-- Permanent Unmuted Audio Status Badge -->
-          <div
-            id="cfvd-sound-badge"
-            class="cfvd-sound-badge-responsive"
-            style="
-              background: rgba(245, 158, 11, 0.18);
-              backdrop-filter: blur(14px);
-              -webkit-backdrop-filter: blur(14px);
-              border: 1px solid rgba(245, 158, 11, 0.65);
-              color: #fbbf24;
-              padding: 7px 14px;
-              border-radius: 9999px;
-              font-size: 11px;
-              font-weight: 800;
-              letter-spacing: 0.7px;
-              display: flex;
-              align-items: center;
-              gap: 6px;
-              box-shadow: 0 0 16px rgba(245, 158, 11, 0.3);
-              user-select: none;
-            "
-          >
-            <span style="font-size: 12px;">🔊</span>
-            <span id="cfvd-sound-status-text">SOUND ON</span>
-            <span style="display: inline-flex; align-items: flex-end; gap: 2px; height: 12px;">
-              <span style="width: 2px; height: 5px; background: #fbbf24; border-radius: 2px; animation: cfvdSoundWave1 0.8s ease-in-out infinite;"></span>
-              <span style="width: 2px; height: 12px; background: #f59e0b; border-radius: 2px; animation: cfvdSoundWave2 0.6s ease-in-out infinite 0.15s;"></span>
-              <span style="width: 2px; height: 8px; background: #d97706; border-radius: 2px; animation: cfvdSoundWave3 0.75s ease-in-out infinite 0.3s;"></span>
-            </span>
-          </div>
-
-          <!-- Skip Button (Guaranteed Clickable & Tap Friendly) -->
-          <button
-            id="cfvd-skip-btn"
-            type="button"
-            class="cfvd-skip-btn-responsive"
-            onclick="window.__dismissCfvdPreloader && window.__dismissCfvdPreloader(false)"
-            ontouchstart="window.__dismissCfvdPreloader && window.__dismissCfvdPreloader(false)"
-            ontouchend="window.__dismissCfvdPreloader && window.__dismissCfvdPreloader(false)"
-            style="
-              background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-              color: #020612;
-              border: 1.5px solid rgba(251, 191, 36, 0.95);
-              padding: 8px 18px;
-              border-radius: 9999px;
-              font-size: 11.5px;
-              font-weight: 900;
-              letter-spacing: 0.8px;
-              cursor: pointer;
-              display: flex;
-              align-items: center;
-              gap: 5px;
-              box-shadow: 0 4px 18px rgba(245, 158, 11, 0.5);
-              transition: all 0.15s ease;
-              user-select: none;
-              -webkit-user-select: none;
-              touch-action: manipulation;
-              pointer-events: auto !important;
-              z-index: 2147483647 !important;
-            "
-          >
-            <span>SKIP INTRO</span>
-            <span style="font-size: 13px; font-weight: 900;">✕</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Center Pulsating Audio Activation Banner (shown only if browser policy restricts audio until first touch) -->
-      <div
-        id="cfvd-tap-sound-hint"
-        style="
-          display: none;
-          position: absolute;
-          top: 80px;
-          left: 50%;
-          transform: translateX(-50%);
-          z-index: 20;
-          background: rgba(15, 23, 42, 0.85);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-          border: 1.5px solid #f59e0b;
-          border-radius: 9999px;
-          padding: 9px 24px;
-          color: #fef08a;
-          font-size: 12.5px;
-          font-weight: 800;
-          letter-spacing: 0.7px;
-          animation: cfvdPromptPulse 1.8s ease-in-out infinite;
-          cursor: pointer;
-          user-select: none;
-          white-space: nowrap;
-        "
-      >
-        🔊 TAP ANYWHERE FOR FULL STADIUM SOUND
       </div>
 
       <!-- Bottom Progress Bar & Title -->
@@ -646,6 +539,8 @@
           // Pause video immediately
           try {
             if (video) video.pause();
+            var backdrop = document.getElementById('cfvd-preloader-backdrop');
+            if (backdrop) backdrop.pause();
           } catch(e) {}
 
           // Immediately unlock body scroll
@@ -805,9 +700,9 @@
             progressBar.style.width = Math.min(100, pct) + '%';
           }
 
-          // Exact Synchronization: When bails lock into the wickets with the clack sound (~6.9s),
-          // trigger the stadium flash and fix the website into place smoothly!
-          if (video.currentTime >= 6.9 && !transitionTriggered) {
+          // Cinematic Synchronization: When the video reaches its climax,
+          // trigger the stadium flash and reveal the website smoothly!
+          if (video.duration && video.currentTime >= Math.max(video.duration - 0.4, 0) && !transitionTriggered) {
             transitionTriggered = true;
             window.__dismissCfvdPreloader(false);
           }
@@ -820,13 +715,20 @@
           }
         });
 
-        // Safety fallback timeout after 9.5s
+        video.addEventListener('error', function() {
+          if (!transitionTriggered) {
+            transitionTriggered = true;
+            window.__dismissCfvdPreloader(true);
+          }
+        });
+
+        // Safety fallback timeout after 10.5s
         setTimeout(function() {
           if (!transitionTriggered) {
             transitionTriggered = true;
             window.__dismissCfvdPreloader(false);
           }
-        }, 9500);
+        }, 10500);
       })();
     </script>
 

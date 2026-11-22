@@ -1,0 +1,59 @@
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: cricket-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: cricket_db
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - cricket-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cricket-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongodb:27017/cricket_db
+      - JWT_SECRET=cfvd_cricket_jwt_secret_key_production_2026
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - cricket-network
+
+  frontend:
+    build:
+      context: ./mobile_frontend
+      dockerfile: Dockerfile
+    container_name: cricket-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - cricket-network
+
+networks:
+  cricket-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+    driver: local
+

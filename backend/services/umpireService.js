@@ -528,6 +528,13 @@ class UmpireService {
     const tossWinner = payload.tossWinner || payload.tossWinnerId || match.toss_winner_id || match.team_a_id;
     const tossDecision = (payload.tossDecision || match.toss_decision || 'BAT').toUpperCase();
 
+    // Optional custom overs at start of match (e.g. 20 reduced to 15)
+    const customOvers = parseInt(payload.overs || payload.totalOvers, 10);
+    if (!isNaN(customOvers) && customOvers > 0) {
+      match.overs = customOvers;
+      match.revised_overs = customOvers;
+    }
+
     match.toss_winner_id = tossWinner;
     match.toss_decision = tossDecision;
     match.status = 'LIVE';

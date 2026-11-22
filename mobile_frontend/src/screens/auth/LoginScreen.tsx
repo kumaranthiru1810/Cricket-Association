@@ -18,6 +18,7 @@ import { showSuccess, showError, showWarning } from '../../utils/sweetalert';
 import { validateEmail, validatePassword } from '../../utils/validation';
 import ForgotPasswordModal from '../../components/auth/ForgotPasswordModal';
 import FindTeamModal from '../../components/auth/FindTeamModal';
+import EmailDomainSuggestions from '../../components/common/EmailDomainSuggestions';
 
 export type UserRole = 'PLAYER' | 'TEAM' | 'SCORER' | 'UMPIRE';
 
@@ -406,6 +407,15 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
               placeholderTextColor="#94a3b8"
               keyboardType="email-address"
               autoCapitalize="none"
+            />
+            <EmailDomainSuggestions
+              value={emailOrUser}
+              onSelectDomain={(completed) => {
+                setEmailOrUser(completed);
+                if (fieldErrors.identifier) {
+                  setFieldErrors((prev) => ({ ...prev, identifier: undefined }));
+                }
+              }}
             />
             {fieldErrors.identifier ? (
               <Text style={styles.fieldErrorText}>{fieldErrors.identifier}</Text>

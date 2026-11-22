@@ -39,6 +39,9 @@ const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
 
+// Enable reverse proxy support for Render, AWS, and Cloudflare (ensures correct client IP for rate limiting)
+app.set('trust proxy', 1);
+
 // Security 1: Hide express fingerprinting
 app.disable('x-powered-by');
 
@@ -86,7 +89,16 @@ db.initDb().catch(err => {
   console.warn('MongoDB initialization warning:', err.message);
 });
 
-// Health Check
+// Root endpoint & Health Check
+app.get('/', (req, res) => {
+  res.json({
+    status: 'ONLINE',
+    service: 'Cricket Association Management & Scoring API',
+    version: '1.0.0',
+    health: '/api/health'
+  });
+});
+
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'OK',

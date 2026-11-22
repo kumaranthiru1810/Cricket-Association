@@ -17,14 +17,14 @@ export default function RootLayout() {
   });
 
   return (
-    <SafeAreaProvider style={{ flex: 1, backgroundColor: '#020612' }}>
+    <SafeAreaProvider style={{ flex: 1, backgroundColor: '#020612', width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
       <ErrorBoundary>
         <StatusBar style="light" />
         <Stack
           screenOptions={{
             headerShown: false,
             animation: 'fade',
-            contentStyle: { backgroundColor: '#020612' }
+            contentStyle: { backgroundColor: '#020612', width: '100%', maxWidth: '100%', overflow: 'hidden' }
           }}
         >
           <Stack.Screen name="index" />

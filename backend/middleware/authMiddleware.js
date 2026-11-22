@@ -191,17 +191,83 @@ async function verifyMatchPermission(req, res, next) {
   }
 }
 
-// Admin authorization helper (backward compatibility)
+// Admin authorization helper (re-checks DB role, status, and token_version on every admin request)
 function requireAdminAuth(req, res, next) {
-  verifyToken(req, res, () => {
-    if (req.user.role !== 'ADMIN') {
+  verifyToken(req, res, async () => {
+    // Immediate role rejection if token is not an admin role
+    const tokenRole = req.user && req.user.role;
+    if (tokenRole && tokenRole !== 'ADMIN' && tokenRole !== 'SUPER_ADMIN' && !req.user.is_super_admin) {
       return res.status(403).json({
         success: false,
         message: 'Forbidden: ADMIN authorization required.',
-        details: `Role '${req.user.role}' cannot access administrative management endpoints.`
+        details: `Role '${tokenRole}' cannot access administrative management endpoints.`
       });
     }
-    req.adminUser = req.user;
+
+    try {
+      await db.initDb();
+      const user = await db.models.User.findOne({
+        $or: [
+          { id: req.user.id },
+          { email: req.user.email ? req.user.email.toLowerCase() : '' }
+        ]
+      }).lean();
+
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized: User account not found in database.'
+        });
+      }
+
+      // Check token_version if provided in token (immediate invalidation upon role change or demotion)
+      if (req.user.tv !== undefined && user.token_version !== undefined) {
+        if (Number(req.user.tv) !== Number(user.token_version)) {
+          return res.status(401).json({
+            success: false,
+            message: 'Unauthorized: Session invalidated due to role or security update. Please log in again.'
+          });
+        }
+      }
+
+      const isAllowedRole = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' || user.is_super_admin;
+      if (!isAllowedRole) {
+        return res.status(403).json({
+          success: false,
+          message: 'Forbidden: ADMIN authorization required.',
+          details: `Role '${user.role}' cannot access administrative management endpoints.`
+        });
+      }
+
+      if (user.status !== 'ACTIVE' && user.status !== 'APPROVED') {
+        return res.status(403).json({
+          success: false,
+          message: `Access denied: Account status is ${user.status}.`
+        });
+      }
+
+      req.user = {
+        ...req.user,
+        ...user,
+        role: user.is_super_admin ? 'SUPER_ADMIN' : user.role
+      };
+      req.adminUser = req.user;
+      next();
+    } catch (err) {
+      return res.status(500).json({ success: false, message: 'Internal authorization error: ' + (err.message || 'Unknown') });
+    }
+  });
+}
+
+// Super Admin authorization middleware
+function requireSuperAdmin(req, res, next) {
+  requireAdminAuth(req, res, () => {
+    if (req.user.role !== 'SUPER_ADMIN' && !req.user.is_super_admin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: SUPER_ADMIN authorization required.'
+      });
+    }
     next();
   });
 }
@@ -494,6 +560,7 @@ module.exports = {
   requireScorerAuth,
   verifyMatchPermission,
   requireAdminAuth,
+  requireSuperAdmin,
   requirePlayerAuth,
   requireTeamAuth,
   requireUmpireAuth,

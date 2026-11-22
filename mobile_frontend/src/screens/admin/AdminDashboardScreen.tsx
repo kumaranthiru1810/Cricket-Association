@@ -40,6 +40,7 @@ import TournamentManagement from '../../admin/components/TournamentManagement';
 import CricketLawsManagement from '../../admin/components/CricketLawsManagement';
 import CalculationSettingsManagement from '../../admin/components/CalculationSettingsManagement';
 import SettingsPage from '../../admin/pages/SettingsPage';
+import UsersPage from '../../admin/pages/UsersPage';
 import {
   getKolkataNow,
   getTodayKolkata,
@@ -61,7 +62,7 @@ export interface AdminDashboardProps {
   initialParams?: any;
 }
 
-type AdminTab = 'overview' | 'teams' | 'scorers' | 'umpires' | 'content' | 'schedules' | 'tournaments' | 'laws' | 'calculations' | 'master_settings' | 'settings';
+type AdminTab = 'overview' | 'users' | 'teams' | 'scorers' | 'umpires' | 'content' | 'schedules' | 'tournaments' | 'laws' | 'calculations' | 'master_settings' | 'settings';
 type FilterStatus = 'all' | 'Pending' | 'Approved' | 'Rejected';
 type MatchFilterStatus = 'all' | 'SCHEDULED' | 'LIVE' | 'COMPLETED' | 'CANCELLED' | 'POSTPONED' | 'REQUESTS';
 
@@ -250,7 +251,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       try {
         const q = new URL(window.location.href).searchParams.get('tab') as AdminTab;
-        if (q && ['overview', 'teams', 'scorers', 'umpires', 'content', 'schedules', 'tournaments', 'laws', 'calculations'].includes(q)) {
+        if (q && ['overview', 'users', 'teams', 'scorers', 'umpires', 'content', 'schedules', 'tournaments', 'laws', 'calculations', 'master_settings', 'settings'].includes(q)) {
           return q;
         }
         const saved = localStorage.getItem('cfvd_admin_active_tab') as AdminTab;
@@ -611,6 +612,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   const [tournamentDropdownOpen, setTournamentDropdownOpen] = useState<boolean>(false);
   const [formatDropdownOpen, setFormatDropdownOpen] = useState<boolean>(false);
   const [scorerDropdownOpen, setScorerDropdownOpen] = useState<boolean>(false);
+  const [scorerSearch, setScorerSearch] = useState<string>('');
   const [tournamentSearchQuery, setTournamentSearchQuery] = useState<string>('');
   const [teamSearchQueryA, setTeamSearchQueryA] = useState<string>('');
   const [teamSearchQueryB, setTeamSearchQueryB] = useState<string>('');
@@ -1444,7 +1446,13 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         match_time: match_time.trim(),
         match_type,
         overs_per_side: Number(overs),
-        assigned_scorer_id,
+        assigned_scorer_id: scheduleForm.assigned_scorer_id || scheduleForm.assigned_scorer_name || 'SCR-101',
+        assigned_scorer_name: scheduleForm.assigned_scorer_name || scheduleForm.assigned_scorer_id || '',
+        scorer_name: scheduleForm.assigned_scorer_name || scheduleForm.assigned_scorer_id || '',
+        umpire1_id: umpire1_id || '',
+        umpire1_name: umpire1_name || '',
+        umpire2_id: umpire2_id || '',
+        umpire2_name: umpire2_name || '',
         notify_teams_and_coaches: notifyTeamsOnTimeChange,
         show_on_team_home: show_on_team_home !== false,
         notes: match_notes || ''
@@ -2029,6 +2037,27 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             )}
           </TouchableOpacity>
 
+          {/* Users & Dynamic Admins */}
+          <TouchableOpacity
+            style={[
+              styles.sidebarNavItem,
+              activeTab === 'users' && styles.sidebarNavItemUsersActive,
+              isCollapsed && styles.sidebarNavItemCollapsed
+            ]}
+            onPress={() => {
+              setActiveTab('users');
+              if (isMobileDrawer) setMobileSidebarOpen(false);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.sidebarNavIcon, activeTab === 'users' && styles.sidebarNavIconActive]}>🛡️</Text>
+            {!isCollapsed && (
+              <Text style={[styles.sidebarNavLabel, activeTab === 'users' && styles.sidebarNavLabelActive]}>
+                Users & Admins
+              </Text>
+            )}
+          </TouchableOpacity>
+
           {/* Team Registrations */}
           <TouchableOpacity
             style={[
@@ -2357,6 +2386,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                   <Text style={styles.pageHeaderTitle}>
                     {activeTab === 'overview' && '⊞ Command Center Overview'}
+                    {activeTab === 'users' && '🛡️ Users & Dynamic Administrator Governance'}
                     {activeTab === 'teams' && '👥 Team Registrations'}
                     {activeTab === 'scorers' && '📋 Scorer Management'}
                     {activeTab === 'umpires' && '⚖️ Umpires Management'}
@@ -2368,6 +2398,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   {activeTab === 'overview' && (
                     <View style={[styles.pageThemeBadge, { backgroundColor: '#0f172a', borderColor: '#d4af37' }]}>
                       <Text style={[styles.pageThemeBadgeText, { color: '#fbbf24' }]}>🏛️ MISSION CONTROL</Text>
+                    </View>
+                  )}
+                  {activeTab === 'users' && (
+                    <View style={[styles.pageThemeBadge, { backgroundColor: '#eff6ff', borderColor: '#1e3a8a' }]}>
+                      <Text style={[styles.pageThemeBadgeText, { color: '#1e3a8a' }]}>🛡️ DYNAMIC ADMIN & OTP GOVERNANCE</Text>
                     </View>
                   )}
                   {activeTab === 'teams' && (
@@ -4759,6 +4794,15 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           )}
 
           {/* ─────────────────────────────────────────────────────────────
+              USERS & DYNAMIC ADMINISTRATOR GOVERNANCE (NODEMAILER OTP)
+              ───────────────────────────────────────────────────────────── */}
+          {activeTab === 'users' && (
+            <View style={{ flex: 1, width: '100%' }}>
+              <UsersPage />
+            </View>
+          )}
+
+          {/* ─────────────────────────────────────────────────────────────
               9. TAB CONTENT: TOURNAMENT MANAGEMENT & TEAM APPROVALS
               ───────────────────────────────────────────────────────────── */}
           {activeTab === 'tournaments' && (
@@ -4801,21 +4845,34 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             <ScrollView style={styles.modalBodyScroll} showsVerticalScrollIndicator={true}>
               <View style={styles.squadTableContainer}>
                 <View style={styles.squadTableHeader}>
-                  <Text style={[styles.thCell, { width: 50 }]}>#</Text>
-                  <Text style={[styles.thCell, { flex: 2.2 }]}>Player Name</Text>
-                  <Text style={[styles.thCell, { flex: 2 }]}>Player Email</Text>
-                  <Text style={[styles.thCell, { flex: 1.5 }]}>Playing Role</Text>
+                  <Text style={[styles.thCell, { width: 45 }]}>#</Text>
+                  <Text style={[styles.thCell, { flex: 2 }]}>Player Details</Text>
+                  <Text style={[styles.thCell, { flex: 1.8 }]}>Phone & Aadhaar</Text>
+                  <Text style={[styles.thCell, { flex: 1.2 }]}>Playing Role</Text>
                 </View>
 
                 {selectedSquadModal?.members && selectedSquadModal.members.length > 0 ? (
                   selectedSquadModal.members.map((m: any, idx: number) => (
                     <View key={m.playerId || m._id || idx} style={[styles.squadTableRow, idx % 2 === 1 && styles.rowAlt]}>
-                      <Text style={[styles.tdCell, { width: 50, fontWeight: '700' }]}>{m.jersey_number || m.jerseyNumber || idx + 1}</Text>
-                      <Text style={[styles.tdCell, { flex: 2.2, fontWeight: '700', color: '#0f172a' }]}>{m.name || m.playerName || 'Player'}</Text>
-                      <Text style={[styles.tdCell, { flex: 2, color: '#475569', fontSize: 13 }]}>{m.email || m.playerEmail || m.playerId || '—'}</Text>
-                      <View style={{ flex: 1.5, justifyContent: 'center' }}>
-                        <View style={{ backgroundColor: '#fef3c7', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, alignSelf: 'flex-start' }}>
-                          <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 12 }}>{m.role || 'Player'}</Text>
+                      <Text style={[styles.tdCell, { width: 45, fontWeight: '700' }]}>{m.jersey_number || m.jerseyNumber || idx + 1}</Text>
+                      <View style={{ flex: 2, paddingVertical: 4 }}>
+                        <Text style={{ fontWeight: '700', color: '#0f172a', fontSize: 13 }}>{m.name || m.playerName || 'Player'}</Text>
+                        <Text style={{ color: '#475569', fontSize: 12 }}>{m.email || m.playerEmail || m.playerId || '—'}</Text>
+                      </View>
+                      <View style={{ flex: 1.8, paddingVertical: 4, justifyContent: 'center' }}>
+                        {(m.phone || m.mobile) && (
+                          <Text style={{ color: '#166534', fontSize: 11, fontWeight: '700' }}>📞 +91 {m.phone || m.mobile}</Text>
+                        )}
+                        {m.aadhaar && (
+                          <Text style={{ color: '#991b1b', fontSize: 11, fontWeight: '700', marginTop: 2 }}>🆔 UIDAI: {m.aadhaar}</Text>
+                        )}
+                        {!m.phone && !m.mobile && !m.aadhaar && (
+                          <Text style={{ color: '#94a3b8', fontSize: 11 }}>—</Text>
+                        )}
+                      </View>
+                      <View style={{ flex: 1.2, justifyContent: 'center' }}>
+                        <View style={{ backgroundColor: '#fef3c7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, alignSelf: 'flex-start' }}>
+                          <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 11 }}>{m.role || 'Player'}</Text>
                         </View>
                       </View>
                     </View>
@@ -6071,61 +6128,74 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     </View>
                   </View>
 
-                  {/* Match Scorer */}
+                  {/* DYNAMIC MATCH SCORER SELECTION */}
                   <View style={[styles.formSectionCard, { marginTop: 14 }]}>
-                    <Text style={styles.formFieldLabel}>Match Scorer *</Text>
-                    {(() => {
-                      const scorers = officialsList.filter((o: any) => {
-                        const r = (o.role || o.type || '').toUpperCase();
-                        return r.includes('SCOR') || (o.id && String(o.id).startsWith('SCR'));
-                      });
-                      const selScorer = scorers.find(s => s.id === scheduleForm.assigned_scorer_id) || scorers[0];
+                    <Text style={styles.formFieldLabel}>👤 Official Match Scorer (Dynamic Selection) *</Text>
+                    <TextInput
+                      style={styles.formTextInputCompact}
+                      placeholder="Type or select Scorer..."
+                      placeholderTextColor="#94a3b8"
+                      value={scheduleForm.assigned_scorer_name || scheduleForm.assigned_scorer_id || ''}
+                      onChangeText={(val) => setScheduleForm(prev => ({ ...prev, assigned_scorer_name: val, assigned_scorer_id: val }))}
+                    />
+                    <View style={{ marginTop: 6 }}>
+                      <TouchableOpacity
+                        style={styles.dropdownToggleSmall}
+                        onPress={() => setScorerDropdownOpen(!scorerDropdownOpen)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.dropdownToggleSmallText}>
+                          {scorerDropdownOpen ? '▲ Hide Registered Scorers' : '▼ Select from Registered Scorers & Officials'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
 
-                      return (
-                        <View style={styles.dropdownContainer}>
-                          <TouchableOpacity
-                            style={[styles.dropdownSelectBoxCompact, scorerDropdownOpen && styles.dropdownSelectBoxActive]}
-                            onPress={() => setScorerDropdownOpen(!scorerDropdownOpen)}
-                            activeOpacity={0.8}
-                          >
-                            <View style={styles.dropdownSelectedLeft}>
-                              <View style={[styles.teamCrestMini, { backgroundColor: '#7c3aed' }]}>
-                                <Text style={{ fontSize: 13 }}>👤</Text>
-                              </View>
-                              <View style={{ flex: 1 }}>
-                                <Text style={styles.dropdownSelectedTitle} numberOfLines={1}>
-                                  {selScorer?.name || scheduleForm.assigned_scorer_id || 'Select Scorer'}
-                                </Text>
-                                <Text style={styles.dropdownSelectedSub} numberOfLines={1}>
-                                  {selScorer?.phone ? `📞 ${selScorer.phone}` : (selScorer?.email || 'Registered Official Scorer')}
-                                </Text>
-                              </View>
-                            </View>
-                            <Text style={styles.dropdownArrow}>{scorerDropdownOpen ? '▲' : '▼'}</Text>
-                          </TouchableOpacity>
-
-                          {scorerDropdownOpen && (
-                            <View style={styles.dropdownTablePanelCompact}>
-                              <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
-                                {scorers.map((sc: any) => (
-                                  <TouchableOpacity
-                                    key={sc.id}
-                                    style={styles.dropdownTableRowCompact}
-                                    onPress={() => {
-                                      setScheduleForm(prev => ({ ...prev, assigned_scorer_id: sc.id }));
-                                      setScorerDropdownOpen(false);
-                                    }}
-                                  >
-                                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>👤 {sc.name}</Text>
-                                    <Text style={{ fontSize: 11, color: '#64748b' }}>{sc.id} • {sc.email || sc.phone || 'Official'}</Text>
-                                  </TouchableOpacity>
-                                ))}
-                              </ScrollView>
+                    {scorerDropdownOpen && (
+                      <View style={styles.dropdownTablePanelCompact}>
+                        <View style={styles.dropdownSearchWrapCompact}>
+                          <Text style={{ fontSize: 12, marginRight: 6 }}>🔍</Text>
+                          <TextInput
+                            style={styles.dropdownSearchInputCompact}
+                            placeholder="Search scorers by name or ID..."
+                            placeholderTextColor="#94a3b8"
+                            value={scorerSearch}
+                            onChangeText={setScorerSearch}
+                          />
+                        </View>
+                        <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
+                          {officialsList
+                            .filter((o: any) => {
+                              const r = (o.role || o.type || '').toUpperCase();
+                              const matchesRole = r.includes('SCOR') || (o.id && String(o.id).startsWith('SCR')) || !o.role;
+                              const matchesQuery = !scorerSearch || (o.name || '').toLowerCase().includes(scorerSearch.toLowerCase()) || (o.id || '').toLowerCase().includes(scorerSearch.toLowerCase());
+                              return matchesRole && matchesQuery;
+                            })
+                            .map((sc: any) => (
+                              <TouchableOpacity
+                                key={`sc-${sc.id}`}
+                                style={styles.dropdownTableRowCompact}
+                                onPress={() => {
+                                  setScheduleForm(prev => ({ ...prev, assigned_scorer_id: sc.id, assigned_scorer_name: sc.name }));
+                                  setScorerDropdownOpen(false);
+                                }}
+                              >
+                                <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>👤 {sc.name}</Text>
+                                <Text style={{ fontSize: 11, color: '#64748b' }}>{sc.id} • {sc.email || sc.phone || 'Registered Scorer'}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          {officialsList.filter((o: any) => {
+                            const r = (o.role || o.type || '').toUpperCase();
+                            const matchesRole = r.includes('SCOR') || (o.id && String(o.id).startsWith('SCR')) || !o.role;
+                            const matchesQuery = !scorerSearch || (o.name || '').toLowerCase().includes(scorerSearch.toLowerCase()) || (o.id || '').toLowerCase().includes(scorerSearch.toLowerCase());
+                            return matchesRole && matchesQuery;
+                          }).length === 0 && (
+                            <View style={{ padding: 10, alignItems: 'center' }}>
+                              <Text style={{ fontSize: 11.5, color: '#94a3b8' }}>No matching scorers found. You can type any scorer name above.</Text>
                             </View>
                           )}
-                        </View>
-                      );
-                    })()}
+                        </ScrollView>
+                      </View>
+                    )}
                   </View>
 
                   {/* DYNAMIC UMPIRES SELECTION (Field Umpire 1 & Square Leg Umpire 2) */}
@@ -6342,7 +6412,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       <View style={styles.summaryDetailItem}>
                         <Text style={styles.summaryDetailKey}>👤 Scorer</Text>
                         <Text style={styles.summaryDetailVal} numberOfLines={1}>
-                          {officialsList.find(o => o.id === scheduleForm.assigned_scorer_id)?.name || scheduleForm.assigned_scorer_id || 'Assigned'}
+                          {scheduleForm.assigned_scorer_name || officialsList.find(o => o.id === scheduleForm.assigned_scorer_id)?.name || scheduleForm.assigned_scorer_id || 'Assigned'}
                         </Text>
                       </View>
                       {(scheduleForm.umpire1_name || scheduleForm.umpire2_name) ? (
@@ -7199,6 +7269,13 @@ const styles: any = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#d4af37',
     boxShadow: '0 4px 14px rgba(212, 175, 55, 0.35)',
+    elevation: 3
+  },
+  sidebarNavItemUsersActive: {
+    backgroundColor: '#1e3a8a',
+    borderWidth: 1.5,
+    borderColor: '#60a5fa',
+    boxShadow: '0 4px 14px rgba(30, 58, 138, 0.4)',
     elevation: 3
   },
   sidebarNavItemTeamsActive: {

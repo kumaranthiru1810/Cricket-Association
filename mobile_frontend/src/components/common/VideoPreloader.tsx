@@ -6,9 +6,10 @@ import {
   StyleSheet,
   Platform,
   Animated,
-  Dimensions
+  useWindowDimensions
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideoPlayer, VideoView } from 'expo-video';
 
 const LOCAL_PRELOADER_VIDEO = require('../../../assets/videos/preloader.mp4');
@@ -16,9 +17,10 @@ const LOCAL_PRELOADER_VIDEO = require('../../../assets/videos/preloader.mp4');
 interface NativeVideoComponentProps {
   onProgress: (pct: number) => void;
   onEnded: () => void;
+  contentFit?: 'contain' | 'cover';
 }
 
-function NativeVideoComponent({ onProgress, onEnded }: NativeVideoComponentProps) {
+function NativeVideoComponent({ onProgress, onEnded, contentFit = 'contain' }: NativeVideoComponentProps) {
   const player = useVideoPlayer(LOCAL_PRELOADER_VIDEO, (p) => {
     p.loop = false;
     p.muted = false;
@@ -32,10 +34,10 @@ function NativeVideoComponent({ onProgress, onEnded }: NativeVideoComponentProps
       if (player.duration) {
         const pct = (event.currentTime / player.duration) * 100;
         onProgress(Math.min(100, pct));
-      }
-      // Exact synchronization: trigger website reveal at 6.9s when bails lock in with sound
-      if (event.currentTime >= 6.9) {
-        onEnded();
+        // Cinematic synchronization: reveal website at video climax
+        if (event.currentTime >= Math.max(player.duration - 0.4, 0)) {
+          onEnded();
+        }
       }
     });
 
@@ -43,9 +45,16 @@ function NativeVideoComponent({ onProgress, onEnded }: NativeVideoComponentProps
       onEnded();
     });
 
+    const statusSub = (player as any).addListener?.('statusChange', (event: any) => {
+      if (event?.status === 'error') {
+        onEnded();
+      }
+    });
+
     return () => {
       timeSub.remove();
       endSub.remove();
+      if (statusSub) statusSub.remove();
     };
   }, [player, onProgress, onEnded]);
 
@@ -53,7 +62,7 @@ function NativeVideoComponent({ onProgress, onEnded }: NativeVideoComponentProps
     <VideoView
       player={player}
       style={StyleSheet.absoluteFill}
-      contentFit="cover"
+      contentFit={contentFit}
       nativeControls={false}
     />
   );
@@ -65,6 +74,11 @@ interface VideoPreloaderProps {
 }
 
 export default function VideoPreloader({ onComplete }: VideoPreloaderProps) {
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const isMobile = width < 768 || width < height;
+  const isNarrow = width < 420;
+
   const [isDismissed, setIsDismissed] = useState<boolean>(false);
   const [showHint, setShowHint] = useState<boolean>(false);
   const [progress, setProgress] = useState<number>(0);
@@ -120,13 +134,13 @@ export default function VideoPreloader({ onComplete }: VideoPreloaderProps) {
   };
 
   useEffect(() => {
-    // Safety auto-dismiss fallback after 9.5 seconds
+    // Safety auto-dismiss fallback after 10.5 seconds
     const timer = setTimeout(() => {
       handleDismiss();
-    }, 9500);
+    }, 10500);
 
     // Try unmuted audio on web immediately, register gesture listeners if blocked
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       const activateSound = () => {
         if (webVideoRef.current) {
           webVideoRef.current.muted = false;
@@ -197,75 +211,74 @@ export default function VideoPreloader({ onComplete }: VideoPreloaderProps) {
     >
       <StatusBar style="light" />
 
-      {/* Main Video Presentation (Edge-to-Edge Full Screen Coverage) */}
-      <View style={styles.videoWrapper}>
+      {/* Main Video Presentation - 100% Contained, Nothing Hidden */}
+      <TouchableOpacity
+        style={styles.videoWrapper}
+        activeOpacity={1}
+        onPress={() => handleDismiss()}
+        // @ts-ignore
+        onClick={() => handleDismiss()}
+      >
         {Platform.OS === 'web' ? (
-          <video
-            ref={webVideoRef}
-            autoPlay
-            playsInline
-            // @ts-ignore
-            webkit-playsinline="true"
-            preload="auto"
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              objectPosition: 'center center',
-              backgroundColor: '#020612',
-            }}
-            src="/preloader.mp4"
-            onEnded={() => handleDismiss()}
-            onTimeUpdate={handleTimeUpdate}
-          />
+          <>
+            <video
+              autoPlay
+              muted
+              loop
+              playsInline
+              // @ts-ignore
+              webkit-playsinline="true"
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                objectPosition: 'center center',
+                filter: 'blur(35px) brightness(0.4) saturate(1.4)',
+                transform: 'scale(1.15)',
+                pointerEvents: 'none',
+                zIndex: 0,
+              }}
+              src="/preloader.mp4"
+            />
+            <video
+              ref={webVideoRef}
+              autoPlay
+              muted
+              playsInline
+              // @ts-ignore
+              webkit-playsinline="true"
+              preload="auto"
+              style={{
+                width: '100%',
+                height: '100%',
+                maxWidth: '100vw',
+                maxHeight: '100vh',
+                objectFit: 'contain',
+                objectPosition: 'center center',
+                backgroundColor: 'transparent',
+                zIndex: 1,
+              }}
+              src="/preloader.mp4"
+              onEnded={() => handleDismiss()}
+              onTimeUpdate={handleTimeUpdate}
+            />
+          </>
         ) : (
           <NativeVideoComponent
             onProgress={(pct) => setProgress(pct)}
             onEnded={() => handleDismiss()}
+            contentFit="contain"
           />
         )}
-      </View>
-
-      {/* Floating Top Header Bar */}
-      <View style={[styles.topBar, { pointerEvents: 'box-none' as any }]}>
-        <View style={styles.brandBadge}>
-          <Text style={{ fontSize: 13 }}>🏏</Text>
-          <Text style={styles.brandText}>CRICKET FEDERATION</Text>
-        </View>
-
-        <View style={[styles.actionRow, { pointerEvents: 'box-none' as any }]}>
-          {/* Always-on Unmuted Stadium Sound Badge */}
-          <View style={styles.soundBadge}>
-            <Text style={{ fontSize: 12 }}>🔊</Text>
-            <Text style={styles.soundBadgeText}>SOUND ON</Text>
-          </View>
-
-          {/* Skip Button (Instant Touch & Click Responsive) */}
-          <TouchableOpacity
-            style={styles.skipBtn}
-            onPress={() => handleDismiss()}
-            // @ts-ignore
-            onClick={() => handleDismiss()}
-            // @ts-ignore
-            onTouchEnd={() => handleDismiss()}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.skipBtnText}>SKIP INTRO</Text>
-            <Text style={styles.skipBtnClose}>✕</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Sound Interaction Hint */}
-      {showHint && (
-        <View style={styles.soundHintBadge}>
-          <Text style={styles.soundHintText}>🔊 TAP ANYWHERE FOR FULL STADIUM SOUND</Text>
-        </View>
-      )}
+      </TouchableOpacity>
 
       {/* Bottom Title & Synchronized Golden Progress Line */}
-      <View style={styles.bottomBar}>
-        <Text style={styles.bottomSubtitle}>
+      <View style={[styles.bottomBar, isNarrow && { bottom: 10, left: 10, right: 10 }]}>
+        <Text style={[styles.bottomSubtitle, isNarrow && { fontSize: 9, letterSpacing: 0.5 }]}>
           VIRUDHUNAGAR DISTRICT CRICKET ASSOCIATION • OFFICIAL PORTAL
         </Text>
         <View style={styles.progressTrack}>
@@ -286,8 +299,6 @@ export default function VideoPreloader({ onComplete }: VideoPreloaderProps) {
     </Animated.View>
   );
 }
-
-const { width } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   overlay: {
@@ -313,73 +324,6 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: '#020612'
   },
-  topBar: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 54 : 24,
-    left: 14,
-    right: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    zIndex: 999999,
-  },
-  brandBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(2, 6, 18, 0.75)',
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.35)',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 9999
-  },
-  brandText: {
-    fontSize: 10.5,
-    fontWeight: '800',
-    letterSpacing: 1,
-    color: '#f59e0b',
-    textTransform: 'uppercase'
-  },
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8
-  },
-  soundBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(245, 158, 11, 0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.65)',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 9999
-  },
-  soundBadgeText: {
-    color: '#fbbf24',
-    fontSize: 10.5,
-    fontWeight: '800',
-    letterSpacing: 0.5
-  },
-  soundHintBadge: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 100 : 70,
-    backgroundColor: 'rgba(15, 23, 42, 0.9)',
-    borderWidth: 1.5,
-    borderColor: '#f59e0b',
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    borderRadius: 9999,
-    zIndex: 999999
-  },
-  soundHintText: {
-    color: '#fef08a',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.6
-  },
   flashOverlay: {
     position: 'absolute',
     top: 0,
@@ -388,34 +332,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: 'rgba(251, 191, 36, 0.7)',
     zIndex: 9999999
-  },
-  skipBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#f59e0b',
-    borderWidth: 1.5,
-    borderColor: '#fbbf24',
-    paddingVertical: 7,
-    paddingHorizontal: 16,
-    borderRadius: 9999,
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.45,
-    shadowRadius: 10,
-    elevation: 8,
-    zIndex: 999999,
-  },
-  skipBtnText: {
-    color: '#020612',
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 0.8
-  },
-  skipBtnClose: {
-    color: '#020612',
-    fontSize: 12,
-    fontWeight: '900'
   },
   bottomBar: {
     position: 'absolute',

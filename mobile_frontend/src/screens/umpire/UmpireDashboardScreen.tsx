@@ -150,12 +150,6 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
   // Cricket Rules Guide & Decision Support Modal
   const [showRulesModal, setShowRulesModal] = useState<boolean>(false);
 
-  // Postponement Request Modal
-  const [postponeModalMatch, setPostponeModalMatch] = useState<any | null>(null);
-  const [umpirePostponeReason, setUmpirePostponeReason] = useState<string>('Unplayable pitch condition / safety hazard');
-  const [umpirePostponeNotes, setUmpirePostponeNotes] = useState<string>('');
-  const [isSubmittingUmpirePostpone, setIsSubmittingUmpirePostpone] = useState<boolean>(false);
-
   // Responsive Layout
   const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
   const isDesktop = windowWidth >= 768;
@@ -378,38 +372,6 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
       showAlert('Update Failed', err.message || 'Could not update profile.');
     } finally {
       setIsSavingProfile(false);
-    }
-  };
-
-  // Umpire Postponement Request
-  const handleRequestPostponement = async () => {
-    if (!postponeModalMatch) return;
-    if (!umpirePostponeReason.trim()) {
-      showError('Mandatory Reason Required', 'Please provide an official reason for requesting match postponement.');
-      return;
-    }
-    setIsSubmittingUmpirePostpone(true);
-    try {
-      const matchIdToPostpone = postponeModalMatch.matchId || postponeModalMatch.id;
-      await UmpireApi.requestPostponement(matchIdToPostpone, {
-        reason: umpirePostponeReason.trim(),
-        notes: umpirePostponeNotes.trim()
-      });
-      showSuccess(
-        'Request Submitted',
-        'Your match postponement request has been submitted to Tournament Administration for approval.'
-      );
-      setPostponeModalMatch(null);
-      setUmpirePostponeReason('Unplayable pitch condition / safety hazard');
-      setUmpirePostponeNotes('');
-      await loadUmpireData(true);
-      if (selectedMatchId === matchIdToPostpone) {
-        await loadMatchDetails(matchIdToPostpone);
-      }
-    } catch (err: any) {
-      showError('Submission Error', err.message || 'Failed to submit postponement request.');
-    } finally {
-      setIsSubmittingUmpirePostpone(false);
     }
   };
 
@@ -781,19 +743,6 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
                         >
                           <Text style={styles.openConsoleBtnText}>Open Supervisor Console →</Text>
                         </TouchableOpacity>
-
-                        {m.status !== 'POSTPONED' && m.status !== 'COMPLETED' && m.umpirePostponementRequest?.status !== 'PENDING' && (
-                          <TouchableOpacity
-                            style={[styles.openConsoleBtn, { backgroundColor: '#fffbeb', borderColor: '#f59e0b', borderWidth: 1 }]}
-                            onPress={() => {
-                              setPostponeModalMatch(m);
-                              setUmpirePostponeReason('Unplayable pitch condition / safety hazard');
-                              setUmpirePostponeNotes('');
-                            }}
-                          >
-                            <Text style={[styles.openConsoleBtnText, { color: '#b45309', fontWeight: '700' }]}>⚠️ Request Postponement</Text>
-                          </TouchableOpacity>
-                        )}
                       </View>
                     </View>
                   ))
@@ -977,21 +926,6 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
                           <Text style={styles.ctrlBtnIcon}>🏆</Text>
                           <Text style={styles.ctrlBtnText}>End Match & Certify</Text>
                         </TouchableOpacity>
-
-                        {/* 5. Request Postponement */}
-                        {selectedMatchDetails.status !== 'POSTPONED' && selectedMatchDetails.status !== 'COMPLETED' && selectedMatchDetails.umpirePostponementRequest?.status !== 'PENDING' && (
-                          <TouchableOpacity
-                            style={[styles.ctrlBtn, { backgroundColor: '#b45309' }]}
-                            onPress={() => {
-                              setPostponeModalMatch(selectedMatchDetails);
-                              setUmpirePostponeReason('Unplayable pitch condition / safety hazard');
-                              setUmpirePostponeNotes('');
-                            }}
-                          >
-                            <Text style={styles.ctrlBtnIcon}>⚠️</Text>
-                            <Text style={styles.ctrlBtnText}>Request Postponement</Text>
-                          </TouchableOpacity>
-                        )}
                       </View>
                     </View>
 
@@ -1470,62 +1404,6 @@ export default function UmpireDashboardScreen({ onExit, initialParams }: UmpireD
                     <ActivityIndicator color="#fff" />
                   ) : (
                     <Text style={styles.modalConfirmText}>Save Changes</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-
-        {/* POSTPONEMENT REQUEST MODAL */}
-        <Modal visible={!!postponeModalMatch} transparent animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalBox}>
-              <Text style={[styles.modalTitle, { color: '#b45309' }]}>⚠️ REQUEST MATCH POSTPONEMENT</Text>
-              <Text style={styles.modalSubtitle}>
-                Submit an official Umpire request to Tournament Administration to postpone match #{postponeModalMatch?.matchId || postponeModalMatch?.id}.
-              </Text>
-
-              <Text style={styles.modalLabel}>Reason for Postponement Request *</Text>
-              <TextInput
-                style={[styles.modalInput, { minHeight: 70, textAlignVertical: 'top' }]}
-                value={umpirePostponeReason}
-                onChangeText={setUmpirePostponeReason}
-                placeholder="e.g. Unplayable pitch conditions, continuous rain, safety hazard..."
-                placeholderTextColor="#94a3b8"
-                multiline
-                numberOfLines={3}
-              />
-
-              <Text style={styles.modalLabel}>Additional Umpire Notes / Ground Conditions (Optional)</Text>
-              <TextInput
-                style={[styles.modalInput, { minHeight: 50, textAlignVertical: 'top' }]}
-                value={umpirePostponeNotes}
-                onChangeText={setUmpirePostponeNotes}
-                placeholder="e.g. Both captains consulted; ground waterlogged; inspection at 2 PM not feasible."
-                placeholderTextColor="#94a3b8"
-                multiline
-                numberOfLines={2}
-              />
-
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  style={styles.modalCancelBtn}
-                  onPress={() => setPostponeModalMatch(null)}
-                  disabled={isSubmittingUmpirePostpone}
-                >
-                  <Text style={styles.modalCancelText}>Dismiss</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.modalConfirmBtn, { backgroundColor: '#b45309' }]}
-                  onPress={handleRequestPostponement}
-                  disabled={isSubmittingUmpirePostpone}
-                >
-                  {isSubmittingUmpirePostpone ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.modalConfirmText}>Submit Request to Admin</Text>
                   )}
                 </TouchableOpacity>
               </View>

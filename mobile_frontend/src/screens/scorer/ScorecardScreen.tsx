@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, useWindowDimensions, Platform, Image, Modal, Linking } from 'react-native';
+import { router } from 'expo-router';
 
 import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
 import SharedFooter from '../../components/scorer/SharedFooter';
@@ -67,6 +68,18 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
   }, []);
 
   const handleBack = () => {
+    if (params?.returnTo === 'Home') {
+      if (typeof onExit === 'function') onExit();
+      try {
+        router.replace('/');
+      } catch {
+        try { router.push('/'); } catch {}
+      }
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.location.href = '/';
+      }
+      return;
+    }
     setShowExitModal(true);
   };
 
@@ -790,68 +803,87 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
           </View>
 
           <View style={styles.tableWrapper}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ minWidth: '100%' }}>
-              <View style={styles.tableInner}>
+            <ScrollView horizontal={isDesktop} showsHorizontalScrollIndicator={false} contentContainerStyle={{ minWidth: isDesktop ? '100%' : undefined, width: '100%' }}>
+              <View style={[styles.tableInner, !isDesktop && { minWidth: 0, width: '100%' }]}>
                 <View style={[styles.tableRow, styles.tableHeader]}>
                   <Text style={[styles.cell, styles.colName, styles.tableHeaderText]}>Batter</Text>
                   <Text style={[styles.cell, styles.colNum, styles.tableHeaderText]}>R</Text>
                   <Text style={[styles.cell, styles.colNum, styles.tableHeaderText]}>B</Text>
                   <Text style={[styles.cell, styles.colNum, styles.tableHeaderText]}>4s</Text>
                   <Text style={[styles.cell, styles.colNum, styles.tableHeaderText]}>6s</Text>
-                  <Text style={[styles.cell, styles.colNum, styles.tableHeaderText]}>SR</Text>
-                  <Text style={[styles.cell, styles.colAction, styles.tableHeaderText]}>Analytics</Text>
+                  <Text style={[styles.cell, styles.colNumSr, styles.tableHeaderText]}>SR</Text>
+                  {isDesktop && <Text style={[styles.cell, styles.colAction, styles.tableHeaderText]}>Analytics</Text>}
                 </View>
 
-                {(currentInnings.batters || []).map((b: any, bIdx: number) => (
-                  <View key={b.id || bIdx} style={[styles.tableRow, bIdx % 2 === 1 && styles.tableRowAlt]}>
-                    <View style={styles.colName}>
-                      <Text style={styles.playerName}>{b.name}</Text>
-                      <TouchableOpacity
-                        onPress={() => {
-                          const isDismissed = b.isOut || (b.dismissal && !b.dismissal.toLowerCase().includes('not out'));
-                          if (isDismissed) {
-                            setActiveUmpireSignal({
-                              type: 'OUT',
-                              title: `BATTER OUT!`,
-                              batterName: b.name,
-                              runs: b.runs,
-                              dismissalType: b.dismissal || 'Wicket Out',
-                              extraDetails: `Official dismissal recorded: ${b.dismissal || 'Out'} (${b.runs} off ${b.balls}b) • MCC Law 31`
-                            });
-                          }
-                        }}
-                        activeOpacity={b.isOut ? 0.7 : 1}
-                      >
-                        <Text style={[styles.dismissal, b.isOut && { color: '#ef4444', fontWeight: 'bold' }]}>
-                          {b.dismissal || (b.isOut ? 'out' : 'not out')}{b.isOut ? ' ☝️' : ''}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                    <Text style={[styles.cell, styles.colNum, styles.runsText]}>{b.runs}</Text>
-                    <Text style={[styles.cell, styles.colNum]}>{b.balls}</Text>
-                    <Text style={[styles.cell, styles.colNum]}>{b.fours}</Text>
-                    <Text style={[styles.cell, styles.colNum]}>{b.sixes}</Text>
-                    <Text style={[styles.cell, styles.colNum, styles.srText]}>
-                      {typeof b.strikeRate === 'number' ? b.strikeRate.toFixed(1) : b.strikeRate}
-                    </Text>
-                    <View style={styles.colAction}>
-                      <TouchableOpacity
-                        style={[
-                          styles.wagonWheelBtn,
-                          selectedWagonBatterId === b.id && styles.wagonWheelBtnActive
-                        ]}
-                        onPress={() => setSelectedWagonBatterId(b.id)}
-                      >
-                        <Text style={[
-                          styles.wagonWheelBtnText,
-                          selectedWagonBatterId === b.id && styles.wagonWheelBtnTextActive
-                        ]}>
-                          🎯 Wheel
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
+                {(currentInnings.batters || []).map((b: any, bIdx: number) => {
+                  const isSelected = selectedWagonBatterId === b.id;
+                  return (
+                    <TouchableOpacity
+                      key={b.id || bIdx}
+                      activeOpacity={0.7}
+                      onPress={() => setSelectedWagonBatterId(b.id)}
+                      style={[
+                        styles.tableRow,
+                        bIdx % 2 === 1 && styles.tableRowAlt,
+                        isSelected && { backgroundColor: '#f0f9ff' }
+                      ]}
+                    >
+                      <View style={styles.colName}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                          <Text style={[styles.playerName, isSelected && { color: '#0284c7' }]} numberOfLines={2}>
+                            {b.name}
+                          </Text>
+                          {isSelected && <Text style={{ fontSize: 11 }}>🎯</Text>}
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => {
+                            const isDismissed = b.isOut || (b.dismissal && !b.dismissal.toLowerCase().includes('not out'));
+                            if (isDismissed) {
+                              setActiveUmpireSignal({
+                                type: 'OUT',
+                                title: `BATTER OUT!`,
+                                batterName: b.name,
+                                runs: b.runs,
+                                dismissalType: b.dismissal || 'Wicket Out',
+                                extraDetails: `Official dismissal recorded: ${b.dismissal || 'Out'} (${b.runs} off ${b.balls}b) • MCC Law 31`
+                              });
+                            }
+                          }}
+                          activeOpacity={b.isOut ? 0.7 : 1}
+                        >
+                          <Text style={[styles.dismissal, b.isOut && { color: '#ef4444', fontWeight: 'bold' }]} numberOfLines={2}>
+                            {b.dismissal || (b.isOut ? 'out' : 'not out')}{b.isOut ? ' ☝️' : ''}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={[styles.cell, styles.colNum, styles.runsText]}>{b.runs}</Text>
+                      <Text style={[styles.cell, styles.colNum]}>{b.balls}</Text>
+                      <Text style={[styles.cell, styles.colNum]}>{b.fours}</Text>
+                      <Text style={[styles.cell, styles.colNum]}>{b.sixes}</Text>
+                      <Text style={[styles.cell, styles.colNumSr, styles.srText]}>
+                        {typeof b.strikeRate === 'number' ? b.strikeRate.toFixed(1) : b.strikeRate}
+                      </Text>
+                      {isDesktop && (
+                        <View style={styles.colAction}>
+                          <TouchableOpacity
+                            style={[
+                              styles.wagonWheelBtn,
+                              isSelected && styles.wagonWheelBtnActive
+                            ]}
+                            onPress={() => setSelectedWagonBatterId(b.id)}
+                          >
+                            <Text style={[
+                              styles.wagonWheelBtnText,
+                              isSelected && styles.wagonWheelBtnTextActive
+                            ]}>
+                              🎯 Wheel
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
 
                 {/* Extras Row */}
                 <View style={styles.extrasRow}>
@@ -899,15 +931,15 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
           </View>
 
           <View style={styles.tableWrapper}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ minWidth: '100%' }}>
-              <View style={styles.tableInner}>
+            <ScrollView horizontal={isDesktop} showsHorizontalScrollIndicator={false} contentContainerStyle={{ minWidth: isDesktop ? '100%' : undefined, width: '100%' }}>
+              <View style={[styles.tableInner, !isDesktop && { minWidth: 0, width: '100%' }]}>
                 <View style={[styles.tableRow, styles.tableHeader]}>
                   <Text style={[styles.cell, styles.colName, styles.tableHeaderText]}>Bowler</Text>
                   <Text style={[styles.cell, styles.colNum, styles.tableHeaderText]}>O</Text>
                   <Text style={[styles.cell, styles.colNum, styles.tableHeaderText]}>M</Text>
                   <Text style={[styles.cell, styles.colNum, styles.tableHeaderText]}>R</Text>
                   <Text style={[styles.cell, styles.colNum, styles.tableHeaderText]}>W</Text>
-                  <Text style={[styles.cell, styles.colNum, styles.tableHeaderText]}>ECON</Text>
+                  <Text style={[styles.cell, styles.colNumSr, styles.tableHeaderText]}>ECON</Text>
                 </View>
 
                 {(currentInnings.bowlers || []).map((bw: any, bwIdx: number) => {
@@ -1371,8 +1403,11 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                   }
                   if (typeof onExit === 'function') {
                     onExit();
-                  } else if (scorerNav?.navigate) {
-                    scorerNav.navigate('Dashboard');
+                  }
+                  try {
+                    router.replace('/');
+                  } catch (_e) {
+                    try { router.push('/'); } catch (_e2) {}
                   }
                 }}
                 activeOpacity={0.8}
@@ -1773,26 +1808,29 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     elevation: 1
   },
-  tableInner: { minWidth: 480 },
+  tableInner: { width: '100%' },
   tableRow: {
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
     paddingVertical: 10,
-    paddingHorizontal: 12,
-    alignItems: 'center'
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    width: '100%'
   },
   tableRowAlt: { backgroundColor: '#fafaf9' },
   tableHeader: {
     backgroundColor: '#fef3c7',
     borderBottomColor: '#fde68a',
-    paddingVertical: 8
+    paddingVertical: 8,
+    paddingHorizontal: 8
   },
   tableHeaderText: { color: '#92400e', fontWeight: '800' },
   cell: { color: '#334155', fontSize: 12.5, fontWeight: '600' },
-  colName: { flex: 4, minWidth: 160 },
-  colNum: { flex: 1.2, textAlign: 'center', minWidth: 36 },
-  colAction: { flex: 2, alignItems: 'center', justifyContent: 'center', minWidth: 90 },
+  colName: { flex: 1, minWidth: 0, paddingRight: 6 },
+  colNum: { width: 30, textAlign: 'right', paddingHorizontal: 2 },
+  colNumSr: { width: 44, textAlign: 'right', paddingHorizontal: 2 },
+  colAction: { width: 80, alignItems: 'center', justifyContent: 'center', marginLeft: 6 },
   wagonWheelBtn: {
     backgroundColor: 'rgba(2, 132, 199, 0.1)',
     borderWidth: 1,

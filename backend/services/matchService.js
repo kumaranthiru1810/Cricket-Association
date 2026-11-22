@@ -48,7 +48,7 @@ class MatchService {
     };
   }
 
-  async startMatch(matchId, { tossWinner, tossDecision, teamAPlayingXI, teamBPlayingXI }, user = null) {
+  async startMatch(matchId, { tossWinner, tossDecision, teamAPlayingXI, teamBPlayingXI, overs, totalOvers }, user = null) {
     await db.initDb();
 
     const match = await db.models.Match.findOne({ id: matchId });
@@ -64,6 +64,13 @@ class MatchService {
     // Batting & Bowling team logic
     const battingTeamId = decision === 'BAT' ? winnerTeamId : (winnerTeamId === match.team_a_id ? match.team_b_id : match.team_a_id);
     const bowlingTeamId = battingTeamId === match.team_a_id ? match.team_b_id : match.team_a_id;
+
+    // Optional custom overs at start of match (e.g. 20 reduced to 15)
+    const customOvers = parseInt(overs || totalOvers, 10);
+    if (!isNaN(customOvers) && customOvers > 0) {
+      match.overs = customOvers;
+      match.revised_overs = customOvers;
+    }
 
     // Update match state
     match.status = 'LIVE';

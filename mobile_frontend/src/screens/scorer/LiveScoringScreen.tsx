@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Image
 } from 'react-native';
+import { router } from 'expo-router';
 import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
 
 const milestoneBatsmanImage = require('../../../assets/milestone_batsman.png');
@@ -116,6 +117,17 @@ const STANDARD_PENALTY_REASONS = [
   'Batter damaging the pitch (Deliberate)',
   'Unfair play / Unsportsmanlike conduct',
   'Dissent towards umpire decision'
+];
+
+const STANDARD_POSTPONE_REASONS = [
+  '🌧️ Heavy Rain / Downpour',
+  '⚠️ Wet Outfield / Unfit Pitch',
+  '🌑 Bad Light / Low Visibility',
+  '⚡ Floodlight / Power Failure',
+  '🛡️ Ground Security / Safety',
+  '🤝 Captains Mutual Agreement',
+  '🚨 Medical / Force Majeure',
+  '⏳ Playing Conditions Unplayable'
 ];
 
 
@@ -484,6 +496,16 @@ export default function LiveScoringScreen() {
   const [changeTeamBowlerId, setChangeTeamBowlerId] = useState<string>('');
   const [isSubmittingChangeTeam, setIsSubmittingChangeTeam] = useState<boolean>(false);
 
+  // 6b. Postpone Match State
+  const [showPostponeModal, setShowPostponeModal] = useState<boolean>(false);
+  const [postponeReason, setPostponeReason] = useState<string>('🌧️ Heavy Rain / Downpour');
+  const [isPostponeReasonDropdownOpen, setIsPostponeReasonDropdownOpen] = useState<boolean>(false);
+  const [postponeCustomReason, setPostponeCustomReason] = useState<string>('');
+  const [postponeNotes, setPostponeNotes] = useState<string>('');
+  const [rescheduledDateInput, setRescheduledDateInput] = useState<string>('');
+  const [rescheduledTimeInput, setRescheduledTimeInput] = useState<string>('');
+  const [isSubmittingPostpone, setIsSubmittingPostpone] = useState<boolean>(false);
+
   // --- PRIMARY ENGINE FUNCTIONALITY STATES (from manual) ---
   const [isBallInProgress, setIsBallInProgress] = useState<boolean>(false);
   const [bowlingMode, setBowlingMode] = useState<'OVER_THE_WICKET' | 'AROUND_THE_WICKET'>('OVER_THE_WICKET');
@@ -536,6 +558,8 @@ export default function LiveScoringScreen() {
   const [showWagonWheelModal, setShowWagonWheelModal] = useState<boolean>(false);
   const [selectedWagonSector, setSelectedWagonSector] = useState<string>('Cover');
   const [pendingBoundaryRun, setPendingBoundaryRun] = useState<number | null>(null);
+  const [autoPromptWagonWheel, setAutoPromptWagonWheel] = useState<boolean>(false);
+  const lastScoreTapTimeRef = useRef<number>(0);
 
   // 7. Umpire Assessment Modal State
   const [showUmpireModal, setShowUmpireModal] = useState<boolean>(false);
@@ -878,15 +902,17 @@ export default function LiveScoringScreen() {
 
   // Real-time Network Connectivity Listener (Wi-Fi symbol green/red)
   useEffect(() => {
-    if (typeof window !== 'undefined' && typeof window.navigator !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function' && typeof window.navigator !== 'undefined') {
       setIsOnline(window.navigator.onLine);
       const handleOnline = () => setIsOnline(true);
       const handleOffline = () => setIsOnline(false);
       window.addEventListener('online', handleOnline);
       window.addEventListener('offline', handleOffline);
       return () => {
-        window.removeEventListener('online', handleOnline);
-        window.removeEventListener('offline', handleOffline);
+        if (typeof window.removeEventListener === 'function') {
+          window.removeEventListener('online', handleOnline);
+          window.removeEventListener('offline', handleOffline);
+        }
       };
     }
   }, []);
@@ -1419,6 +1445,13 @@ export default function LiveScoringScreen() {
   };
 
   const handleScore = async (run: number, type: 'normal' | 'wide' | 'noball' | 'bye' | 'legbye', customOpts: any = {}) => {
+    // Prevent accidental physical bounce / double-tap under 160ms
+    const now = Date.now();
+    if (now - lastScoreTapTimeRef.current < 160) {
+      return;
+    }
+    lastScoreTapTimeRef.current = now;
+
     if (isOverComplete || showBowlerModal) {
       const msg = 'Over is complete! Please select the next bowler before scoring.';
       Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Over Complete', msg);
@@ -1432,16 +1465,12 @@ export default function LiveScoringScreen() {
       return;
     }
 
-    // Auto-prompt Wagon Wheel for boundaries (4s and 6s) if sector not already passed
-    if ((run === 4 || run === 6) && type === 'normal' && !customOpts.wagonSector) {
+    // Auto-prompt Wagon Wheel for boundaries (4s and 6s) ONLY IF enabled by user (otherwise instant scoring)
+    if (autoPromptWagonWheel && (run === 4 || run === 6) && type === 'normal' && !customOpts.wagonSector) {
       setPendingBoundaryRun(run);
       setShowWagonWheelModal(true);
       return;
     }
-
-    if (isSubmittingDelivery) return;
-
-    setIsSubmittingDelivery(true);
 
     const extraTypeMap: Record<string, string> = {
       normal: 'NONE',
@@ -1509,6 +1538,117 @@ export default function LiveScoringScreen() {
       remarks: customOpts.remarks || deliveryRemarks || undefined
     };
 
+    // =========================================================================
+    // LIGHTNING-FAST OPTIMISTIC UI ENGINE: INSTANT STATE UPDATE (< 1ms)
+    // =========================================================================
+    const snapshot = {
+      runs,
+      wickets,
+      balls,
+      striker: striker ? { ...striker } : null,
+      nonStriker: nonStriker ? { ...nonStriker } : null,
+      bowler: bowler ? { ...bowler } : null,
+      recentDeliveries: [...(recentDeliveries || [])],
+      isOverComplete
+    };
+
+    const isLegal = type !== 'wide' && type !== 'noball';
+    const totalDelRuns = runsBatter + runsExtras;
+
+    // 1. Instant update to total team runs
+    setRuns(prev => prev + totalDelRuns);
+
+    // 2. Instant update to legal balls
+    const newTotalBalls = isLegal ? balls + 1 : balls;
+    if (isLegal) {
+      setBalls(newTotalBalls);
+    }
+
+    // 3. Instant Striker update
+    let nextStrikerObj = striker ? { ...striker } : null;
+    let nextNonStrikerObj = nonStriker ? { ...nonStriker } : null;
+
+    if (nextStrikerObj) {
+      nextStrikerObj.runs = (nextStrikerObj.runs || 0) + runsBatter;
+      if (isLegal) {
+        nextStrikerObj.balls = (nextStrikerObj.balls || 0) + 1;
+      }
+      if (runsBatter === 4) {
+        nextStrikerObj.fours = (nextStrikerObj.fours || 0) + 1;
+      }
+      if (runsBatter === 6) {
+        nextStrikerObj.sixes = (nextStrikerObj.sixes || 0) + 1;
+      }
+    }
+
+    // 4. Instant Bowler update
+    if (bowler) {
+      const bowlerRunsConceded = (type === 'bye' || type === 'legbye') ? 0 : totalDelRuns;
+      let newBowlerOvers = bowler.overs;
+      if (isLegal) {
+        const curOv = parseFloat(String(bowler.overs || '0'));
+        const compOv = Math.floor(curOv);
+        const curBalls = Math.round((curOv - compOv) * 10);
+        const totalBowlerBalls = compOv * 6 + curBalls + 1;
+        newBowlerOvers = `${Math.floor(totalBowlerBalls / 6)}.${totalBowlerBalls % 6}`;
+      }
+      setBowler((prev: any) => prev ? {
+        ...prev,
+        runs: (prev.runs || 0) + bowlerRunsConceded,
+        overs: newBowlerOvers
+      } : prev);
+    }
+
+    // 5. Instant Strike Rotation (Odd runs swap ends, End of Over 6 legal balls swaps ends)
+    const isOverDone = isLegal && (newTotalBalls % 6 === 0) && newTotalBalls > 0;
+    const isOdd = runsBatter % 2 !== 0;
+
+    let updatedStriker = nextStrikerObj;
+    let updatedNonStriker = nextNonStrikerObj;
+
+    if (isOdd) {
+      const temp = updatedStriker;
+      updatedStriker = updatedNonStriker;
+      updatedNonStriker = temp;
+    }
+    if (isOverDone) {
+      const temp = updatedStriker;
+      updatedStriker = updatedNonStriker;
+      updatedNonStriker = temp;
+    }
+
+    setStriker(updatedStriker);
+    setNonStriker(updatedNonStriker);
+
+    // 6. Instant Recent Deliveries Chip
+    const ovNum = Math.floor(balls / 6);
+    const bNum = isLegal ? ((balls % 6) + 1) : (balls % 6);
+    let ballLabel = String(run);
+    if (type === 'wide') ballLabel = run > 0 ? `${1 + run}Wd` : 'Wd';
+    else if (type === 'noball') ballLabel = run > 0 ? `${1 + run}Nb` : 'Nb';
+    else if (type === 'bye') ballLabel = `${run}B`;
+    else if (type === 'legbye') ballLabel = `${run}Lb`;
+
+    const optimisticDel = {
+      id: `temp-${Date.now()}`,
+      ball: `${ovNum}.${bNum}`,
+      runs: totalDelRuns,
+      runsBatter,
+      runsExtras,
+      extra: type !== 'normal',
+      extraType: extraTypeMap[type] || 'NONE',
+      wicket: false,
+      text: ballLabel,
+      overNumber: ovNum
+    };
+    setRecentDeliveries(prev => [...(prev || []), optimisticDel]);
+    setIsBallInProgress(false);
+
+    // =========================================================================
+    // ASYNCHRONOUS BACKGROUND SYNC: DISPATCH TO SERVER WITHOUT BLOCKING UI
+    // =========================================================================
+    setIsSubmittingDelivery(true);
+
     try {
       const res = await ScorerApi.recordDelivery(matchId, payload);
       if (!res || !res.success) {
@@ -1516,7 +1656,6 @@ export default function LiveScoringScreen() {
       }
 
       hasRecordedNewBallRef.current = true;
-      setIsBallInProgress(false);
       if (res.commentary) {
         setAiCommentary(res.commentary);
       }
@@ -1524,8 +1663,16 @@ export default function LiveScoringScreen() {
         setCurrentBreak(null);
       }
 
-      // Seamless background update without full page refresh
-      await loadLiveState(false);
+      // Check for Over Complete
+      if (res.isOverComplete || res.data?.isOverComplete) {
+        setIsOverComplete(true);
+        if (res.matchStatus === 'LIVE' && !res.data?.isMatchCompleted) {
+          setShowBowlerModal(true);
+        }
+      }
+
+      // Silent background state sync without freezing UI
+      loadLiveState(false).catch(() => {});
 
       // Smart Rules Analysis: Free Hit status (Rule modal triggers ONCE per match)
       if (res.isFreeHit || res.data?.isFreeHit || type === 'noball') {
@@ -1666,9 +1813,18 @@ export default function LiveScoringScreen() {
         }
       }
     } catch (err: any) {
-      console.error('recordDelivery error:', err);
-      const msg = err.message || 'Error recording delivery. Score was not changed.';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
+      if (!err?.offlineQueued) {
+        console.error('recordDelivery error, rolling back:', err);
+        setRuns(snapshot.runs);
+        setBalls(snapshot.balls);
+        setStriker(snapshot.striker);
+        setNonStriker(snapshot.nonStriker);
+        setBowler(snapshot.bowler);
+        setRecentDeliveries(snapshot.recentDeliveries);
+        setIsOverComplete(snapshot.isOverComplete);
+        const msg = err.message || 'Error recording delivery. Score was restored.';
+        Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
+      }
     } finally {
       setIsSubmittingDelivery(false);
     }
@@ -2710,6 +2866,69 @@ export default function LiveScoringScreen() {
     }
   };
 
+  // --- 8b. POSTPONE / RESUME MATCH HANDLERS ---
+  const handlePostponeMatch = async () => {
+    const finalReason = postponeCustomReason.trim() ? postponeCustomReason.trim() : postponeReason;
+    if (!finalReason) {
+      const msg = 'Please choose or enter a reason for postponement.';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Reason Required', msg);
+      return;
+    }
+
+    setIsSubmittingPostpone(true);
+    try {
+      await ScorerApi.postponeMatch(matchId, {
+        reason: finalReason,
+        notes: postponeNotes.trim(),
+        rescheduledDate: rescheduledDateInput.trim(),
+        rescheduledTime: rescheduledTimeInput.trim()
+      });
+      setShowPostponeModal(false);
+      setIsPostponeReasonDropdownOpen(false);
+      setPostponeCustomReason('');
+      setPostponeNotes('');
+      setRescheduledDateInput('');
+      setRescheduledTimeInput('');
+      await loadLiveState(false);
+      const msg = `Match has been successfully POSTPONED.\n\nReason: ${finalReason}\n\nScoring is now frozen. You or another official can resume the match at any time using "Resume Match".`;
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Match Postponed', msg);
+    } catch (err: any) {
+      const msg = err.message || 'Failed to postpone match.';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
+    } finally {
+      setIsSubmittingPostpone(false);
+    }
+  };
+
+  const handleResumeMatch = async () => {
+    const executeResume = async () => {
+      try {
+        await ScorerApi.resumeMatch(matchId);
+        await loadLiveState(false);
+        const msg = 'Match has been successfully RESUMED to LIVE status. Scoring controls are now active.';
+        Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Match Resumed', msg);
+      } catch (err: any) {
+        const msg = err.message || 'Failed to resume match.';
+        Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm('Are you sure you want to resume this postponed match to LIVE status? Scoring will be enabled immediately.')) {
+        await executeResume();
+      }
+    } else {
+      Alert.alert(
+        'Resume Match to LIVE',
+        'Are you sure you want to resume this postponed match? Delivery entry and live match actions will be re-enabled.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Resume Match', onPress: () => { executeResume(); } }
+        ]
+      );
+    }
+  };
+
   // --- 9. UMPIRE ASSESSMENT HANDLER ---
   const handleSaveUmpireAssessmentSubmit = async () => {
     setIsSubmittingUmpire(true);
@@ -3223,6 +3442,49 @@ export default function LiveScoringScreen() {
                 <Text style={[styles.drawerMenuChevron, { color: '#b45309' }]}>›</Text>
               </TouchableOpacity>
 
+              {/* 7b. Postpone / Resume Match */}
+              <TouchableOpacity
+                style={[
+                  styles.drawerMenuItem,
+                  matchStatus === 'POSTPONED'
+                    ? { borderColor: '#16a34a', backgroundColor: '#f0fdf4' }
+                    : { borderColor: '#f59e0b', backgroundColor: '#fffbeb' }
+                ]}
+                onPress={() => {
+                  setShowSideDrawer(false);
+                  if (matchStatus === 'POSTPONED') {
+                    handleResumeMatch();
+                  } else {
+                    setShowPostponeModal(true);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[
+                  styles.drawerMenuIconBox,
+                  matchStatus === 'POSTPONED'
+                    ? { backgroundColor: '#dcfce7', borderColor: '#86efac' }
+                    : { backgroundColor: '#fef3c7', borderColor: '#fcd34d' }
+                ]}>
+                  <Text style={styles.drawerMenuIconText}>{matchStatus === 'POSTPONED' ? '▶️' : '⏸️'}</Text>
+                </View>
+                <View style={styles.drawerMenuTextBox}>
+                  <Text style={[
+                    styles.drawerMenuLabel,
+                    matchStatus === 'POSTPONED' ? { color: '#15803d' } : { color: '#b45309' }
+                  ]}>
+                    {matchStatus === 'POSTPONED' ? 'Resume Match' : 'Postpone Match'}
+                  </Text>
+                  <Text style={styles.drawerMenuDesc}>
+                    {matchStatus === 'POSTPONED' ? 'Resume match to LIVE status' : 'Freeze & postpone fixture'}
+                  </Text>
+                </View>
+                <Text style={[
+                  styles.drawerMenuChevron,
+                  matchStatus === 'POSTPONED' ? { color: '#15803d' } : { color: '#b45309' }
+                ]}>›</Text>
+              </TouchableOpacity>
+
               {/* 8. Change Team */}
               <TouchableOpacity
                 style={styles.drawerMenuItem}
@@ -3709,7 +3971,19 @@ export default function LiveScoringScreen() {
                 { label: 'Change Ball (New / Old Ball)', icon: '⚾', action: () => { setShowMatchEventsModal(false); setShowChangeBallModal(true); } },
                 { label: 'Playing XI Edit', icon: '👥', action: () => { setShowMatchEventsModal(false); openPlayingXIModal(); } },
                 { label: 'Fielding Action / Highlight', icon: '🧤', action: () => { setShowMatchEventsModal(false); setShowFieldingModal(true); } },
-                { label: 'Revised Overs & Target (Rain / DLS)', icon: '🌧️', action: () => { setShowMatchEventsModal(false); setShowRevisedOversModal(true); } }
+                { label: 'Revised Overs & Target (Rain / DLS)', icon: '🌧️', action: () => { setShowMatchEventsModal(false); setShowRevisedOversModal(true); } },
+                {
+                  label: matchStatus === 'POSTPONED' ? 'Resume Match to Live' : 'Postpone Match (Weather / Pitch / Light)',
+                  icon: matchStatus === 'POSTPONED' ? '▶️' : '⏸️',
+                  action: () => {
+                    setShowMatchEventsModal(false);
+                    if (matchStatus === 'POSTPONED') {
+                      handleResumeMatch();
+                    } else {
+                      setShowPostponeModal(true);
+                    }
+                  }
+                }
               ].map((ev, idx) => (
                 <TouchableOpacity
                   key={idx}
@@ -4616,6 +4890,172 @@ export default function LiveScoringScreen() {
         </View>
       </Modal>
 
+      {/* 2b. POSTPONE MATCH MODAL */}
+      <Modal
+        visible={showPostponeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setIsPostponeReasonDropdownOpen(false);
+          setShowPostponeModal(false);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxWidth: 520 }]}>
+            <View style={styles.revisedModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 20 }}>⏸️</Text>
+                <Text style={styles.revisedModalTitle}>POSTPONE MATCH</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.redCloseBtn}
+                onPress={() => {
+                  setIsPostponeReasonDropdownOpen(false);
+                  setShowPostponeModal(false);
+                }}
+              >
+                <Text style={styles.redCloseBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.revisedModalInfo}>
+              As official scorer, you can postpone this match fixture due to weather, pitch hazards, bad light, or safety concerns. Scoring will be frozen and public scorecards updated live.
+            </Text>
+
+            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+              {/* Primary Pre-set Reason Dropdown */}
+              <View style={{ marginTop: 12, position: 'relative', zIndex: 60 }}>
+                <Text style={styles.fieldSubLabel}>PRIMARY POSTPONEMENT REASON:</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.penaltyDropdownTrigger,
+                    isPostponeReasonDropdownOpen && styles.penaltyDropdownTriggerActive
+                  ]}
+                  onPress={() => setIsPostponeReasonDropdownOpen(!isPostponeReasonDropdownOpen)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.penaltyDropdownText} numberOfLines={1}>
+                    {postponeReason || 'Select Postponement Reason...'}
+                  </Text>
+                  <Text style={styles.penaltyDropdownArrow}>
+                    {isPostponeReasonDropdownOpen ? '▲' : '▼'}
+                  </Text>
+                </TouchableOpacity>
+
+                {isPostponeReasonDropdownOpen && (
+                  <View style={styles.penaltyDropdownMenu}>
+                    <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled showsVerticalScrollIndicator={true}>
+                      {STANDARD_POSTPONE_REASONS.map((reasonText) => {
+                        const isSelected = postponeReason === reasonText;
+                        return (
+                          <TouchableOpacity
+                            key={reasonText}
+                            style={[
+                              styles.penaltyDropdownItem,
+                              isSelected && styles.penaltyDropdownItemActive
+                            ]}
+                            onPress={() => {
+                              setPostponeReason(reasonText);
+                              setIsPostponeReasonDropdownOpen(false);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={[
+                              styles.penaltyDropdownItemText,
+                              isSelected && styles.penaltyDropdownItemTextActive
+                            ]}>
+                              {reasonText}
+                            </Text>
+                            {isSelected && <Text style={{ color: '#d97706', fontWeight: 'bold' }}>✓</Text>}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
+
+              {/* Custom / Detailed Reason */}
+              <Text style={[styles.fieldSubLabel, { marginTop: 12 }]}>CUSTOM / ADDITIONAL REASON (OPTIONAL):</Text>
+              <TextInput
+                style={[styles.customNameInput, { height: 42 }]}
+                placeholder="Or specify custom reason (e.g. Tropical storm alert)"
+                placeholderTextColor="#9ca3af"
+                value={postponeCustomReason}
+                onChangeText={setPostponeCustomReason}
+              />
+
+              {/* Optional Reschedule Date & Time */}
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldSubLabel}>RESCHEDULE DATE (OPTIONAL):</Text>
+                  <TextInput
+                    style={[styles.customNameInput, { height: 40 }]}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor="#9ca3af"
+                    value={rescheduledDateInput}
+                    onChangeText={setRescheduledDateInput}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldSubLabel}>RESCHEDULE TIME (OPTIONAL):</Text>
+                  <TextInput
+                    style={[styles.customNameInput, { height: 40 }]}
+                    placeholder="HH:MM AM/PM"
+                    placeholderTextColor="#9ca3af"
+                    value={rescheduledTimeInput}
+                    onChangeText={setRescheduledTimeInput}
+                  />
+                </View>
+              </View>
+
+              {/* Internal Notes */}
+              <Text style={[styles.fieldSubLabel, { marginTop: 10 }]}>OFFICIAL SCORER / MATCH NOTES:</Text>
+              <TextInput
+                style={[styles.customNameInput, { height: 60, textAlignVertical: 'top' }]}
+                placeholder="Details of umpires consultation, playing conditions, inspection time..."
+                placeholderTextColor="#9ca3af"
+                multiline
+                numberOfLines={3}
+                value={postponeNotes}
+                onChangeText={setPostponeNotes}
+              />
+            </ScrollView>
+
+            {/* Modal Actions */}
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+              <TouchableOpacity
+                style={[styles.modalCancelBtn, { flex: 1 }]}
+                onPress={() => {
+                  setIsPostponeReasonDropdownOpen(false);
+                  setShowPostponeModal(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalCancelText}>CANCEL</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.modalConfirmBtn,
+                  { flex: 1.5, backgroundColor: '#d97706' },
+                  isSubmittingPostpone && { opacity: 0.7 }
+                ]}
+                onPress={handlePostponeMatch}
+                disabled={isSubmittingPostpone}
+                activeOpacity={0.8}
+              >
+                {isSubmittingPostpone ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.modalConfirmText}>CONFIRM POSTPONE</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* 3. PLAYING XI EDIT MODAL (Step 1, Step 2, Step 3) */}
       <Modal
         visible={showPlayingXIModal}
@@ -5055,8 +5495,11 @@ export default function LiveScoringScreen() {
                   }
                   if (typeof onExit === 'function') {
                     onExit('Home');
-                  } else {
-                    navigate('Dashboard');
+                  }
+                  try {
+                    router.replace('/');
+                  } catch (_e) {
+                    try { router.push('/'); } catch (_e2) {}
                   }
                 }}
               >
@@ -6436,6 +6879,37 @@ export default function LiveScoringScreen() {
                 {!isSidebarCollapsed && <Text style={styles.sidebarNavText}>Match Events</Text>}
               </TouchableOpacity>
 
+              {/* 8b. Postpone / Resume Match */}
+              <TouchableOpacity
+                style={[
+                  styles.sidebarNavItem,
+                  isSidebarCollapsed && styles.sidebarNavItemCollapsed,
+                  matchStatus === 'POSTPONED' && { backgroundColor: '#fef3c7', borderColor: '#f59e0b' }
+                ]}
+                onPress={() => {
+                  if (matchStatus === 'POSTPONED') {
+                    handleResumeMatch();
+                  } else {
+                    setShowPostponeModal(true);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.sidebarNavIcon}>{matchStatus === 'POSTPONED' ? '▶️' : '⏸️'}</Text>
+                {!isSidebarCollapsed && (
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={[styles.sidebarNavText, matchStatus === 'POSTPONED' && { color: '#b45309', fontWeight: 'bold' }]}>
+                      {matchStatus === 'POSTPONED' ? 'Resume Match' : 'Postpone Match'}
+                    </Text>
+                    {matchStatus === 'POSTPONED' && (
+                      <View style={[styles.sidebarBadgeOrange, { backgroundColor: '#d97706' }]}>
+                        <Text style={styles.sidebarBadgeOrangeText}>FROZEN</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </TouchableOpacity>
+
               {/* 9. Change Team */}
               <TouchableOpacity
                 style={[styles.sidebarNavItem, isSidebarCollapsed && styles.sidebarNavItemCollapsed]}
@@ -6549,6 +7023,47 @@ export default function LiveScoringScreen() {
           bounces={false}
         >
           <View style={styles.mainLayout}>
+            {/* Active Match Postponed Banner */}
+            {matchStatus === 'POSTPONED' && (
+              <View style={styles.postponedMatchBanner}>
+                <View style={styles.postponedBannerLeft}>
+                  <View style={styles.postponedIconBadge}>
+                    <Text style={{ fontSize: 22 }}>⏸️</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <Text style={styles.postponedBannerTitle}>MATCH POSTPONED</Text>
+                      <View style={styles.postponedTag}>
+                        <Text style={styles.postponedTagText}>SCORING FROZEN</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.postponedBannerReason}>
+                      Reason: {(matchInfo as any)?.postponement?.reason || (matchInfo as any)?.postpone_reason || 'Adverse playing conditions / Official decision'}
+                    </Text>
+                    {Boolean((matchInfo as any)?.postponement?.rescheduled_date) && (
+                      <Text style={styles.postponedRescheduleNotice}>
+                        📅 Rescheduled: {(matchInfo as any).postponement.rescheduled_date} {(matchInfo as any).postponement.rescheduled_time ? `at ${(matchInfo as any).postponement.rescheduled_time}` : ''}
+                      </Text>
+                    )}
+                    {Boolean((matchInfo as any)?.postponement?.notes) && (
+                      <Text style={styles.postponedBannerNotes}>
+                        Note: {(matchInfo as any).postponement.notes}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.resumeMatchBtn}
+                  onPress={handleResumeMatch}
+                  activeOpacity={0.8}
+                >
+                  <Text style={{ fontSize: 16 }}>▶️</Text>
+                  <Text style={styles.resumeMatchBtnText}>RESUME MATCH</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {/* Active Break Banner (Tea / Lunch / Drinks / Rain Break) */}
             {currentBreak && !isInningsBreak && !isMatchEnded && (() => {
               const isRain = currentBreak.type?.toLowerCase().includes('rain') || currentBreak.comments?.toLowerCase().includes('rain');
@@ -7235,6 +7750,22 @@ export default function LiveScoringScreen() {
                       {isOverComplete ? 'START OVER' : `END OVER (${getOvers(balls)})`}
                     </Text>
                   </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.enginePrimaryBtn,
+                      {
+                        backgroundColor: autoPromptWagonWheel ? '#0284c7' : '#047857',
+                        borderColor: autoPromptWagonWheel ? '#0369a1' : '#059669',
+                      }
+                    ]}
+                    onPress={() => setAutoPromptWagonWheel(!autoPromptWagonWheel)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.enginePrimaryBtnText}>
+                      {autoPromptWagonWheel ? '🎯 Wagon Wheel' : '⚡ Fast Mode'}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
 
                 {/* SMART RULES QUICK BAR & FREE HIT LIVE BANNER */}
@@ -7303,7 +7834,6 @@ export default function LiveScoringScreen() {
                       const isDisabled =
                         isOverComplete ||
                         showBowlerModal ||
-                        isSubmittingDelivery ||
                         matchStatus !== 'LIVE' ||
                         isInningsBreak ||
                         isMatchEnded;
@@ -7312,13 +7842,14 @@ export default function LiveScoringScreen() {
                         <TouchableOpacity
                           key={`key-${run}`}
                           disabled={isDisabled}
+                          delayPressIn={0}
                           style={[
                             styles.engineKeypadBtn,
                             run === 0 ? styles.scoreBtnDot : styles.scoreBtnNormal,
                             isDisabled && styles.btnDisabled
                           ]}
                           onPress={() => handleScore(run, 'normal')}
-                          activeOpacity={0.7}
+                          activeOpacity={0.6}
                         >
                           <Text
                             style={[
@@ -7339,7 +7870,6 @@ export default function LiveScoringScreen() {
                       const isDisabled =
                         isOverComplete ||
                         showBowlerModal ||
-                        isSubmittingDelivery ||
                         matchStatus !== 'LIVE' ||
                         isInningsBreak ||
                         isMatchEnded;
@@ -7359,9 +7889,10 @@ export default function LiveScoringScreen() {
                         <TouchableOpacity
                           key={`key-${run}`}
                           disabled={isDisabled}
+                          delayPressIn={0}
                           style={[styles.engineKeypadBtn, bStyle, isDisabled && styles.btnDisabled]}
                           onPress={() => handleScore(run, 'normal')}
-                          activeOpacity={0.7}
+                          activeOpacity={0.6}
                         >
                           <Text style={tStyle}>{run}</Text>
                         </TouchableOpacity>
@@ -12852,6 +13383,122 @@ const getStyles = (isDesktop: boolean) =>
       fontSize: 12,
       fontWeight: '800',
       color: '#ffffff'
+    },
+    // Postponed Match Banner & Chips
+    postponedMatchBanner: {
+      flexDirection: isDesktop ? 'row' : 'column',
+      alignItems: isDesktop ? 'center' : 'stretch',
+      justifyContent: 'space-between',
+      gap: 12,
+      backgroundColor: '#fffbeb',
+      borderColor: '#d97706',
+      borderWidth: 2,
+      borderRadius: 14,
+      padding: 14,
+      marginBottom: 14,
+      shadowColor: '#b45309',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.18,
+      shadowRadius: 8,
+      elevation: 4
+    },
+    postponedBannerLeft: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 12,
+      flex: 1
+    },
+    postponedIconBadge: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: '#fef3c7',
+      borderColor: '#fcd34d',
+      borderWidth: 1.5,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    postponedBannerTitle: {
+      fontSize: 15,
+      fontWeight: '900',
+      color: '#92400e',
+      letterSpacing: 0.5
+    },
+    postponedTag: {
+      backgroundColor: '#fef2f2',
+      borderColor: '#fca5a5',
+      borderWidth: 1,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 6
+    },
+    postponedTagText: {
+      fontSize: 10,
+      fontWeight: '900',
+      color: '#b91c1c'
+    },
+    postponedBannerReason: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: '#78350f',
+      marginTop: 2
+    },
+    postponedRescheduleNotice: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: '#0369a1',
+      marginTop: 4
+    },
+    postponedBannerNotes: {
+      fontSize: 11,
+      color: '#64748b',
+      fontStyle: 'italic',
+      marginTop: 2
+    },
+    resumeMatchBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: '#16a34a',
+      borderColor: '#15803d',
+      borderWidth: 1.5,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      borderRadius: 10,
+      alignSelf: isDesktop ? 'center' : 'stretch',
+      shadowColor: '#16a34a',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 3
+    },
+    resumeMatchBtnText: {
+      fontSize: 13,
+      fontWeight: '900',
+      color: '#ffffff',
+      letterSpacing: 0.5
+    },
+    postponeChip: {
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 20,
+      backgroundColor: '#f8fafc',
+      borderColor: '#cbd5e1',
+      borderWidth: 1.5
+    },
+    postponeChipActive: {
+      backgroundColor: '#fef3c7',
+      borderColor: '#d97706'
+    },
+    postponeChipText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: '#475569'
+    },
+    postponeChipTextActive: {
+      color: '#92400e',
+      fontWeight: '800'
     },
     // Smart Rules & Free Hit Styles
     freeHitLiveBanner: {

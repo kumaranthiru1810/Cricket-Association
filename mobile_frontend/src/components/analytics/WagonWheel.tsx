@@ -14,12 +14,12 @@ import Svg, {
   LinearGradient,
   Stop,
   Circle,
-  Rect,
-  Line,
   Ellipse,
+  Line,
+  Rect,
   Path,
   G,
-  Text as SvgText,
+  Text as SvgText
 } from 'react-native-svg';
 
 export interface ShotDelivery {
@@ -360,7 +360,8 @@ export default function WagonWheel({
   const innerCircleR = radius * 0.44; // 30-yard circle
   const pitchW = 18;
   const pitchH = 46;
-  const displaySize = isDesktop ? 420 : Math.min(Math.max(width - (isSmallScreen ? 36 : 56), 230), 380);
+  const maxMobileWheel = Math.max(Math.min(width - 80, 340), 220);
+  const displaySize = isDesktop ? 400 : maxMobileWheel;
 
   // Function to compute (x, y) coordinates for a shot
   const getCoordinates = (angleDeg: number, distancePct: number) => {
@@ -670,16 +671,16 @@ export default function WagonWheel({
           {/* THE WAGON WHEEL CANVAS */}
           <View style={styles.wheelWrapper}>
             <View style={[styles.groundContainer, { width: displaySize, height: displaySize }]}>
+              {/* Standard SVG Rendering (Works flawlessly on React Native Web & Native) */}
               {/* Standard SVG Rendering via react-native-svg (Works flawlessly on Native & Web) */}
               <Svg
                 width={displaySize}
                 height={displaySize}
                 viewBox={`0 0 ${baseSize} ${baseSize}`}
-                style={{ width: '100%', height: '100%' }}
               >
                 <Defs>
                   {/* Stadium Grass Gradient - Vibrant Daylight Turf */}
-                  <RadialGradient id="turfGradient" cx="50%" cy="50%" r="50%">
+                  <RadialGradient id="turfGradient" cx="50%" cy="50%" rx="50%" ry="50%">
                     <Stop offset="0%" stopColor="#22c55e" />
                     <Stop offset="65%" stopColor="#16a34a" />
                     <Stop offset="100%" stopColor="#15803d" />
@@ -759,7 +760,7 @@ export default function WagonWheel({
                 />
 
                 {/* Clean Infield Off / Leg Badges (Zero text collision) */}
-                <G transform={`translate(${cx - 52}, ${cy - 8})`}>
+                <G x={cx - 52} y={cy - 8}>
                   <Rect
                     x="-22"
                     y="-8"
@@ -784,7 +785,7 @@ export default function WagonWheel({
                   </SvgText>
                 </G>
 
-                <G transform={`translate(${cx + 52}, ${cy - 8})`}>
+                <G x={cx + 52} y={cy - 8}>
                   <Rect
                     x="-22"
                     y="-8"
@@ -828,7 +829,7 @@ export default function WagonWheel({
                 <Circle cx={cx} cy={cy + pitchH / 2 - 3} r="1.5" fill="#e11d48" />
 
                 {/* Batsman Figurine at Batting Crease */}
-                <G transform={`translate(${cx}, ${cy + pitchH / 2 - 4})`}>
+                <G x={cx} y={cy + pitchH / 2 - 4}>
                   <Ellipse cx="0" cy="1" rx="5" ry="2" fill="rgba(0,0,0,0.3)" />
                   <Rect x="-3" y="-5" width="2.5" height="5" rx="1" fill="#f8fafc" stroke="#94a3b8" strokeWidth="0.5" />
                   <Rect x="0.5" y="-5" width="2.5" height="5" rx="1" fill="#f8fafc" stroke="#94a3b8" strokeWidth="0.5" />
@@ -847,6 +848,7 @@ export default function WagonWheel({
                   const isCurrentActive = activeShot?.id === del.id;
 
                   const strokeWidth = runs === 6 ? 2.8 : (runs === 4 ? 2.2 : (runs >= 2 ? 1.6 : 1.2));
+                  const strokeDash = runs === 6 ? undefined : (runs === 3 ? '4 2' : (runs === 0 ? '2 2' : undefined));
                   const markerRadius = runs === 6 ? 4.5 : (runs === 4 ? 3.5 : (runs >= 2 ? 2.8 : (runs === 1 ? 2.2 : 1.8)));
                   const startY = cy + pitchH / 2 - 5; // From striker crease
 
@@ -893,7 +895,7 @@ export default function WagonWheel({
 
                 {/* In-Wheel Notice when no shots match current filter */}
                 {displayedDeliveries.length === 0 && (
-                  <G transform={`translate(${cx}, ${cy})`}>
+                  <G x={cx} y={cy}>
                     <Rect
                       x="-145"
                       y="-32"
@@ -1420,7 +1422,7 @@ const styles = StyleSheet.create({
   cardContainer: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
-    padding: 16,
+    padding: 12,
     borderWidth: 2,
     borderColor: '#fde68a',
     marginVertical: 12,
@@ -1428,7 +1430,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.12,
     shadowRadius: 8,
-    elevation: 3
+    elevation: 3,
+    maxWidth: '100%',
+    overflow: 'hidden'
   },
   cardHeader: {
     flexDirection: 'row',
@@ -1776,14 +1780,18 @@ const styles = StyleSheet.create({
   wheelWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative'
+    position: 'relative',
+    maxWidth: '100%',
+    overflow: 'hidden'
   },
   groundContainer: {
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 999,
-    backgroundColor: '#02140a'
+    backgroundColor: '#02140a',
+    maxWidth: '100%',
+    overflow: 'hidden'
   },
   shotTooltip: {
     position: 'absolute',

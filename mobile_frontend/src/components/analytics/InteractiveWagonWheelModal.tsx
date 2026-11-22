@@ -15,12 +15,13 @@ import Svg, {
   LinearGradient,
   Stop,
   Circle,
-  Rect,
-  Line,
   Ellipse,
+  Line,
+  Rect,
   Path,
   G,
-  Text as SvgText,
+  Text as SvgText
+
 } from 'react-native-svg';
 
 export interface ShotDirectionResult {
@@ -437,8 +438,9 @@ export const InteractiveWagonWheelModal: React.FC<InteractiveWagonWheelModalProp
                 />
 
                 {/* Distance Circles (25m, 50m, 75m) */}
-                <Circle cx={cx} cy={cy} r={groundRadius * 0.35} fill="none" stroke="rgba(255, 255, 255, 0.25)" strokeWidth="1" strokeDasharray={[3, 3]} />
-                <Circle cx={cx} cy={cy} r={groundRadius * 0.70} fill="none" stroke="rgba(255, 255, 255, 0.25)" strokeWidth="1" strokeDasharray={[3, 3]} />
+
+                <Circle cx={cx} cy={cy} r={groundRadius * 0.35} fill="none" stroke="rgba(255, 255, 255, 0.25)" strokeWidth="1" strokeDasharray="3 3" />
+                <Circle cx={cx} cy={cy} r={groundRadius * 0.70} fill="none" stroke="rgba(255, 255, 255, 0.25)" strokeWidth="1" strokeDasharray="3 3" />
 
                 {/* 3. 30-Yard Inner Field Circle (Crisp White Dashed Ring) */}
                 <Circle

@@ -17,7 +17,7 @@ import {
   ScrollView,
   useWindowDimensions
 } from 'react-native';
-import { ShieldIcon } from '../components/Icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { adminApi, setStoredAdminToken, setStoredAdminUser, getStoredAdminToken, getStoredAdminUser } from '../services/adminApi';
 import { setAuthToken, setCurrentUser } from '../../services/api';
@@ -182,7 +182,7 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
             <Text style={styles.brandSub}>OF VIRUDHUNAGAR DISTRICT</Text>
             <Text style={styles.brandEst}>Est. 1987 • CFVD • Official Administrative Portal</Text>
             <View style={styles.affiliationBadge}>
-              <ShieldIcon size={12} color="#10b981" />
+              <Ionicons name="shield-checkmark" size={13} color="#10b981" />
               <Text style={styles.affiliationText}>Official Governing Body • TNCA Affiliated</Text>
             </View>
           </View>
@@ -303,7 +303,7 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
 
           {/* Security Notice */}
           <View style={styles.securityFooter}>
-            <ShieldIcon size={14} color="#64748b" />
+            <Ionicons name="shield-checkmark" size={14} color="#64748b" />
             <Text style={styles.securityText}>
               Protected by Association Two-Factor Cryptographic Session Guard. All access attempts are audited.
             </Text>

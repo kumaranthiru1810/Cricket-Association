@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -32,6 +33,7 @@ export default function MatchSetupScreen() {
   // Toss state
   const [tossWinner, setTossWinner] = useState<string>('');
   const [tossDecision, setTossDecision] = useState<'BAT' | 'BOWL'>('BAT');
+  const [matchOvers, setMatchOvers] = useState<string>('20');
 
   useEffect(() => {
     loadSetupData();
@@ -47,6 +49,9 @@ export default function MatchSetupScreen() {
         if (res.data.tossDecision) {
           setTossDecision(res.data.tossDecision);
         }
+        if (res.data.overs) {
+          setMatchOvers(String(res.data.overs));
+        }
       }
     } catch (err: any) {
       console.warn('Failed to load match setup:', err.message);
@@ -61,11 +66,19 @@ export default function MatchSetupScreen() {
       return;
     }
 
+    const parsedOvers = parseInt(matchOvers || '20', 10);
+    if (isNaN(parsedOvers) || parsedOvers <= 0) {
+      showWarning('Invalid Overs', 'Please enter a valid number of overs per side (e.g. 15 or 20).');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       const payload = {
         tossWinner,
         tossDecision,
+        overs: parsedOvers,
+        totalOvers: parsedOvers,
         teamAPlayingXI: (setupData?.teamAPlayers || []).slice(0, 11).map((p: any) => p.id),
         teamBPlayingXI: (setupData?.teamBPlayers || []).slice(0, 11).map((p: any) => p.id)
       };
@@ -171,7 +184,7 @@ export default function MatchSetupScreen() {
                   </View>
                   <View style={styles.detailItem}>
                     <Text style={styles.detailLabel}>OVERS PER SIDE</Text>
-                    <Text style={styles.detailVal}>{oversNum} Overs per side</Text>
+                    <Text style={styles.detailVal}>{matchOvers || oversNum} Overs per side</Text>
                   </View>
                   <View style={styles.detailItem}>
                     <Text style={styles.detailLabel}>MATCH STATUS</Text>
@@ -234,6 +247,51 @@ export default function MatchSetupScreen() {
                       </Text>
                     </TouchableOpacity>
                   </View>
+                </View>
+
+                {/* OVERS PER SIDE CONFIGURATION (DEFAULT: 20 OVERS, EDITABLE BY SCORER) */}
+                <View style={[styles.tossBlock, { marginTop: 4 }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                    <Text style={styles.fieldLabel}>MATCH OVERS PER SIDE (DEFAULT: 20):</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#0d9488' }}>
+                      Format: {parseInt(matchOvers || '20', 10) <= 20 ? 'T20' : parseInt(matchOvers || '20', 10) <= 50 ? 'One Day' : 'Custom'}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <TextInput
+                      style={styles.oversInputBox}
+                      value={matchOvers}
+                      onChangeText={(val) => setMatchOvers(val.replace(/[^0-9]/g, ''))}
+                      keyboardType="number-pad"
+                      maxLength={3}
+                      placeholder="20"
+                      placeholderTextColor="#94a3b8"
+                    />
+                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#334155' }}>Overs</Text>
+                    <View style={{ flexDirection: 'row', gap: 6, marginLeft: 'auto' }}>
+                      {[10, 15, 20].map((quickOv) => (
+                        <TouchableOpacity
+                          key={quickOv}
+                          onPress={() => setMatchOvers(String(quickOv))}
+                          style={[
+                            styles.quickOverChip,
+                            matchOvers === String(quickOv) && styles.quickOverChipActive
+                          ]}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[
+                            styles.quickOverChipText,
+                            matchOvers === String(quickOv) && styles.quickOverChipTextActive
+                          ]}>
+                            {quickOv} Ov
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 10.5, color: '#64748b', marginTop: 4 }}>
+                    Change 20 to 15, 10 or custom overs before starting. Match will begin with this overs limit.
+                  </Text>
                 </View>
 
                 {tossWinnerName ? (
@@ -608,6 +666,40 @@ function getStyles(isDesktop: boolean) {
     },
     tossBtnTextActive: {
       color: '#854d0e',
+      fontWeight: '800'
+    },
+    oversInputBox: {
+      backgroundColor: '#ffffff',
+      borderWidth: 1.5,
+      borderColor: '#0d9488',
+      borderRadius: 6,
+      paddingVertical: 6,
+      paddingHorizontal: 10,
+      fontSize: 15,
+      fontWeight: '800',
+      color: '#0f172a',
+      width: 65,
+      textAlign: 'center'
+    },
+    quickOverChip: {
+      backgroundColor: '#f1f5f9',
+      borderWidth: 1,
+      borderColor: '#cbd5e1',
+      paddingVertical: 5,
+      paddingHorizontal: 10,
+      borderRadius: 6
+    },
+    quickOverChipActive: {
+      backgroundColor: '#005960',
+      borderColor: '#0d9488'
+    },
+    quickOverChipText: {
+      fontSize: 11.5,
+      fontWeight: '700',
+      color: '#475569'
+    },
+    quickOverChipTextActive: {
+      color: '#fef08a',
       fontWeight: '800'
     },
     tossSummary: {

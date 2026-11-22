@@ -29,6 +29,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import { useAppNavigation } from '../../navigation/AppNavigator';
 import { ScorerApi, fetchMasterSettings } from '../../services/api';
 import { showSuccess, showError, showWarning, showInfo } from '../../utils/sweetalert';
+import EmailDomainSuggestions from '../../components/common/EmailDomainSuggestions';
 
 export type RegistrationRole = 'PLAYER' | 'TEAM' | 'SCORER' | 'UMPIRE';
 
@@ -393,7 +394,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
     // Listen to window focus or storage/custom events to automatically pick up admin updates
     let syncHandler: any = null;
-    if (typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       syncHandler = () => loadDynamicMasterOptions();
       window.addEventListener('focus', syncHandler);
       window.addEventListener('storage', syncHandler);
@@ -402,7 +403,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
     return () => {
       isMounted = false;
-      if (typeof window !== 'undefined' && syncHandler) {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.removeEventListener === 'function' && syncHandler) {
         window.removeEventListener('focus', syncHandler);
         window.removeEventListener('storage', syncHandler);
         window.removeEventListener('master_settings_updated', syncHandler);
@@ -1875,6 +1876,18 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="none"
                       />
+                      <EmailDomainSuggestions
+                        value={pEmail}
+                        onSelectDomain={(completed) => {
+                          setPEmail(completed);
+                          if (isEmailVerified) {
+                            setIsEmailVerified(false);
+                            setOtpSent(false);
+                          }
+                          const err = validateEmailValue(completed, 'Player Email Address');
+                          setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+                        }}
+                      />
                       {fieldErrors.email && (
                         <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.email}</Text>
                       )}
@@ -2246,6 +2259,18 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="none"
                       />
+                      <EmailDomainSuggestions
+                        value={coachEmail}
+                        onSelectDomain={(completed) => {
+                          setCoachEmail(completed);
+                          if (isEmailVerified) {
+                            setIsEmailVerified(false);
+                            setOtpSent(false);
+                          }
+                          const err = validateEmailValue(completed, 'Coach Official Email Address');
+                          setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+                        }}
+                      />
                       {fieldErrors.email && (
                         <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.email}</Text>
                       )}
@@ -2336,6 +2361,14 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                           keyboardType="email-address"
                           placeholderTextColor="#94a3b8"
                           autoCapitalize="none"
+                        />
+                        <EmailDomainSuggestions
+                          value={squadPlayerEmail}
+                          onSelectDomain={(completed) => {
+                            setSquadPlayerEmail(completed);
+                            const err = validateEmailValue(completed, 'Squad Player Email');
+                            setFieldErrors((prev) => ({ ...prev, squadPlayerEmail: err || undefined }));
+                          }}
                         />
                         {fieldErrors.squadPlayerEmail && (
                           <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.squadPlayerEmail}</Text>
@@ -2504,6 +2537,18 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="none"
                       />
+                      <EmailDomainSuggestions
+                        value={sEmail}
+                        onSelectDomain={(completed) => {
+                          setSEmail(completed);
+                          if (isEmailVerified) {
+                            setIsEmailVerified(false);
+                            setOtpSent(false);
+                          }
+                          const err = validateEmailValue(completed, 'Official Scorer Email');
+                          setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+                        }}
+                      />
                       {fieldErrors.email && (
                         <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.email}</Text>
                       )}
@@ -2669,6 +2714,18 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         keyboardType="email-address"
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="none"
+                      />
+                      <EmailDomainSuggestions
+                        value={uEmail}
+                        onSelectDomain={(completed) => {
+                          setUEmail(completed);
+                          if (isEmailVerified) {
+                            setIsEmailVerified(false);
+                            setOtpSent(false);
+                          }
+                          const err = validateEmailValue(completed, 'Official Umpire Email');
+                          setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+                        }}
                       />
                       {fieldErrors.email && (
                         <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.email}</Text>

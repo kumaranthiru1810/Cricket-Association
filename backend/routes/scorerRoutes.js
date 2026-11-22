@@ -11,6 +11,7 @@ const authService = require('../services/authService');
 const scorerService = require('../services/scorerService');
 const scoringEngine = require('../services/scoringEngine');
 const matchService = require('../services/matchService');
+const adminService = require('../services/adminService');
 const { requireScorerAuth, verifyMatchPermission } = require('../middleware/authMiddleware');
 const { acquireMatchLock } = require('../middleware/concurrencyLock');
 const { broadcastScoreUpdate } = require('../services/socketService');
@@ -301,6 +302,50 @@ router.post('/matches/:matchId/revised-overs', verifyMatchPermission, async (req
   try {
     const result = await scoringEngine.setRevisedOvers(req.params.matchId, req.body);
     res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
+// Postpone Match (Official Scorer Action Inside Match Console)
+router.post('/matches/:matchId/postpone', verifyMatchPermission, async (req, res) => {
+  try {
+    const { reason, notes, rescheduledDate, rescheduledTime } = req.body;
+    if (!reason || !String(reason).trim()) {
+      return res.status(400).json({ success: false, error: 'A mandatory reason is required to postpone this match fixture.' });
+    }
+
+    const scorerUser = req.scorerUser || { email: 'scorer@cfvd.org', name: 'Official District Scorer', role: 'SCORER' };
+    const scorerEmail = scorerUser.email || 'scorer@cfvd.org';
+    const scorerName = scorerUser.name || 'Official District Scorer';
+
+    const match = await adminService.postponeMatch(
+      req.params.matchId,
+      {
+        reason: String(reason).trim(),
+        notes: notes ? String(notes).trim() : '',
+        rescheduledDate: rescheduledDate || null,
+        rescheduledTime: rescheduledTime || null,
+        actorRole: 'SCORER',
+        actorName: scorerName
+      },
+      scorerEmail
+    );
+
+    // Broadcast real-time Socket.IO update so live spectators immediately see POSTPONED state
+    broadcastScoreUpdate(req.params.matchId, {
+      matchId: req.params.matchId,
+      type: 'MATCH_POSTPONED',
+      status: 'POSTPONED',
+      reason: String(reason).trim(),
+      updatedAt: new Date().toISOString()
+    });
+
+    res.json({
+      success: true,
+      message: 'Match fixture has been officially postponed.',
+      match
+    });
   } catch (err) {
     res.status(err.status || 500).json({ success: false, error: err.message });
   }

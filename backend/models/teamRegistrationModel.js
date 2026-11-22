@@ -17,7 +17,7 @@ class TeamRegistrationModel {
    * Create a new Team Registration in PENDING status
    * Strictly validates exactly 15 squad players, email formats, and duplicates.
    */
-  async create({ teamId, teamName, coachName, coachEmail, password, password_hash, passkey, city, taluk, players }) {
+  async create({ teamId, teamName, coachName, coachEmail, coachPhone, coachMobile, phone, mobile, coachAadhaar, aadhaar, password, password_hash, passkey, city, taluk, players }) {
     await db.initDb();
 
     // 1. Validate Coach & Team Info
@@ -82,10 +82,16 @@ class TeamRegistrationModel {
       }
       seenPlayerEmails.add(pEmail);
 
+      const pPhone = p.phone || p.mobile ? String(p.phone || p.mobile).replace(/\D/g, '') : null;
+      const pAadhaar = p.aadhaar ? String(p.aadhaar).replace(/\D/g, '') : null;
+
       squadPlayers.push({
         jersey_number: p.jerseyNumber || p.jersey_number || (index + 1),
         name: pName,
         email: pEmail,
+        phone: pPhone,
+        mobile: pPhone,
+        aadhaar: pAadhaar,
         role: p.role || 'BATTER',
         status: 'PENDING'
       });
@@ -102,12 +108,18 @@ class TeamRegistrationModel {
       } catch (_e) {}
     }
 
+    const cleanCoachPhone = String(coachPhone || coachMobile || phone || mobile || '').replace(/\D/g, '');
+    const cleanCoachAadhaar = String(coachAadhaar || aadhaar || '').replace(/\D/g, '');
+
     const reg = await this.Model.create({
       id: regId,
       team_name: teamName.trim(),
       coach_name: coachName.trim(),
       coach_email: cleanCoachEmail,
+      coach_phone: cleanCoachPhone || null,
+      coach_aadhaar: cleanCoachAadhaar || null,
       password_hash: computedPasswordHash,
+      current_password: password ? String(password).trim() : (secretPasskey || null),
       passkey: secretPasskey,
       city: city || taluk || 'Virudhunagar',
       taluk: taluk || 'Virudhunagar',
@@ -123,9 +135,12 @@ class TeamRegistrationModel {
         id: `COACH-${Date.now()}`,
         name: coachName.trim(),
         email: cleanCoachEmail,
+        mobile: cleanCoachPhone || null,
+        aadhaar: cleanCoachAadhaar || null,
         role: 'COACH',
         status: 'PENDING',
-        password_hash: computedPasswordHash
+        password_hash: computedPasswordHash,
+        current_password: password ? String(password).trim() : (secretPasskey || null)
       });
     } else {
       await db.models.User.updateOne(
@@ -133,9 +148,11 @@ class TeamRegistrationModel {
         {
           $set: {
             name: coachName.trim(),
+            ...(cleanCoachPhone && { mobile: cleanCoachPhone }),
+            ...(cleanCoachAadhaar && { aadhaar: cleanCoachAadhaar }),
             role: 'COACH',
             status: 'PENDING',
-            ...(computedPasswordHash && { password_hash: computedPasswordHash }),
+            ...(computedPasswordHash && { password_hash: computedPasswordHash, current_password: password ? String(password).trim() : (secretPasskey || null) }),
             updated_at: new Date()
           }
         }
@@ -435,6 +452,9 @@ class TeamRegistrationModel {
               team_id: teamId,
               name: p.name,
               email: p.email,
+              phone: p.phone || p.mobile || null,
+              mobile: p.phone || p.mobile || null,
+              aadhaar: p.aadhaar || null,
               role: p.role || 'BATTER',
               jersey_number: p.jersey_number || (i + 1),
               status: 'ACTIVE'
@@ -450,13 +470,15 @@ class TeamRegistrationModel {
             id: playerId,
             name: p.name,
             email: p.email,
+            mobile: p.phone || p.mobile || null,
+            aadhaar: p.aadhaar || null,
             role: 'PLAYER',
             status: 'ACTIVE'
           });
         } else {
           await db.models.User.updateOne(
             { email: p.email },
-            { $set: { status: 'ACTIVE', role: 'PLAYER', updated_at: new Date() } }
+            { $set: { status: 'ACTIVE', role: 'PLAYER', mobile: p.phone || p.mobile || existingUser.mobile || null, aadhaar: p.aadhaar || existingUser.aadhaar || null, updated_at: new Date() } }
           );
         }
       }

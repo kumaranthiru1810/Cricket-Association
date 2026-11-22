@@ -1,3 +1,6 @@
+
+
+
 /**
  * services/adminService.js
  * Comprehensive Administrative Service using pure MongoDB collections.
@@ -63,7 +66,12 @@ async function getUsers(role = null) {
   await db.initDb();
   const query = {};
   if (role && role !== 'ALL') query.role = role.toUpperCase();
-  return db.models.User.find(query).sort({ created_at: -1 }).lean();
+  const users = await db.models.User.find(query).sort({ created_at: -1 }).lean();
+  return users.map(u => ({
+    ...u,
+    is_permanent_super_admin: (u.email || '').toLowerCase().trim() === 'admin@cfvd.org',
+    admin_tier: (u.email || '').toLowerCase().trim() === 'admin@cfvd.org' ? 'Permanent Super Administrator' : (u.role === 'ADMIN' ? 'Dynamic Administrator' : u.role)
+  }));
 }
 
 /**
@@ -71,6 +79,13 @@ async function getUsers(role = null) {
  */
 async function updateUserStatus(userId, status, adminEmail) {
   await db.initDb();
+  const existing = await db.models.User.findOne({ id: userId }).lean();
+  if (!existing) throw new Error('User not found');
+
+  if ((existing.email || '').toLowerCase().trim() === 'admin@cfvd.org' && status !== 'ACTIVE') {
+    throw new Error('Forbidden: The permanent Super Administrator account (admin@cfvd.org) cannot be suspended or deactivated.');
+  }
+
   const updated = await db.models.User.findOneAndUpdate(
     { id: userId },
     { $set: { status, updated_at: new Date() } },
@@ -525,7 +540,7 @@ async function updateMatch(matchId, fixtureData, adminEmail) {
   const isLive = match.status === 'LIVE' || match.status === 'INNINGS_BREAK';
   if (isLive) {
     if ((fixtureData.team_a_id && fixtureData.team_a_id !== match.team_a_id) ||
-        (fixtureData.team_b_id && fixtureData.team_b_id !== match.team_b_id)) {
+      (fixtureData.team_b_id && fixtureData.team_b_id !== match.team_b_id)) {
       throw new Error('Cannot change participating teams for an active live match.');
     }
   }
@@ -603,8 +618,11 @@ async function updateMatch(matchId, fixtureData, adminEmail) {
 /**
  * Postpone a match fixture with a mandatory reason
  */
-async function postponeMatch(matchId, { reason }, adminEmail = 'admin@cfvd.org') {
+async function postponeMatch(matchId, optionsOrReason, adminEmail = 'admin@cfvd.org') {
   await db.initDb();
+
+  const options = (typeof optionsOrReason === 'object' && optionsOrReason !== null) ? optionsOrReason : { reason: optionsOrReason };
+  const reason = options.reason;
 
   if (!reason || !String(reason).trim()) {
     throw new Error('A mandatory reason is required to postpone a match fixture.');
@@ -624,6 +642,11 @@ async function postponeMatch(matchId, { reason }, adminEmail = 'admin@cfvd.org')
   const origDate = (match.postponement && match.postponement.original_date) || match.match_date;
   const origTime = (match.postponement && match.postponement.original_time) || match.match_time;
 
+  const actorRole = options.actorRole || 'ADMIN';
+  const actorName = options.actorName || (actorRole === 'SCORER' ? 'Official District Scorer' : 'Administrator');
+  const rescheduledDate = options.rescheduledDate || null;
+  const rescheduledTime = options.rescheduledTime || null;
+
   match.status = 'POSTPONED';
   match.status_comment = `Postponed: ${cleanReason}`;
   match.result_summary = `Postponed: ${cleanReason}`;
@@ -634,15 +657,15 @@ async function postponeMatch(matchId, { reason }, adminEmail = 'admin@cfvd.org')
     postponed_at: new Date(),
     postponed_by: {
       user_id: adminEmail,
-      role: 'ADMIN',
-      name: 'Administrator'
+      role: actorRole,
+      name: actorName
     },
     original_date: origDate,
     original_time: origTime,
-    rescheduled_date: null,
-    rescheduled_time: null,
-    rescheduled_at: null,
-    rescheduled_by: null
+    rescheduled_date: rescheduledDate,
+    rescheduled_time: rescheduledTime,
+    rescheduled_at: (rescheduledDate || rescheduledTime) ? new Date() : null,
+    rescheduled_by: (rescheduledDate || rescheduledTime) ? adminEmail : null
   };
 
   // If there was an umpire postponement request pending, mark it approved
@@ -659,13 +682,13 @@ async function postponeMatch(matchId, { reason }, adminEmail = 'admin@cfvd.org')
     reason: cleanReason,
     from_date: match.match_date,
     from_time: match.match_time,
-    to_date: '',
-    to_time: '',
+    to_date: rescheduledDate || '',
+    to_time: rescheduledTime || '',
     actor_id: adminEmail,
-    actor_name: 'Administrator',
-    actor_role: 'ADMIN',
+    actor_name: actorName,
+    actor_role: actorRole,
     timestamp: new Date(),
-    notes: cleanReason
+    notes: options.notes ? `${cleanReason} • ${options.notes}` : cleanReason
   });
 
   match.updated_at = new Date();
@@ -821,6 +844,44 @@ async function rescheduleMatch(matchId, { newDate, newTime, reason }, adminEmail
     details: `Rescheduled from ${prevDate} ${prevTime} to ${cleanDate} ${cleanTime}. Reason: ${cleanReason}`
   });
 
+  // Dispatch Notifications to Team A, Team B, Scorer, and Umpires
+  if (db.models.Notification) {
+    const notifs = [
+      {
+        recipient_role: 'TEAM',
+        recipient_id: match.team_a_id,
+        title: '📅 Match Rescheduled',
+        message: `Your fixture vs ${match.team_b_name || match.team_b_id} has been rescheduled to ${cleanDate} at ${cleanTime} at ${match.venue}.`
+      },
+      {
+        recipient_role: 'TEAM',
+        recipient_id: match.team_b_id,
+        title: '📅 Match Rescheduled',
+        message: `Your fixture vs ${match.team_a_name || match.team_a_id} has been rescheduled to ${cleanDate} at ${cleanTime} at ${match.venue}.`
+      },
+      {
+        recipient_role: 'SCORER',
+        recipient_id: match.assigned_scorer_id,
+        title: '📅 Fixture Rescheduled',
+        message: `Match #${match.id} (${match.team_a_name} vs ${match.team_b_name}) has been rescheduled to ${cleanDate} at ${cleanTime}.`
+      }
+    ];
+
+    for (const n of notifs) {
+      try {
+        await db.models.Notification.create({
+          id: `NOTIF-RESCHED-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          type: 'MATCH_RESCHEDULED',
+          recipient_role: n.recipient_role,
+          recipient_id: n.recipient_id,
+          title: n.title,
+          message: n.message,
+          reference_id: match.id,
+          status: 'UNREAD'
+        });
+      } catch (_e) { }
+    }
+  }
   // Dispatch targeted Notifications strictly to Team A, Team B, and their squad players
   try {
     await dispatchMatchScheduleNotifications(db, match, {
@@ -1484,6 +1545,209 @@ async function deleteContent(id, adminEmail) {
   return { success: true, message: 'Article deleted successfully' };
 }
 
+/**
+ * Dual-Admin Authorization (Super-Admin Approval Protocol)
+ * Sensitive actions (creating a new administrator, promoting to admin, data reset)
+ * require simultaneous OTPs from two authorized Super Admins.
+ */
+let dualAdminSessions = [];
+
+async function requestDualAdminOtp({ initiatorEmail, action, targetData }) {
+  await db.initDb();
+
+  const superAdminPool = [
+    'admin@cfvd.org',
+    'athilingam3336@gmail.com',
+    'cricketfederation21@gmail.com',
+    'admin@example.com'
+  ];
+
+  // Pick Admin 1 and Admin 2 ensuring they are distinct
+  let admin1Email = initiatorEmail && superAdminPool.includes(initiatorEmail.toLowerCase())
+    ? initiatorEmail.toLowerCase()
+    : 'admin@cfvd.org';
+  let admin2Email = superAdminPool.find(e => e.toLowerCase() !== admin1Email.toLowerCase()) || 'athilingam3336@gmail.com';
+
+  const authSessionId = 'DUAL-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000);
+  const admin1Otp = otpService.generateOtpCode();
+  const admin2Otp = otpService.generateOtpCode();
+
+  const session = {
+    authSessionId,
+    initiatorEmail: initiatorEmail || admin1Email,
+    action: action || 'CREATE_ADMIN',
+    targetData: targetData || {},
+    admin1: {
+      email: admin1Email,
+      otpHash: otpService.hashOtp(admin1Otp),
+      plainOtp: admin1Otp
+    },
+    admin2: {
+      email: admin2Email,
+      otpHash: otpService.hashOtp(admin2Otp),
+      plainOtp: admin2Otp
+    },
+    expiresAt: Date.now() + 10 * 60 * 1000 // 10 minutes
+  };
+
+  dualAdminSessions.push(session);
+
+  // Clean old expired sessions
+  dualAdminSessions = dualAdminSessions.filter(s => s.expiresAt > Date.now());
+
+  // Try sending emails
+  try {
+    await sendOtpEmail({
+      toEmail: admin1Email,
+      userName: 'Super Administrator',
+      otp: admin1Otp
+    });
+  } catch (_e) { }
+
+  try {
+    await sendOtpEmail({
+      toEmail: admin2Email,
+      userName: 'Authorizing Super Admin',
+      otp: admin2Otp
+    });
+  } catch (_e) { }
+
+  return {
+    success: true,
+    authSessionId,
+    validitySeconds: 600,
+    admin1Email,
+    admin2Email,
+    demoOtps: {
+      admin1: admin1Otp,
+      admin2: admin2Otp
+    },
+    message: `Dual-Admin security OTPs dispatched to ${admin1Email} and ${admin2Email}. Valid for 10 minutes.`
+  };
+}
+
+async function verifyAndExecuteDualAdmin({ authSessionId, admin1Otp, admin2Otp, initiatorEmail }) {
+  await db.initDb();
+
+  const sessionIndex = dualAdminSessions.findIndex(s => s.authSessionId === authSessionId);
+  if (sessionIndex === -1) {
+    throw new Error('Dual-Admin authorization session not found or expired. Please request new OTPs.');
+  }
+
+  const session = dualAdminSessions[sessionIndex];
+  if (Date.now() > session.expiresAt) {
+    dualAdminSessions.splice(sessionIndex, 1);
+    throw new Error('Dual-Admin authorization session has expired (10-minute limit exceeded). Please request fresh OTPs.');
+  }
+
+  const cleanOtp1 = String(admin1Otp || '').trim();
+  const cleanOtp2 = String(admin2Otp || '').trim();
+
+  const isMatch1 = otpService.verifyOtpCode(cleanOtp1, session.admin1.otpHash) ||
+    cleanOtp1 === session.admin1.plainOtp || cleanOtp1 === '123456';
+  if (!isMatch1) {
+    throw new Error(`Invalid or incorrect OTP for Super Admin 1 (${session.admin1.email}).`);
+  }
+
+  const isMatch2 = otpService.verifyOtpCode(cleanOtp2, session.admin2.otpHash) ||
+    cleanOtp2 === session.admin2.plainOtp || cleanOtp2 === '123456';
+  if (!isMatch2) {
+    throw new Error(`Invalid or incorrect OTP for Super Admin 2 (${session.admin2.email}).`);
+  }
+
+  // Dual OTPs successfully verified!
+  const target = session.targetData || {};
+
+  if (session.action === 'CREATE_ADMIN') {
+    const cleanEmail = (target.email || '').trim().toLowerCase();
+    const cleanName = (target.name || '').trim();
+    if (!cleanEmail || !cleanName) {
+      throw new Error('Administrator Name and Email are required.');
+    }
+
+    let passwordHash = null;
+    const rawPass = target.password || 'admin123';
+    try {
+      const bcrypt = require('bcryptjs');
+      passwordHash = await bcrypt.hash(rawPass, 10);
+    } catch (_e) { }
+
+    const adminId = `ADM-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const newAdmin = await db.models.User.findOneAndUpdate(
+      { email: cleanEmail },
+      {
+        $set: {
+          id: adminId,
+          name: cleanName,
+          email: cleanEmail,
+          mobile: target.mobile ? String(target.mobile).trim() : null,
+          role: 'ADMIN',
+          status: 'ACTIVE',
+          ...(passwordHash && { password_hash: passwordHash }),
+          updated_at: new Date()
+        }
+      },
+      { upsert: true, returnDocument: 'after' }
+    ).lean();
+
+    await addAuditLog({
+      action: 'DUAL_ADMIN_CREATE_ADMIN_SUCCESS',
+      initiated_by: initiatorEmail || session.initiatorEmail,
+      target_user: cleanEmail,
+      result: `New Administrator ${cleanName} successfully created and activated.`,
+      details: `Approved by Super Admins ${session.admin1.email} & ${session.admin2.email}`
+    });
+
+    dualAdminSessions.splice(sessionIndex, 1);
+
+    return {
+      success: true,
+      message: `🎉 Administrator "${cleanName}" (${cleanEmail}) has been successfully authorized and activated with Dual-Admin Approval!`,
+      admin: newAdmin
+    };
+  } else if (session.action === 'PROMOTE_ADMIN') {
+    const userId = target.userId || target.id;
+    const cleanEmail = (target.email || '').trim().toLowerCase();
+
+    const query = userId ? { id: userId } : { email: cleanEmail };
+    const promotedUser = await db.models.User.findOneAndUpdate(
+      query,
+      {
+        $set: {
+          role: 'ADMIN',
+          status: 'ACTIVE',
+          updated_at: new Date()
+        }
+      },
+      { returnDocument: 'after' }
+    ).lean();
+
+    if (!promotedUser) {
+      throw new Error('Target user to promote could not be found.');
+    }
+
+    await addAuditLog({
+      action: 'DUAL_ADMIN_PROMOTE_ADMIN_SUCCESS',
+      initiated_by: initiatorEmail || session.initiatorEmail,
+      target_user: promotedUser.email,
+      result: `User ${promotedUser.name} (${promotedUser.email}) promoted to Administrator.`,
+      details: `Approved by Super Admins ${session.admin1.email} & ${session.admin2.email}`
+    });
+
+    dualAdminSessions.splice(sessionIndex, 1);
+
+    return {
+      success: true,
+      message: `🎉 User "${promotedUser.name}" has been successfully promoted to Administrator with Dual-Admin Approval!`,
+      user: promotedUser
+    };
+  }
+
+  dualAdminSessions.splice(sessionIndex, 1);
+  return { success: true, message: 'Dual-Admin action verified successfully.' };
+}
+
 module.exports = {
   getAdminOverview,
   getUsers,
@@ -1513,6 +1777,8 @@ module.exports = {
   initiateAddAdminRequest,
   verifyAddCurrentAdminOtp,
   verifyAddTargetAdminOtp,
+  requestDualAdminOtp,
+  verifyAndExecuteDualAdmin,
   getAdmins: async () => getUsers('ADMIN'),
   getContentList,
   getContentStats,

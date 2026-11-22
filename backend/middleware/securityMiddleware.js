@@ -46,10 +46,20 @@ function sanitizeInput(req, res, next) {
 // General API Rate Limiter
 const generalRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 300 : 3000, // Limit each IP
+  max: process.env.NODE_ENV === 'production' ? 10000 : 20000, // Generous limit per client IP
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => req.method === 'OPTIONS',
+  skip: (req) => {
+    // All read requests (GET/HEAD) and CORS preflights are completely exempt from rate limiting
+    if (req.method === 'OPTIONS' || req.method === 'GET' || req.method === 'HEAD') return true;
+    const url = req.originalUrl || req.url || '';
+    return (
+      url === '/' ||
+      url === '/api/health' ||
+      url.startsWith('/api/master-settings') ||
+      url.startsWith('/uploads')
+    );
+  },
   message: {
     success: false,
     message: 'Too many requests from this IP address. Please try again after 15 minutes.'
@@ -59,7 +69,7 @@ const generalRateLimiter = rateLimit({
 // Strict Auth / Sensitive Endpoint Rate Limiter (Brute-force protection)
 const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 15 : 200, // Limit each IP
+  max: process.env.NODE_ENV === 'production' ? 100 : 500, // Allow sufficient verification & submission attempts
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => req.method === 'OPTIONS',
@@ -78,7 +88,9 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'http://localhost:5000',
   'http://127.0.0.1:8081',
   'http://127.0.0.1:3000',
-  'http://127.0.0.1:5000'
+  'http://127.0.0.1:5000',
+  'https://cricketassociation.onrender.com',
+  'https://cricket-backend-dqdm.onrender.com'
 ];
 
 function getCorsOptions() {
@@ -94,14 +106,19 @@ function getCorsOptions() {
       if (allowed.includes(origin)) {
         return callback(null, true);
       }
-      // Allow any localhost, 127.0.0.1 on any port, or local LAN IP (Expo dev server)
+      // Allow any localhost, 127.0.0.1 on any port, local LAN IP, or Render/Vercel/Netlify deployments
       if (
         /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
-        /^https?:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin)
+        /^https?:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin) ||
+        origin.endsWith('.onrender.com') ||
+        origin.includes('onrender.com') ||
+        origin.includes('cricketassociation') ||
+        origin.endsWith('.vercel.app') ||
+        origin.endsWith('.netlify.app')
       ) {
         return callback(null, true);
       }
-      return callback(new Error(`CORS policy violation: Origin '${origin}' is not authorized.`));
+      return callback(null, false);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
