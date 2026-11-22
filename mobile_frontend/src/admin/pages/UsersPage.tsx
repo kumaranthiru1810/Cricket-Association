@@ -792,12 +792,12 @@ export const UsersPage: React.FC = () => {
           <View style={styles.modalOverlay}>
             <View style={[styles.modalDialog, { maxWidth: 520 }]}>
               <View style={styles.modalHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, marginRight: 8 }}>
                   <ShieldIcon size={20} color="#0f2452" />
-                  <View>
-                    <Text style={styles.modalTitle}>Onboard Dynamic Administrator</Text>
-                    <Text style={{ fontSize: 11, color: '#64748b' }}>
-                      Assign association management credentials under Super Admin oversight
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[styles.modalTitle, isMobile && { fontSize: 13.5 }]} numberOfLines={1}>Onboard Dynamic Administrator</Text>
+                    <Text style={{ fontSize: 10, color: '#64748b' }} numberOfLines={1}>
+                      Assign credentials under Super Admin oversight
                     </Text>
                   </View>
                 </View>
@@ -894,15 +894,15 @@ export const UsersPage: React.FC = () => {
                 </View>
               </ScrollView>
 
-              <View style={styles.modalFooter}>
+              <View style={[styles.modalFooter, isMobile && { flexDirection: 'column-reverse', gap: 8, paddingHorizontal: 12 }]}>
                 <TouchableOpacity
-                  style={styles.btnCancel}
+                  style={[styles.btnCancel, isMobile && { width: '100%', paddingVertical: 10 }]}
                   onPress={() => setShowAddAdminModal(false)}
                 >
                   <Text style={styles.btnCancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.btnProceedSuperAdmin, isRequestingAuth && { opacity: 0.7 }]}
+                  style={[styles.btnProceedSuperAdmin, isRequestingAuth && { opacity: 0.7 }, isMobile && { width: '100%', paddingVertical: 11 }]}
                   onPress={handleInitiateAddAdmin}
                   disabled={isRequestingAuth}
                 >
@@ -935,14 +935,14 @@ export const UsersPage: React.FC = () => {
             <View style={[styles.modalDialog, styles.superAdminOtpDialog]}>
               {/* Header */}
               <View style={styles.superAdminOtpHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, marginRight: 8 }}>
                   <View style={styles.superAdminOtpIconCircle}>
                     <ShieldIcon size={18} color="#0f2452" />
                   </View>
-                  <View>
-                    <Text style={styles.superAdminOtpTitle}>Super Administrator Security Verification</Text>
-                    <Text style={styles.superAdminOtpSubtitle}>
-                      Nodemailer SMTP Verification to {PERMANENT_SUPER_ADMIN}
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[styles.superAdminOtpTitle, isMobile && { fontSize: 13 }]} numberOfLines={1}>Super Administrator Verification</Text>
+                    <Text style={{ fontSize: 10, color: '#64748b' }} numberOfLines={1}>
+                      Nodemailer SMTP to {PERMANENT_SUPER_ADMIN}
                     </Text>
                   </View>
                 </View>
@@ -1012,9 +1012,9 @@ export const UsersPage: React.FC = () => {
               </Text>
 
               {/* Modal Actions */}
-              <View style={styles.superAdminOtpFooter}>
+              <View style={[styles.superAdminOtpFooter, isMobile && { flexDirection: 'column-reverse', gap: 8, paddingHorizontal: 12 }]}>
                 <TouchableOpacity
-                  style={styles.btnCancel}
+                  style={[styles.btnCancel, isMobile && { width: '100%', paddingVertical: 10 }]}
                   onPress={() => setShowOtpModal(false)}
                 >
                   <Text style={styles.btnCancelText}>Cancel</Text>
@@ -1022,7 +1022,8 @@ export const UsersPage: React.FC = () => {
                 <TouchableOpacity
                   style={[
                     styles.btnVerifySuperAdmin,
-                    (otpInput.length !== 6 || isVerifyingOtp) && { opacity: 0.6 }
+                    (otpInput.length !== 6 || isVerifyingOtp) && { opacity: 0.6 },
+                    isMobile && { width: '100%', minWidth: 0, paddingVertical: 11 }
                   ]}
                   onPress={handleVerifyOtp}
                   disabled={otpInput.length !== 6 || isVerifyingOtp}
@@ -1252,15 +1253,16 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.68)',
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 12,
-    width: '100%'
+    padding: 10,
+    width: '100%',
+    height: '100%'
   },
   modalDialog: {
-    width: '100%',
-    maxWidth: 520,
+    width: '94%',
+    maxWidth: 500,
     borderRadius: 16,
     backgroundColor: '#ffffff',
     overflow: 'hidden',
@@ -1269,7 +1271,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 20,
     elevation: 8,
-    alignSelf: 'center'
+    alignSelf: 'center',
+    marginHorizontal: 'auto'
   },
   modalHeader: {
     flexDirection: 'row',
