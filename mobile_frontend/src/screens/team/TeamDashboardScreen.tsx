@@ -149,8 +149,10 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
 
   // Responsive sidebar states
   const { width } = useWindowDimensions();
-  const isDesktop = width >= 768;
-  const isTabletOrMobile = width < 1024;
+  const insets = useSafeAreaInsets();
+  const isDesktop = width >= 900;
+  const isTabletOrMobile = width < 900;
+  const isMobile = width < 768;
   const isMobileS = width <= 375;
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
@@ -1575,20 +1577,47 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
           ) : (
             <ScrollView
               style={styles.rightContentScrollView}
-              contentContainerStyle={styles.scrollContentContainer}
+              contentContainerStyle={[
+                styles.scrollContentContainer,
+                !isDesktop && { paddingHorizontal: 12, paddingVertical: 14 }
+              ]}
               showsVerticalScrollIndicator={true}
             >
               <View style={styles.contentConstrained}>
                 {/* Global Page Header Banner */}
-                <View style={styles.pageHeaderBanner}>
-                  <View style={{ flex: 1, minWidth: 200 }}>
-                    <Text style={styles.pageHeaderTitle}>{getPageTitle(activeTab)}</Text>
+                <View style={[styles.pageHeaderBanner, !isDesktop && { paddingHorizontal: 14, paddingVertical: 10, gap: 8 }]}>
+                  <View style={{ flex: 1, minWidth: !isDesktop ? 160 : 200 }}>
+                    <Text style={[styles.pageHeaderTitle, !isDesktop && { fontSize: 15 }]}>{getPageTitle(activeTab)}</Text>
                     <Text style={styles.pageHeaderSubtitle}>{getPageSubtitle(activeTab)}</Text>
                   </View>
-                  <View style={styles.pageHeaderRightPill}>
-                    <Text style={styles.pageHeaderRightPillText}>
-                      🛡️ {teamName} • #{teamId}
-                    </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    {activeTab === 'allocation' && upcomingMatches.length > 0 && (
+                      <>
+                        <View style={styles.verifiedTag}>
+                          <Text style={styles.verifiedTagText}>
+                            📅 {upcomingMatches.length} Fixture{upcomingMatches.length !== 1 ? 's' : ''}
+                          </Text>
+                        </View>
+                        {allocationPendingMatches.length > 0 ? (
+                          <View style={[styles.verifiedTag, { backgroundColor: '#fef3c7', borderColor: '#f59e0b' }]}>
+                            <Text style={[styles.verifiedTagText, { color: '#b45309' }]}>
+                              ⚠️ {allocationPendingMatches.length} Pending
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={[styles.verifiedTag, { backgroundColor: '#dcfce7', borderColor: '#16a34a' }]}>
+                            <Text style={[styles.verifiedTagText, { color: '#166534' }]}>
+                              ✅ All Allocated
+                            </Text>
+                          </View>
+                        )}
+                      </>
+                    )}
+                    <View style={styles.pageHeaderRightPill}>
+                      <Text style={styles.pageHeaderRightPillText}>
+                        🛡️ {teamName} • #{teamId}
+                      </Text>
+                    </View>
                   </View>
                 </View>
 
@@ -2361,38 +2390,6 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                 {/* ══════════════════════════════════════════════════════════ */}
                 {activeTab === 'allocation' && (
                   <View style={{ gap: 16 }}>
-                    {/* Header Banner */}
-                    <View style={styles.card}>
-                      <View style={styles.cardHeader}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.cardTitle}>📋 Official Playing XI & Squad Allocation</Text>
-                          <Text style={styles.cardSubtitle}>
-                            Select and lock your 11 Playing XI players and substitutes for upcoming association fixtures.
-                          </Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-                          <View style={styles.verifiedTag}>
-                            <Text style={styles.verifiedTagText}>
-                              📅 {upcomingMatches.length} Fixtures
-                            </Text>
-                          </View>
-                          {allocationPendingMatches.length > 0 ? (
-                            <View style={[styles.verifiedTag, { backgroundColor: '#fef3c7', borderColor: '#f59e0b' }]}>
-                              <Text style={[styles.verifiedTagText, { color: '#b45309' }]}>
-                                ⚠️ {allocationPendingMatches.length} Pending
-                              </Text>
-                            </View>
-                          ) : (
-                            <View style={[styles.verifiedTag, { backgroundColor: '#dcfce7', borderColor: '#16a34a' }]}>
-                              <Text style={[styles.verifiedTagText, { color: '#166534' }]}>
-                                ✅ All Allocated
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                      </View>
-                    </View>
-
                     {/* Step 1: Match Selector */}
                     {upcomingMatches.length === 0 ? (
                       <View style={styles.emptyCard}>
@@ -4489,7 +4486,7 @@ const styles: any = StyleSheet.create({
   },
   kpiCard: {
     flex: 1,
-    minWidth: 160,
+    minWidth: 140,
     backgroundColor: '#ffffff',
     borderRadius: 12,
     padding: 14,
@@ -6260,7 +6257,7 @@ const styles: any = StyleSheet.create({
   },
   allocCounterBox: {
     flex: 1,
-    minWidth: 120,
+    minWidth: 105,
     backgroundColor: '#ffffff',
     borderRadius: 8,
     padding: 10,

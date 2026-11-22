@@ -63,10 +63,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#040a1c',
     borderTopWidth: 1,
     borderTopColor: 'rgba(234, 179, 8, 0.35)',
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: 16,
     width: '100%',
-    zIndex: 10
+    marginTop: 'auto'
   },
   innerRow: {
     flexDirection: 'row',

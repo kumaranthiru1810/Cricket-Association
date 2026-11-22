@@ -208,7 +208,7 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
   onLogout
 }) => {
   const { width } = useWindowDimensions();
-  const isDesktop = propIsDesktop ?? width >= 768;
+  const isDesktop = propIsDesktop ?? width >= 900;
 
   // Inject hover CSS for web — golden hover on nav items
   React.useEffect(() => {
@@ -284,7 +284,7 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
       <ScrollView
         style={styles.sidebarNavScroll}
         contentContainerStyle={styles.sidebarNavList}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
       >
         {navItems.map((item) => {
           const isActive = activeTab === item.key;
@@ -437,6 +437,10 @@ const styles = StyleSheet.create({
   // 1. SIDEBAR CONTAINER — WHITE background, golden accents (Reference: PlayerSidebar)
   sidebarContainer: {
     width: 250,
+    maxWidth: 250,
+    flexShrink: 0,
+    flexGrow: 0,
+    height: '100%',
     alignSelf: 'stretch',
     backgroundColor: '#ffffff',
     borderRightWidth: 1,
@@ -448,34 +452,43 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 2, height: 0 },
     shadowOpacity: 0.08,
     elevation: 4,
-    flexShrink: 0,
     minHeight: 0,
     overflow: 'hidden',
-    ...(Platform.OS === 'web' ? ({ position: 'sticky', top: 0, height: '100vh', overflowY: 'hidden', alignSelf: 'flex-start', flexShrink: 0 } as any) : {})
+    ...(Platform.OS === 'web' ? ({ height: '100%', overflowY: 'hidden', flexShrink: 0, width: 250, maxWidth: 250 } as any) : {})
+  },
+  sidebarContainerMobile: {
+    width: '100%',
+    maxWidth: '100%',
+    flex: 1,
+    height: '100%',
+    borderRightWidth: 0,
+    elevation: 0,
+    shadowOpacity: 0
   },
   sidebarCollapsed: {
-    width: 76
+    width: 76,
+    maxWidth: 76
   },
 
   // Team profile header card — light cream/gold tint
   sidebarTeamCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: 12,
     backgroundColor: '#fffbeb',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(212, 175, 55, 0.35)',
-    gap: 12,
+    gap: 10,
     flexShrink: 0
   },
   sidebarTeamCardCollapsed: {
     justifyContent: 'center',
     paddingHorizontal: 8,
-    paddingVertical: 14
+    paddingVertical: 12
   },
   teamAvatarCircle: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: 8,
     backgroundColor: '#071026',
     borderWidth: 2,
@@ -538,8 +551,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.4,
     paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 6
+    paddingTop: 10,
+    paddingBottom: 4
   },
 
   sidebarNavScroll: {
@@ -556,10 +569,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 9.5,
+    paddingVertical: 7.5,
     paddingHorizontal: 12,
-    borderRadius: 10,
-    marginVertical: 2.5,
+    borderRadius: 8,
+    marginVertical: 1.5,
     backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: 'transparent',
@@ -657,9 +670,9 @@ const styles = StyleSheet.create({
   sidebarFooter: {
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
-    padding: 12,
+    padding: 10,
     backgroundColor: '#f8fafc',
-    gap: 8,
+    gap: 6,
     flexShrink: 0
   },
   sidebarFooterCollapsed: {
@@ -672,7 +685,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(239, 68, 68, 0.4)',
-    paddingVertical: 9,
+    paddingVertical: 7,
     paddingHorizontal: 12,
     borderRadius: 8,
     backgroundColor: '#fff5f5',
@@ -687,11 +700,11 @@ const styles = StyleSheet.create({
   },
   sidebarLogoutBtnText: {
     color: '#dc2626',
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '800'
   },
   sidebarCollapseToggleBtn: {
-    paddingVertical: 7,
+    paddingVertical: 5.5,
     paddingHorizontal: 10,
     borderRadius: 6,
     backgroundColor: '#f1f5f9',

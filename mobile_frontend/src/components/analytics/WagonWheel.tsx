@@ -672,6 +672,7 @@ export default function WagonWheel({
           <View style={styles.wheelWrapper}>
             <View style={[styles.groundContainer, { width: displaySize, height: displaySize }]}>
               {/* Standard SVG Rendering (Works flawlessly on React Native Web & Native) */}
+              {/* Standard SVG Rendering via react-native-svg (Works flawlessly on Native & Web) */}
               <Svg
                 width={displaySize}
                 height={displaySize}

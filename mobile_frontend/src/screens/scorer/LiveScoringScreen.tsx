@@ -119,6 +119,17 @@ const STANDARD_PENALTY_REASONS = [
   'Dissent towards umpire decision'
 ];
 
+const STANDARD_POSTPONE_REASONS = [
+  '🌧️ Heavy Rain / Downpour',
+  '⚠️ Wet Outfield / Unfit Pitch',
+  '🌑 Bad Light / Low Visibility',
+  '⚡ Floodlight / Power Failure',
+  '🛡️ Ground Security / Safety',
+  '🤝 Captains Mutual Agreement',
+  '🚨 Medical / Force Majeure',
+  '⏳ Playing Conditions Unplayable'
+];
+
 
 const BALL_TYPE_OPTIONS = [
   'Good Length',
@@ -488,6 +499,7 @@ export default function LiveScoringScreen() {
   // 6b. Postpone Match State
   const [showPostponeModal, setShowPostponeModal] = useState<boolean>(false);
   const [postponeReason, setPostponeReason] = useState<string>('🌧️ Heavy Rain / Downpour');
+  const [isPostponeReasonDropdownOpen, setIsPostponeReasonDropdownOpen] = useState<boolean>(false);
   const [postponeCustomReason, setPostponeCustomReason] = useState<string>('');
   const [postponeNotes, setPostponeNotes] = useState<string>('');
   const [rescheduledDateInput, setRescheduledDateInput] = useState<string>('');
@@ -2872,6 +2884,7 @@ export default function LiveScoringScreen() {
         rescheduledTime: rescheduledTimeInput.trim()
       });
       setShowPostponeModal(false);
+      setIsPostponeReasonDropdownOpen(false);
       setPostponeCustomReason('');
       setPostponeNotes('');
       setRescheduledDateInput('');
@@ -4882,7 +4895,10 @@ export default function LiveScoringScreen() {
         visible={showPostponeModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowPostponeModal(false)}
+        onRequestClose={() => {
+          setIsPostponeReasonDropdownOpen(false);
+          setShowPostponeModal(false);
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { maxWidth: 520 }]}>
@@ -4893,7 +4909,10 @@ export default function LiveScoringScreen() {
               </View>
               <TouchableOpacity
                 style={styles.redCloseBtn}
-                onPress={() => setShowPostponeModal(false)}
+                onPress={() => {
+                  setIsPostponeReasonDropdownOpen(false);
+                  setShowPostponeModal(false);
+                }}
               >
                 <Text style={styles.redCloseBtnText}>✕</Text>
               </TouchableOpacity>
@@ -4903,39 +4922,61 @@ export default function LiveScoringScreen() {
               As official scorer, you can postpone this match fixture due to weather, pitch hazards, bad light, or safety concerns. Scoring will be frozen and public scorecards updated live.
             </Text>
 
-            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
-              {/* Primary Pre-set Reason Chips */}
-              <Text style={[styles.fieldSubLabel, { marginTop: 12 }]}>PRIMARY POSTPONEMENT REASON:</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginVertical: 8 }}>
-                {[
-                  '🌧️ Heavy Rain / Downpour',
-                  '⚠️ Wet Outfield / Unfit Pitch',
-                  '🌑 Bad Light / Low Visibility',
-                  '⚡ Floodlight / Power Failure',
-                  '🛡️ Ground Security / Safety',
-                  '🤝 Captains Mutual Agreement'
-                ].map((chip) => {
-                  const isSelected = postponeReason === chip;
-                  return (
-                    <TouchableOpacity
-                      key={chip}
-                      style={[styles.postponeChip, isSelected && styles.postponeChipActive]}
-                      onPress={() => {
-                        setPostponeReason(chip);
-                        setPostponeCustomReason('');
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.postponeChipText, isSelected && styles.postponeChipTextActive]}>
-                        {chip}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+              {/* Primary Pre-set Reason Dropdown */}
+              <View style={{ marginTop: 12, position: 'relative', zIndex: 60 }}>
+                <Text style={styles.fieldSubLabel}>PRIMARY POSTPONEMENT REASON:</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.penaltyDropdownTrigger,
+                    isPostponeReasonDropdownOpen && styles.penaltyDropdownTriggerActive
+                  ]}
+                  onPress={() => setIsPostponeReasonDropdownOpen(!isPostponeReasonDropdownOpen)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.penaltyDropdownText} numberOfLines={1}>
+                    {postponeReason || 'Select Postponement Reason...'}
+                  </Text>
+                  <Text style={styles.penaltyDropdownArrow}>
+                    {isPostponeReasonDropdownOpen ? '▲' : '▼'}
+                  </Text>
+                </TouchableOpacity>
+
+                {isPostponeReasonDropdownOpen && (
+                  <View style={styles.penaltyDropdownMenu}>
+                    <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled showsVerticalScrollIndicator={true}>
+                      {STANDARD_POSTPONE_REASONS.map((reasonText) => {
+                        const isSelected = postponeReason === reasonText;
+                        return (
+                          <TouchableOpacity
+                            key={reasonText}
+                            style={[
+                              styles.penaltyDropdownItem,
+                              isSelected && styles.penaltyDropdownItemActive
+                            ]}
+                            onPress={() => {
+                              setPostponeReason(reasonText);
+                              setIsPostponeReasonDropdownOpen(false);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={[
+                              styles.penaltyDropdownItemText,
+                              isSelected && styles.penaltyDropdownItemTextActive
+                            ]}>
+                              {reasonText}
+                            </Text>
+                            {isSelected && <Text style={{ color: '#d97706', fontWeight: 'bold' }}>✓</Text>}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
 
               {/* Custom / Detailed Reason */}
-              <Text style={[styles.fieldSubLabel, { marginTop: 8 }]}>CUSTOM / ADDITIONAL REASON (OPTIONAL):</Text>
+              <Text style={[styles.fieldSubLabel, { marginTop: 12 }]}>CUSTOM / ADDITIONAL REASON (OPTIONAL):</Text>
               <TextInput
                 style={[styles.customNameInput, { height: 42 }]}
                 placeholder="Or specify custom reason (e.g. Tropical storm alert)"
@@ -4985,7 +5026,10 @@ export default function LiveScoringScreen() {
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
               <TouchableOpacity
                 style={[styles.modalCancelBtn, { flex: 1 }]}
-                onPress={() => setShowPostponeModal(false)}
+                onPress={() => {
+                  setIsPostponeReasonDropdownOpen(false);
+                  setShowPostponeModal(false);
+                }}
                 activeOpacity={0.7}
               >
                 <Text style={styles.modalCancelText}>CANCEL</Text>
