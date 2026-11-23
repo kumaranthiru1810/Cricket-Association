@@ -34,6 +34,7 @@ import {
   Easing,
   Linking
 } from 'react-native';
+import Svg, { Path, Circle, G, Text as SvgText } from 'react-native-svg';
 import { ScorerApi, getCurrentUser, getAuthToken, setAuthToken, setCurrentUser } from '../../services/api';
 import { showSuccess, showError, showWarning, showConfirm, showInfo, swal } from '../../utils/sweetalert';
 import TournamentManagement from '../../admin/components/TournamentManagement';
@@ -639,6 +640,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   const [isCancellingMatch, setIsCancellingMatch] = useState<boolean>(false);
 
   const [postponeMatchModal, setPostponeMatchModal] = useState<{ id: string; teamA: string; teamB: string; date: string; time: string } | null>(null);
+  const [selectedPostponeMatchId, setSelectedPostponeMatchId] = useState<string>('');
+  const [postponeMatchSelectOpen, setPostponeMatchSelectOpen] = useState<boolean>(false);
   const [postponeReasonInput, setPostponeReasonInput] = useState<string>('Inclement weather / ground condition unplayable');
   const [isPostponingMatch, setIsPostponingMatch] = useState<boolean>(false);
 
@@ -1539,21 +1542,63 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     }
   };
 
+  const eligibleMatchesForPostpone = useMemo(() => {
+    return matchesList.filter(m => {
+      const s = (m.status || '').toUpperCase();
+      return s !== 'COMPLETED' && s !== 'CANCELLED' && s !== 'POSTPONED';
+    });
+  }, [matchesList]);
+
+  const handleOpenPostponeModal = (targetMatch?: any) => {
+    if (targetMatch) {
+      setSelectedPostponeMatchId(targetMatch.id);
+      setPostponeMatchModal({
+        id: targetMatch.id,
+        teamA: targetMatch.team_a_name || targetMatch.team_a_id,
+        teamB: targetMatch.team_b_name || targetMatch.team_b_id,
+        date: targetMatch.match_date,
+        time: targetMatch.match_time || '09:30 AM'
+      });
+      setPostponeReasonInput('Inclement weather / ground condition unplayable');
+      setPostponeMatchSelectOpen(false);
+      return;
+    }
+
+    if (eligibleMatchesForPostpone.length === 0) {
+      showWarning('No Active Fixtures', 'There are currently no active or scheduled match fixtures eligible for postponement.');
+      return;
+    }
+
+    const defaultM = eligibleMatchesForPostpone[0];
+    setSelectedPostponeMatchId(defaultM.id);
+    setPostponeMatchModal({
+      id: defaultM.id,
+      teamA: defaultM.team_a_name || defaultM.team_a_id,
+      teamB: defaultM.team_b_name || defaultM.team_b_id,
+      date: defaultM.match_date,
+      time: defaultM.match_time || '09:30 AM'
+    });
+    setPostponeReasonInput('Inclement weather / ground condition unplayable');
+    setPostponeMatchSelectOpen(false);
+  };
+
   const handleConfirmPostponeMatch = async () => {
-    if (!postponeMatchModal) return;
+    const targetMatchId = selectedPostponeMatchId || postponeMatchModal?.id;
+    if (!targetMatchId) return;
     if (!postponeReasonInput.trim()) {
       await showError('Postponement Reason Required', 'Please enter a valid reason for postponing the match.');
       return;
     }
     setIsPostponingMatch(true);
     try {
-      await ScorerApi.postponeMatch(postponeMatchModal.id, postponeReasonInput.trim());
-      showNotification(`✓ Match ${postponeMatchModal.id} has been POSTPONED.`);
+      await ScorerApi.postponeMatch(targetMatchId, postponeReasonInput.trim());
+      showNotification(`✓ Match ${targetMatchId} has been officially POSTPONED.`);
       await showSuccess(
         'Match Postponed',
-        `Match fixture ${postponeMatchModal.id} has been marked as POSTPONED. Teams, scorers, and umpires have been notified.`
+        `Match fixture ${targetMatchId} has been marked as POSTPONED. Teams, scorers, and public portals have been notified.`
       );
       setPostponeMatchModal(null);
+      setPostponeMatchSelectOpen(false);
       await loadMatchesAndLogistics();
     } catch (err: any) {
       await showError('Postponement Failed', err.message || 'Failed to postpone match.');
@@ -4273,47 +4318,118 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       Real-time championship fixtures, live scoring status, venue allocations, and accredited scorer appointments.
                     </Text>
 
-                    {/* 4 Colored Pill Rows */}
-                    <View style={styles.pillRowsContainer}>
-                      <View style={[styles.statRowPill, styles.schedulesPillLive]}>
-                        <View style={styles.pillLeftGroup}>
-                          <View style={[styles.glowingDot, { backgroundColor: '#ef4444' }]} />
-                          <Text style={[styles.statPillLabel, { color: '#991b1b' }]}>Live Matches (Active)</Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          {liveMatchesCount > 0 && (
-                            <View style={styles.livePulseTag}>
-                              <Text style={styles.livePulseTagText}>LIVE</Text>
+                    {/* Responsive Donut Pie Chart & Legend */}
+                    {(() => {
+                      const totalMatches = matchesList.length;
+                      const radius = 38;
+                      const circumference = 2 * Math.PI * radius; // ~238.76
+
+                      const slices = [
+                        { count: liveMatchesCount, color: '#ef4444', label: 'Live' },
+                        { count: scheduledMatchesCount, color: '#0284c7', label: 'Scheduled' },
+                        { count: completedMatchesCount, color: '#10b981', label: 'Completed' },
+                        { count: postponedMatchesCount, color: '#f59e0b', label: 'Postponed' },
+                        { count: cancelledMatchesCount, color: '#64748b', label: 'Cancelled' }
+                      ].filter(s => s.count > 0);
+
+                      let accumulatedOffset = 0;
+
+                      return (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14, marginTop: 14 }}>
+                          {/* Left: SVG Donut Chart */}
+                          <View style={{ alignItems: 'center', justifyContent: 'center', width: 120, height: 120, alignSelf: 'center' }}>
+                            <Svg width={120} height={120} viewBox="0 0 120 120">
+                              <G transform="rotate(-90 60 60)">
+                                {/* Background Ring */}
+                                <Circle
+                                  cx={60}
+                                  cy={60}
+                                  r={radius}
+                                  stroke="#1e293b"
+                                  strokeWidth={16}
+                                  fill="none"
+                                />
+                                {totalMatches > 0 && slices.map((slice, idx) => {
+                                  const strokeDash = (slice.count / totalMatches) * circumference;
+                                  const offset = accumulatedOffset;
+                                  accumulatedOffset += strokeDash;
+                                  return (
+                                    <Circle
+                                      key={idx}
+                                      cx={60}
+                                      cy={60}
+                                      r={radius}
+                                      stroke={slice.color}
+                                      strokeWidth={16}
+                                      strokeDasharray={`${strokeDash} ${circumference}`}
+                                      strokeDashoffset={-offset}
+                                      strokeLinecap="round"
+                                      fill="none"
+                                    />
+                                  );
+                                })}
+                              </G>
+                              {/* Center Count */}
+                              <SvgText
+                                x={60}
+                                y={57}
+                                textAnchor="middle"
+                                fill="#ffffff"
+                                fontSize="18"
+                                fontWeight="900"
+                              >
+                                {totalMatches}
+                              </SvgText>
+                              <SvgText
+                                x={60}
+                                y={71}
+                                textAnchor="middle"
+                                fill="#94a3b8"
+                                fontSize="8"
+                                fontWeight="800"
+                              >
+                                MATCHES
+                              </SvgText>
+                            </Svg>
+                          </View>
+
+                          {/* Right: Status Pill Breakdown */}
+                          <View style={{ flex: 1, minWidth: 155, gap: 5 }}>
+                            <View style={[styles.statRowPill, styles.schedulesPillLive, { marginVertical: 0, paddingVertical: 5 }]}>
+                              <View style={styles.pillLeftGroup}>
+                                <View style={[styles.glowingDot, { backgroundColor: '#ef4444' }]} />
+                                <Text style={[styles.statPillLabel, { color: '#991b1b', fontSize: 11 }]}>Live (Active)</Text>
+                              </View>
+                              <Text style={[styles.statPillCount, { color: '#dc2626', fontSize: 12 }]}>{liveMatchesCount}</Text>
                             </View>
-                          )}
-                          <Text style={[styles.statPillCount, { color: '#dc2626' }]}>{liveMatchesCount}</Text>
-                        </View>
-                      </View>
 
-                      <View style={[styles.statRowPill, styles.schedulesPillScheduled]}>
-                        <View style={styles.pillLeftGroup}>
-                          <View style={[styles.glowingDot, { backgroundColor: '#0284c7' }]} />
-                          <Text style={[styles.statPillLabel, { color: '#0369a1' }]}>Scheduled Fixtures</Text>
-                        </View>
-                        <Text style={[styles.statPillCount, { color: '#0284c7' }]}>{scheduledMatchesCount}</Text>
-                      </View>
+                            <View style={[styles.statRowPill, styles.schedulesPillScheduled, { marginVertical: 0, paddingVertical: 5 }]}>
+                              <View style={styles.pillLeftGroup}>
+                                <View style={[styles.glowingDot, { backgroundColor: '#0284c7' }]} />
+                                <Text style={[styles.statPillLabel, { color: '#0369a1', fontSize: 11 }]}>Scheduled</Text>
+                              </View>
+                              <Text style={[styles.statPillCount, { color: '#0284c7', fontSize: 12 }]}>{scheduledMatchesCount}</Text>
+                            </View>
 
-                      <View style={[styles.statRowPill, styles.schedulesPillCompleted]}>
-                        <View style={styles.pillLeftGroup}>
-                          <View style={[styles.glowingDot, { backgroundColor: '#059669' }]} />
-                          <Text style={[styles.statPillLabel, { color: '#065f46' }]}>Completed Matches</Text>
-                        </View>
-                        <Text style={[styles.statPillCount, { color: '#059669' }]}>{completedMatchesCount}</Text>
-                      </View>
+                            <View style={[styles.statRowPill, styles.schedulesPillCompleted, { marginVertical: 0, paddingVertical: 5 }]}>
+                              <View style={styles.pillLeftGroup}>
+                                <View style={[styles.glowingDot, { backgroundColor: '#059669' }]} />
+                                <Text style={[styles.statPillLabel, { color: '#065f46', fontSize: 11 }]}>Completed</Text>
+                              </View>
+                              <Text style={[styles.statPillCount, { color: '#059669', fontSize: 12 }]}>{completedMatchesCount}</Text>
+                            </View>
 
-                      <View style={[styles.statRowPill, styles.schedulesPillTotal]}>
-                        <View style={styles.pillLeftGroup}>
-                          <View style={[styles.glowingDot, { backgroundColor: '#d97706' }]} />
-                          <Text style={[styles.statPillLabel, { color: '#92400e' }]}>Total Championship Matches</Text>
+                            <View style={[styles.statRowPill, { backgroundColor: '#fef3c7', borderColor: '#f59e0b', borderWidth: 1, marginVertical: 0, paddingVertical: 5 }]}>
+                              <View style={styles.pillLeftGroup}>
+                                <View style={[styles.glowingDot, { backgroundColor: '#f59e0b' }]} />
+                                <Text style={[styles.statPillLabel, { color: '#b45309', fontSize: 11 }]}>Postponed</Text>
+                              </View>
+                              <Text style={[styles.statPillCount, { color: '#b45309', fontSize: 12 }]}>{postponedMatchesCount}</Text>
+                            </View>
+                          </View>
                         </View>
-                        <Text style={[styles.statPillCount, { color: '#b45309' }]}>{matchesList.length}</Text>
-                      </View>
-                    </View>
+                      );
+                    })()}
                   </View>
 
                   {/* Right Card: Quick Action & Logistics Overview */}
@@ -4331,13 +4447,21 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       Schedule new official fixtures between approved teams, designate match venues, and assign certified scorers.
                     </Text>
 
-                    <View style={{ marginTop: 14, gap: 12 }}>
+                    <View style={{ marginTop: 14, gap: 10 }}>
                       <TouchableOpacity
                         style={styles.btnScheduleGradient}
                         onPress={() => handleOpenScheduleModal()}
                         activeOpacity={0.8}
                       >
                         <Text style={styles.btnScheduleGradientText}>➕ Schedule New Match</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.btnScheduleGradient, { backgroundColor: '#fffbeb', borderColor: '#f59e0b', borderWidth: 1.5 }]}
+                        onPress={() => handleOpenPostponeModal()}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[styles.btnScheduleGradientText, { color: '#b45309' }]}>⏸️ Postpone a Match</Text>
                       </TouchableOpacity>
 
                       <View style={styles.scheduleInfoBoxModern}>
@@ -4542,18 +4666,28 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   ) : filteredMatches.length === 0 ? (
                     <View style={styles.emptyContainerBox}>
                       <Text style={{ fontSize: 36, marginBottom: 8 }}>🏏</Text>
-                      <Text style={styles.emptyTitle}>No Match Schedules Found</Text>
+                      <Text style={styles.emptyTitle}>
+                        {matchFilter === 'CANCELLED' ? 'No Cancelled Matches' :
+                         matchFilter === 'POSTPONED' ? 'No Postponed Matches' :
+                         matchFilter === 'COMPLETED' ? 'No Completed Matches' :
+                         matchFilter === 'LIVE' ? 'No Live Matches Active' :
+                         'No Match Schedules Found'}
+                      </Text>
                       <Text style={styles.emptySubtitle}>
                         {matchSearchQuery
                           ? `No match schedules matching "${matchSearchQuery}"`
+                          : matchFilter === 'CANCELLED' ? 'There are currently no cancelled match fixtures.'
+                          : matchFilter === 'POSTPONED' ? 'There are currently no postponed match fixtures.'
                           : 'No fixtures match the selected filter.'}
                       </Text>
-                      <TouchableOpacity
-                        style={[styles.btnPrimarySchedule, { marginTop: 16 }]}
-                        onPress={() => handleOpenScheduleModal()}
-                      >
-                        <Text style={styles.btnPrimaryScheduleText}>➕ Schedule Match</Text>
-                      </TouchableOpacity>
+                      {(matchFilter === 'all' || matchFilter === 'SCHEDULED') && (
+                        <TouchableOpacity
+                          style={[styles.btnPrimarySchedule, { marginTop: 16 }]}
+                          onPress={() => handleOpenScheduleModal()}
+                        >
+                          <Text style={styles.btnPrimaryScheduleText}>➕ Schedule Match</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   ) : (
                     filteredMatches.map((m) => {
@@ -4854,16 +4988,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                                 <TouchableOpacity
                                   style={[styles.btnOutlineEdit, { borderColor: '#d97706', backgroundColor: '#fffbeb' }]}
-                                  onPress={() => {
-                                    setPostponeMatchModal({
-                                      id: m.id,
-                                      teamA: m.team_a_name || m.team_a_id,
-                                      teamB: m.team_b_name || m.team_b_id,
-                                      date: m.match_date,
-                                      time: m.match_time || '09:30 AM'
-                                    });
-                                    setPostponeReasonInput('Inclement weather / ground condition unplayable');
-                                  }}
+                                  onPress={() => handleOpenPostponeModal(m)}
                                   activeOpacity={0.8}
                                 >
                                   <Text style={[styles.btnOutlineEditText, { color: '#d97706', fontWeight: '700' }]}>⏸️ Postpone</Text>
@@ -6921,24 +7046,167 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       </Modal>
 
       {/* ─────────────────────────────────────────────────────────────
-          13.1. POSTPONE MATCH MODAL
+          13.1. POSTPONE MATCH MODAL (DYNAMIC MATCH SELECTOR & QUICK REASONS)
           ───────────────────────────────────────────────────────────── */}
       <Modal
         visible={!!postponeMatchModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setPostponeMatchModal(null)}
+        onRequestClose={() => {
+          setPostponeMatchModal(null);
+          setPostponeMatchSelectOpen(false);
+        }}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalDialogSmall}>
+          <View style={[styles.modalDialogSmall, { maxWidth: 520, width: '92%' }]}>
             <Text style={[styles.rejectModalHeading, { color: '#d97706' }]}>⏸️ Postpone Match Fixture</Text>
             <Text style={styles.rejectModalSubtitle}>
-              Are you sure you want to postpone the match between{' '}
-              <Text style={{ fontWeight: '700' }}>{postponeMatchModal?.teamA}</Text> and{' '}
-              <Text style={{ fontWeight: '700' }}>{postponeMatchModal?.teamB}</Text> (ID: {postponeMatchModal?.id})?
+              Select the match to freeze and provide a mandatory official reason for postponement.
             </Text>
 
+            {/* Match Selector Dropdown */}
+            <Text style={[styles.formLabel, { marginTop: 12, marginBottom: 4 }]}>Select Match to Postpone *</Text>
+            <View style={{ position: 'relative', zIndex: 100 }}>
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  backgroundColor: '#f8fafc',
+                  borderWidth: 1.5,
+                  borderColor: '#cbd5e1',
+                  borderRadius: 8,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10
+                }}
+                onPress={() => setPostponeMatchSelectOpen(!postponeMatchSelectOpen)}
+                activeOpacity={0.8}
+              >
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }} numberOfLines={1}>
+                    🏏 {postponeMatchModal?.teamA} vs {postponeMatchModal?.teamB}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#64748b' }}>
+                    ID: {postponeMatchModal?.id} • 📅 {postponeMatchModal?.date}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 12, color: '#64748b', fontWeight: 'bold' }}>
+                  {postponeMatchSelectOpen ? '▲' : '▼'}
+                </Text>
+              </TouchableOpacity>
+
+              {postponeMatchSelectOpen && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: 54,
+                    left: 0,
+                    right: 0,
+                    backgroundColor: '#ffffff',
+                    borderRadius: 8,
+                    borderWidth: 1.5,
+                    borderColor: '#e2e8f0',
+                    maxHeight: 200,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 8,
+                    elevation: 10,
+                    zIndex: 200
+                  }}
+                >
+                  <ScrollView nestedScrollEnabled style={{ maxHeight: 190 }}>
+                    {eligibleMatchesForPostpone.length === 0 ? (
+                      <View style={{ padding: 12, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 12, color: '#94a3b8' }}>No active fixtures eligible for postponement.</Text>
+                      </View>
+                    ) : (
+                      eligibleMatchesForPostpone.map((em) => {
+                        const isChosen = (selectedPostponeMatchId || postponeMatchModal?.id) === em.id;
+                        const isLiveEm = (em.status || '').toUpperCase() === 'LIVE' || (em.status || '').toUpperCase() === 'INNINGS_BREAK';
+                        return (
+                          <TouchableOpacity
+                            key={em.id}
+                            style={{
+                              paddingHorizontal: 12,
+                              paddingVertical: 10,
+                              backgroundColor: isChosen ? '#fef3c7' : '#ffffff',
+                              borderBottomWidth: 1,
+                              borderBottomColor: '#f1f5f9',
+                              flexDirection: 'row',
+                              justifyContent: 'space-between',
+                              alignItems: 'center'
+                            }}
+                            onPress={() => {
+                              setSelectedPostponeMatchId(em.id);
+                              setPostponeMatchModal({
+                                id: em.id,
+                                teamA: em.team_a_name || em.team_a_id,
+                                teamB: em.team_b_name || em.team_b_id,
+                                date: em.match_date,
+                                time: em.match_time || '09:30 AM'
+                              });
+                              setPostponeMatchSelectOpen(false);
+                            }}
+                          >
+                            <View style={{ flex: 1, marginRight: 8 }}>
+                              <Text style={{ fontSize: 12.5, fontWeight: isChosen ? '800' : '600', color: isChosen ? '#b45309' : '#0f172a' }} numberOfLines={1}>
+                                {em.team_a_name || em.team_a_id} vs {em.team_b_name || em.team_b_id}
+                              </Text>
+                              <Text style={{ fontSize: 11, color: '#64748b' }}>
+                                ID: {em.id} • {em.match_date}
+                              </Text>
+                            </View>
+                            <View
+                              style={{
+                                paddingHorizontal: 6,
+                                paddingVertical: 2,
+                                borderRadius: 4,
+                                backgroundColor: isLiveEm ? '#fee2e2' : '#e0f2fe'
+                              }}
+                            >
+                              <Text style={{ fontSize: 10, fontWeight: '800', color: isLiveEm ? '#dc2626' : '#0369a1' }}>
+                                {isLiveEm ? '● LIVE' : '🗓 SCHEDULED'}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })
+                    )}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
+
+            {/* Quick Reason Chips */}
             <Text style={[styles.formLabel, { marginTop: 12 }]}>Reason for Postponement *</Text>
+            <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+              {[
+                '🌧️ Heavy Rain / Pitch Unplayable',
+                '💧 Waterlogged Ground',
+                '💡 Bad Light / Sight-Screen Delay',
+                '⚠️ Association / Administrative Delay'
+              ].map((reasonChip, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={{
+                    backgroundColor: postponeReasonInput === reasonChip ? '#fef3c7' : '#f1f5f9',
+                    borderColor: postponeReasonInput === reasonChip ? '#f59e0b' : '#cbd5e1',
+                    borderWidth: 1,
+                    borderRadius: 6,
+                    paddingHorizontal: 8,
+                    paddingVertical: 4
+                  }}
+                  onPress={() => setPostponeReasonInput(reasonChip)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ fontSize: 11, color: postponeReasonInput === reasonChip ? '#b45309' : '#475569', fontWeight: '600' }}>
+                    {reasonChip}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
             <TextInput
               style={styles.rejectInput}
               value={postponeReasonInput}
@@ -6952,7 +7220,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             <View style={styles.rejectModalActions}>
               <TouchableOpacity
                 style={styles.modalCancelBtn}
-                onPress={() => setPostponeMatchModal(null)}
+                onPress={() => {
+                  setPostponeMatchModal(null);
+                  setPostponeMatchSelectOpen(false);
+                }}
                 disabled={isPostponingMatch}
               >
                 <Text style={styles.modalCancelBtnText}>Dismiss</Text>
