@@ -698,7 +698,7 @@ export const MatchesPage: React.FC = () => {
                       backgroundColor: '#FFFFFF',
                       color: '#1E293B',
                       width: '100%',
-                      outline: 'none'
+                      outlineStyle: 'none' as any
                     }}
                   >
                     <option value="" disabled>Select Tournament</option>
@@ -724,7 +724,7 @@ export const MatchesPage: React.FC = () => {
                         backgroundColor: '#FFFFFF',
                         color: '#1E293B',
                         width: '100%',
-                        outline: 'none'
+                        outlineStyle: 'none' as any
                       }}
                     >
                       {teams.map((t) => (
@@ -748,7 +748,7 @@ export const MatchesPage: React.FC = () => {
                         backgroundColor: '#FFFFFF',
                         color: '#1E293B',
                         width: '100%',
-                        outline: 'none'
+                        outlineStyle: 'none' as any
                       }}
                     >
                       {teams.map((t) => (
@@ -778,7 +778,7 @@ export const MatchesPage: React.FC = () => {
                       backgroundColor: '#FFFFFF',
                       color: '#1E293B',
                       width: '100%',
-                      outline: 'none'
+                      outlineStyle: 'none' as any
                     }}
                   >
                     <option value="" disabled>Select Ground</option>
@@ -819,7 +819,7 @@ export const MatchesPage: React.FC = () => {
                         border: '1px solid #CBD5E1',
                         backgroundColor: '#F8FAFC',
                         color: '#1E293B',
-                        outline: 'none',
+                        outlineStyle: 'none' as any,
                         boxSizing: 'border-box'
                       }}
                     />
@@ -859,7 +859,7 @@ export const MatchesPage: React.FC = () => {
                         backgroundColor: '#FFFFFF',
                         color: '#1E293B',
                         width: '100%',
-                        outline: 'none',
+                        outlineStyle: 'none' as any,
                         boxSizing: 'border-box'
                       }}
                     />
@@ -946,7 +946,7 @@ export const MatchesPage: React.FC = () => {
                       backgroundColor: '#FFFFFF',
                       color: '#1E293B',
                       width: '100%',
-                      outline: 'none'
+                      outlineStyle: 'none' as any
                     }}
                   >
                     {tournaments.map((t) => (
@@ -971,7 +971,7 @@ export const MatchesPage: React.FC = () => {
                         backgroundColor: '#FFFFFF',
                         color: '#1E293B',
                         width: '100%',
-                        outline: 'none'
+                        outlineStyle: 'none' as any
                       }}
                     >
                       {teams.map((t) => (
@@ -995,7 +995,7 @@ export const MatchesPage: React.FC = () => {
                         backgroundColor: '#FFFFFF',
                         color: '#1E293B',
                         width: '100%',
-                        outline: 'none'
+                        outlineStyle: 'none' as any
                       }}
                     >
                       {teams.map((t) => (
@@ -1024,7 +1024,7 @@ export const MatchesPage: React.FC = () => {
                       backgroundColor: '#FFFFFF',
                       color: '#1E293B',
                       width: '100%',
-                      outline: 'none'
+                      outlineStyle: 'none' as any
                     }}
                   >
                     {venues.map((v) => {
@@ -1054,7 +1054,7 @@ export const MatchesPage: React.FC = () => {
                         border: '1px solid #CBD5E1',
                         backgroundColor: '#F8FAFC',
                         color: '#1E293B',
-                        outline: 'none',
+                        outlineStyle: 'none' as any,
                         boxSizing: 'border-box'
                       }}
                     />
@@ -1133,7 +1133,7 @@ export const MatchesPage: React.FC = () => {
                         backgroundColor: '#FFFFFF',
                         color: '#1E293B',
                         width: '100%',
-                        outline: 'none'
+                        outlineStyle: 'none' as any
                       }}
                     >
                       <option value="SCHEDULED">Scheduled</option>

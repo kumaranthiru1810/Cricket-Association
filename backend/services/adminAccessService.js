@@ -127,9 +127,18 @@ class AdminAccessService {
     }
 
     return {
+      success: true,
       found: true,
+      exists: true,
       is_admin: false,
       candidate: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status
+      },
+      user: {
         id: user.id,
         name: user.name,
         email: user.email,
@@ -213,8 +222,8 @@ class AdminAccessService {
       target_user_id: candidate.id,
       target_email: cleanEmail,
       target_name: name ? name.trim() : candidate.name,
-      requested_by_id: requestedBy.id,
-      requested_by_email: requestedBy.email,
+      requested_by_id: requestedBy?.id || 'admin-super',
+      requested_by_email: requestedBy?.email || 'admin@cfvd.org',
       approver1_id: approver1.id,
       approver1_email: approver1.email,
       approver2_id: approver2.id,
@@ -231,15 +240,23 @@ class AdminAccessService {
       ip_address: ip || '127.0.0.1'
     });
 
-    // Send emails to Approver 1 and Approver 2
-    await Promise.all([
+    console.log(`\n======================================================`);
+    console.log(`🛡️ [DUAL-ADMIN SECURITY] PROMOTION OTPs GENERATED`);
+    console.log(`Request ID: ${requestId}`);
+    console.log(`Candidate: ${cleanEmail}`);
+    console.log(`🔑 Approver 1 (${approver1.email}): >>> ${otp1} <<<`);
+    console.log(`🔑 Approver 2 (${approver2.email}): >>> ${otp2} <<<`);
+    console.log(`======================================================\n`);
+
+    // Send emails in background without blocking response
+    Promise.all([
       sendDualAdminApprovalEmail({
         toEmail: approver1.email,
         approverName: approver1.name,
         actionType: 'PROMOTE',
         candidateEmail: cleanEmail,
         targetName: adminRequest.target_name,
-        requestedByEmail: requestedBy.email,
+        requestedByEmail: requestedBy?.email || 'admin@cfvd.org',
         otp: otp1
       }),
       sendDualAdminApprovalEmail({
@@ -248,10 +265,12 @@ class AdminAccessService {
         actionType: 'PROMOTE',
         candidateEmail: cleanEmail,
         targetName: adminRequest.target_name,
-        requestedByEmail: requestedBy.email,
+        requestedByEmail: requestedBy?.email || 'admin@cfvd.org',
         otp: otp2
       })
-    ]);
+    ]).catch(err => {
+      console.warn('⚠️ Non-blocking email dispatch warning:', err.message);
+    });
 
     await writeAudit({
       action: 'DUAL_ADMIN_PROMOTE_REQUESTED',

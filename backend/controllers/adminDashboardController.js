@@ -850,17 +850,25 @@ class AdminDashboardController {
       try {
         const scorers = await db.models.User.find({ role: 'SCORER' }).sort({ created_at: -1 }).lean();
         scorers.forEach(s => {
+          const ph = s.mobile || s.phone || s.scorer_details?.mobile || s.scorer_details?.phone || '-';
+          const adh = s.aadhaar || s.scorer_details?.aadhaar || s.aadhaar_number || '-';
           items.push({
             id: s.id,
             applicantName: s.name,
             type: 'SCORER',
             contact: s.email,
-            phone: s.mobile || '-',
+            phone: ph,
+            aadhaar: adh,
             association: s.scorer_details?.taluk ? `${s.scorer_details.taluk} District Scorer` : (s.association || 'District Certified Scorer'),
             date: s.created_at,
             status: (s.status === 'ACTIVE' || s.status === 'APPROVED') ? 'APPROVED' : (s.status || 'PENDING'),
             certificationLevel: s.scorer_details?.certification_level || s.certificationLevel || 'District Certified',
-            details: s.scorer_details,
+            details: {
+              ...(s.scorer_details || {}),
+              phone: ph,
+              mobile: ph,
+              aadhaar: adh
+            },
             rejectionReason: s.rejection_reason || null
           });
         });
@@ -873,12 +881,17 @@ class AdminDashboardController {
         const teamRegistrationModel = require('../models/teamRegistrationModel');
         const teamRegs = await teamRegistrationModel.getAll();
         (teamRegs || []).forEach(t => {
+          const cPhone = t.coach_phone || t.coach_mobile || t.phone || t.mobile || '-';
+          const cAadhaar = t.coach_aadhaar || t.aadhaar || '-';
           items.push({
             id: t.id,
             applicantName: `${t.team_name} (Coach: ${t.coach_name})`,
             type: 'TEAM',
             contact: t.coach_email,
-            phone: t.city || t.taluk || 'Virudhunagar',
+            phone: cPhone,
+            coachPhone: cPhone,
+            aadhaar: cAadhaar,
+            coachAadhaar: cAadhaar,
             association: `${t.taluk || t.city || 'District'} Club (${(t.players || []).length} Players)`,
             date: t.created_at,
             status: t.status || 'PENDING',
@@ -887,7 +900,10 @@ class AdminDashboardController {
               teamName: t.team_name,
               coachName: t.coach_name,
               coachEmail: t.coach_email,
+              coachPhone: cPhone,
+              coachAadhaar: cAadhaar,
               taluk: t.taluk,
+              city: t.city,
               squadCount: (t.players || []).length
             },
             rejectionReason: t.rejection_reason || null
@@ -901,18 +917,26 @@ class AdminDashboardController {
       try {
         const umpires = await db.models.User.find({ role: 'UMPIRE' }).sort({ created_at: -1 }).lean();
         umpires.forEach(u => {
+          const uPh = u.mobile || u.phone || u.umpire_details?.mobile || '-';
+          const uAdh = u.aadhaar || u.umpire_details?.aadhaar || u.aadhaar_number || '-';
           items.push({
             id: u.id,
             applicantName: u.name,
             type: 'UMPIRE',
             contact: u.email,
-            phone: u.mobile || '-',
+            phone: uPh,
+            aadhaar: uAdh,
             association: `${u.umpire_details?.district || 'District'} Official Umpire Panel`,
             date: u.created_at,
             status: (u.status === 'ACTIVE' || u.status === 'APPROVED') ? 'APPROVED' : (u.status || 'PENDING'),
             qualification: u.umpire_details?.certification_level || u.umpire_details?.qualification || 'District Certified Umpire',
             experience: u.umpire_details?.experience || `${u.umpire_details?.experience_years || 0} years`,
-            details: u.umpire_details,
+            details: {
+              ...(u.umpire_details || {}),
+              phone: uPh,
+              mobile: uPh,
+              aadhaar: uAdh
+            },
             rejectionReason: u.rejection_reason || null
           });
         });
@@ -924,16 +948,24 @@ class AdminDashboardController {
       try {
         const players = await db.models.User.find({ role: 'PLAYER' }).sort({ created_at: -1 }).limit(50).lean();
         players.forEach(p => {
+          const pPh = p.mobile || p.phone || p.player_details?.mobile || p.player_details?.phone || '-';
+          const pAdh = p.aadhaar || p.player_details?.aadhaar || p.aadhaar_number || '-';
           items.push({
             id: p.id,
             applicantName: p.name,
             type: 'PLAYER',
             contact: p.email,
-            phone: p.mobile || '-',
+            phone: pPh,
+            aadhaar: pAdh,
             association: `Player • ${p.player_details?.taluk || 'Virudhunagar'} (${p.player_details?.category || 'Senior'})`,
             date: p.created_at,
             status: (p.status === 'ACTIVE' || p.status === 'APPROVED') ? 'APPROVED' : (p.status || 'PENDING'),
-            details: p.player_details,
+            details: {
+              ...(p.player_details || {}),
+              phone: pPh,
+              mobile: pPh,
+              aadhaar: pAdh
+            },
             rejectionReason: p.rejection_reason || null
           });
         });

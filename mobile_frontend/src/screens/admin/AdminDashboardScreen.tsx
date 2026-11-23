@@ -41,6 +41,7 @@ import CricketLawsManagement from '../../admin/components/CricketLawsManagement'
 import CalculationSettingsManagement from '../../admin/components/CalculationSettingsManagement';
 import SettingsPage from '../../admin/pages/SettingsPage';
 import UsersPage from '../../admin/pages/UsersPage';
+import DualAdminSecurityModal from '../../components/admin/DualAdminSecurityModal';
 import {
   getKolkataNow,
   getTodayKolkata,
@@ -258,7 +259,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         if (saved && ['overview', 'teams', 'scorers', 'umpires', 'content', 'schedules', 'tournaments', 'laws', 'calculations'].includes(saved)) {
           return saved;
         }
-      } catch (e) {}
+      } catch (e) { }
     }
     return 'scorers';
   });
@@ -279,7 +280,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           url.searchParams.set('tab', activeTab);
           window.history.replaceState({ appScreen: 'Admin', tab: activeTab }, '', url.toString());
         }
-      } catch (e) {}
+      } catch (e) { }
     }
   }, [activeTab]);
 
@@ -293,6 +294,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   const [pendingTournamentsCount, setPendingTournamentsCount] = useState<number>(0);
 
   const adminEmail = initialParams?.adminEmail || currentUser?.email || 'admin@cfvd.org';
+
+  // Dual-Admin Security Modal State (Promote / Add Admin, Remove / Demote Admin, Audit Log)
+  const [securityModalVisible, setSecurityModalVisible] = useState<boolean>(false);
+  const [securityModalTab, setSecurityModalTab] = useState<'promote' | 'remove' | 'audit'>('promote');
 
   // Seed initial registrations for district management
   const DEFAULT_CFVD_SCORERS = [
@@ -697,12 +702,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           ? Array.isArray(regRes.registrations)
             ? regRes.registrations
             : Array.isArray(regRes.data)
-            ? regRes.data
-            : typeof regRes === 'object'
-            ? Object.keys(regRes)
-                .filter((k) => !isNaN(Number(k)))
-                .map((k) => regRes[k])
-            : []
+              ? regRes.data
+              : typeof regRes === 'object'
+                ? Object.keys(regRes)
+                  .filter((k) => !isNaN(Number(k)))
+                  .map((k) => regRes[k])
+                : []
           : [];
 
       if (rawRegs.length > 0) {
@@ -1083,13 +1088,13 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       if (list && list.length > 0) {
         setTournamentsList(list);
       }
-    }).catch(() => {});
+    }).catch(() => { });
     ScorerApi.getVenues().then((res: any) => {
       const vList = Array.isArray(res) ? res : (Array.isArray(res?.venues) ? res.venues : []);
       if (vList && vList.length > 0) {
         setVenuesList(vList);
       }
-    }).catch(() => {});
+    }).catch(() => { });
 
     setScheduleFormError(null);
     setScheduleStep(1);
@@ -1323,7 +1328,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       const statusUpper = (m.status || '').toUpperCase();
       if (statusUpper === 'CANCELLED') return false;
       const sameTeams = (m.team_a_id === team_a_id && m.team_b_id === team_b_id) ||
-                        (m.team_a_id === team_b_id && m.team_b_id === team_a_id);
+        (m.team_a_id === team_b_id && m.team_b_id === team_a_id);
       const mDate = normalizeDate(m.match_date || m.date);
       return sameTeams && mDate === cleanDate;
     });
@@ -2239,6 +2244,33 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               </Text>
             )}
           </TouchableOpacity>
+
+          {/* Dual-Admin Security Protocol (Promote / Remove / Dual Approval) */}
+          <TouchableOpacity
+            style={[
+              styles.sidebarNavItem,
+              isCollapsed && styles.sidebarNavItemCollapsed,
+              { marginTop: 4, backgroundColor: '#fef2f2', borderColor: '#fecaca', borderWidth: 1 }
+            ]}
+            onPress={() => {
+              setSecurityModalTab('promote');
+              setSecurityModalVisible(true);
+              if (isMobileDrawer) setMobileSidebarOpen(false);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.sidebarNavIcon, { color: '#b91c1c' }]}>🛡️</Text>
+            {!isCollapsed && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>
+                <Text style={[styles.sidebarNavLabel, { color: '#b91c1c', fontWeight: '800' }]}>
+                  Dual-Admin Security
+                </Text>
+                <View style={[styles.sidebarBadge, { backgroundColor: '#fee2e2' }]}>
+                  <Text style={[styles.sidebarBadgeText, { color: '#b91c1c' }]}>APEX</Text>
+                </View>
+              </View>
+            )}
+          </TouchableOpacity>
         </ScrollView>
 
         {/* Sidebar Footer (Pinned at bottom) */}
@@ -2310,13 +2342,23 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             <Text style={styles.hamburgerIcon}>☰</Text>
           </TouchableOpacity>
           <Image source={IMG_LOGO} style={styles.adminMinimalLogo} resizeMode="contain" />
-          <View style={{ marginLeft: 12, flex: 1 }}>
-            <Text style={[styles.adminMinimalTitle, !isDesktop && { fontSize: 12.5 }]} numberOfLines={!isDesktop ? 1 : 2}>CRICKET FEDERATION OF VIRUDHUNAGAR DISTRICT</Text>
-            <Text style={[styles.adminMinimalSub, !isDesktop && { fontSize: 10 }]} numberOfLines={1}>Official Administrator Management Console</Text>
+          <View style={{ marginLeft: 10, flex: 1, minWidth: 0 }}>
+            <Text style={[styles.adminMinimalTitle, !isDesktop && { fontSize: 12 }]} numberOfLines={1} ellipsizeMode="tail">CRICKET FEDERATION OF VIRUDHUNAGAR</Text>
+            <Text style={[styles.adminMinimalSub, !isDesktop && { fontSize: 9.5 }]} numberOfLines={1} ellipsizeMode="tail">Official Admin Console</Text>
           </View>
         </View>
         {isDesktop ? (
           <View style={styles.adminMinimalActionRow}>
+            <TouchableOpacity
+              style={[styles.adminExitBtnPill, { backgroundColor: '#b91c1c', borderColor: '#ef4444', marginRight: 8 }]}
+              onPress={() => {
+                setSecurityModalTab('promote');
+                setSecurityModalVisible(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.adminExitBtnPillText, { color: '#ffffff', fontWeight: '800' }]}>🛡️ Dual-Admin Security</Text>
+            </TouchableOpacity>
             <View style={styles.adminUserBadgePill}>
               <Text style={styles.adminUserBadgePillText}>👤 {adminEmail}</Text>
             </View>
@@ -2325,13 +2367,25 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             </TouchableOpacity>
           </View>
         ) : (
-          <TouchableOpacity
-            style={[styles.adminExitBtnPill, { paddingHorizontal: 10, paddingVertical: 5, marginLeft: 8 }]}
-            onPress={() => setLogoutModalOpen(true)}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.adminExitBtnPillText, { fontSize: 11 }]}>Exit</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity
+              style={[styles.adminExitBtnPill, { backgroundColor: '#b91c1c', borderColor: '#ef4444', paddingHorizontal: 8, paddingVertical: 5, marginLeft: 4 }]}
+              onPress={() => {
+                setSecurityModalTab('promote');
+                setSecurityModalVisible(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.adminExitBtnPillText, { color: '#ffffff', fontWeight: '800', fontSize: 10.5 }]}>🛡️ Security</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.adminExitBtnPill, { paddingHorizontal: 10, paddingVertical: 5, marginLeft: 6 }]}
+              onPress={() => setLogoutModalOpen(true)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.adminExitBtnPillText, { fontSize: 11 }]}>Exit</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 
@@ -2382,9 +2436,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
             {/* MODERN PAGE HEADER ROW */}
             <View style={styles.pageHeaderRow}>
-              <View>
+              <View style={{ flex: 1, minWidth: 200 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <Text style={styles.pageHeaderTitle}>
+                  <Text style={[styles.pageHeaderTitle, !isDesktop && { fontSize: 17 }]}>
                     {activeTab === 'overview' && '⊞ Command Center Overview'}
                     {activeTab === 'users' && '🛡️ Users & Dynamic Administrator Governance'}
                     {activeTab === 'teams' && '👥 Team Registrations'}
@@ -2470,87 +2524,87 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               </View>
             </View>
 
-          {/* ─────────────────────────────────────────────────────────────
+            {/* ─────────────────────────────────────────────────────────────
               4. TAB CONTENT: SCORER MANAGEMENT (Exact Match to Screenshot)
               ───────────────────────────────────────────────────────────── */}
-          {activeTab === 'scorers' && (
-            <View>
-              {/* TOP TWO SIDE-BY-SIDE HIGHLIGHT CARDS */}
-              <View style={[styles.highlightCardsRow, { flexDirection: isDesktop ? 'row' : 'column' }]}>
-                {/* Left Card: Scorer Management Stats (Royal Violet & Indigo Themed Modern White Card) */}
-                <View style={styles.scorerStatCard}>
-                  <View style={styles.statCardHeader}>
-                    <View style={styles.scorerIconBox}>
-                      <Text style={{ fontSize: 16 }}>📋</Text>
+            {activeTab === 'scorers' && (
+              <View>
+                {/* TOP TWO SIDE-BY-SIDE HIGHLIGHT CARDS */}
+                <View style={[styles.highlightCardsRow, { flexDirection: isDesktop ? 'row' : 'column' }]}>
+                  {/* Left Card: Scorer Management Stats (Royal Violet & Indigo Themed Modern White Card) */}
+                  <View style={styles.scorerStatCard}>
+                    <View style={styles.statCardHeader}>
+                      <View style={styles.scorerIconBox}>
+                        <Text style={{ fontSize: 16 }}>📋</Text>
+                      </View>
+                      <View>
+                        <Text style={styles.scorerCardTitle}>Scorer Management</Text>
+                        <Text style={styles.scorerBadgeTag}>DIGITAL ARBITER REGISTRY</Text>
+                      </View>
                     </View>
-                    <View>
-                      <Text style={styles.scorerCardTitle}>Scorer Management</Text>
-                      <Text style={styles.scorerBadgeTag}>DIGITAL ARBITER REGISTRY</Text>
+                    <Text style={styles.scorerCardSubtitle}>
+                      Official accredited match scorers authorized for live digital scorecards across Virudhunagar District.
+                    </Text>
+
+                    {/* 4 Colored Pill Rows */}
+                    <View style={styles.pillRowsContainer}>
+                      {/* Authorized Scorers */}
+                      <View style={[styles.statRowPill, styles.scorerPillApproved]}>
+                        <View style={styles.pillLeftGroup}>
+                          <View style={[styles.glowingDot, { backgroundColor: '#10b981' }]} />
+                          <Text style={[styles.pillLabel, { color: '#065f46' }]}>Authorized Scorers</Text>
+                        </View>
+                        <Text style={[styles.pillCount, { color: '#047857' }]}>{scorerApproved}</Text>
+                      </View>
+
+                      {/* Pending Approval */}
+                      <View style={[styles.statRowPill, styles.scorerPillPending]}>
+                        <View style={styles.pillLeftGroup}>
+                          <View style={[styles.glowingDot, { backgroundColor: '#f59e0b' }]} />
+                          <Text style={[styles.pillLabel, { color: '#92400e' }]}>Pending Approval</Text>
+                        </View>
+                        <Text style={[styles.pillCount, { color: '#b45309' }]}>{scorerPending}</Text>
+                      </View>
+
+                      {/* Rejected */}
+                      <View style={[styles.statRowPill, styles.scorerPillRejected]}>
+                        <View style={styles.pillLeftGroup}>
+                          <View style={[styles.glowingDot, { backgroundColor: '#ef4444' }]} />
+                          <Text style={[styles.pillLabel, { color: '#991b1b' }]}>Rejected</Text>
+                        </View>
+                        <Text style={[styles.pillCount, { color: '#dc2626' }]}>{scorerRejected}</Text>
+                      </View>
+
+                      {/* Total Scorers */}
+                      <View style={[styles.statRowPill, styles.scorerPillTotal]}>
+                        <View style={styles.pillLeftGroup}>
+                          <View style={[styles.glowingDot, { backgroundColor: '#6366f1' }]} />
+                          <Text style={[styles.pillLabel, { color: '#3730a3' }]}>Total Registered</Text>
+                        </View>
+                        <Text style={[styles.pillCount, { color: '#4338ca' }]}>{scorerTotal}</Text>
+                      </View>
                     </View>
                   </View>
-                  <Text style={styles.scorerCardSubtitle}>
-                    Official accredited match scorers authorized for live digital scorecards across Virudhunagar District.
-                  </Text>
 
-                  {/* 4 Colored Pill Rows */}
-                  <View style={styles.pillRowsContainer}>
-                    {/* Authorized Scorers */}
-                    <View style={[styles.statRowPill, styles.scorerPillApproved]}>
-                      <View style={styles.pillLeftGroup}>
-                        <View style={[styles.glowingDot, { backgroundColor: '#10b981' }]} />
-                        <Text style={[styles.pillLabel, { color: '#065f46' }]}>Authorized Scorers</Text>
-                      </View>
-                      <Text style={[styles.pillCount, { color: '#047857' }]}>{scorerApproved}</Text>
+                  {/* Right Card: Status Distribution with Donut Chart */}
+                  <View style={[styles.scorerStatCard, styles.donutCardAlign]}>
+                    <View style={styles.donutHeader}>
+                      <Text style={{ fontSize: 16, marginRight: 6 }}>📊</Text>
+                      <Text style={styles.scorerCardTitle}>Status Distribution</Text>
                     </View>
 
-                    {/* Pending Approval */}
-                    <View style={[styles.statRowPill, styles.scorerPillPending]}>
-                      <View style={styles.pillLeftGroup}>
-                        <View style={[styles.glowingDot, { backgroundColor: '#f59e0b' }]} />
-                        <Text style={[styles.pillLabel, { color: '#92400e' }]}>Pending Approval</Text>
-                      </View>
-                      <Text style={[styles.pillCount, { color: '#b45309' }]}>{scorerPending}</Text>
-                    </View>
-
-                    {/* Rejected */}
-                    <View style={[styles.statRowPill, styles.scorerPillRejected]}>
-                      <View style={styles.pillLeftGroup}>
-                        <View style={[styles.glowingDot, { backgroundColor: '#ef4444' }]} />
-                        <Text style={[styles.pillLabel, { color: '#991b1b' }]}>Rejected</Text>
-                      </View>
-                      <Text style={[styles.pillCount, { color: '#dc2626' }]}>{scorerRejected}</Text>
-                    </View>
-
-                    {/* Total Scorers */}
-                    <View style={[styles.statRowPill, styles.scorerPillTotal]}>
-                      <View style={styles.pillLeftGroup}>
-                        <View style={[styles.glowingDot, { backgroundColor: '#6366f1' }]} />
-                        <Text style={[styles.pillLabel, { color: '#3730a3' }]}>Total Registered</Text>
-                      </View>
-                      <Text style={[styles.pillCount, { color: '#4338ca' }]}>{scorerTotal}</Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Right Card: Status Distribution with Donut Chart */}
-                <View style={[styles.scorerStatCard, styles.donutCardAlign]}>
-                  <View style={styles.donutHeader}>
-                    <Text style={{ fontSize: 16, marginRight: 6 }}>📊</Text>
-                    <Text style={styles.scorerCardTitle}>Status Distribution</Text>
-                  </View>
-
-                  {/* Donut Chart with CSS Conic Gradient on Web / Multi-border Ring on Native */}
-                  <View style={styles.donutWrapper}>
-                    <View
-                      style={[
-                        styles.donutOuterRing,
-                        !isDesktop && { width: 140, height: 140, borderRadius: 70 },
-                        Platform.OS === 'web'
-                          ? ({
+                    {/* Donut Chart with CSS Conic Gradient on Web / Multi-border Ring on Native */}
+                    <View style={styles.donutWrapper}>
+                      <View
+                        style={[
+                          styles.donutOuterRing,
+                          !isDesktop && { width: 140, height: 140, borderRadius: 70 },
+                          Platform.OS === 'web'
+                            ? ({
                               background: `conic-gradient(#10b981 0% ${scorerSegments.appPct}%, #f59e0b ${scorerSegments.appPct}% ${scorerSegments.appPct + scorerSegments.pendPct}%, #ef4444 ${scorerSegments.appPct + scorerSegments.pendPct}% 100%)`,
                               backgroundImage: `conic-gradient(#10b981 0% ${scorerSegments.appPct}%, #f59e0b ${scorerSegments.appPct}% ${scorerSegments.appPct + scorerSegments.pendPct}%, #ef4444 ${scorerSegments.appPct + scorerSegments.pendPct}% 100%)`
                             } as any)
-                          : {
+                            : {
                               borderWidth: 10,
                               borderColor: '#10b981',
                               borderTopColor: '#10b981',
@@ -2559,938 +2613,157 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               borderLeftColor: '#10b981',
                               backgroundColor: '#ffffff'
                             }
-                      ]}
-                    >
-                      {/* Center Hole */}
-                      <View style={[styles.donutHole, { backgroundColor: '#ffffff' }, !isDesktop && { width: 80, height: 80, borderRadius: 40 }]}>
-                        <Text style={[styles.donutNumber, { color: '#1e1b4b' }, !isDesktop && { fontSize: 24 }]}>{scorerTotal}</Text>
-                        <Text style={[styles.donutUnitLabel, { color: '#6366f1' }, !isDesktop && { fontSize: 8 }]}>SCORERS</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Dynamic Proportional Distribution Bar */}
-                  <View style={styles.distributionBarWrapper}>
-                    <View style={[styles.distributionBarTrack, { backgroundColor: '#f1f5f9' }]}>
-                      {scorerSegments.appPct > 0 && (
-                        <View style={[styles.distributionBarSegment, { width: `${scorerSegments.appPct}%`, backgroundColor: '#10b981' }]} />
-                      )}
-                      {scorerSegments.pendPct > 0 && (
-                        <View style={[styles.distributionBarSegment, { width: `${scorerSegments.pendPct}%`, backgroundColor: '#f59e0b' }]} />
-                      )}
-                      {scorerSegments.rejPct > 0 && (
-                        <View style={[styles.distributionBarSegment, { width: `${scorerSegments.rejPct}%`, backgroundColor: '#ef4444' }]} />
-                      )}
-                    </View>
-                    <View style={styles.distributionPctRow}>
-                      <Text style={[styles.distributionPctText, { color: '#047857' }]}>{scorerSegments.appPct}% Authorized</Text>
-                      <Text style={[styles.distributionPctText, { color: '#b45309' }]}>{scorerSegments.pendPct}% Pending</Text>
-                      <Text style={[styles.distributionPctText, { color: '#b91c1c' }]}>{scorerSegments.rejPct}% Rejected</Text>
-                    </View>
-                  </View>
-
-                  {/* 3-Color Legend */}
-                  <View style={styles.donutLegendRow}>
-                    <View style={styles.legendItem}>
-                      <View style={[styles.legendDot, { backgroundColor: '#10b981' }]} />
-                      <Text style={[styles.legendText, { color: '#334155' }]}>Authorized ({scorerApproved})</Text>
-                    </View>
-                    <View style={styles.legendItem}>
-                      <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
-                      <Text style={[styles.legendText, { color: '#334155' }]}>Pending ({scorerPending})</Text>
-                    </View>
-                    <View style={styles.legendItem}>
-                      <View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} />
-                      <Text style={[styles.legendText, { color: '#334155' }]}>Rejected ({scorerRejected})</Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-
-              {/* Dynamic Live Scorer Status Strip */}
-              <View style={[styles.dynamicRegistryStrip, { backgroundColor: '#f5f3ff', borderColor: '#ddd6fe' }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ fontSize: 16 }}>📋</Text>
-                  <Text style={[styles.dynamicRegistryText, { color: '#4338ca' }]}>
-                    LIVE SCORER REGISTRY • {scorerTotal} Registered • {scorerApproved} Authorized • {scorerPending} Awaiting Review
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <View style={styles.badgeCategoryPurple}>
-                    <Text style={styles.badgeCategoryPurpleText}>Grade A Panel</Text>
-                  </View>
-                  <View style={styles.badgeCategoryIndigo}>
-                    <Text style={styles.badgeCategoryIndigoText}>Digital Arbiters</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={[styles.roundReloadBtnSm, isLiveReloading && styles.roundReloadBtnSpinning]}
-                    onPress={handleLiveReload}
-                    activeOpacity={0.7}
-                    accessibilityLabel="Reload live scorers"
-                  >
-                    <Animated.Text style={[styles.roundReloadIconSm, { transform: [{ rotate: spinInterpolate }] }]}>
-                      🔄
-                    </Animated.Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* SEARCH & FILTER TOOLBAR */}
-              <View style={styles.toolbarCard}>
-                <View style={styles.searchBox}>
-                  <Text style={styles.searchIcon}>🔍</Text>
-                  <TextInput
-                    style={styles.searchInput}
-                    value={scorerSearchQuery}
-                    onChangeText={setScorerSearchQuery}
-                    placeholder="Search by scorer name, email or grade..."
-                    placeholderTextColor="#94a3b8"
-                  />
-                </View>
-
-                <View style={styles.filterPillsGroup}>
-                  <Text style={styles.filterStatusLabel}>Filter Status:</Text>
-                  <TouchableOpacity
-                    style={[styles.filterPill, scorerFilter === 'all' && styles.filterPillActive]}
-                    onPress={() => setScorerFilter('all')}
-                  >
-                    <Text style={[styles.filterPillText, scorerFilter === 'all' && styles.filterPillTextActive]}>
-                      All ({scorerTotal})
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.filterPill, scorerFilter === 'Pending' && styles.filterPillActive]}
-                    onPress={() => setScorerFilter('Pending')}
-                  >
-                    <Text style={[styles.filterPillText, scorerFilter === 'Pending' && styles.filterPillTextActive]}>
-                      Pending ({scorerPending})
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.filterPill, scorerFilter === 'Approved' && styles.filterPillActive]}
-                    onPress={() => setScorerFilter('Approved')}
-                  >
-                    <Text style={[styles.filterPillText, scorerFilter === 'Approved' && styles.filterPillTextActive]}>
-                      Approved ({scorerApproved})
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.filterPill, scorerFilter === 'Rejected' && styles.filterPillActive]}
-                    onPress={() => setScorerFilter('Rejected')}
-                  >
-                    <Text style={[styles.filterPillText, scorerFilter === 'Rejected' && styles.filterPillTextActive]}>
-                      Rejected ({scorerRejected})
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* SCORERS LIST CARDS */}
-              <View style={styles.itemsListContainer}>
-                {filteredScorers.length === 0 ? null : (
-                  filteredScorers.map(s => {
-                    const isApproved = s.status === 'Approved';
-                    const isPending = (s.status || 'Pending') === 'Pending';
-                    const isRejected = s.status === 'Rejected';
-
-                    return (
-                      <View
-                        key={s.scorerId}
-                        style={[
-                          styles.whiteItemCard,
-                          isApproved && styles.cardApprovedBorder,
-                          isPending && styles.cardPendingBorder,
-                          isRejected && styles.cardRejectedBorder
                         ]}
                       >
-                        <View style={styles.itemCardHeaderRow}>
-                          <View style={styles.itemTitleGroup}>
-                            <View style={styles.itemTitleBadgeRow}>
-                              <Text style={styles.itemNameText}>{s.scorerName}</Text>
-                              {isApproved && (
-                                <View style={styles.badgeConfirmed}>
-                                  <Text style={styles.badgeConfirmedText}>✔ Approved</Text>
-                                </View>
-                              )}
-                              {isPending && (
-                                <View style={styles.badgePending}>
-                                  <Text style={styles.badgePendingText}>⏳ Pending</Text>
-                                </View>
-                              )}
-                              {isRejected && (
-                                <View style={styles.badgeRejected}>
-                                  <Text style={styles.badgeRejectedText}>🚫 Rejected</Text>
-                                </View>
-                              )}
-                            </View>
-
-                            {/* Colorful Category Badges Row */}
-                            <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 5 }}>
-                              <View style={styles.badgeCategoryIndigo}>
-                                <Text style={styles.badgeCategoryIndigoText}>ID: {s.scorerId}</Text>
-                              </View>
-                              <View style={styles.badgeCategoryPurple}>
-                                <Text style={styles.badgeCategoryPurpleText}>🏅 {s.grade}</Text>
-                              </View>
-                              <View style={styles.badgeCategoryRose}>
-                                <Text style={styles.badgeCategoryRoseText}>📍 {s.taluk || 'Virudhunagar'}</Text>
-                              </View>
-                              <View style={styles.badgeCategoryAmber}>
-                                <Text style={styles.badgeCategoryAmberText}>⏱️ {s.experienceYears != null ? `${s.experienceYears} Yr${s.experienceYears !== 1 ? 's' : ''}` : 'N/A'} Exp</Text>
-                              </View>
-                            </View>
-                          </View>
-
-                          {/* Action Buttons */}
-                          <View style={[styles.itemActionsRow, { flexWrap: 'wrap' }]}>
-                            {s.phone && s.phone !== '—' && (
-                              <TouchableOpacity
-                                style={styles.btnActionCall}
-                                onPress={() => handleCallContact(s.phone, s.scorerName)}
-                                activeOpacity={0.8}
-                                accessibilityLabel="Call Scorer"
-                              >
-                                <Text style={styles.btnActionCallText}>📞 Call</Text>
-                              </TouchableOpacity>
-                            )}
-
-                            {Boolean(s.email) && (
-                              <TouchableOpacity
-                                style={styles.btnActionEmail}
-                                onPress={() => handleEmailContact(s.email, s.scorerName)}
-                                activeOpacity={0.8}
-                                accessibilityLabel="Email Scorer"
-                              >
-                                <Text style={styles.btnActionEmailText}>✉️ Email</Text>
-                              </TouchableOpacity>
-                            )}
-
-                            <TouchableOpacity
-                              style={styles.btnActionViewViolet}
-                              onPress={() => setSelectedScorerModal(s)}
-                              activeOpacity={0.8}
-                            >
-                              <Text style={styles.btnActionViewVioletText}>👁 View</Text>
-                            </TouchableOpacity>
-
-                            {isPending ? (
-                              <>
-                                <TouchableOpacity
-                                  style={styles.btnSuccessSm}
-                                  onPress={() => handleApproveScorer(s.scorerId)}
-                                  activeOpacity={0.8}
-                                >
-                                  <Text style={styles.btnSuccessSmText}>✔ Approve</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  style={styles.btnOutlineDanger}
-                                  onPress={() => handleOpenRejectModal(s.scorerId, 'SCORER', s.scorerName)}
-                                  activeOpacity={0.8}
-                                >
-                                  <Text style={styles.btnOutlineDangerText}>🚫 Reject</Text>
-                                </TouchableOpacity>
-                              </>
-                            ) : isApproved ? (
-                              <TouchableOpacity
-                                style={styles.btnOutlineDanger}
-                                onPress={() => handleOpenRejectModal(s.scorerId, 'SCORER', s.scorerName)}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={styles.btnOutlineDangerText}>🚫 Reject</Text>
-                              </TouchableOpacity>
-                            ) : (
-                              <TouchableOpacity
-                                style={styles.btnSuccessSm}
-                                onPress={() => handleApproveScorer(s.scorerId)}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={styles.btnSuccessSmText}>✔ Approve</Text>
-                              </TouchableOpacity>
-                            )}
-                          </View>
+                        {/* Center Hole */}
+                        <View style={[styles.donutHole, { backgroundColor: '#ffffff' }, !isDesktop && { width: 80, height: 80, borderRadius: 40 }]}>
+                          <Text style={[styles.donutNumber, { color: '#1e1b4b' }, !isDesktop && { fontSize: 24 }]}>{scorerTotal}</Text>
+                          <Text style={[styles.donutUnitLabel, { color: '#6366f1' }, !isDesktop && { fontSize: 8 }]}>SCORERS</Text>
                         </View>
+                      </View>
+                    </View>
 
-                        {/* Item Meta Details */}
-                        <View style={styles.itemMetaGrid}>
-                          <View style={styles.metaCell}>
-                            <Text style={styles.metaLabel}>Email Address</Text>
-                            <Text style={styles.metaVal}>{s.email}</Text>
-                          </View>
-                          <View style={styles.metaCell}>
-                            <Text style={styles.metaLabel}>Contact Phone</Text>
-                            <Text style={styles.metaVal}>{s.phone || 'N/A'}</Text>
-                          </View>
-                          <View style={styles.metaCell}>
-                            <Text style={styles.metaLabel}>Taluk / Jurisdiction</Text>
-                            <Text style={styles.metaVal}>{s.taluk || 'Virudhunagar'}</Text>
-                          </View>
-                          <View style={styles.metaCell}>
-                            <Text style={styles.metaLabel}>Experience</Text>
-                            <Text style={styles.metaVal}>{s.experienceYears != null ? `${s.experienceYears} Year${s.experienceYears !== 1 ? 's' : ''}` : 'Not Specified'}</Text>
-                          </View>
-                        </View>
-
-                        {isRejected && s.rejectionReason && (
-                          <View style={styles.rejectionNoticeBox}>
-                            <Text style={styles.rejectionNoticeLabel}>Rejection Reason:</Text>
-                            <Text style={styles.rejectionNoticeText}>{s.rejectionReason}</Text>
-                          </View>
+                    {/* Dynamic Proportional Distribution Bar */}
+                    <View style={styles.distributionBarWrapper}>
+                      <View style={[styles.distributionBarTrack, { backgroundColor: '#f1f5f9' }]}>
+                        {scorerSegments.appPct > 0 && (
+                          <View style={[styles.distributionBarSegment, { width: `${scorerSegments.appPct}%`, backgroundColor: '#10b981' }]} />
+                        )}
+                        {scorerSegments.pendPct > 0 && (
+                          <View style={[styles.distributionBarSegment, { width: `${scorerSegments.pendPct}%`, backgroundColor: '#f59e0b' }]} />
+                        )}
+                        {scorerSegments.rejPct > 0 && (
+                          <View style={[styles.distributionBarSegment, { width: `${scorerSegments.rejPct}%`, backgroundColor: '#ef4444' }]} />
                         )}
                       </View>
-                    );
-                  })
-                )}
-              </View>
-            </View>
-          )}
-
-          {/* ─────────────────────────────────────────────────────────────
-              4B. TAB CONTENT: UMPIRE MANAGEMENT
-              ───────────────────────────────────────────────────────────── */}
-          {activeTab === 'umpires' && (
-            <View>
-              {/* TOP TWO SIDE-BY-SIDE HIGHLIGHT CARDS */}
-              <View style={[styles.highlightCardsRow, { flexDirection: isDesktop ? 'row' : 'column' }]}>
-                {/* Left Card: Umpire Management Stats (Ocean Cyan & Sapphire Blue Modern White Card) */}
-                <View style={styles.umpireStatCard}>
-                  <View style={styles.statCardHeader}>
-                    <View style={styles.umpireIconBox}>
-                      <Text style={{ fontSize: 16 }}>⚖️</Text>
-                    </View>
-                    <View>
-                      <Text style={styles.umpireCardTitle}>Umpire Accreditation</Text>
-                      <Text style={styles.umpireBadgeTag}>OFFICIAL DISTRICT ARBITER REGISTRY</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.umpireCardSubtitle}>
-                    Official certified umpires and match officiating access requests across Virudhunagar District.
-                  </Text>
-
-                  {/* 4 Colored Pill Rows */}
-                  <View style={styles.pillRowsContainer}>
-                    {/* Authorized Umpires */}
-                    <View style={[styles.statRowPill, styles.umpirePillApproved]}>
-                      <View style={styles.pillLeftGroup}>
-                        <View style={[styles.glowingDot, { backgroundColor: '#10b981' }]} />
-                        <Text style={[styles.pillLabel, { color: '#065f46' }]}>Authorized Umpires</Text>
+                      <View style={styles.distributionPctRow}>
+                        <Text style={[styles.distributionPctText, { color: '#047857' }]}>{scorerSegments.appPct}% Authorized</Text>
+                        <Text style={[styles.distributionPctText, { color: '#b45309' }]}>{scorerSegments.pendPct}% Pending</Text>
+                        <Text style={[styles.distributionPctText, { color: '#b91c1c' }]}>{scorerSegments.rejPct}% Rejected</Text>
                       </View>
-                      <Text style={[styles.pillCount, { color: '#047857' }]}>{umpireApproved}</Text>
                     </View>
 
-                    {/* Pending Approval */}
-                    <View style={[styles.statRowPill, styles.umpirePillPending]}>
-                      <View style={styles.pillLeftGroup}>
-                        <View style={[styles.glowingDot, { backgroundColor: '#f59e0b' }]} />
-                        <Text style={[styles.pillLabel, { color: '#92400e' }]}>Pending Approval</Text>
+                    {/* 3-Color Legend */}
+                    <View style={styles.donutLegendRow}>
+                      <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#10b981' }]} />
+                        <Text style={[styles.legendText, { color: '#334155' }]}>Authorized ({scorerApproved})</Text>
                       </View>
-                      <Text style={[styles.pillCount, { color: '#b45309' }]}>{umpirePending}</Text>
-                    </View>
-
-                    {/* Rejected */}
-                    <View style={[styles.statRowPill, styles.umpirePillRejected]}>
-                      <View style={styles.pillLeftGroup}>
-                        <View style={[styles.glowingDot, { backgroundColor: '#ef4444' }]} />
-                        <Text style={[styles.pillLabel, { color: '#991b1b' }]}>Rejected</Text>
+                      <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
+                        <Text style={[styles.legendText, { color: '#334155' }]}>Pending ({scorerPending})</Text>
                       </View>
-                      <Text style={[styles.pillCount, { color: '#dc2626' }]}>{umpireRejected}</Text>
-                    </View>
-
-                    {/* Total Umpires */}
-                    <View style={[styles.statRowPill, styles.umpirePillTotal]}>
-                      <View style={styles.pillLeftGroup}>
-                        <View style={[styles.glowingDot, { backgroundColor: '#0284c7' }]} />
-                        <Text style={[styles.pillLabel, { color: '#075985' }]}>Total Umpires</Text>
+                      <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} />
+                        <Text style={[styles.legendText, { color: '#334155' }]}>Rejected ({scorerRejected})</Text>
                       </View>
-                      <Text style={[styles.pillCount, { color: '#0284c7' }]}>{umpireTotal}</Text>
                     </View>
                   </View>
                 </View>
 
-                {/* Right Card: Status Distribution with Donut Chart */}
-                <View style={[styles.umpireStatCard, styles.donutCardAlign]}>
-                  <View style={styles.donutHeader}>
-                    <Text style={{ fontSize: 16, marginRight: 6 }}>📊</Text>
-                    <Text style={styles.umpireCardTitle}>Status Distribution</Text>
+                {/* Dynamic Live Scorer Status Strip */}
+                <View style={[styles.dynamicRegistryStrip, { backgroundColor: '#f5f3ff', borderColor: '#ddd6fe' }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontSize: 16 }}>📋</Text>
+                    <Text style={[styles.dynamicRegistryText, { color: '#4338ca' }]}>
+                      LIVE SCORER REGISTRY • {scorerTotal} Registered • {scorerApproved} Authorized • {scorerPending} Awaiting Review
+                    </Text>
                   </View>
-
-                  {/* Donut Chart */}
-                  <View style={styles.donutWrapper}>
-                    <View
-                      style={[
-                        styles.donutOuterRing,
-                        !isDesktop && { width: 140, height: 140, borderRadius: 70 },
-                        Platform.OS === 'web'
-                          ? ({
-                              background: `conic-gradient(#10b981 0% ${umpireSegments.appPct}%, #f59e0b ${umpireSegments.appPct}% ${umpireSegments.appPct + umpireSegments.pendPct}%, #ef4444 ${umpireSegments.appPct + umpireSegments.pendPct}% 100%)`,
-                              backgroundImage: `conic-gradient(#10b981 0% ${umpireSegments.appPct}%, #f59e0b ${umpireSegments.appPct}% ${umpireSegments.appPct + umpireSegments.pendPct}%, #ef4444 ${umpireSegments.appPct + umpireSegments.pendPct}% 100%)`
-                            } as any)
-                          : {
-                              borderWidth: 10,
-                              borderColor: '#10b981',
-                              borderTopColor: '#10b981',
-                              borderRightColor: umpireSegments.pendPct > 0 ? '#f59e0b' : '#10b981',
-                              borderBottomColor: umpireSegments.rejPct > 0 ? '#ef4444' : '#10b981',
-                              borderLeftColor: '#10b981',
-                              backgroundColor: '#ffffff'
-                            }
-                      ]}
+                  <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <View style={styles.badgeCategoryPurple}>
+                      <Text style={styles.badgeCategoryPurpleText}>Grade A Panel</Text>
+                    </View>
+                    <View style={styles.badgeCategoryIndigo}>
+                      <Text style={styles.badgeCategoryIndigoText}>Digital Arbiters</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.roundReloadBtnSm, isLiveReloading && styles.roundReloadBtnSpinning]}
+                      onPress={handleLiveReload}
+                      activeOpacity={0.7}
+                      accessibilityLabel="Reload live scorers"
                     >
-                      {/* Center Hole */}
-                      <View style={[styles.donutHole, { backgroundColor: '#ffffff' }, !isDesktop && { width: 80, height: 80, borderRadius: 40 }]}>
-                        <Text style={[styles.donutNumber, { color: '#0c4a6e' }, !isDesktop && { fontSize: 24 }]}>{umpireTotal}</Text>
-                        <Text style={[styles.donutUnitLabel, { color: '#0284c7' }, !isDesktop && { fontSize: 8 }]}>UMPIRES</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Dynamic Proportional Distribution Bar */}
-                  <View style={styles.distributionBarWrapper}>
-                    <View style={[styles.distributionBarTrack, { backgroundColor: '#f1f5f9' }]}>
-                      {umpireSegments.appPct > 0 && (
-                        <View style={[styles.distributionBarSegment, { width: `${umpireSegments.appPct}%`, backgroundColor: '#10b981' }]} />
-                      )}
-                      {umpireSegments.pendPct > 0 && (
-                        <View style={[styles.distributionBarSegment, { width: `${umpireSegments.pendPct}%`, backgroundColor: '#f59e0b' }]} />
-                      )}
-                      {umpireSegments.rejPct > 0 && (
-                        <View style={[styles.distributionBarSegment, { width: `${umpireSegments.rejPct}%`, backgroundColor: '#ef4444' }]} />
-                      )}
-                    </View>
-                    <View style={styles.distributionPctRow}>
-                      <Text style={[styles.distributionPctText, { color: '#047857' }]}>{umpireSegments.appPct}% Authorized</Text>
-                      <Text style={[styles.distributionPctText, { color: '#b45309' }]}>{umpireSegments.pendPct}% Pending</Text>
-                      <Text style={[styles.distributionPctText, { color: '#b91c1c' }]}>{umpireSegments.rejPct}% Rejected</Text>
-                    </View>
-                  </View>
-
-                  {/* 3-Color Legend */}
-                  <View style={styles.donutLegendRow}>
-                    <View style={styles.legendItem}>
-                      <View style={[styles.legendDot, { backgroundColor: '#10b981' }]} />
-                      <Text style={[styles.legendText, { color: '#334155' }]}>Authorized ({umpireApproved})</Text>
-                    </View>
-                    <View style={styles.legendItem}>
-                      <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
-                      <Text style={[styles.legendText, { color: '#334155' }]}>Pending ({umpirePending})</Text>
-                    </View>
-                    <View style={styles.legendItem}>
-                      <View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} />
-                      <Text style={[styles.legendText, { color: '#334155' }]}>Rejected ({umpireRejected})</Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-
-              {/* Dynamic Live Umpire Status Strip */}
-              <View style={[styles.dynamicRegistryStrip, { backgroundColor: '#f0f9ff', borderColor: '#bae6fd' }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ fontSize: 16 }}>⚖️</Text>
-                  <Text style={[styles.dynamicRegistryText, { color: '#0369a1' }]}>
-                    LIVE UMPIRE REGISTRY • {umpireTotal} Officials • {umpireApproved} Accredited • {umpirePending} Pending Review
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <View style={styles.badgeCategoryCyan}>
-                    <Text style={styles.badgeCategoryCyanText}>BCCI & TNCA Panel</Text>
-                  </View>
-                  <View style={styles.badgeCategoryEmerald}>
-                    <Text style={styles.badgeCategoryEmeraldText}>Certified Match Arbiters</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={[styles.roundReloadBtnSm, isLiveReloading && styles.roundReloadBtnSpinning]}
-                    onPress={handleLiveReload}
-                    activeOpacity={0.7}
-                    accessibilityLabel="Reload live umpires"
-                  >
-                    <Animated.Text style={[styles.roundReloadIconSm, { transform: [{ rotate: spinInterpolate }] }]}>
-                      🔄
-                    </Animated.Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* SEARCH & FILTER TOOLBAR */}
-              <View style={styles.toolbarCard}>
-                <View style={styles.searchBox}>
-                  <Text style={styles.searchIcon}>🔍</Text>
-                  <TextInput
-                    style={styles.searchInput}
-                    value={umpireSearchQuery}
-                    onChangeText={setUmpireSearchQuery}
-                    placeholder="Search by umpire name, email, qualification or district..."
-                    placeholderTextColor="#94a3b8"
-                  />
-                </View>
-
-                <View style={styles.filterPillsGroup}>
-                  <Text style={styles.filterStatusLabel}>Filter Status:</Text>
-                  <TouchableOpacity
-                    style={[styles.filterPill, umpireFilter === 'all' && styles.filterPillActive]}
-                    onPress={() => setUmpireFilter('all')}
-                  >
-                    <Text style={[styles.filterPillText, umpireFilter === 'all' && styles.filterPillTextActive]}>
-                      All ({umpireTotal})
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.filterPill, umpireFilter === 'Pending' && styles.filterPillActive]}
-                    onPress={() => setUmpireFilter('Pending')}
-                  >
-                    <Text style={[styles.filterPillText, umpireFilter === 'Pending' && styles.filterPillTextActive]}>
-                      Pending ({umpirePending})
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.filterPill, umpireFilter === 'Approved' && styles.filterPillActive]}
-                    onPress={() => setUmpireFilter('Approved')}
-                  >
-                    <Text style={[styles.filterPillText, umpireFilter === 'Approved' && styles.filterPillTextActive]}>
-                      Approved ({umpireApproved})
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.filterPill, umpireFilter === 'Rejected' && styles.filterPillActive]}
-                    onPress={() => setUmpireFilter('Rejected')}
-                  >
-                    <Text style={[styles.filterPillText, umpireFilter === 'Rejected' && styles.filterPillTextActive]}>
-                      Rejected ({umpireRejected})
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* UMPIRES LIST CARDS */}
-              <View style={styles.itemsListContainer}>
-                {filteredUmpires.length === 0 ? (
-                  <View style={[styles.whiteItemCard, { alignItems: 'center', paddingVertical: 32 }]}>
-                    <Text style={{ fontSize: 24, marginBottom: 8 }}>⚖️</Text>
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#0f172a' }}>No Umpire Registrations Found</Text>
-                    <Text style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
-                      {umpireSearchQuery ? 'No umpires matched your search query.' : 'No umpires in this category.'}
-                    </Text>
-                  </View>
-                ) : (
-                  filteredUmpires.map(u => {
-                    const isApproved = u.status === 'Approved';
-                    const isPending = (u.status || 'Pending') === 'Pending';
-                    const isRejected = u.status === 'Rejected';
-
-                    return (
-                      <View
-                        key={u.umpireId}
-                        style={[
-                          styles.whiteItemCard,
-                          isApproved && styles.cardApprovedBorder,
-                          isPending && styles.cardPendingBorder,
-                          isRejected && styles.cardRejectedBorder
-                        ]}
-                      >
-                        <View style={styles.itemCardHeaderRow}>
-                          <View style={styles.itemTitleGroup}>
-                            <View style={styles.itemTitleBadgeRow}>
-                              <Text style={styles.itemNameText}>{u.umpireName}</Text>
-                              {isApproved && (
-                                <View style={styles.badgeConfirmed}>
-                                  <Text style={styles.badgeConfirmedText}>✔ Approved</Text>
-                                </View>
-                              )}
-                              {isPending && (
-                                <View style={styles.badgePending}>
-                                  <Text style={styles.badgePendingText}>⏳ Pending</Text>
-                                </View>
-                              )}
-                              {isRejected && (
-                                <View style={styles.badgeRejected}>
-                                  <Text style={styles.badgeRejectedText}>🚫 Rejected</Text>
-                                </View>
-                              )}
-                            </View>
-
-                            {/* Colorful Category Badges Row */}
-                            <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 5 }}>
-                              <View style={styles.badgeCategoryCyan}>
-                                <Text style={styles.badgeCategoryCyanText}>ID: {u.umpireId}</Text>
-                              </View>
-                              <View style={styles.badgeCategoryPurple}>
-                                <Text style={styles.badgeCategoryPurpleText}>⚖️ {u.qualification}</Text>
-                              </View>
-                              <View style={styles.badgeCategoryEmerald}>
-                                <Text style={styles.badgeCategoryEmeraldText}>🎯 {u.specialization || 'On-field Official'}</Text>
-                              </View>
-                              <View style={styles.badgeCategoryAmber}>
-                                <Text style={styles.badgeCategoryAmberText}>⏱️ {u.experience || `${u.experienceYears || 2} Yrs`}</Text>
-                              </View>
-                              {u.certificationNumber && u.certificationNumber !== '—' && (
-                                <View style={styles.badgeCategoryRose}>
-                                  <Text style={styles.badgeCategoryRoseText}>📜 {u.certificationNumber}</Text>
-                                </View>
-                              )}
-                            </View>
-                          </View>
-
-                          {/* Action Buttons */}
-                          <View style={[styles.itemActionsRow, { flexWrap: 'wrap' }]}>
-                            {u.phone && u.phone !== '—' && (
-                              <TouchableOpacity
-                                style={styles.btnActionCall}
-                                onPress={() => handleCallContact(u.phone, u.umpireName)}
-                                activeOpacity={0.8}
-                                accessibilityLabel="Call Umpire"
-                              >
-                                <Text style={styles.btnActionCallText}>📞 Call</Text>
-                              </TouchableOpacity>
-                            )}
-
-                            {u.email && u.email !== '—' && (
-                              <TouchableOpacity
-                                style={styles.btnActionEmail}
-                                onPress={() => handleEmailContact(u.email, u.umpireName)}
-                                activeOpacity={0.8}
-                                accessibilityLabel="Email Umpire"
-                              >
-                                <Text style={styles.btnActionEmailText}>✉️ Email</Text>
-                              </TouchableOpacity>
-                            )}
-
-                            <TouchableOpacity
-                              style={styles.btnActionViewCyan}
-                              onPress={() => setSelectedUmpireForView(u)}
-                              activeOpacity={0.8}
-                            >
-                              <Text style={styles.btnActionViewCyanText}>👁 View</Text>
-                            </TouchableOpacity>
-
-                            {isPending ? (
-                              <>
-                                <TouchableOpacity
-                                  style={styles.btnSuccessSm}
-                                  onPress={() => handleApproveUmpire(u.umpireId)}
-                                  activeOpacity={0.8}
-                                >
-                                  <Text style={styles.btnSuccessSmText}>✔ Approve</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  style={styles.btnOutlineDanger}
-                                  onPress={() => handleOpenRejectModal(u.umpireId, 'UMPIRE', u.umpireName)}
-                                  activeOpacity={0.8}
-                                >
-                                  <Text style={styles.btnOutlineDangerText}>🚫 Reject</Text>
-                                </TouchableOpacity>
-                              </>
-                            ) : isApproved ? (
-                              <TouchableOpacity
-                                style={styles.btnOutlineDanger}
-                                onPress={() => handleOpenRejectModal(u.umpireId, 'UMPIRE', u.umpireName)}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={styles.btnOutlineDangerText}>🚫 Reject</Text>
-                              </TouchableOpacity>
-                            ) : (
-                              <TouchableOpacity
-                                style={styles.btnSuccessSm}
-                                onPress={() => handleApproveUmpire(u.umpireId)}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={styles.btnSuccessSmText}>✔ Approve</Text>
-                              </TouchableOpacity>
-                            )}
-                          </View>
-                        </View>
-
-                        {/* Item Meta Details */}
-                        <View style={styles.itemMetaGrid}>
-                          <View style={styles.metaCell}>
-                            <Text style={styles.metaLabel}>Official Email</Text>
-                            <Text style={styles.metaVal}>{u.email || '—'}</Text>
-                          </View>
-                          <View style={styles.metaCell}>
-                            <Text style={styles.metaLabel}>Experience</Text>
-                            <Text style={styles.metaVal}>{u.experience || `${u.experienceYears} Years`}</Text>
-                          </View>
-                          <View style={styles.metaCell}>
-                            <Text style={styles.metaLabel}>District & State</Text>
-                            <Text style={styles.metaVal}>{u.district || 'Virudhunagar'}, {u.state || 'Tamil Nadu'}</Text>
-                          </View>
-                          <View style={styles.metaCell}>
-                            <Text style={styles.metaLabel}>Cert Number</Text>
-                            <Text style={styles.metaVal}>{u.certificationNumber || '—'}</Text>
-                          </View>
-                        </View>
-
-                        {isRejected && u.rejectionReason && (
-                          <View style={styles.rejectionNoticeBox}>
-                            <Text style={styles.rejectionNoticeLabel}>Rejection Reason:</Text>
-                            <Text style={styles.rejectionNoticeText}>{u.rejectionReason}</Text>
-                          </View>
-                        )}
-                      </View>
-                    );
-                  })
-                )}
-              </View>
-            </View>
-          )}
-
-          {/* ─────────────────────────────────────────────────────────────
-              5. TAB CONTENT: TEAM REGISTRATIONS
-              ───────────────────────────────────────────────────────────── */}
-          {activeTab === 'teams' && (
-            <View>
-              {/* TOP TWO SIDE-BY-SIDE HIGHLIGHT CARDS FOR TEAMS */}
-              <View style={[styles.highlightCardsRow, { flexDirection: isDesktop ? 'row' : 'column' }]}>
-                {/* Left Card: Team Registrations Stats (Emerald & Athletic Gold Themed Modern White Card) */}
-                <View style={styles.teamStatCard}>
-                  <View style={styles.statCardHeader}>
-                    <View style={styles.teamIconBox}>
-                      <Text style={{ fontSize: 16 }}>🛡️</Text>
-                    </View>
-                    <View>
-                      <Text style={styles.teamCardTitle}>Team Registrations</Text>
-                      <Text style={styles.teamBadgeTag}>OFFICIAL CLUB AFFILIATION</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.teamCardSubtitle}>
-                    Official club and collegiate team squad applications submitted for district championship entry.
-                  </Text>
-
-                  {/* 4 Colored Pill Rows */}
-                  <View style={styles.pillRowsContainer}>
-                    <View style={[styles.statRowPill, styles.teamPillApproved]}>
-                      <View style={styles.pillLeftGroup}>
-                        <View style={[styles.glowingDot, { backgroundColor: '#10b981' }]} />
-                        <Text style={[styles.pillLabel, { color: '#065f46' }]}>Approved Clubs</Text>
-                      </View>
-                      <Text style={[styles.pillCount, { color: '#047857' }]}>{teamApproved}</Text>
-                    </View>
-
-                    <View style={[styles.statRowPill, styles.teamPillPending]}>
-                      <View style={styles.pillLeftGroup}>
-                        <View style={[styles.glowingDot, { backgroundColor: '#f59e0b' }]} />
-                        <Text style={[styles.pillLabel, { color: '#92400e' }]}>Pending Approval</Text>
-                      </View>
-                      <Text style={[styles.pillCount, { color: '#b45309' }]}>{teamPending}</Text>
-                    </View>
-
-                    <View style={[styles.statRowPill, styles.teamPillRejected]}>
-                      <View style={styles.pillLeftGroup}>
-                        <View style={[styles.glowingDot, { backgroundColor: '#ef4444' }]} />
-                        <Text style={[styles.pillLabel, { color: '#991b1b' }]}>Rejected Teams</Text>
-                      </View>
-                      <Text style={[styles.pillCount, { color: '#dc2626' }]}>{teamRejected}</Text>
-                    </View>
-
-                    <View style={[styles.statRowPill, styles.teamPillTotal]}>
-                      <View style={styles.pillLeftGroup}>
-                        <View style={[styles.glowingDot, { backgroundColor: '#3b82f6' }]} />
-                        <Text style={[styles.pillLabel, { color: '#1e40af' }]}>Total Registered</Text>
-                      </View>
-                      <Text style={[styles.pillCount, { color: '#1d4ed8' }]}>{teamTotal}</Text>
-                    </View>
+                      <Animated.Text style={[styles.roundReloadIconSm, { transform: [{ rotate: spinInterpolate }] }]}>
+                        🔄
+                      </Animated.Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
 
-                {/* Right Card: Teams Status Distribution Donut */}
-                <View style={[styles.teamStatCard, styles.donutCardAlign]}>
-                  <View style={styles.donutHeader}>
-                    <Text style={{ fontSize: 16, marginRight: 6 }}>📊</Text>
-                    <Text style={styles.teamCardTitle}>Status Distribution</Text>
+                {/* SEARCH & FILTER TOOLBAR */}
+                <View style={styles.toolbarCard}>
+                  <View style={styles.searchBox}>
+                    <Text style={styles.searchIcon}>🔍</Text>
+                    <TextInput
+                      style={styles.searchInput}
+                      value={scorerSearchQuery}
+                      onChangeText={setScorerSearchQuery}
+                      placeholder="Search by scorer name, email or grade..."
+                      placeholderTextColor="#94a3b8"
+                    />
                   </View>
 
-                  <View style={styles.donutWrapper}>
-                    <View
-                      style={[
-                        styles.donutOuterRing,
-                        !isDesktop && { width: 140, height: 140, borderRadius: 70 },
-                        Platform.OS === 'web'
-                          ? ({
-                              background: `conic-gradient(#10b981 0% ${teamSegments.appPct}%, #f59e0b ${teamSegments.appPct}% ${teamSegments.appPct + teamSegments.pendPct}%, #ef4444 ${teamSegments.appPct + teamSegments.pendPct}% 100%)`,
-                              backgroundImage: `conic-gradient(#10b981 0% ${teamSegments.appPct}%, #f59e0b ${teamSegments.appPct}% ${teamSegments.appPct + teamSegments.pendPct}%, #ef4444 ${teamSegments.appPct + teamSegments.pendPct}% 100%)`
-                            } as any)
-                          : {
-                              borderWidth: 10,
-                              borderColor: '#10b981',
-                              borderTopColor: '#10b981',
-                              borderRightColor: teamSegments.pendPct > 0 ? '#f59e0b' : '#10b981',
-                              borderBottomColor: teamSegments.rejPct > 0 ? '#ef4444' : '#10b981',
-                              borderLeftColor: '#10b981',
-                              backgroundColor: '#ffffff'
-                            }
-                      ]}
+                  <View style={styles.filterPillsGroup}>
+                    <Text style={styles.filterStatusLabel}>Filter Status:</Text>
+                    <TouchableOpacity
+                      style={[styles.filterPill, scorerFilter === 'all' && styles.filterPillActive]}
+                      onPress={() => setScorerFilter('all')}
                     >
-                      <View style={[styles.donutHole, { backgroundColor: '#ffffff' }, !isDesktop && { width: 80, height: 80, borderRadius: 40 }]}>
-                        <Text style={[styles.donutNumber, { color: '#064e3b' }, !isDesktop && { fontSize: 24 }]}>{teamTotal}</Text>
-                        <Text style={[styles.donutUnitLabel, { color: '#059669' }, !isDesktop && { fontSize: 8 }]}>CLUBS</Text>
-                      </View>
-                    </View>
-                  </View>
+                      <Text style={[styles.filterPillText, scorerFilter === 'all' && styles.filterPillTextActive]}>
+                        All ({scorerTotal})
+                      </Text>
+                    </TouchableOpacity>
 
-                  {/* Dynamic Proportional Distribution Bar */}
-                  <View style={styles.distributionBarWrapper}>
-                    <View style={[styles.distributionBarTrack, { backgroundColor: '#f1f5f9' }]}>
-                      {teamSegments.appPct > 0 && (
-                        <View style={[styles.distributionBarSegment, { width: `${teamSegments.appPct}%`, backgroundColor: '#10b981' }]} />
-                      )}
-                      {teamSegments.pendPct > 0 && (
-                        <View style={[styles.distributionBarSegment, { width: `${teamSegments.pendPct}%`, backgroundColor: '#f59e0b' }]} />
-                      )}
-                      {teamSegments.rejPct > 0 && (
-                        <View style={[styles.distributionBarSegment, { width: `${teamSegments.rejPct}%`, backgroundColor: '#ef4444' }]} />
-                      )}
-                    </View>
-                    <View style={styles.distributionPctRow}>
-                      <Text style={[styles.distributionPctText, { color: '#047857' }]}>{teamSegments.appPct}% Approved</Text>
-                      <Text style={[styles.distributionPctText, { color: '#b45309' }]}>{teamSegments.pendPct}% Pending</Text>
-                      <Text style={[styles.distributionPctText, { color: '#b91c1c' }]}>{teamSegments.rejPct}% Rejected</Text>
-                    </View>
-                  </View>
+                    <TouchableOpacity
+                      style={[styles.filterPill, scorerFilter === 'Pending' && styles.filterPillActive]}
+                      onPress={() => setScorerFilter('Pending')}
+                    >
+                      <Text style={[styles.filterPillText, scorerFilter === 'Pending' && styles.filterPillTextActive]}>
+                        Pending ({scorerPending})
+                      </Text>
+                    </TouchableOpacity>
 
-                  <View style={styles.donutLegendRow}>
-                    <View style={styles.legendItem}>
-                      <View style={[styles.legendDot, { backgroundColor: '#10b981' }]} />
-                      <Text style={[styles.legendText, { color: '#334155' }]}>Approved ({teamApproved})</Text>
-                    </View>
-                    <View style={styles.legendItem}>
-                      <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
-                      <Text style={[styles.legendText, { color: '#334155' }]}>Pending ({teamPending})</Text>
-                    </View>
-                    <View style={styles.legendItem}>
-                      <View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} />
-                      <Text style={[styles.legendText, { color: '#334155' }]}>Rejected ({teamRejected})</Text>
-                    </View>
+                    <TouchableOpacity
+                      style={[styles.filterPill, scorerFilter === 'Approved' && styles.filterPillActive]}
+                      onPress={() => setScorerFilter('Approved')}
+                    >
+                      <Text style={[styles.filterPillText, scorerFilter === 'Approved' && styles.filterPillTextActive]}>
+                        Approved ({scorerApproved})
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.filterPill, scorerFilter === 'Rejected' && styles.filterPillActive]}
+                      onPress={() => setScorerFilter('Rejected')}
+                    >
+                      <Text style={[styles.filterPillText, scorerFilter === 'Rejected' && styles.filterPillTextActive]}>
+                        Rejected ({scorerRejected})
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
-              </View>
 
-              {/* Dynamic Live Team Status Strip */}
-              <View style={[styles.dynamicRegistryStrip, { backgroundColor: '#ecfdf5', borderColor: '#a7f3d0' }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ fontSize: 16 }}>🛡️</Text>
-                  <Text style={[styles.dynamicRegistryText, { color: '#065f46' }]}>
-                    LIVE TEAM REGISTRY • {teamTotal} Clubs Registered • {teamApproved} Affiliated • {teamPending} Awaiting Clearance
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <View style={styles.badgeCategoryEmerald}>
-                    <Text style={styles.badgeCategoryEmeraldText}>District Championship Clubs</Text>
-                  </View>
-                  <View style={styles.badgeCategoryAmber}>
-                    <Text style={styles.badgeCategoryAmberText}>15-Member Squads</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={[styles.roundReloadBtnSm, isLiveReloading && styles.roundReloadBtnSpinning]}
-                    onPress={handleLiveReload}
-                    activeOpacity={0.7}
-                    accessibilityLabel="Reload live teams"
-                  >
-                    <Animated.Text style={[styles.roundReloadIconSm, { transform: [{ rotate: spinInterpolate }] }]}>
-                      🔄
-                    </Animated.Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+                {/* SCORERS LIST CARDS */}
+                <View style={styles.itemsListContainer}>
+                  {filteredScorers.length === 0 ? null : (
+                    filteredScorers.map(s => {
+                      const isApproved = s.status === 'Approved';
+                      const isPending = (s.status || 'Pending') === 'Pending';
+                      const isRejected = s.status === 'Rejected';
 
-              {/* TEAMS TOOLBAR */}
-              <View style={styles.toolbarCard}>
-                <View style={styles.searchBox}>
-                  <Text style={styles.searchIcon}>🔍</Text>
-                  <TextInput
-                    style={styles.searchInput}
-                    value={teamSearchQuery}
-                    onChangeText={setTeamSearchQuery}
-                    placeholder="Search by team name, coach or taluk..."
-                    placeholderTextColor="#94a3b8"
-                  />
-                </View>
-
-                <View style={styles.filterPillsGroup}>
-                  <Text style={styles.filterStatusLabel}>Filter Status:</Text>
-                  <TouchableOpacity
-                    style={[styles.filterPill, teamFilter === 'all' && styles.filterPillActive]}
-                    onPress={() => setTeamFilter('all')}
-                  >
-                    <Text style={[styles.filterPillText, teamFilter === 'all' && styles.filterPillTextActive]}>
-                      All ({teamTotal})
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.filterPill, teamFilter === 'Pending' && styles.filterPillActive]}
-                    onPress={() => setTeamFilter('Pending')}
-                  >
-                    <Text style={[styles.filterPillText, teamFilter === 'Pending' && styles.filterPillTextActive]}>
-                      Pending ({teamPending})
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.filterPill, teamFilter === 'Approved' && styles.filterPillActive]}
-                    onPress={() => setTeamFilter('Approved')}
-                  >
-                    <Text style={[styles.filterPillText, teamFilter === 'Approved' && styles.filterPillTextActive]}>
-                      Approved ({teamApproved})
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.filterPill, teamFilter === 'Rejected' && styles.filterPillActive]}
-                    onPress={() => setTeamFilter('Rejected')}
-                  >
-                    <Text style={[styles.filterPillText, teamFilter === 'Rejected' && styles.filterPillTextActive]}>
-                      Rejected ({teamRejected})
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* TEAMS LIST CARDS */}
-              <View style={styles.itemsListContainer}>
-                {filteredTeams.length === 0 ? (
-                  <View style={styles.emptyBox}>
-                    <Text style={{ fontSize: 28, marginBottom: 8 }}>👥</Text>
-                    <Text style={styles.emptyTitle}>No Teams Found</Text>
-                    <Text style={styles.emptySubtitle}>No club applications match the current filter selection.</Text>
-                  </View>
-                ) : (
-                  filteredTeams.map(t => {
-                    const isApproved = t.status === 'Approved';
-                    const isPending = (t.status || 'Pending') === 'Pending';
-                    const isRejected = t.status === 'Rejected';
-
-                    const initials = (t.teamName || 'TM')
-                      .split(' ')
-                      .map((w: string) => w[0])
-                      .join('')
-                      .slice(0, 2)
-                      .toUpperCase();
-
-                    const crestBg = isApproved ? '#059669' : isPending ? '#d97706' : '#dc2626';
-
-                    return (
-                      <View
-                        key={t.teamId}
-                        style={[
-                          styles.whiteItemCard,
-                          isApproved && styles.cardApprovedBorder,
-                          isPending && styles.cardPendingBorder,
-                          isRejected && styles.cardRejectedBorder
-                        ]}
-                      >
-                        <View style={styles.itemCardHeaderRow}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                            {/* Colorful Team Initial Crest */}
-                            <View style={[styles.teamCrestAvatar, { backgroundColor: crestBg }]}>
-                              <Text style={styles.teamCrestText}>{initials}</Text>
-                            </View>
-
+                      return (
+                        <View
+                          key={s.scorerId}
+                          style={[
+                            styles.whiteItemCard,
+                            isApproved && styles.cardApprovedBorder,
+                            isPending && styles.cardPendingBorder,
+                            isRejected && styles.cardRejectedBorder
+                          ]}
+                        >
+                          <View style={styles.itemCardHeaderRow}>
                             <View style={styles.itemTitleGroup}>
                               <View style={styles.itemTitleBadgeRow}>
-                                <Text style={styles.itemNameText}>{t.teamName}</Text>
+                                <Text style={styles.itemNameText}>{s.scorerName}</Text>
                                 {isApproved && (
                                   <View style={styles.badgeConfirmed}>
                                     <Text style={styles.badgeConfirmedText}>✔ Approved</Text>
@@ -3510,52 +2783,852 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                               {/* Colorful Category Badges Row */}
                               <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 5 }}>
-                                <View style={styles.badgeCategoryEmerald}>
-                                  <Text style={styles.badgeCategoryEmeraldText}>ID: {t.teamId}</Text>
-                                </View>
-                                <View style={styles.badgeCategoryAmber}>
-                                  <Text style={styles.badgeCategoryAmberText}>👤 Coach: {t.coach?.name || 'Head Coach'}</Text>
-                                </View>
                                 <View style={styles.badgeCategoryIndigo}>
-                                  <Text style={styles.badgeCategoryIndigoText}>🏏 {t.members?.length || 15} Squad Players</Text>
+                                  <Text style={styles.badgeCategoryIndigoText}>ID: {s.scorerId}</Text>
                                 </View>
                                 <View style={styles.badgeCategoryPurple}>
-                                  <Text style={styles.badgeCategoryPurpleText}>📍 {t.taluk || 'Virudhunagar'}</Text>
+                                  <Text style={styles.badgeCategoryPurpleText}>🏅 {s.grade}</Text>
+                                </View>
+                                <View style={styles.badgeCategoryRose}>
+                                  <Text style={styles.badgeCategoryRoseText}>📍 {s.taluk || 'Virudhunagar'}</Text>
+                                </View>
+                                <View style={styles.badgeCategoryAmber}>
+                                  <Text style={styles.badgeCategoryAmberText}>⏱️ {s.experienceYears != null ? `${s.experienceYears} Yr${s.experienceYears !== 1 ? 's' : ''}` : 'N/A'} Exp</Text>
                                 </View>
                               </View>
                             </View>
-                          </View>
 
-                          {/* Action Buttons */}
-                          <View style={[styles.itemActionsRow, { flexWrap: 'wrap' }]}>
-                            {Boolean(t.coach?.email) && (
+                            {/* Action Buttons */}
+                            <View style={[styles.itemActionsRow, { flexWrap: 'wrap' }]}>
+                              {s.phone && s.phone !== '—' && (
+                                <TouchableOpacity
+                                  style={styles.btnActionCall}
+                                  onPress={() => handleCallContact(s.phone, s.scorerName)}
+                                  activeOpacity={0.8}
+                                  accessibilityLabel="Call Scorer"
+                                >
+                                  <Text style={styles.btnActionCallText}>📞 Call</Text>
+                                </TouchableOpacity>
+                              )}
+
+                              {Boolean(s.email) && (
+                                <TouchableOpacity
+                                  style={styles.btnActionEmail}
+                                  onPress={() => handleEmailContact(s.email, s.scorerName)}
+                                  activeOpacity={0.8}
+                                  accessibilityLabel="Email Scorer"
+                                >
+                                  <Text style={styles.btnActionEmailText}>✉️ Email</Text>
+                                </TouchableOpacity>
+                              )}
+
                               <TouchableOpacity
-                                style={styles.btnActionEmail}
-                                onPress={() => handleEmailContact(t.coach.email, t.coach?.name || t.teamName)}
+                                style={styles.btnActionViewViolet}
+                                onPress={() => setSelectedScorerModal(s)}
                                 activeOpacity={0.8}
-                                accessibilityLabel="Email Coach"
                               >
-                                <Text style={styles.btnActionEmailText}>✉️ Email Coach</Text>
+                                <Text style={styles.btnActionViewVioletText}>👁 View</Text>
                               </TouchableOpacity>
-                            )}
 
-                            <TouchableOpacity
-                              style={styles.btnActionViewEmerald}
-                              onPress={() => setSelectedSquadModal(t)}
-                              activeOpacity={0.8}
-                            >
-                              <Text style={styles.btnActionViewEmeraldText}>👁 Squad ({t.members?.length || 15})</Text>
-                            </TouchableOpacity>
-
-                            {isPending ? (
-                              <>
+                              {isPending ? (
+                                <>
+                                  <TouchableOpacity
+                                    style={styles.btnSuccessSm}
+                                    onPress={() => handleApproveScorer(s.scorerId)}
+                                    activeOpacity={0.8}
+                                  >
+                                    <Text style={styles.btnSuccessSmText}>✔ Approve</Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={styles.btnOutlineDanger}
+                                    onPress={() => handleOpenRejectModal(s.scorerId, 'SCORER', s.scorerName)}
+                                    activeOpacity={0.8}
+                                  >
+                                    <Text style={styles.btnOutlineDangerText}>🚫 Reject</Text>
+                                  </TouchableOpacity>
+                                </>
+                              ) : isApproved ? (
+                                <TouchableOpacity
+                                  style={styles.btnOutlineDanger}
+                                  onPress={() => handleOpenRejectModal(s.scorerId, 'SCORER', s.scorerName)}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={styles.btnOutlineDangerText}>🚫 Reject</Text>
+                                </TouchableOpacity>
+                              ) : (
                                 <TouchableOpacity
                                   style={styles.btnSuccessSm}
-                                  onPress={() => handleApproveTeam(t.teamId)}
+                                  onPress={() => handleApproveScorer(s.scorerId)}
                                   activeOpacity={0.8}
                                 >
                                   <Text style={styles.btnSuccessSmText}>✔ Approve</Text>
                                 </TouchableOpacity>
+                              )}
+                            </View>
+                          </View>
+
+                          {/* Item Meta Details */}
+                          <View style={styles.itemMetaGrid}>
+                            <View style={styles.metaCell}>
+                              <Text style={styles.metaLabel}>Email Address</Text>
+                              <Text style={styles.metaVal}>{s.email}</Text>
+                            </View>
+                            <View style={styles.metaCell}>
+                              <Text style={styles.metaLabel}>Contact Phone</Text>
+                              <Text style={styles.metaVal}>{s.phone || 'N/A'}</Text>
+                            </View>
+                            <View style={styles.metaCell}>
+                              <Text style={styles.metaLabel}>Taluk / Jurisdiction</Text>
+                              <Text style={styles.metaVal}>{s.taluk || 'Virudhunagar'}</Text>
+                            </View>
+                            <View style={styles.metaCell}>
+                              <Text style={styles.metaLabel}>Experience</Text>
+                              <Text style={styles.metaVal}>{s.experienceYears != null ? `${s.experienceYears} Year${s.experienceYears !== 1 ? 's' : ''}` : 'Not Specified'}</Text>
+                            </View>
+                          </View>
+
+                          {isRejected && s.rejectionReason && (
+                            <View style={styles.rejectionNoticeBox}>
+                              <Text style={styles.rejectionNoticeLabel}>Rejection Reason:</Text>
+                              <Text style={styles.rejectionNoticeText}>{s.rejectionReason}</Text>
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })
+                  )}
+                </View>
+              </View>
+            )}
+
+            {/* ─────────────────────────────────────────────────────────────
+              4B. TAB CONTENT: UMPIRE MANAGEMENT
+              ───────────────────────────────────────────────────────────── */}
+            {activeTab === 'umpires' && (
+              <View>
+                {/* TOP TWO SIDE-BY-SIDE HIGHLIGHT CARDS */}
+                <View style={[styles.highlightCardsRow, { flexDirection: isDesktop ? 'row' : 'column' }]}>
+                  {/* Left Card: Umpire Management Stats (Ocean Cyan & Sapphire Blue Modern White Card) */}
+                  <View style={styles.umpireStatCard}>
+                    <View style={styles.statCardHeader}>
+                      <View style={styles.umpireIconBox}>
+                        <Text style={{ fontSize: 16 }}>⚖️</Text>
+                      </View>
+                      <View>
+                        <Text style={styles.umpireCardTitle}>Umpire Accreditation</Text>
+                        <Text style={styles.umpireBadgeTag}>OFFICIAL DISTRICT ARBITER REGISTRY</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.umpireCardSubtitle}>
+                      Official certified umpires and match officiating access requests across Virudhunagar District.
+                    </Text>
+
+                    {/* 4 Colored Pill Rows */}
+                    <View style={styles.pillRowsContainer}>
+                      {/* Authorized Umpires */}
+                      <View style={[styles.statRowPill, styles.umpirePillApproved]}>
+                        <View style={styles.pillLeftGroup}>
+                          <View style={[styles.glowingDot, { backgroundColor: '#10b981' }]} />
+                          <Text style={[styles.pillLabel, { color: '#065f46' }]}>Authorized Umpires</Text>
+                        </View>
+                        <Text style={[styles.pillCount, { color: '#047857' }]}>{umpireApproved}</Text>
+                      </View>
+
+                      {/* Pending Approval */}
+                      <View style={[styles.statRowPill, styles.umpirePillPending]}>
+                        <View style={styles.pillLeftGroup}>
+                          <View style={[styles.glowingDot, { backgroundColor: '#f59e0b' }]} />
+                          <Text style={[styles.pillLabel, { color: '#92400e' }]}>Pending Approval</Text>
+                        </View>
+                        <Text style={[styles.pillCount, { color: '#b45309' }]}>{umpirePending}</Text>
+                      </View>
+
+                      {/* Rejected */}
+                      <View style={[styles.statRowPill, styles.umpirePillRejected]}>
+                        <View style={styles.pillLeftGroup}>
+                          <View style={[styles.glowingDot, { backgroundColor: '#ef4444' }]} />
+                          <Text style={[styles.pillLabel, { color: '#991b1b' }]}>Rejected</Text>
+                        </View>
+                        <Text style={[styles.pillCount, { color: '#dc2626' }]}>{umpireRejected}</Text>
+                      </View>
+
+                      {/* Total Umpires */}
+                      <View style={[styles.statRowPill, styles.umpirePillTotal]}>
+                        <View style={styles.pillLeftGroup}>
+                          <View style={[styles.glowingDot, { backgroundColor: '#0284c7' }]} />
+                          <Text style={[styles.pillLabel, { color: '#075985' }]}>Total Umpires</Text>
+                        </View>
+                        <Text style={[styles.pillCount, { color: '#0284c7' }]}>{umpireTotal}</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Right Card: Status Distribution with Donut Chart */}
+                  <View style={[styles.umpireStatCard, styles.donutCardAlign]}>
+                    <View style={styles.donutHeader}>
+                      <Text style={{ fontSize: 16, marginRight: 6 }}>📊</Text>
+                      <Text style={styles.umpireCardTitle}>Status Distribution</Text>
+                    </View>
+
+                    {/* Donut Chart */}
+                    <View style={styles.donutWrapper}>
+                      <View
+                        style={[
+                          styles.donutOuterRing,
+                          !isDesktop && { width: 140, height: 140, borderRadius: 70 },
+                          Platform.OS === 'web'
+                            ? ({
+                              background: `conic-gradient(#10b981 0% ${umpireSegments.appPct}%, #f59e0b ${umpireSegments.appPct}% ${umpireSegments.appPct + umpireSegments.pendPct}%, #ef4444 ${umpireSegments.appPct + umpireSegments.pendPct}% 100%)`,
+                              backgroundImage: `conic-gradient(#10b981 0% ${umpireSegments.appPct}%, #f59e0b ${umpireSegments.appPct}% ${umpireSegments.appPct + umpireSegments.pendPct}%, #ef4444 ${umpireSegments.appPct + umpireSegments.pendPct}% 100%)`
+                            } as any)
+                            : {
+                              borderWidth: 10,
+                              borderColor: '#10b981',
+                              borderTopColor: '#10b981',
+                              borderRightColor: umpireSegments.pendPct > 0 ? '#f59e0b' : '#10b981',
+                              borderBottomColor: umpireSegments.rejPct > 0 ? '#ef4444' : '#10b981',
+                              borderLeftColor: '#10b981',
+                              backgroundColor: '#ffffff'
+                            }
+                        ]}
+                      >
+                        {/* Center Hole */}
+                        <View style={[styles.donutHole, { backgroundColor: '#ffffff' }, !isDesktop && { width: 80, height: 80, borderRadius: 40 }]}>
+                          <Text style={[styles.donutNumber, { color: '#0c4a6e' }, !isDesktop && { fontSize: 24 }]}>{umpireTotal}</Text>
+                          <Text style={[styles.donutUnitLabel, { color: '#0284c7' }, !isDesktop && { fontSize: 8 }]}>UMPIRES</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Dynamic Proportional Distribution Bar */}
+                    <View style={styles.distributionBarWrapper}>
+                      <View style={[styles.distributionBarTrack, { backgroundColor: '#f1f5f9' }]}>
+                        {umpireSegments.appPct > 0 && (
+                          <View style={[styles.distributionBarSegment, { width: `${umpireSegments.appPct}%`, backgroundColor: '#10b981' }]} />
+                        )}
+                        {umpireSegments.pendPct > 0 && (
+                          <View style={[styles.distributionBarSegment, { width: `${umpireSegments.pendPct}%`, backgroundColor: '#f59e0b' }]} />
+                        )}
+                        {umpireSegments.rejPct > 0 && (
+                          <View style={[styles.distributionBarSegment, { width: `${umpireSegments.rejPct}%`, backgroundColor: '#ef4444' }]} />
+                        )}
+                      </View>
+                      <View style={styles.distributionPctRow}>
+                        <Text style={[styles.distributionPctText, { color: '#047857' }]}>{umpireSegments.appPct}% Authorized</Text>
+                        <Text style={[styles.distributionPctText, { color: '#b45309' }]}>{umpireSegments.pendPct}% Pending</Text>
+                        <Text style={[styles.distributionPctText, { color: '#b91c1c' }]}>{umpireSegments.rejPct}% Rejected</Text>
+                      </View>
+                    </View>
+
+                    {/* 3-Color Legend */}
+                    <View style={styles.donutLegendRow}>
+                      <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#10b981' }]} />
+                        <Text style={[styles.legendText, { color: '#334155' }]}>Authorized ({umpireApproved})</Text>
+                      </View>
+                      <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
+                        <Text style={[styles.legendText, { color: '#334155' }]}>Pending ({umpirePending})</Text>
+                      </View>
+                      <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} />
+                        <Text style={[styles.legendText, { color: '#334155' }]}>Rejected ({umpireRejected})</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Dynamic Live Umpire Status Strip */}
+                <View style={[styles.dynamicRegistryStrip, { backgroundColor: '#f0f9ff', borderColor: '#bae6fd' }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontSize: 16 }}>⚖️</Text>
+                    <Text style={[styles.dynamicRegistryText, { color: '#0369a1' }]}>
+                      LIVE UMPIRE REGISTRY • {umpireTotal} Officials • {umpireApproved} Accredited • {umpirePending} Pending Review
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <View style={styles.badgeCategoryCyan}>
+                      <Text style={styles.badgeCategoryCyanText}>BCCI & TNCA Panel</Text>
+                    </View>
+                    <View style={styles.badgeCategoryEmerald}>
+                      <Text style={styles.badgeCategoryEmeraldText}>Certified Match Arbiters</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.roundReloadBtnSm, isLiveReloading && styles.roundReloadBtnSpinning]}
+                      onPress={handleLiveReload}
+                      activeOpacity={0.7}
+                      accessibilityLabel="Reload live umpires"
+                    >
+                      <Animated.Text style={[styles.roundReloadIconSm, { transform: [{ rotate: spinInterpolate }] }]}>
+                        🔄
+                      </Animated.Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* SEARCH & FILTER TOOLBAR */}
+                <View style={styles.toolbarCard}>
+                  <View style={styles.searchBox}>
+                    <Text style={styles.searchIcon}>🔍</Text>
+                    <TextInput
+                      style={styles.searchInput}
+                      value={umpireSearchQuery}
+                      onChangeText={setUmpireSearchQuery}
+                      placeholder="Search by umpire name, email, qualification or district..."
+                      placeholderTextColor="#94a3b8"
+                    />
+                  </View>
+
+                  <View style={styles.filterPillsGroup}>
+                    <Text style={styles.filterStatusLabel}>Filter Status:</Text>
+                    <TouchableOpacity
+                      style={[styles.filterPill, umpireFilter === 'all' && styles.filterPillActive]}
+                      onPress={() => setUmpireFilter('all')}
+                    >
+                      <Text style={[styles.filterPillText, umpireFilter === 'all' && styles.filterPillTextActive]}>
+                        All ({umpireTotal})
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.filterPill, umpireFilter === 'Pending' && styles.filterPillActive]}
+                      onPress={() => setUmpireFilter('Pending')}
+                    >
+                      <Text style={[styles.filterPillText, umpireFilter === 'Pending' && styles.filterPillTextActive]}>
+                        Pending ({umpirePending})
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.filterPill, umpireFilter === 'Approved' && styles.filterPillActive]}
+                      onPress={() => setUmpireFilter('Approved')}
+                    >
+                      <Text style={[styles.filterPillText, umpireFilter === 'Approved' && styles.filterPillTextActive]}>
+                        Approved ({umpireApproved})
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.filterPill, umpireFilter === 'Rejected' && styles.filterPillActive]}
+                      onPress={() => setUmpireFilter('Rejected')}
+                    >
+                      <Text style={[styles.filterPillText, umpireFilter === 'Rejected' && styles.filterPillTextActive]}>
+                        Rejected ({umpireRejected})
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* UMPIRES LIST CARDS */}
+                <View style={styles.itemsListContainer}>
+                  {filteredUmpires.length === 0 ? (
+                    <View style={[styles.whiteItemCard, { alignItems: 'center', paddingVertical: 32 }]}>
+                      <Text style={{ fontSize: 24, marginBottom: 8 }}>⚖️</Text>
+                      <Text style={{ fontSize: 16, fontWeight: '700', color: '#0f172a' }}>No Umpire Registrations Found</Text>
+                      <Text style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
+                        {umpireSearchQuery ? 'No umpires matched your search query.' : 'No umpires in this category.'}
+                      </Text>
+                    </View>
+                  ) : (
+                    filteredUmpires.map(u => {
+                      const isApproved = u.status === 'Approved';
+                      const isPending = (u.status || 'Pending') === 'Pending';
+                      const isRejected = u.status === 'Rejected';
+
+                      return (
+                        <View
+                          key={u.umpireId}
+                          style={[
+                            styles.whiteItemCard,
+                            isApproved && styles.cardApprovedBorder,
+                            isPending && styles.cardPendingBorder,
+                            isRejected && styles.cardRejectedBorder
+                          ]}
+                        >
+                          <View style={styles.itemCardHeaderRow}>
+                            <View style={styles.itemTitleGroup}>
+                              <View style={styles.itemTitleBadgeRow}>
+                                <Text style={styles.itemNameText}>{u.umpireName}</Text>
+                                {isApproved && (
+                                  <View style={styles.badgeConfirmed}>
+                                    <Text style={styles.badgeConfirmedText}>✔ Approved</Text>
+                                  </View>
+                                )}
+                                {isPending && (
+                                  <View style={styles.badgePending}>
+                                    <Text style={styles.badgePendingText}>⏳ Pending</Text>
+                                  </View>
+                                )}
+                                {isRejected && (
+                                  <View style={styles.badgeRejected}>
+                                    <Text style={styles.badgeRejectedText}>🚫 Rejected</Text>
+                                  </View>
+                                )}
+                              </View>
+
+                              {/* Colorful Category Badges Row */}
+                              <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 5 }}>
+                                <View style={styles.badgeCategoryCyan}>
+                                  <Text style={styles.badgeCategoryCyanText}>ID: {u.umpireId}</Text>
+                                </View>
+                                <View style={styles.badgeCategoryPurple}>
+                                  <Text style={styles.badgeCategoryPurpleText}>⚖️ {u.qualification}</Text>
+                                </View>
+                                <View style={styles.badgeCategoryEmerald}>
+                                  <Text style={styles.badgeCategoryEmeraldText}>🎯 {u.specialization || 'On-field Official'}</Text>
+                                </View>
+                                <View style={styles.badgeCategoryAmber}>
+                                  <Text style={styles.badgeCategoryAmberText}>⏱️ {u.experience || `${u.experienceYears || 2} Yrs`}</Text>
+                                </View>
+                                {u.certificationNumber && u.certificationNumber !== '—' && (
+                                  <View style={styles.badgeCategoryRose}>
+                                    <Text style={styles.badgeCategoryRoseText}>📜 {u.certificationNumber}</Text>
+                                  </View>
+                                )}
+                              </View>
+                            </View>
+
+                            {/* Action Buttons */}
+                            <View style={[styles.itemActionsRow, { flexWrap: 'wrap' }]}>
+                              {u.phone && u.phone !== '—' && (
+                                <TouchableOpacity
+                                  style={styles.btnActionCall}
+                                  onPress={() => handleCallContact(u.phone, u.umpireName)}
+                                  activeOpacity={0.8}
+                                  accessibilityLabel="Call Umpire"
+                                >
+                                  <Text style={styles.btnActionCallText}>📞 Call</Text>
+                                </TouchableOpacity>
+                              )}
+
+                              {u.email && u.email !== '—' && (
+                                <TouchableOpacity
+                                  style={styles.btnActionEmail}
+                                  onPress={() => handleEmailContact(u.email, u.umpireName)}
+                                  activeOpacity={0.8}
+                                  accessibilityLabel="Email Umpire"
+                                >
+                                  <Text style={styles.btnActionEmailText}>✉️ Email</Text>
+                                </TouchableOpacity>
+                              )}
+
+                              <TouchableOpacity
+                                style={styles.btnActionViewCyan}
+                                onPress={() => setSelectedUmpireForView(u)}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={styles.btnActionViewCyanText}>👁 View</Text>
+                              </TouchableOpacity>
+
+                              {isPending ? (
+                                <>
+                                  <TouchableOpacity
+                                    style={styles.btnSuccessSm}
+                                    onPress={() => handleApproveUmpire(u.umpireId)}
+                                    activeOpacity={0.8}
+                                  >
+                                    <Text style={styles.btnSuccessSmText}>✔ Approve</Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={styles.btnOutlineDanger}
+                                    onPress={() => handleOpenRejectModal(u.umpireId, 'UMPIRE', u.umpireName)}
+                                    activeOpacity={0.8}
+                                  >
+                                    <Text style={styles.btnOutlineDangerText}>🚫 Reject</Text>
+                                  </TouchableOpacity>
+                                </>
+                              ) : isApproved ? (
+                                <TouchableOpacity
+                                  style={styles.btnOutlineDanger}
+                                  onPress={() => handleOpenRejectModal(u.umpireId, 'UMPIRE', u.umpireName)}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={styles.btnOutlineDangerText}>🚫 Reject</Text>
+                                </TouchableOpacity>
+                              ) : (
+                                <TouchableOpacity
+                                  style={styles.btnSuccessSm}
+                                  onPress={() => handleApproveUmpire(u.umpireId)}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={styles.btnSuccessSmText}>✔ Approve</Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          </View>
+
+                          {/* Item Meta Details */}
+                          <View style={styles.itemMetaGrid}>
+                            <View style={styles.metaCell}>
+                              <Text style={styles.metaLabel}>Official Email</Text>
+                              <Text style={styles.metaVal}>{u.email || '—'}</Text>
+                            </View>
+                            <View style={styles.metaCell}>
+                              <Text style={styles.metaLabel}>Experience</Text>
+                              <Text style={styles.metaVal}>{u.experience || `${u.experienceYears} Years`}</Text>
+                            </View>
+                            <View style={styles.metaCell}>
+                              <Text style={styles.metaLabel}>District & State</Text>
+                              <Text style={styles.metaVal}>{u.district || 'Virudhunagar'}, {u.state || 'Tamil Nadu'}</Text>
+                            </View>
+                            <View style={styles.metaCell}>
+                              <Text style={styles.metaLabel}>Cert Number</Text>
+                              <Text style={styles.metaVal}>{u.certificationNumber || '—'}</Text>
+                            </View>
+                          </View>
+
+                          {isRejected && u.rejectionReason && (
+                            <View style={styles.rejectionNoticeBox}>
+                              <Text style={styles.rejectionNoticeLabel}>Rejection Reason:</Text>
+                              <Text style={styles.rejectionNoticeText}>{u.rejectionReason}</Text>
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })
+                  )}
+                </View>
+              </View>
+            )}
+
+            {/* ─────────────────────────────────────────────────────────────
+              5. TAB CONTENT: TEAM REGISTRATIONS
+              ───────────────────────────────────────────────────────────── */}
+            {activeTab === 'teams' && (
+              <View>
+                {/* TOP TWO SIDE-BY-SIDE HIGHLIGHT CARDS FOR TEAMS */}
+                <View style={[styles.highlightCardsRow, { flexDirection: isDesktop ? 'row' : 'column' }]}>
+                  {/* Left Card: Team Registrations Stats (Emerald & Athletic Gold Themed Modern White Card) */}
+                  <View style={styles.teamStatCard}>
+                    <View style={styles.statCardHeader}>
+                      <View style={styles.teamIconBox}>
+                        <Text style={{ fontSize: 16 }}>🛡️</Text>
+                      </View>
+                      <View>
+                        <Text style={styles.teamCardTitle}>Team Registrations</Text>
+                        <Text style={styles.teamBadgeTag}>OFFICIAL CLUB AFFILIATION</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.teamCardSubtitle}>
+                      Official club and collegiate team squad applications submitted for district championship entry.
+                    </Text>
+
+                    {/* 4 Colored Pill Rows */}
+                    <View style={styles.pillRowsContainer}>
+                      <View style={[styles.statRowPill, styles.teamPillApproved]}>
+                        <View style={styles.pillLeftGroup}>
+                          <View style={[styles.glowingDot, { backgroundColor: '#10b981' }]} />
+                          <Text style={[styles.pillLabel, { color: '#065f46' }]}>Approved Clubs</Text>
+                        </View>
+                        <Text style={[styles.pillCount, { color: '#047857' }]}>{teamApproved}</Text>
+                      </View>
+
+                      <View style={[styles.statRowPill, styles.teamPillPending]}>
+                        <View style={styles.pillLeftGroup}>
+                          <View style={[styles.glowingDot, { backgroundColor: '#f59e0b' }]} />
+                          <Text style={[styles.pillLabel, { color: '#92400e' }]}>Pending Approval</Text>
+                        </View>
+                        <Text style={[styles.pillCount, { color: '#b45309' }]}>{teamPending}</Text>
+                      </View>
+
+                      <View style={[styles.statRowPill, styles.teamPillRejected]}>
+                        <View style={styles.pillLeftGroup}>
+                          <View style={[styles.glowingDot, { backgroundColor: '#ef4444' }]} />
+                          <Text style={[styles.pillLabel, { color: '#991b1b' }]}>Rejected Teams</Text>
+                        </View>
+                        <Text style={[styles.pillCount, { color: '#dc2626' }]}>{teamRejected}</Text>
+                      </View>
+
+                      <View style={[styles.statRowPill, styles.teamPillTotal]}>
+                        <View style={styles.pillLeftGroup}>
+                          <View style={[styles.glowingDot, { backgroundColor: '#3b82f6' }]} />
+                          <Text style={[styles.pillLabel, { color: '#1e40af' }]}>Total Registered</Text>
+                        </View>
+                        <Text style={[styles.pillCount, { color: '#1d4ed8' }]}>{teamTotal}</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Right Card: Teams Status Distribution Donut */}
+                  <View style={[styles.teamStatCard, styles.donutCardAlign]}>
+                    <View style={styles.donutHeader}>
+                      <Text style={{ fontSize: 16, marginRight: 6 }}>📊</Text>
+                      <Text style={styles.teamCardTitle}>Status Distribution</Text>
+                    </View>
+
+                    <View style={styles.donutWrapper}>
+                      <View
+                        style={[
+                          styles.donutOuterRing,
+                          !isDesktop && { width: 140, height: 140, borderRadius: 70 },
+                          Platform.OS === 'web'
+                            ? ({
+                              background: `conic-gradient(#10b981 0% ${teamSegments.appPct}%, #f59e0b ${teamSegments.appPct}% ${teamSegments.appPct + teamSegments.pendPct}%, #ef4444 ${teamSegments.appPct + teamSegments.pendPct}% 100%)`,
+                              backgroundImage: `conic-gradient(#10b981 0% ${teamSegments.appPct}%, #f59e0b ${teamSegments.appPct}% ${teamSegments.appPct + teamSegments.pendPct}%, #ef4444 ${teamSegments.appPct + teamSegments.pendPct}% 100%)`
+                            } as any)
+                            : {
+                              borderWidth: 10,
+                              borderColor: '#10b981',
+                              borderTopColor: '#10b981',
+                              borderRightColor: teamSegments.pendPct > 0 ? '#f59e0b' : '#10b981',
+                              borderBottomColor: teamSegments.rejPct > 0 ? '#ef4444' : '#10b981',
+                              borderLeftColor: '#10b981',
+                              backgroundColor: '#ffffff'
+                            }
+                        ]}
+                      >
+                        <View style={[styles.donutHole, { backgroundColor: '#ffffff' }, !isDesktop && { width: 80, height: 80, borderRadius: 40 }]}>
+                          <Text style={[styles.donutNumber, { color: '#064e3b' }, !isDesktop && { fontSize: 24 }]}>{teamTotal}</Text>
+                          <Text style={[styles.donutUnitLabel, { color: '#059669' }, !isDesktop && { fontSize: 8 }]}>CLUBS</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Dynamic Proportional Distribution Bar */}
+                    <View style={styles.distributionBarWrapper}>
+                      <View style={[styles.distributionBarTrack, { backgroundColor: '#f1f5f9' }]}>
+                        {teamSegments.appPct > 0 && (
+                          <View style={[styles.distributionBarSegment, { width: `${teamSegments.appPct}%`, backgroundColor: '#10b981' }]} />
+                        )}
+                        {teamSegments.pendPct > 0 && (
+                          <View style={[styles.distributionBarSegment, { width: `${teamSegments.pendPct}%`, backgroundColor: '#f59e0b' }]} />
+                        )}
+                        {teamSegments.rejPct > 0 && (
+                          <View style={[styles.distributionBarSegment, { width: `${teamSegments.rejPct}%`, backgroundColor: '#ef4444' }]} />
+                        )}
+                      </View>
+                      <View style={styles.distributionPctRow}>
+                        <Text style={[styles.distributionPctText, { color: '#047857' }]}>{teamSegments.appPct}% Approved</Text>
+                        <Text style={[styles.distributionPctText, { color: '#b45309' }]}>{teamSegments.pendPct}% Pending</Text>
+                        <Text style={[styles.distributionPctText, { color: '#b91c1c' }]}>{teamSegments.rejPct}% Rejected</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.donutLegendRow}>
+                      <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#10b981' }]} />
+                        <Text style={[styles.legendText, { color: '#334155' }]}>Approved ({teamApproved})</Text>
+                      </View>
+                      <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
+                        <Text style={[styles.legendText, { color: '#334155' }]}>Pending ({teamPending})</Text>
+                      </View>
+                      <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} />
+                        <Text style={[styles.legendText, { color: '#334155' }]}>Rejected ({teamRejected})</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Dynamic Live Team Status Strip */}
+                <View style={[styles.dynamicRegistryStrip, { backgroundColor: '#ecfdf5', borderColor: '#a7f3d0' }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontSize: 16 }}>🛡️</Text>
+                    <Text style={[styles.dynamicRegistryText, { color: '#065f46' }]}>
+                      LIVE TEAM REGISTRY • {teamTotal} Clubs Registered • {teamApproved} Affiliated • {teamPending} Awaiting Clearance
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <View style={styles.badgeCategoryEmerald}>
+                      <Text style={styles.badgeCategoryEmeraldText}>District Championship Clubs</Text>
+                    </View>
+                    <View style={styles.badgeCategoryAmber}>
+                      <Text style={styles.badgeCategoryAmberText}>15-Member Squads</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.roundReloadBtnSm, isLiveReloading && styles.roundReloadBtnSpinning]}
+                      onPress={handleLiveReload}
+                      activeOpacity={0.7}
+                      accessibilityLabel="Reload live teams"
+                    >
+                      <Animated.Text style={[styles.roundReloadIconSm, { transform: [{ rotate: spinInterpolate }] }]}>
+                        🔄
+                      </Animated.Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* TEAMS TOOLBAR */}
+                <View style={styles.toolbarCard}>
+                  <View style={styles.searchBox}>
+                    <Text style={styles.searchIcon}>🔍</Text>
+                    <TextInput
+                      style={styles.searchInput}
+                      value={teamSearchQuery}
+                      onChangeText={setTeamSearchQuery}
+                      placeholder="Search by team name, coach or taluk..."
+                      placeholderTextColor="#94a3b8"
+                    />
+                  </View>
+
+                  <View style={styles.filterPillsGroup}>
+                    <Text style={styles.filterStatusLabel}>Filter Status:</Text>
+                    <TouchableOpacity
+                      style={[styles.filterPill, teamFilter === 'all' && styles.filterPillActive]}
+                      onPress={() => setTeamFilter('all')}
+                    >
+                      <Text style={[styles.filterPillText, teamFilter === 'all' && styles.filterPillTextActive]}>
+                        All ({teamTotal})
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.filterPill, teamFilter === 'Pending' && styles.filterPillActive]}
+                      onPress={() => setTeamFilter('Pending')}
+                    >
+                      <Text style={[styles.filterPillText, teamFilter === 'Pending' && styles.filterPillTextActive]}>
+                        Pending ({teamPending})
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.filterPill, teamFilter === 'Approved' && styles.filterPillActive]}
+                      onPress={() => setTeamFilter('Approved')}
+                    >
+                      <Text style={[styles.filterPillText, teamFilter === 'Approved' && styles.filterPillTextActive]}>
+                        Approved ({teamApproved})
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.filterPill, teamFilter === 'Rejected' && styles.filterPillActive]}
+                      onPress={() => setTeamFilter('Rejected')}
+                    >
+                      <Text style={[styles.filterPillText, teamFilter === 'Rejected' && styles.filterPillTextActive]}>
+                        Rejected ({teamRejected})
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* TEAMS LIST CARDS */}
+                <View style={styles.itemsListContainer}>
+                  {filteredTeams.length === 0 ? (
+                    <View style={styles.emptyBox}>
+                      <Text style={{ fontSize: 28, marginBottom: 8 }}>👥</Text>
+                      <Text style={styles.emptyTitle}>No Teams Found</Text>
+                      <Text style={styles.emptySubtitle}>No club applications match the current filter selection.</Text>
+                    </View>
+                  ) : (
+                    filteredTeams.map(t => {
+                      const isApproved = t.status === 'Approved';
+                      const isPending = (t.status || 'Pending') === 'Pending';
+                      const isRejected = t.status === 'Rejected';
+
+                      const initials = (t.teamName || 'TM')
+                        .split(' ')
+                        .map((w: string) => w[0])
+                        .join('')
+                        .slice(0, 2)
+                        .toUpperCase();
+
+                      const crestBg = isApproved ? '#059669' : isPending ? '#d97706' : '#dc2626';
+
+                      return (
+                        <View
+                          key={t.teamId}
+                          style={[
+                            styles.whiteItemCard,
+                            isApproved && styles.cardApprovedBorder,
+                            isPending && styles.cardPendingBorder,
+                            isRejected && styles.cardRejectedBorder
+                          ]}
+                        >
+                          <View style={styles.itemCardHeaderRow}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                              {/* Colorful Team Initial Crest */}
+                              <View style={[styles.teamCrestAvatar, { backgroundColor: crestBg }]}>
+                                <Text style={styles.teamCrestText}>{initials}</Text>
+                              </View>
+
+                              <View style={styles.itemTitleGroup}>
+                                <View style={styles.itemTitleBadgeRow}>
+                                  <Text style={styles.itemNameText}>{t.teamName}</Text>
+                                  {isApproved && (
+                                    <View style={styles.badgeConfirmed}>
+                                      <Text style={styles.badgeConfirmedText}>✔ Approved</Text>
+                                    </View>
+                                  )}
+                                  {isPending && (
+                                    <View style={styles.badgePending}>
+                                      <Text style={styles.badgePendingText}>⏳ Pending</Text>
+                                    </View>
+                                  )}
+                                  {isRejected && (
+                                    <View style={styles.badgeRejected}>
+                                      <Text style={styles.badgeRejectedText}>🚫 Rejected</Text>
+                                    </View>
+                                  )}
+                                </View>
+
+                                {/* Colorful Category Badges Row */}
+                                <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 5 }}>
+                                  <View style={styles.badgeCategoryEmerald}>
+                                    <Text style={styles.badgeCategoryEmeraldText}>ID: {t.teamId}</Text>
+                                  </View>
+                                  <View style={styles.badgeCategoryAmber}>
+                                    <Text style={styles.badgeCategoryAmberText}>👤 Coach: {t.coach?.name || 'Head Coach'}</Text>
+                                  </View>
+                                  {(t.coach?.phone || t.coach?.mobile || t.coachPhone || t.phone) && (
+                                    <View style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                                      <Text style={{ color: '#166534', fontSize: 11, fontWeight: '700' }}>📞 {t.coach?.phone || t.coach?.mobile || t.coachPhone || t.phone}</Text>
+                                    </View>
+                                  )}
+                                  {(t.coach?.aadhaar || t.coach_aadhaar || t.coachAadhaar || t.aadhaar) && (
+                                    <View style={{ backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                                      <Text style={{ color: '#991b1b', fontSize: 11, fontWeight: '700' }}>🆔 UIDAI: {t.coach?.aadhaar || t.coach_aadhaar || t.coachAadhaar || t.aadhaar}</Text>
+                                    </View>
+                                  )}
+                                  <View style={styles.badgeCategoryIndigo}>
+                                    <Text style={styles.badgeCategoryIndigoText}>🏏 {t.members?.length || 15} Squad Players</Text>
+                                  </View>
+                                  <View style={styles.badgeCategoryPurple}>
+                                    <Text style={styles.badgeCategoryPurpleText}>📍 {t.taluk || 'Virudhunagar'}</Text>
+                                  </View>
+                                </View>
+                              </View>
+                            </View>
+
+                            {/* Action Buttons */}
+                            <View style={[styles.itemActionsRow, { flexWrap: 'wrap' }]}>
+                              {Boolean(t.coach?.email) && (
+                                <TouchableOpacity
+                                  style={styles.btnActionEmail}
+                                  onPress={() => handleEmailContact(t.coach.email, t.coach?.name || t.teamName)}
+                                  activeOpacity={0.8}
+                                  accessibilityLabel="Email Coach"
+                                >
+                                  <Text style={styles.btnActionEmailText}>✉️ Email Coach</Text>
+                                </TouchableOpacity>
+                              )}
+
+                              <TouchableOpacity
+                                style={styles.btnActionViewEmerald}
+                                onPress={() => setSelectedSquadModal(t)}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={styles.btnActionViewEmeraldText}>👁 Squad ({t.members?.length || 15})</Text>
+                              </TouchableOpacity>
+
+                              {isPending ? (
+                                <>
+                                  <TouchableOpacity
+                                    style={styles.btnSuccessSm}
+                                    onPress={() => handleApproveTeam(t.teamId)}
+                                    activeOpacity={0.8}
+                                  >
+                                    <Text style={styles.btnSuccessSmText}>✔ Approve</Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={styles.btnOutlineDanger}
+                                    onPress={() => handleOpenRejectModal(t.teamId, 'TEAM', t.teamName)}
+                                    activeOpacity={0.8}
+                                  >
+                                    <Text style={styles.btnOutlineDangerText}>🚫 Reject</Text>
+                                  </TouchableOpacity>
+                                </>
+                              ) : isApproved ? (
                                 <TouchableOpacity
                                   style={styles.btnOutlineDanger}
                                   onPress={() => handleOpenRejectModal(t.teamId, 'TEAM', t.teamName)}
@@ -3563,464 +3636,455 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 >
                                   <Text style={styles.btnOutlineDangerText}>🚫 Reject</Text>
                                 </TouchableOpacity>
-                              </>
-                            ) : isApproved ? (
-                              <TouchableOpacity
-                                style={styles.btnOutlineDanger}
-                                onPress={() => handleOpenRejectModal(t.teamId, 'TEAM', t.teamName)}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={styles.btnOutlineDangerText}>🚫 Reject</Text>
-                              </TouchableOpacity>
-                            ) : (
-                              <TouchableOpacity
-                                style={styles.btnSuccessSm}
-                                onPress={() => handleApproveTeam(t.teamId)}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={styles.btnSuccessSmText}>✔ Approve</Text>
-                              </TouchableOpacity>
-                            )}
+                              ) : (
+                                <TouchableOpacity
+                                  style={styles.btnSuccessSm}
+                                  onPress={() => handleApproveTeam(t.teamId)}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={styles.btnSuccessSmText}>✔ Approve</Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
                           </View>
-                        </View>
 
-                        <View style={styles.itemMetaGrid}>
-                          <View style={styles.metaCell}>
-                            <Text style={styles.metaLabel}>Head Coach Email</Text>
-                            <Text style={styles.metaVal}>{t.coach?.email || 'N/A'}</Text>
-                          </View>
-                          <View style={styles.metaCell}>
-                            <Text style={styles.metaLabel}>Taluk / Jurisdiction</Text>
-                            <Text style={styles.metaVal}>{t.taluk || 'Virudhunagar'}</Text>
-                          </View>
-                          <View style={styles.metaCell}>
-                            <Text style={styles.metaLabel}>Registered Squad</Text>
-                            <Text style={styles.metaVal}>{t.members?.length || 15} Members Verified</Text>
-                          </View>
-                          <View style={styles.metaCell}>
-                            <Text style={styles.metaLabel}>Submission Date</Text>
-                            <Text style={styles.metaVal}>
-                              {t.registrationDate ? new Date(t.registrationDate).toLocaleDateString() : 'Active'}
-                            </Text>
+                          <View style={styles.itemMetaGrid}>
+                            <View style={styles.metaCell}>
+                              <Text style={styles.metaLabel}>Head Coach Email</Text>
+                              <Text style={styles.metaVal}>{t.coach?.email || 'N/A'}</Text>
+                            </View>
+                            <View style={styles.metaCell}>
+                              <Text style={styles.metaLabel}>Taluk / Jurisdiction</Text>
+                              <Text style={styles.metaVal}>{t.taluk || 'Virudhunagar'}</Text>
+                            </View>
+                            <View style={styles.metaCell}>
+                              <Text style={styles.metaLabel}>Registered Squad</Text>
+                              <Text style={styles.metaVal}>{t.members?.length || 15} Members Verified</Text>
+                            </View>
+                            <View style={styles.metaCell}>
+                              <Text style={styles.metaLabel}>Submission Date</Text>
+                              <Text style={styles.metaVal}>
+                                {t.registrationDate ? new Date(t.registrationDate).toLocaleDateString() : 'Active'}
+                              </Text>
+                            </View>
                           </View>
                         </View>
-                      </View>
-                    );
-                  })
-                )}
+                      );
+                    })
+                  )}
+                </View>
               </View>
-            </View>
-          )}
+            )}
 
-          {/* ─────────────────────────────────────────────────────────────
+            {/* ─────────────────────────────────────────────────────────────
               6. TAB CONTENT: OVERVIEW (EXECUTIVE MISSION CONTROL UI/UX)
               ───────────────────────────────────────────────────────────── */}
-          {activeTab === 'overview' && (
-            <View style={{ gap: 20 }}>
-              {/* 1. EXECUTIVE COMMAND HERO BANNER */}
-              <View style={styles.overviewHeroCard}>
-                <View style={styles.overviewHeroTop}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1, flexWrap: 'wrap' }}>
-                    <View style={styles.overviewHeroIconBox}>
-                      <Text style={{ fontSize: 24 }}>👑</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                        <Text style={styles.overviewHeroTitle}>Apex Council Governance Matrix</Text>
-                        <View style={styles.heroLiveStatusChip}>
-                          <View style={styles.pulsingLiveDot} />
-                          <Text style={styles.heroLiveStatusText}>SYSTEM ONLINE • 100% LIVE</Text>
-                        </View>
+            {activeTab === 'overview' && (
+              <View style={{ gap: 20 }}>
+                {/* 1. EXECUTIVE COMMAND HERO BANNER */}
+                <View style={styles.overviewHeroCard}>
+                  <View style={styles.overviewHeroTop}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1, flexWrap: 'wrap' }}>
+                      <View style={styles.overviewHeroIconBox}>
+                        <Text style={{ fontSize: 24 }}>👑</Text>
                       </View>
-                      <Text style={styles.overviewHeroSubtitle}>
-                        Cricket Federation of Virudhunagar District (CFVD) • Central Executive Command Portal
-                      </Text>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                          <Text style={styles.overviewHeroTitle}>Apex Council Governance Matrix</Text>
+                          <View style={styles.heroLiveStatusChip}>
+                            <View style={styles.pulsingLiveDot} />
+                            <Text style={styles.heroLiveStatusText}>SYSTEM ONLINE • 100% LIVE</Text>
+                          </View>
+                        </View>
+                        <Text style={styles.overviewHeroSubtitle}>
+                          Cricket Federation of Virudhunagar District (CFVD) • Central Executive Command Portal
+                        </Text>
+                      </View>
                     </View>
-                  </View>
-                  <TouchableOpacity
-                    style={[styles.roundReloadBtn, isLiveReloading && styles.roundReloadBtnSpinning]}
-                    onPress={handleLiveReload}
-                    activeOpacity={0.7}
-                    accessibilityLabel="Reload Complete Matrix"
-                  >
-                    <Animated.Text style={[styles.roundReloadIcon, { transform: [{ rotate: spinInterpolate }] }]}>
-                      🔄
-                    </Animated.Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Quick Action Launchpad */}
-                <View style={styles.heroLaunchpadRow}>
-                  <Text style={styles.heroLaunchpadHeading}>QUICK LAUNCHPAD:</Text>
-                  {pendingPostponementCount > 0 && (
                     <TouchableOpacity
-                      style={[styles.btnLaunchpadOrange, { backgroundColor: '#dc2626', borderColor: '#b91c1c' }]}
+                      style={[styles.roundReloadBtn, isLiveReloading && styles.roundReloadBtnSpinning]}
+                      onPress={handleLiveReload}
+                      activeOpacity={0.7}
+                      accessibilityLabel="Reload Complete Matrix"
+                    >
+                      <Animated.Text style={[styles.roundReloadIcon, { transform: [{ rotate: spinInterpolate }] }]}>
+                        🔄
+                      </Animated.Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Quick Action Launchpad */}
+                  <View style={styles.heroLaunchpadRow}>
+                    <Text style={styles.heroLaunchpadHeading}>QUICK LAUNCHPAD:</Text>
+                    {pendingPostponementCount > 0 && (
+                      <TouchableOpacity
+                        style={[styles.btnLaunchpadOrange, { backgroundColor: '#dc2626', borderColor: '#b91c1c' }]}
+                        onPress={() => {
+                          setMatchFilter('REQUESTS');
+                          setActiveTab('schedules');
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[styles.btnLaunchpadOrangeText, { color: '#ffffff', fontWeight: '800' }]}>
+                          ⚠️ Review Postponement Requests ({pendingPostponementCount} Pending)
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={styles.btnLaunchpadOrange}
                       onPress={() => {
-                        setMatchFilter('REQUESTS');
                         setActiveTab('schedules');
+                        setScheduleModalOpen(true);
                       }}
                       activeOpacity={0.8}
                     >
-                      <Text style={[styles.btnLaunchpadOrangeText, { color: '#ffffff', fontWeight: '800' }]}>
-                        ⚠️ Review Postponement Requests ({pendingPostponementCount} Pending)
-                      </Text>
+                      <Text style={styles.btnLaunchpadOrangeText}>⚡ + Schedule Match</Text>
                     </TouchableOpacity>
-                  )}
-                  <TouchableOpacity
-                    style={styles.btnLaunchpadOrange}
-                    onPress={() => {
-                      setActiveTab('schedules');
-                      setScheduleModalOpen(true);
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.btnLaunchpadOrangeText}>⚡ + Schedule Match</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.btnLaunchpadEmerald}
-                    onPress={() => setActiveTab('teams')}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.btnLaunchpadEmeraldText}>🛡️ Review Clubs ({teamPending} Pending)</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.btnLaunchpadViolet}
-                    onPress={() => setActiveTab('scorers')}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.btnLaunchpadVioletText}>📋 Verify Scorers ({scorerPending} Pending)</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.btnLaunchpadCyan}
-                    onPress={() => setActiveTab('umpires')}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.btnLaunchpadCyanText}>⚖️ Accredit Umpires ({umpirePending} Pending)</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.btnLaunchpadRose}
-                    onPress={() => setActiveTab('content')}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.btnLaunchpadRoseText}>📰 Publish Notice</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* URGENT POSTPONEMENT REQUESTS BANNER (OVERVIEW) */}
-              {pendingPostponementCount > 0 && (
-                <View style={{ backgroundColor: '#fff1f2', borderColor: '#f43f5e', borderWidth: 1.5, borderRadius: 12, padding: 18 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                      <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#ffe4e6', alignItems: 'center', justifyContent: 'center' }}>
-                        <Text style={{ fontSize: 18 }}>⚠️</Text>
-                      </View>
-                      <View>
-                        <Text style={{ color: '#9f1239', fontWeight: '800', fontSize: 15, letterSpacing: 0.3 }}>
-                          ACTION REQUIRED: {pendingPostponementCount} UMPIRE POSTPONEMENT REQUEST{pendingPostponementCount > 1 ? 'S' : ''} PENDING
-                        </Text>
-                        <Text style={{ color: '#be123c', fontSize: 12, marginTop: 1 }}>
-                          Assigned Umpires have submitted official postponement requests awaiting your approval.
-                        </Text>
-                      </View>
-                    </View>
                     <TouchableOpacity
-                      style={{ backgroundColor: '#e11d48', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 6 }}
-                      onPress={() => {
-                        setMatchFilter('REQUESTS');
-                        setActiveTab('schedules');
-                      }}
+                      style={styles.btnLaunchpadEmerald}
+                      onPress={() => setActiveTab('teams')}
+                      activeOpacity={0.8}
                     >
-                      <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>View in Schedules →</Text>
+                      <Text style={styles.btnLaunchpadEmeraldText}>🛡️ Review Clubs ({teamPending} Pending)</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.btnLaunchpadViolet}
+                      onPress={() => setActiveTab('scorers')}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.btnLaunchpadVioletText}>📋 Verify Scorers ({scorerPending} Pending)</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.btnLaunchpadCyan}
+                      onPress={() => setActiveTab('umpires')}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.btnLaunchpadCyanText}>⚖️ Accredit Umpires ({umpirePending} Pending)</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.btnLaunchpadRose}
+                      onPress={() => setActiveTab('content')}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.btnLaunchpadRoseText}>📰 Publish Notice</Text>
                     </TouchableOpacity>
                   </View>
-
-                  {pendingPostponementRequests.map(m => (
-                    <View key={m.id} style={{ backgroundColor: '#ffffff', borderRadius: 8, padding: 14, marginTop: 8, borderColor: '#fecdd3', borderWidth: 1 }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
-                        <View style={{ flex: 1, minWidth: 220 }}>
-                          <Text style={{ fontWeight: '700', fontSize: 14, color: '#1e293b' }}>
-                            {m.team_a_name || m.team_a_id} vs {m.team_b_name || m.team_b_id} (Match #{m.id})
-                          </Text>
-                          <Text style={{ color: '#64748b', fontSize: 12, marginTop: 2 }}>
-                            📅 {m.match_date} at {m.match_time || '09:30 AM'} • 📍 {m.venue || 'District Stadium'}
-                          </Text>
-                          <Text style={{ color: '#9f1239', fontSize: 12, fontWeight: '600', marginTop: 4 }}>
-                            Requested by: {m.umpire_postponement_request?.umpire_name || 'Assigned Umpire'}
-                          </Text>
-                          <Text style={{ color: '#881337', fontSize: 12, fontStyle: 'italic', marginTop: 1 }}>
-                            Reason: "{m.umpire_postponement_request?.reason}"
-                          </Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-                          <TouchableOpacity
-                            style={{ backgroundColor: '#16a34a', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6 }}
-                            onPress={() => handleReviewUmpirePostponement(m.id, 'APPROVE')}
-                            activeOpacity={0.8}
-                          >
-                            <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>✓ Approve & Postpone</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={{ backgroundColor: '#dc2626', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6 }}
-                            onPress={() => handleReviewUmpirePostponement(m.id, 'REJECT')}
-                            activeOpacity={0.8}
-                          >
-                            <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>✕ Reject</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              {/* 2. FOUR DISTINCT SECTOR HUB CARDS */}
-              <View style={[styles.overviewHubsGrid, { flexDirection: isDesktop ? 'row' : 'column' }]}>
-                {/* Hub 1: Teams & Clubs (Emerald) */}
-                <TouchableOpacity
-                  style={[styles.overviewHubCard, styles.hubBorderEmerald]}
-                  onPress={() => setActiveTab('teams')}
-                  activeOpacity={0.85}
-                >
-                  <View style={styles.hubHeaderRow}>
-                    <View style={[styles.hubIconBox, { backgroundColor: '#059669' }]}>
-                      <Text style={{ fontSize: 18 }}>🛡️</Text>
-                    </View>
-                    <View style={styles.hubTagEmerald}>
-                      <Text style={styles.hubTagEmeraldText}>CLUB AFFILIATION</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.hubCardTitle}>Registered Clubs</Text>
-                  <Text style={styles.hubCardBigCount}>{teamTotal}</Text>
-                  <View style={styles.hubMiniPillRow}>
-                    <View style={[styles.hubMiniPill, { backgroundColor: '#ecfdf5' }]}>
-                      <Text style={[styles.hubMiniPillText, { color: '#047857' }]}>✔ {teamApproved} Appr</Text>
-                    </View>
-                    <View style={[styles.hubMiniPill, { backgroundColor: '#fffbeb' }]}>
-                      <Text style={[styles.hubMiniPillText, { color: '#b45309' }]}>⏳ {teamPending} Pend</Text>
-                    </View>
-                    <View style={[styles.hubMiniPill, { backgroundColor: '#fff1f2' }]}>
-                      <Text style={[styles.hubMiniPillText, { color: '#dc2626' }]}>✕ {teamRejected} Rej</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.hubFooterLinkEmerald}>Open Team Registry →</Text>
-                </TouchableOpacity>
-
-                {/* Hub 2: Match Scorers (Royal Violet) */}
-                <TouchableOpacity
-                  style={[styles.overviewHubCard, styles.hubBorderViolet]}
-                  onPress={() => setActiveTab('scorers')}
-                  activeOpacity={0.85}
-                >
-                  <View style={styles.hubHeaderRow}>
-                    <View style={[styles.hubIconBox, { backgroundColor: '#4f46e5' }]}>
-                      <Text style={{ fontSize: 18 }}>📋</Text>
-                    </View>
-                    <View style={styles.hubTagViolet}>
-                      <Text style={styles.hubTagVioletText}>DIGITAL ARBITERS</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.hubCardTitle}>Scorer Guild</Text>
-                  <Text style={styles.hubCardBigCount}>{scorerTotal}</Text>
-                  <View style={styles.hubMiniPillRow}>
-                    <View style={[styles.hubMiniPill, { backgroundColor: '#ecfdf5' }]}>
-                      <Text style={[styles.hubMiniPillText, { color: '#047857' }]}>✔ {scorerApproved} Auth</Text>
-                    </View>
-                    <View style={[styles.hubMiniPill, { backgroundColor: '#fffbeb' }]}>
-                      <Text style={[styles.hubMiniPillText, { color: '#b45309' }]}>⏳ {scorerPending} Pend</Text>
-                    </View>
-                    <View style={[styles.hubMiniPill, { backgroundColor: '#fff1f2' }]}>
-                      <Text style={[styles.hubMiniPillText, { color: '#dc2626' }]}>✕ {scorerRejected} Rej</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.hubFooterLinkViolet}>Manage Scorer Cadre →</Text>
-                </TouchableOpacity>
-
-                {/* Hub 3: Umpires (Ocean Sapphire Cyan) */}
-                <TouchableOpacity
-                  style={[styles.overviewHubCard, styles.hubBorderCyan]}
-                  onPress={() => setActiveTab('umpires')}
-                  activeOpacity={0.85}
-                >
-                  <View style={styles.hubHeaderRow}>
-                    <View style={[styles.hubIconBox, { backgroundColor: '#0284c7' }]}>
-                      <Text style={{ fontSize: 18 }}>⚖️</Text>
-                    </View>
-                    <View style={styles.hubTagCyan}>
-                      <Text style={styles.hubTagCyanText}>BCCI & TNCA PANEL</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.hubCardTitle}>Umpire Cadre</Text>
-                  <Text style={styles.hubCardBigCount}>{umpireTotal}</Text>
-                  <View style={styles.hubMiniPillRow}>
-                    <View style={[styles.hubMiniPill, { backgroundColor: '#ecfdf5' }]}>
-                      <Text style={[styles.hubMiniPillText, { color: '#047857' }]}>✔ {umpireApproved} Accr</Text>
-                    </View>
-                    <View style={[styles.hubMiniPill, { backgroundColor: '#fffbeb' }]}>
-                      <Text style={[styles.hubMiniPillText, { color: '#b45309' }]}>⏳ {umpirePending} Pend</Text>
-                    </View>
-                    <View style={[styles.hubMiniPill, { backgroundColor: '#fff1f2' }]}>
-                      <Text style={[styles.hubMiniPillText, { color: '#dc2626' }]}>✕ {umpireRejected} Rej</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.hubFooterLinkCyan}>Accredit Umpires →</Text>
-                </TouchableOpacity>
-
-                {/* Hub 4: Fixtures & Live Matches (Flame Orange) */}
-                <TouchableOpacity
-                  style={[styles.overviewHubCard, styles.hubBorderOrange]}
-                  onPress={() => setActiveTab('schedules')}
-                  activeOpacity={0.85}
-                >
-                  <View style={styles.hubHeaderRow}>
-                    <View style={[styles.hubIconBox, { backgroundColor: '#ea580c' }]}>
-                      <Text style={{ fontSize: 18 }}>⚡</Text>
-                    </View>
-                    <View style={styles.hubTagOrange}>
-                      <Text style={styles.hubTagOrangeText}>TOURNAMENT OPS</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.hubCardTitle}>Championship Matches</Text>
-                  <Text style={styles.hubCardBigCount}>{matchesList.length}</Text>
-                  <View style={styles.hubMiniPillRow}>
-                    <View style={[styles.hubMiniPill, { backgroundColor: '#fef2f2' }]}>
-                      <Text style={[styles.hubMiniPillText, { color: '#dc2626' }]}>● {liveMatchesCount} Live</Text>
-                    </View>
-                    <View style={[styles.hubMiniPill, { backgroundColor: '#eff6ff' }]}>
-                      <Text style={[styles.hubMiniPillText, { color: '#2563eb' }]}>📅 {scheduledMatchesCount} Sched</Text>
-                    </View>
-                    <View style={[styles.hubMiniPill, { backgroundColor: '#ecfdf5' }]}>
-                      <Text style={[styles.hubMiniPillText, { color: '#059669' }]}>🏆 {completedMatchesCount} Done</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.hubFooterLinkOrange}>Open Match Schedule →</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* 3. TWO-COLUMN INTERACTIVE MATRIX (Activity Feed + Donut Analytics) */}
-              <View style={[styles.overviewTwoColRow, { flexDirection: isDesktop ? 'row' : 'column' }]}>
-                {/* Left Column: Live Recent Registry Submissions */}
-                <View style={[styles.whiteItemCard, { flex: 1.2 }]}>
-                  <View style={styles.overviewSectionHeaderRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={{ fontSize: 18 }}>📋</Text>
-                      <View>
-                        <Text style={styles.overviewSectionTitle}>Live District Submissions Stream</Text>
-                        <Text style={styles.overviewSectionSubtitle}>Real-time application feed across clubs & officials</Text>
-                      </View>
-                    </View>
-                    <View style={styles.badgeCategoryIndigo}>
-                      <Text style={styles.badgeCategoryIndigoText}>LATEST ENTRIES</Text>
-                    </View>
-                  </View>
-
-                  <View style={{ gap: 10, marginTop: 14 }}>
-                    {/* Entry 1 */}
-                    <View style={styles.overviewActivityRow}>
-                      <View style={[styles.overviewActivityDot, { backgroundColor: '#059669' }]} />
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                          <Text style={styles.overviewActivityName}>Virudhunagar Spartans CC</Text>
-                          <View style={styles.badgeCategoryEmerald}>
-                            <Text style={styles.badgeCategoryEmeraldText}>CLUB • APPROVED</Text>
-                          </View>
-                        </View>
-                        <Text style={styles.overviewActivitySub}>Coach M. Gurumoorthy • Virudhunagar Central • 15 Squad Players</Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.btnActionViewEmerald}
-                        onPress={() => setActiveTab('teams')}
-                      >
-                        <Text style={styles.btnActionViewEmeraldText}>Review</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Entry 2 */}
-                    <View style={styles.overviewActivityRow}>
-                      <View style={[styles.overviewActivityDot, { backgroundColor: '#4f46e5' }]} />
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                          <Text style={styles.overviewActivityName}>Rajesh Kumar M</Text>
-                          <View style={styles.badgeCategoryPurple}>
-                            <Text style={styles.badgeCategoryPurpleText}>SCORER • AUTHORIZED</Text>
-                          </View>
-                        </View>
-                        <Text style={styles.overviewActivitySub}>Grade A Elite Panel • 5 Yrs Exp • 📞 +91 94431 82741</Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.btnActionViewViolet}
-                        onPress={() => setActiveTab('scorers')}
-                      >
-                        <Text style={styles.btnActionViewVioletText}>Review</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Entry 3 */}
-                    <View style={styles.overviewActivityRow}>
-                      <View style={[styles.overviewActivityDot, { backgroundColor: '#f59e0b' }]} />
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                          <Text style={styles.overviewActivityName}>P. Soundararajan</Text>
-                          <View style={styles.badgeCategoryAmber}>
-                            <Text style={styles.badgeCategoryAmberText}>UMPIRE • PENDING</Text>
-                          </View>
-                        </View>
-                        <Text style={styles.overviewActivitySub}>TNCA District Panel • Sivakasi Taluk • Cert TNCA-D-8821</Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.btnActionViewCyan}
-                        onPress={() => setActiveTab('umpires')}
-                      >
-                        <Text style={styles.btnActionViewCyanText}>Inspect</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Entry 4 */}
-                    <View style={styles.overviewActivityRow}>
-                      <View style={[styles.overviewActivityDot, { backgroundColor: '#d97706' }]} />
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                          <Text style={styles.overviewActivityName}>Rajapalayam Royals CC</Text>
-                          <View style={styles.badgeCategoryAmber}>
-                            <Text style={styles.badgeCategoryAmberText}>CLUB • PENDING</Text>
-                          </View>
-                        </View>
-                        <Text style={styles.overviewActivitySub}>Coach S. Ramanathan • Rajapalayam Taluk • 15 Squad Players</Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.btnActionViewEmerald}
-                        onPress={() => setActiveTab('teams')}
-                      >
-                        <Text style={styles.btnActionViewEmeraldText}>Review</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
                 </View>
 
-                {/* Right Column: District Registration Distribution Donut Gauge */}
-                <View style={[styles.whiteItemCard, styles.donutCardAlign, { flex: 1 }]}>
-                  <View style={styles.overviewSectionHeaderRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={{ fontSize: 18 }}>📊</Text>
-                      <View>
-                        <Text style={styles.overviewSectionTitle}>District Accreditation Gauge</Text>
-                        <Text style={styles.overviewSectionSubtitle}>Proportional clearance distribution</Text>
+                {/* URGENT POSTPONEMENT REQUESTS BANNER (OVERVIEW) */}
+                {pendingPostponementCount > 0 && (
+                  <View style={{ backgroundColor: '#fff1f2', borderColor: '#f43f5e', borderWidth: 1.5, borderRadius: 12, padding: 18 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#ffe4e6', alignItems: 'center', justifyContent: 'center' }}>
+                          <Text style={{ fontSize: 18 }}>⚠️</Text>
+                        </View>
+                        <View>
+                          <Text style={{ color: '#9f1239', fontWeight: '800', fontSize: 15, letterSpacing: 0.3 }}>
+                            ACTION REQUIRED: {pendingPostponementCount} UMPIRE POSTPONEMENT REQUEST{pendingPostponementCount > 1 ? 'S' : ''} PENDING
+                          </Text>
+                          <Text style={{ color: '#be123c', fontSize: 12, marginTop: 1 }}>
+                            Assigned Umpires have submitted official postponement requests awaiting your approval.
+                          </Text>
+                        </View>
+                      </View>
+                      <TouchableOpacity
+                        style={{ backgroundColor: '#e11d48', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 6 }}
+                        onPress={() => {
+                          setMatchFilter('REQUESTS');
+                          setActiveTab('schedules');
+                        }}
+                      >
+                        <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>View in Schedules →</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {pendingPostponementRequests.map(m => (
+                      <View key={m.id} style={{ backgroundColor: '#ffffff', borderRadius: 8, padding: 14, marginTop: 8, borderColor: '#fecdd3', borderWidth: 1 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                          <View style={{ flex: 1, minWidth: 220 }}>
+                            <Text style={{ fontWeight: '700', fontSize: 14, color: '#1e293b' }}>
+                              {m.team_a_name || m.team_a_id} vs {m.team_b_name || m.team_b_id} (Match #{m.id})
+                            </Text>
+                            <Text style={{ color: '#64748b', fontSize: 12, marginTop: 2 }}>
+                              📅 {m.match_date} at {m.match_time || '09:30 AM'} • 📍 {m.venue || 'District Stadium'}
+                            </Text>
+                            <Text style={{ color: '#9f1239', fontSize: 12, fontWeight: '600', marginTop: 4 }}>
+                              Requested by: {m.umpire_postponement_request?.umpire_name || 'Assigned Umpire'}
+                            </Text>
+                            <Text style={{ color: '#881337', fontSize: 12, fontStyle: 'italic', marginTop: 1 }}>
+                              Reason: "{m.umpire_postponement_request?.reason}"
+                            </Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                            <TouchableOpacity
+                              style={{ backgroundColor: '#16a34a', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6 }}
+                              onPress={() => handleReviewUmpirePostponement(m.id, 'APPROVE')}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>✓ Approve & Postpone</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={{ backgroundColor: '#dc2626', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6 }}
+                              onPress={() => handleReviewUmpirePostponement(m.id, 'REJECT')}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>✕ Reject</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* 2. FOUR DISTINCT SECTOR HUB CARDS */}
+                <View style={[styles.overviewHubsGrid, { flexDirection: isDesktop ? 'row' : 'column' }]}>
+                  {/* Hub 1: Teams & Clubs (Emerald) */}
+                  <TouchableOpacity
+                    style={[styles.overviewHubCard, styles.hubBorderEmerald]}
+                    onPress={() => setActiveTab('teams')}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.hubHeaderRow}>
+                      <View style={[styles.hubIconBox, { backgroundColor: '#059669' }]}>
+                        <Text style={{ fontSize: 18 }}>🛡️</Text>
+                      </View>
+                      <View style={styles.hubTagEmerald}>
+                        <Text style={styles.hubTagEmeraldText}>CLUB AFFILIATION</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.hubCardTitle}>Registered Clubs</Text>
+                    <Text style={styles.hubCardBigCount}>{teamTotal}</Text>
+                    <View style={styles.hubMiniPillRow}>
+                      <View style={[styles.hubMiniPill, { backgroundColor: '#ecfdf5' }]}>
+                        <Text style={[styles.hubMiniPillText, { color: '#047857' }]}>✔ {teamApproved} Appr</Text>
+                      </View>
+                      <View style={[styles.hubMiniPill, { backgroundColor: '#fffbeb' }]}>
+                        <Text style={[styles.hubMiniPillText, { color: '#b45309' }]}>⏳ {teamPending} Pend</Text>
+                      </View>
+                      <View style={[styles.hubMiniPill, { backgroundColor: '#fff1f2' }]}>
+                        <Text style={[styles.hubMiniPillText, { color: '#dc2626' }]}>✕ {teamRejected} Rej</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.hubFooterLinkEmerald}>Open Team Registry →</Text>
+                  </TouchableOpacity>
+
+                  {/* Hub 2: Match Scorers (Royal Violet) */}
+                  <TouchableOpacity
+                    style={[styles.overviewHubCard, styles.hubBorderViolet]}
+                    onPress={() => setActiveTab('scorers')}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.hubHeaderRow}>
+                      <View style={[styles.hubIconBox, { backgroundColor: '#4f46e5' }]}>
+                        <Text style={{ fontSize: 18 }}>📋</Text>
+                      </View>
+                      <View style={styles.hubTagViolet}>
+                        <Text style={styles.hubTagVioletText}>DIGITAL ARBITERS</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.hubCardTitle}>Scorer Guild</Text>
+                    <Text style={styles.hubCardBigCount}>{scorerTotal}</Text>
+                    <View style={styles.hubMiniPillRow}>
+                      <View style={[styles.hubMiniPill, { backgroundColor: '#ecfdf5' }]}>
+                        <Text style={[styles.hubMiniPillText, { color: '#047857' }]}>✔ {scorerApproved} Auth</Text>
+                      </View>
+                      <View style={[styles.hubMiniPill, { backgroundColor: '#fffbeb' }]}>
+                        <Text style={[styles.hubMiniPillText, { color: '#b45309' }]}>⏳ {scorerPending} Pend</Text>
+                      </View>
+                      <View style={[styles.hubMiniPill, { backgroundColor: '#fff1f2' }]}>
+                        <Text style={[styles.hubMiniPillText, { color: '#dc2626' }]}>✕ {scorerRejected} Rej</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.hubFooterLinkViolet}>Manage Scorer Cadre →</Text>
+                  </TouchableOpacity>
+
+                  {/* Hub 3: Umpires (Ocean Sapphire Cyan) */}
+                  <TouchableOpacity
+                    style={[styles.overviewHubCard, styles.hubBorderCyan]}
+                    onPress={() => setActiveTab('umpires')}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.hubHeaderRow}>
+                      <View style={[styles.hubIconBox, { backgroundColor: '#0284c7' }]}>
+                        <Text style={{ fontSize: 18 }}>⚖️</Text>
+                      </View>
+                      <View style={styles.hubTagCyan}>
+                        <Text style={styles.hubTagCyanText}>BCCI & TNCA PANEL</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.hubCardTitle}>Umpire Cadre</Text>
+                    <Text style={styles.hubCardBigCount}>{umpireTotal}</Text>
+                    <View style={styles.hubMiniPillRow}>
+                      <View style={[styles.hubMiniPill, { backgroundColor: '#ecfdf5' }]}>
+                        <Text style={[styles.hubMiniPillText, { color: '#047857' }]}>✔ {umpireApproved} Accr</Text>
+                      </View>
+                      <View style={[styles.hubMiniPill, { backgroundColor: '#fffbeb' }]}>
+                        <Text style={[styles.hubMiniPillText, { color: '#b45309' }]}>⏳ {umpirePending} Pend</Text>
+                      </View>
+                      <View style={[styles.hubMiniPill, { backgroundColor: '#fff1f2' }]}>
+                        <Text style={[styles.hubMiniPillText, { color: '#dc2626' }]}>✕ {umpireRejected} Rej</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.hubFooterLinkCyan}>Accredit Umpires →</Text>
+                  </TouchableOpacity>
+
+                  {/* Hub 4: Fixtures & Live Matches (Flame Orange) */}
+                  <TouchableOpacity
+                    style={[styles.overviewHubCard, styles.hubBorderOrange]}
+                    onPress={() => setActiveTab('schedules')}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.hubHeaderRow}>
+                      <View style={[styles.hubIconBox, { backgroundColor: '#ea580c' }]}>
+                        <Text style={{ fontSize: 18 }}>⚡</Text>
+                      </View>
+                      <View style={styles.hubTagOrange}>
+                        <Text style={styles.hubTagOrangeText}>TOURNAMENT OPS</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.hubCardTitle}>Championship Matches</Text>
+                    <Text style={styles.hubCardBigCount}>{matchesList.length}</Text>
+                    <View style={styles.hubMiniPillRow}>
+                      <View style={[styles.hubMiniPill, { backgroundColor: '#fef2f2' }]}>
+                        <Text style={[styles.hubMiniPillText, { color: '#dc2626' }]}>● {liveMatchesCount} Live</Text>
+                      </View>
+                      <View style={[styles.hubMiniPill, { backgroundColor: '#eff6ff' }]}>
+                        <Text style={[styles.hubMiniPillText, { color: '#2563eb' }]}>📅 {scheduledMatchesCount} Sched</Text>
+                      </View>
+                      <View style={[styles.hubMiniPill, { backgroundColor: '#ecfdf5' }]}>
+                        <Text style={[styles.hubMiniPillText, { color: '#059669' }]}>🏆 {completedMatchesCount} Done</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.hubFooterLinkOrange}>Open Match Schedule →</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* 3. TWO-COLUMN INTERACTIVE MATRIX (Activity Feed + Donut Analytics) */}
+                <View style={[styles.overviewTwoColRow, { flexDirection: isDesktop ? 'row' : 'column' }]}>
+                  {/* Left Column: Live Recent Registry Submissions */}
+                  <View style={[styles.whiteItemCard, { flex: 1.2 }]}>
+                    <View style={styles.overviewSectionHeaderRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={{ fontSize: 18 }}>📋</Text>
+                        <View>
+                          <Text style={styles.overviewSectionTitle}>Live District Submissions Stream</Text>
+                          <Text style={styles.overviewSectionSubtitle}>Real-time application feed across clubs & officials</Text>
+                        </View>
+                      </View>
+                      <View style={styles.badgeCategoryIndigo}>
+                        <Text style={styles.badgeCategoryIndigoText}>LATEST ENTRIES</Text>
+                      </View>
+                    </View>
+
+                    <View style={{ gap: 10, marginTop: 14 }}>
+                      {/* Entry 1 */}
+                      <View style={styles.overviewActivityRow}>
+                        <View style={[styles.overviewActivityDot, { backgroundColor: '#059669' }]} />
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <Text style={styles.overviewActivityName}>Virudhunagar Spartans CC</Text>
+                            <View style={styles.badgeCategoryEmerald}>
+                              <Text style={styles.badgeCategoryEmeraldText}>CLUB • APPROVED</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.overviewActivitySub}>Coach M. Gurumoorthy • Virudhunagar Central • 15 Squad Players</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.btnActionViewEmerald}
+                          onPress={() => setActiveTab('teams')}
+                        >
+                          <Text style={styles.btnActionViewEmeraldText}>Review</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Entry 2 */}
+                      <View style={styles.overviewActivityRow}>
+                        <View style={[styles.overviewActivityDot, { backgroundColor: '#4f46e5' }]} />
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <Text style={styles.overviewActivityName}>Rajesh Kumar M</Text>
+                            <View style={styles.badgeCategoryPurple}>
+                              <Text style={styles.badgeCategoryPurpleText}>SCORER • AUTHORIZED</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.overviewActivitySub}>Grade A Elite Panel • 5 Yrs Exp • 📞 +91 94431 82741</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.btnActionViewViolet}
+                          onPress={() => setActiveTab('scorers')}
+                        >
+                          <Text style={styles.btnActionViewVioletText}>Review</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Entry 3 */}
+                      <View style={styles.overviewActivityRow}>
+                        <View style={[styles.overviewActivityDot, { backgroundColor: '#f59e0b' }]} />
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <Text style={styles.overviewActivityName}>P. Soundararajan</Text>
+                            <View style={styles.badgeCategoryAmber}>
+                              <Text style={styles.badgeCategoryAmberText}>UMPIRE • PENDING</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.overviewActivitySub}>TNCA District Panel • Sivakasi Taluk • Cert TNCA-D-8821</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.btnActionViewCyan}
+                          onPress={() => setActiveTab('umpires')}
+                        >
+                          <Text style={styles.btnActionViewCyanText}>Inspect</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Entry 4 */}
+                      <View style={styles.overviewActivityRow}>
+                        <View style={[styles.overviewActivityDot, { backgroundColor: '#d97706' }]} />
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <Text style={styles.overviewActivityName}>Rajapalayam Royals CC</Text>
+                            <View style={styles.badgeCategoryAmber}>
+                              <Text style={styles.badgeCategoryAmberText}>CLUB • PENDING</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.overviewActivitySub}>Coach S. Ramanathan • Rajapalayam Taluk • 15 Squad Players</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.btnActionViewEmerald}
+                          onPress={() => setActiveTab('teams')}
+                        >
+                          <Text style={styles.btnActionViewEmeraldText}>Review</Text>
+                        </TouchableOpacity>
                       </View>
                     </View>
                   </View>
 
-                  {/* Donut Chart */}
-                  <View style={styles.donutWrapper}>
-                    <View
-                      style={[
-                        styles.donutOuterRing,
-                        !isDesktop && { width: 140, height: 140, borderRadius: 70 },
-                        Platform.OS === 'web'
-                          ? ({
+                  {/* Right Column: District Registration Distribution Donut Gauge */}
+                  <View style={[styles.whiteItemCard, styles.donutCardAlign, { flex: 1 }]}>
+                    <View style={styles.overviewSectionHeaderRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={{ fontSize: 18 }}>📊</Text>
+                        <View>
+                          <Text style={styles.overviewSectionTitle}>District Accreditation Gauge</Text>
+                          <Text style={styles.overviewSectionSubtitle}>Proportional clearance distribution</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Donut Chart */}
+                    <View style={styles.donutWrapper}>
+                      <View
+                        style={[
+                          styles.donutOuterRing,
+                          !isDesktop && { width: 140, height: 140, borderRadius: 70 },
+                          Platform.OS === 'web'
+                            ? ({
                               background: `conic-gradient(#10b981 0% ${overallSegments.appPct}%, #f59e0b ${overallSegments.appPct}% ${overallSegments.appPct + overallSegments.pendPct}%, #ef4444 ${overallSegments.appPct + overallSegments.pendPct}% 100%)`,
                               backgroundImage: `conic-gradient(#10b981 0% ${overallSegments.appPct}%, #f59e0b ${overallSegments.appPct}% ${overallSegments.appPct + overallSegments.pendPct}%, #ef4444 ${overallSegments.appPct + overallSegments.pendPct}% 100%)`
                             } as any)
-                          : {
+                            : {
                               borderWidth: 10,
                               borderColor: '#10b981',
                               borderTopColor: '#10b981',
@@ -4029,742 +4093,753 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               borderLeftColor: '#10b981',
                               backgroundColor: '#ffffff'
                             }
-                      ]}
-                    >
-                      <View style={[styles.donutHole, { backgroundColor: '#ffffff' }, !isDesktop && { width: 80, height: 80, borderRadius: 40 }]}>
-                        <Text style={[styles.donutNumber, { color: '#0f172a' }, !isDesktop && { fontSize: 24 }]}>{totalOverall}</Text>
-                        <Text style={[styles.donutUnitLabel, { color: '#d97706' }, !isDesktop && { fontSize: 8 }]}>OFFICIALS</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Proportional Distribution Bar */}
-                  <View style={styles.distributionBarWrapper}>
-                    <View style={[styles.distributionBarTrack, { backgroundColor: '#f1f5f9' }]}>
-                      {overallSegments.appPct > 0 && (
-                        <View style={[styles.distributionBarSegment, { width: `${overallSegments.appPct}%`, backgroundColor: '#10b981' }]} />
-                      )}
-                      {overallSegments.pendPct > 0 && (
-                        <View style={[styles.distributionBarSegment, { width: `${overallSegments.pendPct}%`, backgroundColor: '#f59e0b' }]} />
-                      )}
-                      {overallSegments.rejPct > 0 && (
-                        <View style={[styles.distributionBarSegment, { width: `${overallSegments.rejPct}%`, backgroundColor: '#ef4444' }]} />
-                      )}
-                    </View>
-                    <View style={styles.distributionPctRow}>
-                      <Text style={[styles.distributionPctText, { color: '#047857' }]}>{overallSegments.appPct}% Approved ({overallApproved})</Text>
-                      <Text style={[styles.distributionPctText, { color: '#b45309' }]}>{overallSegments.pendPct}% Pending ({overallPending})</Text>
-                      <Text style={[styles.distributionPctText, { color: '#b91c1c' }]}>{overallSegments.rejPct}% Rejected ({overallRejected})</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.donutLegendRow}>
-                    <View style={styles.legendItem}>
-                      <View style={[styles.legendDot, { backgroundColor: '#10b981' }]} />
-                      <Text style={[styles.legendText, { color: '#334155' }]}>Approved ({overallApproved})</Text>
-                    </View>
-                    <View style={styles.legendItem}>
-                      <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
-                      <Text style={[styles.legendText, { color: '#334155' }]}>Pending ({overallPending})</Text>
-                    </View>
-                    <View style={styles.legendItem}>
-                      <View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} />
-                      <Text style={[styles.legendText, { color: '#334155' }]}>Rejected ({overallRejected})</Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            </View>
-          )}
-
-          {/* ─────────────────────────────────────────────────────────────
-              7. TAB CONTENT: NEWS & CONTENT MANAGEMENT
-              ───────────────────────────────────────────────────────────── */}
-          {activeTab === 'content' && (
-            <View>
-              {/* Header Box */}
-              <View style={styles.contentTopCard}>
-                <View style={styles.contentTopLeft}>
-                  <View style={styles.goldIconBox}>
-                    <Text style={{ fontSize: 16 }}>📰</Text>
-                  </View>
-                  <View>
-                    <Text style={styles.contentTopTitle}>Official News, Circulars & Media Management</Text>
-                    <Text style={styles.contentTopSub}>
-                      Create, publish, and delete official tournament announcements, press releases, match reports, and circulars shown across the portal.
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Publish Form Box */}
-              <View style={styles.newsFormCard}>
-                <View style={styles.newsFormHeader}>
-                  <Text style={styles.newsFormTitle}>✏ Publish Official Article or Notice</Text>
-                  <View style={styles.tagDirectDispatch}>
-                    <Text style={styles.tagDirectDispatchText}>DIRECT ADMIN DISPATCH</Text>
-                  </View>
-                </View>
-
-                <View style={styles.formRow}>
-                  <View style={styles.formGroup}>
-                    <Text style={styles.formLabel}>Article / Notice Title *</Text>
-                    <TextInput
-                      style={styles.formInput}
-                      value={newNewsTitle}
-                      onChangeText={setNewNewsTitle}
-                      placeholder="e.g. Under-19 District Selection Trials Announced"
-                      placeholderTextColor="#94a3b8"
-                    />
-                  </View>
-
-                  <View style={styles.formGroup}>
-                    <Text style={styles.formLabel}>Category</Text>
-                    <TextInput
-                      style={styles.formInput}
-                      value={newNewsCategory}
-                      onChangeText={setNewNewsCategory}
-                      placeholder="e.g. TOURNAMENT, ANNOUNCEMENT"
-                      placeholderTextColor="#94a3b8"
-                    />
-                  </View>
-
-                  <View style={styles.formGroup}>
-                    <Text style={styles.formLabel}>Author / Department</Text>
-                    <TextInput
-                      style={styles.formInput}
-                      value={newNewsAuthor}
-                      onChangeText={setNewNewsAuthor}
-                      placeholder="e.g. CFVD Secretariat"
-                      placeholderTextColor="#94a3b8"
-                    />
-                  </View>
-                </View>
-
-                <TouchableOpacity style={styles.btnPublishNews} onPress={handlePublishNews} activeOpacity={0.8}>
-                  <Text style={styles.btnPublishNewsText}>🚀 Dispatch & Publish Notice</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Published News List */}
-              <View style={styles.newsListContainer}>
-                <Text style={styles.sectionHeading}>Published Official Notices ({newsList.length})</Text>
-                {newsList.length === 0 ? (
-                  <View style={{ padding: 24, alignItems: 'center' }}>
-                    <Text style={{ color: '#64748b' }}>No official notices published yet.</Text>
-                  </View>
-                ) : (
-                  newsList.map((n: any) => (
-                    <View key={n.id || n._id} style={styles.newsItemRow}>
-                      <View style={styles.newsItemTextCol}>
-                        <Text style={styles.newsItemTitle}>{n.title}</Text>
-                        <Text style={styles.newsItemMeta}>
-                          <Text style={{ fontWeight: '700', color: '#1e293b' }}>Category: </Text>
-                          {n.category} • <Text style={{ fontWeight: '700', color: '#1e293b' }}>Author: </Text>
-                          {n.author} • {n.createdAt || n.published_at ? new Date(n.createdAt || n.published_at).toLocaleDateString() : 'Live'}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.btnDeleteNews}
-                        onPress={() => handleDeleteNews(n.id || n._id)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.btnDeleteNewsText}>🗑 Delete</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))
-                )}
-              </View>
-            </View>
-          )}
-
-          {/* ─────────────────────────────────────────────────────────────
-              8. TAB CONTENT: MATCH SCHEDULES MANAGEMENT (Distinct Vibrant Styling)
-              ───────────────────────────────────────────────────────────── */}
-          {activeTab === 'schedules' && (
-            <View>
-              {/* TOP TWO SIDE-BY-SIDE HIGHLIGHT CARDS FOR SCHEDULES */}
-              <View style={[styles.highlightCardsRow, { flexDirection: isDesktop ? 'row' : 'column' }]}>
-                {/* Left Card: Match Schedules Stats */}
-                <View style={styles.schedulesStatCard}>
-                  <View style={styles.statCardHeader}>
-                    <View style={styles.schedulesIconBox}>
-                      <Text style={{ fontSize: 16 }}>🏏</Text>
-                    </View>
-                    <View>
-                      <Text style={styles.schedulesStatCardTitle}>Match Schedules & Live Tracking</Text>
-                      <Text style={styles.schedulesStatCardTag}>CHAMPIONSHIP OPERATIONS</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.schedulesStatCardSubtitle}>
-                    Real-time championship fixtures, live scoring status, venue allocations, and accredited scorer appointments.
-                  </Text>
-
-                  {/* 4 Colored Pill Rows */}
-                  <View style={styles.pillRowsContainer}>
-                    <View style={[styles.statRowPill, styles.schedulesPillLive]}>
-                      <View style={styles.pillLeftGroup}>
-                        <View style={[styles.glowingDot, { backgroundColor: '#ef4444' }]} />
-                        <Text style={[styles.statPillLabel, { color: '#fca5a5' }]}>Live Matches (Active)</Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        {liveMatchesCount > 0 && (
-                          <View style={styles.livePulseTag}>
-                            <Text style={styles.livePulseTagText}>LIVE</Text>
-                          </View>
-                        )}
-                        <Text style={[styles.statPillCount, { color: '#f87171' }]}>{liveMatchesCount}</Text>
-                      </View>
-                    </View>
-
-                    <View style={[styles.statRowPill, styles.schedulesPillScheduled]}>
-                      <View style={styles.pillLeftGroup}>
-                        <View style={[styles.glowingDot, { backgroundColor: '#38bdf8' }]} />
-                        <Text style={[styles.statPillLabel, { color: '#bae6fd' }]}>Scheduled Fixtures</Text>
-                      </View>
-                      <Text style={[styles.statPillCount, { color: '#38bdf8' }]}>{scheduledMatchesCount}</Text>
-                    </View>
-
-                    <View style={[styles.statRowPill, styles.schedulesPillCompleted]}>
-                      <View style={styles.pillLeftGroup}>
-                        <View style={[styles.glowingDot, { backgroundColor: '#34d399' }]} />
-                        <Text style={[styles.statPillLabel, { color: '#a7f3d0' }]}>Completed Matches</Text>
-                      </View>
-                      <Text style={[styles.statPillCount, { color: '#34d399' }]}>{completedMatchesCount}</Text>
-                    </View>
-
-                    <View style={[styles.statRowPill, styles.schedulesPillTotal]}>
-                      <View style={styles.pillLeftGroup}>
-                        <View style={[styles.glowingDot, { backgroundColor: '#fbbf24' }]} />
-                        <Text style={[styles.statPillLabel, { color: '#fde68a' }]}>Total Championship Matches</Text>
-                      </View>
-                      <Text style={[styles.statPillCount, { color: '#fbbf24' }]}>{matchesList.length}</Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Right Card: Quick Action & Logistics Overview */}
-                <View style={styles.schedulesOpsCard}>
-                  <View style={styles.statCardHeader}>
-                    <View style={styles.schedulesGoldIconBox}>
-                      <Text style={{ fontSize: 16 }}>⚙️</Text>
-                    </View>
-                    <View>
-                      <Text style={styles.schedulesStatCardTitle}>Fixture Operations</Text>
-                      <Text style={styles.schedulesOpsTag}>GOVERNANCE PORTAL</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.schedulesStatCardSubtitle}>
-                    Schedule new official fixtures between approved teams, designate match venues, and assign certified scorers.
-                  </Text>
-
-                  <View style={{ marginTop: 14, gap: 12 }}>
-                    <TouchableOpacity
-                      style={styles.btnScheduleGradient}
-                      onPress={() => handleOpenScheduleModal()}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.btnScheduleGradientText}>➕ Schedule New Match</Text>
-                    </TouchableOpacity>
-
-                    <View style={styles.scheduleInfoBoxModern}>
-                      <View style={styles.scheduleInfoRow}>
-                        <Text style={styles.scheduleInfoLabel}>• Approved Teams Available:</Text>
-                        <Text style={styles.scheduleInfoVal}>{allClubsList.length}</Text>
-                      </View>
-                      <View style={styles.scheduleInfoRow}>
-                        <Text style={styles.scheduleInfoLabel}>• Venues Registered:</Text>
-                        <Text style={styles.scheduleInfoVal}>{venuesList.length}</Text>
-                      </View>
-                      <View style={styles.scheduleInfoRow}>
-                        <Text style={styles.scheduleInfoLabel}>• Accredited Scorers & Officials:</Text>
-                        <Text style={styles.scheduleInfoVal}>{officialsList.length}</Text>
-                      </View>
-                    </View>
-                  </View>
-                </View>
-              </View>
-
-              {/* SEARCH & FILTER TOOLBAR */}
-              <View style={styles.filterToolbarCard}>
-                <View style={styles.searchBoxWrap}>
-                  <Text style={styles.searchIcon}>🔍</Text>
-                  <TextInput
-                    style={styles.searchInput}
-                    placeholder="Search fixtures by team name, venue, tournament, or ID..."
-                    placeholderTextColor="#94a3b8"
-                    value={matchSearchQuery}
-                    onChangeText={setMatchSearchQuery}
-                  />
-                  {matchSearchQuery ? (
-                    <TouchableOpacity onPress={() => setMatchSearchQuery('')}>
-                      <Text style={{ color: '#94a3b8', fontSize: 16 }}>✕</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-
-                {/* Urgent Pending Postponements Banner in Schedules */}
-                {pendingPostponementCount > 0 && (
-                  <View style={{ backgroundColor: '#fff1f2', borderColor: '#f43f5e', borderWidth: 1.5, borderRadius: 10, padding: 12, marginBottom: 12 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-                      <Text style={{ color: '#9f1239', fontWeight: '800', fontSize: 13 }}>
-                        ⚠️ {pendingPostponementCount} Umpire Postponement Request(s) Awaiting Admin Decision
-                      </Text>
-                      <TouchableOpacity
-                        style={{ backgroundColor: '#e11d48', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 4 }}
-                        onPress={() => setMatchFilter('REQUESTS')}
-                      >
-                        <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 11 }}>Filter Requests</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-
-                {/* Status Filter Pills with distinctive colors */}
-                <View style={styles.filterPillsRow}>
-                  <TouchableOpacity
-                    style={[styles.filterPill, matchFilter === 'all' && styles.filterPillActive]}
-                    onPress={() => setMatchFilter('all')}
-                  >
-                    <Text style={[styles.filterPillText, matchFilter === 'all' && styles.filterPillTextActive]}>
-                      All ({matchesList.length})
-                    </Text>
-                  </TouchableOpacity>
-
-                  {pendingPostponementCount > 0 && (
-                    <TouchableOpacity
-                      style={[styles.filterPill, matchFilter === 'REQUESTS' && { backgroundColor: '#fee2e2', borderColor: '#ef4444', borderWidth: 1.5 }]}
-                      onPress={() => setMatchFilter('REQUESTS')}
-                    >
-                      <Text style={[styles.filterPillText, { color: '#b91c1c', fontWeight: '800' }]}>
-                        ⚠️ Requests ({pendingPostponementCount})
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-
-                  <TouchableOpacity
-                    style={[styles.filterPill, matchFilter === 'SCHEDULED' && styles.filterPillActiveScheduled]}
-                    onPress={() => setMatchFilter('SCHEDULED')}
-                  >
-                    <Text style={[styles.filterPillText, matchFilter === 'SCHEDULED' && styles.filterPillTextActiveScheduled]}>
-                      🗓 Scheduled ({scheduledMatchesCount})
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.filterPill, matchFilter === 'LIVE' && styles.filterPillActiveLive]}
-                    onPress={() => setMatchFilter('LIVE')}
-                  >
-                    <Text style={[styles.filterPillText, matchFilter === 'LIVE' && styles.filterPillTextActiveLive]}>
-                      🔴 Live ({liveMatchesCount})
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.filterPill, matchFilter === 'COMPLETED' && styles.filterPillActiveCompleted]}
-                    onPress={() => setMatchFilter('COMPLETED')}
-                  >
-                    <Text style={[styles.filterPillText, matchFilter === 'COMPLETED' && styles.filterPillTextActiveCompleted]}>
-                      ✓ Completed ({completedMatchesCount})
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.filterPill, matchFilter === 'CANCELLED' && styles.filterPillActiveCancelled]}
-                    onPress={() => setMatchFilter('CANCELLED')}
-                  >
-                    <Text style={[styles.filterPillText, matchFilter === 'CANCELLED' && styles.filterPillTextActiveCancelled]}>
-                      ✕ Cancelled ({cancelledMatchesCount})
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.filterPill, matchFilter === 'POSTPONED' && { backgroundColor: '#fef3c7', borderColor: '#f59e0b', borderWidth: 1 }]}
-                    onPress={() => setMatchFilter('POSTPONED')}
-                  >
-                    <Text style={[styles.filterPillText, matchFilter === 'POSTPONED' && { color: '#b45309', fontWeight: '700' }]}>
-                      ⏸️ Postponed ({postponedMatchesCount})
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.refreshBtnSm}
-                    onPress={loadMatchesAndLogistics}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.refreshBtnSmText}>🔄 Refresh</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* FIXTURES LIST CONTAINER */}
-              <View style={styles.itemsListContainer}>
-                {isMatchesLoading ? (
-                  <View style={styles.loadingContainerBox}>
-                    <ActivityIndicator size="large" color="#d4af37" />
-                    <Text style={styles.loadingText}>Retrieving Official Match Fixtures from MongoDB...</Text>
-                  </View>
-                ) : filteredMatches.length === 0 ? (
-                  <View style={styles.emptyContainerBox}>
-                    <Text style={{ fontSize: 36, marginBottom: 8 }}>🏏</Text>
-                    <Text style={styles.emptyTitle}>No Match Schedules Found</Text>
-                    <Text style={styles.emptySubtitle}>
-                      {matchSearchQuery
-                        ? `No match schedules matching "${matchSearchQuery}"`
-                        : 'No fixtures match the selected filter.'}
-                    </Text>
-                    <TouchableOpacity
-                      style={[styles.btnPrimarySchedule, { marginTop: 16 }]}
-                      onPress={() => handleOpenScheduleModal()}
-                    >
-                      <Text style={styles.btnPrimaryScheduleText}>➕ Schedule Match</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  filteredMatches.map((m) => {
-                    const statusUpper = (m.status || 'SCHEDULED').toUpperCase();
-                    const isScheduled = statusUpper === 'SCHEDULED';
-                    const isLive = statusUpper === 'LIVE' || statusUpper === 'INNINGS_BREAK';
-                    const isCompleted = statusUpper === 'COMPLETED';
-                    const isCancelled = statusUpper === 'CANCELLED' || statusUpper === 'ABANDONED';
-                    const isPostponed = statusUpper === 'POSTPONED' || !!m.postponement?.is_postponed;
-
-                    return (
-                      <View
-                        key={m.id}
-                        style={[
-                          styles.itemCard,
-                          isLive && styles.matchCardLive,
-                          isScheduled && styles.matchCardScheduled,
-                          isCompleted && styles.matchCardCompleted,
-                          isCancelled && styles.matchCardCancelled,
-                          isPostponed && { borderColor: '#f59e0b', backgroundColor: '#fffdf5' }
                         ]}
                       >
-                        {/* Top Header Row */}
-                        <View style={styles.itemCardTop}>
-                          <View style={styles.itemTitleRow}>
-                            <View style={[
-                              styles.itemCrest,
-                              isLive && { backgroundColor: '#ef4444' },
-                              isScheduled && { backgroundColor: '#2563eb' },
-                              isCompleted && { backgroundColor: '#10b981' },
-                              isCancelled && { backgroundColor: '#64748b' },
-                              isPostponed && { backgroundColor: '#f59e0b' }
-                            ]}>
-                              <Text style={styles.itemCrestText}>{isLive ? '🔴' : (isPostponed ? '⏸️' : '🏏')}</Text>
+                        <View style={[styles.donutHole, { backgroundColor: '#ffffff' }, !isDesktop && { width: 80, height: 80, borderRadius: 40 }]}>
+                          <Text style={[styles.donutNumber, { color: '#0f172a' }, !isDesktop && { fontSize: 24 }]}>{totalOverall}</Text>
+                          <Text style={[styles.donutUnitLabel, { color: '#d97706' }, !isDesktop && { fontSize: 8 }]}>OFFICIALS</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Proportional Distribution Bar */}
+                    <View style={styles.distributionBarWrapper}>
+                      <View style={[styles.distributionBarTrack, { backgroundColor: '#f1f5f9' }]}>
+                        {overallSegments.appPct > 0 && (
+                          <View style={[styles.distributionBarSegment, { width: `${overallSegments.appPct}%`, backgroundColor: '#10b981' }]} />
+                        )}
+                        {overallSegments.pendPct > 0 && (
+                          <View style={[styles.distributionBarSegment, { width: `${overallSegments.pendPct}%`, backgroundColor: '#f59e0b' }]} />
+                        )}
+                        {overallSegments.rejPct > 0 && (
+                          <View style={[styles.distributionBarSegment, { width: `${overallSegments.rejPct}%`, backgroundColor: '#ef4444' }]} />
+                        )}
+                      </View>
+                      <View style={styles.distributionPctRow}>
+                        <Text style={[styles.distributionPctText, { color: '#047857' }]}>{overallSegments.appPct}% Approved ({overallApproved})</Text>
+                        <Text style={[styles.distributionPctText, { color: '#b45309' }]}>{overallSegments.pendPct}% Pending ({overallPending})</Text>
+                        <Text style={[styles.distributionPctText, { color: '#b91c1c' }]}>{overallSegments.rejPct}% Rejected ({overallRejected})</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.donutLegendRow}>
+                      <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#10b981' }]} />
+                        <Text style={[styles.legendText, { color: '#334155' }]}>Approved ({overallApproved})</Text>
+                      </View>
+                      <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
+                        <Text style={[styles.legendText, { color: '#334155' }]}>Pending ({overallPending})</Text>
+                      </View>
+                      <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} />
+                        <Text style={[styles.legendText, { color: '#334155' }]}>Rejected ({overallRejected})</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* ─────────────────────────────────────────────────────────────
+              7. TAB CONTENT: NEWS & CONTENT MANAGEMENT
+              ───────────────────────────────────────────────────────────── */}
+            {activeTab === 'content' && (
+              <View>
+                {/* Header Box */}
+                <View style={styles.contentTopCard}>
+                  <View style={styles.contentTopLeft}>
+                    <View style={styles.goldIconBox}>
+                      <Text style={{ fontSize: 16 }}>📰</Text>
+                    </View>
+                    <View>
+                      <Text style={styles.contentTopTitle}>Official News, Circulars & Media Management</Text>
+                      <Text style={styles.contentTopSub}>
+                        Create, publish, and delete official tournament announcements, press releases, match reports, and circulars shown across the portal.
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Publish Form Box */}
+                <View style={styles.newsFormCard}>
+                  <View style={styles.newsFormHeader}>
+                    <Text style={styles.newsFormTitle}>✏ Publish Official Article or Notice</Text>
+                    <View style={styles.tagDirectDispatch}>
+                      <Text style={styles.tagDirectDispatchText}>DIRECT ADMIN DISPATCH</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.formRow}>
+                    <View style={styles.formGroup}>
+                      <Text style={styles.formLabel}>Article / Notice Title *</Text>
+                      <TextInput
+                        style={styles.formInput}
+                        value={newNewsTitle}
+                        onChangeText={setNewNewsTitle}
+                        placeholder="e.g. Under-19 District Selection Trials Announced"
+                        placeholderTextColor="#94a3b8"
+                      />
+                    </View>
+
+                    <View style={styles.formGroup}>
+                      <Text style={styles.formLabel}>Category</Text>
+                      <TextInput
+                        style={styles.formInput}
+                        value={newNewsCategory}
+                        onChangeText={setNewNewsCategory}
+                        placeholder="e.g. TOURNAMENT, ANNOUNCEMENT"
+                        placeholderTextColor="#94a3b8"
+                      />
+                    </View>
+
+                    <View style={styles.formGroup}>
+                      <Text style={styles.formLabel}>Author / Department</Text>
+                      <TextInput
+                        style={styles.formInput}
+                        value={newNewsAuthor}
+                        onChangeText={setNewNewsAuthor}
+                        placeholder="e.g. CFVD Secretariat"
+                        placeholderTextColor="#94a3b8"
+                      />
+                    </View>
+                  </View>
+
+                  <TouchableOpacity style={styles.btnPublishNews} onPress={handlePublishNews} activeOpacity={0.8}>
+                    <Text style={styles.btnPublishNewsText}>🚀 Dispatch & Publish Notice</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Published News List */}
+                <View style={styles.newsListContainer}>
+                  <Text style={styles.sectionHeading}>Published Official Notices ({newsList.length})</Text>
+                  {newsList.length === 0 ? (
+                    <View style={{ padding: 24, alignItems: 'center' }}>
+                      <Text style={{ color: '#64748b' }}>No official notices published yet.</Text>
+                    </View>
+                  ) : (
+                    newsList.map((n: any) => (
+                      <View key={n.id || n._id} style={styles.newsItemRow}>
+                        <View style={styles.newsItemTextCol}>
+                          <Text style={styles.newsItemTitle}>{n.title}</Text>
+                          <Text style={styles.newsItemMeta}>
+                            <Text style={{ fontWeight: '700', color: '#1e293b' }}>Category: </Text>
+                            {n.category} • <Text style={{ fontWeight: '700', color: '#1e293b' }}>Author: </Text>
+                            {n.author} • {n.createdAt || n.published_at ? new Date(n.createdAt || n.published_at).toLocaleDateString() : 'Live'}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.btnDeleteNews}
+                          onPress={() => handleDeleteNews(n.id || n._id)}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.btnDeleteNewsText}>🗑 Delete</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))
+                  )}
+                </View>
+              </View>
+            )}
+
+            {/* ─────────────────────────────────────────────────────────────
+              8. TAB CONTENT: MATCH SCHEDULES MANAGEMENT (Distinct Vibrant Styling)
+              ───────────────────────────────────────────────────────────── */}
+            {activeTab === 'schedules' && (
+              <View>
+                {/* TOP TWO SIDE-BY-SIDE HIGHLIGHT CARDS FOR SCHEDULES */}
+                <View style={[styles.highlightCardsRow, { flexDirection: isDesktop ? 'row' : 'column' }]}>
+                  {/* Left Card: Match Schedules Stats */}
+                  <View style={styles.schedulesStatCard}>
+                    <View style={styles.statCardHeader}>
+                      <View style={styles.schedulesIconBox}>
+                        <Text style={{ fontSize: 16 }}>🏏</Text>
+                      </View>
+                      <View>
+                        <Text style={styles.schedulesStatCardTitle}>Match Schedules & Live Tracking</Text>
+                        <Text style={styles.schedulesStatCardTag}>CHAMPIONSHIP OPERATIONS</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.schedulesStatCardSubtitle}>
+                      Real-time championship fixtures, live scoring status, venue allocations, and accredited scorer appointments.
+                    </Text>
+
+                    {/* 4 Colored Pill Rows */}
+                    <View style={styles.pillRowsContainer}>
+                      <View style={[styles.statRowPill, styles.schedulesPillLive]}>
+                        <View style={styles.pillLeftGroup}>
+                          <View style={[styles.glowingDot, { backgroundColor: '#ef4444' }]} />
+                          <Text style={[styles.statPillLabel, { color: '#fca5a5' }]}>Live Matches (Active)</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          {liveMatchesCount > 0 && (
+                            <View style={styles.livePulseTag}>
+                              <Text style={styles.livePulseTagText}>LIVE</Text>
                             </View>
-                            <View style={styles.itemTitleCol}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                <Text style={styles.itemName}>
-                                  {m.team_a_name || m.team_a_id} <Text style={{ color: '#d97706' }}>vs</Text> {m.team_b_name || m.team_b_id}
+                          )}
+                          <Text style={[styles.statPillCount, { color: '#f87171' }]}>{liveMatchesCount}</Text>
+                        </View>
+                      </View>
+
+                      <View style={[styles.statRowPill, styles.schedulesPillScheduled]}>
+                        <View style={styles.pillLeftGroup}>
+                          <View style={[styles.glowingDot, { backgroundColor: '#38bdf8' }]} />
+                          <Text style={[styles.statPillLabel, { color: '#bae6fd' }]}>Scheduled Fixtures</Text>
+                        </View>
+                        <Text style={[styles.statPillCount, { color: '#38bdf8' }]}>{scheduledMatchesCount}</Text>
+                      </View>
+
+                      <View style={[styles.statRowPill, styles.schedulesPillCompleted]}>
+                        <View style={styles.pillLeftGroup}>
+                          <View style={[styles.glowingDot, { backgroundColor: '#34d399' }]} />
+                          <Text style={[styles.statPillLabel, { color: '#a7f3d0' }]}>Completed Matches</Text>
+                        </View>
+                        <Text style={[styles.statPillCount, { color: '#34d399' }]}>{completedMatchesCount}</Text>
+                      </View>
+
+                      <View style={[styles.statRowPill, styles.schedulesPillTotal]}>
+                        <View style={styles.pillLeftGroup}>
+                          <View style={[styles.glowingDot, { backgroundColor: '#fbbf24' }]} />
+                          <Text style={[styles.statPillLabel, { color: '#fde68a' }]}>Total Championship Matches</Text>
+                        </View>
+                        <Text style={[styles.statPillCount, { color: '#fbbf24' }]}>{matchesList.length}</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Right Card: Quick Action & Logistics Overview */}
+                  <View style={styles.schedulesOpsCard}>
+                    <View style={styles.statCardHeader}>
+                      <View style={styles.schedulesGoldIconBox}>
+                        <Text style={{ fontSize: 16 }}>⚙️</Text>
+                      </View>
+                      <View>
+                        <Text style={styles.schedulesStatCardTitle}>Fixture Operations</Text>
+                        <Text style={styles.schedulesOpsTag}>GOVERNANCE PORTAL</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.schedulesStatCardSubtitle}>
+                      Schedule new official fixtures between approved teams, designate match venues, and assign certified scorers.
+                    </Text>
+
+                    <View style={{ marginTop: 14, gap: 12 }}>
+                      <TouchableOpacity
+                        style={styles.btnScheduleGradient}
+                        onPress={() => handleOpenScheduleModal()}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.btnScheduleGradientText}>➕ Schedule New Match</Text>
+                      </TouchableOpacity>
+
+                      <View style={styles.scheduleInfoBoxModern}>
+                        <View style={styles.scheduleInfoRow}>
+                          <Text style={styles.scheduleInfoLabel}>• Approved Teams Available:</Text>
+                          <Text style={styles.scheduleInfoVal}>{allClubsList.length}</Text>
+                        </View>
+                        <View style={styles.scheduleInfoRow}>
+                          <Text style={styles.scheduleInfoLabel}>• Venues Registered:</Text>
+                          <Text style={styles.scheduleInfoVal}>{venuesList.length}</Text>
+                        </View>
+                        <View style={styles.scheduleInfoRow}>
+                          <Text style={styles.scheduleInfoLabel}>• Accredited Scorers & Officials:</Text>
+                          <Text style={styles.scheduleInfoVal}>{officialsList.length}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+
+                {/* SEARCH & FILTER TOOLBAR */}
+                <View style={styles.filterToolbarCard}>
+                  <View style={styles.searchBoxWrap}>
+                    <Text style={styles.searchIcon}>🔍</Text>
+                    <TextInput
+                      style={styles.searchInput}
+                      placeholder="Search fixtures by team name, venue, tournament, or ID..."
+                      placeholderTextColor="#94a3b8"
+                      value={matchSearchQuery}
+                      onChangeText={setMatchSearchQuery}
+                    />
+                    {matchSearchQuery ? (
+                      <TouchableOpacity onPress={() => setMatchSearchQuery('')}>
+                        <Text style={{ color: '#94a3b8', fontSize: 16 }}>✕</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+
+                  {/* Urgent Pending Postponements Banner in Schedules */}
+                  {pendingPostponementCount > 0 && (
+                    <View style={{ backgroundColor: '#fff1f2', borderColor: '#f43f5e', borderWidth: 1.5, borderRadius: 10, padding: 12, marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                        <Text style={{ color: '#9f1239', fontWeight: '800', fontSize: 13 }}>
+                          ⚠️ {pendingPostponementCount} Umpire Postponement Request(s) Awaiting Admin Decision
+                        </Text>
+                        <TouchableOpacity
+                          style={{ backgroundColor: '#e11d48', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 4 }}
+                          onPress={() => setMatchFilter('REQUESTS')}
+                        >
+                          <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 11 }}>Filter Requests</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Status Filter Pills with distinctive colors */}
+                  <View style={styles.filterPillsRow}>
+                    <TouchableOpacity
+                      style={[styles.filterPill, matchFilter === 'all' && styles.filterPillActive]}
+                      onPress={() => setMatchFilter('all')}
+                    >
+                      <Text style={[styles.filterPillText, matchFilter === 'all' && styles.filterPillTextActive]}>
+                        All ({matchesList.length})
+                      </Text>
+                    </TouchableOpacity>
+
+                    {pendingPostponementCount > 0 && (
+                      <TouchableOpacity
+                        style={[styles.filterPill, matchFilter === 'REQUESTS' && { backgroundColor: '#fee2e2', borderColor: '#ef4444', borderWidth: 1.5 }]}
+                        onPress={() => setMatchFilter('REQUESTS')}
+                      >
+                        <Text style={[styles.filterPillText, { color: '#b91c1c', fontWeight: '800' }]}>
+                          ⚠️ Requests ({pendingPostponementCount})
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+
+                    <TouchableOpacity
+                      style={[styles.filterPill, matchFilter === 'SCHEDULED' && styles.filterPillActiveScheduled]}
+                      onPress={() => setMatchFilter('SCHEDULED')}
+                    >
+                      <Text style={[styles.filterPillText, matchFilter === 'SCHEDULED' && styles.filterPillTextActiveScheduled]}>
+                        🗓 Scheduled ({scheduledMatchesCount})
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.filterPill, matchFilter === 'LIVE' && styles.filterPillActiveLive]}
+                      onPress={() => setMatchFilter('LIVE')}
+                    >
+                      <Text style={[styles.filterPillText, matchFilter === 'LIVE' && styles.filterPillTextActiveLive]}>
+                        🔴 Live ({liveMatchesCount})
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.filterPill, matchFilter === 'COMPLETED' && styles.filterPillActiveCompleted]}
+                      onPress={() => setMatchFilter('COMPLETED')}
+                    >
+                      <Text style={[styles.filterPillText, matchFilter === 'COMPLETED' && styles.filterPillTextActiveCompleted]}>
+                        ✓ Completed ({completedMatchesCount})
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.filterPill, matchFilter === 'CANCELLED' && styles.filterPillActiveCancelled]}
+                      onPress={() => setMatchFilter('CANCELLED')}
+                    >
+                      <Text style={[styles.filterPillText, matchFilter === 'CANCELLED' && styles.filterPillTextActiveCancelled]}>
+                        ✕ Cancelled ({cancelledMatchesCount})
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.filterPill, matchFilter === 'POSTPONED' && { backgroundColor: '#fef3c7', borderColor: '#f59e0b', borderWidth: 1 }]}
+                      onPress={() => setMatchFilter('POSTPONED')}
+                    >
+                      <Text style={[styles.filterPillText, matchFilter === 'POSTPONED' && { color: '#b45309', fontWeight: '700' }]}>
+                        ⏸️ Postponed ({postponedMatchesCount})
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.refreshBtnSm}
+                      onPress={loadMatchesAndLogistics}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.refreshBtnSmText}>🔄 Refresh</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* FIXTURES LIST CONTAINER */}
+                <View style={styles.itemsListContainer}>
+                  {isMatchesLoading ? (
+                    <View style={styles.loadingContainerBox}>
+                      <ActivityIndicator size="large" color="#d4af37" />
+                      <Text style={styles.loadingText}>Retrieving Official Match Fixtures from MongoDB...</Text>
+                    </View>
+                  ) : filteredMatches.length === 0 ? (
+                    <View style={styles.emptyContainerBox}>
+                      <Text style={{ fontSize: 36, marginBottom: 8 }}>🏏</Text>
+                      <Text style={styles.emptyTitle}>No Match Schedules Found</Text>
+                      <Text style={styles.emptySubtitle}>
+                        {matchSearchQuery
+                          ? `No match schedules matching "${matchSearchQuery}"`
+                          : 'No fixtures match the selected filter.'}
+                      </Text>
+                      <TouchableOpacity
+                        style={[styles.btnPrimarySchedule, { marginTop: 16 }]}
+                        onPress={() => handleOpenScheduleModal()}
+                      >
+                        <Text style={styles.btnPrimaryScheduleText}>➕ Schedule Match</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    filteredMatches.map((m) => {
+                      const statusUpper = (m.status || 'SCHEDULED').toUpperCase();
+                      const isScheduled = statusUpper === 'SCHEDULED';
+                      const isLive = statusUpper === 'LIVE' || statusUpper === 'INNINGS_BREAK';
+                      const isCompleted = statusUpper === 'COMPLETED';
+                      const isCancelled = statusUpper === 'CANCELLED' || statusUpper === 'ABANDONED';
+                      const isPostponed = statusUpper === 'POSTPONED' || !!m.postponement?.is_postponed;
+
+                      return (
+                        <View
+                          key={m.id}
+                          style={[
+                            styles.itemCard,
+                            isLive && styles.matchCardLive,
+                            isScheduled && styles.matchCardScheduled,
+                            isCompleted && styles.matchCardCompleted,
+                            isCancelled && styles.matchCardCancelled,
+                            isPostponed && { borderColor: '#f59e0b', backgroundColor: '#fffdf5' }
+                          ]}
+                        >
+                          {/* Top Header Row */}
+                          <View style={styles.itemCardTop}>
+                            <View style={styles.itemTitleRow}>
+                              <View style={[
+                                styles.itemCrest,
+                                isLive && { backgroundColor: '#ef4444' },
+                                isScheduled && { backgroundColor: '#2563eb' },
+                                isCompleted && { backgroundColor: '#10b981' },
+                                isCancelled && { backgroundColor: '#64748b' },
+                                isPostponed && { backgroundColor: '#f59e0b' }
+                              ]}>
+                                <Text style={styles.itemCrestText}>{isLive ? '🔴' : (isPostponed ? '⏸️' : '🏏')}</Text>
+                              </View>
+                              <View style={styles.itemTitleCol}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                  <Text style={styles.itemName}>
+                                    {m.team_a_name || m.team_a_id} <Text style={{ color: '#d97706' }}>vs</Text> {m.team_b_name || m.team_b_id}
+                                  </Text>
+                                  <View style={styles.matchIdBadge}>
+                                    <Text style={styles.matchIdBadgeText}>{m.id}</Text>
+                                  </View>
+                                </View>
+                                <Text style={styles.itemSub}>
+                                  🏆 {m.tournament_name || m.tournament_display_name || 'District Championship'} • {m.match_type || 'T20'} ({m.overs_per_side || 20} Overs)
                                 </Text>
-                                <View style={styles.matchIdBadge}>
-                                  <Text style={styles.matchIdBadgeText}>{m.id}</Text>
-                                </View>
                               </View>
-                              <Text style={styles.itemSub}>
-                                🏆 {m.tournament_name || m.tournament_display_name || 'District Championship'} • {m.match_type || 'T20'} ({m.overs_per_side || 20} Overs)
+                            </View>
+
+                            {/* Status Badge */}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              {isScheduled && (
+                                <View style={[styles.statusBadge, styles.badgeScheduled]}>
+                                  <Text style={styles.badgeScheduledText}>📅 SCHEDULED</Text>
+                                </View>
+                              )}
+                              {isPostponed && (
+                                <View style={[styles.statusBadge, { backgroundColor: '#fef3c7', borderColor: '#f59e0b', borderWidth: 1 }]}>
+                                  <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 11 }}>⏸️ POSTPONED</Text>
+                                </View>
+                              )}
+                              {isLive && (
+                                <View style={[styles.statusBadge, styles.badgeLive]}>
+                                  <Text style={styles.badgeLiveText}>🔴 LIVE MATCH</Text>
+                                </View>
+                              )}
+                              {isCompleted && (
+                                <View style={[styles.statusBadge, styles.badgeCompleted]}>
+                                  <Text style={styles.badgeCompletedText}>✓ COMPLETED</Text>
+                                </View>
+                              )}
+                              {isCancelled && (
+                                <View style={[styles.statusBadge, styles.badgeCancelled]}>
+                                  <Text style={styles.badgeCancelledText}>✕ CANCELLED</Text>
+                                </View>
+                              )}
+                            </View>
+                          </View>
+
+                          {/* Item Meta Details Grid */}
+                          <View style={styles.itemMetaGrid}>
+                            <View style={styles.metaCell}>
+                              <Text style={styles.metaLabel}>Match Date & Time</Text>
+                              <Text style={styles.metaVal}>📅 {m.match_date} • ⏰ {m.match_time || '09:30 AM'}</Text>
+                            </View>
+                            <TouchableOpacity
+                              style={styles.metaCell}
+                              onPress={() => {
+                                const v = m.venue || 'Cricket Ground Virudhunagar';
+                                const url = m.venue_maps_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v)}`;
+                                if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                                  window.open(url, '_blank');
+                                } else {
+                                  Linking.openURL(url).catch(() => { });
+                                }
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={styles.metaLabel}>Venue / Stadium</Text>
+                              <Text style={[styles.metaVal, { color: '#0284c7', textDecorationLine: 'underline' }]} numberOfLines={1}>📍 {m.venue || 'District Stadium'} ↗</Text>
+                            </TouchableOpacity>
+                            <View style={styles.metaCell}>
+                              <Text style={styles.metaLabel}>Official Scorer</Text>
+                              <Text style={styles.metaVal}>👤 {m.scorer_name || m.assigned_scorer_id || 'SCR-101'}</Text>
+                            </View>
+                            <View style={styles.metaCell}>
+                              <Text style={styles.metaLabel}>Current Status</Text>
+                              <Text style={styles.metaVal}>
+                                {isLive ? 'Scorecard Active' : (isCompleted ? 'Finalized' : (isCancelled ? 'Cancelled' : (isPostponed ? 'Postponed' : 'Awaiting Toss')))}
                               </Text>
                             </View>
                           </View>
 
-                          {/* Status Badge */}
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            {isScheduled && (
-                              <View style={[styles.statusBadge, styles.badgeScheduled]}>
-                                <Text style={styles.badgeScheduledText}>📅 SCHEDULED</Text>
-                              </View>
-                            )}
-                            {isPostponed && (
-                              <View style={[styles.statusBadge, { backgroundColor: '#fef3c7', borderColor: '#f59e0b', borderWidth: 1 }]}>
-                                <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 11 }}>⏸️ POSTPONED</Text>
-                              </View>
-                            )}
-                            {isLive && (
-                              <View style={[styles.statusBadge, styles.badgeLive]}>
-                                <Text style={styles.badgeLiveText}>🔴 LIVE MATCH</Text>
-                              </View>
-                            )}
-                            {isCompleted && (
-                              <View style={[styles.statusBadge, styles.badgeCompleted]}>
-                                <Text style={styles.badgeCompletedText}>✓ COMPLETED</Text>
-                              </View>
-                            )}
-                            {isCancelled && (
-                              <View style={[styles.statusBadge, styles.badgeCancelled]}>
-                                <Text style={styles.badgeCancelledText}>✕ CANCELLED</Text>
-                              </View>
-                            )}
-                          </View>
-                        </View>
-
-                        {/* Item Meta Details Grid */}
-                        <View style={styles.itemMetaGrid}>
-                          <View style={styles.metaCell}>
-                            <Text style={styles.metaLabel}>Match Date & Time</Text>
-                            <Text style={styles.metaVal}>📅 {m.match_date} • ⏰ {m.match_time || '09:30 AM'}</Text>
-                          </View>
-                          <TouchableOpacity
-                            style={styles.metaCell}
-                            onPress={() => {
-                              const v = m.venue || 'Cricket Ground Virudhunagar';
-                              const url = m.venue_maps_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v)}`;
-                              if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                                window.open(url, '_blank');
-                              } else {
-                                Linking.openURL(url).catch(() => {});
-                              }
-                            }}
-                            activeOpacity={0.7}
-                          >
-                            <Text style={styles.metaLabel}>Venue / Stadium</Text>
-                            <Text style={[styles.metaVal, { color: '#0284c7', textDecorationLine: 'underline' }]} numberOfLines={1}>📍 {m.venue || 'District Stadium'} ↗</Text>
-                          </TouchableOpacity>
-                          <View style={styles.metaCell}>
-                            <Text style={styles.metaLabel}>Official Scorer</Text>
-                            <Text style={styles.metaVal}>👤 {m.scorer_name || m.assigned_scorer_id || 'SCR-101'}</Text>
-                          </View>
-                          <View style={styles.metaCell}>
-                            <Text style={styles.metaLabel}>Current Status</Text>
-                            <Text style={styles.metaVal}>
-                              {isLive ? 'Scorecard Active' : (isCompleted ? 'Finalized' : (isCancelled ? 'Cancelled' : (isPostponed ? 'Postponed' : 'Awaiting Toss')))}
-                            </Text>
-                          </View>
-                        </View>
-
-                        {/* Postponement Information Banner */}
-                        {isPostponed && (
-                          <View style={{ backgroundColor: '#fffbeb', borderColor: '#fcd34d', borderWidth: 1, borderRadius: 8, padding: 10, marginTop: 10 }}>
-                            <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 12 }}>
-                              ⏸️ Match Postponed: {m.postponement?.reason || 'Reason not specified'}
-                            </Text>
-                            {Boolean(m.postponement?.original_date) && (
-                              <Text style={{ color: '#78350f', fontSize: 11, marginTop: 3 }}>
-                                Original Schedule: {m.postponement.original_date} • {m.postponement.original_time || '09:30 AM'}
+                          {/* Postponement Information Banner */}
+                          {isPostponed && (
+                            <View style={{ backgroundColor: '#fffbeb', borderColor: '#fcd34d', borderWidth: 1, borderRadius: 8, padding: 10, marginTop: 10 }}>
+                              <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 12 }}>
+                                ⏸️ Match Postponed: {m.postponement?.reason || 'Reason not specified'}
                               </Text>
-                            )}
-                            {m.postponement?.rescheduled_date ? (
-                              <Text style={{ color: '#15803d', fontSize: 11, fontWeight: '700', marginTop: 3 }}>
-                                📅 Rescheduled Date: {m.postponement.rescheduled_date} • {m.postponement.rescheduled_time || '09:30 AM'}
-                              </Text>
-                            ) : (
-                              <Text style={{ color: '#92400e', fontSize: 11, fontStyle: 'italic', marginTop: 3 }}>
-                                ⏳ Pending Reschedule: Please click "Reschedule Match" below to set a new date and time.
-                              </Text>
-                            )}
-                          </View>
-                        )}
-
-                        {/* Umpire Postponement Request Banner */}
-                        {m.umpire_postponement_request?.status === 'PENDING' && (
-                          <View style={{ backgroundColor: '#fef2f2', borderColor: '#fca5a5', borderWidth: 1, borderRadius: 8, padding: 10, marginTop: 10 }}>
-                            <Text style={{ color: '#991b1b', fontWeight: '700', fontSize: 12 }}>
-                              ⚠️ Umpire Postponement Request Pending Review
-                            </Text>
-                            <Text style={{ color: '#7f1d1d', fontSize: 11, marginTop: 3 }}>
-                              Submitted by: <Text style={{ fontWeight: '600' }}>{m.umpire_postponement_request.umpire_name || 'Assigned Umpire'}</Text>
-                            </Text>
-                            <Text style={{ color: '#991b1b', fontSize: 11, marginTop: 2 }}>
-                              Reason: {m.umpire_postponement_request.reason}
-                            </Text>
-                            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-                              <TouchableOpacity
-                                style={{ backgroundColor: '#16a34a', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
-                                onPress={() => handleReviewUmpirePostponement(m.id, 'APPROVE')}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>✓ Approve & Postpone</Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                style={{ backgroundColor: '#dc2626', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
-                                onPress={() => handleReviewUmpirePostponement(m.id, 'REJECT')}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>✕ Reject</Text>
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                        )}
-
-                        {/* Result / Score Note if present */}
-                        {Boolean(m.result_summary) && (
-                          <View style={styles.resultNoticeBox}>
-                            <Text style={styles.resultNoticeText}>ℹ️ {m.result_summary}</Text>
-                          </View>
-                        )}
-
-                        {/* Squad Allocation & Schedule Confirmation Banner */}
-                        {isScheduled && (
-                          <View style={{
-                            marginTop: 10,
-                            padding: 10,
-                            borderRadius: 8,
-                            backgroundColor: m.schedule_confirmation_status === 'CONFIRMED' ? '#ecfdf5' : ((m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#eff6ff' : '#f8fafc'),
-                            borderWidth: 1,
-                            borderColor: m.schedule_confirmation_status === 'CONFIRMED' ? '#a7f3d0' : ((m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#bfdbfe' : '#e2e8f0')
-                          }}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Squad Allocations:</Text>
-                                <View style={{
-                                  paddingHorizontal: 8,
-                                  paddingVertical: 3,
-                                  borderRadius: 4,
-                                  backgroundColor: m.team_a_allocation_status === 'SUBMITTED' ? '#dcfce7' : '#fee2e2',
-                                  borderWidth: 1,
-                                  borderColor: m.team_a_allocation_status === 'SUBMITTED' ? '#86efac' : '#fca5a5'
-                                }}>
-                                  <Text style={{ fontSize: 11, fontWeight: '700', color: m.team_a_allocation_status === 'SUBMITTED' ? '#166534' : '#991b1b' }}>
-                                    {m.team_a_allocation_status === 'SUBMITTED' ? '✓' : '⏳'} {m.team_a_name || 'Team 1'}: {m.team_a_allocation_status === 'SUBMITTED' ? 'Playing XI Locked' : 'Pending'}
-                                  </Text>
-                                </View>
-                                <View style={{
-                                  paddingHorizontal: 8,
-                                  paddingVertical: 3,
-                                  borderRadius: 4,
-                                  backgroundColor: m.team_b_allocation_status === 'SUBMITTED' ? '#dcfce7' : '#fee2e2',
-                                  borderWidth: 1,
-                                  borderColor: m.team_b_allocation_status === 'SUBMITTED' ? '#86efac' : '#fca5a5'
-                                }}>
-                                  <Text style={{ fontSize: 11, fontWeight: '700', color: m.team_b_allocation_status === 'SUBMITTED' ? '#166534' : '#991b1b' }}>
-                                    {m.team_b_allocation_status === 'SUBMITTED' ? '✓' : '⏳'} {m.team_b_name || 'Team 2'}: {m.team_b_allocation_status === 'SUBMITTED' ? 'Playing XI Locked' : 'Pending'}
-                                  </Text>
-                                </View>
-                              </View>
-
-                              {m.schedule_confirmation_status === 'CONFIRMED' ? (
-                                <View style={{ backgroundColor: '#10b981', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}>
-                                  <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: '800' }}>✓ Confirmed & Live to Scorer</Text>
-                                </View>
+                              {Boolean(m.postponement?.original_date) && (
+                                <Text style={{ color: '#78350f', fontSize: 11, marginTop: 3 }}>
+                                  Original Schedule: {m.postponement.original_date} • {m.postponement.original_time || '09:30 AM'}
+                                </Text>
+                              )}
+                              {m.postponement?.rescheduled_date ? (
+                                <Text style={{ color: '#15803d', fontSize: 11, fontWeight: '700', marginTop: 3 }}>
+                                  📅 Rescheduled Date: {m.postponement.rescheduled_date} • {m.postponement.rescheduled_time || '09:30 AM'}
+                                </Text>
                               ) : (
-                                <TouchableOpacity
-                                  style={{
-                                    backgroundColor: (m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#16a34a' : '#94a3b8',
-                                    paddingHorizontal: 14,
-                                    paddingVertical: 6,
-                                    borderRadius: 6,
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    gap: 6
-                                  }}
-                                  onPress={() => handleConfirmMatchSchedule(m)}
-                                  activeOpacity={0.8}
-                                  disabled={isConfirmingScheduleId === m.id}
-                                >
-                                  {isConfirmingScheduleId === m.id ? (
-                                    <ActivityIndicator size="small" color="#ffffff" />
-                                  ) : (
-                                    <Text style={{ color: '#ffffff', fontSize: 12, fontWeight: '800' }}>
-                                      {(m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED')
-                                        ? '✓ Confirm Match Schedule'
-                                        : '⏳ Confirm (Pending Squads)'}
-                                    </Text>
-                                  )}
-                                </TouchableOpacity>
+                                <Text style={{ color: '#92400e', fontSize: 11, fontStyle: 'italic', marginTop: 3 }}>
+                                  ⏳ Pending Reschedule: Please click "Reschedule Match" below to set a new date and time.
+                                </Text>
                               )}
                             </View>
-                          </View>
-                        )}
-
-                        {/* Action Buttons Row */}
-                        <View style={styles.scheduleActionsRow}>
-                          <TouchableOpacity
-                            style={styles.btnOutlineGold}
-                            onPress={() => setSelectedMatchModal(m)}
-                            activeOpacity={0.8}
-                          >
-                            <Text style={styles.btnOutlineGoldText}>👁 View Details</Text>
-                          </TouchableOpacity>
-
-                          {isScheduled && (
-                            <>
-                              {m.schedule_confirmation_status !== 'CONFIRMED' && (
-                                <TouchableOpacity
-                                  style={[
-                                    styles.btnOutlineEdit,
-                                    {
-                                      borderColor: (m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#16a34a' : '#94a3b8',
-                                      backgroundColor: (m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#ecfdf5' : '#f1f5f9'
-                                    }
-                                  ]}
-                                  onPress={() => handleConfirmMatchSchedule(m)}
-                                  activeOpacity={0.8}
-                                  disabled={isConfirmingScheduleId === m.id}
-                                >
-                                  <Text style={[
-                                    styles.btnOutlineEditText,
-                                    {
-                                      color: (m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#16a34a' : '#64748b',
-                                      fontWeight: '800'
-                                    }
-                                  ]}>
-                                    {(m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '✓ Confirm' : '⏳ Confirm'}
-                                  </Text>
-                                </TouchableOpacity>
-                              )}
-
-                              <TouchableOpacity
-                                style={styles.btnOutlineEdit}
-                                onPress={() => handleOpenScheduleModal(m)}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={styles.btnOutlineEditText}>✏️ Edit</Text>
-                              </TouchableOpacity>
-
-                              <TouchableOpacity
-                                style={[styles.btnOutlineEdit, { borderColor: '#d97706', backgroundColor: '#fffbeb' }]}
-                                onPress={() => {
-                                  setPostponeMatchModal({
-                                    id: m.id,
-                                    teamA: m.team_a_name || m.team_a_id,
-                                    teamB: m.team_b_name || m.team_b_id,
-                                    date: m.match_date,
-                                    time: m.match_time || '09:30 AM'
-                                  });
-                                  setPostponeReasonInput('Inclement weather / ground condition unplayable');
-                                }}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={[styles.btnOutlineEditText, { color: '#d97706', fontWeight: '700' }]}>⏸️ Postpone</Text>
-                              </TouchableOpacity>
-
-                              <TouchableOpacity
-                                style={styles.btnOutlineDanger}
-                                onPress={() => setCancelMatchModal({ id: m.id, teamA: m.team_a_name || m.team_a_id, teamB: m.team_b_name || m.team_b_id })}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={styles.btnOutlineDangerText}>🚫 Cancel</Text>
-                              </TouchableOpacity>
-
-                              <TouchableOpacity
-                                style={styles.btnOutlineDelete}
-                                onPress={() => handleDeleteMatch(m.id)}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={styles.btnOutlineDeleteText}>🗑 Delete</Text>
-                              </TouchableOpacity>
-                            </>
                           )}
 
-                          {isPostponed && (
-                            <>
-                              <TouchableOpacity
-                                style={[styles.btnOutlineEdit, { borderColor: '#0284c7', backgroundColor: '#e0f2fe' }]}
-                                onPress={() => handleOpenRescheduleModal(m)}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={[styles.btnOutlineEditText, { color: '#0284c7', fontWeight: '700' }]}>📅 Reschedule Match</Text>
-                              </TouchableOpacity>
+                          {/* Umpire Postponement Request Banner */}
+                          {m.umpire_postponement_request?.status === 'PENDING' && (
+                            <View style={{ backgroundColor: '#fef2f2', borderColor: '#fca5a5', borderWidth: 1, borderRadius: 8, padding: 10, marginTop: 10 }}>
+                              <Text style={{ color: '#991b1b', fontWeight: '700', fontSize: 12 }}>
+                                ⚠️ Umpire Postponement Request Pending Review
+                              </Text>
+                              <Text style={{ color: '#7f1d1d', fontSize: 11, marginTop: 3 }}>
+                                Submitted by: <Text style={{ fontWeight: '600' }}>{m.umpire_postponement_request.umpire_name || 'Assigned Umpire'}</Text>
+                              </Text>
+                              <Text style={{ color: '#991b1b', fontSize: 11, marginTop: 2 }}>
+                                Reason: {m.umpire_postponement_request.reason}
+                              </Text>
+                              <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                                <TouchableOpacity
+                                  style={{ backgroundColor: '#16a34a', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
+                                  onPress={() => handleReviewUmpirePostponement(m.id, 'APPROVE')}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>✓ Approve & Postpone</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  style={{ backgroundColor: '#dc2626', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
+                                  onPress={() => handleReviewUmpirePostponement(m.id, 'REJECT')}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>✕ Reject</Text>
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          )}
 
-                              <TouchableOpacity
-                                style={styles.btnOutlineDanger}
-                                onPress={() => setCancelMatchModal({ id: m.id, teamA: m.team_a_name || m.team_a_id, teamB: m.team_b_name || m.team_b_id })}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={styles.btnOutlineDangerText}>🚫 Cancel</Text>
-                              </TouchableOpacity>
+                          {/* Result / Score Note if present */}
+                          {Boolean(m.result_summary) && (
+                            <View style={styles.resultNoticeBox}>
+                              <Text style={styles.resultNoticeText}>ℹ️ {m.result_summary}</Text>
+                            </View>
+                          )}
 
+                          {/* Squad Allocation & Schedule Confirmation Banner */}
+                          {isScheduled && (
+                            <View style={{
+                              marginTop: 10,
+                              padding: 10,
+                              borderRadius: 8,
+                              backgroundColor: m.schedule_confirmation_status === 'CONFIRMED' ? '#ecfdf5' : ((m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#eff6ff' : '#f8fafc'),
+                              borderWidth: 1,
+                              borderColor: m.schedule_confirmation_status === 'CONFIRMED' ? '#a7f3d0' : ((m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#bfdbfe' : '#e2e8f0')
+                            }}>
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Squad Allocations:</Text>
+                                  <View style={{
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 3,
+                                    borderRadius: 4,
+                                    backgroundColor: m.team_a_allocation_status === 'SUBMITTED' ? '#dcfce7' : '#fee2e2',
+                                    borderWidth: 1,
+                                    borderColor: m.team_a_allocation_status === 'SUBMITTED' ? '#86efac' : '#fca5a5'
+                                  }}>
+                                    <Text style={{ fontSize: 11, fontWeight: '700', color: m.team_a_allocation_status === 'SUBMITTED' ? '#166534' : '#991b1b' }}>
+                                      {m.team_a_allocation_status === 'SUBMITTED' ? '✓' : '⏳'} {m.team_a_name || 'Team 1'}: {m.team_a_allocation_status === 'SUBMITTED' ? 'Playing XI Locked' : 'Pending'}
+                                    </Text>
+                                  </View>
+                                  <View style={{
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 3,
+                                    borderRadius: 4,
+                                    backgroundColor: m.team_b_allocation_status === 'SUBMITTED' ? '#dcfce7' : '#fee2e2',
+                                    borderWidth: 1,
+                                    borderColor: m.team_b_allocation_status === 'SUBMITTED' ? '#86efac' : '#fca5a5'
+                                  }}>
+                                    <Text style={{ fontSize: 11, fontWeight: '700', color: m.team_b_allocation_status === 'SUBMITTED' ? '#166534' : '#991b1b' }}>
+                                      {m.team_b_allocation_status === 'SUBMITTED' ? '✓' : '⏳'} {m.team_b_name || 'Team 2'}: {m.team_b_allocation_status === 'SUBMITTED' ? 'Playing XI Locked' : 'Pending'}
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                {m.schedule_confirmation_status === 'CONFIRMED' ? (
+                                  <View style={{ backgroundColor: '#10b981', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}>
+                                    <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: '800' }}>✓ Confirmed & Live to Scorer</Text>
+                                  </View>
+                                ) : (
+                                  <TouchableOpacity
+                                    style={{
+                                      backgroundColor: (m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#16a34a' : '#94a3b8',
+                                      paddingHorizontal: 14,
+                                      paddingVertical: 6,
+                                      borderRadius: 6,
+                                      flexDirection: 'row',
+                                      alignItems: 'center',
+                                      gap: 6
+                                    }}
+                                    onPress={() => handleConfirmMatchSchedule(m)}
+                                    activeOpacity={0.8}
+                                    disabled={isConfirmingScheduleId === m.id}
+                                  >
+                                    {isConfirmingScheduleId === m.id ? (
+                                      <ActivityIndicator size="small" color="#ffffff" />
+                                    ) : (
+                                      <Text style={{ color: '#ffffff', fontSize: 12, fontWeight: '800' }}>
+                                        {(m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED')
+                                          ? '✓ Confirm Match Schedule'
+                                          : '⏳ Confirm (Pending Squads)'}
+                                      </Text>
+                                    )}
+                                  </TouchableOpacity>
+                                )}
+                              </View>
+                            </View>
+                          )}
+
+                          {/* Action Buttons Row */}
+                          <View style={styles.scheduleActionsRow}>
+                            <TouchableOpacity
+                              style={styles.btnOutlineGold}
+                              onPress={() => setSelectedMatchModal(m)}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={styles.btnOutlineGoldText}>👁 View Details</Text>
+                            </TouchableOpacity>
+
+                            {isScheduled && (
+                              <>
+                                {m.schedule_confirmation_status !== 'CONFIRMED' && (
+                                  <TouchableOpacity
+                                    style={[
+                                      styles.btnOutlineEdit,
+                                      {
+                                        borderColor: (m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#16a34a' : '#94a3b8',
+                                        backgroundColor: (m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#ecfdf5' : '#f1f5f9'
+                                      }
+                                    ]}
+                                    onPress={() => handleConfirmMatchSchedule(m)}
+                                    activeOpacity={0.8}
+                                    disabled={isConfirmingScheduleId === m.id}
+                                  >
+                                    <Text style={[
+                                      styles.btnOutlineEditText,
+                                      {
+                                        color: (m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#16a34a' : '#64748b',
+                                        fontWeight: '800'
+                                      }
+                                    ]}>
+                                      {(m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '✓ Confirm' : '⏳ Confirm'}
+                                    </Text>
+                                  </TouchableOpacity>
+                                )}
+
+                                <TouchableOpacity
+                                  style={styles.btnOutlineEdit}
+                                  onPress={() => handleOpenScheduleModal(m)}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={styles.btnOutlineEditText}>✏️ Edit</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                  style={[styles.btnOutlineEdit, { borderColor: '#d97706', backgroundColor: '#fffbeb' }]}
+                                  onPress={() => {
+                                    setPostponeMatchModal({
+                                      id: m.id,
+                                      teamA: m.team_a_name || m.team_a_id,
+                                      teamB: m.team_b_name || m.team_b_id,
+                                      date: m.match_date,
+                                      time: m.match_time || '09:30 AM'
+                                    });
+                                    setPostponeReasonInput('Inclement weather / ground condition unplayable');
+                                  }}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={[styles.btnOutlineEditText, { color: '#d97706', fontWeight: '700' }]}>⏸️ Postpone</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                  style={styles.btnOutlineDanger}
+                                  onPress={() => setCancelMatchModal({ id: m.id, teamA: m.team_a_name || m.team_a_id, teamB: m.team_b_name || m.team_b_id })}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={styles.btnOutlineDangerText}>🚫 Cancel</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                  style={styles.btnOutlineDelete}
+                                  onPress={() => handleDeleteMatch(m.id)}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={styles.btnOutlineDeleteText}>🗑 Delete</Text>
+                                </TouchableOpacity>
+                              </>
+                            )}
+
+                            {isPostponed && (
+                              <>
+                                <TouchableOpacity
+                                  style={[styles.btnOutlineEdit, { borderColor: '#0284c7', backgroundColor: '#e0f2fe' }]}
+                                  onPress={() => handleOpenRescheduleModal(m)}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={[styles.btnOutlineEditText, { color: '#0284c7', fontWeight: '700' }]}>📅 Reschedule Match</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                  style={styles.btnOutlineDanger}
+                                  onPress={() => setCancelMatchModal({ id: m.id, teamA: m.team_a_name || m.team_a_id, teamB: m.team_b_name || m.team_b_id })}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={styles.btnOutlineDangerText}>🚫 Cancel</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                  style={styles.btnOutlineDelete}
+                                  onPress={() => handleDeleteMatch(m.id)}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={styles.btnOutlineDeleteText}>🗑 Delete Fixture</Text>
+                                </TouchableOpacity>
+                              </>
+                            )}
+
+                            {isCancelled && (
                               <TouchableOpacity
                                 style={styles.btnOutlineDelete}
                                 onPress={() => handleDeleteMatch(m.id)}
@@ -4772,52 +4847,41 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               >
                                 <Text style={styles.btnOutlineDeleteText}>🗑 Delete Fixture</Text>
                               </TouchableOpacity>
-                            </>
-                          )}
-
-                          {isCancelled && (
-                            <TouchableOpacity
-                              style={styles.btnOutlineDelete}
-                              onPress={() => handleDeleteMatch(m.id)}
-                              activeOpacity={0.8}
-                            >
-                              <Text style={styles.btnOutlineDeleteText}>🗑 Delete Fixture</Text>
-                            </TouchableOpacity>
-                          )}
+                            )}
+                          </View>
                         </View>
-                      </View>
-                    );
-                  })
-                )}
+                      );
+                    })
+                  )}
+                </View>
               </View>
-            </View>
-          )}
+            )}
 
-          {/* ─────────────────────────────────────────────────────────────
+            {/* ─────────────────────────────────────────────────────────────
               USERS & DYNAMIC ADMINISTRATOR GOVERNANCE (NODEMAILER OTP)
               ───────────────────────────────────────────────────────────── */}
-          {activeTab === 'users' && (
-            <View style={{ flex: 1, width: '100%' }}>
-              <UsersPage />
-            </View>
-          )}
+            {activeTab === 'users' && (
+              <View style={{ flex: 1, width: '100%' }}>
+                <UsersPage />
+              </View>
+            )}
 
-          {/* ─────────────────────────────────────────────────────────────
+            {/* ─────────────────────────────────────────────────────────────
               9. TAB CONTENT: TOURNAMENT MANAGEMENT & TEAM APPROVALS
               ───────────────────────────────────────────────────────────── */}
-          {activeTab === 'tournaments' && (
-            <TournamentManagement />
-          )}
+            {activeTab === 'tournaments' && (
+              <TournamentManagement />
+            )}
 
-          {/* ─────────────────────────────────────────────────────────────
+            {/* ─────────────────────────────────────────────────────────────
               10. TAB CONTENT: SETTINGS (MASTER SETTINGS / DB DYNAMIC CATEGORIES)
               ───────────────────────────────────────────────────────────── */}
-          {(activeTab === 'master_settings' || activeTab === 'settings') && (
-            <SettingsPage initialCategory={settingsCategory || 'taluk_jurisdiction'} />
-          )}
-        </View>
-      </ScrollView>
-    </View>
+            {(activeTab === 'master_settings' || activeTab === 'settings') && (
+              <SettingsPage initialCategory={settingsCategory || 'taluk_jurisdiction'} />
+            )}
+          </View>
+        </ScrollView>
+      </View>
 
       {/* ─────────────────────────────────────────────────────────────
           8. SQUAD INSPECTION MODAL (15 Member Roster)
@@ -5216,7 +5280,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     <Text style={styles.modalTitle}>
                       {editingMatch ? '✏️ Edit Match Schedule' : '🏏 Schedule Match'}
                     </Text>
-                    
+
                   </View>
                   <Text style={styles.modalSubtitle}>
                     {editingMatch
@@ -5378,7 +5442,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           backgroundColor: '#ffffff',
                           color: '#0f172a',
                           width: '100%',
-                          outline: 'none',
+                          outlineStyle: 'none' as any,
                           cursor: 'pointer'
                         }}
                       >
@@ -5685,7 +5749,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           backgroundColor: '#ffffff',
                           color: '#0f172a',
                           width: '100%',
-                          outline: 'none',
+                          outlineStyle: 'none' as any,
                           cursor: 'pointer',
                           marginBottom: 8
                         }}
@@ -5785,7 +5849,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                             if (Platform.OS === 'web' && typeof window !== 'undefined') {
                               window.open(url, '_blank');
                             } else {
-                              Linking.openURL(url).catch(() => {});
+                              Linking.openURL(url).catch(() => { });
                             }
                           }}
                           activeOpacity={0.8}
@@ -5850,7 +5914,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 if (Platform.OS === 'web' && typeof window !== 'undefined') {
                                   window.open(mapsLink, '_blank');
                                 } else {
-                                  Linking.openURL(mapsLink).catch(() => {});
+                                  Linking.openURL(mapsLink).catch(() => { });
                                 }
                               }}
                               style={{
@@ -5915,7 +5979,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                             backgroundColor: '#ffffff',
                             color: '#0f172a',
                             width: '100%',
-                            outline: 'none',
+                            outlineStyle: 'none' as any,
                             boxSizing: 'border-box'
                           }}
                         />
@@ -5990,7 +6054,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                             backgroundColor: '#ffffff',
                             color: '#0f172a',
                             width: '100%',
-                            outline: 'none',
+                            outlineStyle: 'none' as any,
                             boxSizing: 'border-box'
                           }}
                         />
@@ -6046,6 +6110,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       </View>
                     </View>
                   </View>
+
 
                   {/* Weather / Rain Delay Adjustments (Shown in Reschedule Mode) */}
                   {editingMatch && (
@@ -6125,6 +6190,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           </Text>
                         </TouchableOpacity>
                       ))}
+
                     </View>
                   </View>
 
@@ -6189,10 +6255,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                             const matchesQuery = !scorerSearch || (o.name || '').toLowerCase().includes(scorerSearch.toLowerCase()) || (o.id || '').toLowerCase().includes(scorerSearch.toLowerCase());
                             return matchesRole && matchesQuery;
                           }).length === 0 && (
-                            <View style={{ padding: 10, alignItems: 'center' }}>
-                              <Text style={{ fontSize: 11.5, color: '#94a3b8' }}>No matching scorers found. You can type any scorer name above.</Text>
-                            </View>
-                          )}
+                              <View style={{ padding: 10, alignItems: 'center' }}>
+                                <Text style={{ fontSize: 11.5, color: '#94a3b8' }}>No matching scorers found. You can type any scorer name above.</Text>
+                              </View>
+                            )}
                         </ScrollView>
                       </View>
                     )}
@@ -6598,7 +6664,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     if (Platform.OS === 'web' && typeof window !== 'undefined') {
                       window.open(url, '_blank');
                     } else {
-                      Linking.openURL(url).catch(() => {});
+                      Linking.openURL(url).catch(() => { });
                     }
                   }}
                   activeOpacity={0.8}
@@ -6965,7 +7031,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       if (Platform.OS === 'web' && typeof window !== 'undefined') {
                         window.open(url, '_blank');
                       } else {
-                        Linking.openURL(url).catch(() => {});
+                        Linking.openURL(url).catch(() => { });
                       }
                     }}
                     style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
@@ -7097,6 +7163,16 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           </View>
         </View>
       </Modal>
+
+      {/* Dual-Admin Security Approval & Revocation Modal (CFVD Apex Protocol) */}
+      <DualAdminSecurityModal
+        visible={securityModalVisible}
+        onClose={() => setSecurityModalVisible(false)}
+        initialTab={securityModalTab}
+        onSuccess={() => {
+          showSuccess('Security Action Authorized', 'Dual-admin cryptographic verification was successful.');
+        }}
+      />
     </View>
   );
 }
@@ -7221,13 +7297,13 @@ const styles: any = StyleSheet.create({
     minHeight: 0,
     ...(Platform.OS === 'web'
       ? ({
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          scrollbarWidth: 'thin',
-          scrollbarColor: '#cbd5e1 transparent',
-          WebkitOverflowScrolling: 'touch',
-          overscrollBehavior: 'contain'
-        } as any)
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        scrollbarWidth: 'thin',
+        scrollbarColor: '#cbd5e1 transparent',
+        WebkitOverflowScrolling: 'touch',
+        overscrollBehavior: 'contain'
+      } as any)
       : {})
   },
   sidebarNavScrollContent: {
@@ -8940,7 +9016,10 @@ const styles: any = StyleSheet.create({
   },
   adminMinimalBrandCol: {
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8
   },
   adminMinimalLogo: {
     width: 38,

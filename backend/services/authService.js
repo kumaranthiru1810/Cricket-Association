@@ -2629,6 +2629,8 @@ class AuthService {
         if (filterStatus && filterStatus !== 'ALL' && status !== filterStatus.toUpperCase()) {
           return;
         }
+        const cPhone = t.coach_phone || t.coach_mobile || t.phone || t.mobile || 'N/A';
+        const cAadhaar = t.coach_aadhaar || t.aadhaar || 'N/A';
         results.push({
           id: t.id || t._id?.toString(),
           mongoId: t._id?.toString(),
@@ -2638,12 +2640,23 @@ class AuthService {
           email: t.coach_email,
           contactName: t.coach_name,
           contactEmail: t.coach_email,
+          phone: cPhone,
+          coachPhone: cPhone,
+          aadhaar: cAadhaar,
+          coachAadhaar: cAadhaar,
           taluk: t.taluk || t.city || 'Virudhunagar',
           status: status,
           created_at: t.created_at || new Date().toISOString(),
           details: {
+            coachPhone: cPhone,
+            coachAadhaar: cAadhaar,
             squadCount: (t.players || []).length,
-            players: t.players || [],
+            players: (t.players || []).map(p => ({
+              ...p,
+              phone: p.phone || p.mobile || '-',
+              mobile: p.mobile || p.phone || '-',
+              aadhaar: p.aadhaar || '-'
+            })),
             taluk: t.taluk,
             city: t.city,
             rejectionReason: t.rejection_reason,
@@ -2682,6 +2695,7 @@ class AuthService {
         if (role === 'UMPIRE') roleDisplay = 'Official Umpire';
         if (role === 'CONTENT_CREATOR') roleDisplay = 'Content Staff';
 
+        const uAadhaar = u.aadhaar || u.aadhaar_number || u.player_details?.aadhaar || u.umpire_details?.aadhaar || 'N/A';
         results.push({
           id: u.id || u._id?.toString(),
           mongoId: u._id?.toString(),
@@ -2690,11 +2704,13 @@ class AuthService {
           name: u.name,
           email: u.email,
           phone: u.mobile || u.phone || 'N/A',
+          aadhaar: uAadhaar,
           status: status,
           created_at: u.created_at || new Date().toISOString(),
           details: {
             phone: u.mobile || u.phone,
             mobile: u.mobile || u.phone,
+            aadhaar: uAadhaar,
             specialty: u.specialty || u.umpire_details?.qualification || u.umpire_details?.certification_level,
             certification_id: u.certification_id || u.umpire_details?.certification_number,
             experience_years: u.experience_years || u.umpire_details?.experience_years,
@@ -2728,6 +2744,7 @@ class AuthService {
           const status = (rawStatus === 'ACTIVE') ? 'APPROVED' : rawStatus;
           if (filterStatus && filterStatus !== 'ALL' && status !== filterStatus.toUpperCase()) continue;
           existingScorerEmails.add(sc.email.toLowerCase());
+          const scAadhaar = sc.aadhaar || sc.aadhaar_number || 'N/A';
           results.push({
             id: sc.id || sc._id?.toString(),
             mongoId: sc._id?.toString(),
@@ -2736,11 +2753,13 @@ class AuthService {
             name: sc.full_name || sc.name || 'Official Scorer',
             email: sc.email,
             phone: sc.mobile || sc.phone || 'N/A',
+            aadhaar: scAadhaar,
             status: status,
             created_at: sc.created_at || new Date().toISOString(),
             details: {
               phone: sc.mobile || sc.phone,
               mobile: sc.mobile || sc.phone,
+              aadhaar: scAadhaar,
               specialty: sc.certification_level || 'District Certified',
               taluk: sc.taluk || 'Virudhunagar',
               experience_years: sc.experience_years || 2,
