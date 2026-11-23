@@ -685,6 +685,16 @@ class PlayerService {
       dismissal_type: 'RUN_OUT'
     });
 
+    const directHitsCount = await db.models.Delivery.countDocuments({
+      $or: [{ fielder_id: playerId }, { fielder_name: profile.name }],
+      fielding_action: { $regex: /direct\s*hit/i }
+    });
+
+    const boundarySavesCount = await db.models.Delivery.countDocuments({
+      $or: [{ fielder_id: playerId }, { fielder_name: profile.name }],
+      fielding_action: { $regex: /boundary\s*save/i }
+    });
+
     // 4. Combine with Player.stats baseline if present
     const baseStats = playerDoc?.stats || {};
     const totalRuns = bRuns + (baseStats.runs || 0);
@@ -756,7 +766,9 @@ class PlayerService {
       fielding: {
         catches: totalCatches,
         runOuts: totalRunOuts,
-        stumpings: totalStumpings
+        stumpings: totalStumpings,
+        directHits: directHitsCount + (baseStats.direct_hits || 0),
+        boundarySaves: boundarySavesCount + (baseStats.boundary_saves || 0)
       },
       performancePoints: pointsData.points,
       tier: pointsData.currentTier,
@@ -991,7 +1003,6 @@ class PlayerService {
     const teamId = profile?.teamId || profile?.team_id;
 
     const query = {
-      type: { $in: ['MATCH_SCHEDULED', 'MATCH_RESCHEDULED'] },
       recipient_role: 'PLAYER',
       $or: [
         { recipient_id: { $in: playerIds } },

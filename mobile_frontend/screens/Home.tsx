@@ -1238,10 +1238,10 @@ export default function HomeScreen() {
                 const s = (m.status || '').toLowerCase();
                 const raw = (m.rawStatus || '').toUpperCase();
                 const isPostponed = s === 'postponed' || raw === 'POSTPONED' || !!m.isPostponed || !!m.postponement?.is_postponed;
-                if (matchFilter === 'live') return s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK';
+                if (matchFilter === 'live') return !isPostponed && (s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK');
                 if (matchFilter === 'upcoming') return !isPostponed && (s === 'upcoming' || raw === 'SCHEDULED');
                 if (matchFilter === 'postponed') return isPostponed;
-                if (matchFilter === 'results') return s === 'completed' || raw === 'COMPLETED' || s === 'cancelled' || raw === 'CANCELLED';
+                if (matchFilter === 'results') return !isPostponed && (s === 'completed' || raw === 'COMPLETED' || s === 'cancelled' || raw === 'CANCELLED');
                 return true;
               });
 
@@ -1283,10 +1283,10 @@ export default function HomeScreen() {
                     {paginatedMatches.map(m => {
                     const s = (m.status || '').toLowerCase();
                     const raw = (m.rawStatus || '').toUpperCase();
-                    const isLive = s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK';
                     const isPostponed = s === 'postponed' || raw === 'POSTPONED' || !!m.isPostponed || !!m.postponement?.is_postponed;
+                    const isLive = !isPostponed && (s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK');
                     const isUpcoming = !isPostponed && (s === 'upcoming' || raw === 'SCHEDULED');
-                    const isCompleted = s === 'completed' || raw === 'COMPLETED';
+                    const isCompleted = !isPostponed && (s === 'completed' || raw === 'COMPLETED');
                     const isCancelled = !isPostponed && (s === 'cancelled' || raw === 'CANCELLED' || raw === 'ABANDONED');
 
                     const teamAShort = m.teamAShort || (m.teamA ? m.teamA.slice(0, 3).toUpperCase() : 'TMA');

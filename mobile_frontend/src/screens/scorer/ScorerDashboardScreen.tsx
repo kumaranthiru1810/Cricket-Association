@@ -183,34 +183,46 @@ export default function ScorerDashboardScreen() {
     }
   };
 
+  const isPostponedMatch = (m: any) => {
+    const s = (m.status || '').toLowerCase();
+    const r = (m.rawStatus || '').toUpperCase();
+    return s === 'postponed' || r === 'POSTPONED' || !!m.postponement?.is_postponed || !!m.isPostponed;
+  };
+
   // Categorized matches sorted by Date & Time:
   // 1. Live matches: currently active, sorted by most recent
   const liveMatches = matches
     .filter(m => {
+      if (isPostponedMatch(m)) return false;
       const s = (m.status || '').toLowerCase();
-      return s === 'live' || s === 'innings_break';
+      const r = (m.rawStatus || '').toUpperCase();
+      return s === 'live' || s === 'innings_break' || r === 'LIVE' || r === 'INNINGS_BREAK';
     })
     .sort((a, b) => parseMatchTimestamp(b) - parseMatchTimestamp(a));
 
   // 2. Upcoming matches: sorted ascending by date and time (nearest upcoming match first!)
   const upcomingMatches = matches
     .filter(m => {
+      if (isPostponedMatch(m)) return false;
       const s = (m.status || '').toLowerCase();
-      return s === 'upcoming' || s === 'scheduled';
+      const r = (m.rawStatus || '').toUpperCase();
+      return s === 'upcoming' || s === 'scheduled' || r === 'SCHEDULED';
     })
     .sort((a, b) => parseMatchTimestamp(a) - parseMatchTimestamp(b));
 
   // 3. Completed matches: sorted descending by date and time (most recently finished match first!)
   const completedMatches = matches
-    .filter(m => (m.status || '').toLowerCase() === 'completed')
+    .filter(m => {
+      if (isPostponedMatch(m)) return false;
+      const s = (m.status || '').toLowerCase();
+      const r = (m.rawStatus || '').toUpperCase();
+      return s === 'completed' || r === 'COMPLETED';
+    })
     .sort((a, b) => parseMatchTimestamp(b) - parseMatchTimestamp(a));
 
   // 4. Postponed matches:
   const postponedMatches = matches
-    .filter(m => {
-      const s = (m.status || '').toLowerCase();
-      return s === 'postponed' || !!m.postponement?.is_postponed || !!m.isPostponed;
-    })
+    .filter(isPostponedMatch)
     .sort((a, b) => parseMatchTimestamp(b) - parseMatchTimestamp(a));
 
   const totalAssigned = matches.length;

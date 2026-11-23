@@ -51,7 +51,7 @@ export interface PlayerNavItem {
   label: string;
   icon: (color: string) => React.ReactNode;
   badge?: number;
-  badgeType?: 'blue' | 'orange' | 'gold';
+  badgeType?: 'blue' | 'orange' | 'gold' | 'red';
 }
 
 export interface PlayerSidebarProps {
@@ -117,10 +117,10 @@ export const getPlayerNavItems = (badges?: {
   },
   {
     key: 'notifications',
-    label: 'Notices',
+    label: 'Inbox / Notices',
     icon: (c) => <BellIcon size={18} color={c} />,
     badge: badges?.notificationsCount,
-    badgeType: 'gold'
+    badgeType: 'red'
   }
 ];
 
@@ -257,6 +257,7 @@ export const PlayerSidebar: React.FC<PlayerSidebarProps> = ({
                       item.badgeType === 'blue' && styles.tabBadgeBlue,
                       item.badgeType === 'orange' && styles.tabBadgeOrange,
                       item.badgeType === 'gold' && styles.tabBadgeGold,
+                      item.badgeType === 'red' && { backgroundColor: '#fee2e2' },
                       isActive && styles.tabBadgeActive
                     ]}
                   >
@@ -266,6 +267,7 @@ export const PlayerSidebar: React.FC<PlayerSidebarProps> = ({
                         item.badgeType === 'blue' && styles.tabBadgeBlueText,
                         item.badgeType === 'orange' && styles.tabBadgeOrangeText,
                         item.badgeType === 'gold' && styles.tabBadgeGoldText,
+                        item.badgeType === 'red' && { color: '#dc2626' },
                         isActive && styles.tabBadgeActiveText
                       ]}
                     >
