@@ -395,6 +395,7 @@ export const UsersPage: React.FC = () => {
         <View>
           <Text style={styles.userEmailText}>{item.email}</Text>
           {item.mobile && <Text style={styles.userMobileSub}>📱 {item.mobile}</Text>}
+          {item.aadhaar && <Text style={{ color: '#991b1b', fontSize: 10, fontWeight: '700', marginTop: 2 }}>🆔 UIDAI: {item.aadhaar}</Text>}
         </View>
       )
     },
@@ -724,6 +725,12 @@ export const UsersPage: React.FC = () => {
                   <View style={styles.infoRow}>
                     <Text style={styles.infoKey}>Mobile:</Text>
                     <Text style={styles.infoVal}>{activeUser.mobile || 'Not specified'}</Text>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoKey}>Aadhaar (UIDAI):</Text>
+                    <Text style={[styles.infoVal, activeUser.aadhaar && { color: '#991b1b', fontWeight: '700' }]}>
+                      {activeUser.aadhaar ? `🆔 ${activeUser.aadhaar}` : 'Not specified'}
+                    </Text>
                   </View>
                   <View style={styles.infoRow}>
                     <Text style={styles.infoKey}>Role & Tier:</Text>

@@ -187,11 +187,12 @@ export default function DualAdminSecurityModal({
       if (res && res.is_admin) {
         setCandidateCheckStatus('already_admin');
         setCandidateCheckMessage('Account already possesses Administrator privileges.');
-      } else if (res && res.exists) {
+      } else if (res && (res.exists || res.found)) {
+        const candidateUser = res.candidate || res.user;
         setCandidateCheckStatus('found');
-        setCandidateCheckMessage(`Found existing account: ${res.user?.name || trimmed} (${res.user?.role || 'USER'})`);
-        if (!candidateName && res.user?.name) {
-          setCandidateName(res.user.name);
+        setCandidateCheckMessage(`Found existing account: ${candidateUser?.name || trimmed} (${candidateUser?.role || 'USER'})`);
+        if (!candidateName && candidateUser?.name) {
+          setCandidateName(candidateUser.name);
         }
       } else {
         setCandidateCheckStatus('not_found');

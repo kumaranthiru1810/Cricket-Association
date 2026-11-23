@@ -3570,6 +3570,16 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                   <View style={styles.badgeCategoryAmber}>
                                     <Text style={styles.badgeCategoryAmberText}>👤 Coach: {t.coach?.name || 'Head Coach'}</Text>
                                   </View>
+                                  {(t.coach?.phone || t.coach?.mobile || t.coachPhone || t.phone) && (
+                                    <View style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                                      <Text style={{ color: '#166534', fontSize: 11, fontWeight: '700' }}>📞 {t.coach?.phone || t.coach?.mobile || t.coachPhone || t.phone}</Text>
+                                    </View>
+                                  )}
+                                  {(t.coach?.aadhaar || t.coach_aadhaar || t.coachAadhaar || t.aadhaar) && (
+                                    <View style={{ backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                                      <Text style={{ color: '#991b1b', fontSize: 11, fontWeight: '700' }}>🆔 UIDAI: {t.coach?.aadhaar || t.coach_aadhaar || t.coachAadhaar || t.aadhaar}</Text>
+                                    </View>
+                                  )}
                                   <View style={styles.badgeCategoryIndigo}>
                                     <Text style={styles.badgeCategoryIndigoText}>🏏 {t.members?.length || 15} Squad Players</Text>
                                   </View>
@@ -6100,6 +6110,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       </View>
                     </View>
                   </View>
+
 
                   {/* Weather / Rain Delay Adjustments (Shown in Reschedule Mode) */}
                   {editingMatch && (

@@ -1692,6 +1692,9 @@ async function seedDefaultData() {
           team_name: 'Virudhunagar Spartans',
           coach_name: 'K. Muthu',
           coach_email: 'coach@cfvd.org',
+          coach_phone: '9842112345',
+          coach_mobile: '9842112345',
+          coach_aadhaar: '542188992211',
           passkey: 'PASS-7788',
           city: 'Virudhunagar',
           taluk: 'Virudhunagar',
@@ -1699,12 +1702,12 @@ async function seedDefaultData() {
           approved_by: 'ADM-1001',
           approved_at: new Date('2026-10-01'),
           players: [
-            { jersey_number: 7, name: 'Suresh Kumar', email: 'suresh@spartans.com', role: 'BATTER', status: 'APPROVED' },
-            { jersey_number: 18, name: 'Muthu Raj', email: 'muthuraj@spartans.com', role: 'ALL_ROUNDER', status: 'APPROVED' },
-            { jersey_number: 3, name: 'Vijay', email: 'vijay@spartans.com', role: 'BATTER', status: 'APPROVED' },
-            { jersey_number: 1, name: 'K. Balaji', email: 'balaji@spartans.com', role: 'WICKET_KEEPER', status: 'APPROVED' },
-            { jersey_number: 23, name: 'R. Vignesh', email: 'vignesh@spartans.com', role: 'BOWLER', status: 'APPROVED' },
-            { jersey_number: 10, name: 'Arun Pandian', email: 'player@example.com', role: 'ALL_ROUNDER', status: 'APPROVED' }
+            { jersey_number: 7, name: 'Suresh Kumar', email: 'suresh@spartans.com', phone: '9842110001', mobile: '9842110001', aadhaar: '321045678901', role: 'BATTER', status: 'APPROVED' },
+            { jersey_number: 18, name: 'Muthu Raj', email: 'muthuraj@spartans.com', phone: '9842110002', mobile: '9842110002', aadhaar: '321045678902', role: 'ALL_ROUNDER', status: 'APPROVED' },
+            { jersey_number: 3, name: 'Vijay', email: 'vijay@spartans.com', phone: '9842110003', mobile: '9842110003', aadhaar: '321045678903', role: 'BATTER', status: 'APPROVED' },
+            { jersey_number: 1, name: 'K. Balaji', email: 'balaji@spartans.com', phone: '9842110004', mobile: '9842110004', aadhaar: '321045678904', role: 'WICKET_KEEPER', status: 'APPROVED' },
+            { jersey_number: 23, name: 'R. Vignesh', email: 'vignesh@spartans.com', phone: '9842110005', mobile: '9842110005', aadhaar: '321045678905', role: 'BOWLER', status: 'APPROVED' },
+            { jersey_number: 10, name: 'Arun Pandian', email: 'player@example.com', phone: '9842110006', mobile: '9842110006', aadhaar: '321045678906', role: 'ALL_ROUNDER', status: 'APPROVED' }
           ]
         },
         {
@@ -1712,16 +1715,25 @@ async function seedDefaultData() {
           team_name: 'Sattur Super Kings',
           coach_name: 'R. Kannan',
           coach_email: 'coach.sattur@gmail.com',
+          coach_phone: '9789456123',
+          coach_mobile: '9789456123',
+          coach_aadhaar: '897644331122',
           passkey: 'PASS-5544',
           city: 'Sattur',
           taluk: 'Sattur',
           status: 'PENDING',
           players: [
-            { jersey_number: 1, name: 'M. Karthik', email: 'karthik@sattur.com', role: 'BATTER', status: 'PENDING' },
-            { jersey_number: 2, name: 'S. Ram', email: 'ram@sattur.com', role: 'ALL_ROUNDER', status: 'PENDING' }
+            { jersey_number: 1, name: 'M. Karthik', email: 'karthik@sattur.com', phone: '9789456001', mobile: '9789456001', aadhaar: '456789012345', role: 'BATTER', status: 'PENDING' },
+            { jersey_number: 2, name: 'S. Ram', email: 'ram@sattur.com', phone: '9789456002', mobile: '9789456002', aadhaar: '456789012346', role: 'ALL_ROUNDER', status: 'PENDING' }
           ]
         }
       ]);
+    } else {
+      // Auto-migrate team registrations if phone/aadhaar missing
+      await TeamRegistration.updateMany(
+        { $or: [{ coach_phone: null }, { coach_phone: { $exists: false } }, { coach_aadhaar: null }, { coach_aadhaar: { $exists: false } }] },
+        { $set: { coach_phone: '9842112345', coach_mobile: '9842112345', coach_aadhaar: '542188992211' } }
+      ).catch(() => {});
     }
 
     // Seed News
