@@ -42,6 +42,7 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
 
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
+  const isMobile = width <= 480;
   const insetsTop = Platform.OS === 'android' ? 36 : Platform.OS === 'ios' ? 44 : 0;
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -837,22 +838,38 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
           {/* ─────────────────────────────────────────────────────────────
               BATTING SCORECARD TABLE
               ───────────────────────────────────────────────────────────── */}
-          <View style={styles.sectionHeaderRow}>
+          <View style={[styles.sectionHeaderRow, !isDesktop && styles.sectionHeaderRowMobile]}>
             <Text style={styles.sectionHeaderTitle}>🏏 Batting Scorecard</Text>
             <Text style={styles.sectionHeaderSub}>Innings of {currentInnings?.battingTeam || 'Batting Team'}</Text>
           </View>
 
           <View style={styles.tableWrapper}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={!isDesktop} contentContainerStyle={{ minWidth: isDesktop ? '100%' : 540 }}>
-              <View style={[styles.tableInner, { minWidth: isDesktop ? '100%' : 540 }]}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ minWidth: '100%' }}>
+              <View style={[styles.tableInner, { minWidth: isDesktop ? '100%' : (isMobile ? '100%' : 340) }]}>
                 <View style={[styles.tableRow, styles.tableHeader]}>
-                  <Text style={[styles.cell, styles.colName, styles.tableHeaderText]}>Batter</Text>
-                  <Text style={[styles.cell, styles.colNum, styles.tableHeaderText]}>R</Text>
-                  <Text style={[styles.cell, styles.colNum, styles.tableHeaderText]}>B</Text>
-                  <Text style={[styles.cell, styles.colNum, styles.tableHeaderText]}>4s</Text>
-                  <Text style={[styles.cell, styles.colNum, styles.tableHeaderText]}>6s</Text>
-                  <Text style={[styles.cell, styles.colNumSr, styles.tableHeaderText]}>SR</Text>
-                  {isDesktop && <Text style={[styles.cell, styles.colAction, styles.tableHeaderText]}>Analytics</Text>}
+                  <View style={[styles.colName, styles.tableHeaderCell, { alignItems: 'flex-start' }]}>
+                    <Text style={[styles.cell, styles.cellLeft, styles.tableHeaderText]}>Batter</Text>
+                  </View>
+                  <View style={[styles.colNum, styles.tableHeaderCell]}>
+                    <Text style={[styles.cell, styles.tableHeaderText]}>R</Text>
+                  </View>
+                  <View style={[styles.colNum, styles.tableHeaderCell]}>
+                    <Text style={[styles.cell, styles.tableHeaderText]}>B</Text>
+                  </View>
+                  <View style={[styles.colNum, styles.tableHeaderCell]}>
+                    <Text style={[styles.cell, styles.tableHeaderText]}>4s</Text>
+                  </View>
+                  <View style={[styles.colNum, styles.tableHeaderCell]}>
+                    <Text style={[styles.cell, styles.tableHeaderText]}>6s</Text>
+                  </View>
+                  <View style={[styles.colNumSr, styles.tableHeaderCell, !isDesktop && styles.tableCellLast]}>
+                    <Text style={[styles.cell, styles.tableHeaderText]}>SR</Text>
+                  </View>
+                  {isDesktop && (
+                    <View style={[styles.colAction, styles.tableHeaderCell, styles.tableCellLast]}>
+                      <Text style={[styles.cell, styles.tableHeaderText]}>Analytics</Text>
+                    </View>
+                  )}
                 </View>
 
                 {(currentInnings.batters || []).map((b: any, bIdx: number) => {
@@ -868,7 +885,7 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                         isSelected && { backgroundColor: '#f0f9ff' }
                       ]}
                     >
-                      <View style={styles.colName}>
+                      <View style={[styles.colName, styles.tableCell]}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
                           <Text style={[styles.playerName, isSelected && { color: '#0284c7' }]} numberOfLines={2}>
                             {b.name}
@@ -896,15 +913,25 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                           </Text>
                         </TouchableOpacity>
                       </View>
-                      <Text style={[styles.cell, styles.colNum, styles.runsText]}>{b.runs}</Text>
-                      <Text style={[styles.cell, styles.colNum]}>{b.balls}</Text>
-                      <Text style={[styles.cell, styles.colNum]}>{b.fours}</Text>
-                      <Text style={[styles.cell, styles.colNum]}>{b.sixes}</Text>
-                      <Text style={[styles.cell, styles.colNumSr, styles.srText]}>
-                        {typeof b.strikeRate === 'number' ? b.strikeRate.toFixed(1) : b.strikeRate}
-                      </Text>
+                      <View style={[styles.colNum, styles.tableCell]}>
+                        <Text style={[styles.cell, styles.runsText]}>{b.runs}</Text>
+                      </View>
+                      <View style={[styles.colNum, styles.tableCell]}>
+                        <Text style={styles.cell}>{b.balls}</Text>
+                      </View>
+                      <View style={[styles.colNum, styles.tableCell]}>
+                        <Text style={styles.cell}>{b.fours}</Text>
+                      </View>
+                      <View style={[styles.colNum, styles.tableCell]}>
+                        <Text style={styles.cell}>{b.sixes}</Text>
+                      </View>
+                      <View style={[styles.colNumSr, styles.tableCell, !isDesktop && styles.tableCellLast]}>
+                        <Text style={[styles.cell, styles.srText]}>
+                          {typeof b.strikeRate === 'number' ? b.strikeRate.toFixed(1) : (b.strikeRate ?? '0.0')}
+                        </Text>
+                      </View>
                       {isDesktop && (
-                        <View style={styles.colAction}>
+                        <View style={[styles.colAction, styles.tableCell, styles.tableCellLast]}>
                           <TouchableOpacity
                             style={[
                               styles.wagonWheelBtn,
@@ -956,7 +983,7 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
           {/* ─────────────────────────────────────────────────────────────
               BOWLING SCORECARD TABLE
               ───────────────────────────────────────────────────────────── */}
-          <View style={styles.sectionHeaderRow}>
+          <View style={[styles.sectionHeaderRow, !isDesktop && styles.sectionHeaderRowMobile]}>
             <View>
               <Text style={styles.sectionHeaderTitle}>🎯 Bowling Figures</Text>
               <Text style={styles.sectionHeaderSub}>Attack by {currentInnings.bowlingTeam || 'Opponent'}</Text>
@@ -971,15 +998,27 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
           </View>
 
           <View style={styles.tableWrapper}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={!isDesktop} contentContainerStyle={{ minWidth: isDesktop ? '100%' : 540 }}>
-              <View style={[styles.tableInner, { minWidth: isDesktop ? '100%' : 540 }]}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ minWidth: '100%' }}>
+              <View style={[styles.tableInner, { minWidth: isDesktop ? '100%' : (isMobile ? '100%' : 340) }]}>
                 <View style={[styles.tableRow, styles.tableHeader]}>
-                  <Text style={[styles.cell, styles.colName, styles.tableHeaderText]}>Bowler</Text>
-                  <Text style={[styles.cell, styles.colNum, styles.tableHeaderText]}>O</Text>
-                  <Text style={[styles.cell, styles.colNum, styles.tableHeaderText]}>M</Text>
-                  <Text style={[styles.cell, styles.colNum, styles.tableHeaderText]}>R</Text>
-                  <Text style={[styles.cell, styles.colNum, styles.tableHeaderText]}>W</Text>
-                  <Text style={[styles.cell, styles.colNumSr, styles.tableHeaderText]}>ECON</Text>
+                  <View style={[styles.colName, styles.tableHeaderCell, { alignItems: 'flex-start' }]}>
+                    <Text style={[styles.cell, styles.cellLeft, styles.tableHeaderText]}>Bowler</Text>
+                  </View>
+                  <View style={[styles.colNum, styles.tableHeaderCell]}>
+                    <Text style={[styles.cell, styles.tableHeaderText]}>O</Text>
+                  </View>
+                  <View style={[styles.colNum, styles.tableHeaderCell]}>
+                    <Text style={[styles.cell, styles.tableHeaderText]}>M</Text>
+                  </View>
+                  <View style={[styles.colNum, styles.tableHeaderCell]}>
+                    <Text style={[styles.cell, styles.tableHeaderText]}>R</Text>
+                  </View>
+                  <View style={[styles.colNum, styles.tableHeaderCell]}>
+                    <Text style={[styles.cell, styles.tableHeaderText]}>W</Text>
+                  </View>
+                  <View style={[styles.colNumEcon, styles.tableHeaderCell, styles.tableCellLast]}>
+                    <Text style={[styles.cell, styles.tableHeaderText]}>ECON</Text>
+                  </View>
                 </View>
 
                 {(currentInnings.bowlers || []).map((bw: any, bwIdx: number) => {
@@ -1025,7 +1064,7 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                         isSuspended && { backgroundColor: '#fff1f2' }
                       ]}
                     >
-                      <View style={[styles.colName, { flexDirection: 'column', alignItems: 'flex-start' }]}>
+                      <View style={[styles.colName, styles.tableCell, { flexDirection: 'column', alignItems: 'flex-start' }]}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <Text style={[styles.playerName, isCurrent && { color: '#005960', fontWeight: '800' }]}>
                             {bw.name}
@@ -1050,15 +1089,25 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                           </View>
                         ) : null}
                       </View>
-                      <Text style={[styles.cell, styles.colNum, isCurrent && { fontWeight: '800', color: '#005960' }]}>
-                        {bw.overs}
-                      </Text>
-                      <Text style={[styles.cell, styles.colNum]}>{bw.maidens || 0}</Text>
-                      <Text style={[styles.cell, styles.colNum]}>{bw.runs}</Text>
-                      <Text style={[styles.cell, styles.colNum, styles.wicketsText]}>{bw.wickets}</Text>
-                      <Text style={[styles.cell, styles.colNum, styles.econText]}>
-                        {typeof bw.economy === 'number' ? bw.economy.toFixed(2) : bw.economy}
-                      </Text>
+                      <View style={[styles.colNum, styles.tableCell]}>
+                        <Text style={[styles.cell, isCurrent && { fontWeight: '800', color: '#005960' }]}>
+                          {bw.overs}
+                        </Text>
+                      </View>
+                      <View style={[styles.colNum, styles.tableCell]}>
+                        <Text style={styles.cell}>{bw.maidens || 0}</Text>
+                      </View>
+                      <View style={[styles.colNum, styles.tableCell]}>
+                        <Text style={styles.cell}>{bw.runs}</Text>
+                      </View>
+                      <View style={[styles.colNum, styles.tableCell]}>
+                        <Text style={[styles.cell, styles.wicketsText]}>{bw.wickets}</Text>
+                      </View>
+                      <View style={[styles.colNumEcon, styles.tableCell, styles.tableCellLast]}>
+                        <Text style={[styles.cell, styles.econText]}>
+                          {typeof bw.economy === 'number' ? bw.economy.toFixed(2) : (bw.economy ?? '0.00')}
+                        </Text>
+                      </View>
                     </View>
                   );
                 })}
@@ -1152,7 +1201,7 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
           {/* ─────────────────────────────────────────────────────────────
               FIELDING SCORECARD & DISCIPLINE
               ───────────────────────────────────────────────────────────── */}
-          <View style={styles.sectionHeaderRow}>
+          <View style={[styles.sectionHeaderRow, !isDesktop && styles.sectionHeaderRowMobile]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <Text style={styles.sectionHeaderTitle}>🛡️ Fielding Performance & Impact</Text>
               <View style={{ backgroundColor: '#0284c7', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 }}>
@@ -1164,36 +1213,66 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
 
           <View style={styles.tableWrapper}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ minWidth: '100%' }}>
-              <View style={styles.tableInner}>
-                <View style={[styles.tableRow, styles.tableHeader, { backgroundColor: '#0f172a' }]}>
-                  <Text style={[styles.cell, styles.colName, styles.tableHeaderText, { color: '#38bdf8' }]}>Fielder</Text>
-                  <Text style={[styles.cell, styles.colNum, styles.tableHeaderText, { color: '#38bdf8' }]}>Catches</Text>
-                  <Text style={[styles.cell, styles.colNum, styles.tableHeaderText, { color: '#38bdf8' }]}>Run Outs</Text>
-                  <Text style={[styles.cell, styles.colNum, styles.tableHeaderText, { color: '#38bdf8' }]}>Collects</Text>
-                  <Text style={[styles.cell, styles.colNum, styles.tableHeaderText, { color: '#38bdf8' }]}>Saves</Text>
-                  <Text style={[styles.cell, { width: 100, textAlign: 'center' }, styles.tableHeaderText, { color: '#38bdf8' }]}>Fielding Rating</Text>
+              <View style={[styles.tableInner, { minWidth: isDesktop ? '100%' : (isMobile ? '100%' : 360) }]}>
+                <View style={[styles.tableRow, styles.tableHeader, { backgroundColor: '#0f172a', borderBottomColor: '#334155' }]}>
+                  <View style={[styles.colName, styles.tableHeaderCellDark, { alignItems: 'flex-start' }]}>
+                    <Text style={[styles.cell, styles.cellLeft, styles.tableHeaderText, { color: '#38bdf8' }]}>Fielder</Text>
+                  </View>
+                  <View style={[styles.colFieldNum, styles.tableHeaderCellDark]}>
+                    <Text style={[styles.cell, styles.tableHeaderText, { color: '#38bdf8' }]}>
+                      {isDesktop ? 'Catches' : 'Ct'}
+                    </Text>
+                  </View>
+                  <View style={[styles.colFieldNum, styles.tableHeaderCellDark]}>
+                    <Text style={[styles.cell, styles.tableHeaderText, { color: '#38bdf8' }]}>
+                      {isDesktop ? 'Run Outs' : 'RO'}
+                    </Text>
+                  </View>
+                  <View style={[styles.colFieldNum, styles.tableHeaderCellDark]}>
+                    <Text style={[styles.cell, styles.tableHeaderText, { color: '#38bdf8' }]}>
+                      {isDesktop ? 'Collects' : 'Coll'}
+                    </Text>
+                  </View>
+                  <View style={[styles.colFieldNum, styles.tableHeaderCellDark]}>
+                    <Text style={[styles.cell, styles.tableHeaderText, { color: '#38bdf8' }]}>
+                      {isDesktop ? 'Boundary Saves' : 'Saves'}
+                    </Text>
+                  </View>
+                  <View style={[styles.colFieldRating, styles.tableHeaderCellDark, styles.tableCellLast]}>
+                    <Text style={[styles.cell, styles.tableHeaderText, { color: '#38bdf8' }]}>
+                      {isDesktop ? 'Fielding Rating' : 'Rating'}
+                    </Text>
+                  </View>
                 </View>
 
                 {fieldingStats.map((f: any, fIdx: number) => (
                   <View key={`fld-${f.name}-${fIdx}`} style={[styles.tableRow, fIdx % 2 === 1 && styles.tableRowAlt]}>
-                    <View style={styles.colName}>
+                    <View style={[styles.colName, styles.tableCell]}>
                       <Text style={styles.playerName}>{f.name}</Text>
                       <Text style={styles.dismissal}>
                         {f.isKeeper ? '🧤 Wicketkeeper' : (f.catches > 0 || f.runOuts > 0 ? '⭐ Key Outfielder' : '🛡️ Agile Fielder')}
                       </Text>
                     </View>
-                    <Text style={[styles.cell, styles.colNum, f.catches > 0 && { fontWeight: 'bold', color: '#db2777' }]}>
-                      {f.catches}
-                    </Text>
-                    <Text style={[styles.cell, styles.colNum, f.runOuts > 0 && { fontWeight: 'bold', color: '#e11d48' }]}>
-                      {f.runOuts}
-                    </Text>
-                    <Text style={[styles.cell, styles.colNum]}>{f.cleanCollects}</Text>
-                    <Text style={[styles.cell, styles.colNum, f.boundarySaves > 0 && { fontWeight: 'bold', color: '#059669' }]}>
-                      {f.boundarySaves}
-                    </Text>
-                    <View style={{ width: 100, alignItems: 'center', justifyContent: 'center' }}>
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#0284c7' }}>
+                    <View style={[styles.colFieldNum, styles.tableCell]}>
+                      <Text style={[styles.cell, f.catches > 0 && { fontWeight: 'bold', color: '#db2777' }]}>
+                        {f.catches}
+                      </Text>
+                    </View>
+                    <View style={[styles.colFieldNum, styles.tableCell]}>
+                      <Text style={[styles.cell, f.runOuts > 0 && { fontWeight: 'bold', color: '#e11d48' }]}>
+                        {f.runOuts}
+                      </Text>
+                    </View>
+                    <View style={[styles.colFieldNum, styles.tableCell]}>
+                      <Text style={styles.cell}>{f.cleanCollects}</Text>
+                    </View>
+                    <View style={[styles.colFieldNum, styles.tableCell]}>
+                      <Text style={[styles.cell, f.boundarySaves > 0 && { fontWeight: 'bold', color: '#059669' }]}>
+                        {f.boundarySaves}
+                      </Text>
+                    </View>
+                    <View style={[styles.colFieldRating, styles.tableCell, styles.tableCellLast]}>
+                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0284c7', textAlign: 'center' }}>
                         {f.rating}
                       </Text>
                     </View>
@@ -1831,46 +1910,86 @@ const styles = StyleSheet.create({
   },
   distributionPctText: { fontSize: 11, fontWeight: '700' },
 
-  // Scorecard Tables Styling
+  // Scorecard Tables Styling - SQL Grid Box Format
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8
+    marginBottom: 8,
+    flexWrap: 'wrap',
+    gap: 6
+  },
+  sectionHeaderRowMobile: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 4
   },
   sectionHeaderTitle: { color: '#1e293b', fontSize: 15, fontWeight: '800' },
   sectionHeaderSub: { color: '#64748b', fontSize: 12, fontWeight: '600' },
   tableWrapper: {
     backgroundColor: '#ffffff',
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
     overflow: 'hidden',
-    elevation: 1
+    marginBottom: 16,
+    elevation: 2
   },
   tableInner: { width: '100%' },
   tableRow: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-    width: '100%'
+    borderBottomColor: '#e2e8f0',
+    alignItems: 'stretch',
+    width: '100%',
+    backgroundColor: '#ffffff'
   },
-  tableRowAlt: { backgroundColor: '#fafaf9' },
+  tableRowAlt: { backgroundColor: '#f8fafc' },
   tableHeader: {
     backgroundColor: '#fef3c7',
-    borderBottomColor: '#fde68a',
-    paddingVertical: 8,
-    paddingHorizontal: 8
+    borderBottomWidth: 2,
+    borderBottomColor: '#cbd5e1',
+    alignItems: 'stretch'
   },
-  tableHeaderText: { color: '#92400e', fontWeight: '800' },
-  cell: { color: '#334155', fontSize: 12.5, fontWeight: '600' },
-  colName: { flex: 1, minWidth: 0, paddingRight: 6 },
-  colNum: { width: 30, textAlign: 'right', paddingHorizontal: 2 },
-  colNumSr: { width: 44, textAlign: 'right', paddingHorizontal: 2 },
-  colAction: { width: 80, alignItems: 'center', justifyContent: 'center', marginLeft: 6 },
+  tableHeaderText: { color: '#92400e', fontWeight: '800', fontSize: 11.5 },
+  cell: { color: '#334155', fontSize: 12.5, fontWeight: '600', textAlign: 'center' },
+  cellLeft: { textAlign: 'left' },
+
+  // SQL Table Grid Cell Border Box Styles
+  tableCell: {
+    borderRightWidth: 1,
+    borderRightColor: '#e2e8f0',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    justifyContent: 'center'
+  },
+  tableCellLast: {
+    borderRightWidth: 0
+  },
+  tableHeaderCell: {
+    borderRightWidth: 1,
+    borderRightColor: '#cbd5e1',
+    paddingVertical: 9,
+    paddingHorizontal: 4,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  tableHeaderCellDark: {
+    borderRightWidth: 1,
+    borderRightColor: '#334155',
+    paddingVertical: 9,
+    paddingHorizontal: 4,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+
+  colName: { flex: 1, minWidth: 110, paddingHorizontal: 8, justifyContent: 'center' },
+  colNum: { width: 36, alignItems: 'center', justifyContent: 'center' },
+  colNumSr: { width: 52, alignItems: 'center', justifyContent: 'center' },
+  colNumEcon: { width: 56, alignItems: 'center', justifyContent: 'center' },
+  colFieldNum: { width: 44, alignItems: 'center', justifyContent: 'center' },
+  colFieldRating: { width: 76, alignItems: 'center', justifyContent: 'center' },
+  colAction: { width: 80, alignItems: 'center', justifyContent: 'center' },
   wagonWheelBtn: {
     backgroundColor: 'rgba(2, 132, 199, 0.1)',
     borderWidth: 1,
@@ -1891,13 +2010,13 @@ const styles = StyleSheet.create({
   wagonWheelBtnTextActive: {
     color: '#ffffff'
   },
-  playerName: { color: '#0f172a', fontWeight: 'bold', fontSize: 13.5 },
+  playerName: { color: '#0f172a', fontWeight: 'bold', fontSize: 13 },
   dismissal: { color: '#b45309', fontSize: 11, fontStyle: 'italic', marginTop: 1 },
   runsText: { color: '#0f172a', fontWeight: '900', fontSize: 13.5 },
   srText: { color: '#2563eb', fontWeight: '700' },
   wicketsText: { color: '#15803d', fontWeight: '900', fontSize: 13.5 },
   econText: { color: '#475569', fontWeight: '700' },
-  extrasRow: { padding: 10, backgroundColor: '#fffbeb', borderTopWidth: 1, borderTopColor: '#fef3c7' },
+  extrasRow: { padding: 10, backgroundColor: '#fffbeb', borderTopWidth: 1, borderTopColor: '#fde68a' },
   extrasText: { color: '#b45309', fontSize: 12, fontWeight: 'bold' },
 
   fowCard: {
