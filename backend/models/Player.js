@@ -92,3 +92,4 @@ module.exports = {
   PlayerMatchRating,
   PlayerMatchRatingSchema
 };
+

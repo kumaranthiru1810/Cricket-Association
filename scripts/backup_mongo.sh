@@ -39,3 +39,4 @@ else
   "
   echo "[BACKUP] Fallback JSON backup completed."
 fi
+

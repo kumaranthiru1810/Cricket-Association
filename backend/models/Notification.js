@@ -27,3 +27,4 @@ NotificationSchema.index({ status: 1, created_at: -1 });
 const Notification = mongoose.models.Notification || mongoose.model('Notification', NotificationSchema);
 
 module.exports = { Notification, NotificationSchema };
+

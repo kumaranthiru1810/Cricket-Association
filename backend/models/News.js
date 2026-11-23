@@ -21,3 +21,4 @@ NewsSchema.index({ status: 1, created_at: -1 });
 const News = mongoose.models.News || mongoose.model('News', NewsSchema);
 
 module.exports = { News, NewsSchema };
+

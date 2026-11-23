@@ -660,3 +660,4 @@ class InningsService {
 }
 
 module.exports = new InningsService();
+

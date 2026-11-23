@@ -250,3 +250,4 @@ class UmpireAuth {
 }
 
 module.exports = new UmpireAuth();
+

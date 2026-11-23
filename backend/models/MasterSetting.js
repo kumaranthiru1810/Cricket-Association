@@ -31,3 +31,4 @@ const MasterSettingSchema = new mongoose.Schema({
 const MasterSetting = mongoose.models.MasterSetting || mongoose.model('MasterSetting', MasterSettingSchema);
 
 module.exports = { MasterSetting, MasterSettingSchema };
+

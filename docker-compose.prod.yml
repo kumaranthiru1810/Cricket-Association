@@ -1,0 +1,133 @@
+# =================================================================
+# Production Docker Compose Configuration
+# =================================================================
+
+services:
+  # 1. MongoDB Database Server (Auth enabled, internal network only - NOT published to host)
+  mongodb:
+    image: mongo:7.0
+    container_name: cricket-mongodb-prod
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-ChangeThisStrongAdminPass123!}
+      MONGO_INITDB_DATABASE: cricket_db
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - cricket-internal-network
+    # Port 27017 intentionally omitted from ports so it is NOT exposed to the internet/host
+    expose:
+      - "27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "-u", "${MONGO_ROOT_USER:-admin}", "-p", "${MONGO_ROOT_PASSWORD:-ChangeThisStrongAdminPass123!}", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # 2. Node.js Backend API & Socket Server (Internal only, proxied by Nginx)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cricket-backend-prod
+    restart: always
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-ChangeThisStrongAdminPass123!}@mongodb:27017/cricket_db?authSource=admin
+      - JWT_SECRET=${JWT_SECRET}
+      - ADMIN_INITIAL_EMAIL=${ADMIN_INITIAL_EMAIL:-superadmin@cfvd.org}
+      - ADMIN_INITIAL_PASSWORD=${ADMIN_INITIAL_PASSWORD}
+      - FRONTEND_URL=${FRONTEND_URL:-https://cricket.yourdomain.com}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-https://cricket.yourdomain.com}
+      - EMAIL_PROVIDER=${EMAIL_PROVIDER:-auto}
+      - BREVO_API_KEY=${BREVO_API_KEY}
+      - BREVO_SENDER_EMAIL=${BREVO_SENDER_EMAIL}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - RESEND_FROM=${RESEND_FROM}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM=${SMTP_FROM}
+      - UPLOAD_DIR=/app/uploads
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - backend_uploads:/app/uploads
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - cricket-internal-network
+    # Port 5000 only exposed internally to nginx
+    expose:
+      - "5000"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+        reservations:
+          cpus: '0.2'
+          memory: 256M
+
+  # 3. Nginx Web Server & Reverse Proxy (Handles public HTTP/HTTPS, static Expo Web assets, /api, and /socket.io)
+  frontend:
+    build:
+      context: ./mobile_frontend
+      dockerfile: Dockerfile
+    container_name: cricket-frontend-prod
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+      - backend_uploads:/usr/share/nginx/html/uploads:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - cricket-internal-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:80/"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+networks:
+  cricket-internal-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+    driver: local
+  backend_uploads:
+    driver: local

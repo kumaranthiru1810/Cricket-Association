@@ -185,3 +185,4 @@ module.exports = {
   UmpireDecision,
   UmpireDecisionSchema
 };
+

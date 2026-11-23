@@ -273,3 +273,4 @@ class TeamAuth {
 }
 
 module.exports = new TeamAuth();
+

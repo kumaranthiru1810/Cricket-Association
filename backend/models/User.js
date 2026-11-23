@@ -100,3 +100,4 @@ UserSchema.index({ role: 1, status: 1 });
 const User = mongoose.models.User || mongoose.model('User', UserSchema);
 
 module.exports = { User, UserSchema };
+

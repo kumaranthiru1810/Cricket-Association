@@ -151,3 +151,4 @@ class WicketService {
 }
 
 module.exports = new WicketService();
+

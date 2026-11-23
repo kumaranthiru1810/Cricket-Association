@@ -27,3 +27,4 @@ const ScorerSchema = new mongoose.Schema({
 const Scorer = mongoose.models.Scorer || mongoose.model('Scorer', ScorerSchema);
 
 module.exports = { Scorer, ScorerSchema };
+

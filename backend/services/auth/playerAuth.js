@@ -439,3 +439,4 @@ class PlayerAuth {
 }
 
 module.exports = new PlayerAuth();
+

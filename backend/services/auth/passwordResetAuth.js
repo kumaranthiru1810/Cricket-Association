@@ -420,3 +420,4 @@ class PasswordResetAuth {
 }
 
 module.exports = new PasswordResetAuth();
+

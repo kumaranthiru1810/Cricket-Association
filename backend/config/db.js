@@ -1487,6 +1487,7 @@ module.exports = {
   ping,
   close,
   ensureIndexes,
+  seedDefaultData,
   getUseMemoryFallback: () => false,
   memoryDb,
   query: mongoQuery,
