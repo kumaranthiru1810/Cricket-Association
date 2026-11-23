@@ -107,6 +107,7 @@ async function seedDefaultData() {
 
     const defaultPasswordHash = await bcrypt.hash('1234', 10);
     const adminPasswordHash = await bcrypt.hash('admin123', 10);
+    const athiPasswordHash = await bcrypt.hash('athi1833@@', 10);
 
     const userCount = await User.countDocuments();
     if (userCount === 0) {
@@ -147,7 +148,7 @@ async function seedDefaultData() {
           mobile: '9876543212',
           role: 'ADMIN',
           status: 'ACTIVE',
-          password_hash: adminPasswordHash
+          password_hash: athiPasswordHash
         },
         {
           id: 'ADM-1005',

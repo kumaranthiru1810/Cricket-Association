@@ -6150,157 +6150,68 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     </View>
                   </View>
 
-                  {/* Date & Start Time Selector */}
+                  {/* Date & Start Time Selector with Calendar & Clock Modals */}
                   <View style={styles.twoColFormGrid}>
                     <View style={styles.colFormCard}>
                       <Text style={styles.formFieldLabel}>Match Date (YYYY-MM-DD) *</Text>
-                      {Platform.OS === 'web' ? (
-                        <input
-                          type="text"
-                          placeholder="e.g. 2026-11-09 or 09/11/2026"
-                          value={scheduleForm.match_date}
-                          onChange={(e: any) => setScheduleForm(prev => ({ ...prev, match_date: e.target.value }))}
-                          style={{
-                            padding: '8px 10px',
-                            fontSize: 13,
-                            fontWeight: '600',
-                            borderRadius: 6,
-                            border: currentDateTimeVal.dateError ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                            backgroundColor: '#ffffff',
-                            color: '#0f172a',
-                            width: '100%',
-                            outlineStyle: 'none' as any,
-                            boxSizing: 'border-box'
-                          }}
-                        />
-                      ) : (
+                      <View style={styles.timeInputContainer}>
                         <TextInput
-                          style={[styles.formTextInputCompact, currentDateTimeVal.dateError ? { borderColor: '#dc2626', borderWidth: 1.5 } : null]}
-                          placeholder="e.g. 2026-11-09 or 09/11/2026"
+                          style={[
+                            styles.formTextInputCompact,
+                            { paddingRight: 96 },
+                            currentDateTimeVal.dateError ? { borderColor: '#dc2626', borderWidth: 1.5 } : null
+                          ]}
+                          placeholder="YYYY-MM-DD"
                           placeholderTextColor="#94a3b8"
                           value={scheduleForm.match_date}
                           onChangeText={(val) => setScheduleForm(prev => ({ ...prev, match_date: val }))}
                         />
-                      )}
+                        <TouchableOpacity
+                          style={styles.fieldClockBtn}
+                          onPress={() => setCalendarModalVisible(true)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={{ fontSize: 13 }}>📅</Text>
+                          <Text style={styles.fieldClockBtnText}>Calendar</Text>
+                        </TouchableOpacity>
+                      </View>
                       {currentDateTimeVal.dateError ? (
                         <Text style={{ fontSize: 11, color: '#dc2626', marginTop: 4, fontWeight: '600' }}>
                           ⚠️ {currentDateTimeVal.dateError}
                         </Text>
                       ) : null}
-                      {/* Quick Date Presets */}
-                      <View style={styles.quickPresetRow}>
-                        <TouchableOpacity
-                          style={styles.quickDateChip}
-                          onPress={() => {
-                            const today = getTodayKolkata();
-                            const slot = getDefaultScheduleDateTime();
-                            setScheduleForm(prev => {
-                              const checkTime = validateScheduleTime(today, prev.match_time);
-                              return {
-                                ...prev,
-                                match_date: today,
-                                match_time: checkTime.isValid ? prev.match_time : slot.time
-                              };
-                            });
-                          }}
-                        >
-                          <Text style={styles.quickDateChipText}>Today</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.quickDateChip}
-                          onPress={() => setScheduleForm(prev => ({ ...prev, match_date: getFutureDateKolkata(1) }))}
-                        >
-                          <Text style={styles.quickDateChipText}>Tomorrow</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.quickDateChip}
-                          onPress={() => setScheduleForm(prev => ({ ...prev, match_date: getFutureDateKolkata(3) }))}
-                        >
-                          <Text style={styles.quickDateChipText}>+3 Days</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.quickDateChip}
-                          onPress={() => setScheduleForm(prev => ({ ...prev, match_date: getFutureDateKolkata(7) }))}
-                        >
-                          <Text style={styles.quickDateChipText}>+1 Week</Text>
-                        </TouchableOpacity>
-                      </View>
                     </View>
 
                     <View style={styles.colFormCard}>
                       <Text style={styles.formFieldLabel}>Match Start Time *</Text>
-                      {Platform.OS === 'web' ? (
-                        <input
-                          type="text"
-                          placeholder="e.g. 09:30 AM"
-                          value={scheduleForm.match_time}
-                          onChange={(e: any) => setScheduleForm(prev => ({ ...prev, match_time: e.target.value }))}
-                          style={{
-                            padding: '8px 10px',
-                            fontSize: 13,
-                            fontWeight: '600',
-                            borderRadius: 6,
-                            border: currentDateTimeVal.timeError ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                            backgroundColor: '#ffffff',
-                            color: '#0f172a',
-                            width: '100%',
-                            outlineStyle: 'none' as any,
-                            boxSizing: 'border-box'
-                          }}
-                        />
-                      ) : (
+                      <View style={styles.timeInputContainer}>
                         <TextInput
-                          style={[styles.formTextInputCompact, currentDateTimeVal.timeError ? { borderColor: '#dc2626', borderWidth: 1.5 } : null]}
-                          placeholder="e.g. 09:30 AM"
+                          style={[
+                            styles.formTextInputCompact,
+                            { paddingRight: 80 },
+                            currentDateTimeVal.timeError ? { borderColor: '#dc2626', borderWidth: 1.5 } : null
+                          ]}
+                          placeholder="09:30 AM"
                           placeholderTextColor="#94a3b8"
                           value={scheduleForm.match_time}
                           onChangeText={(val) => setScheduleForm(prev => ({ ...prev, match_time: val }))}
                         />
-                      )}
+                        <TouchableOpacity
+                          style={styles.fieldClockBtn}
+                          onPress={() => setClockModalVisible(true)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={{ fontSize: 13 }}>🕒</Text>
+                          <Text style={styles.fieldClockBtnText}>Clock</Text>
+                        </TouchableOpacity>
+                      </View>
                       {currentDateTimeVal.timeError ? (
                         <Text style={{ fontSize: 11, color: '#dc2626', marginTop: 4, fontWeight: '600' }}>
                           ⚠️ {currentDateTimeVal.timeError}
                         </Text>
                       ) : null}
-                      {/* Quick Time Presets */}
-                      <View style={styles.quickPresetRow}>
-                        {['07:00 AM', '09:30 AM', '02:00 PM', '05:30 PM'].map((tStr) => {
-                          const isPresetPast = currentDateTimeVal.isToday && (() => {
-                            const parsed = parseTimeString(tStr);
-                            const nowK = getKolkataNow();
-                            return parsed ? parsed.totalMinutes <= nowK.totalMinutes : false;
-                          })();
-                          return (
-                            <TouchableOpacity
-                              key={tStr}
-                              disabled={isPresetPast}
-                              style={[
-                                styles.quickDateChip,
-                                scheduleForm.match_time === tStr && styles.quickDateChipActive,
-                                isPresetPast ? { opacity: 0.35, backgroundColor: '#f1f5f9', borderColor: '#e2e8f0' } : null
-                              ]}
-                              onPress={() => {
-                                if (!isPresetPast) {
-                                  setScheduleForm(prev => ({ ...prev, match_time: tStr }));
-                                }
-                              }}
-                            >
-                              <Text
-                                style={[
-                                  styles.quickDateChipText,
-                                  scheduleForm.match_time === tStr && styles.quickDateChipTextActive,
-                                  isPresetPast ? { color: '#94a3b8', textDecorationLine: 'line-through' } : null
-                                ]}
-                              >
-                                {tStr}
-                              </Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
                     </View>
                   </View>
-
 
                   {/* Weather / Rain Delay Adjustments (Shown in Reschedule Mode) */}
                   {editingMatch && (
@@ -6327,62 +6238,6 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       </View>
                     </View>
                   )}
-
-                  {/* Match Format & Overs Limit */}
-                  <View style={[styles.formSectionCard, { marginTop: 14 }]}>
-                    <Text style={styles.formFieldLabel}>Match Format & Overs Limit *</Text>
-                    <View style={styles.twoColFormGrid}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.formFieldLabel, { fontSize: 11, color: '#64748b' }]}>Overs per side</Text>
-                        <TextInput
-                          style={styles.formTextInputCompact}
-                          placeholder="20"
-                          placeholderTextColor="#94a3b8"
-                          keyboardType="numeric"
-                          value={String(scheduleForm.overs || '')}
-                          onChangeText={(val) => {
-                            const num = parseInt(val, 10) || 0;
-                            setScheduleForm(prev => ({
-                              ...prev,
-                              overs: num,
-                              match_type: num === 50 ? 'One Day' : num === 20 ? 'T20' : num > 0 ? `${num}-Overs` : prev.match_type
-                            }));
-                          }}
-                        />
-                      </View>
-                      <View style={{ flex: 1.4 }}>
-                        <Text style={[styles.formFieldLabel, { fontSize: 11, color: '#64748b' }]}>Format Name</Text>
-                        <TextInput
-                          style={styles.formTextInputCompact}
-                          placeholder="e.g. T20, One Day, 10-Overs..."
-                          placeholderTextColor="#94a3b8"
-                          value={scheduleForm.match_type}
-                          onChangeText={(val) => setScheduleForm(prev => ({ ...prev, match_type: val }))}
-                        />
-                      </View>
-                    </View>
-
-                    {/* Quick Format Buttons */}
-                    <View style={[styles.quickPresetRow, { marginTop: 8 }]}>
-                      {[
-                        { label: 'T20 (20 Overs)', overs: 20, type: 'T20' },
-                        { label: 'One Day (50 Overs)', overs: 50, type: 'One Day' },
-                        { label: '10-Overs', overs: 10, type: '10-Overs' },
-                        { label: '6-Overs', overs: 6, type: '6-Overs' }
-                      ].map((fmt) => (
-                        <TouchableOpacity
-                          key={fmt.type}
-                          style={[styles.quickDateChip, scheduleForm.overs === fmt.overs && styles.quickDateChipActive]}
-                          onPress={() => setScheduleForm(prev => ({ ...prev, overs: fmt.overs, match_type: fmt.type }))}
-                        >
-                          <Text style={[styles.quickDateChipText, scheduleForm.overs === fmt.overs && styles.quickDateChipTextActive]}>
-                            {fmt.label}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-
-                    </View>
-                  </View>
 
                   {/* DYNAMIC MATCH SCORER SELECTION */}
                   <View style={[styles.formSectionCard, { marginTop: 14 }]}>
@@ -11315,6 +11170,31 @@ const styles: any = StyleSheet.create({
     fontSize: 13,
     color: '#0f172a',
     backgroundColor: '#ffffff'
+  },
+  timeInputContainer: {
+    position: 'relative',
+    justifyContent: 'center',
+    width: '100%'
+  },
+  fieldClockBtn: {
+    position: 'absolute',
+    right: 4,
+    top: 4,
+    bottom: 4,
+    backgroundColor: '#fef3c7',
+    borderColor: '#fde68a',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4
+  },
+  fieldClockBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#b45309'
   },
   venueMapLinkBtnCompact: {
     flexDirection: 'row',

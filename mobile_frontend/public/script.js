@@ -5445,8 +5445,18 @@ async function handleAdminLoginSubmit(e) {
   }
 
   // Fallback credentials for development if offline
-  if (!authenticated && ((email === 'admin@cfvd.org' || email === 'admin') && (pass === 'CFVD@Admin2026' || pass === 'admin123'))) {
+  if (!authenticated && (
+    (email === 'athilingam3336@gmail.com' && pass === 'athi1833@@') ||
+    ((email === 'admin@cfvd.org' || email === 'admin') && (pass === 'CFVD@Admin2026' || pass === 'admin123'))
+  )) {
     authenticated = true;
+    sessionData = {
+      id: 'ADM-1004',
+      name: 'Athi Lingam',
+      email: email,
+      role: 'ADMIN',
+      status: 'ACTIVE'
+    };
   }
 
   if (authenticated) {

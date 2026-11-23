@@ -36,8 +36,8 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
   const isDesktop = windowWidth >= 640;
   const styles = useMemo(() => getStyles(isDesktop), [isDesktop]);
   const { login } = useAdminAuth();
-  const [email, setEmail] = useState('admin@cfvd.org');
-  const [password, setPassword] = useState('CFVD@Admin2026');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -85,6 +85,20 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
       } catch (apiErr: any) {
         // Fallback for official development admin credentials
         if (
+          cleanEmail.toLowerCase() === 'athilingam3336@gmail.com' &&
+          cleanPass === 'athi1833@@'
+        ) {
+          const fallbackUser = {
+            id: 'ADM-1004',
+            name: 'Athi Lingam',
+            email: 'athilingam3336@gmail.com',
+            role: 'ADMIN',
+            status: 'ACTIVE'
+          };
+          setStoredAdminToken('dev_admin_athi_token_2026', rememberMe);
+          setStoredAdminUser(fallbackUser, rememberMe);
+          res = { success: true, message: 'Authenticated successfully.' };
+        } else if (
           cleanEmail.toLowerCase() === 'admin@cfvd.org' &&
           (cleanPass === 'CFVD@Admin2026' || cleanPass === 'admin123')
         ) {
@@ -132,12 +146,6 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
       setErrorMsg(msg);
       showError('Authentication Failed', msg);
     }
-  };
-
-  const handleUseDevCredentials = () => {
-    setEmail('admin@cfvd.org');
-    setPassword('CFVD@Admin2026');
-    setErrorMsg(null);
   };
 
   const IMG_LOGO = require('../../../assets/logo_transparent.png');
@@ -219,7 +227,7 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
                 style={styles.input}
                 value={email}
                 onChangeText={setEmail}
-                placeholder="e.g. admin@cfvd.org"
+                placeholder="e.g. athilingam3336@gmail.com"
                 placeholderTextColor="#64748b"
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -278,20 +286,6 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
                 <Text style={styles.submitBtnText}>Access Admin Dashboard →</Text>
               )}
             </TouchableOpacity>
-
-            {/* Quick Dev Credentials Autofill */}
-            <View style={styles.devHintBox}>
-              <View style={styles.devHintHeader}>
-                <Text style={styles.devHintTitle}>Development Credentials</Text>
-                <TouchableOpacity onPress={handleUseDevCredentials}>
-                  <Text style={styles.devAutofillLink}>Autofill</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.devHintText}>
-                Email: <Text style={styles.devCode}>admin@cfvd.org</Text> • Password:{' '}
-                <Text style={styles.devCode}>CFVD@Admin2026</Text>
-              </Text>
-            </View>
 
             {/* Back to Public Site */}
             {handleBack && (
