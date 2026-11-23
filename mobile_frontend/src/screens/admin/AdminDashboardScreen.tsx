@@ -1034,20 +1034,25 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   // Comprehensive tournaments list with season & format info
   const availableTournaments = useMemo(() => {
     const list: any[] = [];
-    const ids = new Set<string>();
+    const seenNames = new Set<string>();
 
     if (Array.isArray(tournamentsList) && tournamentsList.length > 0) {
       tournamentsList.forEach((t: any) => {
         const id = t.id || t.tournament_id || t._id;
-        const name = t.name || t.tournament_name || id;
-        if (id && !ids.has(id)) {
-          ids.add(id);
+        const rawName = t.name || t.tournament_name || (typeof id === 'string' && !id.startsWith('T-') ? id : '');
+        const name = (rawName || '').trim();
+        const normKey = name.toLowerCase();
+        if (name && !seenNames.has(normKey)) {
+          seenNames.add(normKey);
+          const fmt = t.format || t.match_type || 'T20';
+          const overs = Number(t.overs) || (fmt === 'ODI' || fmt === 'One Day' ? 50 : fmt === 'T10' || fmt === '10-Overs' ? 10 : fmt === '6-Overs' ? 6 : 20);
           list.push({
-            id,
+            id: id || `T-${Date.now()}-${list.length}`,
             name,
             season: t.season || '2026 Season',
-            format: t.format || 'T20 Championship',
-            clubsCount: t.teamsCount || t.clubsCount || 12,
+            format: fmt,
+            overs,
+            clubsCount: t.teamsCount || t.clubsCount || (Array.isArray(t.teams) ? t.teams.length : 12),
             status: t.status || 'Active'
           });
         }
@@ -1061,6 +1066,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           name: 'Virudhunagar Premier League 2026',
           season: '2026',
           format: 'T20',
+          overs: 20,
           clubsCount: 16,
           status: 'Active'
         },
@@ -1069,6 +1075,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           name: 'District Under-19 Championship',
           season: '2026',
           format: 'ODI',
+          overs: 50,
           clubsCount: 12,
           status: 'Active'
         },
@@ -1077,6 +1084,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           name: 'Kamarajar Memorial Knockout Trophy 2026',
           season: '2026',
           format: 'T20',
+          overs: 20,
           clubsCount: 8,
           status: 'Active'
         }
@@ -5616,79 +5624,75 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                   {/* Tournament Dropdown from Database */}
                   <View style={{ marginTop: 14 }}>
-                    <Text style={styles.formFieldLabel}>Select Tournament</Text>
-                    {Platform.OS === 'web' ? (
-                      <select
-                        aria-label="Select Tournament"
-                        value={availableTournaments.some(t => t.name === scheduleForm.tournament_name) ? scheduleForm.tournament_name : ''}
-                        onChange={(e: any) => {
-                          const val = e.target.value;
-                          const found = availableTournaments.find(t => t.name === val || t.id === val);
-                          if (found) {
-                            setScheduleForm(prev => ({
-                              ...prev,
-                              tournament_id: found.id,
-                              tournament_name: found.name
-                            }));
-                            setCustomTournamentInput(found.name);
-                            setScheduleFormError(null);
-                          }
+                    <Text style={styles.formFieldLabel}>Select Tournament *</Text>
+                    <View style={styles.timeInputContainer}>
+                      <TextInput
+                        style={[styles.formTextInputCompact, { paddingRight: 40 }]}
+                        placeholder="Type to search or select championship..."
+                        placeholderTextColor="#94a3b8"
+                        value={tournamentDropdownOpen ? tournamentSearchQuery : (scheduleForm.tournament_name || '')}
+                        onChangeText={(val) => {
+                          setTournamentSearchQuery(val);
+                          if (!tournamentDropdownOpen) setTournamentDropdownOpen(true);
                         }}
-                        style={{
-                          padding: '10px 14px',
-                          fontSize: 13.5,
-                          fontWeight: '600',
-                          borderRadius: 8,
-                          border: '1.5px solid #cbd5e1',
-                          backgroundColor: '#ffffff',
-                          color: '#0f172a',
-                          width: '100%',
-                          outlineStyle: 'none' as any,
-                          cursor: 'pointer'
+                        onFocus={() => {
+                          setTournamentDropdownOpen(true);
+                          setTournamentSearchQuery(scheduleForm.tournament_name || '');
                         }}
-                      >
-                        <option value="" disabled>Select Tournament</option>
-                        {availableTournaments.map((t) => (
-                          <option key={t.id} value={t.name}>
-                            {t.name}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
+                      />
                       <TouchableOpacity
-                        style={[styles.dropdownTriggerCompact, { paddingVertical: 10, paddingHorizontal: 12 }]}
+                        style={styles.fieldDropdownIconBtn}
                         onPress={() => setTournamentDropdownOpen(!tournamentDropdownOpen)}
-                        activeOpacity={0.8}
+                        activeOpacity={0.7}
                       >
-                        <Text style={{ fontSize: 13, fontWeight: '700', color: scheduleForm.tournament_name ? '#0f172a' : '#94a3b8' }}>
-                          {scheduleForm.tournament_name || 'Select Tournament'}
-                        </Text>
-                        <Text style={{ fontSize: 12, color: '#64748b' }}>{tournamentDropdownOpen ? '▲' : '▼'}</Text>
+                        <Text style={{ fontSize: 13, color: '#64748b' }}>{tournamentDropdownOpen ? '▲' : '▼'}</Text>
                       </TouchableOpacity>
-                    )}
+                    </View>
 
                     {tournamentDropdownOpen && (
-                      <View style={[styles.dropdownTablePanelCompact, { marginTop: 6 }]}>
+                      <View style={[styles.dropdownTablePanelCompact, { maxHeight: 220, marginTop: 4 }]}>
                         <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
-                          {availableTournaments.map(t => (
-                            <TouchableOpacity
-                              key={t.id}
-                              style={styles.dropdownTableRowCompact}
-                              onPress={() => {
-                                setScheduleForm(prev => ({
-                                  ...prev,
-                                  tournament_id: t.id,
-                                  tournament_name: t.name
-                                }));
-                                setCustomTournamentInput(t.name);
-                                setTournamentDropdownOpen(false);
-                                setScheduleFormError(null);
-                              }}
-                            >
-                              <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>{t.name}</Text>
-                              <Text style={{ fontSize: 11, color: '#64748b' }}>{t.format} • {t.season}</Text>
-                            </TouchableOpacity>
-                          ))}
+                          {availableTournaments
+                            .filter(t => !tournamentSearchQuery.trim() || t.name.toLowerCase().includes(tournamentSearchQuery.trim().toLowerCase()))
+                            .map(t => (
+                              <TouchableOpacity
+                                key={`t-${t.id}`}
+                                style={[
+                                  styles.dropdownTableRowCompact,
+                                  scheduleForm.tournament_name === t.name && { backgroundColor: '#f0fdf4' }
+                                ]}
+                                onPress={() => {
+                                  const oversNum = t.overs || (t.format === 'ODI' || t.format === 'One Day' ? 50 : t.format === 'T10' || t.format === '10-Overs' ? 10 : 20);
+                                  const fmt = t.format || (oversNum === 50 ? 'One Day' : oversNum === 10 ? '10-Overs' : 'T20');
+                                  setScheduleForm(prev => ({
+                                    ...prev,
+                                    tournament_id: t.id,
+                                    tournament_name: t.name,
+                                    overs: oversNum,
+                                    match_type: fmt
+                                  }));
+                                  setCustomTournamentInput(t.name);
+                                  setTournamentDropdownOpen(false);
+                                  setTournamentSearchQuery('');
+                                  setScheduleFormError(null);
+                                }}
+                              >
+                                <View style={{ flex: 1 }}>
+                                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>🏆 {t.name}</Text>
+                                  <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                                    {t.format} ({t.overs || 20} Overs) • {t.season}
+                                  </Text>
+                                </View>
+                                {scheduleForm.tournament_name === t.name && (
+                                  <Text style={{ fontSize: 12, color: '#16a34a', fontWeight: '800' }}>✓ Selected</Text>
+                                )}
+                              </TouchableOpacity>
+                            ))}
+                          {availableTournaments.filter(t => !tournamentSearchQuery.trim() || t.name.toLowerCase().includes(tournamentSearchQuery.trim().toLowerCase())).length === 0 && (
+                            <View style={{ padding: 12, alignItems: 'center' }}>
+                              <Text style={{ fontSize: 12, color: '#94a3b8' }}>No tournaments match your search.</Text>
+                            </View>
+                          )}
                         </ScrollView>
                       </View>
                     )}
@@ -5807,82 +5811,74 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                         <Text style={styles.formFieldLabel}>Team 1 (Home Club) *</Text>
                       </View>
 
-                      {/* Direct Editable Dynamic Team 1 Name */}
-                      <TextInput
-                        style={styles.formTextInputCompact}
-                        placeholder="Type Team 1 name or select below..."
-                        placeholderTextColor="#94a3b8"
-                        value={scheduleForm.team_a_name || ''}
-                        onChangeText={(val) => {
-                          setScheduleForm(prev => ({
-                            ...prev,
-                            team_a_name: val,
-                            team_a_id: prev.team_a_id && prev.team_a_id.startsWith('TEAM-VRD-') ? prev.team_a_id : (val ? val.trim() : '')
-                          }));
-                          setScheduleFormError(null);
-                        }}
-                      />
-
-                      {/* Quick Dropdown Picker for Registered Clubs */}
-                      <View style={{ marginTop: 6 }}>
+                      {/* Direct Editable Dynamic Team 1 Name with Integrated Dropdown */}
+                      <View style={styles.timeInputContainer}>
+                        <TextInput
+                          style={[styles.formTextInputCompact, { paddingRight: 40 }]}
+                          placeholder="Type Team 1 or pick from clubs..."
+                          placeholderTextColor="#94a3b8"
+                          value={scheduleForm.team_a_name || ''}
+                          onChangeText={(val) => {
+                            setScheduleForm(prev => ({
+                              ...prev,
+                              team_a_name: val,
+                              team_a_id: prev.team_a_id && prev.team_a_id.startsWith('TEAM-VRD-') ? prev.team_a_id : (val ? val.trim() : '')
+                            }));
+                            setTeamSearchQueryA(val);
+                            if (!teamADropdownOpen) setTeamADropdownOpen(true);
+                            setScheduleFormError(null);
+                          }}
+                          onFocus={() => {
+                            setTeamADropdownOpen(true);
+                            setTeamBDropdownOpen(false);
+                          }}
+                        />
                         <TouchableOpacity
-                          style={styles.dropdownToggleSmall}
+                          style={styles.fieldDropdownIconBtn}
                           onPress={() => {
                             setTeamADropdownOpen(!teamADropdownOpen);
                             setTeamBDropdownOpen(false);
                             setVenueDropdownOpen(false);
                           }}
-                          activeOpacity={0.8}
+                          activeOpacity={0.7}
                         >
-                          <Text style={styles.dropdownToggleSmallText}>
-                            {teamADropdownOpen ? '▲ Hide Registered Clubs' : '▼ Pick from Registered Clubs'}
-                          </Text>
+                          <Text style={{ fontSize: 13, color: '#64748b' }}>{teamADropdownOpen ? '▲' : '▼'}</Text>
                         </TouchableOpacity>
-
-                        {teamADropdownOpen && (
-                          <View style={styles.dropdownTablePanelCompact}>
-                            <View style={styles.dropdownSearchWrapCompact}>
-                              <Text style={{ fontSize: 12, marginRight: 6 }}>🔍</Text>
-                              <TextInput
-                                style={styles.dropdownSearchInputCompact}
-                                placeholder="Search clubs..."
-                                placeholderTextColor="#94a3b8"
-                                value={teamSearchQueryA}
-                                onChangeText={setTeamSearchQueryA}
-                              />
-                            </View>
-
-                            <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
-                              {availableTeams
-                                .filter(tm => {
-                                  if (scheduleForm.team_b_name && (tm.name.toLowerCase().trim() === scheduleForm.team_b_name.toLowerCase().trim() || (scheduleForm.team_b_id && tm.id === scheduleForm.team_b_id))) {
-                                    return false;
-                                  }
-                                  return !teamSearchQueryA || tm.name.toLowerCase().includes(teamSearchQueryA.toLowerCase());
-                                })
-                                .map(tm => (
-                                  <TouchableOpacity
-                                    key={`dd-a-${tm.id}`}
-                                    style={styles.dropdownTableRowCompact}
-                                    onPress={() => {
-                                      setScheduleForm(prev => ({
-                                        ...prev,
-                                        team_a_id: tm.id,
-                                        team_a_name: tm.name
-                                      }));
-                                      setTeamADropdownOpen(false);
-                                      setScheduleFormError(null);
-                                    }}
-                                    activeOpacity={0.8}
-                                  >
-                                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>🏏 {tm.name}</Text>
-                                    <Text style={{ fontSize: 11, color: '#64748b' }}>Coach: {tm.coachName} • {tm.taluk}</Text>
-                                  </TouchableOpacity>
-                                ))}
-                            </ScrollView>
-                          </View>
-                        )}
                       </View>
+
+                      {teamADropdownOpen && (
+                        <View style={[styles.dropdownTablePanelCompact, { marginTop: 4 }]}>
+                          <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
+                            {availableTeams
+                              .filter(tm => {
+                                if (scheduleForm.team_b_name && (tm.name.toLowerCase().trim() === scheduleForm.team_b_name.toLowerCase().trim() || (scheduleForm.team_b_id && tm.id === scheduleForm.team_b_id))) {
+                                  return false;
+                                }
+                                return !teamSearchQueryA || tm.name.toLowerCase().includes(teamSearchQueryA.toLowerCase());
+                              })
+                              .map(tm => (
+                                <TouchableOpacity
+                                  key={`dd-a-${tm.id}`}
+                                  style={styles.dropdownTableRowCompact}
+                                  onPress={() => {
+                                    setScheduleForm(prev => ({
+                                      ...prev,
+                                      team_a_id: tm.id,
+                                      team_a_name: tm.name
+                                    }));
+                                    setTeamADropdownOpen(false);
+                                    setTeamSearchQueryA('');
+                                    setScheduleFormError(null);
+                                  }}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>🏏 {tm.name}</Text>
+                                  <Text style={{ fontSize: 11, color: '#64748b' }}>Coach: {tm.coachName} • {tm.taluk}</Text>
+                                </TouchableOpacity>
+                              ))}
+                          </ScrollView>
+                        </View>
+                      )}
                     </View>
 
                     {/* Team 2 (Away Club) */}
@@ -5891,82 +5887,74 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                         <Text style={styles.formFieldLabel}>Team 2 (Away Club) *</Text>
                       </View>
 
-                      {/* Direct Editable Dynamic Team 2 Name */}
-                      <TextInput
-                        style={styles.formTextInputCompact}
-                        placeholder="Type Team 2 name or select below..."
-                        placeholderTextColor="#94a3b8"
-                        value={scheduleForm.team_b_name || ''}
-                        onChangeText={(val) => {
-                          setScheduleForm(prev => ({
-                            ...prev,
-                            team_b_name: val,
-                            team_b_id: prev.team_b_id && prev.team_b_id.startsWith('TEAM-VRD-') ? prev.team_b_id : (val ? val.trim() : '')
-                          }));
-                          setScheduleFormError(null);
-                        }}
-                      />
-
-                      {/* Quick Dropdown Picker for Registered Clubs */}
-                      <View style={{ marginTop: 6 }}>
+                      {/* Direct Editable Dynamic Team 2 Name with Integrated Dropdown */}
+                      <View style={styles.timeInputContainer}>
+                        <TextInput
+                          style={[styles.formTextInputCompact, { paddingRight: 40 }]}
+                          placeholder="Type Team 2 or pick from clubs..."
+                          placeholderTextColor="#94a3b8"
+                          value={scheduleForm.team_b_name || ''}
+                          onChangeText={(val) => {
+                            setScheduleForm(prev => ({
+                              ...prev,
+                              team_b_name: val,
+                              team_b_id: prev.team_b_id && prev.team_b_id.startsWith('TEAM-VRD-') ? prev.team_b_id : (val ? val.trim() : '')
+                            }));
+                            setTeamSearchQueryB(val);
+                            if (!teamBDropdownOpen) setTeamBDropdownOpen(true);
+                            setScheduleFormError(null);
+                          }}
+                          onFocus={() => {
+                            setTeamBDropdownOpen(true);
+                            setTeamADropdownOpen(false);
+                          }}
+                        />
                         <TouchableOpacity
-                          style={styles.dropdownToggleSmall}
+                          style={styles.fieldDropdownIconBtn}
                           onPress={() => {
                             setTeamBDropdownOpen(!teamBDropdownOpen);
                             setTeamADropdownOpen(false);
                             setVenueDropdownOpen(false);
                           }}
-                          activeOpacity={0.8}
+                          activeOpacity={0.7}
                         >
-                          <Text style={styles.dropdownToggleSmallText}>
-                            {teamBDropdownOpen ? '▲ Hide Registered Clubs' : '▼ Pick from Registered Clubs'}
-                          </Text>
+                          <Text style={{ fontSize: 13, color: '#64748b' }}>{teamBDropdownOpen ? '▲' : '▼'}</Text>
                         </TouchableOpacity>
-
-                        {teamBDropdownOpen && (
-                          <View style={styles.dropdownTablePanelCompact}>
-                            <View style={styles.dropdownSearchWrapCompact}>
-                              <Text style={{ fontSize: 12, marginRight: 6 }}>🔍</Text>
-                              <TextInput
-                                style={styles.dropdownSearchInputCompact}
-                                placeholder="Search clubs..."
-                                placeholderTextColor="#94a3b8"
-                                value={teamSearchQueryB}
-                                onChangeText={setTeamSearchQueryB}
-                              />
-                            </View>
-
-                            <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
-                              {availableTeams
-                                .filter(tm => {
-                                  if (scheduleForm.team_a_name && (tm.name.toLowerCase().trim() === scheduleForm.team_a_name.toLowerCase().trim() || (scheduleForm.team_a_id && tm.id === scheduleForm.team_a_id))) {
-                                    return false;
-                                  }
-                                  return !teamSearchQueryB || tm.name.toLowerCase().includes(teamSearchQueryB.toLowerCase());
-                                })
-                                .map(tm => (
-                                  <TouchableOpacity
-                                    key={`dd-b-${tm.id}`}
-                                    style={styles.dropdownTableRowCompact}
-                                    onPress={() => {
-                                      setScheduleForm(prev => ({
-                                        ...prev,
-                                        team_b_id: tm.id,
-                                        team_b_name: tm.name
-                                      }));
-                                      setTeamBDropdownOpen(false);
-                                      setScheduleFormError(null);
-                                    }}
-                                    activeOpacity={0.8}
-                                  >
-                                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>🏏 {tm.name}</Text>
-                                    <Text style={{ fontSize: 11, color: '#64748b' }}>Coach: {tm.coachName} • {tm.taluk}</Text>
-                                  </TouchableOpacity>
-                                ))}
-                            </ScrollView>
-                          </View>
-                        )}
                       </View>
+
+                      {teamBDropdownOpen && (
+                        <View style={[styles.dropdownTablePanelCompact, { marginTop: 4 }]}>
+                          <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
+                            {availableTeams
+                              .filter(tm => {
+                                if (scheduleForm.team_a_name && (tm.name.toLowerCase().trim() === scheduleForm.team_a_name.toLowerCase().trim() || (scheduleForm.team_a_id && tm.id === scheduleForm.team_a_id))) {
+                                  return false;
+                                }
+                                return !teamSearchQueryB || tm.name.toLowerCase().includes(teamSearchQueryB.toLowerCase());
+                              })
+                              .map(tm => (
+                                <TouchableOpacity
+                                  key={`dd-b-${tm.id}`}
+                                  style={styles.dropdownTableRowCompact}
+                                  onPress={() => {
+                                    setScheduleForm(prev => ({
+                                      ...prev,
+                                      team_b_id: tm.id,
+                                      team_b_name: tm.name
+                                    }));
+                                    setTeamBDropdownOpen(false);
+                                    setTeamSearchQueryB('');
+                                    setScheduleFormError(null);
+                                  }}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>🏏 {tm.name}</Text>
+                                  <Text style={{ fontSize: 11, color: '#64748b' }}>Coach: {tm.coachName} • {tm.taluk}</Text>
+                                </TouchableOpacity>
+                              ))}
+                          </ScrollView>
+                        </View>
+                      )}
                     </View>
                   </View>
 
@@ -6242,37 +6230,30 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   {/* DYNAMIC MATCH SCORER SELECTION */}
                   <View style={[styles.formSectionCard, { marginTop: 14 }]}>
                     <Text style={styles.formFieldLabel}>👤 Official Match Scorer (Dynamic Selection) *</Text>
-                    <TextInput
-                      style={styles.formTextInputCompact}
-                      placeholder="Type or select Scorer..."
-                      placeholderTextColor="#94a3b8"
-                      value={scheduleForm.assigned_scorer_name || scheduleForm.assigned_scorer_id || ''}
-                      onChangeText={(val) => setScheduleForm(prev => ({ ...prev, assigned_scorer_name: val, assigned_scorer_id: val }))}
-                    />
-                    <View style={{ marginTop: 6 }}>
+                    <View style={styles.timeInputContainer}>
+                      <TextInput
+                        style={[styles.formTextInputCompact, { paddingRight: 40 }]}
+                        placeholder="Type or select Scorer..."
+                        placeholderTextColor="#94a3b8"
+                        value={scheduleForm.assigned_scorer_name || scheduleForm.assigned_scorer_id || ''}
+                        onChangeText={(val) => {
+                          setScheduleForm(prev => ({ ...prev, assigned_scorer_name: val, assigned_scorer_id: val }));
+                          setScorerSearch(val);
+                          if (!scorerDropdownOpen) setScorerDropdownOpen(true);
+                        }}
+                        onFocus={() => setScorerDropdownOpen(true)}
+                      />
                       <TouchableOpacity
-                        style={styles.dropdownToggleSmall}
+                        style={styles.fieldDropdownIconBtn}
                         onPress={() => setScorerDropdownOpen(!scorerDropdownOpen)}
-                        activeOpacity={0.8}
+                        activeOpacity={0.7}
                       >
-                        <Text style={styles.dropdownToggleSmallText}>
-                          {scorerDropdownOpen ? '▲ Hide Registered Scorers' : '▼ Select from Registered Scorers & Officials'}
-                        </Text>
+                        <Text style={{ fontSize: 13, color: '#64748b' }}>{scorerDropdownOpen ? '▲' : '▼'}</Text>
                       </TouchableOpacity>
                     </View>
 
                     {scorerDropdownOpen && (
-                      <View style={styles.dropdownTablePanelCompact}>
-                        <View style={styles.dropdownSearchWrapCompact}>
-                          <Text style={{ fontSize: 12, marginRight: 6 }}>🔍</Text>
-                          <TextInput
-                            style={styles.dropdownSearchInputCompact}
-                            placeholder="Search scorers by name or ID..."
-                            placeholderTextColor="#94a3b8"
-                            value={scorerSearch}
-                            onChangeText={setScorerSearch}
-                          />
-                        </View>
+                      <View style={[styles.dropdownTablePanelCompact, { marginTop: 4 }]}>
                         <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
                           {officialsList
                             .filter((o: any) => {
@@ -6288,6 +6269,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 onPress={() => {
                                   setScheduleForm(prev => ({ ...prev, assigned_scorer_id: sc.id, assigned_scorer_name: sc.name }));
                                   setScorerDropdownOpen(false);
+                                  setScorerSearch('');
                                 }}
                               >
                                 <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>👤 {sc.name}</Text>
@@ -6300,10 +6282,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                             const matchesQuery = !scorerSearch || (o.name || '').toLowerCase().includes(scorerSearch.toLowerCase()) || (o.id || '').toLowerCase().includes(scorerSearch.toLowerCase());
                             return matchesRole && matchesQuery;
                           }).length === 0 && (
-                              <View style={{ padding: 10, alignItems: 'center' }}>
-                                <Text style={{ fontSize: 11.5, color: '#94a3b8' }}>No matching scorers found. You can type any scorer name above.</Text>
-                              </View>
-                            )}
+                            <View style={{ padding: 10, alignItems: 'center' }}>
+                              <Text style={{ fontSize: 11.5, color: '#94a3b8' }}>No matching scorers found. You can type any scorer name above.</Text>
+                            </View>
+                          )}
                         </ScrollView>
                       </View>
                     )}
@@ -6316,43 +6298,44 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       {/* Field Umpire 1 */}
                       <View style={styles.colFormCard}>
                         <Text style={[styles.formFieldLabel, { fontSize: 11.5, color: '#475569' }]}>⚖️ Field Umpire 1 (Lead)</Text>
-                        <TextInput
-                          style={styles.formTextInputCompact}
-                          placeholder="Type or select Umpire 1..."
-                          placeholderTextColor="#94a3b8"
-                          value={scheduleForm.umpire1_name || ''}
-                          onChangeText={(val) => setScheduleForm(prev => ({ ...prev, umpire1_name: val, umpire1_id: val }))}
-                        />
-                        <View style={{ marginTop: 6 }}>
+                        <View style={styles.timeInputContainer}>
+                          <TextInput
+                            style={[styles.formTextInputCompact, { paddingRight: 40 }]}
+                            placeholder="Type or select Umpire 1..."
+                            placeholderTextColor="#94a3b8"
+                            value={scheduleForm.umpire1_name || ''}
+                            onChangeText={(val) => {
+                              setScheduleForm(prev => ({ ...prev, umpire1_name: val, umpire1_id: val }));
+                              setUmpireSearch1(val);
+                              if (!umpire1DropdownOpen) setUmpire1DropdownOpen(true);
+                            }}
+                            onFocus={() => {
+                              setUmpire1DropdownOpen(true);
+                              setUmpire2DropdownOpen(false);
+                            }}
+                          />
                           <TouchableOpacity
-                            style={styles.dropdownToggleSmall}
+                            style={styles.fieldDropdownIconBtn}
                             onPress={() => {
                               setUmpire1DropdownOpen(!umpire1DropdownOpen);
                               setUmpire2DropdownOpen(false);
                             }}
-                            activeOpacity={0.8}
+                            activeOpacity={0.7}
                           >
-                            <Text style={styles.dropdownToggleSmallText}>
-                              {umpire1DropdownOpen ? '▲ Hide Registered Umpires' : '▼ Select from Umpires'}
-                            </Text>
+                            <Text style={{ fontSize: 13, color: '#64748b' }}>{umpire1DropdownOpen ? '▲' : '▼'}</Text>
                           </TouchableOpacity>
                         </View>
 
                         {umpire1DropdownOpen && (
-                          <View style={styles.dropdownTablePanelCompact}>
-                            <View style={styles.dropdownSearchWrapCompact}>
-                              <Text style={{ fontSize: 12, marginRight: 6 }}>🔍</Text>
-                              <TextInput
-                                style={styles.dropdownSearchInputCompact}
-                                placeholder="Search umpires..."
-                                placeholderTextColor="#94a3b8"
-                                value={umpireSearch1}
-                                onChangeText={setUmpireSearch1}
-                              />
-                            </View>
+                          <View style={[styles.dropdownTablePanelCompact, { marginTop: 4 }]}>
                             <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
                               {availableUmpires
-                                .filter(u => !umpireSearch1 || (u.name || '').toLowerCase().includes(umpireSearch1.toLowerCase()))
+                                .filter(u => {
+                                  if (scheduleForm.umpire2_name && u.name.trim().toLowerCase() === scheduleForm.umpire2_name.trim().toLowerCase()) {
+                                    return false;
+                                  }
+                                  return !umpireSearch1 || (u.name || '').toLowerCase().includes(umpireSearch1.toLowerCase());
+                                })
                                 .map(u => (
                                   <TouchableOpacity
                                     key={`u1-${u.id}`}
@@ -6360,13 +6343,19 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                     onPress={() => {
                                       setScheduleForm(prev => ({ ...prev, umpire1_id: u.id, umpire1_name: u.name }));
                                       setUmpire1DropdownOpen(false);
+                                      setUmpireSearch1('');
                                     }}
                                   >
                                     <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>⚖️ {u.name}</Text>
                                     <Text style={{ fontSize: 11, color: '#64748b' }}>{u.role || 'Official Umpire'} • {u.id}</Text>
                                   </TouchableOpacity>
                                 ))}
-                              {availableUmpires.filter(u => !umpireSearch1 || (u.name || '').toLowerCase().includes(umpireSearch1.toLowerCase())).length === 0 && (
+                              {availableUmpires.filter(u => {
+                                if (scheduleForm.umpire2_name && u.name.trim().toLowerCase() === scheduleForm.umpire2_name.trim().toLowerCase()) {
+                                  return false;
+                                }
+                                return !umpireSearch1 || (u.name || '').toLowerCase().includes(umpireSearch1.toLowerCase());
+                              }).length === 0 && (
                                 <View style={{ padding: 10, alignItems: 'center' }}>
                                   <Text style={{ fontSize: 11.5, color: '#94a3b8' }}>No matching umpires found.</Text>
                                 </View>
@@ -6379,43 +6368,44 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       {/* Field Umpire 2 */}
                       <View style={styles.colFormCard}>
                         <Text style={[styles.formFieldLabel, { fontSize: 11.5, color: '#475569' }]}>⚖️ Field Umpire 2 (Square Leg)</Text>
-                        <TextInput
-                          style={styles.formTextInputCompact}
-                          placeholder="Type or select Umpire 2..."
-                          placeholderTextColor="#94a3b8"
-                          value={scheduleForm.umpire2_name || ''}
-                          onChangeText={(val) => setScheduleForm(prev => ({ ...prev, umpire2_name: val, umpire2_id: val }))}
-                        />
-                        <View style={{ marginTop: 6 }}>
+                        <View style={styles.timeInputContainer}>
+                          <TextInput
+                            style={[styles.formTextInputCompact, { paddingRight: 40 }]}
+                            placeholder="Type or select Umpire 2..."
+                            placeholderTextColor="#94a3b8"
+                            value={scheduleForm.umpire2_name || ''}
+                            onChangeText={(val) => {
+                              setScheduleForm(prev => ({ ...prev, umpire2_name: val, umpire2_id: val }));
+                              setUmpireSearch2(val);
+                              if (!umpire2DropdownOpen) setUmpire2DropdownOpen(true);
+                            }}
+                            onFocus={() => {
+                              setUmpire2DropdownOpen(true);
+                              setUmpire1DropdownOpen(false);
+                            }}
+                          />
                           <TouchableOpacity
-                            style={styles.dropdownToggleSmall}
+                            style={styles.fieldDropdownIconBtn}
                             onPress={() => {
                               setUmpire2DropdownOpen(!umpire2DropdownOpen);
                               setUmpire1DropdownOpen(false);
                             }}
-                            activeOpacity={0.8}
+                            activeOpacity={0.7}
                           >
-                            <Text style={styles.dropdownToggleSmallText}>
-                              {umpire2DropdownOpen ? '▲ Hide Registered Umpires' : '▼ Select from Umpires'}
-                            </Text>
+                            <Text style={{ fontSize: 13, color: '#64748b' }}>{umpire2DropdownOpen ? '▲' : '▼'}</Text>
                           </TouchableOpacity>
                         </View>
 
                         {umpire2DropdownOpen && (
-                          <View style={styles.dropdownTablePanelCompact}>
-                            <View style={styles.dropdownSearchWrapCompact}>
-                              <Text style={{ fontSize: 12, marginRight: 6 }}>🔍</Text>
-                              <TextInput
-                                style={styles.dropdownSearchInputCompact}
-                                placeholder="Search umpires..."
-                                placeholderTextColor="#94a3b8"
-                                value={umpireSearch2}
-                                onChangeText={setUmpireSearch2}
-                              />
-                            </View>
+                          <View style={[styles.dropdownTablePanelCompact, { marginTop: 4 }]}>
                             <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
                               {availableUmpires
-                                .filter(u => !umpireSearch2 || (u.name || '').toLowerCase().includes(umpireSearch2.toLowerCase()))
+                                .filter(u => {
+                                  if (scheduleForm.umpire1_name && u.name.trim().toLowerCase() === scheduleForm.umpire1_name.trim().toLowerCase()) {
+                                    return false;
+                                  }
+                                  return !umpireSearch2 || (u.name || '').toLowerCase().includes(umpireSearch2.toLowerCase());
+                                })
                                 .map(u => (
                                   <TouchableOpacity
                                     key={`u2-${u.id}`}
@@ -6423,13 +6413,19 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                     onPress={() => {
                                       setScheduleForm(prev => ({ ...prev, umpire2_id: u.id, umpire2_name: u.name }));
                                       setUmpire2DropdownOpen(false);
+                                      setUmpireSearch2('');
                                     }}
                                   >
                                     <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>⚖️ {u.name}</Text>
                                     <Text style={{ fontSize: 11, color: '#64748b' }}>{u.role || 'Official Umpire'} • {u.id}</Text>
                                   </TouchableOpacity>
                                 ))}
-                              {availableUmpires.filter(u => !umpireSearch2 || (u.name || '').toLowerCase().includes(umpireSearch2.toLowerCase())).length === 0 && (
+                              {availableUmpires.filter(u => {
+                                if (scheduleForm.umpire1_name && u.name.trim().toLowerCase() === scheduleForm.umpire1_name.trim().toLowerCase()) {
+                                  return false;
+                                }
+                                return !umpireSearch2 || (u.name || '').toLowerCase().includes(umpireSearch2.toLowerCase());
+                              }).length === 0 && (
                                 <View style={{ padding: 10, alignItems: 'center' }}>
                                   <Text style={{ fontSize: 11.5, color: '#94a3b8' }}>No matching umpires found.</Text>
                                 </View>
@@ -6439,6 +6435,16 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                         )}
                       </View>
                     </View>
+
+                    {/* Duplicate Umpire Validation Banner */}
+                    {scheduleForm.umpire1_name && scheduleForm.umpire2_name &&
+                     scheduleForm.umpire1_name.trim().toLowerCase() === scheduleForm.umpire2_name.trim().toLowerCase() && (
+                      <View style={{ backgroundColor: '#fee2e2', padding: 8, borderRadius: 6, borderWidth: 1, borderColor: '#fca5a5', marginTop: 8 }}>
+                        <Text style={{ fontSize: 11.5, color: '#991b1b', fontWeight: '700' }}>
+                          ⚠️ Field Umpire 1 and Field Umpire 2 cannot be the same official. Please assign two different umpires.
+                        </Text>
+                      </View>
+                    )}
                   </View>
 
                   {/* Optional Match Notes & Preferences */}
@@ -11195,6 +11201,19 @@ const styles: any = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#b45309'
+  },
+  fieldDropdownIconBtn: {
+    position: 'absolute',
+    right: 4,
+    top: 4,
+    bottom: 4,
+    width: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
   },
   venueMapLinkBtnCompact: {
     flexDirection: 'row',
