@@ -416,45 +416,26 @@ export default function ScorerDashboardScreen() {
             )}
           </View>
         ) : effectiveFilter === 'Upcoming' ? (
-          /* UPCOMING MATCHES - IF NONE, SHOW RECENT MATCHES DIRECTLY! */
+          /* UPCOMING MATCHES ONLY - IF NONE, SHOW EMPTY NOTICE ONLY */
           <View style={{ width: '100%' }}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionHeaderTitle}>UPCOMING MATCHES ({upcomingMatches.length})</Text>
+            </View>
+
             {upcomingMatches.length > 0 ? (
-              <>
-                <View style={styles.sectionHeaderRow}>
-                  <Text style={styles.sectionHeaderTitle}>UPCOMING MATCHES ({upcomingMatches.length})</Text>
-                </View>
-
-                {upcomingMatches.map(match => (
-                  <MatchCard key={match.id} match={match} variant="upcoming" />
-                ))}
-              </>
+              upcomingMatches.map(match => (
+                <MatchCard key={match.id} match={match} variant="upcoming" />
+              ))
             ) : (
-              /* UPCOMING MATCH ILLA NA -> RECENT MATCH KAATUNA POOTHUM */
-              <>
-                <View style={styles.emptyNoticeCard}>
-                  <Text style={styles.emptyNoticeIcon}>📅</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.emptyNoticeTitle}>No Upcoming Matches Scheduled</Text>
-                    <Text style={styles.emptyNoticeSub}>
-                      There are currently no upcoming fixtures assigned. Displaying recent matches below:
-                    </Text>
-                  </View>
+              <View style={styles.emptyNoticeCard}>
+                <Text style={styles.emptyNoticeIcon}>📅</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.emptyNoticeTitle}>No Upcoming Matches Scheduled</Text>
+                  <Text style={styles.emptyNoticeSub}>
+                    There are currently no upcoming fixtures assigned.
+                  </Text>
                 </View>
-
-                <View style={styles.sectionHeaderRow}>
-                  <Text style={styles.sectionHeaderTitle}>RECENT MATCHES ({completedMatches.length})</Text>
-                </View>
-
-                {completedMatches.length > 0 ? (
-                  completedMatches.map(match => (
-                    <MatchCard key={match.id} match={match} variant="completed" />
-                  ))
-                ) : (
-                  <View style={styles.emptyCard}>
-                    <Text style={styles.emptyCardText}>No matches found.</Text>
-                  </View>
-                )}
-              </>
+              </View>
             )}
           </View>
         ) : effectiveFilter === 'Completed' ? (
