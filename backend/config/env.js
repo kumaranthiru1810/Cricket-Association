@@ -59,7 +59,11 @@ module.exports = {
   isDevelopment,
   isTest,
   PORT: parseInt(process.env.PORT || '5000', 10),
-  MONGODB_URI: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/cricket_db',
+  MONGODB_URI: process.env.MONGODB_URI || (
+    isTest
+      ? 'mongodb://127.0.0.1:27017/cricket_test_db'
+      : 'mongodb://127.0.0.1:27017/cricket_db'
+  ),
   JWT_SECRET: jwtSecret || 'cricket_super_secret_jwt_2026_dev_mode_only_secret_key_32_chars',
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:8081',
   ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS

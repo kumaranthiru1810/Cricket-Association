@@ -225,20 +225,87 @@ export default function ScorerDashboardScreen() {
     liveMatches.length > 0 ? 'Live' : (upcomingMatches.length > 0 ? 'Upcoming' : 'Completed')
   );
 
+  const renderPostponedMatchCard = (match: any) => (
+    <View key={match.id} style={styles.postponedCard}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <Text style={{ fontWeight: '700', fontSize: 16, color: '#1e293b' }}>
+          {match.teamA?.name || match.team_a_name || match.teamA || 'Team A'} <Text style={{ color: '#d97706' }}>vs</Text> {match.teamB?.name || match.team_b_name || match.teamB || 'Team B'}
+        </Text>
+        <View style={{ backgroundColor: '#fef3c7', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 4, borderColor: '#f59e0b', borderWidth: 1 }}>
+          <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 11 }}>⏸️ POSTPONED</Text>
+        </View>
+      </View>
+
+      <Text style={{ color: '#64748b', fontSize: 13, marginTop: 4 }}>
+        🏆 {match.tournamentName || match.tournament || 'Tournament'} • 📍 {match.venue || 'District Stadium'}
+      </Text>
+
+      <View style={{ backgroundColor: '#fffbeb', padding: 12, borderRadius: 6, marginTop: 10, borderColor: '#fde68a', borderWidth: 1 }}>
+        <Text style={{ color: '#92400e', fontWeight: '700', fontSize: 13 }}>
+          Reason: {match.postponement?.reason || match.postponementReason || 'Reason not recorded'}
+        </Text>
+        <Text style={{ color: '#78350f', fontSize: 12, marginTop: 3 }}>
+          Original Schedule: 📅 {match.postponement?.original_date || match.originalDate || match.date || match.match_date} • ⏰ {match.postponement?.original_time || match.originalTime || match.time || match.match_time || '09:30 AM'}
+        </Text>
+        {(match.postponement?.rescheduled_date || match.rescheduledDate) ? (
+          <Text style={{ color: '#15803d', fontWeight: '700', fontSize: 13, marginTop: 4 }}>
+            📅 Rescheduled Date: {match.postponement?.rescheduled_date || match.rescheduledDate} • ⏰ {match.postponement?.rescheduled_time || match.rescheduledTime || '09:30 AM'}
+          </Text>
+        ) : (
+          <Text style={{ color: '#b45309', fontStyle: 'italic', fontSize: 12, marginTop: 4 }}>
+            ⏳ Awaiting Admin Rescheduling
+          </Text>
+        )}
+
+        {/* Match Score & Over Situation at Postponement */}
+        <View style={{ marginTop: 8, padding: 10, backgroundColor: '#fef3c7', borderRadius: 6, borderLeftWidth: 4, borderLeftColor: '#d97706' }}>
+          <Text style={{ color: '#92400e', fontWeight: '800', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            📊 Match Situation at Postponement:
+          </Text>
+          <Text style={{ color: '#78350f', fontSize: 13, fontWeight: '700', marginTop: 3 }}>
+            {match.postponement?.postponed_score_display || match.postponedScoreDisplay || (
+              match.scoreA ? `${match.teamA?.name || match.teamA}: ${match.scoreA}${match.scoreB && match.scoreB !== 'Yet to bat' ? ` • ${match.teamB?.name || match.teamB}: ${match.scoreB}` : ''}` : 'Postponed before match start (0 overs bowled / Toss pending)'
+            )}
+          </Text>
+        </View>
+      </View>
+
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
+        <TouchableOpacity
+          style={{
+            backgroundColor: '#d97706',
+            paddingVertical: 7,
+            paddingHorizontal: 14,
+            borderRadius: 6,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6
+          }}
+          onPress={() => navigate('LiveScoring', { matchId: match.id })}
+          activeOpacity={0.8}
+        >
+          <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>
+            OPEN LIVE CONSOLE ▶
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       {/* PROFESSIONAL HEADER */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Image source={require('../../../assets/logo_transparent.png')} style={styles.logo} resizeMode="contain" />
-          <View>
-            <Text style={styles.title}>Scorer Dashboard</Text>
-            <Text style={styles.subtitle}>Official Match Scoring Console</Text>
+          <View style={{ flexShrink: 1, minWidth: 0 }}>
+            <Text style={styles.title} numberOfLines={1}>Scorer Dashboard</Text>
+            <Text style={styles.subtitle} numberOfLines={1}>Official Match Scoring Console</Text>
           </View>
         </View>
         <View style={styles.headerRight}>
           <View style={styles.scorerInfo}>
-            <Text style={styles.scorerName}>{profile?.name || 'Official Scorer'}</Text>
+            <Text style={styles.scorerName} numberOfLines={1}>{profile?.name || 'Official Scorer'}</Text>
             <Text style={styles.scorerId}>{profile?.id || 'SCORER'}</Text>
           </View>
           <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
@@ -385,6 +452,13 @@ export default function ScorerDashboardScreen() {
               </View>
             )}
 
+            {postponedMatches.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.subSectionHeader}>⏸️ POSTPONED MATCHES ({postponedMatches.length})</Text>
+                {postponedMatches.map(match => renderPostponedMatchCard(match))}
+              </View>
+            )}
+
             {completedMatches.length > 0 && (
               <View style={styles.section}>
                 <Text style={styles.subSectionHeader}>🟢 COMPLETED MATCHES ({completedMatches.length})</Text>
@@ -416,45 +490,26 @@ export default function ScorerDashboardScreen() {
             )}
           </View>
         ) : effectiveFilter === 'Upcoming' ? (
-          /* UPCOMING MATCHES - IF NONE, SHOW RECENT MATCHES DIRECTLY! */
+          /* UPCOMING MATCHES ONLY - IF NONE, SHOW EMPTY NOTICE ONLY */
           <View style={{ width: '100%' }}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionHeaderTitle}>UPCOMING MATCHES ({upcomingMatches.length})</Text>
+            </View>
+
             {upcomingMatches.length > 0 ? (
-              <>
-                <View style={styles.sectionHeaderRow}>
-                  <Text style={styles.sectionHeaderTitle}>UPCOMING MATCHES ({upcomingMatches.length})</Text>
-                </View>
-
-                {upcomingMatches.map(match => (
-                  <MatchCard key={match.id} match={match} variant="upcoming" />
-                ))}
-              </>
+              upcomingMatches.map(match => (
+                <MatchCard key={match.id} match={match} variant="upcoming" />
+              ))
             ) : (
-              /* UPCOMING MATCH ILLA NA -> RECENT MATCH KAATUNA POOTHUM */
-              <>
-                <View style={styles.emptyNoticeCard}>
-                  <Text style={styles.emptyNoticeIcon}>📅</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.emptyNoticeTitle}>No Upcoming Matches Scheduled</Text>
-                    <Text style={styles.emptyNoticeSub}>
-                      There are currently no upcoming fixtures assigned. Displaying recent matches below:
-                    </Text>
-                  </View>
+              <View style={styles.emptyNoticeCard}>
+                <Text style={styles.emptyNoticeIcon}>📅</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.emptyNoticeTitle}>No Upcoming Matches Scheduled</Text>
+                  <Text style={styles.emptyNoticeSub}>
+                    There are currently no upcoming fixtures assigned.
+                  </Text>
                 </View>
-
-                <View style={styles.sectionHeaderRow}>
-                  <Text style={styles.sectionHeaderTitle}>RECENT MATCHES ({completedMatches.length})</Text>
-                </View>
-
-                {completedMatches.length > 0 ? (
-                  completedMatches.map(match => (
-                    <MatchCard key={match.id} match={match} variant="completed" />
-                  ))
-                ) : (
-                  <View style={styles.emptyCard}>
-                    <Text style={styles.emptyCardText}>No matches found.</Text>
-                  </View>
-                )}
-              </>
+              </View>
             )}
           </View>
         ) : effectiveFilter === 'Completed' ? (
@@ -482,40 +537,7 @@ export default function ScorerDashboardScreen() {
             </View>
 
             {postponedMatches.length > 0 ? (
-              postponedMatches.map(match => (
-                <View key={match.id} style={styles.postponedCard}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                    <Text style={{ fontWeight: '700', fontSize: 16, color: '#1e293b' }}>
-                      {match.teamA?.name || match.team_a_name || 'Team A'} <Text style={{ color: '#d97706' }}>vs</Text> {match.teamB?.name || match.team_b_name || 'Team B'}
-                    </Text>
-                    <View style={{ backgroundColor: '#fef3c7', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 4, borderColor: '#f59e0b', borderWidth: 1 }}>
-                      <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 11 }}>⏸️ POSTPONED</Text>
-                    </View>
-                  </View>
-
-                  <Text style={{ color: '#64748b', fontSize: 13, marginTop: 4 }}>
-                    🏆 {match.tournamentName || 'Tournament'} • 📍 {match.venue || 'District Stadium'}
-                  </Text>
-
-                  <View style={{ backgroundColor: '#fffbeb', padding: 12, borderRadius: 6, marginTop: 10, borderColor: '#fde68a', borderWidth: 1 }}>
-                    <Text style={{ color: '#92400e', fontWeight: '700', fontSize: 13 }}>
-                      Reason: {match.postponement?.reason || match.postponementReason || 'Reason not recorded'}
-                    </Text>
-                    <Text style={{ color: '#78350f', fontSize: 12, marginTop: 3 }}>
-                      Original Schedule: 📅 {match.postponement?.original_date || match.originalDate || match.date} • ⏰ {match.postponement?.original_time || match.originalTime || match.time || '09:30 AM'}
-                    </Text>
-                    {(match.postponement?.rescheduled_date || match.rescheduledDate) ? (
-                      <Text style={{ color: '#15803d', fontWeight: '700', fontSize: 13, marginTop: 4 }}>
-                        📅 Rescheduled Date: {match.postponement?.rescheduled_date || match.rescheduledDate} • ⏰ {match.postponement?.rescheduled_time || match.rescheduledTime || '09:30 AM'}
-                      </Text>
-                    ) : (
-                      <Text style={{ color: '#b45309', fontStyle: 'italic', fontSize: 12, marginTop: 4 }}>
-                        ⏳ Awaiting Admin Rescheduling
-                      </Text>
-                    )}
-                  </View>
-                </View>
-              ))
+              postponedMatches.map(match => renderPostponedMatchCard(match))
             ) : (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyCardText}>No postponed matches.</Text>
@@ -532,36 +554,46 @@ export default function ScorerDashboardScreen() {
 }
 
 const getStyles = (isDesktop: boolean) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'transparent' },
+  container: { flex: 1, backgroundColor: 'transparent', width: '100%', maxWidth: '100%', overflow: 'hidden' },
   
   // HEADER
   header: {
-    padding: 14,
-    paddingHorizontal: isDesktop ? 24 : 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    padding: 12,
+    paddingHorizontal: isDesktop ? 24 : 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    rowGap: 8,
     borderBottomColor: '#e2e8f0',
     borderBottomWidth: 1,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2,
+    width: '100%',
+    maxWidth: '100%'
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center' },
-  logo: { width: 32, height: 32, marginRight: 10 },
-  title: { color: '#1e293b', fontSize: 16, fontWeight: 'bold', letterSpacing: 0.5 },
-  subtitle: { color: '#b45309', fontSize: 11, marginTop: 1, fontWeight: '600' },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: isDesktop ? 220 : 160 },
+  logo: { width: 32, height: 32, marginRight: 8, flexShrink: 0 },
+  title: { color: '#1e293b', fontSize: isDesktop ? 16 : 14, fontWeight: 'bold', letterSpacing: 0.5 },
+  subtitle: { color: '#b45309', fontSize: isDesktop ? 11 : 10, marginTop: 1, fontWeight: '600' },
   
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: isDesktop ? 12 : 8, flexShrink: 0 },
   scorerInfo: { alignItems: 'flex-end' },
-  scorerName: { color: '#1e293b', fontSize: 13, fontWeight: '700' },
-  scorerId: { color: '#64748b', fontSize: 11 },
+  scorerName: { color: '#1e293b', fontSize: isDesktop ? 13 : 11.5, fontWeight: '700' },
+  scorerId: { color: '#64748b', fontSize: isDesktop ? 11 : 9.5 },
   
-  logoutBtn: { backgroundColor: '#fef2f2', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 6, borderWidth: 1, borderColor: '#fca5a5' },
-  logoutText: { color: '#dc2626', fontWeight: 'bold', fontSize: 12 },
+  logoutBtn: { backgroundColor: '#fef2f2', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#fca5a5' },
+  logoutText: { color: '#dc2626', fontWeight: 'bold', fontSize: 11 },
   
   // LAYOUT
-  scroll: { flexGrow: 1 },
-  contentWrapper: { padding: isDesktop ? 24 : 14, paddingBottom: 32 },
+  scroll: { flexGrow: 1, width: '100%', maxWidth: '100%' },
+  contentWrapper: { 
+    padding: isDesktop ? 24 : 12, 
+    paddingBottom: 32,
+    width: '100%',
+    maxWidth: 900,
+    alignSelf: 'center'
+  },
 
   // QUICK BANNERS
   liveBanner: {
@@ -572,9 +604,11 @@ const getStyles = (isDesktop: boolean) => StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#f43f5e',
     borderRadius: 8,
-    padding: 14,
+    padding: 12,
     marginBottom: 16,
-    gap: 12,
+    gap: 10,
+    width: '100%',
+    maxWidth: '100%',
     shadowColor: '#f43f5e',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -596,9 +630,11 @@ const getStyles = (isDesktop: boolean) => StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#3b82f6',
     borderRadius: 8,
-    padding: 14,
+    padding: 12,
     marginBottom: 16,
-    gap: 12,
+    gap: 10,
+    width: '100%',
+    maxWidth: '100%',
     shadowColor: '#3b82f6',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -615,16 +651,17 @@ const getStyles = (isDesktop: boolean) => StyleSheet.create({
   tabsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 18
+    gap: 6,
+    marginBottom: 16,
+    width: '100%'
   },
   tabButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.85)',
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderRadius: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 14
+    paddingVertical: 6,
+    paddingHorizontal: 10
   },
   tabButtonActive: {
     backgroundColor: '#0f172a',

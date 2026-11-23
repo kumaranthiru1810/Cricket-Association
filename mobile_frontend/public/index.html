@@ -232,12 +232,12 @@
       /* CINEMATIC PRELOADER & GRAND WEBSITE ENTRANCE ANIMATIONS     */
       /* ============================================================ */
       body.cfvd-preloader-active {
-        overflow: auto;
+        overflow: hidden;
       }
 
       body.cfvd-preloader-active #root {
-        opacity: 1;
-        pointer-events: auto;
+        opacity: 0;
+        pointer-events: none;
       }
 
       /* Grand Website Entrance Animation upon Video Completion */
@@ -441,15 +441,15 @@
           muted
           playsinline
           webkit-playsinline
-          preload="none"
-          poster="/stadium.webp"
+          preload="auto"
           style="
-            width: 100%;
-            height: 100%;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
             max-width: 100vw;
             max-height: 100vh;
             max-height: 100dvh;
-            object-fit: contain;
+            object-fit: cover;
             object-position: center center;
             background: transparent;
           "
@@ -695,13 +695,6 @@
           if (video.duration && progressBar) {
             var pct = (video.currentTime / video.duration) * 100;
             progressBar.style.width = Math.min(100, pct) + '%';
-          }
-
-          // Cinematic Synchronization: When the video reaches its climax,
-          // trigger the stadium flash and reveal the website smoothly!
-          if (video.duration && video.currentTime >= Math.max(video.duration - 0.4, 0) && !transitionTriggered) {
-            transitionTriggered = true;
-            window.__dismissCfvdPreloader(false);
           }
         });
 

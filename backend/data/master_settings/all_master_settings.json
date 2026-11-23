@@ -54,15 +54,6 @@
     "sort_order": 6
   },
   {
-    "id": "MSET-TALUK-07",
-    "category": "taluk_jurisdiction",
-    "name": "Watrap",
-    "code": "WTR",
-    "description": "Watrap Taluk Jurisdiction",
-    "is_active": true,
-    "sort_order": 7
-  },
-  {
     "id": "MSET-TALUK-08",
     "category": "taluk_jurisdiction",
     "name": "Kariapatti",

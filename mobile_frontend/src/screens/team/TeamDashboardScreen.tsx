@@ -3143,6 +3143,20 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                               </Text>
                             </View>
 
+                            {/* Match Situation at Postponement */}
+                            {Boolean(m.postponement?.postponed_score_display || m.postponedScoreDisplay || m.scoreA) && (
+                              <View style={{ backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa', borderRadius: 8, padding: 10, marginTop: 8 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: '#c2410c', textTransform: 'uppercase' }}>
+                                  📊 Match Situation at Postponement
+                                </Text>
+                                <Text style={{ fontSize: 13, color: '#9a3412', fontWeight: '700', marginTop: 3 }}>
+                                  {m.postponement?.postponed_score_display || m.postponedScoreDisplay || (
+                                    m.scoreA ? `${m.teamA}: ${m.scoreA}${m.scoreB && m.scoreB !== 'Yet to bat' ? ` • ${m.teamB}: ${m.scoreB}` : ''}` : 'Postponed before match start (0 overs bowled)'
+                                  )}
+                                </Text>
+                              </View>
+                            )}
+
                             {/* Rescheduled Date Status */}
                             <View style={{ backgroundColor: reschedDate ? '#ecfdf5' : '#f8fafc', borderWidth: 1, borderColor: reschedDate ? '#a7f3d0' : '#e2e8f0', borderRadius: 8, padding: 10, marginTop: 8 }}>
                               <Text style={{ fontSize: 11, fontWeight: '700', color: reschedDate ? '#065f46' : '#64748b', textTransform: 'uppercase' }}>

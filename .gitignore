@@ -1,15 +1,22 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
-# dependencies
+# Dependencies
 node_modules/
+*/node_modules/
 
-# Expo
+# Environment Variables & Secrets (CRITICAL: Never commit .env files)
+.env
+.env*
+!.env.example
+!.env.production.example
+
+# Expo & Web Builds
 .expo/
 dist/
 web-build/
 expo-env.d.ts
 
-# Native
+# Native builds
 .kotlin/
 *.orig.*
 *.jks
@@ -17,38 +24,33 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+/ios
+/android
 
 # Metro
 .metro-health-check*
 
-# debug
+# Logs & Debug
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+*.log
+logs/
 
-# macOS
+# Operating Systems
 .DS_Store
 *.pem
 
-# local env files
-.env
-.env*.local
-
-# typescript
+# TypeScript
 *.tsbuildinfo
 
-# generated native folders
-/ios
-/android
+# Uploaded Media & User Content
+uploads/
+*/uploads/
+backend/uploads/
+mobile_frontend/public/uploads/
 
-# nested cloned directory
-cricket1/
-
-# Uploaded player photos & media (PII)
-backend/uploads/players/
-uploads/players/
-
-# Generated bundles & scratch files
+# Generated Bundles & Scratch Files
 bundled.html
 inlineHtml.ts
 *.html.bundle
@@ -56,15 +58,18 @@ scratch/
 scratch_*.html
 *preview*.html
 *_backup.*
+*.zip
+*.tar.gz
 
-
-# Generated bundled HTML & PDF presentations (large binary/bundled files)
-*.pdf
-bundled.html
-inlineHtml.ts
+# Presentation & Demos
 demo_match_presentation/
 mobile_frontend/assets_web/bundled.html
 mobile_frontend/assets_web/inlineHtml.ts
 mobile_frontend/public/bundled.html
 mobile_frontend/public/inlineHtml.ts
 mobile_frontend/dist/
+
+# Certbot & Local SSL
+certbot/conf/
+certbot/www/
+backups/

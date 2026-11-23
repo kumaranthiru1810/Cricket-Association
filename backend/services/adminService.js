@@ -647,9 +647,52 @@ async function postponeMatch(matchId, optionsOrReason, adminEmail = 'admin@cfvd.
   const rescheduledDate = options.rescheduledDate || null;
   const rescheduledTime = options.rescheduledTime || null;
 
+  // Determine match situation at postponement (runs, wickets, overs, batting team)
+  const inns = await db.models.Innings.find({ match_id: matchId }).sort({ innings_number: 1 }).lean();
+  let hasPlayStarted = false;
+  let scoreSummary = '';
+  let runs = 0;
+  let wickets = 0;
+  let oversStr = '0.0';
+  let battingTeam = '';
+  let innNumber = 1;
+
+  if (inns && inns.length > 0) {
+    const lastInn = inns[inns.length - 1];
+    const totalBalls = (lastInn.overs || 0) * 6 + (lastInn.balls || 0);
+    if (totalBalls > 0 || (lastInn.total_runs || 0) > 0 || (lastInn.wickets || 0) > 0 || match.status === 'LIVE' || match.status === 'INNINGS_BREAK') {
+      hasPlayStarted = true;
+      runs = lastInn.total_runs || 0;
+      wickets = lastInn.wickets || 0;
+      oversStr = `${lastInn.overs || 0}.${lastInn.balls || 0}`;
+      innNumber = lastInn.innings_number || 1;
+      battingTeam = (lastInn.batting_team_id === match.team_a_id)
+        ? (match.team_a_name || match.team_a_id)
+        : (match.team_b_name || match.team_b_id);
+      const maxOv = match.overs_per_side || 20;
+      scoreSummary = `${battingTeam}: ${runs}/${wickets} (${oversStr}/${maxOv} Ov) - Innings ${innNumber}`;
+    }
+  }
+
+  // Allow explicit options from caller or fallback to database inspection
+  if (options.runsAtPostpone !== undefined && (options.runsAtPostpone > 0 || options.oversAtPostpone !== '0.0' || options.wicketsAtPostpone > 0)) {
+    hasPlayStarted = true;
+    runs = options.runsAtPostpone;
+    wickets = options.wicketsAtPostpone || 0;
+    oversStr = options.oversAtPostpone || oversStr;
+    battingTeam = options.battingTeamAtPostpone || battingTeam;
+    innNumber = options.inningsAtPostpone || innNumber;
+    scoreSummary = options.postponedScoreDisplay || `${battingTeam}: ${runs}/${wickets} (${oversStr}/${match.overs_per_side || 20} Ov) - Innings ${innNumber}`;
+  }
+
+  const finalStage = options.postponedStage || (hasPlayStarted ? 'IN_PLAY' : 'BEFORE_START');
+  const finalScoreDisplay = hasPlayStarted
+    ? (options.postponedScoreDisplay || scoreSummary)
+    : 'Postponed before match start (0 overs bowled / Toss pending)';
+
   match.status = 'POSTPONED';
-  match.status_comment = `Postponed: ${cleanReason}`;
-  match.result_summary = `Postponed: ${cleanReason}`;
+  match.status_comment = `Postponed: ${cleanReason} (${finalScoreDisplay})`;
+  match.result_summary = `Postponed: ${cleanReason} (${finalScoreDisplay})`;
 
   match.postponement = {
     is_postponed: true,
@@ -665,7 +708,15 @@ async function postponeMatch(matchId, optionsOrReason, adminEmail = 'admin@cfvd.
     rescheduled_date: rescheduledDate,
     rescheduled_time: rescheduledTime,
     rescheduled_at: (rescheduledDate || rescheduledTime) ? new Date() : null,
-    rescheduled_by: (rescheduledDate || rescheduledTime) ? adminEmail : null
+    rescheduled_by: (rescheduledDate || rescheduledTime) ? adminEmail : null,
+    postponed_stage: finalStage,
+    postponed_score_display: finalScoreDisplay,
+    score_at_postponement: finalScoreDisplay,
+    runs,
+    wickets,
+    overs: oversStr,
+    batting_team: battingTeam,
+    innings_number: innNumber
   };
 
   // If there was an umpire postponement request pending, mark it approved

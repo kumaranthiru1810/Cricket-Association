@@ -64,9 +64,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(234, 179, 8, 0.35)',
     paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     width: '100%',
-    marginTop: 'auto'
+    maxWidth: '100%',
+    marginTop: 'auto',
+    overflow: 'hidden'
   },
   innerRow: {
     flexDirection: 'row',
@@ -74,7 +76,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     maxWidth: 1200,
     width: '100%',
-    alignSelf: 'center'
+    alignSelf: 'center',
+    flexWrap: 'wrap',
+    gap: 8
   },
   innerRowMobile: {
     flexDirection: 'column',
@@ -84,26 +88,33 @@ const styles = StyleSheet.create({
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8
+    gap: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'center'
   },
   logo: {
     width: 22,
     height: 22,
-    borderRadius: 11
+    borderRadius: 11,
+    flexShrink: 0
   },
   brandTextWrap: {
-    flexDirection: 'column'
+    flexDirection: 'column',
+    alignItems: 'center'
   },
   brandTitleLine: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6
+    gap: 6,
+    flexWrap: 'wrap',
+    justifyContent: 'center'
   },
   brandTitle: {
     color: '#ffffff',
     fontWeight: '700',
-    fontSize: 11,
-    letterSpacing: 0.2
+    fontSize: 10.5,
+    letterSpacing: 0.2,
+    textAlign: 'center'
   },
   statusPill: {
     backgroundColor: 'rgba(234, 179, 8, 0.15)',
@@ -121,7 +132,8 @@ const styles = StyleSheet.create({
   brandSubtitle: {
     color: '#94a3b8',
     fontSize: 9.5,
-    marginTop: 1
+    marginTop: 1,
+    textAlign: 'center'
   },
   metaRow: {
     flexDirection: 'row',
@@ -136,12 +148,15 @@ const styles = StyleSheet.create({
   },
   copyrightText: {
     color: '#64748b',
-    fontSize: 10
+    fontSize: 10,
+    textAlign: 'center'
   },
   linksRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6
+    gap: 6,
+    flexWrap: 'wrap',
+    justifyContent: 'center'
   },
   linkText: {
     color: '#94a3b8',

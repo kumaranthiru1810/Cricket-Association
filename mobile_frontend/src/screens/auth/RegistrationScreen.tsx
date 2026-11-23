@@ -85,7 +85,6 @@ const TALUKS = [
   'Srivilliputhur',
   'Aruppukottai',
   'Sattur',
-  'Watrap',
   'Kariapatti',
   'Tiruchuli',
   'Vembakottai'
@@ -116,7 +115,6 @@ const DISTRICT_OPTIONS = [
   'Srivilliputhur',
   'Aruppukottai',
   'Sattur',
-  'Watrap',
   'Chennai',
   'Coimbatore',
   'Tirunelveli',
@@ -351,7 +349,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
             return fromFlat;
           };
 
-          const taluks = resolveCategory('taluk_jurisdiction', extractItemsForCategory('taluk_jurisdiction'), TALUK_OPTIONS, true);
+          const taluks = resolveCategory('taluk_jurisdiction', extractItemsForCategory('taluk_jurisdiction'), TALUK_OPTIONS, true).filter((t: string) => t.toLowerCase() !== 'watrap');
           const roles = resolveCategory('playing_role', extractItemsForCategory('playing_role'), PLAYER_ROLES);
           const batting = resolveCategory('batting_style', extractItemsForCategory('batting_style'), BATTING_STYLES);
           const ages = resolveCategory('age_category', extractItemsForCategory('age_category'), AGE_CATEGORIES);
@@ -1940,8 +1938,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         }}
                         placeholder="e.g. saravanan@example.com"
                         keyboardType="email-address"
+                        autoComplete="email"
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="none"
+                        accessibilityLabel="Player email address"
                       />
                       <EmailDomainSuggestions
                         value={pEmail}
@@ -1999,8 +1999,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                           }}
                           placeholder="9876543210"
                           keyboardType="phone-pad"
+                          autoComplete="tel"
                           placeholderTextColor="#94a3b8"
                           maxLength={10}
+                          accessibilityLabel="Player 10-digit phone number"
                         />
                         {pMobile.replace(/\D/g, '').length === 10 && (
                           <View style={styles.validCheckBadge}>
@@ -2385,8 +2387,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                           }}
                           placeholder="9876543210"
                           keyboardType="phone-pad"
+                          autoComplete="tel"
                           placeholderTextColor="#94a3b8"
                           maxLength={10}
+                          accessibilityLabel="Player 10-digit phone number"
                         />
                         {coachMobile.replace(/\D/g, '').length === 10 && (
                           <View style={styles.validCheckBadge}>

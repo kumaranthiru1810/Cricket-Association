@@ -309,6 +309,23 @@ class AuthController {
     }
   }
 
+  // Unified Register Endpoint
+  async register(req, res) {
+    try {
+      const result = await authService.register(req.body);
+      if (result.token) {
+        setAuthCookies(res, result.token);
+      }
+      res.status(201).json(result);
+    } catch (err) {
+      const status = err.status || 400;
+      res.status(status).json({
+        success: false,
+        message: err.message || 'Registration failed'
+      });
+    }
+  }
+
   // Register Scorer
   async registerScorer(req, res) {
     try {

@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { ScorerApi } from '../../services/api';
 import { showSuccess, showError, showWarning } from '../../utils/sweetalert';
-import { validateEmail, validatePassword, getPasswordCriteria } from '../../utils/validation';
+import { validateEmail } from '../../utils/validation';
 import EmailDomainSuggestions from '../common/EmailDomainSuggestions';
 
 export interface ForgotPasswordModalProps {
@@ -22,7 +22,7 @@ export interface ForgotPasswordModalProps {
   onClose: () => void;
   initialEmail?: string;
   role?: string;
-  onSuccess?: (email: string) => void;
+  onSuccess?: (email: string, newPassword?: string) => void;
   onNavigateToRegister?: (role?: string) => void;
 }
 
@@ -41,7 +41,6 @@ export default function ForgotPasswordModal({
   // Form Fields
   const [email, setEmail] = useState('');
   const [otpBoxes, setOtpBoxes] = useState<string[]>(['', '', '', '']);
-  const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -54,8 +53,6 @@ export default function ForgotPasswordModal({
   const [focusedBoxIndex, setFocusedBoxIndex] = useState<number | null>(null);
 
   // UI States
-  const [showOldPassword, setShowOldPassword] = useState(false);
-  const [copiedOldPassword, setCopiedOldPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [newPasswordError, setNewPasswordError] = useState<string | null>(null);
@@ -63,15 +60,10 @@ export default function ForgotPasswordModal({
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const passwordCriteria = getPasswordCriteria(newPassword);
-
   useEffect(() => {
     if (visible) {
       setEmail(initialEmail || '');
       setOtpBoxes(['', '', '', '']);
-      setOldPassword('');
-      setShowOldPassword(false);
-      setCopiedOldPassword(false);
       setNewPassword('');
       setConfirmPassword('');
       setShowNewPassword(false);
@@ -206,15 +198,11 @@ export default function ForgotPasswordModal({
     try {
       const res = await ScorerApi.verifyForgotPasswordOtp(email.trim(), combinedOtp);
 
-      const retrievedOldPass = res?.oldPassword || res?.currentPassword || 'Athi1833@';
-      setOldPassword(retrievedOldPass);
-      setShowOldPassword(true);
-
       // SweetAlert at end of Step 2
       await showSuccess(
         'OTP Verified Successfully!',
-        res?.message || 'Identity confirmed! Your current password is shown below. You may keep it or create a new password.',
-        2200
+        res?.message || 'Verification complete. Please enter your new password below.',
+        2000
       );
 
       setCurrentStep(3);
@@ -227,29 +215,6 @@ export default function ForgotPasswordModal({
     }
   };
 
-  // Copy Old Password to Clipboard
-  const handleCopyOldPassword = () => {
-    const textToCopy = oldPassword || '';
-    if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(textToCopy);
-      setCopiedOldPassword(true);
-      setTimeout(() => setCopiedOldPassword(false), 2000);
-    }
-  };
-
-  // Keep Old Password & Log In Directly
-  const handleKeepOldPassword = async () => {
-    await showSuccess(
-      'Current Password Kept!',
-      `Your current password "${oldPassword}" is active. You can now use it to log in.`,
-      2500
-    );
-    if (onSuccess) {
-      onSuccess(email.trim());
-    }
-    onClose();
-  };
-
   // STEP 3: Reset and Encrypt Password
   const handleResetPassword = async () => {
     setErrorMessage(null);
@@ -259,10 +224,16 @@ export default function ForgotPasswordModal({
     const conf = confirmPassword.trim();
     const combinedOtp = otpBoxes.join('').trim();
 
-    // Password validation: min 8 characters, 1 uppercase, 1 special character, 2 numbers
-    const passCheck = validatePassword(pass);
-    if (!passCheck.isValid) {
-      const err = passCheck.error || 'Password must be at least 8 characters, with 1 uppercase letter, 1 special character, and 2 numbers.';
+    if (!pass) {
+      const err = 'Please enter a new password.';
+      setNewPasswordError(err);
+      setErrorMessage(err);
+      showWarning('Password Required', err);
+      return;
+    }
+
+    if (pass.length < 4) {
+      const err = 'Password must be at least 4 characters long.';
       setNewPasswordError(err);
       setErrorMessage(err);
       showWarning('Password Requirements', err);
@@ -292,12 +263,12 @@ export default function ForgotPasswordModal({
       // SweetAlert at end of Step 3
       await showSuccess(
         'Password Reset Successful!',
-        res?.message || 'Your new password has been securely encrypted and stored in the database. You can now log in.',
-        2800
+        res?.message || 'Your new password has been saved. You can now log in.',
+        2500
       );
 
       if (onSuccess) {
-        onSuccess(email.trim());
+        onSuccess(email.trim(), pass);
       }
       onClose();
     } catch (err: any) {
@@ -483,85 +454,13 @@ export default function ForgotPasswordModal({
               </View>
             )}
 
-            {/* STEP 3: OLD PASSWORD DISPLAY & NEW PASSWORD FORM */}
+            {/* STEP 3: NEW PASSWORD FORM */}
             {currentStep === 3 && (
               <View style={styles.stepContent}>
                 <View style={styles.infoBoxSuccess}>
                   <Text style={styles.infoBoxSuccessText}>
-                    ✓ Email verified successfully for: <Text style={styles.boldText}>{email}</Text>
+                    ✓ Identity confirmed for: <Text style={styles.boldText}>{email}</Text>
                   </Text>
-                </View>
-
-                {/* OLD / CURRENT PASSWORD DISPLAY CARD */}
-                <View style={styles.oldPasswordCard}>
-                  <View style={styles.oldPasswordHeaderRow}>
-                    <View style={styles.oldPasswordHeaderLeft}>
-                      <Text style={styles.oldPasswordIcon}>🔑</Text>
-                      <Text style={styles.oldPasswordTitle}>CURRENT / OLD PASSWORD</Text>
-                    </View>
-                    <View style={styles.oldPasswordBadge}>
-                      <Text style={styles.oldPasswordBadgeText}>ACTIVE</Text>
-                    </View>
-                  </View>
-
-                  <Text style={styles.oldPasswordHint}>
-                    This is your existing password. You can keep it to log in, or create a new password below:
-                  </Text>
-
-                  <View style={styles.oldPasswordBox}>
-                    <Text style={styles.oldPasswordValue} selectable={true}>
-                      {showOldPassword ? (oldPassword || 'Athi1833@') : '••••••••••••'}
-                    </Text>
-                    <View style={styles.oldPasswordActionButtons}>
-                      <TouchableOpacity
-                        onPress={() => setShowOldPassword(!showOldPassword)}
-                        style={styles.oldPasswordIconBtn}
-                        activeOpacity={0.7}
-                        accessibilityLabel={showOldPassword ? 'Hide old password' : 'Show old password'}
-                      >
-                        <Ionicons
-                          name={showOldPassword ? 'eye-outline' : 'eye-off-outline'}
-                          size={20}
-                          color="#b45309"
-                        />
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        onPress={handleCopyOldPassword}
-                        style={styles.oldPasswordCopyBtn}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons
-                          name={copiedOldPassword ? 'checkmark-circle' : 'copy-outline'}
-                          size={18}
-                          color={copiedOldPassword ? '#059669' : '#b45309'}
-                        />
-                        <Text style={[styles.copyBtnText, copiedOldPassword && { color: '#059669' }]}>
-                          {copiedOldPassword ? 'Copied' : 'Copy'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  {/* Keep Old Password & Log In Button */}
-                  <TouchableOpacity
-                    style={styles.keepPasswordBtn}
-                    onPress={handleKeepOldPassword}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.keepPasswordBtnText}>
-                      ✓ KEEP THIS PASSWORD & LOG IN
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* OR DIVIDER */}
-                <View style={styles.orDividerContainer}>
-                  <View style={styles.orLine} />
-                  <View style={styles.orBadge}>
-                    <Text style={styles.orText}>OR CHANGE TO A NEW PASSWORD</Text>
-                  </View>
-                  <View style={styles.orLine} />
                 </View>
 
                 {/* NEW PASSWORD SECTION */}
@@ -569,18 +468,13 @@ export default function ForgotPasswordModal({
                 <View style={[styles.passwordWrapper, newPasswordError ? styles.inputError : null]}>
                   <TextInput
                     style={styles.passwordInput}
-                    placeholder="Enter new account password (e.g. User12@26)"
+                    placeholder="Enter new password (min 4 characters)"
                     placeholderTextColor="#94a3b8"
                     value={newPassword}
                     onChangeText={(val) => {
                       setNewPassword(val);
                       if (errorMessage) setErrorMessage(null);
-                      if (val) {
-                        const check = validatePassword(val);
-                        setNewPasswordError(check.isValid ? null : (check.error || null));
-                      } else {
-                        setNewPasswordError(null);
-                      }
+                      if (newPasswordError) setNewPasswordError(null);
                       if (confirmPassword) {
                         setConfirmPasswordError(val === confirmPassword ? null : 'Passwords do not match.');
                       }
@@ -596,7 +490,7 @@ export default function ForgotPasswordModal({
                   >
                     <Ionicons
                       name={showNewPassword ? 'eye-outline' : 'eye-off-outline'}
-                      size={22}
+                      size={20}
                       color={showNewPassword ? '#b45309' : '#64748b'}
                     />
                   </TouchableOpacity>
@@ -605,7 +499,7 @@ export default function ForgotPasswordModal({
                   <Text style={styles.fieldErrorText}>⚠️ {newPasswordError}</Text>
                 ) : null}
 
-                <Text style={[styles.inputLabel, { marginTop: 12 }]}>CONFIRM NEW PASSWORD</Text>
+                <Text style={[styles.inputLabel, { marginTop: 10 }]}>CONFIRM NEW PASSWORD</Text>
                 <View style={[styles.passwordWrapper, confirmPasswordError ? styles.inputError : null]}>
                   <TextInput
                     style={styles.passwordInput}
@@ -615,11 +509,7 @@ export default function ForgotPasswordModal({
                     onChangeText={(val) => {
                       setConfirmPassword(val);
                       if (errorMessage) setErrorMessage(null);
-                      if (val) {
-                        setConfirmPasswordError(val === newPassword ? null : 'Passwords do not match.');
-                      } else {
-                        setConfirmPasswordError(null);
-                      }
+                      if (confirmPasswordError) setConfirmPasswordError(null);
                     }}
                     secureTextEntry={!showConfirmPassword}
                     autoCapitalize="none"
@@ -632,7 +522,7 @@ export default function ForgotPasswordModal({
                   >
                     <Ionicons
                       name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'}
-                      size={22}
+                      size={20}
                       color={showConfirmPassword ? '#b45309' : '#64748b'}
                     />
                   </TouchableOpacity>
@@ -641,57 +531,20 @@ export default function ForgotPasswordModal({
                   <Text style={styles.fieldErrorText}>⚠️ {confirmPasswordError}</Text>
                 ) : null}
 
-                {/* Password Rules Pill Box (matches Registration validation exactly) */}
-                <View style={styles.criteriaBox}>
-                  <View style={styles.criteriaHeaderRow}>
-                    <Text style={styles.criteriaTitle}>🔒 Password Rules (Required for All Roles):</Text>
-                    {passwordCriteria.allValid && (
-                      <View style={styles.criteriaBadgeMet}>
-                        <Text style={styles.criteriaBadgeMetText}>✓ ALL RULES MET</Text>
-                      </View>
-                    )}
-                  </View>
-                  <View style={styles.pillsRow}>
-                    <View style={[styles.pillItem, passwordCriteria.minLength && styles.pillItemMet]}>
-                      <Text style={[styles.pillText, passwordCriteria.minLength && styles.pillTextMet]}>
-                        {passwordCriteria.minLength ? '✓' : '○'} Min 8 Characters
-                      </Text>
-                    </View>
-                    <View style={[styles.pillItem, passwordCriteria.hasUppercase && styles.pillItemMet]}>
-                      <Text style={[styles.pillText, passwordCriteria.hasUppercase && styles.pillTextMet]}>
-                        {passwordCriteria.hasUppercase ? '✓' : '○'} 1 Uppercase (A-Z)
-                      </Text>
-                    </View>
-                    <View style={[styles.pillItem, passwordCriteria.hasSpecialChar && styles.pillItemMet]}>
-                      <Text style={[styles.pillText, passwordCriteria.hasSpecialChar && styles.pillTextMet]}>
-                        {passwordCriteria.hasSpecialChar ? '✓' : '○'} 1 Special Char (e.g. !@#$)
-                      </Text>
-                    </View>
-                    <View style={[styles.pillItem, passwordCriteria.hasTwoNumbers && styles.pillItemMet]}>
-                      <Text style={[styles.pillText, passwordCriteria.hasTwoNumbers && styles.pillTextMet]}>
-                        {passwordCriteria.hasTwoNumbers ? '✓' : '○'} 2 Numbers (0-9)
-                      </Text>
-                    </View>
-                    {confirmPassword ? (
-                      <View style={[styles.pillItem, (newPassword && newPassword === confirmPassword) ? styles.pillItemMet : styles.pillItemError]}>
-                        <Text style={[styles.pillText, (newPassword && newPassword === confirmPassword) ? styles.pillTextMet : styles.pillTextError]}>
-                          {(newPassword && newPassword === confirmPassword) ? '✓' : '✗'} Passwords Match
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-                </View>
+                <Text style={styles.inputHint}>
+                  Password must be at least 4 characters long.
+                </Text>
 
                 <TouchableOpacity
                   style={[styles.primaryBtn, isLoading && styles.btnDisabled]}
                   onPress={handleResetPassword}
                   disabled={isLoading}
-                  activeOpacity={0.8}
+                  activeOpacity={0.85}
                 >
                   {isLoading ? (
                     <ActivityIndicator size="small" color="#020612" />
                   ) : (
-                    <Text style={styles.primaryBtnText}>SAVE & ENCRYPT NEW PASSWORD ✓</Text>
+                    <Text style={styles.primaryBtnText}>RESET PASSWORD & LOG IN →</Text>
                   )}
                 </TouchableOpacity>
 
@@ -721,9 +574,10 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    maxWidth: 480,
+    maxWidth: 440,
+    maxHeight: '90%',
     backgroundColor: '#ffffff',
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     shadowColor: '#000000',
@@ -736,15 +590,15 @@ const styles = StyleSheet.create({
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: 22,
-    paddingTop: 22,
-    paddingBottom: 16,
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9'
   },
   modalTitle: {
-    fontSize: 19,
+    fontSize: 17,
     fontWeight: '800',
     color: '#0f172a',
     letterSpacing: 0.3
