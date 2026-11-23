@@ -38,6 +38,9 @@ export interface SquadPlayer {
   name: string;
   email: string;
   role: string;
+  phone?: string;
+  mobile?: string;
+  aadhaar?: string;
 }
 
 const COMMON_ROLES = [
@@ -481,10 +484,14 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   const [teamName, setTeamName] = useState<string>('');
   const [coachName, setCoachName] = useState<string>('');
   const [coachEmail, setCoachEmail] = useState<string>('');
+  const [coachMobile, setCoachMobile] = useState<string>('');
+  const [coachAadhaar, setCoachAadhaar] = useState<string>('');
   const [teamTaluk, setTeamTaluk] = useState<string>('Virudhunagar');
   const [teamCustomTaluk, setTeamCustomTaluk] = useState<string>('');
   const [squadPlayerName, setSquadPlayerName] = useState<string>('');
   const [squadPlayerEmail, setSquadPlayerEmail] = useState<string>('');
+  const [squadPlayerPhone, setSquadPlayerPhone] = useState<string>('');
+  const [squadPlayerAadhaar, setSquadPlayerAadhaar] = useState<string>('');
   const [squadPlayerRole, setSquadPlayerRole] = useState<string>('Batter');
   const [players, setPlayers] = useState<SquadPlayer[]>([]);
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
@@ -657,12 +664,17 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setTeamName('Virudhunagar Super Strikers CC');
       setCoachName('Coach Murugan');
       setCoachEmail('coach.murugan@strikerscc.org');
+      setCoachMobile('9842112345');
+      setCoachAadhaar('5432 9876 1234');
       setTeamTaluk('Virudhunagar');
       const squad: SquadPlayer[] = SAMPLE_15_SQUAD.map((item, idx) => ({
         id: `sample-${idx + 1}-${Date.now()}`,
         name: item.name,
         email: item.email,
-        role: item.role
+        role: item.role,
+        phone: `98421${String(10000 + idx + 1).slice(-5)}`,
+        mobile: `98421${String(10000 + idx + 1).slice(-5)}`,
+        aadhaar: `5432 9876 ${String(1000 + idx + 1)}`
       }));
       setPlayers(squad);
       setTeamAgreed(true);
@@ -1059,12 +1071,21 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const name = squadPlayerName.trim();
     const email = squadPlayerEmail.trim().toLowerCase();
     const role = squadPlayerRole.trim() || 'Batter';
+    const phone = squadPlayerPhone.trim().replace(/\D/g, '');
+    const rawAadhaar = squadPlayerAadhaar.trim().replace(/\D/g, '');
 
     const nameErr = validateNameValue(name, 'Squad Player Name');
     const emailErr = validateEmailValue(email, 'Squad Player Email');
     const errs: Record<string, string> = {};
     if (nameErr) errs.squadPlayerName = nameErr;
     if (emailErr) errs.squadPlayerEmail = emailErr;
+
+    if (phone && phone.length !== 10) {
+      errs.squadPlayerPhone = 'Player Phone Number must be exactly 10 digits.';
+    }
+    if (rawAadhaar && (rawAadhaar.length !== 12 || rawAadhaar[0] === '0' || rawAadhaar[0] === '1')) {
+      errs.squadPlayerAadhaar = 'Player Aadhaar must be 12 digits and cannot start with 0 or 1.';
+    }
 
     if (coachEmail.trim() && email === coachEmail.trim().toLowerCase()) {
       errs.squadPlayerEmail = `Player email cannot be identical to Coach Email.`;
@@ -1086,7 +1107,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
     if (editingPlayerId) {
       // Update existing player
-      setPlayers((prev) => prev.map((p) => p.id === editingPlayerId ? { ...p, name, email, role } : p));
+      setPlayers((prev) => prev.map((p) => p.id === editingPlayerId ? { ...p, name, email, role, phone, mobile: phone, aadhaar: formatAadhaar(rawAadhaar) } : p));
       setEditingPlayerId(null);
       setStatusMessage(`✓ Updated ${name} (${role}) in squad!`);
     } else {
@@ -1094,7 +1115,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
         id: Date.now().toString() + Math.random().toString(36).substring(2, 6),
         name,
         email,
-        role
+        role,
+        phone,
+        mobile: phone,
+        aadhaar: rawAadhaar ? formatAadhaar(rawAadhaar) : ''
       };
       setPlayers((prev) => [...prev, newPlayer]);
       setStatusMessage(`✓ Added ${name} (${role}) to squad! (${players.length + 1} players in squad)`);
@@ -1102,8 +1126,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
     setSquadPlayerName('');
     setSquadPlayerEmail('');
+    setSquadPlayerPhone('');
+    setSquadPlayerAadhaar('');
     setSquadPlayerRole('Batter');
-    setFieldErrors((prev) => ({ ...prev, squad: undefined, squadPlayerName: undefined, squadPlayerEmail: undefined }));
+    setFieldErrors((prev) => ({ ...prev, squad: undefined, squadPlayerName: undefined, squadPlayerEmail: undefined, squadPlayerPhone: undefined, squadPlayerAadhaar: undefined }));
     setStatusType('info');
   };
 
@@ -1111,16 +1137,20 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     setEditingPlayerId(player.id);
     setSquadPlayerName(player.name);
     setSquadPlayerEmail(player.email);
+    setSquadPlayerPhone(player.phone || player.mobile || '');
+    setSquadPlayerAadhaar(player.aadhaar || '');
     setSquadPlayerRole(player.role);
-    setFieldErrors((prev) => ({ ...prev, squadPlayerName: undefined, squadPlayerEmail: undefined }));
+    setFieldErrors((prev) => ({ ...prev, squadPlayerName: undefined, squadPlayerEmail: undefined, squadPlayerPhone: undefined, squadPlayerAadhaar: undefined }));
   };
 
   const handleCancelEdit = () => {
     setEditingPlayerId(null);
     setSquadPlayerName('');
     setSquadPlayerEmail('');
+    setSquadPlayerPhone('');
+    setSquadPlayerAadhaar('');
     setSquadPlayerRole('Batter');
-    setFieldErrors((prev) => ({ ...prev, squadPlayerName: undefined, squadPlayerEmail: undefined }));
+    setFieldErrors((prev) => ({ ...prev, squadPlayerName: undefined, squadPlayerEmail: undefined, squadPlayerPhone: undefined, squadPlayerAadhaar: undefined }));
   };
 
   const handleRemovePlayer = (id: string) => {
@@ -1132,16 +1162,21 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     if (!teamName.trim()) setTeamName('Virudhunagar Strikers Cricket Club');
     if (!coachName.trim()) setCoachName('S. Murugan (NIS Certified Coach)');
     if (!coachEmail.trim()) setCoachEmail('coach.murugan@strikerscc.org');
+    if (!coachMobile.trim()) setCoachMobile('9842112345');
+    if (!coachAadhaar.trim()) setCoachAadhaar('5432 9876 1234');
 
     const squad: SquadPlayer[] = SAMPLE_15_SQUAD.map((item, idx) => ({
       id: `sample-${idx + 1}-${Date.now()}`,
       name: item.name,
       email: item.email,
-      role: item.role
+      role: item.role,
+      phone: `98421${String(10000 + idx + 1).slice(-5)}`,
+      mobile: `98421${String(10000 + idx + 1).slice(-5)}`,
+      aadhaar: `5432 9876 ${String(1000 + idx + 1)}`
     }));
 
     setPlayers(squad);
-    setStatusMessage('⚡ Sample squad loaded! Coach details and all 15 squad players added.');
+    setStatusMessage('⚡ Sample squad loaded! Coach details and all 15 squad players added with Phone & Aadhaar numbers.');
     setStatusType('success');
   };
 
@@ -1154,6 +1189,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const teamNameErr = validateTeamNameValue(teamName, 'Team Name');
     const coachNameErr = validateNameValue(coachName, 'Coach Name');
     const coachEmailErr = validateEmailValue(coachEmail, 'Coach Official Email Address');
+    const coachPhoneRes = validatePhone(coachMobile, 'Coach Phone Number');
+    const coachMobileErr = coachPhoneRes.isValid ? null : coachPhoneRes.error;
+    const coachAadhaarRes = validateAadhaar(coachAadhaar);
+    const coachAadhaarErr = coachAadhaarRes.isValid ? null : coachAadhaarRes.error;
+
     let talukErr: string | null = null;
     if (teamTaluk === 'Other' && !targetTaluk) talukErr = 'Please enter your team Taluk name.';
 
@@ -1161,6 +1201,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     if (teamNameErr) errs.teamName = teamNameErr;
     if (coachNameErr) errs.name = coachNameErr;
     if (coachEmailErr) errs.email = coachEmailErr;
+    if (coachMobileErr) errs.coachMobile = coachMobileErr;
+    if (coachAadhaarErr) errs.coachAadhaar = coachAadhaarErr;
     if (talukErr) errs.taluk = talukErr;
 
     if (Object.keys(errs).length > 0) {
@@ -1229,6 +1271,9 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
         teamName: teamName.trim(),
         coachName: coachName.trim(),
         coachEmail: coachEmail.trim().toLowerCase(),
+        coachPhone: coachMobile.trim().replace(/\D/g, ''),
+        coachMobile: coachMobile.trim().replace(/\D/g, ''),
+        coachAadhaar: coachAadhaar.trim().replace(/\D/g, ''),
         password,
         taluk: targetTaluk,
         city: 'Virudhunagar',
@@ -1236,7 +1281,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
           jerseyNumber: idx + 1,
           name: p.name,
           email: p.email,
-          role: p.role
+          role: p.role,
+          phone: (p.phone || p.mobile || '').replace(/\D/g, ''),
+          mobile: (p.phone || p.mobile || '').replace(/\D/g, ''),
+          aadhaar: (p.aadhaar || '').replace(/\D/g, '')
         })),
         otp: otpCode.trim()
       });
@@ -2256,8 +2304,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     </View>
                   </View>
 
-                  {/* Row 2: Coach Email (left) & Team Taluk (right) */}
-                  <View style={styles.formRow}>
+                  {/* Row 2: Coach Email (left) & Coach Phone (right) */}
+                  <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Coach Official Email Address *</Text>
                       <TextInput
@@ -2300,6 +2348,117 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.email}</Text>
                       )}
                     </View>
+
+                    {/* Coach Phone Number Input */}
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <FontAwesome name="phone" size={13} color="#0284c7" />
+                          <Text style={styles.label}>Coach Phone Number (10 Digits) *</Text>
+                        </View>
+                        <Text style={{ fontSize: 10, color: coachMobile.replace(/\D/g, '').length === 10 ? '#16a34a' : '#64748b', fontWeight: '700' }}>
+                          {coachMobile.replace(/\D/g, '').length === 10 ? '✓ 10/10 Digits' : `(${coachMobile.replace(/\D/g, '').length}/10)`}
+                        </Text>
+                      </View>
+                      <View style={[styles.dynamicInputWrap, fieldErrors.coachMobile ? styles.inputError : (coachMobile.replace(/\D/g, '').length === 10 ? styles.dynamicInputSuccess : null)]}>
+                        <View style={styles.phonePrefixBox}>
+                          <Text style={styles.phonePrefixText}>🇮🇳 +91</Text>
+                        </View>
+                        <TextInput
+                          style={styles.dynamicInputCore}
+                          value={coachMobile}
+                          onChangeText={(val) => {
+                            const cleaned = formatPhone(val);
+                            setCoachMobile(cleaned);
+                            if (cleaned.length === 10) {
+                              const res = validatePhone(cleaned, 'Coach Phone Number');
+                              setFieldErrors((prev) => ({ ...prev, coachMobile: res.isValid ? undefined : res.error }));
+                            } else {
+                              setFieldErrors((prev) => ({ ...prev, coachMobile: undefined }));
+                            }
+                          }}
+                          onBlur={() => {
+                            if (coachMobile.trim()) {
+                              const res = validatePhone(coachMobile, 'Coach Phone Number');
+                              setFieldErrors((prev) => ({ ...prev, coachMobile: res.isValid ? undefined : res.error }));
+                            }
+                          }}
+                          placeholder="9876543210"
+                          keyboardType="phone-pad"
+                          placeholderTextColor="#94a3b8"
+                          maxLength={10}
+                        />
+                        {coachMobile.replace(/\D/g, '').length === 10 && (
+                          <View style={styles.validCheckBadge}>
+                            <Text style={styles.validCheckText}>✓</Text>
+                          </View>
+                        )}
+                      </View>
+                      {fieldErrors.coachMobile ? (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.coachMobile}</Text>
+                      ) : (
+                        <Text style={styles.helperText}>Used for official club & match notifications</Text>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Row 3: Coach Aadhaar (left) & Team Taluk (right) */}
+                  <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                    {/* Coach Aadhaar Number Input */}
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <FontAwesome name="id-card" size={13} color="#b91c1c" />
+                          <Text style={styles.label}>Coach Aadhaar Number (12 Digits) *</Text>
+                        </View>
+                        <Text style={{ fontSize: 10, color: coachAadhaar.replace(/\D/g, '').length === 12 ? '#16a34a' : '#64748b', fontWeight: '700' }}>
+                          {coachAadhaar.replace(/\D/g, '').length === 12 ? '✓ 12/12 Digits' : `(${coachAadhaar.replace(/\D/g, '').length}/12)`}
+                        </Text>
+                      </View>
+                      <View style={[styles.dynamicInputWrap, fieldErrors.coachAadhaar ? styles.inputError : (coachAadhaar.replace(/\D/g, '').length === 12 ? styles.dynamicInputSuccess : null)]}>
+                        <View style={styles.aadhaarIconBox}>
+                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#b91c1c' }}>UIDAI</Text>
+                        </View>
+                        <TextInput
+                          style={styles.dynamicInputCore}
+                          value={coachAadhaar}
+                          onChangeText={(val) => {
+                            const formatted = formatAadhaar(val);
+                            setCoachAadhaar(formatted);
+                            const rawDigits = formatted.replace(/\D/g, '');
+                            if (rawDigits.length === 12) {
+                              const res = validateAadhaar(rawDigits);
+                              setFieldErrors((prev) => ({ ...prev, coachAadhaar: res.isValid ? undefined : res.error }));
+                            } else if (rawDigits.length > 0 && (rawDigits[0] === '0' || rawDigits[0] === '1')) {
+                              setFieldErrors((prev) => ({ ...prev, coachAadhaar: 'Aadhaar number cannot start with 0 or 1.' }));
+                            } else {
+                              setFieldErrors((prev) => ({ ...prev, coachAadhaar: undefined }));
+                            }
+                          }}
+                          onBlur={() => {
+                            if (coachAadhaar.trim()) {
+                              const res = validateAadhaar(coachAadhaar);
+                              setFieldErrors((prev) => ({ ...prev, coachAadhaar: res.isValid ? undefined : res.error }));
+                            }
+                          }}
+                          placeholder="5432 9876 1234"
+                          keyboardType="number-pad"
+                          placeholderTextColor="#94a3b8"
+                          maxLength={14}
+                        />
+                        {coachAadhaar.replace(/\D/g, '').length === 12 && (
+                          <View style={[styles.validCheckBadge, { backgroundColor: '#16a34a' }]}>
+                            <Text style={styles.validCheckText}>✓</Text>
+                          </View>
+                        )}
+                      </View>
+                      {fieldErrors.coachAadhaar ? (
+                        <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.coachAadhaar}</Text>
+                      ) : (
+                        <Text style={styles.helperText}>Indian 12-digit National Identification Number</Text>
+                      )}
+                    </View>
+
                     <DropdownField
                       label="Team Taluk Jurisdiction"
                       value={teamTaluk}
@@ -2354,6 +2513,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         </TouchableOpacity>
                       </View>
                     )}
+                    {/* Row 1: Name and Email */}
                     <View style={styles.formRow}>
                       <View style={{ flex: 1 }}>
                         <TextInput
@@ -2365,7 +2525,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                             const err = validateNameValue(sanitized, 'Squad Player Name');
                             setFieldErrors((prev) => ({ ...prev, squadPlayerName: err || undefined }));
                           }}
-                          placeholder="Player Full Name"
+                          placeholder="Player Full Name *"
                           placeholderTextColor="#94a3b8"
                         />
                         {fieldErrors.squadPlayerName && (
@@ -2388,7 +2548,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                               setFieldErrors((prev) => ({ ...prev, squadPlayerEmail: err || undefined }));
                             }
                           }}
-                          placeholder="Player Email Address"
+                          placeholder="Player Email Address *"
                           keyboardType="email-address"
                           placeholderTextColor="#94a3b8"
                           autoCapitalize="none"
@@ -2406,6 +2566,84 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         )}
                       </View>
                     </View>
+
+                    {/* Row 2: Player Phone and Player Aadhaar */}
+                    <View style={[styles.formRow, { marginTop: 8 }, isMobile && { flexDirection: 'column' }]}>
+                      {/* Player Phone */}
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <FontAwesome name="phone" size={11} color="#0284c7" />
+                            <Text style={styles.label}>Player Phone (10 Digits)</Text>
+                          </View>
+                          <Text style={{ fontSize: 10, color: squadPlayerPhone.replace(/\D/g, '').length === 10 ? '#16a34a' : '#64748b', fontWeight: '700' }}>
+                            {squadPlayerPhone.replace(/\D/g, '').length === 10 ? '✓ 10/10' : `(${squadPlayerPhone.replace(/\D/g, '').length}/10)`}
+                          </Text>
+                        </View>
+                        <View style={[styles.dynamicInputWrap, fieldErrors.squadPlayerPhone ? styles.inputError : null]}>
+                          <View style={styles.phonePrefixBox}>
+                            <Text style={styles.phonePrefixText}>+91</Text>
+                          </View>
+                          <TextInput
+                            style={styles.dynamicInputCore}
+                            value={squadPlayerPhone}
+                            onChangeText={(val) => {
+                              const cleaned = formatPhone(val);
+                              setSquadPlayerPhone(cleaned);
+                              if (cleaned.length === 10 || cleaned.length === 0) {
+                                setFieldErrors((prev) => ({ ...prev, squadPlayerPhone: undefined }));
+                              }
+                            }}
+                            placeholder="9876543210"
+                            keyboardType="phone-pad"
+                            placeholderTextColor="#94a3b8"
+                            maxLength={10}
+                          />
+                        </View>
+                        {fieldErrors.squadPlayerPhone && (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.squadPlayerPhone}</Text>
+                        )}
+                      </View>
+
+                      {/* Player Aadhaar */}
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <FontAwesome name="id-card" size={11} color="#b91c1c" />
+                            <Text style={styles.label}>Player Aadhaar (12 Digits)</Text>
+                          </View>
+                          <Text style={{ fontSize: 10, color: squadPlayerAadhaar.replace(/\D/g, '').length === 12 ? '#16a34a' : '#64748b', fontWeight: '700' }}>
+                            {squadPlayerAadhaar.replace(/\D/g, '').length === 12 ? '✓ 12/12' : `(${squadPlayerAadhaar.replace(/\D/g, '').length}/12)`}
+                          </Text>
+                        </View>
+                        <View style={[styles.dynamicInputWrap, fieldErrors.squadPlayerAadhaar ? styles.inputError : null]}>
+                          <View style={styles.aadhaarIconBox}>
+                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#b91c1c' }}>UIDAI</Text>
+                          </View>
+                          <TextInput
+                            style={styles.dynamicInputCore}
+                            value={squadPlayerAadhaar}
+                            onChangeText={(val) => {
+                              const formatted = formatAadhaar(val);
+                              setSquadPlayerAadhaar(formatted);
+                              const rawDigits = formatted.replace(/\D/g, '');
+                              if (rawDigits.length === 12 || rawDigits.length === 0) {
+                                setFieldErrors((prev) => ({ ...prev, squadPlayerAadhaar: undefined }));
+                              }
+                            }}
+                            placeholder="5432 9876 1234"
+                            keyboardType="number-pad"
+                            placeholderTextColor="#94a3b8"
+                            maxLength={14}
+                          />
+                        </View>
+                        {fieldErrors.squadPlayerAadhaar && (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.squadPlayerAadhaar}</Text>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Row 3: Role and Add/Update button */}
                     <View style={[styles.formRow, { marginTop: 8, marginBottom: 0 }]}>
                       <DropdownField
                         label="Squad Role"
@@ -2436,6 +2674,18 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                               </View>
                             </View>
                             <Text style={styles.playerItemEmail}>{p.email}</Text>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 3 }}>
+                              {(p.phone || p.mobile) ? (
+                                <Text style={{ fontSize: 11, color: '#0369a1', fontWeight: '600' }}>
+                                  📞 +91 {p.phone || p.mobile}
+                                </Text>
+                              ) : null}
+                              {p.aadhaar ? (
+                                <Text style={{ fontSize: 11, color: '#991b1b', fontWeight: '600' }}>
+                                  🆔 UIDAI: {p.aadhaar}
+                                </Text>
+                              ) : null}
+                            </View>
                           </View>
                           <TouchableOpacity onPress={() => handleEditPlayer(p)} style={[styles.editBtn, editingPlayerId === p.id && styles.editBtnActive]}>
                             <Text style={styles.editBtnText}>✏️</Text>
