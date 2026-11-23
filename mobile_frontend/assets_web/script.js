@@ -27,14 +27,12 @@ function getApiBaseUrl() {
   if (typeof window !== 'undefined' && window.REACT_APP_API_URL) return window.REACT_APP_API_URL.replace(/\/+$/, '');
   if (typeof window !== 'undefined' && window.__ENV__ && window.__ENV__.API_URL) return window.__ENV__.API_URL.replace(/\/+$/, '');
   if (typeof window !== 'undefined' && window.location) {
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      return `http://${window.location.hostname}:5000`;
+    if (window.location.port === '80' || window.location.port === '' || window.location.port === '443') {
+      return '';
     }
-    if (window.location.origin && !window.location.origin.includes('5000')) {
-      return window.location.origin;
-    }
+    return `http://${window.location.hostname}:5000`;
   }
-  return 'http://localhost:5000';
+  return '';
 }
 
 /* --------------------------------------------------------------------------

@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import { ScorerApi, API_URL, resolveImageUrl } from '../../services/api';
 import { showSuccess, showError, showWarning, showConfirm } from '../../utils/sweetalert';
+import { useDebounce } from '../../utils/debounce';
 
 export interface TournamentManagementProps {
   onOpenScheduler?: (tournament: any, match?: any) => void;
@@ -43,6 +44,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [statusFilter, setStatusFilter] = useState<TournamentFilterStatus>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   // ── Admin Sub-Sections (Directory / Registrations / Approved Teams) ──────
   const [adminSection, setAdminSection] = useState<'directory' | 'registrations' | 'approved'>('directory');
@@ -51,6 +53,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
   const [regTournamentFilter, setRegTournamentFilter] = useState<string>('ALL');
   const [regStatusFilter, setRegStatusFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
   const [regSearchQuery, setRegSearchQuery] = useState<string>('');
+  const debouncedRegSearchQuery = useDebounce(regSearchQuery, 300);
 
   // Rejection Reason Prompt Modal
   const [rejectModalOpen, setRejectModalOpen] = useState<boolean>(false);
@@ -668,8 +671,8 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
         if (statusFilter !== 'ONGOING' && s !== statusFilter) return false;
       }
       // Search filter
-      if (searchQuery.trim()) {
-        const term = searchQuery.toLowerCase();
+      if (debouncedSearchQuery.trim()) {
+        const term = debouncedSearchQuery.toLowerCase();
         const n = (t.name || '').toLowerCase();
         const sn = (t.short_name || '').toLowerCase();
         const c = (t.category || '').toLowerCase();
@@ -681,7 +684,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
       }
       return true;
     });
-  }, [tournaments, statusFilter, searchQuery]);
+  }, [tournaments, statusFilter, debouncedSearchQuery]);
 
   // Statistics Summary
   const summaryCounts = useMemo(() => {
@@ -735,8 +738,8 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
         return false;
       }
       // Search filter
-      if (regSearchQuery.trim()) {
-        const q = regSearchQuery.toLowerCase();
+      if (debouncedRegSearchQuery.trim()) {
+        const q = debouncedRegSearchQuery.toLowerCase();
         const tn = (r.team_name || r.teamName || '').toLowerCase();
         const tourName = (r.tournament_name || r.tournamentName || '').toLowerCase();
         const cn = (r.coach_name || r.coachName || '').toLowerCase();
@@ -748,7 +751,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
       }
       return true;
     });
-  }, [registrations, regTournamentFilter, regStatusFilter, regSearchQuery]);
+  }, [registrations, regTournamentFilter, regStatusFilter, debouncedRegSearchQuery]);
 
   const pendingRegistrationsCount = useMemo(() => {
     return registrations.filter(r => (r.status || 'PENDING').toUpperCase() === 'PENDING').length;

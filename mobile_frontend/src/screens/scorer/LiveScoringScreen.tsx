@@ -895,7 +895,15 @@ export default function LiveScoringScreen() {
       }
     });
 
+    // Polling fallback every 12s ONLY when disconnected from Socket.IO room
+    const pollInterval = setInterval(() => {
+      if (!socket || !socket.connected) {
+        handleSyncOfflineQueue();
+      }
+    }, 12000);
+
     return () => {
+      clearInterval(pollInterval);
       ScorerApi.disconnectSocket();
     };
   }, [matchId]);

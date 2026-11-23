@@ -85,11 +85,34 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
 
   useEffect(() => {
     loadScorecard();
+
+    // ─── REAL-TIME SCORECARD UPDATES VIA SOCKET.IO ROOM ────────────────────
+    let pollTimer: any = null;
+    let socketRef: any = null;
+
+    try {
+      socketRef = ScorerApi.connectSocket(matchId, (_payload) => {
+        // Refresh scorecard on live ball update in match room
+        loadScorecard(false);
+      });
+    } catch (_e) {}
+
+    // Polling fallback every 12 seconds ONLY if socket is disconnected / unavailable
+    pollTimer = setInterval(() => {
+      if (!socketRef || !socketRef.connected) {
+        loadScorecard(false);
+      }
+    }, 12000);
+
+    return () => {
+      if (pollTimer) clearInterval(pollTimer);
+      ScorerApi.disconnectSocket();
+    };
   }, [matchId]);
 
-  const loadScorecard = async () => {
+  const loadScorecard = async (showSpinner = true) => {
     try {
-      setIsLoading(true);
+      if (showSpinner) setIsLoading(true);
       let res = await ScorerApi.getScorecard(matchId);
       if (!res?.data?.match) {
         // Fallback to M001 or M002 if specific match has no scorecard records yet
@@ -104,7 +127,7 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
         if (fallbackRes?.data) setScorecardData(fallbackRes.data);
       } catch (_err) {}
     } finally {
-      setIsLoading(false);
+      if (showSpinner) setIsLoading(false);
     }
   };
 
@@ -523,7 +546,7 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
         <Text style={{ fontSize: 14, color: '#64748b', textAlign: 'center', marginBottom: 20 }}>
           Unable to find scorecard records in the database for Match ID: {matchId}
         </Text>
-        <TouchableOpacity style={styles.actionBtn} onPress={loadScorecard}>
+        <TouchableOpacity style={styles.actionBtn} onPress={() => loadScorecard()}>
           <Text style={styles.actionBtnText}>Retry Loading</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.actionBtn, { marginTop: 12, backgroundColor: '#f1f5f9' }]} onPress={handleBack}>

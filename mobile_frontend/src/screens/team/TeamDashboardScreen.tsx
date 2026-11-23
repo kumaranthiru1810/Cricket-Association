@@ -32,7 +32,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import { TeamApi, getCurrentUser, ScorerApi, SOCKET_URL } from '../../services/api';
+import { TeamApi, getCurrentUser, ScorerApi, SOCKET_URL, resolveImageUrl } from '../../services/api';
 import { showError, showSuccess } from '../../utils/sweetalert';
 import {
   RefreshIcon,
@@ -463,15 +463,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
 
   // Resolve full URI for team photo / logo (handles base64 data URLs, absolute URLs, relative upload paths)
   const resolvePhotoUrl = (photoUri?: string | null): string | null => {
-    if (!photoUri || typeof photoUri !== 'string') return null;
-    const trimmed = photoUri.trim();
-    if (!trimmed || trimmed === 'null' || trimmed === 'undefined') return null;
-    if (trimmed.startsWith('data:image/') || trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('blob:')) {
-      return trimmed;
-    }
-    const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-    const base = SOCKET_URL || 'http://localhost:5000';
-    return `${base}${cleanPath}`;
+    return resolveImageUrl(photoUri);
   };
 
   // Open Interactive Photo Crop Modal

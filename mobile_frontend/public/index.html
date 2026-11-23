@@ -52,10 +52,10 @@
     <meta name="twitter:title" content="Cricket Federation of Virudhunagar District" />
     <meta name="twitter:description" content="Official cricket portal featuring live scorecards, tournament fixtures, and wagon wheel analytics." />
 
-    <!-- Video Preload & Connection Pre-warming for Instant Streaming -->
-    <link rel="preload" href="/preloader.mp4" as="video" type="video/mp4" crossorigin="anonymous" />
-    <link rel="preconnect" href="http://localhost:5000" crossorigin />
-    <link rel="dns-prefetch" href="http://localhost:5000" />
+    <!-- Resource Hints & Font Optimization (Outfit + Barlow with font-display: swap) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Barlow:wght@600;700&display=swap" media="print" onload="this.media='all'" />
 
     <!-- Structured Data JSON-LD for Google & Search Engine Rich Snippets -->
     <script type="application/ld+json">
@@ -232,15 +232,12 @@
       /* CINEMATIC PRELOADER & GRAND WEBSITE ENTRANCE ANIMATIONS     */
       /* ============================================================ */
       body.cfvd-preloader-active {
-        overflow: hidden !important;
+        overflow: auto;
       }
 
       body.cfvd-preloader-active #root {
-        opacity: 0;
-        transform: scale(0.93) translateY(24px);
-        filter: blur(14px) brightness(0.75);
-        pointer-events: none;
-        will-change: transform, opacity, filter;
+        opacity: 1;
+        pointer-events: auto;
       }
 
       /* Grand Website Entrance Animation upon Video Completion */
@@ -444,7 +441,8 @@
           muted
           playsinline
           webkit-playsinline
-          preload="auto"
+          preload="none"
+          poster="/stadium.webp"
           style="
             width: 100%;
             height: 100%;
@@ -459,7 +457,6 @@
           <source src="/preloader.mp4" type="video/mp4" />
           <source src="./preloader.mp4" type="video/mp4" />
           <source src="/assets/preloader.mp4" type="video/mp4" />
-          <source src="http://localhost:5000/uploads/preloader.mp4" type="video/mp4" />
         </video>
       </div>
 

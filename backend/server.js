@@ -242,7 +242,7 @@ function handleGracefulShutdown(signal) {
     try {
       await db.close();
       console.log('Database connections closed cleanly.');
-    } catch (_) {}
+    } catch (_) { }
     process.exit(0);
   });
 
