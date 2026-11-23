@@ -11,7 +11,9 @@ const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/cricket_db';
+const MONGODB_URI = process.env.NODE_ENV === 'test'
+  ? (process.env.TEST_MONGODB_URI || 'mongodb://127.0.0.1:27017/cricket_test_db')
+  : (process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/cricket_db');
 
 let isConnected = false;
 

@@ -3,6 +3,8 @@
  * Verification suite for the 6 Cricket Logic Bug Fixes
  */
 
+process.env.NODE_ENV = 'test';
+
 const assert = require('assert');
 const db = require('../config/db');
 const scoringEngine = require('../services/scoringEngine');
@@ -341,6 +343,13 @@ async function runCricketLogicTests() {
 
   res2.emit('finish');
   console.log('✅ PASS: Bug 6: Scoring concurrency queues concurrent requests and avoids false 409 conflicts');
+
+  // Clean up all temporary test records so they never persist in the database
+  try {
+    await db.models.Match.deleteMany({ id: { $regex: /^(M-NRR|M-OVERLAP|M-DLS|M-WIDE|M-ALLOUT|M-LOCK)/ } });
+    await db.models.Innings.deleteMany({ id: { $regex: /^(INN-M1|INN-OVERLAP|INN-DLS|INN-WIDE|INN-ALLOUT)/ } });
+    await db.models.Tournament.deleteMany({ id: { $regex: /^TRN-TEST/ } });
+  } catch (_cleanErr) {}
 
   console.log('\n==================================================');
   console.log('🎉 ALL 6 CRICKET LOGIC AUDIT TESTS PASSED');

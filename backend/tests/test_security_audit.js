@@ -3,6 +3,8 @@
  * Verification suite for the 6 Critical Security Vulnerability Fixes.
  */
 
+process.env.NODE_ENV = 'test';
+
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');

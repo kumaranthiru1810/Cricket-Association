@@ -11903,28 +11903,8 @@ const getStyles = (isDesktop: boolean) =>
 
     // WICKET MODAL
     wicketModalHeader: { marginBottom: 12 },
-    wicketModalTitle: { fontSize: 18, fontWeight: 'bold', color: '#1e293b' },
-    wicketModalSub: { fontSize: 12, color: '#64748b', marginTop: 4 },
-    dismissedBanner: {
-      backgroundColor: '#fef2f2',
-      padding: 10,
-      borderRadius: 6,
-      borderWidth: 1,
-      borderColor: '#fca5a5',
-      marginBottom: 12
-    },
-    dismissedLabel: {
-      fontSize: 10,
-      fontWeight: '800',
-      color: '#991b1b',
-      letterSpacing: 0.5
-    },
-    dismissedValue: {
-      fontSize: 13,
-      fontWeight: 'bold',
-      color: '#7f1d1d',
-      marginTop: 2
-    },
+    wicketModalTitle: { fontSize: 18, fontWeight: 'bold', color: '#b45309' },
+    wicketModalSub: { fontSize: 12, color: '#64748b', marginTop: 2 },
     batterOption: {
       backgroundColor: '#f8fafc',
       borderWidth: 1,

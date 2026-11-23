@@ -58,7 +58,7 @@ export function formatScoreWithTotalOvers(scoreStr?: string, maxOvers?: number):
 
 interface Props {
   match: MatchData;
-  variant?: 'live' | 'upcoming' | 'completed';
+  variant?: 'live' | 'upcoming' | 'completed' | 'postponed';
 }
 
 export interface ScheduleTimeline {

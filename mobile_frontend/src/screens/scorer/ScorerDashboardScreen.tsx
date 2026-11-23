@@ -225,6 +225,73 @@ export default function ScorerDashboardScreen() {
     liveMatches.length > 0 ? 'Live' : (upcomingMatches.length > 0 ? 'Upcoming' : 'Completed')
   );
 
+  const renderPostponedMatchCard = (match: any) => (
+    <View key={match.id} style={styles.postponedCard}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <Text style={{ fontWeight: '700', fontSize: 16, color: '#1e293b' }}>
+          {match.teamA?.name || match.team_a_name || match.teamA || 'Team A'} <Text style={{ color: '#d97706' }}>vs</Text> {match.teamB?.name || match.team_b_name || match.teamB || 'Team B'}
+        </Text>
+        <View style={{ backgroundColor: '#fef3c7', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 4, borderColor: '#f59e0b', borderWidth: 1 }}>
+          <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 11 }}>⏸️ POSTPONED</Text>
+        </View>
+      </View>
+
+      <Text style={{ color: '#64748b', fontSize: 13, marginTop: 4 }}>
+        🏆 {match.tournamentName || match.tournament || 'Tournament'} • 📍 {match.venue || 'District Stadium'}
+      </Text>
+
+      <View style={{ backgroundColor: '#fffbeb', padding: 12, borderRadius: 6, marginTop: 10, borderColor: '#fde68a', borderWidth: 1 }}>
+        <Text style={{ color: '#92400e', fontWeight: '700', fontSize: 13 }}>
+          Reason: {match.postponement?.reason || match.postponementReason || 'Reason not recorded'}
+        </Text>
+        <Text style={{ color: '#78350f', fontSize: 12, marginTop: 3 }}>
+          Original Schedule: 📅 {match.postponement?.original_date || match.originalDate || match.date || match.match_date} • ⏰ {match.postponement?.original_time || match.originalTime || match.time || match.match_time || '09:30 AM'}
+        </Text>
+        {(match.postponement?.rescheduled_date || match.rescheduledDate) ? (
+          <Text style={{ color: '#15803d', fontWeight: '700', fontSize: 13, marginTop: 4 }}>
+            📅 Rescheduled Date: {match.postponement?.rescheduled_date || match.rescheduledDate} • ⏰ {match.postponement?.rescheduled_time || match.rescheduledTime || '09:30 AM'}
+          </Text>
+        ) : (
+          <Text style={{ color: '#b45309', fontStyle: 'italic', fontSize: 12, marginTop: 4 }}>
+            ⏳ Awaiting Admin Rescheduling
+          </Text>
+        )}
+
+        {/* Match Score & Over Situation at Postponement */}
+        <View style={{ marginTop: 8, padding: 10, backgroundColor: '#fef3c7', borderRadius: 6, borderLeftWidth: 4, borderLeftColor: '#d97706' }}>
+          <Text style={{ color: '#92400e', fontWeight: '800', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            📊 Match Situation at Postponement:
+          </Text>
+          <Text style={{ color: '#78350f', fontSize: 13, fontWeight: '700', marginTop: 3 }}>
+            {match.postponement?.postponed_score_display || match.postponedScoreDisplay || (
+              match.scoreA ? `${match.teamA?.name || match.teamA}: ${match.scoreA}${match.scoreB && match.scoreB !== 'Yet to bat' ? ` • ${match.teamB?.name || match.teamB}: ${match.scoreB}` : ''}` : 'Postponed before match start (0 overs bowled / Toss pending)'
+            )}
+          </Text>
+        </View>
+      </View>
+
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
+        <TouchableOpacity
+          style={{
+            backgroundColor: '#d97706',
+            paddingVertical: 7,
+            paddingHorizontal: 14,
+            borderRadius: 6,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6
+          }}
+          onPress={() => navigate('LiveScoring', { matchId: match.id })}
+          activeOpacity={0.8}
+        >
+          <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>
+            OPEN LIVE CONSOLE ▶
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       {/* PROFESSIONAL HEADER */}
@@ -385,6 +452,13 @@ export default function ScorerDashboardScreen() {
               </View>
             )}
 
+            {postponedMatches.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.subSectionHeader}>⏸️ POSTPONED MATCHES ({postponedMatches.length})</Text>
+                {postponedMatches.map(match => renderPostponedMatchCard(match))}
+              </View>
+            )}
+
             {completedMatches.length > 0 && (
               <View style={styles.section}>
                 <Text style={styles.subSectionHeader}>🟢 COMPLETED MATCHES ({completedMatches.length})</Text>
@@ -463,72 +537,7 @@ export default function ScorerDashboardScreen() {
             </View>
 
             {postponedMatches.length > 0 ? (
-              postponedMatches.map(match => (
-                <View key={match.id} style={styles.postponedCard}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                    <Text style={{ fontWeight: '700', fontSize: 16, color: '#1e293b' }}>
-                      {match.teamA?.name || match.team_a_name || 'Team A'} <Text style={{ color: '#d97706' }}>vs</Text> {match.teamB?.name || match.team_b_name || 'Team B'}
-                    </Text>
-                    <View style={{ backgroundColor: '#fef3c7', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 4, borderColor: '#f59e0b', borderWidth: 1 }}>
-                      <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 11 }}>⏸️ POSTPONED</Text>
-                    </View>
-                  </View>
-
-                  <Text style={{ color: '#64748b', fontSize: 13, marginTop: 4 }}>
-                    🏆 {match.tournamentName || 'Tournament'} • 📍 {match.venue || 'District Stadium'}
-                  </Text>
-
-                  <View style={{ backgroundColor: '#fffbeb', padding: 12, borderRadius: 6, marginTop: 10, borderColor: '#fde68a', borderWidth: 1 }}>
-                    <Text style={{ color: '#92400e', fontWeight: '700', fontSize: 13 }}>
-                      Reason: {match.postponement?.reason || match.postponementReason || 'Reason not recorded'}
-                    </Text>
-                    <Text style={{ color: '#78350f', fontSize: 12, marginTop: 3 }}>
-                      Original Schedule: 📅 {match.postponement?.original_date || match.originalDate || match.date} • ⏰ {match.postponement?.original_time || match.originalTime || match.time || '09:30 AM'}
-                    </Text>
-                    {(match.postponement?.rescheduled_date || match.rescheduledDate) ? (
-                      <Text style={{ color: '#15803d', fontWeight: '700', fontSize: 13, marginTop: 4 }}>
-                        📅 Rescheduled Date: {match.postponement?.rescheduled_date || match.rescheduledDate} • ⏰ {match.postponement?.rescheduled_time || match.rescheduledTime || '09:30 AM'}
-                      </Text>
-                    ) : (
-                      <Text style={{ color: '#b45309', fontStyle: 'italic', fontSize: 12, marginTop: 4 }}>
-                        ⏳ Awaiting Admin Rescheduling
-                      </Text>
-                    )}
-
-                    {/* Match Score & Over Situation at Postponement */}
-                    <View style={{ marginTop: 8, padding: 10, backgroundColor: '#fef3c7', borderRadius: 6, borderLeftWidth: 4, borderLeftColor: '#d97706' }}>
-                      <Text style={{ color: '#92400e', fontWeight: '800', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                        📊 Match Situation at Postponement:
-                      </Text>
-                      <Text style={{ color: '#78350f', fontSize: 13, fontWeight: '700', marginTop: 3 }}>
-                        {match.postponement?.postponed_score_display || match.postponedScoreDisplay || (
-                          match.scoreA ? `${match.teamA?.name || match.teamA}: ${match.scoreA}${match.scoreB && match.scoreB !== 'Yet to bat' ? ` • ${match.teamB?.name || match.teamB}: ${match.scoreB}` : ''}` : 'Postponed before match start (0 overs bowled / Toss pending)'
-                        )}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
-                    <TouchableOpacity
-                      style={{
-                        backgroundColor: '#d97706',
-                        paddingVertical: 7,
-                        paddingHorizontal: 14,
-                        borderRadius: 6,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 6
-                      }}
-                      onPress={() => navigate('LiveScoring', { matchId: match.id })}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>
-                        OPEN LIVE CONSOLE ▶
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))
+              postponedMatches.map(match => renderPostponedMatchCard(match))
             ) : (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyCardText}>No postponed matches.</Text>
