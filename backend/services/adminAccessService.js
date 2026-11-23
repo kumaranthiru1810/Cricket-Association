@@ -241,11 +241,9 @@ class AdminAccessService {
     });
 
     console.log(`\n======================================================`);
-    console.log(`🛡️ [DUAL-ADMIN SECURITY] PROMOTION OTPs GENERATED`);
-    console.log(`Request ID: ${requestId}`);
+    console.log(`[DUAL-ADMIN SECURITY] Promotion OTPs generated for Request ID: ${requestId}`);
     console.log(`Candidate: ${cleanEmail}`);
-    console.log(`🔑 Approver 1 (${approver1.email}): >>> ${otp1} <<<`);
-    console.log(`🔑 Approver 2 (${approver2.email}): >>> ${otp2} <<<`);
+    console.log(`Approver 1: ${approver1.email} | Approver 2: ${approver2.email}`);
     console.log(`======================================================\n`);
 
     // Send emails in background without blocking response

@@ -21,9 +21,9 @@ let isConnected = false;
 
 // 1. User Schema (Multi-Role: Player, Coach, Scorer, Admin, Content)
 const UserSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   name: { type: String, required: true },
-  email: { type: String, required: true, unique: true, index: true, lowercase: true, trim: true },
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   mobile: { type: String, default: null },
   aadhaar: { type: String, default: null },
   password_hash: { type: String, default: null },
@@ -112,7 +112,7 @@ const UserSchema = new mongoose.Schema({
 
 // 2. Tournament Schema
 const TournamentSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   name: { type: String, required: true, trim: true },
   short_name: { type: String, default: '', trim: true },
   logo_url: { type: String, default: '' },
@@ -169,7 +169,7 @@ const TournamentSchema = new mongoose.Schema({
 
 // 2b. Tournament Registration Schema (Team registrations for specific Tournaments)
 const TournamentRegistrationSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   tournament_id: { type: String, required: true, index: true },
   tournament_name: { type: String, required: true },
   team_id: { type: String, required: true, index: true },
@@ -202,7 +202,7 @@ TournamentRegistrationSchema.index({ tournament_id: 1, team_id: 1 });
 
 // 3. Team Schema
 const TeamSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   team_id: { type: String, default: null, index: true },
   name: { type: String, required: true },
   team_name: { type: String, default: '' },
@@ -234,7 +234,7 @@ const TeamSchema = new mongoose.Schema({
 
 // 4. Player Schema
 const PlayerSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   team_id: { type: String, required: true, index: true },
   name: { type: String, required: true },
   email: { type: String, default: null, lowercase: true, trim: true, index: true },
@@ -265,7 +265,7 @@ const PlayerSchema = new mongoose.Schema({
 
 // 5. Team Registration Schema (Coach submission with 15 squad players)
 const TeamRegistrationSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   team_name: { type: String, required: true },
   coach_name: { type: String, required: true },
   coach_email: { type: String, required: true, lowercase: true, trim: true, index: true },
@@ -306,7 +306,7 @@ const TeamRegistrationSchema = new mongoose.Schema({
 
 // 6. Match Schema
 const MatchSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   tournament_id: { type: String, default: 'T-2026-VPL' },
   tournament_name: { type: String, default: 'Virudhunagar Premier League 2026' },
   team_a_id: { type: String, required: true },
@@ -461,7 +461,7 @@ const MatchSchema = new mongoose.Schema({
 
 // 7. Innings Schema
 const InningsSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   match_id: { type: String, required: true, index: true },
   innings_number: { type: Number, required: true },
   batting_team_id: { type: String, required: true },
@@ -499,7 +499,7 @@ const InningsSchema = new mongoose.Schema({
 
 // 8. Innings Batters & Bowlers
 const InningsBatterSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   innings_id: { type: String, required: true, index: true },
   player_id: { type: String, required: true },
   batting_position: { type: Number, default: 1 },
@@ -516,7 +516,7 @@ const InningsBatterSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const InningsBowlerSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   innings_id: { type: String, required: true, index: true },
   player_id: { type: String, required: true },
   overs: { type: Number, default: 0 },
@@ -532,7 +532,7 @@ const InningsBowlerSchema = new mongoose.Schema({
 
 // 9. Delivery Schema
 const DeliverySchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   innings_id: { type: String, required: true, index: true },
   match_id: { type: String, default: null, index: true },
   innings_number: { type: Number, default: 1 },
@@ -574,9 +574,9 @@ const DeliverySchema = new mongoose.Schema({
 
 // 10. Scorer Schema (Official Match Scorers)
 const ScorerSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   full_name: { type: String, required: true },
-  email: { type: String, required: true, unique: true, index: true, lowercase: true, trim: true },
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   mobile: { type: String, default: '' },
   aadhaar: { type: String, default: '' },
   association: { type: String, default: 'Virudhunagar District Cricket Association' },
@@ -594,7 +594,7 @@ const ScorerSchema = new mongoose.Schema({
 
 // 11. Team Player Schema (Squad Players from Team Registrations)
 const TeamPlayerSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   team_id: { type: String, required: true, index: true },
   player_name: { type: String, required: true },
   player_email: { type: String, required: true, lowercase: true, trim: true },
@@ -606,7 +606,7 @@ const TeamPlayerSchema = new mongoose.Schema({
 
 // 12. Notifications Schema (Strict Match Schedule Target Delivery)
 const NotificationSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   type: { type: String, default: 'MATCH_SCHEDULED' },
   title: { type: String, required: true },
   message: { type: String, required: true },
@@ -623,7 +623,7 @@ const NotificationSchema = new mongoose.Schema({
 
 // 13. News Schema
 const NewsSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   title: { type: String, required: true },
   summary: { type: String, required: true },
   content: { type: String, required: true },
@@ -635,7 +635,7 @@ const NewsSchema = new mongoose.Schema({
 
 // 14. Officials & Venues & Audit
 const OfficialSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   name: { type: String, required: true },
   role: { type: String, default: 'SCORER' },
   email: { type: String, required: true },
@@ -644,7 +644,7 @@ const OfficialSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const VenueSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   name: { type: String, required: true },
   location: { type: String, default: 'Virudhunagar' },
   capacity: { type: Number, default: 5000 },
@@ -653,7 +653,7 @@ const VenueSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const AuditLogSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   action: { type: String, required: true },
   initiated_by: { type: String, default: 'admin@cfvd.org' },
   admin_email: { type: String, default: '' },
@@ -663,6 +663,18 @@ const AuditLogSchema = new mongoose.Schema({
   result: { type: String, default: 'SUCCESS' },
   details: { type: String, default: '' }
 }, { timestamps: { createdAt: 'timestamp' } });
+
+// Compound & Query Optimization Indexes
+UserSchema.index({ role: 1, status: 1 });
+MatchSchema.index({ tournament_id: 1, status: 1 });
+MatchSchema.index({ team_a_id: 1, team_b_id: 1 });
+MatchSchema.index({ match_date: 1, match_time: 1 });
+InningsSchema.index({ match_id: 1, innings_number: 1 });
+DeliverySchema.index({ innings_id: 1, over_number: 1, ball_number: 1 });
+DeliverySchema.index({ match_id: 1, innings_number: 1 });
+NotificationSchema.index({ recipient_id: 1, status: 1 });
+NotificationSchema.index({ status: 1, created_at: -1 });
+NewsSchema.index({ status: 1, created_at: -1 });
 
 // Create or reuse Mongoose Models
 const User = mongoose.models.User || mongoose.model('User', UserSchema);
@@ -686,7 +698,7 @@ const AuditLog = mongoose.models.AuditLog || mongoose.model('AuditLog', AuditLog
 
 // 15. Umpire Decisions Schema & Model
 const UmpireDecisionSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   match_id: { type: String, required: true, index: true },
   umpire_id: { type: String, required: true, index: true },
   umpire_name: { type: String, default: '' },
@@ -704,8 +716,8 @@ const UmpireDecision = mongoose.models.UmpireDecision || mongoose.model('UmpireD
 // 16. Cricket Laws Schema (MCC 2017 Code – Fourth Edition 2026)
 // ─────────────────────────────────────────────────────────────────────────────
 const CricketLawSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  law_number: { type: Number, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
+  law_number: { type: Number, required: true, unique: true },
   title: { type: String, required: true },
   short_description: { type: String, default: '' },
   category: {
@@ -729,7 +741,7 @@ const CricketLaw = mongoose.models.CricketLaw || mongoose.model('CricketLaw', Cr
 
 // 17. Cricket Law Sections Schema
 const CricketLawSectionSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   law_id: { type: String, required: true, index: true },
   law_number: { type: Number, required: true, index: true },
   section_number: { type: String, required: true }, // e.g. "30.1", "30.1.1"
@@ -750,7 +762,7 @@ const CricketLawSection = mongoose.models.CricketLawSection || mongoose.model('C
 
 // 18. Cricket Law Versions Schema
 const CricketLawVersionSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   law_id: { type: String, required: true, index: true },
   law_number: { type: Number, required: true },
   edition: { type: String, required: true },
@@ -763,7 +775,7 @@ const CricketLawVersion = mongoose.models.CricketLawVersion || mongoose.model('C
 
 // 19. Cricket Law Audit Log Schema
 const CricketLawAuditLogSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   law_id: { type: String, required: true, index: true },
   law_number: { type: Number, required: true },
   action: { type: String, required: true, enum: ['CREATE', 'UPDATE', 'PUBLISH', 'RESTORE', 'SECTION_ADD', 'SECTION_UPDATE'] },
@@ -779,8 +791,8 @@ const CricketLawAuditLog = mongoose.models.CricketLawAuditLog || mongoose.model(
 
 // 20. Tournament Calculation Settings Schema (DLS / VJD per tournament)
 const TournamentCalculationSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  tournament_id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
+  tournament_id: { type: String, required: true, unique: true },
   tournament_name: { type: String, default: '' },
   calculation_method: {
     type: String,
@@ -797,7 +809,7 @@ const TournamentCalculation = mongoose.models.TournamentCalculation || mongoose.
 
 // 24. Player Performance Match Rating Schema
 const PlayerMatchRatingSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   player_id: { type: String, required: true, index: true },
   player_name: { type: String, default: '' },
   match_id: { type: String, required: true, index: true },
@@ -848,7 +860,7 @@ PlayerMatchRatingSchema.index({ format: 1, overall_rating: -1 });
 const PlayerMatchRating = mongoose.models.PlayerMatchRating || mongoose.model('PlayerMatchRating', PlayerMatchRatingSchema);
 // 21. Master Settings & Dynamic Dropdown Options Schema
 const MasterSettingSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   category: { 
     type: String, 
     required: true, 
@@ -874,7 +886,7 @@ const MasterSetting = mongoose.models.MasterSetting || mongoose.model('MasterSet
 
 // 22. Super Admin Security Verification & Action OTP Schema
 const AdminActionOtpSchema = new mongoose.Schema({
-  session_id: { type: String, required: true, unique: true, index: true },
+  session_id: { type: String, required: true, unique: true },
   action: { 
     type: String, 
     required: true,
@@ -907,7 +919,7 @@ const AdminActionOtp = mongoose.models.AdminActionOtp || mongoose.model('AdminAc
 
 // 23. Dual-Admin Approval & Role System (AdminRequest)
 const AdminRequestSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
+  id: { type: String, required: true, unique: true },
   type: { type: String, enum: ['PROMOTE', 'REMOVE'], required: true, index: true },
   target_user_id: { type: String, required: true },
   target_email: { type: String, required: true, lowercase: true, trim: true },
@@ -1899,6 +1911,68 @@ async function seedDefaultData() {
 
 // Connect to MongoDB
 let connectionPromise = null;
+let listenersAttached = false;
+
+function setupConnectionListeners() {
+  if (listenersAttached) return;
+  listenersAttached = true;
+
+  mongoose.connection.on('connected', () => {
+    isConnected = true;
+  });
+
+  mongoose.connection.on('disconnected', () => {
+    isConnected = false;
+    console.warn('MongoDB connection lost. Awaiting reconnect...');
+  });
+
+  mongoose.connection.on('reconnected', () => {
+    isConnected = true;
+    console.log('MongoDB connection restored.');
+  });
+
+  mongoose.connection.on('error', (err) => {
+    console.warn('MongoDB connection error:', err.message);
+  });
+}
+
+async function ensureIndexes() {
+  try {
+    const modelsToIndex = [
+      User, Tournament, TournamentRegistration, Team, Player,
+      TeamRegistration, Match, Innings, InningsBatter, InningsBowler,
+      Delivery, Scorer, TeamPlayer, Notification, News, Official,
+      Venue, AuditLog, UmpireDecision, CricketLaw, CricketLawSection,
+      MasterSetting
+    ];
+    for (const m of modelsToIndex) {
+      if (m && m.syncIndexes) {
+        await m.syncIndexes().catch(() => {});
+      }
+    }
+    console.log('Database indexes synchronized.');
+  } catch (err) {
+    console.warn('Database index sync note:', err.message);
+  }
+}
+
+async function ping() {
+  if (mongoose.connection.readyState !== 1) return false;
+  try {
+    await mongoose.connection.db.admin().ping();
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function close() {
+  try {
+    await mongoose.connection.close();
+    isConnected = false;
+  } catch (_) {}
+}
+
 async function initDb() {
   if (mongoose.connection.readyState === 1) {
     isConnected = true;
@@ -1907,16 +1981,21 @@ async function initDb() {
   if (connectionPromise) {
     return connectionPromise;
   }
+  setupConnectionListeners();
   connectionPromise = (async () => {
     try {
       mongoose.set('strictQuery', false);
       await mongoose.connect(MONGODB_URI, {
         serverSelectionTimeoutMS: 5000,
-        autoIndex: true
+        maxPoolSize: 20,
+        minPoolSize: 5,
+        socketTimeoutMS: 45000,
+        autoIndex: false
       });
       isConnected = true;
       console.log(`🍃 Connected to MongoDB Database Server at: ${MONGODB_URI}`);
       await seedDefaultData();
+      await ensureIndexes();
     } catch (err) {
       console.warn(`⚠️ MongoDB connection note: ${err.message}.`);
     } finally {
@@ -2308,6 +2387,9 @@ class MongoConnection {
 
 module.exports = {
   initDb,
+  ping,
+  close,
+  ensureIndexes,
   getUseMemoryFallback: () => false,
   memoryDb,
   query: mongoQuery,

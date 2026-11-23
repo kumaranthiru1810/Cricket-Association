@@ -77,8 +77,6 @@ class AuthService {
       otp: rawOtp
     }).catch(err => console.warn('Background OTP email dispatch notice:', err.message));
 
-    console.log(`\n📧 [REGISTRATION OTP SENT] Email: ${cleanEmail} | Role: ${role || 'USER'} | OTP: ${rawOtp}\n`);
-
     const isProd = process.env.NODE_ENV === 'production';
     return {
       success: true,
@@ -252,8 +250,6 @@ class AuthService {
       userName: user.name || 'Member',
       otp: rawOtp
     });
-
-    console.log(`\n🔑 [PASSWORD RESET 4-DIGIT OTP] Email: ${cleanEmail} | Role: ${user.role || role} | 4-Digit OTP: ${rawOtp}\n`);
 
     const isProd = process.env.NODE_ENV === 'production';
     return {

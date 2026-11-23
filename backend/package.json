@@ -9,7 +9,7 @@
     "migrate": "node migrations/migrate.js",
     "seed": "node seeds/seed.js",
     "seed:settings": "node scripts/importMasterSettings.js",
-    "test": "node tests/runTests.js && node tests/test_cricket_logic_fixes.js && node tests/test_security_audit.js",
+    "test": "node tests/runTests.js && node tests/test_cricket_logic_fixes.js && node tests/test_security_audit.js && node tests/test_phase3_speed.js",
     "test:rules": "node tests/test_cricket_rules_engine.js",
     "test:umpire": "node tests/test_umpire_module.js",
     "test:security": "node tests/securityVerification.js",
@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "compression": "^1.8.2",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
@@ -26,7 +27,10 @@
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^7.7.0",
     "mongoose": "^9.10.4",
+    "morgan": "^1.12.1",
+    "multer": "^2.5.0",
     "nodemailer": "^10.0.13",
+    "sharp": "^0.35.5",
     "socket.io": "^4.8.1"
   },
   "devDependencies": {

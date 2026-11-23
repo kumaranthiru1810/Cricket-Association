@@ -86,7 +86,6 @@ const db = require('../config/db');
 async function requireScorerAuth(req, res, next) {
   verifyToken(req, res, async () => {
     try {
-      await db.initDb();
       const user = await db.models.User.findOne({
         $or: [
           { id: req.user.id },
@@ -161,7 +160,6 @@ async function verifyMatchPermission(req, res, next) {
   if (!matchId) return next();
 
   try {
-    await db.initDb();
     const match = await db.models.Match.findOne({ id: matchId });
     if (!match) {
       return res.status(404).json({ success: false, message: `Match '${matchId}' not found.` });
@@ -215,7 +213,6 @@ function requireAdminAuth(req, res, next) {
     }
 
     try {
-      await db.initDb();
       const user = await db.models.User.findOne({
         $or: [
           { id: req.user.id },
@@ -296,7 +293,6 @@ function requireSuperAdmin(req, res, next) {
 async function requirePlayerAuth(req, res, next) {
   verifyToken(req, res, async () => {
     try {
-      await db.initDb();
       const user = await db.models.User.findOne({
         $or: [
           { id: req.user.id },
@@ -369,7 +365,6 @@ async function requirePlayerAuth(req, res, next) {
 async function requireTeamAuth(req, res, next) {
   verifyToken(req, res, async () => {
     try {
-      await db.initDb();
       const user = await db.models.User.findOne({
         $or: [
           { id: req.user.id },
@@ -480,7 +475,6 @@ async function requireTeamAuth(req, res, next) {
 async function requireUmpireAuth(req, res, next) {
   verifyToken(req, res, async () => {
     try {
-      await db.initDb();
       const user = await db.models.User.findOne({
         $or: [
           { id: req.user.id },
@@ -556,7 +550,6 @@ async function verifyUmpireMatchPermission(req, res, next) {
   if (!matchId) return next();
 
   try {
-    await db.initDb();
     const match = await db.models.Match.findOne({ id: matchId });
     if (!match) {
       return res.status(404).json({ success: false, message: `Match '${matchId}' not found.` });

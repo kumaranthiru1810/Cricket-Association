@@ -9,6 +9,7 @@ const router = express.Router();
 const teamService = require('../services/teamService');
 const scorerService = require('../services/scorerService');
 const { requireTeamAuth, requireAdminAuth } = require('../middleware/authMiddleware');
+const { uploadLogo, processImageUpload } = require('../middleware/uploadMiddleware');
 
 // ──────────────────────────────────────────────
 // PUBLIC ROUTES (no auth required)
@@ -396,11 +397,10 @@ router.put('/profile', requireTeamAuth, async (req, res) => {
  * POST /api/team/upload-photo
  * Direct upload/update for Team logo / crest photo
  */
-router.post('/upload-photo', requireTeamAuth, async (req, res) => {
+router.post('/upload-photo', requireTeamAuth, uploadLogo, processImageUpload, async (req, res) => {
   try {
     const db = require('../config/db');
-    await db.initDb();
-    const photo = req.body.photo || req.body.logo || req.body.image || req.body.image_path || req.body.teamLogo;
+    const photo = req.fileUrl || req.body?.photo || req.body?.logo || req.body?.image || req.body?.image_path || req.body?.teamLogo;
     const teamId = req.team?.id || req.user?.teamId || 'TM-01';
     const coachEmail = (req.user?.email || req.team?.coachEmail || '').toLowerCase().trim();
     const cleanImg = photo ? String(photo).trim() : null;

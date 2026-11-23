@@ -1049,7 +1049,7 @@ async function sendDualAdminApprovalEmail({
         text: textContent,
         html: htmlContent
       });
-      console.log(`✅ Dual-Admin authorization email dispatched to [${recipients.join(', ')}] (Code: ${otp})`);
+      console.log(`✅ Dual-Admin authorization email dispatched to [${recipients.join(', ')}]`);
       return { success: true, messageId: info.messageId };
     } catch (err) {
       console.error(`❌ Failed to send dual-admin OTP email:`, err.message);
