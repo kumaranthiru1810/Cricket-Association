@@ -962,9 +962,40 @@ const memoryDb = {
 async function seedDefaultData() {
   try {
     const isProd = process.env.NODE_ENV === 'production';
-    const adminInitialPass = process.env.ADMIN_INITIAL_PASSWORD || (isProd ? crypto.randomBytes(16).toString('hex') : 'admin123');
+    const isDevOrTest = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
+
+    if (isProd) {
+      const adminEmail = (process.env.ADMIN_INITIAL_EMAIL || '').trim().toLowerCase();
+      const adminPass = process.env.ADMIN_INITIAL_PASSWORD;
+      if (!adminEmail || !adminPass) {
+        console.warn('Production Notice: ADMIN_INITIAL_EMAIL and/or ADMIN_INITIAL_PASSWORD not configured. Skipping initial admin seeding.');
+        return;
+      }
+      const existingAdmin = await User.findOne({ role: 'ADMIN' });
+      if (!existingAdmin) {
+        const passwordHash = await bcrypt.hash(adminPass, 12);
+        await User.create({
+          id: 'ADM-PROD-001',
+          name: 'Super Administrator',
+          email: adminEmail,
+          mobile: '9876543210',
+          role: 'ADMIN',
+          status: 'ACTIVE',
+          is_super_admin: true,
+          admin_level: 'Permanent Super Administrator',
+          password_hash: passwordHash
+        });
+        console.log(`Initial production super admin provisioned for: ${adminEmail}`);
+      }
+      return;
+    }
+
+    if (!isDevOrTest) {
+      return;
+    }
+
     const defaultPasswordHash = await bcrypt.hash('1234', 10);
-    const adminPasswordHash = await bcrypt.hash(adminInitialPass, 10);
+    const adminPasswordHash = await bcrypt.hash('admin123', 10);
 
     const userCount = await User.countDocuments();
     if (userCount === 0) {

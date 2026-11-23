@@ -4,7 +4,7 @@
  */
 
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = process.env.JWT_SECRET || 'cricket_super_secret_jwt_2026';
+const { JWT_SECRET } = require('../config/env');
 
 function verifyToken(req, res, next) {
   let token = null;
@@ -17,8 +17,8 @@ function verifyToken(req, res, next) {
   }
 
   if (token) {
-    // Support dev tokens in non-production environment ONLY
-    if (process.env.NODE_ENV !== 'production' && (token.startsWith('dev_admin') || token.includes('admin_cfvd') || token === 'dev_admin_cfvd_token_2026')) {
+    // Support dev tokens in development environment ONLY
+    if (process.env.NODE_ENV === 'development' && (token.startsWith('dev_admin') || token.includes('admin_cfvd') || token === 'dev_admin_cfvd_token_2026')) {
       req.user = {
         id: 'ADM-1001',
         email: 'admin@cfvd.org',
@@ -34,7 +34,7 @@ function verifyToken(req, res, next) {
       req.user = decoded;
       return next();
     } catch (err) {
-      if (process.env.NODE_ENV !== 'production') {
+      if (process.env.NODE_ENV === 'development') {
         const roleHeader = req.headers['x-user-role'] || req.headers['role'];
         if (roleHeader) {
           req.user = {
@@ -54,8 +54,8 @@ function verifyToken(req, res, next) {
     }
   }
 
-  // Development/testing custom headers (only if token is absent and test headers are provided)
-  if (process.env.NODE_ENV !== 'production') {
+  // Development/testing custom headers (only in development if token is absent and test headers are provided)
+  if (process.env.NODE_ENV === 'development') {
     const roleHeader = req.headers['x-user-role'] || req.headers['role'];
     const emailHeader = req.headers['x-user-email'] || req.headers['user-email'];
     const idHeader = req.headers['x-user-id'] || req.headers['scorer-id'];
@@ -182,7 +182,7 @@ async function verifyMatchPermission(req, res, next) {
     }
 
     // Scorer must be assigned to this match, or match must be unassigned, or admin
-    const isDev = process.env.NODE_ENV !== 'production';
+    const isDev = process.env.NODE_ENV === 'development';
     const isAssigned = (match.assigned_scorer_id === req.user.id) || 
                        (!match.assigned_scorer_id) ||
                        (isDev && (match.assigned_scorer_id === 'SCR-101' || (req.user.email && ['ramesh@gmail.com', 'scorer@cfvd.org'].includes(req.user.email))));
