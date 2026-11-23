@@ -414,11 +414,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 16
+    padding: 16,
+    zIndex: 999999,
+    elevation: 99999
   },
   clockCard: {
     width: '100%',
     maxWidth: 380,
+    zIndex: 1000000,
+    elevation: 100000,
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 18,
@@ -426,7 +430,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
     shadowRadius: 18,
-    elevation: 8,
     borderWidth: 1,
     borderColor: '#e2e8f0'
   },
