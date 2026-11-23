@@ -615,6 +615,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   const [teamBDropdownOpen, setTeamBDropdownOpen] = useState<boolean>(false);
   const [venueDropdownOpen, setVenueDropdownOpen] = useState<boolean>(false);
   const [tournamentDropdownOpen, setTournamentDropdownOpen] = useState<boolean>(false);
+  const [eligibleClubsDropdownOpen, setEligibleClubsDropdownOpen] = useState<boolean>(false);
   const [formatDropdownOpen, setFormatDropdownOpen] = useState<boolean>(false);
   const [scorerDropdownOpen, setScorerDropdownOpen] = useState<boolean>(false);
   const [scorerSearch, setScorerSearch] = useState<string>('');
@@ -1104,6 +1105,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     setTeamBDropdownOpen(false);
     setVenueDropdownOpen(false);
     setTournamentDropdownOpen(false);
+    setEligibleClubsDropdownOpen(false);
     setFormatDropdownOpen(false);
     setScorerDropdownOpen(false);
     setTournamentSearchQuery('');
@@ -4269,7 +4271,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       <View style={[styles.statRowPill, styles.schedulesPillLive]}>
                         <View style={styles.pillLeftGroup}>
                           <View style={[styles.glowingDot, { backgroundColor: '#ef4444' }]} />
-                          <Text style={[styles.statPillLabel, { color: '#fca5a5' }]}>Live Matches (Active)</Text>
+                          <Text style={[styles.statPillLabel, { color: '#991b1b' }]}>Live Matches (Active)</Text>
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                           {liveMatchesCount > 0 && (
@@ -4277,32 +4279,32 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               <Text style={styles.livePulseTagText}>LIVE</Text>
                             </View>
                           )}
-                          <Text style={[styles.statPillCount, { color: '#f87171' }]}>{liveMatchesCount}</Text>
+                          <Text style={[styles.statPillCount, { color: '#dc2626' }]}>{liveMatchesCount}</Text>
                         </View>
                       </View>
 
                       <View style={[styles.statRowPill, styles.schedulesPillScheduled]}>
                         <View style={styles.pillLeftGroup}>
-                          <View style={[styles.glowingDot, { backgroundColor: '#38bdf8' }]} />
-                          <Text style={[styles.statPillLabel, { color: '#bae6fd' }]}>Scheduled Fixtures</Text>
+                          <View style={[styles.glowingDot, { backgroundColor: '#0284c7' }]} />
+                          <Text style={[styles.statPillLabel, { color: '#0369a1' }]}>Scheduled Fixtures</Text>
                         </View>
-                        <Text style={[styles.statPillCount, { color: '#38bdf8' }]}>{scheduledMatchesCount}</Text>
+                        <Text style={[styles.statPillCount, { color: '#0284c7' }]}>{scheduledMatchesCount}</Text>
                       </View>
 
                       <View style={[styles.statRowPill, styles.schedulesPillCompleted]}>
                         <View style={styles.pillLeftGroup}>
-                          <View style={[styles.glowingDot, { backgroundColor: '#34d399' }]} />
-                          <Text style={[styles.statPillLabel, { color: '#a7f3d0' }]}>Completed Matches</Text>
+                          <View style={[styles.glowingDot, { backgroundColor: '#059669' }]} />
+                          <Text style={[styles.statPillLabel, { color: '#065f46' }]}>Completed Matches</Text>
                         </View>
-                        <Text style={[styles.statPillCount, { color: '#34d399' }]}>{completedMatchesCount}</Text>
+                        <Text style={[styles.statPillCount, { color: '#059669' }]}>{completedMatchesCount}</Text>
                       </View>
 
                       <View style={[styles.statRowPill, styles.schedulesPillTotal]}>
                         <View style={styles.pillLeftGroup}>
-                          <View style={[styles.glowingDot, { backgroundColor: '#fbbf24' }]} />
-                          <Text style={[styles.statPillLabel, { color: '#fde68a' }]}>Total Championship Matches</Text>
+                          <View style={[styles.glowingDot, { backgroundColor: '#d97706' }]} />
+                          <Text style={[styles.statPillLabel, { color: '#92400e' }]}>Total Championship Matches</Text>
                         </View>
-                        <Text style={[styles.statPillCount, { color: '#fbbf24' }]}>{matchesList.length}</Text>
+                        <Text style={[styles.statPillCount, { color: '#b45309' }]}>{matchesList.length}</Text>
                       </View>
                     </View>
                   </View>
@@ -5505,28 +5507,76 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                         <Text style={styles.tournamentAssignedTitle}>
                           ✅ Assigned Championship: <Text style={{ color: '#166534', fontWeight: '800' }}>{scheduleForm.tournament_name}</Text>
                         </Text>
-                        <View style={styles.eligibleTeamsPill}>
+                        <TouchableOpacity
+                          style={styles.eligibleTeamsPill}
+                          onPress={() => setEligibleClubsDropdownOpen(prev => !prev)}
+                          activeOpacity={0.7}
+                        >
                           <Text style={styles.eligibleTeamsPillText}>
-                            {availableTeams.length} Clubs Eligible
+                            {availableTeams.length} Clubs Eligible {eligibleClubsDropdownOpen ? '▲' : '▼'}
                           </Text>
-                        </View>
+                        </TouchableOpacity>
                       </View>
                       <Text style={styles.tournamentAssignedSub}>
                         Competing clubs in Step 2 will dynamically load registered squads for this championship.
                       </Text>
-                      {/* Compact Clubs Badge Preview */}
-                      <View style={styles.teamBadgePreviewRow}>
-                        {availableTeams.slice(0, 5).map(tm => (
-                          <View key={tm.id} style={styles.teamMiniChip}>
-                            <Text style={styles.teamMiniChipText}>🏏 {tm.name}</Text>
+
+                      {/* Dropdown Toggle Bar */}
+                      <TouchableOpacity
+                        style={styles.eligibleClubsToggleBar}
+                        onPress={() => setEligibleClubsDropdownOpen(prev => !prev)}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={styles.eligibleClubsToggleText}>
+                          {eligibleClubsDropdownOpen ? '▲ Hide Eligible Clubs' : `▼ Click to Dropdown & View All (${availableTeams.length}) Clubs`}
+                        </Text>
+                      </TouchableOpacity>
+
+                      {/* Dropdown Expanded View */}
+                      {eligibleClubsDropdownOpen ? (
+                        <View style={styles.eligibleClubsDropdownContainer}>
+                          <View style={styles.eligibleClubsDropdownHeader}>
+                            <Text style={styles.eligibleClubsDropdownHeaderText}>
+                              🏏 All Eligible Clubs for {scheduleForm.tournament_name} ({availableTeams.length}):
+                            </Text>
                           </View>
-                        ))}
-                        {availableTeams.length > 5 && (
-                          <View style={[styles.teamMiniChip, { backgroundColor: '#e2e8f0' }]}>
-                            <Text style={[styles.teamMiniChipText, { color: '#475569' }]}>+{availableTeams.length - 5} More</Text>
-                          </View>
-                        )}
-                      </View>
+                          <ScrollView style={styles.eligibleClubsDropdownScroll} nestedScrollEnabled={true}>
+                            {availableTeams.map((tm, idx) => (
+                              <View key={`all-team-${tm.id || idx}`} style={styles.eligibleClubRow}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                                  <Text style={styles.eligibleClubIndex}>{idx + 1}.</Text>
+                                  <Text style={styles.eligibleClubName}>🏏 {tm.name}</Text>
+                                </View>
+                                {tm.taluk ? (
+                                  <View style={styles.eligibleClubTalukBadge}>
+                                    <Text style={styles.eligibleClubTalukText}>{tm.taluk}</Text>
+                                  </View>
+                                ) : null}
+                              </View>
+                            ))}
+                          </ScrollView>
+                        </View>
+                      ) : (
+                        /* Compact Preview Chips when collapsed */
+                        <View style={styles.teamBadgePreviewRow}>
+                          {availableTeams.slice(0, 5).map(tm => (
+                            <View key={tm.id} style={styles.teamMiniChip}>
+                              <Text style={styles.teamMiniChipText}>🏏 {tm.name}</Text>
+                            </View>
+                          ))}
+                          {availableTeams.length > 5 && (
+                            <TouchableOpacity
+                              style={[styles.teamMiniChip, { backgroundColor: '#fef3c7', borderColor: '#fde68a' }]}
+                              onPress={() => setEligibleClubsDropdownOpen(true)}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={[styles.teamMiniChipText, { color: '#92400e', fontWeight: '800' }]}>
+                                +{availableTeams.length - 5} More (Click to view all)
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      )}
                     </View>
                   ) : (
                     <View style={styles.inlineWarningAlert}>
@@ -9539,76 +9589,80 @@ const styles: any = StyleSheet.create({
   schedulesStatCard: {
     flex: 1,
     minWidth: 320,
-    backgroundColor: '#0c2340',
+    backgroundColor: '#ffffff',
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: 'rgba(59, 130, 246, 0.45)',
+    borderColor: '#f59e0b',
     padding: 22,
-    shadowColor: '#0c2340',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 4
+    shadowColor: '#f59e0b',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 3
   },
   schedulesOpsCard: {
     flex: 1,
     minWidth: 320,
-    backgroundColor: '#0a1e38',
+    backgroundColor: '#ffffff',
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: 'rgba(212, 175, 55, 0.45)',
+    borderColor: '#f59e0b',
     padding: 22,
-    shadowColor: '#0a1e38',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.22,
-    shadowRadius: 16,
-    elevation: 4
+    shadowColor: '#f59e0b',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 3
   },
   schedulesIconBox: {
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: '#1d4ed8',
+    backgroundColor: '#fffbeb',
+    borderWidth: 1.5,
+    borderColor: '#fde68a',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#1d4ed8',
+    shadowColor: '#f59e0b',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 3
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2
   },
   schedulesGoldIconBox: {
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: '#f59e0b',
+    backgroundColor: '#fffbeb',
+    borderWidth: 1.5,
+    borderColor: '#fde68a',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#f59e0b',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 3
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2
   },
   schedulesStatCardTitle: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 16,
     fontWeight: '800'
   },
   schedulesStatCardTag: {
-    color: '#60a5fa',
+    color: '#d97706',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.8
   },
   schedulesOpsTag: {
-    color: '#fbbf24',
+    color: '#d97706',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.8
   },
   schedulesStatCardSubtitle: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 12,
     marginTop: 6,
     lineHeight: 18
@@ -9616,32 +9670,32 @@ const styles: any = StyleSheet.create({
 
   // Schedules Metric Pill Rows
   schedulesPillLive: {
-    backgroundColor: 'rgba(239, 68, 68, 0.14)',
+    backgroundColor: '#fef2f2',
     borderLeftWidth: 4,
     borderLeftColor: '#ef4444',
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.35)'
+    borderColor: '#fca5a5'
   },
   schedulesPillScheduled: {
-    backgroundColor: 'rgba(56, 189, 248, 0.14)',
+    backgroundColor: '#f0f9ff',
     borderLeftWidth: 4,
     borderLeftColor: '#0284c7',
     borderWidth: 1,
-    borderColor: 'rgba(56, 189, 248, 0.35)'
+    borderColor: '#bae6fd'
   },
   schedulesPillCompleted: {
-    backgroundColor: 'rgba(16, 185, 129, 0.14)',
+    backgroundColor: '#ecfdf5',
     borderLeftWidth: 4,
     borderLeftColor: '#059669',
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.35)'
+    borderColor: '#a7f3d0'
   },
   schedulesPillTotal: {
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
+    backgroundColor: '#fffbeb',
     borderLeftWidth: 4,
     borderLeftColor: '#d97706',
     borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.35)'
+    borderColor: '#fde68a'
   },
   livePulseTag: {
     backgroundColor: '#dc2626',
@@ -9660,27 +9714,29 @@ const styles: any = StyleSheet.create({
   btnScheduleGradient: {
     backgroundColor: '#f59e0b',
     paddingHorizontal: 18,
-    paddingVertical: 11,
+    paddingVertical: 12,
     borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#d97706',
     shadowColor: '#f59e0b',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 3
   },
   btnScheduleGradientText: {
-    color: '#0f172a',
+    color: '#78350f',
     fontSize: 13.5,
     fontWeight: '800',
     letterSpacing: 0.3
   },
   scheduleInfoBoxModern: {
-    backgroundColor: 'rgba(15, 31, 60, 0.7)',
+    backgroundColor: '#fffbeb',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.25)',
+    borderColor: '#fde68a',
     padding: 12,
     gap: 8
   },
@@ -9690,12 +9746,12 @@ const styles: any = StyleSheet.create({
     alignItems: 'center'
   },
   scheduleInfoLabel: {
-    color: '#cbd5e1',
+    color: '#475569',
     fontSize: 12,
     fontWeight: '600'
   },
   scheduleInfoVal: {
-    color: '#f59e0b',
+    color: '#b45309',
     fontSize: 13,
     fontWeight: '800'
   },
@@ -10730,6 +10786,84 @@ const styles: any = StyleSheet.create({
     fontSize: 10.5,
     fontWeight: '700',
     color: '#0f172a'
+  },
+  eligibleClubsToggleBar: {
+    marginTop: 8,
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer'
+  },
+  eligibleClubsToggleText: {
+    color: '#047857',
+    fontSize: 11,
+    fontWeight: '800'
+  },
+  eligibleClubsDropdownContainer: {
+    marginTop: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#86efac',
+    borderRadius: 8,
+    padding: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2
+  },
+  eligibleClubsDropdownHeader: {
+    paddingBottom: 6,
+    marginBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9'
+  },
+  eligibleClubsDropdownHeaderText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#166534'
+  },
+  eligibleClubsDropdownScroll: {
+    maxHeight: 180
+  },
+  eligibleClubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    backgroundColor: '#f8fafc',
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  eligibleClubIndex: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748b',
+    width: 22
+  },
+  eligibleClubName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  eligibleClubTalukBadge: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4
+  },
+  eligibleClubTalukText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#475569'
   },
   inlineWarningAlert: {
     backgroundColor: '#fffbeb',
