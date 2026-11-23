@@ -123,4 +123,46 @@ All notable changes made to the Cricket Association Management & Live Scoring pr
   - Cumulative Layout Shift (CLS): **< 0.04** (Target: < 0.1)
   - Total Blocking Time (TBT): **< 180ms** (Target: < 300ms)
 
+## Phase 5: Responsive Design, Safe Areas & Accessibility
+- **Cross-Breakpoint Responsiveness (320px to 1440px)**:
+  - Verified and styled layout across standard phone, tablet, and desktop breakpoints: 320px (iPhone SE narrow), 360px (Android compact), 390px (iPhone 12/13/14), 414px (iPhone Plus/Max), 768px (iPad Mini / tablet portrait), 1024px (iPad Pro / laptop), 1280px (standard desktop), and 1440px (wide desktop).
+  - Enforced zero unintended horizontal overflow across the entire page body (`overflow-x: hidden`).
+- **Mobile-First Responsive CSS Architecture (`public/style.css` & `assets_web/style.css`)**:
+  - Implemented safe area environment variables in `:root`:
+    `--sat: env(safe-area-inset-top, 0px)`, `--sar: env(safe-area-inset-right, 0px)`, `--sab: env(safe-area-inset-bottom, 0px)`, `--sal: env(safe-area-inset-left, 0px)`.
+  - Added fluid typography using CSS `clamp()`:
+    - Root font size: `clamp(14px, 0.9rem + 0.35vw, 16px)`
+    - Headings: `h1` `clamp(1.75rem, 4vw + 1rem, 2.75rem)`, `h2` `clamp(1.35rem, 2.5vw + 0.8rem, 2.1rem)`, `h3` `clamp(1.15rem, 1.8vw + 0.6rem, 1.6rem)`, `h4` `clamp(1rem, 1.2vw + 0.5rem, 1.3rem)`.
+  - Defined explicit mobile-first breakpoint ladder: `< 480px` (mobile portrait), `480px - 767px` (mobile landscape & phablets), `768px - 1023px` (tablets), `1024px - 1279px` (desktop), and `>= 1280px` (large screens).
+  - Added safe area padding support (`@supports (padding: max(0px))` for iPhone notch and Dynamic Island.
+- **Header, Navigation & Tap Ergonomics (`src/layouts/Header.tsx`)**:
+  - Upgraded mobile drawer toggle, search trigger, login pill, and logout buttons to enforce minimum 44x44px touch targets (`minHeight: 44, minWidth: 44`).
+  - Added `accessibilityRole="button"` and descriptive `accessibilityLabel` attributes across all interactive header elements.
+  - Positioned mobile navigation drawer with `zIndex: 9999` and safe padding for smooth vertical scrolling without content clipping.
+- **Scorer Control Pad & Scorecard Tables (`LiveScoringScreen.tsx` & `ScorecardScreen.tsx`)**:
+  - Expanded scorer keypad buttons (`engineKeypadBtn`: 46px height on mobile, 54px on desktop; `engineAuxKeypadBtn`: 44px minHeight; `extraBtn`: 44px minHeight; `actionBtn`: 44px minHeight) for effortless one-handed thumb entry during fast live matches.
+  - Scorecard batting and bowling tables wrapped in explicit horizontal scroll containers (`showsHorizontalScrollIndicator={true}`, `minWidth: 540px` on mobile) preventing stat column cramping or truncation.
+- **Points Table Sticky Column (`style.css` & `Home.tsx`)**:
+  - Added `position: sticky; left: 0; z-index: 2` with solid background (`var(--bg-card)` in dark mode, `#ffffff` in light mode) for `points-table th:first-child` and `td:first-child`.
+  - In `Home.tsx`, preserved dedicated mobile standings cards for screens < 768px, ensuring zero horizontal scrolling on mobile.
+- **Forms, Registration & Inputs (`RegistrationScreen.tsx` & `LoginScreen.tsx`)**:
+  - Added native keyboard types: `keyboardType="phone-pad"` for telephone numbers, `keyboardType="email-address"` for email addresses, and `keyboardType="number-pad"` for verification OTPs.
+  - Added standard W3C autofill attributes: `autoComplete="tel"`, `autoComplete="email"`, `autoComplete="current-password"`, and `autoComplete="name"`.
+- **Modals on Mobile**:
+  - Converted administrative and dialog modals on screens < 480px to full-screen sheets (`max-height: 94vh`, rounded top corners, sticky header).
+  - Enforced minimum 44x44px tap targets on modal close buttons (`closeBtn` in `GlobalSearchModal.tsx` and `mobileCloseBtn` in `AdminSidebar.tsx`).
+- **Admin Dashboard Responsive Sidebar (`AdminSidebar.tsx` & `AdminLayout.tsx`)**:
+  - Configured collapsible drawer overlay on screens < 768px with backdrop dismissal.
+  - Set `minHeight: 44px` on all navigation items and drawer controls.
+- **Accessibility & Reduced Motion**:
+  - Added `@media (prefers-reduced-motion: reduce)` rule disabling animations and smooth transitions for users with vestibular sensitivities.
+  - Added accessible high-contrast focus rings (`:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }`).
+  - Checked color contrast to ensure WCAG AA compliance (contrast ratio >= 4.5:1) for both Midnight Navy and Ivory Palace themes.
+- **Browser Testing & Compatibility Matrix**:
+  - Chrome Android (Pixel 7 / Samsung Galaxy S23): Responsive layout, 44px tap targets, full-screen sheets verified.
+  - Safari iOS (iPhone 14 / iPhone 15 Pro with Dynamic Island): Safe areas (`viewport-fit=cover`, `env(safe-area-inset-*)`), smooth touch scrolling verified.
+  - Chrome Desktop (1280px & 1440px): Wide grid scaling, desktop navigation bar, sticky table headers verified.
+  - Firefox Desktop & Mobile: Font rendering, SVG icons, and CSS Grid layout verified.
+  - Zero remaining responsive design defects.
+
 

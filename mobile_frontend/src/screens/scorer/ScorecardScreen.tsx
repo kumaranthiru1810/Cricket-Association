@@ -826,8 +826,8 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
           </View>
 
           <View style={styles.tableWrapper}>
-            <ScrollView horizontal={isDesktop} showsHorizontalScrollIndicator={false} contentContainerStyle={{ minWidth: isDesktop ? '100%' : undefined, width: '100%' }}>
-              <View style={[styles.tableInner, !isDesktop && { minWidth: 0, width: '100%' }]}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={!isDesktop} contentContainerStyle={{ minWidth: isDesktop ? '100%' : 540 }}>
+              <View style={[styles.tableInner, { minWidth: isDesktop ? '100%' : 540 }]}>
                 <View style={[styles.tableRow, styles.tableHeader]}>
                   <Text style={[styles.cell, styles.colName, styles.tableHeaderText]}>Batter</Text>
                   <Text style={[styles.cell, styles.colNum, styles.tableHeaderText]}>R</Text>
@@ -954,8 +954,8 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
           </View>
 
           <View style={styles.tableWrapper}>
-            <ScrollView horizontal={isDesktop} showsHorizontalScrollIndicator={false} contentContainerStyle={{ minWidth: isDesktop ? '100%' : undefined, width: '100%' }}>
-              <View style={[styles.tableInner, !isDesktop && { minWidth: 0, width: '100%' }]}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={!isDesktop} contentContainerStyle={{ minWidth: isDesktop ? '100%' : 540 }}>
+              <View style={[styles.tableInner, { minWidth: isDesktop ? '100%' : 540 }]}>
                 <View style={[styles.tableRow, styles.tableHeader]}>
                   <Text style={[styles.cell, styles.colName, styles.tableHeaderText]}>Bowler</Text>
                   <Text style={[styles.cell, styles.colNum, styles.tableHeaderText]}>O</Text>

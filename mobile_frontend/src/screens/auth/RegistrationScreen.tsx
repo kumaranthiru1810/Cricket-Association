@@ -1940,8 +1940,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         }}
                         placeholder="e.g. saravanan@example.com"
                         keyboardType="email-address"
+                        autoComplete="email"
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="none"
+                        accessibilityLabel="Player email address"
                       />
                       <EmailDomainSuggestions
                         value={pEmail}
@@ -1999,8 +2001,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                           }}
                           placeholder="9876543210"
                           keyboardType="phone-pad"
+                          autoComplete="tel"
                           placeholderTextColor="#94a3b8"
                           maxLength={10}
+                          accessibilityLabel="Player 10-digit phone number"
                         />
                         {pMobile.replace(/\D/g, '').length === 10 && (
                           <View style={styles.validCheckBadge}>
@@ -2385,8 +2389,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                           }}
                           placeholder="9876543210"
                           keyboardType="phone-pad"
+                          autoComplete="tel"
                           placeholderTextColor="#94a3b8"
                           maxLength={10}
+                          accessibilityLabel="Player 10-digit phone number"
                         />
                         {coachMobile.replace(/\D/g, '').length === 10 && (
                           <View style={styles.validCheckBadge}>

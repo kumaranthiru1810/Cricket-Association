@@ -406,7 +406,10 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
               }
               placeholderTextColor="#94a3b8"
               keyboardType="email-address"
+              autoComplete="email"
               autoCapitalize="none"
+              autoCorrect={false}
+              accessibilityLabel="Login email or user"
             />
             <EmailDomainSuggestions
               value={emailOrUser}
@@ -452,6 +455,10 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
                     secureTextEntry={!showPassword}
                     placeholder="Enter your password"
                     placeholderTextColor="#94a3b8"
+                    autoComplete="current-password"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    accessibilityLabel="Account password"
                   />
                   <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                     <Text style={styles.toggleText}>{showPassword ? '👁️' : '🔒'}</Text>

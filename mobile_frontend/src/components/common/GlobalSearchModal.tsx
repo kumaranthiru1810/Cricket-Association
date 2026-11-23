@@ -523,10 +523,14 @@ const styles = StyleSheet.create({
   },
   clearBtn: {
     padding: 4,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   closeBtn: {
-    width: 38,
-    height: 38,
+    width: 44,
+    height: 44,
     borderRadius: 8,
     backgroundColor: '#f1f5f9',
     justifyContent: 'center',

@@ -11130,7 +11130,8 @@ const getStyles = (isDesktop: boolean) =>
     extraBtn: {
       flex: 1,
       minWidth: 70,
-      height: 40,
+      minHeight: 44,
+      height: 44,
       borderRadius: 6,
       backgroundColor: '#f1f5f9',
       borderWidth: 1,
@@ -11165,7 +11166,8 @@ const getStyles = (isDesktop: boolean) =>
     actionBtn: {
       flex: 1,
       minWidth: isDesktop ? 120 : 0,
-      height: isDesktop ? 44 : 32,
+      minHeight: 44,
+      height: 44,
       borderRadius: 6,
       alignItems: 'center',
       justifyContent: 'center'
@@ -13124,8 +13126,9 @@ const getStyles = (isDesktop: boolean) =>
     },
     engineKeypadBtn: {
       flex: 1,
-      height: isDesktop ? 54 : 36,
-      borderRadius: isDesktop ? 10 : 6,
+      minHeight: 46,
+      height: isDesktop ? 54 : 46,
+      borderRadius: isDesktop ? 10 : 8,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: '#ffffff',
@@ -13145,7 +13148,8 @@ const getStyles = (isDesktop: boolean) =>
     engineAuxKeypadBtn: {
       backgroundColor: '#005960',
       borderColor: '#0d9488',
-      height: isDesktop ? 54 : 32
+      minHeight: 44,
+      height: isDesktop ? 54 : 44
     },
     engineAuxKeypadText: {
       fontSize: isDesktop ? 12 : 10,

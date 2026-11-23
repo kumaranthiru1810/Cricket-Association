@@ -335,6 +335,7 @@ export const Header: React.FC<HeaderProps> = ({
             style={[styles.headerSearchBtn, isMobile && styles.headerSearchBtnMobile]}
             onPress={() => setSearchModalOpen(true)}
             activeOpacity={0.8}
+            accessibilityRole="button"
             accessibilityLabel="Search teams and players"
           >
             <Ionicons name="search" size={isMobile ? 18 : 15} color="#f5c43d" />
@@ -348,6 +349,8 @@ export const Header: React.FC<HeaderProps> = ({
                 style={[styles.headerUserPill, isMobile && styles.headerUserPillMobile]}
                 onPress={handleNavigateToUserPortal}
                 activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Go to user portal"
               >
                 <Ionicons name="person-circle-outline" size={isMobile ? 20 : 16} color="#f5c43d" />
                 {!isMobile && (
@@ -368,6 +371,8 @@ export const Header: React.FC<HeaderProps> = ({
                 style={[styles.headerLogoutBtn, isMobile && styles.headerLogoutBtnMobile]}
                 onPress={handleLogout}
                 activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Logout"
               >
                 <Ionicons name="log-out-outline" size={isMobile ? 18 : 13} color="#ef4444" />
                 {!isMobile && (
@@ -380,6 +385,8 @@ export const Header: React.FC<HeaderProps> = ({
               style={[styles.headerLoginBtn, isMobile && styles.headerLoginBtnMobile]}
               onPress={() => navigate('Login')}
               activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Login to portal"
             >
               <Ionicons name="log-in-outline" size={15} color="#081225" style={isMobile ? {} : { marginRight: 5 }} />
               {!isSmallMobile && (
@@ -393,8 +400,10 @@ export const Header: React.FC<HeaderProps> = ({
               style={styles.hamburgerBtn}
               onPress={() => setIsNavOpen(!isNavOpen)}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={isNavOpen ? "Close navigation menu" : "Open navigation menu"}
             >
-              <Ionicons name={isNavOpen ? 'close' : 'menu'} size={20} color="#f5c43d" />
+              <Ionicons name={isNavOpen ? 'close' : 'menu'} size={22} color="#f5c43d" />
             </TouchableOpacity>
           )}
         </View>
@@ -712,7 +721,8 @@ const styles = StyleSheet.create({
   },
   headerSearchBtnMobile: {
     paddingHorizontal: 8,
-    height: 32,
+    minHeight: 44,
+    minWidth: 44,
     borderRadius: 6,
     gap: 0,
   },
@@ -724,7 +734,7 @@ const styles = StyleSheet.create({
   headerLoginBtn: {
     backgroundColor: '#f5c43d',
     paddingHorizontal: 16,
-    height: 36,
+    minHeight: 44,
     borderRadius: 6,
     flexDirection: 'row',
     alignItems: 'center',
@@ -732,7 +742,8 @@ const styles = StyleSheet.create({
   },
   headerLoginBtnMobile: {
     paddingHorizontal: 10,
-    height: 32,
+    minHeight: 44,
+    minWidth: 44,
     borderRadius: 6,
   },
   headerLoginBtnText: {
@@ -745,7 +756,7 @@ const styles = StyleSheet.create({
     borderColor: '#d4af37',
     borderWidth: 1.2,
     paddingHorizontal: 12,
-    height: 36,
+    minHeight: 44,
     borderRadius: 6,
     flexDirection: 'row',
     alignItems: 'center',
@@ -754,8 +765,9 @@ const styles = StyleSheet.create({
   },
   headerUserPillMobile: {
     paddingHorizontal: 8,
-    height: 32,
-    borderRadius: 20,
+    minHeight: 44,
+    minWidth: 44,
+    borderRadius: 22,
     gap: 0,
   },
   headerUserNameText: {
@@ -781,7 +793,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(239, 68, 68, 0.5)',
     borderWidth: 1,
     paddingHorizontal: 10,
-    height: 36,
+    minHeight: 44,
     borderRadius: 6,
     flexDirection: 'row',
     alignItems: 'center',
@@ -789,8 +801,9 @@ const styles = StyleSheet.create({
   },
   headerLogoutBtnMobile: {
     paddingHorizontal: 7,
-    height: 32,
-    borderRadius: 20,
+    minHeight: 44,
+    minWidth: 44,
+    borderRadius: 22,
   },
   headerLogoutBtnText: {
     color: '#ef4444',
@@ -849,10 +862,14 @@ const styles = StyleSheet.create({
   },
   hamburgerBtn: {
     padding: 6,
+    minHeight: 44,
+    minWidth: 44,
     borderRadius: 6,
     backgroundColor: 'rgba(212, 175, 55, 0.15)',
     borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.3)'
+    borderColor: 'rgba(212, 175, 55, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   hamburgerIcon: {
     color: '#f5c43d',
@@ -864,10 +881,12 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(212, 175, 55, 0.25)',
     paddingHorizontal: 16,
-    paddingVertical: 10
+    paddingVertical: 10,
+    zIndex: 9999,
   },
   mobileNavItem: {
-    paddingVertical: 10,
+    minHeight: 44,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.06)',
     flexDirection: 'row',
