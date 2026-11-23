@@ -4603,6 +4603,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 12 }}>
                                 ⏸️ Match Postponed: {m.postponement?.reason || 'Reason not specified'}
                               </Text>
+                              {Boolean(m.postponement?.postponed_score_display) && (
+                                <Text style={{ color: '#92400e', fontWeight: '700', fontSize: 11.5, marginTop: 3 }}>
+                                  📊 State at Postponement: {m.postponement.postponed_score_display}
+                                </Text>
+                              )}
                               {Boolean(m.postponement?.original_date) && (
                                 <Text style={{ color: '#78350f', fontSize: 11, marginTop: 3 }}>
                                   Original Schedule: {m.postponement.original_date} • {m.postponement.original_time || '09:30 AM'}

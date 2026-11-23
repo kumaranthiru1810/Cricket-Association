@@ -367,6 +367,8 @@ class ScorerService {
         isPostponed,
         postponement: m.postponement || null,
         postponementReason: m.postponement?.reason || null,
+        postponedScoreDisplay: m.postponement?.postponed_score_display || null,
+        postponedStage: m.postponement?.postponed_stage || null,
         originalDate: m.postponement?.original_date || m.match_date,
         originalTime: m.postponement?.original_time || m.match_time,
         rescheduledDate: m.postponement?.rescheduled_date || null,

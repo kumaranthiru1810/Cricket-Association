@@ -39,7 +39,15 @@ const MatchSchema = new mongoose.Schema({
       user_id: { type: String, default: null },
       role: { type: String, default: null },
       name: { type: String, default: '' }
-    }
+    },
+    postponed_stage: { type: String, default: 'BEFORE_START' },
+    postponed_score_display: { type: String, default: '' },
+    score_at_postponement: { type: String, default: '' },
+    runs: { type: Number, default: 0 },
+    wickets: { type: Number, default: 0 },
+    overs: { type: String, default: '0.0' },
+    batting_team: { type: String, default: '' },
+    innings_number: { type: Number, default: 1 }
   },
   umpire_postponement_request: {
     requested: { type: Boolean, default: false },

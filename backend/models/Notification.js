@@ -11,7 +11,7 @@ const NotificationSchema = new mongoose.Schema({
   title: { type: String, required: true },
   message: { type: String, required: true },
   reference_id: { type: String, default: null },
-  recipient_role: { type: String, enum: ['TEAM', 'PLAYER', 'ADMIN'], default: 'TEAM' },
+  recipient_role: { type: String, enum: ['TEAM', 'PLAYER', 'ADMIN', 'UMPIRE', 'SCORER'], default: 'TEAM' },
   recipient_id: { type: String, default: null, index: true },
   recipient_email: { type: String, default: null, index: true },
   team_id: { type: String, default: null, index: true },

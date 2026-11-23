@@ -337,7 +337,14 @@ router.post('/matches/:matchId/postpone', verifyMatchPermission, async (req, res
         rescheduledDate: rescheduledDate || null,
         rescheduledTime: rescheduledTime || null,
         actorRole: 'SCORER',
-        actorName: scorerName
+        actorName: scorerName,
+        postponedStage: req.body.postponedStage,
+        postponedScoreDisplay: req.body.postponedScoreDisplay,
+        runsAtPostpone: req.body.runsAtPostpone,
+        wicketsAtPostpone: req.body.wicketsAtPostpone,
+        oversAtPostpone: req.body.oversAtPostpone,
+        battingTeamAtPostpone: req.body.battingTeamAtPostpone,
+        inningsAtPostpone: req.body.inningsAtPostpone
       },
       scorerEmail
     );

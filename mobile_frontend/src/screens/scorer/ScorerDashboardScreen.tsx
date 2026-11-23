@@ -494,6 +494,38 @@ export default function ScorerDashboardScreen() {
                         ⏳ Awaiting Admin Rescheduling
                       </Text>
                     )}
+
+                    {/* Match Score & Over Situation at Postponement */}
+                    <View style={{ marginTop: 8, padding: 10, backgroundColor: '#fef3c7', borderRadius: 6, borderLeftWidth: 4, borderLeftColor: '#d97706' }}>
+                      <Text style={{ color: '#92400e', fontWeight: '800', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        📊 Match Situation at Postponement:
+                      </Text>
+                      <Text style={{ color: '#78350f', fontSize: 13, fontWeight: '700', marginTop: 3 }}>
+                        {match.postponement?.postponed_score_display || match.postponedScoreDisplay || (
+                          match.scoreA ? `${match.teamA?.name || match.teamA}: ${match.scoreA}${match.scoreB && match.scoreB !== 'Yet to bat' ? ` • ${match.teamB?.name || match.teamB}: ${match.scoreB}` : ''}` : 'Postponed before match start (0 overs bowled / Toss pending)'
+                        )}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: '#d97706',
+                        paddingVertical: 7,
+                        paddingHorizontal: 14,
+                        borderRadius: 6,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6
+                      }}
+                      onPress={() => navigate('LiveScoring', { matchId: match.id })}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>
+                        OPEN LIVE CONSOLE ▶
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               ))

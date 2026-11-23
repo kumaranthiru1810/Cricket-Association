@@ -992,7 +992,23 @@ export const ScorerApi = {
     });
   },
 
-  postponeMatch: async (matchId: string, payloadOrReason: string | { reason: string; notes?: string; rescheduledDate?: string; rescheduledTime?: string }) => {
+  postponeMatch: async (
+    matchId: string,
+    payloadOrReason: string | {
+      reason: string;
+      notes?: string;
+      rescheduledDate?: string;
+      rescheduledTime?: string;
+      postponedStage?: string;
+      postponedScoreDisplay?: string;
+      runsAtPostpone?: number;
+      wicketsAtPostpone?: number;
+      oversAtPostpone?: string;
+      battingTeamAtPostpone?: string;
+      inningsAtPostpone?: number;
+      [key: string]: any;
+    }
+  ) => {
     const payload = typeof payloadOrReason === 'string' ? { reason: payloadOrReason } : payloadOrReason;
     return request(`/scorer/matches/${matchId}/postpone`, {
       method: 'POST',

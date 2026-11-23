@@ -21,7 +21,7 @@ const milestoneBatsmanImage = require('../../../assets/milestone_batsman.png');
 const centuryBatsmanImage = require('../../../assets/century_batsman.jpg');
 import SharedFooter from '../../components/scorer/SharedFooter';
 import { ScorerApi, getCurrentUser } from '../../services/api';
-import { ClockPickerModal, calculateDurationMinutes } from '../../components/common/ClockPickerModal';
+import { ClockPickerModal, calculateDurationMinutes, parseTimeString } from '../../components/common/ClockPickerModal';
 import CricketRulesModal, { CricketRuleType } from '../../components/scorer/CricketRulesModal';
 import CricketConfetti from '../../components/common/CricketConfetti';
 import CricketFigurine3D from '../../components/common/CricketFigurine3D';
@@ -385,7 +385,50 @@ export default function LiveScoringScreen() {
 
   // Clock Picker Modal State
   const [clockPickerVisible, setClockPickerVisible] = useState<boolean>(false);
-  const [clockPickerTarget, setClockPickerTarget] = useState<'BREAK_START' | 'BREAK_END'>('BREAK_START');
+  const [clockPickerTarget, setClockPickerTarget] = useState<'BREAK_START' | 'BREAK_END' | 'RESCHEDULE_TIME'>('BREAK_START');
+
+  const getCurrentTimeFormatted = () => {
+    const now = new Date();
+    let h = now.getHours();
+    const m = now.getMinutes();
+    const p = h >= 12 ? 'pm' : 'am';
+    h = h % 12 || 12;
+    return `${h}:${String(m).padStart(2, '0')} ${p}`;
+  };
+
+  const isTimeInPastToday = (timeStr: string): boolean => {
+    if (!timeStr) return false;
+    try {
+      const parsed = parseTimeString(timeStr);
+      const now = new Date();
+      let h24 = parsed.hour;
+      if (parsed.period === 'PM' && h24 < 12) h24 += 12;
+      if (parsed.period === 'AM' && h24 === 12) h24 = 0;
+      const selectedMinutes = h24 * 60 + parsed.minute;
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      return selectedMinutes < currentMinutes;
+    } catch (_e) {
+      return false;
+    }
+  };
+
+  const handleRescheduledDateChange = (val: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    if (val && val < today) {
+      const msg = 'Past dates cannot be selected. Please choose today or a future date.';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Invalid Date', msg);
+      setRescheduledDateInput(today);
+      return;
+    }
+    setRescheduledDateInput(val);
+    if (val === today && rescheduledTimeInput && isTimeInPastToday(rescheduledTimeInput)) {
+      setRescheduledTimeInput('');
+    }
+  };
+
+  const handleRescheduledTimeChange = (val: string) => {
+    setRescheduledTimeInput(val);
+  };
 
   // Open Breaks modal with current time and default duration
   const handleOpenBreaksModal = () => {
@@ -443,6 +486,15 @@ export default function LiveScoringScreen() {
         setBreakDuration(String(mins));
         setIsDurationAutoCalculated(true);
       }
+    } else if (clockPickerTarget === 'RESCHEDULE_TIME') {
+      const today = new Date().toISOString().split('T')[0];
+      const checkDate = rescheduledDateInput || today;
+      if (checkDate === today && isTimeInPastToday(formattedTime)) {
+        const msg = 'The selected time has already passed today. Please select a future time.';
+        Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Invalid Time', msg);
+        return;
+      }
+      setRescheduledTimeInput(formattedTime);
     }
     setClockPickerVisible(false);
   };
@@ -2883,13 +2935,51 @@ export default function LiveScoringScreen() {
       return;
     }
 
+    const today = new Date().toISOString().split('T')[0];
+    if (rescheduledDateInput) {
+      if (rescheduledDateInput < today) {
+        const msg = 'Reschedule date cannot be in the past. Please select today or a future date.';
+        Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Invalid Date', msg);
+        return;
+      }
+      if (rescheduledDateInput === today && rescheduledTimeInput && isTimeInPastToday(rescheduledTimeInput)) {
+        const msg = 'Reschedule time has already passed for today. Please select a future time.';
+        Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Invalid Time', msg);
+        return;
+      }
+    }
+
+    // Determine current match situation at postponement
+    const oversCompleted = Math.floor(balls / 6);
+    const ballsInOver = balls % 6;
+    const oversStr = `${oversCompleted}.${ballsInOver}`;
+    const totalMatchOvers = matchInfo?.overs || 20;
+    const currentInnNum = matchInfo?.currentInningsNumber || 1;
+    const currentBattingTeam = (currentInnNum === 2)
+      ? (matchInfo?.teamB?.name || matchInfo?.teamBName || 'Team B')
+      : (matchInfo?.teamA?.name || matchInfo?.teamAName || 'Team A');
+
+    const hasPlayStarted = balls > 0 || runs > 0 || wickets > 0 || (allInningsList && allInningsList.length > 1);
+
+    const postponedStage = hasPlayStarted ? 'IN_PLAY' : 'BEFORE_START';
+    const scoreDisplay = hasPlayStarted
+      ? `${currentBattingTeam}: ${runs}/${wickets} (${oversStr}/${totalMatchOvers} Ov) - Innings ${currentInnNum}`
+      : 'Postponed before match start (0 overs bowled / Toss pending)';
+
     setIsSubmittingPostpone(true);
     try {
       await ScorerApi.postponeMatch(matchId, {
         reason: finalReason,
         notes: postponeNotes.trim(),
         rescheduledDate: rescheduledDateInput.trim(),
-        rescheduledTime: rescheduledTimeInput.trim()
+        rescheduledTime: rescheduledTimeInput.trim(),
+        postponedStage,
+        postponedScoreDisplay: scoreDisplay,
+        runsAtPostpone: runs,
+        wicketsAtPostpone: wickets,
+        oversAtPostpone: oversStr,
+        battingTeamAtPostpone: currentBattingTeam,
+        inningsAtPostpone: currentInnNum
       });
       setShowPostponeModal(false);
       setIsPostponeReasonDropdownOpen(false);
@@ -2898,7 +2988,7 @@ export default function LiveScoringScreen() {
       setRescheduledDateInput('');
       setRescheduledTimeInput('');
       await loadLiveState(false);
-      const msg = `Match has been successfully POSTPONED.\n\nReason: ${finalReason}\n\nScoring is now frozen. You or another official can resume the match at any time using "Resume Match".`;
+      const msg = `Match has been successfully POSTPONED.\n\nReason: ${finalReason}\nSituation: ${scoreDisplay}\n\nScoring is now frozen. You or another official can resume the match at any time using "Resume Match".`;
       Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Match Postponed', msg);
     } catch (err: any) {
       const msg = err.message || 'Failed to postpone match.';
@@ -3896,20 +3986,30 @@ export default function LiveScoringScreen() {
       </Modal>
 
 
-      {/* CLOCK PICKER MODAL (For Breaks & Sessions) */}
+      {/* CLOCK PICKER MODAL (For Breaks, Sessions & Rescheduling) */}
       <ClockPickerModal
         visible={clockPickerVisible}
         title={
-          clockPickerTarget === 'BREAK_START'
+          clockPickerTarget === 'RESCHEDULE_TIME'
+            ? 'Select Reschedule Time'
+            : clockPickerTarget === 'BREAK_START'
             ? 'Select Break Start Time'
             : 'Select Break End Time'
         }
         initialTime={
-          clockPickerTarget === 'BREAK_START'
+          clockPickerTarget === 'RESCHEDULE_TIME'
+            ? (rescheduledTimeInput || undefined)
+            : clockPickerTarget === 'BREAK_START'
             ? breakStartTime
             : breakEndTime
         }
-        referenceStartTime={clockPickerTarget === 'BREAK_END' ? breakStartTime : undefined}
+        referenceStartTime={
+          clockPickerTarget === 'BREAK_END'
+            ? breakStartTime
+            : (clockPickerTarget === 'RESCHEDULE_TIME' && (!rescheduledDateInput || rescheduledDateInput === new Date().toISOString().split('T')[0])
+                ? getCurrentTimeFormatted()
+                : undefined)
+        }
         onClose={() => setClockPickerVisible(false)}
         onSelectTime={handleClockPickerSelect}
       />
@@ -4993,27 +5093,79 @@ export default function LiveScoringScreen() {
                 onChangeText={setPostponeCustomReason}
               />
 
+              {/* Current Match Situation Summary */}
+              <View style={{ marginTop: 10, padding: 10, backgroundColor: '#fef3c7', borderRadius: 8, borderWidth: 1, borderColor: '#fde68a' }}>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#92400e', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  📊 Current Match Situation:
+                </Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#78350f', marginTop: 2 }}>
+                  {balls > 0 || runs > 0 || wickets > 0 || (allInningsList && allInningsList.length > 1)
+                    ? `In Play: ${runs}/${wickets} in ${Math.floor(balls / 6)}.${balls % 6} Overs (${matchInfo?.overs || 20} Ov match)`
+                    : 'Match Not Started (0 Overs Bowled / Toss Pending)'}
+                </Text>
+              </View>
+
               {/* Optional Reschedule Date & Time */}
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.fieldSubLabel}>RESCHEDULE DATE (OPTIONAL):</Text>
-                  <TextInput
-                    style={[styles.customNameInput, { height: 40 }]}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor="#9ca3af"
-                    value={rescheduledDateInput}
-                    onChangeText={setRescheduledDateInput}
-                  />
+                  {Platform.OS === 'web' ? (
+                    <input
+                      type="date"
+                      min={new Date().toISOString().split('T')[0]}
+                      value={rescheduledDateInput}
+                      onChange={(e: any) => handleRescheduledDateChange(e.target.value)}
+                      style={{
+                        width: '100%',
+                        height: 40,
+                        backgroundColor: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: 8,
+                        padding: '0 12px',
+                        fontSize: 13,
+                        color: '#0f172a',
+                        outline: 'none',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  ) : (
+                    <TextInput
+                      style={[styles.customNameInput, { height: 40 }]}
+                      placeholder="YYYY-MM-DD"
+                      placeholderTextColor="#9ca3af"
+                      value={rescheduledDateInput}
+                      onChangeText={handleRescheduledDateChange}
+                    />
+                  )}
+                  <Text style={{ fontSize: 10.5, color: '#64748b', marginTop: 3 }}>
+                    * Today or future date only
+                  </Text>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.fieldSubLabel}>RESCHEDULE TIME (OPTIONAL):</Text>
-                  <TextInput
-                    style={[styles.customNameInput, { height: 40 }]}
-                    placeholder="HH:MM AM/PM"
-                    placeholderTextColor="#9ca3af"
-                    value={rescheduledTimeInput}
-                    onChangeText={setRescheduledTimeInput}
-                  />
+                  <View style={styles.timeInputContainer}>
+                    <TextInput
+                      style={[styles.customNameInput, { height: 40, paddingRight: 74 }]}
+                      placeholder="e.g. 04:30 pm"
+                      placeholderTextColor="#9ca3af"
+                      value={rescheduledTimeInput}
+                      onChangeText={handleRescheduledTimeChange}
+                    />
+                    <TouchableOpacity
+                      style={styles.fieldClockBtn}
+                      onPress={() => {
+                        setClockPickerTarget('RESCHEDULE_TIME');
+                        setClockPickerVisible(true);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={{ fontSize: 13 }}>🕒</Text>
+                      <Text style={styles.fieldClockBtnText}>Clock</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={{ fontSize: 10.5, color: '#64748b', marginTop: 3 }}>
+                    * Future time only
+                  </Text>
                 </View>
               </View>
 
@@ -7048,6 +7200,15 @@ export default function LiveScoringScreen() {
                     <Text style={styles.postponedBannerReason}>
                       Reason: {(matchInfo as any)?.postponement?.reason || (matchInfo as any)?.postpone_reason || 'Adverse playing conditions / Official decision'}
                     </Text>
+                    {Boolean((matchInfo as any)?.postponement?.postponed_score_display) ? (
+                      <Text style={[styles.postponedRescheduleNotice, { color: '#b45309', fontWeight: '700', marginTop: 2 }]}>
+                        📊 Situation: {(matchInfo as any).postponement.postponed_score_display}
+                      </Text>
+                    ) : (
+                      <Text style={[styles.postponedRescheduleNotice, { color: '#64748b', marginTop: 2 }]}>
+                        📊 Situation: {balls > 0 || runs > 0 || wickets > 0 ? `Interrupted at ${runs}/${wickets} (${Math.floor(balls / 6)}.${balls % 6} Ov)` : 'Postponed before match start (0 overs bowled)'}
+                      </Text>
+                    )}
                     {Boolean((matchInfo as any)?.postponement?.rescheduled_date) && (
                       <Text style={styles.postponedRescheduleNotice}>
                         📅 Rescheduled: {(matchInfo as any).postponement.rescheduled_date} {(matchInfo as any).postponement.rescheduled_time ? `at ${(matchInfo as any).postponement.rescheduled_time}` : ''}
