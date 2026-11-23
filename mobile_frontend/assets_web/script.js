@@ -23,6 +23,20 @@ document.addEventListener('DOMContentLoaded', () => {
   initAuthSessionUI();
 });
 
+function getApiBaseUrl() {
+  if (typeof window !== 'undefined' && window.REACT_APP_API_URL) return window.REACT_APP_API_URL.replace(/\/+$/, '');
+  if (typeof window !== 'undefined' && window.__ENV__ && window.__ENV__.API_URL) return window.__ENV__.API_URL.replace(/\/+$/, '');
+  if (typeof window !== 'undefined' && window.location) {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return `http://${window.location.hostname}:5000`;
+    }
+    if (window.location.origin && !window.location.origin.includes('5000')) {
+      return window.location.origin;
+    }
+  }
+  return 'http://localhost:5000';
+}
+
 /* --------------------------------------------------------------------------
    1. THEME TOGGLE (Dark / Light)
    -------------------------------------------------------------------------- */
@@ -1156,7 +1170,7 @@ async function handleOfficialRegisterSubmit(e) {
     if (typeof window !== 'undefined' && window.location && window.location.hostname) {
       return `http://${window.location.hostname}:5000/api`;
     }
-    return 'http://localhost:5000/api';
+    return `${getApiBaseUrl()}/api`;
   })();
 
   let mongoId = null;
@@ -2479,7 +2493,7 @@ async function handleAdminApproveTeam(teamId) {
   if (idx === -1) return;
 
   try {
-    await fetch('http://localhost:5000/api/auth/admin/approve-registration', {
+    await fetch(`${getApiBaseUrl()}/api/auth/admin/approve-registration`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: teamId, type: 'TEAM' })
@@ -2768,7 +2782,7 @@ function handlePlayerSendOTP(e) {
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verifying...'; }
   if (alertBox) alertBox.style.display = 'none';
 
-  const API_BASE = 'http://localhost:5000';
+  const API_BASE = getApiBaseUrl();
 
   fetch(`${API_BASE}/api/players/send-otp`, {
     method: 'POST',
@@ -2844,7 +2858,7 @@ function handleResendOTP() {
   const alertBox = document.getElementById('otpAlert');
   if (alertBox) alertBox.style.display = 'none';
 
-  const API_BASE = 'http://localhost:5000';
+  const API_BASE = getApiBaseUrl();
 
   fetch(`${API_BASE}/api/players/send-otp`, {
     method: 'POST',
@@ -2950,7 +2964,7 @@ function handleVerifyOTP() {
   if (verifyBtn) { verifyBtn.disabled = true; verifyBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verifying...'; }
   if (alertBox) alertBox.style.display = 'none';
 
-  const API_BASE = 'http://localhost:5000';
+  const API_BASE = getApiBaseUrl();
 
   fetch(`${API_BASE}/api/players/verify-otp`, {
     method: 'POST',
@@ -4370,10 +4384,7 @@ async function handleUnifiedTeamVerify(e) {
 }
 
 function getBackendApiBase() {
-  if (typeof window !== 'undefined' && window.location && window.location.hostname) {
-    return `http://${window.location.hostname}:5000/api`;
-  }
-  return 'http://localhost:5000/api';
+  return `${getApiBaseUrl()}/api`;
 }
 
 async function handleUnifiedScorerSendOTP(e) {
@@ -5404,7 +5415,7 @@ async function handleAdminLoginSubmit(e) {
     if (typeof window !== 'undefined' && window.location && window.location.hostname) {
       return `http://${window.location.hostname}:5000/api`;
     }
-    return 'http://localhost:5000/api';
+    return `${getApiBaseUrl()}/api`;
   })();
 
   let authenticated = false;
@@ -5536,7 +5547,7 @@ async function syncAdminDataFromBackend() {
     if (typeof window !== 'undefined' && window.location && window.location.hostname) {
       return `http://${window.location.hostname}:5000/api`;
     }
-    return 'http://localhost:5000/api';
+    return `${getApiBaseUrl()}/api`;
   })();
 
   try {
@@ -6072,7 +6083,7 @@ function promptApproveTeam(teamId) {
         if (typeof window !== 'undefined' && window.location && window.location.hostname) {
           return `http://${window.location.hostname}:5000/api`;
         }
-        return 'http://localhost:5000/api';
+        return `${getApiBaseUrl()}/api`;
       })();
 
       try {
@@ -6130,7 +6141,7 @@ function promptRejectTeam(teamId) {
         if (typeof window !== 'undefined' && window.location && window.location.hostname) {
           return `http://${window.location.hostname}:5000/api`;
         }
-        return 'http://localhost:5000/api';
+        return `${getApiBaseUrl()}/api`;
       })();
 
       try {
@@ -6405,7 +6416,7 @@ function promptApproveScorer(scorerId) {
         if (typeof window !== 'undefined' && window.location && window.location.hostname) {
           return `http://${window.location.hostname}:5000/api`;
         }
-        return 'http://localhost:5000/api';
+        return `${getApiBaseUrl()}/api`;
       })();
 
       const token = localStorage.getItem('cfvd_admin_token') || '';
@@ -6465,7 +6476,7 @@ function promptRejectScorer(scorerId) {
         if (typeof window !== 'undefined' && window.location && window.location.hostname) {
           return `http://${window.location.hostname}:5000/api`;
         }
-        return 'http://localhost:5000/api';
+        return `${getApiBaseUrl()}/api`;
       })();
 
       const token = localStorage.getItem('cfvd_admin_token') || '';
@@ -6616,7 +6627,7 @@ async function handleScorerLoginSubmit(e) {
     if (typeof window !== 'undefined' && window.location && window.location.hostname) {
       return `http://${window.location.hostname}:5000/api`;
     }
-    return 'http://localhost:5000/api';
+    return `${getApiBaseUrl()}/api`;
   })();
 
   // 1. Try Live MongoDB Authentication via Scorer Login API
@@ -6877,7 +6888,7 @@ async function syncAdminNewsFromBackend() {
     if (typeof window !== 'undefined' && window.location && window.location.hostname) {
       return `http://${window.location.hostname}:5000/api`;
     }
-    return 'http://localhost:5000/api';
+    return `${getApiBaseUrl()}/api`;
   })();
 
   const token = localStorage.getItem('cfvd_admin_token') || '';
@@ -7038,7 +7049,7 @@ async function handleAdminPublishNews(event) {
     if (typeof window !== 'undefined' && window.location && window.location.hostname) {
       return `http://${window.location.hostname}:5000/api`;
     }
-    return 'http://localhost:5000/api';
+    return `${getApiBaseUrl()}/api`;
   })();
 
   try {
@@ -7111,7 +7122,7 @@ async function handleAdminDeleteNews(id) {
     if (typeof window !== 'undefined' && window.location && window.location.hostname) {
       return `http://${window.location.hostname}:5000/api`;
     }
-    return 'http://localhost:5000/api';
+    return `${getApiBaseUrl()}/api`;
   })();
 
   try {

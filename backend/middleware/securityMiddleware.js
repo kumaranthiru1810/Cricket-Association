@@ -46,17 +46,16 @@ function sanitizeInput(req, res, next) {
 // General API Rate Limiter
 const generalRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 10000 : 20000, // Generous limit per client IP
+  max: process.env.NODE_ENV === 'production' ? 1000 : 5000, // Sensible limit per client IP
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => {
-    // All read requests (GET/HEAD) and CORS preflights are completely exempt from rate limiting
-    if (req.method === 'OPTIONS' || req.method === 'GET' || req.method === 'HEAD') return true;
+    // Only skip OPTIONS preflights, static media uploads and basic health checks
+    if (req.method === 'OPTIONS') return true;
     const url = req.originalUrl || req.url || '';
     return (
       url === '/' ||
       url === '/api/health' ||
-      url.startsWith('/api/master-settings') ||
       url.startsWith('/uploads')
     );
   },
@@ -106,18 +105,28 @@ function getCorsOptions() {
       if (allowed.includes(origin)) {
         return callback(null, true);
       }
-      // Allow any localhost, 127.0.0.1 on any port, local LAN IP, or Render/Vercel/Netlify deployments
-      if (
-        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
-        /^https?:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin) ||
-        origin.endsWith('.onrender.com') ||
-        origin.includes('onrender.com') ||
-        origin.includes('cricketassociation') ||
-        origin.endsWith('.vercel.app') ||
-        origin.endsWith('.netlify.app')
-      ) {
-        return callback(null, true);
+      
+      try {
+        const parsed = new URL(origin);
+        const hostname = parsed.hostname;
+        if (
+          hostname === 'localhost' ||
+          hostname === '127.0.0.1' ||
+          /^192\.168\.\d+\.\d+$/.test(hostname) ||
+          /^10\.\d+\.\d+\.\d+$/.test(hostname) ||
+          /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(hostname) ||
+          hostname === 'cricketassociation.onrender.com' ||
+          hostname === 'cricket-backend-dqdm.onrender.com' ||
+          hostname.endsWith('.onrender.com') ||
+          hostname.endsWith('.vercel.app') ||
+          hostname.endsWith('.netlify.app')
+        ) {
+          return callback(null, true);
+        }
+      } catch (_e) {
+        return callback(null, false);
       }
+
       return callback(null, false);
     },
     credentials: true,

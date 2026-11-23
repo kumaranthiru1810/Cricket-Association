@@ -8,6 +8,11 @@ const router = express.Router();
 const db = require('../config/db');
 const { verifyToken } = require('../middleware/authMiddleware');
 
+function escapeRegex(str) {
+  if (typeof str !== 'string') return '';
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * GET /api/news
  * List news articles with category and search filter
@@ -19,13 +24,15 @@ router.get('/', async (req, res) => {
     const query = { status: 'PUBLISHED' };
 
     if (category && category !== 'ALL') {
-      query.category = category;
+      const safeCategory = escapeRegex(category.trim());
+      query.category = new RegExp(`^${safeCategory}$`, 'i');
     }
-    if (search) {
+    if (search && search.trim()) {
+      const safeSearch = escapeRegex(search.trim());
       query.$or = [
-        { title: new RegExp(search, 'i') },
-        { summary: new RegExp(search, 'i') },
-        { content: new RegExp(search, 'i') }
+        { title: new RegExp(safeSearch, 'i') },
+        { summary: new RegExp(safeSearch, 'i') },
+        { content: new RegExp(safeSearch, 'i') }
       ];
     }
 

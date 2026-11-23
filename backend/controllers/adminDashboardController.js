@@ -37,18 +37,9 @@ class AdminDashboardController {
       // Built-in credential verification for administrative roles
       let isAuthenticated = false;
 
-      if (cleanEmail === 'admin@cfvd.org' && (cleanPass === 'CFVD@Admin2026' || cleanPass === 'admin123')) {
-        isAuthenticated = true;
-        if (!adminUser) {
-          adminUser = {
-            id: 'ADM-1002',
-            name: 'Chief Administrator',
-            email: 'admin@cfvd.org',
-            role: 'ADMIN',
-            status: 'ACTIVE'
-          };
-        }
-      } else if (cleanEmail === 'admin@example.com' && cleanPass === '1234') {
+      // In non-production testing environment ONLY, allow dev admin bypass
+      const isDev = process.env.NODE_ENV !== 'production';
+      if (isDev && cleanEmail === 'admin@example.com' && cleanPass === '1234') {
         isAuthenticated = true;
         if (!adminUser) {
           adminUser = {
@@ -59,10 +50,8 @@ class AdminDashboardController {
             status: 'ACTIVE'
           };
         }
-      } else if (adminUser && adminUser.role === 'ADMIN') {
-        if (adminUser.password_hash === cleanPass) {
-          isAuthenticated = true;
-        } else {
+      } else if (adminUser && (adminUser.role === 'ADMIN' || adminUser.role === 'SUPER_ADMIN')) {
+        if (adminUser.password_hash) {
           try {
             isAuthenticated = await bcrypt.compare(cleanPass, adminUser.password_hash);
           } catch (e) {

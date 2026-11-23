@@ -17,7 +17,7 @@ const router = express.Router();
 const authService = require('../services/authService');
 const playerService = require('../services/playerService');
 const playerRatingService = require('../services/playerRatingService');
-const { requirePlayerAuth } = require('../middleware/authMiddleware');
+const { requirePlayerAuth, requireAdminAuth } = require('../middleware/authMiddleware');
 
 // -------------------------------------------------------------
 // 1. PUBLIC AUTHENTICATION & REGISTRATION ENDPOINTS
@@ -252,7 +252,7 @@ router.get('/leaderboards/ratings', async (req, res) => {
  * POST /api/players/matches/:matchId/recalculate-ratings
  * Idempotently trigger rating computation for all players in a match
  */
-router.post('/matches/:matchId/recalculate-ratings', async (req, res) => {
+router.post('/matches/:matchId/recalculate-ratings', requireAdminAuth, async (req, res) => {
   try {
     const result = await playerRatingService.recalculateMatchRatings(req.params.matchId);
     res.status(result.success ? 200 : 400).json(result);

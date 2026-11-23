@@ -539,6 +539,19 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     return null;
   };
 
+  const validateEmailOnType = (val: string, label: string = 'Email address'): string | undefined => {
+    if (!val || !val.trim()) return undefined;
+    // Do not show error while user is still typing their username or before clicking a quick domain
+    if (!val.includes('@') || val.endsWith('@')) {
+      return undefined;
+    }
+    const res = validateEmail(val, `${label} is required.`);
+    if (!res.isValid) {
+      return res.error || `${label} is invalid.`;
+    }
+    return undefined;
+  };
+
   const validatePasswordValue = (val: string): string | null => {
     const res = validatePassword(val);
     if (!res.isValid) {
@@ -1868,8 +1881,14 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                             setIsEmailVerified(false);
                             setOtpSent(false);
                           }
-                          const err = validateEmailValue(sanitized, 'Player Email Address');
-                          setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+                          const err = validateEmailOnType(sanitized, 'Player Email Address');
+                          setFieldErrors((prev) => ({ ...prev, email: err }));
+                        }}
+                        onBlur={() => {
+                          if (pEmail) {
+                            const err = validateEmailValue(pEmail, 'Player Email Address');
+                            setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+                          }
                         }}
                         placeholder="e.g. saravanan@example.com"
                         keyboardType="email-address"
@@ -2251,8 +2270,14 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                             setIsEmailVerified(false);
                             setOtpSent(false);
                           }
-                          const err = validateEmailValue(sanitized, 'Coach Official Email Address');
-                          setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+                          const err = validateEmailOnType(sanitized, 'Coach Official Email Address');
+                          setFieldErrors((prev) => ({ ...prev, email: err }));
+                        }}
+                        onBlur={() => {
+                          if (coachEmail) {
+                            const err = validateEmailValue(coachEmail, 'Coach Official Email Address');
+                            setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+                          }
                         }}
                         placeholder="e.g. coach@strikerscc.org"
                         keyboardType="email-address"
@@ -2354,8 +2379,14 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                           onChangeText={(val) => {
                             const sanitized = val.replace(/[^a-zA-Z0-9_.@]/g, '');
                             setSquadPlayerEmail(sanitized);
-                            const err = validateEmailValue(sanitized, 'Squad Player Email');
-                            setFieldErrors((prev) => ({ ...prev, squadPlayerEmail: err || undefined }));
+                            const err = validateEmailOnType(sanitized, 'Squad Player Email');
+                            setFieldErrors((prev) => ({ ...prev, squadPlayerEmail: err }));
+                          }}
+                          onBlur={() => {
+                            if (squadPlayerEmail) {
+                              const err = validateEmailValue(squadPlayerEmail, 'Squad Player Email');
+                              setFieldErrors((prev) => ({ ...prev, squadPlayerEmail: err || undefined }));
+                            }
                           }}
                           placeholder="Player Email Address"
                           keyboardType="email-address"
@@ -2529,8 +2560,14 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                             setIsEmailVerified(false);
                             setOtpSent(false);
                           }
-                          const err = validateEmailValue(sanitized, 'Official Scorer Email');
-                          setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+                          const err = validateEmailOnType(sanitized, 'Official Scorer Email');
+                          setFieldErrors((prev) => ({ ...prev, email: err }));
+                        }}
+                        onBlur={() => {
+                          if (sEmail) {
+                            const err = validateEmailValue(sEmail, 'Official Scorer Email');
+                            setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+                          }
                         }}
                         placeholder="e.g. ramesh.scorer@cfvd.org"
                         keyboardType="email-address"
@@ -2707,8 +2744,14 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                             setIsEmailVerified(false);
                             setOtpSent(false);
                           }
-                          const err = validateEmailValue(sanitized, 'Official Umpire Email');
-                          setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+                          const err = validateEmailOnType(sanitized, 'Official Umpire Email');
+                          setFieldErrors((prev) => ({ ...prev, email: err }));
+                        }}
+                        onBlur={() => {
+                          if (uEmail) {
+                            const err = validateEmailValue(uEmail, 'Official Umpire Email');
+                            setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+                          }
                         }}
                         placeholder="e.g. sundararajan.umpire@cfvd.org"
                         keyboardType="email-address"

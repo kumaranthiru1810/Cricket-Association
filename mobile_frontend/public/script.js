@@ -23,6 +23,20 @@ document.addEventListener('DOMContentLoaded', () => {
   initAuthSessionUI();
 });
 
+function getApiBaseUrl() {
+  if (typeof window !== 'undefined' && window.REACT_APP_API_URL) return window.REACT_APP_API_URL.replace(/\/+$/, '');
+  if (typeof window !== 'undefined' && window.__ENV__ && window.__ENV__.API_URL) return window.__ENV__.API_URL.replace(/\/+$/, '');
+  if (typeof window !== 'undefined' && window.location) {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return `http://${window.location.hostname}:5000`;
+    }
+    if (window.location.origin && !window.location.origin.includes('5000')) {
+      return window.location.origin;
+    }
+  }
+  return 'http://localhost:5000';
+}
+
 /* --------------------------------------------------------------------------
    1. THEME TOGGLE (Dark / Light)
    -------------------------------------------------------------------------- */
@@ -1156,7 +1170,7 @@ async function handleOfficialRegisterSubmit(e) {
     if (typeof window !== 'undefined' && window.location && window.location.hostname) {
       return `http://${window.location.hostname}:5000/api`;
     }
-    return 'http://localhost:5000/api';
+    return `${getApiBaseUrl()}/api`;
   })();
 
   let mongoId = null;
@@ -2479,7 +2493,7 @@ async function handleAdminApproveTeam(teamId) {
   if (idx === -1) return;
 
   try {
-    await fetch('http://localhost:5000/api/auth/admin/approve-registration', {
+    await fetch(`${getApiBaseUrl()}/api/auth/admin/approve-registration`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: teamId, type: 'TEAM' })
@@ -2732,160 +2746,16 @@ function showPlayerPortalView(view) {
   }
 }
 
-function prefillPlayerLogin(name, email) {
-  const nameInput = document.getElementById('playerLoginName');
-  const emailInput = document.getElementById('playerLoginEmail');
-  if (nameInput) nameInput.value = name;
-  if (emailInput) emailInput.value = email;
+// prefillPlayerLogin removed — no fake test profiles
 
-  const alertBox = document.getElementById('playerLoginAlert');
-  if (alertBox) alertBox.style.display = 'none';
-
-  if (nameInput) nameInput.focus();
-}
+// ── REAL PLAYER LOGIN — calls backend API, NO localStorage, NO fake data ──
 
 function handlePlayerLoginSubmit(e) {
-  e.preventDefault();
-
-  const nameInput = document.getElementById('playerLoginName');
-  const emailInput = document.getElementById('playerLoginEmail');
-  const alertBox = document.getElementById('playerLoginAlert');
-
-  const name = nameInput ? nameInput.value.trim() : '';
-  const email = emailInput ? emailInput.value.trim().toLowerCase() : '';
-
-  if (!name || !email) {
-    if (alertBox) {
-      alertBox.className = 'alert-box alert-danger';
-      alertBox.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <div>Please enter both Player Name and Player Email ID.</div>';
-      alertBox.style.display = 'flex';
-    }
-    return;
-  }
-
-  const teams = getStoredTeams();
-  let matchedPlayer = null;
-  let matchedTeam = null;
-  let memberIndex = -1;
-
-  for (const team of teams) {
-    if (!Array.isArray(team.members)) continue;
-    for (let i = 0; i < team.members.length; i++) {
-      const m = team.members[i];
-      const mName = (m.playerName || '').trim().toLowerCase();
-      const mEmail = (m.playerEmail || '').trim().toLowerCase();
-
-      // Check exact match or base name substring match + email match
-      const emailMatches = mEmail === email;
-      const nameMatches = mName === name.toLowerCase() ||
-        mName.startsWith(name.toLowerCase() + ' ') ||
-        mName.includes(name.toLowerCase()) ||
-        name.toLowerCase().includes(mName);
-
-      if (emailMatches && nameMatches) {
-        matchedPlayer = m;
-        matchedTeam = team;
-        memberIndex = i;
-        break;
-      }
-    }
-    if (matchedPlayer) break;
-  }
-
-  // 1. If player not found
-  if (!matchedPlayer || !matchedTeam) {
-    if (alertBox) {
-      alertBox.className = 'alert-box alert-danger';
-      alertBox.innerHTML = `
-        <i class="fa-solid fa-circle-xmark" style="font-size:1.2rem; flex-shrink:0;"></i>
-        <div>
-          <strong>Authentication Error:</strong> Player not found. Please check your name and email.
-        </div>
-      `;
-      alertBox.style.display = 'flex';
-    }
-    return;
-  }
-
-  const teamStatus = matchedTeam.status || matchedTeam.adminApprovalStatus || 'Pending';
-
-  // 2. If team registration is still pending
-  if (teamStatus === 'Pending') {
-    if (alertBox) {
-      alertBox.className = 'alert-box alert-warning';
-      alertBox.innerHTML = `
-        <i class="fa-solid fa-clock-rotate-left" style="font-size:1.2rem; flex-shrink:0;"></i>
-        <div>
-          <strong>Pending Approval:</strong> Your team registration is still pending admin approval.
-          <div style="font-size:0.8rem; margin-top:5px; opacity:0.9;">
-            Team: <strong>${matchedTeam.teamName}</strong> • Coach: ${matchedTeam.coach.name} (${matchedTeam.coach.email})
-          </div>
-        </div>
-      `;
-      alertBox.style.display = 'flex';
-    }
-    return;
-  }
-
-  // 3. If team registration has been rejected
-  if (teamStatus === 'Rejected') {
-    if (alertBox) {
-      alertBox.className = 'alert-box alert-danger';
-      alertBox.innerHTML = `
-        <i class="fa-solid fa-ban" style="font-size:1.2rem; flex-shrink:0;"></i>
-        <div>
-          <strong>Registration Rejected:</strong> Your team registration has been rejected.
-          <div style="font-size:0.8rem; margin-top:5px; opacity:0.9;">
-            Reason: ${matchedTeam.rejectionReason || 'Documentation criteria not fulfilled'} • Please contact your coach.
-          </div>
-        </div>
-      `;
-      alertBox.style.display = 'flex';
-    }
-    return;
-  }
-
-  // 4. If registered and team is approved -> Allow access!
-  if (teamStatus === 'Approved') {
-    if (alertBox) alertBox.style.display = 'none';
-
-    // Ensure member has ID and standard fields
-    if (!matchedPlayer.playerId) {
-      matchedPlayer.playerId = `CFVD-PLY-${matchedTeam.teamId.slice(-4)}-${(memberIndex + 1).toString().padStart(2, '0')}`;
-    }
-    if (!matchedPlayer.role) matchedPlayer.role = 'Batsman';
-    if (!matchedPlayer.battingStyle) matchedPlayer.battingStyle = 'Right Hand Bat';
-    if (!matchedPlayer.bowlingStyle) matchedPlayer.bowlingStyle = 'Right Arm Medium';
-    if (!matchedPlayer.jerseyNumber) matchedPlayer.jerseyNumber = (memberIndex + 1).toString();
-
-    // Persist changes to team members
-    saveStoredTeams(teams);
-
-    // Save active player session
-    const session = {
-      playerId: matchedPlayer.playerId,
-      playerName: matchedPlayer.playerName,
-      playerEmail: matchedPlayer.playerEmail,
-      teamId: matchedTeam.teamId,
-      teamName: matchedTeam.teamName,
-      loginTime: new Date().toISOString()
-    };
-    saveActivePlayerSession(session);
-
-    // Update Header and Navbar UI
-    updatePlayerHeaderUI();
-
-    // Update Header UI
-    updateAuthHeaderUI();
-
-    // Render Dashboard & navigate to /player route
-    renderPlayerDashboard(matchedPlayer, matchedTeam);
-    navigateToRoute('/player');
-    switchPlayerDashTab('overview');
-  }
+  // Alias: form submit goes straight to Send OTP
+  handlePlayerSendOTP(e);
 }
 
-// Global variable to store target login identity during OTP step
+// Global to hold verified player email for OTP step
 let pendingPlayerLoginData = null;
 let otpTimerInterval = null;
 
@@ -2894,6 +2764,7 @@ function handlePlayerSendOTP(e) {
   const nameInput = document.getElementById('playerLoginName');
   const emailInput = document.getElementById('playerLoginEmail');
   const alertBox = document.getElementById('playerLoginAlert');
+  const btn = document.getElementById('btnPlayerSendOTP') || document.getElementById('btnPlayerLoginSubmit');
 
   const name = nameInput ? nameInput.value.trim() : '';
   const email = emailInput ? emailInput.value.trim().toLowerCase() : '';
@@ -2907,117 +2778,57 @@ function handlePlayerSendOTP(e) {
     return;
   }
 
-  // Validate player in teams database
-  const teams = getStoredTeams();
-  let matchedPlayer = null;
-  let matchedTeam = null;
-  let memberIndex = -1;
-
-  for (const team of teams) {
-    if (!Array.isArray(team.members)) continue;
-    for (let i = 0; i < team.members.length; i++) {
-      const m = team.members[i];
-      const mName = (m.playerName || '').trim().toLowerCase();
-      const mEmail = (m.playerEmail || '').trim().toLowerCase();
-
-      const emailMatches = mEmail === email;
-      const nameMatches = mName === name.toLowerCase() ||
-        mName.startsWith(name.toLowerCase() + ' ') ||
-        mName.includes(name.toLowerCase()) ||
-        name.toLowerCase().includes(mName);
-
-      if (emailMatches && nameMatches) {
-        matchedPlayer = m;
-        matchedTeam = team;
-        memberIndex = i;
-        break;
-      }
-    }
-    if (matchedPlayer) break;
-  }
-
-  if (!matchedPlayer || !matchedTeam) {
-    // Dynamically fallback/create player so any entered name/email can login smoothly for demo
-    matchedTeam = teams.find(t => (t.status || t.adminApprovalStatus) === 'Approved') || teams[0];
-    if (!matchedTeam) {
-      matchedTeam = {
-        teamId: 'CFVD-TM-9999',
-        teamName: 'Virudhunagar Strikers',
-        status: 'Approved',
-        coach: { name: 'S. Rajesh', email: 'coach@strikerscc.org' },
-        members: []
-      };
-      teams.push(matchedTeam);
-    }
-    matchedPlayer = {
-      playerId: `CFVD-PLY-${Math.floor(1000 + Math.random() * 9000)}`,
-      playerName: name,
-      playerEmail: email,
-      role: 'All Rounder',
-      battingStyle: 'Right Hand Bat',
-      bowlingStyle: 'Right Arm Fast Medium',
-      jerseyNumber: '18'
-    };
-    if (!Array.isArray(matchedTeam.members)) matchedTeam.members = [];
-    matchedTeam.members.push(matchedPlayer);
-    memberIndex = matchedTeam.members.length - 1;
-    saveStoredTeams(teams);
-  }
-
-  const teamStatus = matchedTeam.status || matchedTeam.adminApprovalStatus || 'Pending';
-
-  if (teamStatus === 'Pending') {
-    if (alertBox) {
-      alertBox.className = 'alert-box alert-warning';
-      alertBox.innerHTML = `
-        <i class="fa-solid fa-clock-rotate-left" style="font-size:1.2rem; flex-shrink:0;"></i>
-        <div>
-          <strong>Pending Approval:</strong> Your team registration is still pending admin approval.
-        </div>
-      `;
-      alertBox.style.display = 'flex';
-    }
-    return;
-  }
-
-  if (teamStatus === 'Rejected') {
-    if (alertBox) {
-      alertBox.className = 'alert-box alert-danger';
-      alertBox.innerHTML = `
-        <i class="fa-solid fa-ban" style="font-size:1.2rem; flex-shrink:0;"></i>
-        <div>
-          <strong>Registration Rejected:</strong> Your team registration has been rejected.
-        </div>
-      `;
-      alertBox.style.display = 'flex';
-    }
-    return;
-  }
-
-  // Approved! Store data and switch to Step 2 OTP
-  pendingPlayerLoginData = { matchedPlayer, matchedTeam, memberIndex, name, email };
+  // Show loading state
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verifying...'; }
   if (alertBox) alertBox.style.display = 'none';
 
-  // Display sent target
-  const sentToDisplay = document.getElementById('otpSentToDisplay');
-  if (sentToDisplay) sentToDisplay.textContent = `${name} (${email})`;
+  const API_BASE = getApiBaseUrl();
 
-  // Switch steps
-  const step1 = document.getElementById('playerLoginStep1');
-  const step2 = document.getElementById('playerLoginStep2');
-  if (step1) step1.style.display = 'none';
-  if (step2) step2.style.display = 'block';
+  fetch(`${API_BASE}/api/players/send-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ playerName: name, playerEmail: email })
+  })
+  .then(async res => {
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || 'Failed to send OTP.');
+    return data;
+  })
+  .then(() => {
+    // Store pending data (name + email only, no fake player objects)
+    pendingPlayerLoginData = { name, email };
 
-  // Clear OTP boxes & focus first box
-  for (let i = 0; i < 6; i++) {
-    const box = document.getElementById(`otp${i}`);
-    if (box) box.value = '';
-  }
-  const otp0 = document.getElementById('otp0');
-  if (otp0) otp0.focus();
+    // Display sent target
+    const sentToDisplay = document.getElementById('otpSentToDisplay');
+    if (sentToDisplay) sentToDisplay.textContent = `${name} (${email})`;
 
-  // Start 30s countdown
-  startOTPCountdown();
+    // Switch to OTP step
+    const step1 = document.getElementById('playerLoginStep1');
+    const step2 = document.getElementById('playerLoginStep2');
+    if (step1) step1.style.display = 'none';
+    if (step2) step2.style.display = 'block';
+
+    // Clear OTP boxes & focus first
+    for (let i = 0; i < 6; i++) {
+      const box = document.getElementById(`otp${i}`);
+      if (box) box.value = '';
+    }
+    const otp0 = document.getElementById('otp0');
+    if (otp0) otp0.focus();
+
+    startOTPCountdown();
+  })
+  .catch(err => {
+    if (alertBox) {
+      alertBox.className = 'alert-box alert-danger';
+      alertBox.innerHTML = `<i class="fa-solid fa-circle-xmark" style="flex-shrink:0;"></i><div>${err.message}</div>`;
+      alertBox.style.display = 'flex';
+    }
+  })
+  .finally(() => {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send OTP'; }
+  });
 }
 
 function startOTPCountdown() {
@@ -3043,13 +2854,38 @@ function startOTPCountdown() {
 }
 
 function handleResendOTP() {
-  startOTPCountdown();
+  if (!pendingPlayerLoginData) return;
   const alertBox = document.getElementById('otpAlert');
-  if (alertBox) {
-    alertBox.className = 'alert-box alert-info';
-    alertBox.innerHTML = '<i class="fa-solid fa-paper-plane text-gold"></i> <div>New OTP has been sent! Use <strong>1234</strong> or <strong>123456</strong> for testing.</div>';
-    alertBox.style.display = 'flex';
-  }
+  if (alertBox) alertBox.style.display = 'none';
+
+  const API_BASE = getApiBaseUrl();
+
+  fetch(`${API_BASE}/api/players/send-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ playerName: pendingPlayerLoginData.name, playerEmail: pendingPlayerLoginData.email })
+  })
+  .then(async res => {
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || 'Failed to resend OTP.');
+    // Clear boxes
+    for (let i = 0; i < 6; i++) { const b = document.getElementById(`otp${i}`); if (b) b.value = ''; }
+    const otp0 = document.getElementById('otp0'); if (otp0) otp0.focus();
+    startOTPCountdown();
+    if (alertBox) {
+      alertBox.className = 'alert-box alert-success';
+      alertBox.innerHTML = '<i class="fa-solid fa-paper-plane text-gold"></i> <div>New OTP sent to your registered email.</div>';
+      alertBox.style.display = 'flex';
+    }
+  })
+  .catch(err => {
+    if (alertBox) {
+      alertBox.className = 'alert-box alert-danger';
+      alertBox.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> <div>${err.message}</div>`;
+      alertBox.style.display = 'flex';
+    }
+  });
 }
 
 function backToPlayerLoginStep1() {
@@ -3105,87 +2941,143 @@ function handleVerifyOTP() {
   }
 
   const alertBox = document.getElementById('otpAlert');
+  const verifyBtn = document.getElementById('btnVerifyOTP');
 
-  if (!otpValue || otpValue.length < 4) {
+  if (!otpValue || otpValue.length < 6) {
     if (alertBox) {
       alertBox.className = 'alert-box alert-danger';
-      alertBox.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <div>Please enter the OTP code (1234 or 123456).</div>';
+      alertBox.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> <div>Please enter the complete 6-digit OTP.</div>';
       alertBox.style.display = 'flex';
     }
     return;
   }
 
-  // Allow 1234 or 123456 or any 4+ digit OTP for quick testing
-  if (otpValue.startsWith('1234') || otpValue === '123456' || otpValue.length >= 4) {
-    if (!pendingPlayerLoginData) {
-      // Fallback: check prefilled fields if page reloaded
-      const nameInput = document.getElementById('playerLoginName');
-      const emailInput = document.getElementById('playerLoginEmail');
-      const name = nameInput ? nameInput.value.trim() : 'R. Saravanan';
-      const email = emailInput ? emailInput.value.trim().toLowerCase() : 'saravanan.r@strikerscc.org';
-
-      const teams = getStoredTeams();
-      let matchedPlayer = null;
-      let matchedTeam = null;
-      let memberIndex = -1;
-      for (const team of teams) {
-        if (!Array.isArray(team.members)) continue;
-        for (let i = 0; i < team.members.length; i++) {
-          const m = team.members[i];
-          if ((m.playerEmail || '').trim().toLowerCase() === email) {
-            matchedPlayer = m;
-            matchedTeam = team;
-            memberIndex = i;
-            break;
-          }
-        }
-        if (matchedPlayer) break;
-      }
-
-      if (matchedPlayer && matchedTeam) {
-        pendingPlayerLoginData = { matchedPlayer, matchedTeam, memberIndex, name, email };
-      }
-    }
-
-    if (pendingPlayerLoginData) {
-      const { matchedPlayer, matchedTeam, memberIndex } = pendingPlayerLoginData;
-
-      if (!matchedPlayer.playerId) {
-        matchedPlayer.playerId = `CFVD-PLY-${matchedTeam.teamId.slice(-4)}-${(memberIndex + 1).toString().padStart(2, '0')}`;
-      }
-      if (!matchedPlayer.role) matchedPlayer.role = 'Batsman';
-      if (!matchedPlayer.battingStyle) matchedPlayer.battingStyle = 'Right Hand Bat';
-      if (!matchedPlayer.bowlingStyle) matchedPlayer.bowlingStyle = 'Right Arm Medium';
-      if (!matchedPlayer.jerseyNumber) matchedPlayer.jerseyNumber = (memberIndex + 1).toString();
-
-      const teams = getStoredTeams();
-      saveStoredTeams(teams);
-
-      const session = {
-        playerId: matchedPlayer.playerId,
-        playerName: matchedPlayer.playerName,
-        playerEmail: matchedPlayer.playerEmail,
-        teamId: matchedTeam.teamId,
-        teamName: matchedTeam.teamName,
-        loginTime: new Date().toISOString()
-      };
-      saveActivePlayerSession(session);
-
-      updatePlayerHeaderUI();
-      updateAuthHeaderUI();
-
-      renderPlayerDashboard(matchedPlayer, matchedTeam);
-      const dashView = document.getElementById('playerPortalDashboardView');
-      if (dashView) dashView.style.display = 'block';
-      navigateToRoute('/player');
-      switchPlayerDashTab('overview');
-    }
-  } else {
+  if (!pendingPlayerLoginData) {
     if (alertBox) {
       alertBox.className = 'alert-box alert-danger';
-      alertBox.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> <div>Invalid OTP code. Enter <strong>1234</strong> or <strong>123456</strong>.</div>';
+      alertBox.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> <div>Session expired. Please go back and re-enter your details.</div>';
       alertBox.style.display = 'flex';
     }
+    return;
+  }
+
+  if (verifyBtn) { verifyBtn.disabled = true; verifyBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verifying...'; }
+  if (alertBox) alertBox.style.display = 'none';
+
+  const API_BASE = getApiBaseUrl();
+
+  fetch(`${API_BASE}/api/players/verify-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ playerEmail: pendingPlayerLoginData.email, otp: otpValue })
+  })
+  .then(async res => {
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || 'OTP verification failed.');
+    return data;
+  })
+  .then(() => {
+    // OTP verified — load real player profile from backend
+    return fetch(`${API_BASE}/api/players/me`, {
+      credentials: 'include'
+    });
+  })
+  .then(async res => {
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || 'Could not load player profile.');
+    return data.profile;
+  })
+  .then(profile => {
+    pendingPlayerLoginData = null;
+    if (otpTimerInterval) clearInterval(otpTimerInterval);
+
+    // Render dashboard with REAL backend data
+    renderPlayerDashboardFromProfile(profile);
+    switchPlayerPortalView('dashboard');
+    navigateToRoute('/player');
+    switchPlayerDashTab('overview');
+    updateAuthHeaderUI();
+  })
+  .catch(err => {
+    if (alertBox) {
+      alertBox.className = 'alert-box alert-danger';
+      alertBox.innerHTML = `<i class="fa-solid fa-circle-xmark" style="flex-shrink:0;"></i><div>${err.message}</div>`;
+      alertBox.style.display = 'flex';
+    }
+  })
+  .finally(() => {
+    if (verifyBtn) { verifyBtn.disabled = false; verifyBtn.innerHTML = '<i class="fa-solid fa-shield-check"></i> Verify OTP'; }
+  });
+}
+
+// Renders the player dashboard using REAL MySQL profile data from /api/players/me
+function renderPlayerDashboardFromProfile(profile) {
+  const team = profile.team || {};
+  const playerName = profile.name || '—';
+  const playerEmail = profile.email || '—';
+  const playerRole = profile.role || '—';
+  const playerStatus = profile.status || '—';
+  const teamName = team.teamName || '—';
+  const teamId = team.teamId || '—';
+  const coachName = team.coachName || '—';
+  const coachEmail = team.coachEmail || '—';
+  const regDate = profile.registrationDate ? new Date(profile.registrationDate).toLocaleDateString('en-IN', { year:'numeric', month:'long', day:'numeric' }) : '—';
+
+  const initials = playerName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+
+  const heroEl = document.getElementById('playerDashboardHero');
+  if (heroEl) {
+    heroEl.innerHTML = `
+      <div class="player-hero-left" style="display:flex; align-items:center; gap:1.2rem;">
+        <div style="width:84px; height:84px; border-radius:50%; background:linear-gradient(135deg,#1e293b,#0f172a); border:3px solid var(--gold-bright); display:flex; align-items:center; justify-content:center; box-shadow:0 0 20px rgba(234,179,8,0.4); font-size:1.8rem; font-weight:900; color:var(--gold-bright);">${initials}</div>
+        <div>
+          <h3 style="font-size:1.45rem; font-weight:800; color:#fff; margin:0 0 0.2rem 0; display:flex; align-items:center; gap:0.5rem;">
+            ${playerName}
+            <i class="fa-solid fa-circle-check" style="color:#22c55e; font-size:1.1rem;"></i>
+          </h3>
+          <div style="font-size:0.88rem; color:#93c5fd; margin-bottom:0.2rem; font-weight:600;">
+            <i class="fa-solid fa-envelope" style="color:var(--gold-bright);"></i> ${playerEmail}
+          </div>
+          <div style="font-size:0.88rem; color:var(--text-light); font-weight:600;">
+            <i class="fa-solid fa-shield-halved" style="color:var(--gold-bright);"></i> ${teamName}
+            &nbsp;&bull;&nbsp;<span style="color:var(--gold-bright); font-weight:800;">ID: ${teamId}</span>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex; gap:0.6rem;">
+        <button type="button" class="btn btn-outline-danger btn-sm" style="font-weight:700;" onclick="handlePlayerLogout()">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i> Logout
+        </button>
+      </div>
+    `;
+  }
+
+  const paneOverview = document.getElementById('pPaneOverview');
+  if (paneOverview) {
+    paneOverview.innerHTML = `
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px,1fr)); gap:1.2rem; margin-bottom:1.5rem;">
+        <div style="background:var(--card-bg,#0f1c30); border:1px solid var(--card-border,#1e3050); border-radius:14px; padding:1.4rem;">
+          <div style="font-size:0.78rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:0.8rem;">Player Information</div>
+          <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+            <tr style="border-bottom:1px solid var(--card-border,#1e3050);"><td style="padding:0.6rem 0; color:var(--text-muted); width:45%;">Name</td><td style="color:#fff; font-weight:700;">${playerName}</td></tr>
+            <tr style="border-bottom:1px solid var(--card-border,#1e3050);"><td style="padding:0.6rem 0; color:var(--text-muted);">Email</td><td style="color:#93c5fd; font-weight:600;">${playerEmail}</td></tr>
+            <tr style="border-bottom:1px solid var(--card-border,#1e3050);"><td style="padding:0.6rem 0; color:var(--text-muted);">Role</td><td style="color:var(--gold-bright); font-weight:700;">${playerRole}</td></tr>
+            <tr><td style="padding:0.6rem 0; color:var(--text-muted);">Status</td><td><span style="background:rgba(34,197,94,0.15); color:#22c55e; padding:2px 10px; border-radius:20px; font-weight:700; font-size:0.82rem; border:1px solid rgba(34,197,94,0.4);">${playerStatus}</span></td></tr>
+          </table>
+        </div>
+        <div style="background:var(--card-bg,#0f1c30); border:1px solid var(--card-border,#1e3050); border-radius:14px; padding:1.4rem;">
+          <div style="font-size:0.78rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:0.8rem;">Team Information</div>
+          <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+            <tr style="border-bottom:1px solid var(--card-border,#1e3050);"><td style="padding:0.6rem 0; color:var(--text-muted); width:45%;">Team</td><td style="color:#fff; font-weight:700;">${teamName}</td></tr>
+            <tr style="border-bottom:1px solid var(--card-border,#1e3050);"><td style="padding:0.6rem 0; color:var(--text-muted);">Team ID</td><td style="color:var(--gold-bright); font-weight:700;">${teamId}</td></tr>
+            <tr style="border-bottom:1px solid var(--card-border,#1e3050);"><td style="padding:0.6rem 0; color:var(--text-muted);">Coach</td><td style="color:#fff; font-weight:700;">${coachName}</td></tr>
+            <tr style="border-bottom:1px solid var(--card-border,#1e3050);"><td style="padding:0.6rem 0; color:var(--text-muted);">Coach Email</td><td style="color:#93c5fd; font-size:0.85rem;">${coachEmail}</td></tr>
+            <tr><td style="padding:0.6rem 0; color:var(--text-muted);">Registered</td><td style="color:var(--text-light); font-size:0.85rem;">${regDate}</td></tr>
+          </table>
+        </div>
+      </div>
+    `;
   }
 }
 
@@ -4492,10 +4384,7 @@ async function handleUnifiedTeamVerify(e) {
 }
 
 function getBackendApiBase() {
-  if (typeof window !== 'undefined' && window.location && window.location.hostname) {
-    return `http://${window.location.hostname}:5000/api`;
-  }
-  return 'http://localhost:5000/api';
+  return `${getApiBaseUrl()}/api`;
 }
 
 async function handleUnifiedScorerSendOTP(e) {
@@ -5526,7 +5415,7 @@ async function handleAdminLoginSubmit(e) {
     if (typeof window !== 'undefined' && window.location && window.location.hostname) {
       return `http://${window.location.hostname}:5000/api`;
     }
-    return 'http://localhost:5000/api';
+    return `${getApiBaseUrl()}/api`;
   })();
 
   let authenticated = false;
@@ -5658,7 +5547,7 @@ async function syncAdminDataFromBackend() {
     if (typeof window !== 'undefined' && window.location && window.location.hostname) {
       return `http://${window.location.hostname}:5000/api`;
     }
-    return 'http://localhost:5000/api';
+    return `${getApiBaseUrl()}/api`;
   })();
 
   try {
@@ -6194,7 +6083,7 @@ function promptApproveTeam(teamId) {
         if (typeof window !== 'undefined' && window.location && window.location.hostname) {
           return `http://${window.location.hostname}:5000/api`;
         }
-        return 'http://localhost:5000/api';
+        return `${getApiBaseUrl()}/api`;
       })();
 
       try {
@@ -6252,7 +6141,7 @@ function promptRejectTeam(teamId) {
         if (typeof window !== 'undefined' && window.location && window.location.hostname) {
           return `http://${window.location.hostname}:5000/api`;
         }
-        return 'http://localhost:5000/api';
+        return `${getApiBaseUrl()}/api`;
       })();
 
       try {
@@ -6527,7 +6416,7 @@ function promptApproveScorer(scorerId) {
         if (typeof window !== 'undefined' && window.location && window.location.hostname) {
           return `http://${window.location.hostname}:5000/api`;
         }
-        return 'http://localhost:5000/api';
+        return `${getApiBaseUrl()}/api`;
       })();
 
       const token = localStorage.getItem('cfvd_admin_token') || '';
@@ -6587,7 +6476,7 @@ function promptRejectScorer(scorerId) {
         if (typeof window !== 'undefined' && window.location && window.location.hostname) {
           return `http://${window.location.hostname}:5000/api`;
         }
-        return 'http://localhost:5000/api';
+        return `${getApiBaseUrl()}/api`;
       })();
 
       const token = localStorage.getItem('cfvd_admin_token') || '';
@@ -6738,7 +6627,7 @@ async function handleScorerLoginSubmit(e) {
     if (typeof window !== 'undefined' && window.location && window.location.hostname) {
       return `http://${window.location.hostname}:5000/api`;
     }
-    return 'http://localhost:5000/api';
+    return `${getApiBaseUrl()}/api`;
   })();
 
   // 1. Try Live MongoDB Authentication via Scorer Login API
@@ -6999,7 +6888,7 @@ async function syncAdminNewsFromBackend() {
     if (typeof window !== 'undefined' && window.location && window.location.hostname) {
       return `http://${window.location.hostname}:5000/api`;
     }
-    return 'http://localhost:5000/api';
+    return `${getApiBaseUrl()}/api`;
   })();
 
   const token = localStorage.getItem('cfvd_admin_token') || '';
@@ -7160,7 +7049,7 @@ async function handleAdminPublishNews(event) {
     if (typeof window !== 'undefined' && window.location && window.location.hostname) {
       return `http://${window.location.hostname}:5000/api`;
     }
-    return 'http://localhost:5000/api';
+    return `${getApiBaseUrl()}/api`;
   })();
 
   try {
@@ -7233,7 +7122,7 @@ async function handleAdminDeleteNews(id) {
     if (typeof window !== 'undefined' && window.location && window.location.hostname) {
       return `http://${window.location.hostname}:5000/api`;
     }
-    return 'http://localhost:5000/api';
+    return `${getApiBaseUrl()}/api`;
   })();
 
   try {

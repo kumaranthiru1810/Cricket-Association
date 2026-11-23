@@ -1,15 +1,64 @@
-﻿/**
+/**
  * middleware/concurrencyLock.js
- * In-process concurrency locking and duplicate delivery protection
+ * Distributed concurrency locking with request queuing and duplicate delivery protection
  */
 
-const activeMatchLocks = new Set();
+const crypto = require('crypto');
+const db = require('../config/db');
 
-function acquireMatchLock(req, res, next) {
+// In-process lock tracker for fast local queuing
+const inProcessQueues = new Map();
+
+async function acquireMatchLock(req, res, next) {
   const matchId = req.params.matchId;
   if (!matchId) return next();
 
-  if (activeMatchLocks.has(matchId)) {
+  const lockId = crypto.randomUUID ? crypto.randomUUID() : `lock_${Date.now()}_${Math.random()}`;
+  const maxWaitMs = 2500;
+  const pollIntervalMs = 75;
+  const startTime = Date.now();
+  const lockTimeoutMs = 5000;
+
+  async function tryAcquireDbLock() {
+    try {
+      await db.initDb();
+      if (!db.models || !db.models.Match) return true;
+      const expiry = new Date(Date.now() - lockTimeoutMs);
+      const updated = await db.models.Match.findOneAndUpdate(
+        {
+          id: matchId,
+          $or: [
+            { 'scoring_lock.locked_at': null },
+            { 'scoring_lock.locked_at': { $lt: expiry } }
+          ]
+        },
+        {
+          $set: {
+            'scoring_lock.locked_at': new Date(),
+            'scoring_lock.lock_id': lockId
+          }
+        },
+        { returnDocument: 'after' }
+      );
+      return !!updated;
+    } catch (_err) {
+      return true;
+    }
+  }
+
+  // Queue loop: wait for in-process and DB lock
+  while (Date.now() - startTime < maxWaitMs) {
+    if (!inProcessQueues.has(matchId)) {
+      const dbAcquired = await tryAcquireDbLock();
+      if (dbAcquired) {
+        inProcessQueues.set(matchId, lockId);
+        break;
+      }
+    }
+    await new Promise(r => setTimeout(r, pollIntervalMs));
+  }
+
+  if (inProcessQueues.get(matchId) !== lockId) {
     return res.status(409).json({
       success: false,
       error: 'Conflict: Another scoring operation is currently in progress for this match. Please retry.',
@@ -17,11 +66,21 @@ function acquireMatchLock(req, res, next) {
     });
   }
 
-  activeMatchLocks.add(matchId);
-
-  // Auto-release lock on response finish/close
-  const release = () => {
-    activeMatchLocks.delete(matchId);
+  let released = false;
+  const release = async () => {
+    if (released) return;
+    released = true;
+    if (inProcessQueues.get(matchId) === lockId) {
+      inProcessQueues.delete(matchId);
+    }
+    try {
+      if (db.models && db.models.Match) {
+        await db.models.Match.updateOne(
+          { id: matchId, 'scoring_lock.lock_id': lockId },
+          { $set: { 'scoring_lock.locked_at': null, 'scoring_lock.lock_id': null } }
+        );
+      }
+    } catch (_) {}
     res.removeListener('finish', release);
     res.removeListener('close', release);
   };

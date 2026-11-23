@@ -6,7 +6,7 @@
 
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'cricket_team_jwt_secret_2025';
+const JWT_SECRET = process.env.JWT_SECRET || 'cricket_super_secret_jwt_2026';
 
 function requireTeamAuth(req, res, next) {
   const authHeader = req.headers['authorization'] || req.headers['Authorization'];

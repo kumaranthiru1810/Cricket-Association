@@ -15,6 +15,22 @@ class ScoringEngine {
    * Generates realistic rule-based cricket commentary
    */
   /**
+   * Helper to determine maximum wickets for an innings based on playing XI/squad size
+   */
+  getMaxWicketsForInnings(innings, match) {
+    if (!match) return 10;
+    const isTeamA = innings?.batting_team_id === match.team_a_id;
+    const lineup = isTeamA ? (match.team_a_playing_xi || match.team_a_lineup) : (match.team_b_playing_xi || match.team_b_lineup);
+    if (Array.isArray(lineup) && lineup.length > 1) {
+      return Math.max(1, lineup.length - 1);
+    }
+    if (match.players_per_side && match.players_per_side > 1) {
+      return Math.max(1, match.players_per_side - 1);
+    }
+    return 10;
+  }
+
+  /**
    * Helper to resolve all players across official Player and registered team squads
    */
   async getFullPlayerMap() {
@@ -205,6 +221,13 @@ class ScoringEngine {
     }
     if (!innings) {
       throw { status: 400, message: 'No active innings found for this match. Please start the match first.' };
+    }
+
+    // State conflict check: prevent duplicate or stale delivery execution
+    if (deliveryData.expectedOver !== undefined && deliveryData.expectedBall !== undefined) {
+      if (innings.overs !== Number(deliveryData.expectedOver) || innings.balls !== Number(deliveryData.expectedBall)) {
+        throw { status: 409, message: `Conflict: Stale delivery state. Expected ${deliveryData.expectedOver}.${deliveryData.expectedBall}, current is ${innings.overs}.${innings.balls}.` };
+      }
     }
 
     // Input extraction
@@ -399,11 +422,31 @@ class ScoringEngine {
       }
     }
 
-    const runsThatRotate = (extraType === 'NONE' || extraType === 'NO_BALL') 
-      ? Number(runsBatter) 
-      : ((extraType === 'BYE' || extraType === 'LEG_BYE') ? Number(runsExtras) : 0);
+    let runsThatRotate = 0;
+    if (extraType === 'NONE') {
+      runsThatRotate = Number(runsBatter) || 0;
+    } else if (extraType === 'WIDE') {
+      // 1 run is the wide penalty; any additional runs in runsExtras or runsBatter were physical runs ran by the batters
+      runsThatRotate = Number(runsBatter) > 0 ? Number(runsBatter) : Math.max(0, Number(runsExtras) - 1);
+    } else if (extraType === 'NO_BALL') {
+      // 1 run is the no-ball penalty; runs off bat (runsBatter) or byes/leg-byes (runsExtras - 1) were physical runs ran
+      runsThatRotate = Number(runsBatter) > 0 ? Number(runsBatter) : Math.max(0, Number(runsExtras) - 1);
+    } else if (extraType === 'BYE' || extraType === 'LEG_BYE') {
+      runsThatRotate = Number(runsExtras) || Number(runsBatter) || 0;
+    } else if (extraType === 'PENALTY') {
+      runsThatRotate = 0;
+    } else {
+      runsThatRotate = Number(runsBatter) || 0;
+    }
 
-    const isOdd = runsThatRotate % 2 !== 0;
+    if (deliveryData.runs_ran !== undefined && deliveryData.runs_ran !== null) {
+      runsThatRotate = Number(deliveryData.runs_ran);
+    }
+
+    let isOdd = runsThatRotate % 2 !== 0;
+    if (deliveryData.rotateStrike !== undefined) {
+      isOdd = Boolean(deliveryData.rotateStrike);
+    }
 
     if (isOdd) {
       const temp = nextStriker;
@@ -447,18 +490,22 @@ class ScoringEngine {
     // 6a. Striker Batter record
     let batter = await db.models.InningsBatter.findOne({ innings_id: innings.id, player_id: activeStrikerId });
     if (!batter) {
-      batter = new db.models.InningsBatter({
-        id: `BAT-${innings.id}-${activeStrikerId}`,
-        innings_id: innings.id,
-        player_id: activeStrikerId,
-        batting_position: (await db.models.InningsBatter.countDocuments({ innings_id: innings.id })) + 1,
-        runs: 0,
-        balls: 0,
-        fours: 0,
-        sixes: 0,
-        is_out: false,
-        dismissal_text: 'not out'
-      });
+      try {
+        batter = await db.models.InningsBatter.create({
+          id: `BAT-${innings.id}-${activeStrikerId}`,
+          innings_id: innings.id,
+          player_id: activeStrikerId,
+          batting_position: (await db.models.InningsBatter.countDocuments({ innings_id: innings.id })) + 1,
+          runs: 0,
+          balls: 0,
+          fours: 0,
+          sixes: 0,
+          is_out: false,
+          dismissal_text: 'not out'
+        });
+      } catch (_err) {
+        batter = await db.models.InningsBatter.findOne({ innings_id: innings.id, player_id: activeStrikerId });
+      }
     }
 
     if (extraType === 'NONE' || extraType === 'NO_BALL') {
@@ -486,18 +533,22 @@ class ScoringEngine {
     if (activeNonStrikerId && activeNonStrikerId !== activeStrikerId) {
       let nonStrikerBatter = await db.models.InningsBatter.findOne({ innings_id: innings.id, player_id: activeNonStrikerId });
       if (!nonStrikerBatter) {
-        nonStrikerBatter = new db.models.InningsBatter({
-          id: `BAT-${innings.id}-${activeNonStrikerId}`,
-          innings_id: innings.id,
-          player_id: activeNonStrikerId,
-          batting_position: (await db.models.InningsBatter.countDocuments({ innings_id: innings.id })) + 1,
-          runs: 0,
-          balls: 0,
-          fours: 0,
-          sixes: 0,
-          is_out: false,
-          dismissal_text: 'not out'
-        });
+        try {
+          nonStrikerBatter = await db.models.InningsBatter.create({
+            id: `BAT-${innings.id}-${activeNonStrikerId}`,
+            innings_id: innings.id,
+            player_id: activeNonStrikerId,
+            batting_position: (await db.models.InningsBatter.countDocuments({ innings_id: innings.id })) + 1,
+            runs: 0,
+            balls: 0,
+            fours: 0,
+            sixes: 0,
+            is_out: false,
+            dismissal_text: 'not out'
+          });
+        } catch (_err) {
+          nonStrikerBatter = await db.models.InningsBatter.findOne({ innings_id: innings.id, player_id: activeNonStrikerId });
+        }
       }
 
       if (wicket && dismissedPlayerId === activeNonStrikerId) {
@@ -549,18 +600,22 @@ class ScoringEngine {
     // 7. Update or Create Bowler record in MongoDB
     let bowler = await db.models.InningsBowler.findOne({ innings_id: innings.id, player_id: activeBowlerId });
     if (!bowler) {
-      bowler = new db.models.InningsBowler({
-        id: `BWL-${innings.id}-${activeBowlerId}`,
-        innings_id: innings.id,
-        player_id: activeBowlerId,
-        overs: 0,
-        balls: 0,
-        maidens: 0,
-        runs_conceded: 0,
-        wickets: 0,
-        wides: 0,
-        no_balls: 0
-      });
+      try {
+        bowler = await db.models.InningsBowler.create({
+          id: `BWL-${innings.id}-${activeBowlerId}`,
+          innings_id: innings.id,
+          player_id: activeBowlerId,
+          overs: 0,
+          balls: 0,
+          maidens: 0,
+          runs_conceded: 0,
+          wickets: 0,
+          wides: 0,
+          no_balls: 0
+        });
+      } catch (_err) {
+        bowler = await db.models.InningsBowler.findOne({ innings_id: innings.id, player_id: activeBowlerId });
+      }
     }
 
     if (isLegal) {
@@ -584,18 +639,20 @@ class ScoringEngine {
     await bowler.save();
 
     // 8. Check match completion / target chasing
+    const maxWickets = this.getMaxWicketsForInnings(innings, match);
     let isMatchCompleted = false;
     if (innings.innings_number === 2 && innings.target && innings.total_runs >= innings.target) {
       match.status = 'COMPLETED';
       isMatchCompleted = true;
       const winnerTeam = await db.models.Team.findOne({ id: innings.batting_team_id }).lean();
-      const wicketsRemaining = 10 - innings.wickets;
+      const wicketsRemaining = Math.max(0, maxWickets - innings.wickets);
       match.result_summary = `${winnerTeam?.name || 'Chasing Team'} won by ${wicketsRemaining} wicket${wicketsRemaining > 1 ? 's' : ''}`;
+      match.winner_id = innings.batting_team_id;
       innings.is_completed = true;
       innings.is_over_complete = false;
       await match.save();
       await innings.save();
-    } else if (innings.wickets >= 10 || (match.overs_per_side && overNumber >= match.overs_per_side)) {
+    } else if (innings.wickets >= maxWickets || (match.overs_per_side && overNumber >= match.overs_per_side)) {
       if (innings.innings_number === 1) {
         innings.is_completed = true;
         innings.is_over_complete = false;
@@ -641,8 +698,10 @@ class ScoringEngine {
         if (runsDiff > 0) {
           const winnerTeam = await db.models.Team.findOne({ id: inn1.batting_team_id }).lean();
           match.result_summary = `${winnerTeam?.name || 'Defending Team'} won by ${runsDiff} runs`;
+          match.winner_id = inn1.batting_team_id;
         } else if (runsDiff === 0) {
           match.result_summary = 'Match Tied';
+          match.winner_id = 'TIE';
         }
         await innings.save();
         await match.save();
@@ -1406,11 +1465,16 @@ class ScoringEngine {
       if (diff > 0) {
         const team1 = await db.models.Team.findOne({ id: inn1.batting_team_id }).lean();
         match.result_summary = `${team1?.name || 'Team 1'} won by ${diff} runs`;
+        match.winner_id = inn1.batting_team_id;
       } else if (diff < 0) {
         const team2 = await db.models.Team.findOne({ id: currentInnings.batting_team_id }).lean();
-        match.result_summary = `${team2?.name || 'Team 2'} won by ${10 - currentInnings.wickets} wickets`;
+        const maxWickets = this.getMaxWicketsForInnings(currentInnings, match);
+        const wRem = Math.max(0, maxWickets - currentInnings.wickets);
+        match.result_summary = `${team2?.name || 'Team 2'} won by ${wRem} wickets`;
+        match.winner_id = currentInnings.batting_team_id;
       } else {
         match.result_summary = 'Match Tied';
+        match.winner_id = 'TIE';
       }
       await match.save();
 

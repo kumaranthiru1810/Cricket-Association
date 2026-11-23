@@ -825,6 +825,20 @@ class TournamentService {
       return wholeOvers + (remainderBalls / 6);
     };
 
+    // Helper: determine maximum wickets based on squad size / playing XI
+    const getMaxWicketsForInnings = (inn, m) => {
+      if (!m) return 10;
+      const isTeamA = inn?.batting_team_id === m.team_a_id;
+      const lineup = isTeamA ? (m.team_a_playing_xi || m.team_a_lineup) : (m.team_b_playing_xi || m.team_b_lineup);
+      if (Array.isArray(lineup) && lineup.length > 1) {
+        return Math.max(1, lineup.length - 1);
+      }
+      if (m.players_per_side && m.players_per_side > 1) {
+        return Math.max(1, m.players_per_side - 1);
+      }
+      return 10;
+    };
+
     // Calculate match outcomes
     matches.forEach(m => {
       const teamA = m.team_a_id;
@@ -850,31 +864,57 @@ class TournamentService {
       standings[teamA].played++;
       standings[teamB].played++;
 
-      const res = (m.result_summary || '').toLowerCase();
-      const teamAName = (m.team_a_name || '').toLowerCase();
-      const teamBName = (m.team_b_name || '').toLowerCase();
-
       let winner = null;
       let isTie = false;
       let isNoResult = false;
 
-      if (res.includes('tied') || res.includes('match tied')) {
-        isTie = true;
-      } else if (res.includes('no result') || res.includes('abandoned') || res.includes('cancelled')) {
-        isNoResult = true;
-      } else if (teamAName && res.includes(teamAName) && res.includes('won')) {
-        winner = teamA;
-      } else if (teamBName && res.includes(teamBName) && res.includes('won')) {
-        winner = teamB;
-      } else if (res.includes('won by')) {
-        // Fallback: check runs from innings
-        const matchInnings = inningsByMatch[m.id] || [];
-        const inn1 = matchInnings.find(i => i.innings_number === 1);
-        const inn2 = matchInnings.find(i => i.innings_number === 2);
-        if (inn1 && inn2) {
-          if (inn1.total_runs > inn2.total_runs) winner = inn1.batting_team_id;
-          else if (inn2.total_runs > inn1.total_runs) winner = inn2.batting_team_id;
-          else isTie = true;
+      // 1. Check winner_id in database directly (avoids name overlap / substring bugs)
+      if (m.winner_id) {
+        if (m.winner_id === teamA) {
+          winner = teamA;
+        } else if (m.winner_id === teamB) {
+          winner = teamB;
+        } else if (m.winner_id === 'TIE' || m.winner_id === 'MATCH_TIED') {
+          isTie = true;
+        } else if (m.winner_id === 'NO_RESULT' || m.winner_id === 'ABANDONED') {
+          isNoResult = true;
+        }
+      }
+
+      // 2. Fallback to text matching if winner_id was not set
+      if (!winner && !isTie && !isNoResult) {
+        const res = (m.result_summary || '').toLowerCase();
+        const teamAName = (m.team_a_name || '').toLowerCase().trim();
+        const teamBName = (m.team_b_name || '').toLowerCase().trim();
+
+        if (res.includes('tied') || res.includes('match tied')) {
+          isTie = true;
+        } else if (res.includes('no result') || res.includes('abandoned') || res.includes('cancelled')) {
+          isNoResult = true;
+        } else {
+          // Sort by name length descending so "Spartans XI" matches before "Spartans"
+          const candidates = [
+            { id: teamA, name: teamAName },
+            { id: teamB, name: teamBName }
+          ].sort((a, b) => b.name.length - a.name.length);
+
+          for (const cand of candidates) {
+            if (cand.name && res.includes(cand.name) && res.includes('won')) {
+              winner = cand.id;
+              break;
+            }
+          }
+
+          if (!winner && res.includes('won by')) {
+            const matchInnings = inningsByMatch[m.id] || [];
+            const inn1 = matchInnings.find(i => i.innings_number === 1);
+            const inn2 = matchInnings.find(i => i.innings_number === 2);
+            if (inn1 && inn2) {
+              if (inn1.total_runs > inn2.total_runs) winner = inn1.batting_team_id;
+              else if (inn2.total_runs > inn1.total_runs) winner = inn2.batting_team_id;
+              else isTie = true;
+            }
+          }
         }
       }
 
@@ -914,21 +954,49 @@ class TournamentService {
         standings[teamB].form.push('NR');
       }
 
+      // Rules: No-result / Abandoned matches do NOT count towards NRR calculations
+      if (isNoResult || m.status === 'ABANDONED' || m.status === 'CANCELLED') {
+        return;
+      }
+
       // Add NRR tallies from Innings
       const matchInns = inningsByMatch[m.id] || [];
+      const inn1 = matchInns.find(i => i.innings_number === 1);
+      const inn2 = matchInns.find(i => i.innings_number === 2);
+
+      // Check if DLS or rain revised target/overs was applied
+      const isDlsOrRevised = Boolean(m.revised_target || m.revised_overs || inn2?.revised_overs);
+      const revisedOvers = m.revised_overs || inn2?.revised_overs || null;
+      const revisedTarget = m.revised_target || inn2?.target || null;
+
       matchInns.forEach(inn => {
         const batTeam = inn.batting_team_id;
         const bowlTeam = inn.bowling_team_id;
-        const isAllOut = inn.wickets >= 10;
-        const maxOvers = m.overs_per_side || tournament.overs_per_match || 20;
-        const decOvers = toDecimalOvers(inn.overs, inn.balls, isAllOut, maxOvers);
+        const maxWickets = getMaxWicketsForInnings(inn, m);
+        const isAllOut = inn.wickets >= maxWickets;
+        const standardMaxOvers = m.overs_per_side || tournament.overs_per_match || 20;
+
+        let runsScored = inn.total_runs || 0;
+        let decOvers = 0;
+
+        if (isDlsOrRevised && revisedOvers && inn.innings_number === 1) {
+          // Team 1 DLS adjustment: accredited with revised target - 1 and revised overs
+          runsScored = revisedTarget ? Math.max(0, revisedTarget - 1) : runsScored;
+          decOvers = revisedOvers;
+        } else if (isDlsOrRevised && revisedOvers && inn.innings_number === 2) {
+          // Team 2 DLS adjustment: accredited with actual runs and overs faced (capped at revised overs if all out)
+          decOvers = toDecimalOvers(inn.overs, inn.balls, isAllOut, revisedOvers);
+        } else {
+          // Standard match calculation
+          decOvers = toDecimalOvers(inn.overs, inn.balls, isAllOut, standardMaxOvers);
+        }
 
         if (standings[batTeam]) {
-          standings[batTeam].runs_scored += (inn.total_runs || 0);
+          standings[batTeam].runs_scored += runsScored;
           standings[batTeam].overs_faced += decOvers;
         }
         if (standings[bowlTeam]) {
-          standings[bowlTeam].runs_conceded += (inn.total_runs || 0);
+          standings[bowlTeam].runs_conceded += runsScored;
           standings[bowlTeam].overs_bowled += decOvers;
         }
       });

@@ -1045,15 +1045,36 @@ router.get('/notifications', requireTeamAuth, async (req, res) => {
 
 /**
  * PUT /api/team/notifications/:id/read
- * Mark notification as read
+ * Mark notification as read (Strictly protected with ownership check)
  */
-router.put('/notifications/:id/read', async (req, res) => {
+router.put('/notifications/:id/read', requireTeamAuth, async (req, res) => {
   try {
     const db = require('../config/db');
     const mongoose = require('mongoose');
     await db.initDb();
     const isMongoId = mongoose.Types.ObjectId.isValid(req.params.id);
     const query = isMongoId ? { $or: [{ id: req.params.id }, { _id: req.params.id }] } : { id: req.params.id };
+    
+    const notif = await db.models.Notification.findOne(query).lean();
+    if (!notif) {
+      return res.status(404).json({ success: false, error: 'Notification not found.' });
+    }
+
+    const teamId = req.team?.id || req.user?.teamId || req.user?.team_id;
+    const coachEmail = (req.team?.coachEmail || req.user?.email || '').toLowerCase().trim();
+    const isAdmin = req.user && req.user.role === 'ADMIN';
+
+    if (!isAdmin) {
+      const allowedIds = [teamId, req.user?.id].filter(Boolean);
+      const isOwner = (notif.recipient_id && allowedIds.includes(notif.recipient_id)) ||
+                      (notif.team_id && allowedIds.includes(notif.team_id)) ||
+                      (notif.target_id && allowedIds.includes(notif.target_id)) ||
+                      (notif.recipient_email && notif.recipient_email.toLowerCase() === coachEmail);
+      if (!isOwner) {
+        return res.status(403).json({ success: false, error: 'Forbidden: Cannot modify notifications belonging to another team.' });
+      }
+    }
+
     await db.models.Notification.findOneAndUpdate(
       query,
       { $set: { status: 'READ' } }

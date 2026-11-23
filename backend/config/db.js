@@ -7,6 +7,7 @@
 
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 
@@ -366,6 +367,11 @@ const MatchSchema = new mongoose.Schema({
   }],
   toss_winner_id: { type: String, default: null },
   toss_decision: { type: String, default: null },
+  winner_id: { type: String, default: null, index: true },
+  scoring_lock: {
+    locked_at: { type: Date, default: null },
+    lock_id: { type: String, default: null }
+  },
   current_innings_number: { type: Number, default: 1 },
   result_summary: { type: String, default: null },
   player_of_match: { type: String, default: null },
@@ -466,6 +472,7 @@ const InningsSchema = new mongoose.Schema({
   balls: { type: Number, default: 0 },
   target: { type: Number, default: null },
   revised_overs: { type: Number, default: null },
+  version: { type: Number, default: 0 },
   is_super_over: { type: Boolean, default: false },
   is_declared: { type: Boolean, default: false },
   status: { type: String, default: 'LIVE' },
@@ -954,8 +961,10 @@ const memoryDb = {
 // Seed default users and records if empty
 async function seedDefaultData() {
   try {
+    const isProd = process.env.NODE_ENV === 'production';
+    const adminInitialPass = process.env.ADMIN_INITIAL_PASSWORD || (isProd ? crypto.randomBytes(16).toString('hex') : 'admin123');
     const defaultPasswordHash = await bcrypt.hash('1234', 10);
-    const adminPasswordHash = await bcrypt.hash('admin123', 10);
+    const adminPasswordHash = await bcrypt.hash(adminInitialPass, 10);
 
     const userCount = await User.countDocuments();
     if (userCount === 0) {
