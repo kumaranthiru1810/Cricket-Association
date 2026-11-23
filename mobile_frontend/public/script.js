@@ -201,7 +201,7 @@ const tableDataSets = {
     { stand: 2, badge: 'silver', name: 'Sivakasi Super Kings', sub: 'Finalist', p: 6, w: 4, l: 1, nr: 1, bonus: 1, nrr: '+1.420', pts: 11, form: ['w', 'w', 'nr', 'w', 'w'], crest: 'king-crest', code: 'SSK' },
     { stand: 3, badge: 'bronze', name: 'Srivilliputhur Warriors', sub: 'Semi-Finalist', p: 6, w: 3, l: 2, nr: 1, bonus: 1, nrr: '+0.150', pts: 8, form: ['l', 'w', 'nr', 'w', 'w'], crest: 'spw-crest', code: 'SW' },
     { stand: 4, badge: '', name: 'Rajapalayam CC', sub: 'Semi-Finalist', p: 6, w: 3, l: 3, nr: 0, bonus: 0, nrr: '-0.080', pts: 6, form: ['w', 'l', 'w', 'l', 'l'], crest: 'rcc-crest', code: 'RCC' },
-    { stand: 5, badge: '', name: 'Watrap Pioneer CC', sub: 'Group Stage', p: 6, w: 2, l: 3, nr: 1, bonus: 0, nrr: '-0.750', pts: 5, form: ['l', 'l', 'nr', 'l', 'w'], crest: 'stars-crest', code: 'WPC' },
+    { stand: 5, badge: '', name: 'Kariapatti Pioneer CC', sub: 'Group Stage', p: 6, w: 2, l: 3, nr: 1, bonus: 0, nrr: '-0.750', pts: 5, form: ['l', 'l', 'nr', 'l', 'w'], crest: 'stars-crest', code: 'KPC' },
     { stand: 6, badge: '', name: 'Sattur Cricket XI', sub: 'Group Stage', p: 6, w: 0, l: 5, nr: 1, bonus: 0, nrr: '-2.110', pts: 1, form: ['l', 'l', 'nr', 'l', 'l'], crest: 'str-crest', code: 'SXI' }
   ],
   school: [

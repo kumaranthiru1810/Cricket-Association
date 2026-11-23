@@ -85,7 +85,6 @@ const TALUKS = [
   'Srivilliputhur',
   'Aruppukottai',
   'Sattur',
-  'Watrap',
   'Kariapatti',
   'Tiruchuli',
   'Vembakottai'
@@ -116,7 +115,6 @@ const DISTRICT_OPTIONS = [
   'Srivilliputhur',
   'Aruppukottai',
   'Sattur',
-  'Watrap',
   'Chennai',
   'Coimbatore',
   'Tirunelveli',
@@ -351,7 +349,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
             return fromFlat;
           };
 
-          const taluks = resolveCategory('taluk_jurisdiction', extractItemsForCategory('taluk_jurisdiction'), TALUK_OPTIONS, true);
+          const taluks = resolveCategory('taluk_jurisdiction', extractItemsForCategory('taluk_jurisdiction'), TALUK_OPTIONS, true).filter((t: string) => t.toLowerCase() !== 'watrap');
           const roles = resolveCategory('playing_role', extractItemsForCategory('playing_role'), PLAYER_ROLES);
           const batting = resolveCategory('batting_style', extractItemsForCategory('batting_style'), BATTING_STYLES);
           const ages = resolveCategory('age_category', extractItemsForCategory('age_category'), AGE_CATEGORIES);

@@ -915,7 +915,7 @@ async function seedDefaultData() {
         { id: 'VEN-05', name: 'Aruppukottai SBK College Ground', location: 'Aruppukottai', capacity: 3000, floodlights: false, description: 'Taluk-level championship ground.' },
         { id: 'VEN-06', name: 'Sattur Railway Ground', location: 'Near Railway Station, Sattur', capacity: 2500, floodlights: false, description: 'Fast outfield and traditional turf pitch.' },
         { id: 'VEN-07', name: 'Vembakottai Sports Pavilion Ground', location: 'Vembakottai', capacity: 2000, floodlights: false, description: 'District rural sports development facility.' },
-        { id: 'VEN-08', name: 'Watrap Taluk Sports Arena Ground', location: 'Main Road, Watrap', capacity: 2000, floodlights: false, description: 'Taluk arena with newly relaid central pitch.' }
+        { id: 'VEN-08', name: 'Kariapatti Sports Arena Ground', location: 'Main Road, Kariapatti', capacity: 2000, floodlights: false, description: 'Taluk arena with newly relaid central pitch.' }
       ]);
     }
 
@@ -944,10 +944,9 @@ async function seedDefaultData() {
           { category: 'taluk_jurisdiction', name: 'Srivilliputhur', code: 'SVPR', sort_order: 4 },
           { category: 'taluk_jurisdiction', name: 'Aruppukottai', code: 'APKI', sort_order: 5 },
           { category: 'taluk_jurisdiction', name: 'Sattur', code: 'STR', sort_order: 6 },
-          { category: 'taluk_jurisdiction', name: 'Watrap', code: 'WTR', sort_order: 7 },
-          { category: 'taluk_jurisdiction', name: 'Kariapatti', code: 'KPT', sort_order: 8 },
-          { category: 'taluk_jurisdiction', name: 'Tiruchuli', code: 'TCL', sort_order: 9 },
-          { category: 'taluk_jurisdiction', name: 'Vembakottai', code: 'VBK', sort_order: 10 },
+          { category: 'taluk_jurisdiction', name: 'Kariapatti', code: 'KPT', sort_order: 7 },
+          { category: 'taluk_jurisdiction', name: 'Tiruchuli', code: 'TCL', sort_order: 8 },
+          { category: 'taluk_jurisdiction', name: 'Vembakottai', code: 'VBK', sort_order: 9 },
 
           // 2. Playing Role
           { category: 'playing_role', name: 'Batsman', code: 'BAT', sort_order: 1 },

@@ -301,22 +301,11 @@ class PasswordResetAuth {
     }
 
     const teamDoc = await db.models.TeamRegistration.findOne({ coach_email: cleanEmail }).lean();
-    let oldPassword = dbUser?.current_password || teamDoc?.current_password;
-    if (!oldPassword) {
-      if (teamDoc?.passkey) {
-        oldPassword = teamDoc.passkey;
-      } else if (dbUser?.password_hash === '1234') {
-        oldPassword = '1234';
-      } else if (cleanEmail === 'lenovo@gmail.com') {
-        oldPassword = 'Athi1833@';
-      } else {
-        oldPassword = '1234';
-      }
-    }
+    const oldPassword = dbUser?.current_password || teamDoc?.current_password || (dbUser?.password_hash === '1234' ? '1234' : null);
 
     return {
       success: true,
-      message: 'OTP verified successfully! You can view your current password or configure a new password.',
+      message: 'OTP verified successfully! You can configure your new password.',
       email: cleanEmail,
       oldPassword: oldPassword,
       currentPassword: oldPassword

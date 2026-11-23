@@ -903,7 +903,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       { id: 'VEN-07', name: 'Aruppukottai SBK College Ground', location: 'Aruppukottai', capacity: 3000, floodlights: false, description: 'Taluk-level championship ground.' },
       { id: 'VEN-08', name: 'Sattur Railway Ground', location: 'Near Railway Station, Sattur', capacity: 2500, floodlights: false, description: 'Fast outfield and traditional turf pitch.' },
       { id: 'VEN-09', name: 'Vembakottai Sports Pavilion Ground', location: 'Vembakottai', capacity: 2000, floodlights: false, description: 'District rural sports development facility.' },
-      { id: 'VEN-10', name: 'Watrap Taluk Sports Arena Ground', location: 'Main Road, Watrap', capacity: 2000, floodlights: false, description: 'Taluk arena with newly relaid central pitch.' }
+      { id: 'VEN-10', name: 'Kariapatti Sports Arena Ground', location: 'Main Road, Kariapatti', capacity: 2000, floodlights: false, description: 'Taluk arena with newly relaid central pitch.' }
     ];
 
     const list: any[] = [];

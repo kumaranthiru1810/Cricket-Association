@@ -15,7 +15,7 @@ import {
 import { useAppNavigation } from '../../navigation/AppNavigator';
 import { ScorerApi, setAuthToken, setCurrentUser } from '../../services/api';
 import { showSuccess, showError, showWarning } from '../../utils/sweetalert';
-import { validateEmail, validatePassword } from '../../utils/validation';
+import { validateEmail } from '../../utils/validation';
 import ForgotPasswordModal from '../../components/auth/ForgotPasswordModal';
 import FindTeamModal from '../../components/auth/FindTeamModal';
 import EmailDomainSuggestions from '../../components/common/EmailDomainSuggestions';
@@ -153,10 +153,9 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
       newErrors.identifier = emailResult.error;
     }
 
-    // 2. Password validation: min 8 characters, 1 uppercase, 1 special character, 2 numbers
-    const passwordResult = validatePassword(pass);
-    if (!passwordResult.isValid) {
-      newErrors.password = passwordResult.error;
+    // 2. Password validation: check not empty
+    if (!pass) {
+      newErrors.password = 'Please enter your account password.';
     }
 
     // If validation fails, show error messages and DO NOT SUBMIT
@@ -519,9 +518,11 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
         onNavigateToRegister={(targetRole) => {
           navigate('Registration', { initialRole: targetRole || activeRole });
         }}
-        onSuccess={(resetEmail) => {
+        onSuccess={(resetEmail, newPass) => {
           setEmailOrUser(resetEmail);
-          setPassword('');
+          if (newPass) {
+            setPassword(newPass);
+          }
         }}
       />
 
