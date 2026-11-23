@@ -74,7 +74,7 @@ function BallFlight() {
     Animated.timing(anim, {
       toValue: 1,
       duration: 1200,
-      useNativeDriver: Platform.OS !== 'web',
+      useNativeDriver: false,
     }).start();
   }, [anim]);
   const left = anim.interpolate({ inputRange: [0, 1], outputRange: ['5%', '90%'] });

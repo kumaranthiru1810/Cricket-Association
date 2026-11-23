@@ -834,5 +834,18 @@ router.post('/access/remove/:id/verify', (req, res) => adminAccessController.ver
 router.get('/access/requests', (req, res) => adminAccessController.getRequests(req, res));
 router.get('/access/audit', (req, res) => adminAccessController.getAudit(req, res));
 
+// Security endpoint aliases (Section 8)
+router.post('/security/promotion/request', (req, res) => adminAccessController.requestPromote(req, res));
+router.post('/security/promotion/send-otp', (req, res) => adminAccessController.resendDualOtp(req, res));
+router.post('/security/promotion/verify', (req, res) => adminAccessController.verifyDualOtp(req, res));
+router.post('/security/promotion/finalize', (req, res) => adminAccessController.verifyCandidateOtp(req, res));
+router.post('/security/removal/request', (req, res) => adminAccessController.requestRemove(req, res));
+router.post('/security/removal/send-otp', (req, res) => adminAccessController.resendDualOtp(req, res));
+router.post('/security/removal/verify', (req, res) => adminAccessController.verifyRemove(req, res));
+router.post('/security/removal/finalize', (req, res) => adminAccessController.verifyRemove(req, res));
+router.get('/security/admins', (req, res) => adminAccessController.getAdmins(req, res));
+router.get('/security/requests', (req, res) => adminAccessController.getRequests(req, res));
+router.get('/security/audit-logs', (req, res) => adminAccessController.getAudit(req, res));
+
 module.exports = router;
 

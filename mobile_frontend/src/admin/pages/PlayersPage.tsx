@@ -252,7 +252,7 @@ export const PlayersPage: React.FC = () => {
               backgroundColor: '#FFFFFF',
               color: '#334155',
               cursor: 'pointer',
-              outline: 'none'
+              outlineStyle: 'none' as any
             }}
           >
             <option value="ALL">All Disciplines</option>
@@ -276,7 +276,7 @@ export const PlayersPage: React.FC = () => {
               backgroundColor: '#FFFFFF',
               color: '#334155',
               cursor: 'pointer',
-              outline: 'none',
+              outlineStyle: 'none' as any,
               maxWidth: 220
             }}
           >
@@ -302,7 +302,7 @@ export const PlayersPage: React.FC = () => {
               backgroundColor: '#FFFFFF',
               color: '#334155',
               cursor: 'pointer',
-              outline: 'none'
+              outlineStyle: 'none' as any
             }}
           >
             <option value="ALL">All Statuses</option>
@@ -471,7 +471,7 @@ export const PlayersPage: React.FC = () => {
                         backgroundColor: '#FFFFFF',
                         color: '#1E293B',
                         width: '100%',
-                        outline: 'none'
+                        outlineStyle: 'none' as any
                       }}
                     >
                       <option value="">No Team (District Pool)</option>
@@ -496,7 +496,7 @@ export const PlayersPage: React.FC = () => {
                         backgroundColor: '#FFFFFF',
                         color: '#1E293B',
                         width: '100%',
-                        outline: 'none'
+                        outlineStyle: 'none' as any
                       }}
                     >
                       <option value="BATTER">Batter</option>
@@ -533,7 +533,7 @@ export const PlayersPage: React.FC = () => {
                         backgroundColor: '#FFFFFF',
                         color: '#1E293B',
                         width: '100%',
-                        outline: 'none'
+                        outlineStyle: 'none' as any
                       }}
                     >
                       <option value="ACTIVE">Active</option>
@@ -557,7 +557,7 @@ export const PlayersPage: React.FC = () => {
                         backgroundColor: '#FFFFFF',
                         color: '#1E293B',
                         width: '100%',
-                        outline: 'none'
+                        outlineStyle: 'none' as any
                       }}
                     >
                       <option value="RIGHT_HAND">Right-Hand Bat</option>
@@ -578,7 +578,7 @@ export const PlayersPage: React.FC = () => {
                         backgroundColor: '#FFFFFF',
                         color: '#1E293B',
                         width: '100%',
-                        outline: 'none'
+                        outlineStyle: 'none' as any
                       }}
                     >
                       <option value="NONE">None</option>

@@ -11,7 +11,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ActivityIndicator, ScrollView, useWindowDimensions } from 'react-native';
 import PageHeader from '../components/PageHeader';
 import DataTable, { ColumnDef } from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
@@ -19,11 +19,16 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import { EditIcon, CheckIcon, CloseIcon, EyeIcon, ShieldIcon } from '../components/Icons';
 import { adminApi } from '../services/adminApi';
 import { useAdminLayout } from '../components/AdminLayout';
+import DualAdminSecurityModal from '../../components/admin/DualAdminSecurityModal';
 
 const PERMANENT_SUPER_ADMIN = 'admin@cfvd.org';
 
 export const UsersPage: React.FC = () => {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+  const isSmall = width < 480;
   const { showToast } = useAdminLayout();
+  const [showDualSecurityModal, setShowDualSecurityModal] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [roleFilter, setRoleFilter] = useState('ALL');
@@ -390,6 +395,7 @@ export const UsersPage: React.FC = () => {
         <View>
           <Text style={styles.userEmailText}>{item.email}</Text>
           {item.mobile && <Text style={styles.userMobileSub}>📱 {item.mobile}</Text>}
+          {item.aadhaar && <Text style={{ color: '#991b1b', fontSize: 10, fontWeight: '700', marginTop: 2 }}>🆔 UIDAI: {item.aadhaar}</Text>}
         </View>
       )
     },
@@ -566,14 +572,31 @@ export const UsersPage: React.FC = () => {
         subtitle="Manage federation accounts. Super Administrator (admin@cfvd.org) exercises cryptographic OTP approval over all dynamic admins."
         breadcrumbs={[{ label: 'Admin' }, { label: 'Users & Admins' }]}
         actions={
-          <TouchableOpacity
-            style={styles.addAdminBtn}
-            onPress={() => setShowAddAdminModal(true)}
-            activeOpacity={0.8}
-          >
-            <ShieldIcon size={16} color="#ffffff" style={{ marginRight: 6 }} />
-            <Text style={styles.addAdminBtnText}>+ Add New Administrator</Text>
-          </TouchableOpacity>
+          <View style={[styles.headerActionsWrap, isMobile && { width: '100%', gap: 8 }]}>
+            <TouchableOpacity
+              style={[
+                styles.addAdminBtn,
+                { backgroundColor: '#b91c1c' },
+                isMobile && { flex: 1, minWidth: 140, justifyContent: 'center', paddingHorizontal: 10 }
+              ]}
+              onPress={() => setShowDualSecurityModal(true)}
+              activeOpacity={0.8}
+            >
+              <ShieldIcon size={15} color="#ffffff" style={{ marginRight: 6 }} />
+              <Text style={styles.addAdminBtnText} numberOfLines={1}>🛡️ Dual-Admin Security</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.addAdminBtn,
+                isMobile && { flex: 1, minWidth: 140, justifyContent: 'center', paddingHorizontal: 10 }
+              ]}
+              onPress={() => setShowAddAdminModal(true)}
+              activeOpacity={0.8}
+            >
+              <ShieldIcon size={15} color="#ffffff" style={{ marginRight: 6 }} />
+              <Text style={styles.addAdminBtnText} numberOfLines={1}>+ Add Administrator</Text>
+            </TouchableOpacity>
+          </View>
         }
       />
 
@@ -581,32 +604,36 @@ export const UsersPage: React.FC = () => {
       <View style={styles.filtersBar}>
         <View style={styles.filterGroup}>
           <Text style={styles.filterLabel}>Role Filter:</Text>
-          {['ALL', 'ADMIN', 'SCORER', 'PLAYER', 'USER'].map(r => (
-            <TouchableOpacity
-              key={r}
-              style={[styles.filterChip, roleFilter === r && styles.filterChipActive]}
-              onPress={() => setRoleFilter(r)}
-            >
-              <Text style={[styles.filterChipText, roleFilter === r && styles.filterChipTextActive]}>
-                {r === 'ADMIN' ? 'ADMINISTRATORS' : r}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipsRow}>
+            {['ALL', 'ADMIN', 'SCORER', 'PLAYER', 'USER'].map(r => (
+              <TouchableOpacity
+                key={r}
+                style={[styles.filterChip, roleFilter === r && styles.filterChipActive]}
+                onPress={() => setRoleFilter(r)}
+              >
+                <Text style={[styles.filterChipText, roleFilter === r && styles.filterChipTextActive]}>
+                  {r === 'ADMIN' ? 'ADMINISTRATORS' : r}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
 
         <View style={styles.filterGroup}>
           <Text style={styles.filterLabel}>Status:</Text>
-          {['ALL', 'ACTIVE', 'PENDING', 'SUSPENDED'].map(s => (
-            <TouchableOpacity
-              key={s}
-              style={[styles.filterChip, statusFilter === s && styles.filterChipActive]}
-              onPress={() => setStatusFilter(s)}
-            >
-              <Text style={[styles.filterChipText, statusFilter === s && styles.filterChipTextActive]}>
-                {s}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipsRow}>
+            {['ALL', 'ACTIVE', 'PENDING', 'SUSPENDED'].map(s => (
+              <TouchableOpacity
+                key={s}
+                style={[styles.filterChip, statusFilter === s && styles.filterChipActive]}
+                onPress={() => setStatusFilter(s)}
+              >
+                <Text style={[styles.filterChipText, statusFilter === s && styles.filterChipTextActive]}>
+                  {s}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
       </View>
 
@@ -700,6 +727,12 @@ export const UsersPage: React.FC = () => {
                     <Text style={styles.infoVal}>{activeUser.mobile || 'Not specified'}</Text>
                   </View>
                   <View style={styles.infoRow}>
+                    <Text style={styles.infoKey}>Aadhaar (UIDAI):</Text>
+                    <Text style={[styles.infoVal, activeUser.aadhaar && { color: '#991b1b', fontWeight: '700' }]}>
+                      {activeUser.aadhaar ? `🆔 ${activeUser.aadhaar}` : 'Not specified'}
+                    </Text>
+                  </View>
+                  <View style={styles.infoRow}>
                     <Text style={styles.infoKey}>Role & Tier:</Text>
                     <Text style={styles.infoVal}>
                       {activeUser.email === PERMANENT_SUPER_ADMIN ? 'Permanent Super Administrator' : activeUser.role}
@@ -766,12 +799,12 @@ export const UsersPage: React.FC = () => {
           <View style={styles.modalOverlay}>
             <View style={[styles.modalDialog, { maxWidth: 520 }]}>
               <View style={styles.modalHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, marginRight: 8 }}>
                   <ShieldIcon size={20} color="#0f2452" />
-                  <View>
-                    <Text style={styles.modalTitle}>Onboard Dynamic Administrator</Text>
-                    <Text style={{ fontSize: 11, color: '#64748b' }}>
-                      Assign association management credentials under Super Admin oversight
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[styles.modalTitle, isMobile && { fontSize: 13.5 }]} numberOfLines={1}>Onboard Dynamic Administrator</Text>
+                    <Text style={{ fontSize: 10, color: '#64748b' }} numberOfLines={1}>
+                      Assign credentials under Super Admin oversight
                     </Text>
                   </View>
                 </View>
@@ -805,7 +838,7 @@ export const UsersPage: React.FC = () => {
                   />
                 </View>
 
-                <View style={styles.fieldRow}>
+                <View style={[styles.fieldRow, isMobile && { flexDirection: 'column', gap: 12 }]}>
                   <View style={[styles.fieldGroup, { flex: 1 }]}>
                     <Text style={styles.fieldLabel}>Mobile Number (10 Digits)</Text>
                     <TextInput
@@ -868,15 +901,15 @@ export const UsersPage: React.FC = () => {
                 </View>
               </ScrollView>
 
-              <View style={styles.modalFooter}>
+              <View style={[styles.modalFooter, isMobile && { flexDirection: 'column-reverse', gap: 8, paddingHorizontal: 12 }]}>
                 <TouchableOpacity
-                  style={styles.btnCancel}
+                  style={[styles.btnCancel, isMobile && { width: '100%', paddingVertical: 10 }]}
                   onPress={() => setShowAddAdminModal(false)}
                 >
                   <Text style={styles.btnCancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.btnProceedSuperAdmin, isRequestingAuth && { opacity: 0.7 }]}
+                  style={[styles.btnProceedSuperAdmin, isRequestingAuth && { opacity: 0.7 }, isMobile && { width: '100%', paddingVertical: 11 }]}
                   onPress={handleInitiateAddAdmin}
                   disabled={isRequestingAuth}
                 >
@@ -909,14 +942,14 @@ export const UsersPage: React.FC = () => {
             <View style={[styles.modalDialog, styles.superAdminOtpDialog]}>
               {/* Header */}
               <View style={styles.superAdminOtpHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, marginRight: 8 }}>
                   <View style={styles.superAdminOtpIconCircle}>
                     <ShieldIcon size={18} color="#0f2452" />
                   </View>
-                  <View>
-                    <Text style={styles.superAdminOtpTitle}>Super Administrator Security Verification</Text>
-                    <Text style={styles.superAdminOtpSubtitle}>
-                      Nodemailer SMTP Verification to {PERMANENT_SUPER_ADMIN}
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[styles.superAdminOtpTitle, isMobile && { fontSize: 13 }]} numberOfLines={1}>Super Administrator Verification</Text>
+                    <Text style={{ fontSize: 10, color: '#64748b' }} numberOfLines={1}>
+                      Nodemailer SMTP to {PERMANENT_SUPER_ADMIN}
                     </Text>
                   </View>
                 </View>
@@ -986,9 +1019,9 @@ export const UsersPage: React.FC = () => {
               </Text>
 
               {/* Modal Actions */}
-              <View style={styles.superAdminOtpFooter}>
+              <View style={[styles.superAdminOtpFooter, isMobile && { flexDirection: 'column-reverse', gap: 8, paddingHorizontal: 12 }]}>
                 <TouchableOpacity
-                  style={styles.btnCancel}
+                  style={[styles.btnCancel, isMobile && { width: '100%', paddingVertical: 10 }]}
                   onPress={() => setShowOtpModal(false)}
                 >
                   <Text style={styles.btnCancelText}>Cancel</Text>
@@ -996,7 +1029,8 @@ export const UsersPage: React.FC = () => {
                 <TouchableOpacity
                   style={[
                     styles.btnVerifySuperAdmin,
-                    (otpInput.length !== 6 || isVerifyingOtp) && { opacity: 0.6 }
+                    (otpInput.length !== 6 || isVerifyingOtp) && { opacity: 0.6 },
+                    isMobile && { width: '100%', minWidth: 0, paddingVertical: 11 }
                   ]}
                   onPress={handleVerifyOtp}
                   disabled={otpInput.length !== 6 || isVerifyingOtp}
@@ -1014,6 +1048,16 @@ export const UsersPage: React.FC = () => {
           </View>
         </Modal>
       )}
+
+      {/* High-Security Dual-Admin Approval & Revocation Modal */}
+      <DualAdminSecurityModal
+        visible={showDualSecurityModal}
+        onClose={() => setShowDualSecurityModal(false)}
+        onSuccess={() => {
+          loadUsers();
+          showToast('Dual-admin operation completed successfully.', 'success');
+        }}
+      />
     </View>
   );
 };
@@ -1022,28 +1066,37 @@ const styles = StyleSheet.create({
   container: {
     flex: 1
   },
-  filtersBar: {
+  headerActionsWrap: {
     flexDirection: 'row',
-    alignItems: 'center',
+    gap: 8,
     flexWrap: 'wrap',
-    gap: 20,
+    alignItems: 'center'
+  },
+  filtersBar: {
     backgroundColor: '#ffffff',
-    padding: 14,
+    padding: 12,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    marginBottom: 16
+    marginBottom: 16,
+    gap: 12
   },
   filterGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap'
+    gap: 8
+  },
+  filterChipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingRight: 8
   },
   filterLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#64748b'
+    color: '#64748b',
+    minWidth: 70
   },
   filterChip: {
     paddingVertical: 5,
@@ -1207,27 +1260,32 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16
+    padding: 10,
+    width: '100%',
+    height: '100%'
   },
   modalDialog: {
-    width: '100%',
-    maxWidth: 480,
-    borderRadius: 14,
+    width: '94%',
+    maxWidth: 500,
+    borderRadius: 16,
     backgroundColor: '#ffffff',
     overflow: 'hidden',
+    maxHeight: '92%',
     shadowColor: '#000',
     shadowOpacity: 0.15,
     shadowRadius: 20,
-    elevation: 8
+    elevation: 8,
+    alignSelf: 'center',
+    marginHorizontal: 'auto'
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9'
@@ -1238,7 +1296,7 @@ const styles = StyleSheet.create({
     color: '#0f172a'
   },
   modalBody: {
-    padding: 20,
+    padding: 16,
     maxHeight: 520
   },
   fieldGroup: {
@@ -1257,7 +1315,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3
   },
   fieldInput: {
-    height: 40,
+    height: 42,
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderRadius: 8,
@@ -1307,23 +1365,28 @@ const styles = StyleSheet.create({
   infoVal: {
     fontSize: 13,
     color: '#0f172a',
-    fontWeight: '600'
+    fontWeight: '600',
+    flex: 1
   },
   modalFooter: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
+    alignItems: 'center',
     gap: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9'
+    borderTopColor: '#f1f5f9',
+    flexWrap: 'wrap'
   },
   btnCancel: {
-    paddingVertical: 8,
+    paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#cbd5e1'
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   btnCancelText: {
     fontSize: 13,
@@ -1331,10 +1394,12 @@ const styles = StyleSheet.create({
     color: '#475569'
   },
   btnSave: {
-    paddingVertical: 8,
+    paddingVertical: 9,
     paddingHorizontal: 18,
     borderRadius: 8,
-    backgroundColor: '#0f2452'
+    backgroundColor: '#0f2452',
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   btnSaveText: {
     fontSize: 13,
@@ -1346,13 +1411,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     backgroundColor: '#0f2452',
-    paddingVertical: 8,
+    paddingVertical: 9,
     paddingHorizontal: 14,
     borderRadius: 8
   },
   addAdminBtnText: {
     color: '#ffffff',
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700'
   },
   securityNoticeCard: {
@@ -1377,8 +1442,9 @@ const styles = StyleSheet.create({
   btnProceedSuperAdmin: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 9,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     borderRadius: 8,
     backgroundColor: '#0f2452'
   },

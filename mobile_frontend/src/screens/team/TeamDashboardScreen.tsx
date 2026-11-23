@@ -1127,7 +1127,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                   paddingRight: '36px',
                   fontSize: 13,
                   color: value ? '#0f172a' : '#64748b',
-                  outline: 'none',
+                  outlineStyle: 'none' as any,
                   cursor: 'pointer',
                   appearance: 'none',
                   WebkitAppearance: 'none',

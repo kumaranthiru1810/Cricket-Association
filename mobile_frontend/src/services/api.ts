@@ -1805,5 +1805,58 @@ export const fetchMasterSettings = async (category?: string) => {
   return { success: false, data: [], grouped: {} };
 };
 
+// ============================================================================
+// DUAL-ADMIN ACCESS CONTROL & SECURITY API (CFVD Apex Protocol)
+// ============================================================================
+export const AdminSecurityApi = {
+  getActiveAdmins: async () => {
+    return request('/admin/access/admins');
+  },
+  searchCandidate: async (email: string) => {
+    return request(`/admin/access/candidates?email=${encodeURIComponent(email)}`);
+  },
+  requestPromote: async (payload: { email: string; name?: string }) => {
+    return request('/admin/access/promote/request', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+  verifyDualOtp: async (requestId: string, otp1: string, otp2: string) => {
+    return request(`/admin/access/requests/${requestId}/verify`, {
+      method: 'POST',
+      body: JSON.stringify({ otp1, otp2 })
+    });
+  },
+  resendDualOtp: async (requestId: string) => {
+    return request(`/admin/access/requests/${requestId}/resend`, {
+      method: 'POST'
+    });
+  },
+  verifyCandidateOtp: async (requestId: string, code: string) => {
+    return request(`/admin/access/promote/${requestId}/candidate-verify`, {
+      method: 'POST',
+      body: JSON.stringify({ code })
+    });
+  },
+  requestRemove: async (targetAdminId: string) => {
+    return request('/admin/access/remove/request', {
+      method: 'POST',
+      body: JSON.stringify({ targetAdminId })
+    });
+  },
+  verifyRemove: async (requestId: string, otp1: string, otp2: string) => {
+    return request(`/admin/access/remove/${requestId}/verify`, {
+      method: 'POST',
+      body: JSON.stringify({ otp1, otp2 })
+    });
+  },
+  getSecurityRequests: async () => {
+    return request('/admin/access/requests');
+  },
+  getSecurityAuditLogs: async () => {
+    return request('/admin/access/audit');
+  }
+};
+
 export const authService = ScorerApi;
 

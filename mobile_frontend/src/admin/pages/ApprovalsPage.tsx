@@ -99,8 +99,13 @@ export const ApprovalsPage: React.FC = () => {
           <View>
             <Text style={styles.applicantName}>{item.applicantName}</Text>
             <Text style={styles.applicantMeta}>
-              {item.contact || 'No email provided'} • {item.phone || '-'}
+              {item.contact || 'No email provided'} • 📞 {item.phone || '-'}
             </Text>
+            {(item.aadhaar || item.details?.aadhaar || item.coachAadhaar) && (
+              <Text style={{ fontSize: 11, color: '#991b1b', fontWeight: '700', marginTop: 2 }}>
+                🆔 UIDAI: {item.aadhaar || item.details?.aadhaar || item.coachAadhaar}
+              </Text>
+            )}
           </View>
         </View>
       )
@@ -304,8 +309,16 @@ export const ApprovalsPage: React.FC = () => {
                   </View>
                   <View style={styles.detailBox}>
                     <Text style={styles.detailBoxLabel}>Phone Number</Text>
-                    <Text style={styles.detailBoxValue}>{activeItem.phone || 'N/A'}</Text>
+                    <Text style={styles.detailBoxValue}>{activeItem.phone || activeItem.details?.phone || 'N/A'}</Text>
                   </View>
+                  {(activeItem.aadhaar || activeItem.details?.aadhaar || activeItem.details?.coachAadhaar) && (
+                    <View style={styles.detailBox}>
+                      <Text style={styles.detailBoxLabel}>Aadhaar (UIDAI)</Text>
+                      <Text style={[styles.detailBoxValue, { color: '#991b1b', fontWeight: '700' }]}>
+                        🆔 {activeItem.aadhaar || activeItem.details?.aadhaar || activeItem.details?.coachAadhaar}
+                      </Text>
+                    </View>
+                  )}
                   <View style={styles.detailBox}>
                     <Text style={styles.detailBoxLabel}>Club / Body</Text>
                     <Text style={styles.detailBoxValue}>{activeItem.association || 'N/A'}</Text>

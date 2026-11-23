@@ -5357,7 +5357,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     zIndex: 99,
     elevation: 20,
-    ...(Platform.OS === 'web' ? ({ cursor: 'pointer', outline: 'none', WebkitTapHighlightColor: 'transparent' } as any) : {}),
+    ...(Platform.OS === 'web' ? ({ cursor: 'pointer', outlineStyle: 'none' as any, WebkitTapHighlightColor: 'transparent' } as any) : {}),
   },
 
   // Hero Section (Prestigious Athletic Federation Atmosphere)
