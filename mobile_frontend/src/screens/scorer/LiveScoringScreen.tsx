@@ -7177,10 +7177,14 @@ export default function LiveScoringScreen() {
         {/* Main Content Area (Wide, Yellow/Gold Stadium Theme) */}
         <ScrollView
           style={styles.mainContentScroll}
-          contentContainerStyle={styles.scroll}
-          scrollEnabled={isDesktop}
-          showsVerticalScrollIndicator={false}
-          bounces={false}
+          contentContainerStyle={[
+            styles.scroll,
+            !isDesktop && { paddingBottom: 100 }
+          ]}
+          scrollEnabled={true}
+          showsVerticalScrollIndicator={true}
+          bounces={true}
+          nestedScrollEnabled={true}
         >
           <View style={styles.mainLayout}>
             {/* Active Match Postponed Banner */}
@@ -7966,32 +7970,38 @@ export default function LiveScoringScreen() {
                 )}
 
                 {/* Cricket Rules, Umpire Signals & DLS/VJD Quick Navigation Buttons */}
-                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10, flexWrap: isDesktop ? 'nowrap' : 'wrap' }}>
+                <View style={{ flexDirection: 'row', gap: isDesktop ? 8 : 4, marginBottom: isDesktop ? 10 : 6, flexWrap: 'nowrap' }}>
                   <TouchableOpacity
-                    style={[styles.smartRulesNavBtn, { flex: isDesktop ? 1 : undefined, minWidth: isDesktop ? 0 : '48%', marginBottom: 0 }]}
+                    style={[styles.smartRulesNavBtn, { flex: 1, paddingVertical: isDesktop ? 7 : 5, paddingHorizontal: 4, marginVertical: 0 }]}
                     onPress={() => {
                       setActiveCricketRule('FREE_HIT');
                       setShowCricketRulesModal(true);
                     }}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.smartRulesNavBtnText} numberOfLines={1}>⚖️ Smart Cricket Rules</Text>
+                    <Text style={[styles.smartRulesNavBtnText, { fontSize: isDesktop ? 12 : 10.5 }]} numberOfLines={1}>
+                      {isDesktop ? '⚖️ Smart Cricket Rules' : '⚖️ Rules'}
+                    </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.smartRulesNavBtn, { flex: isDesktop ? 1 : undefined, minWidth: isDesktop ? 0 : '48%', marginBottom: 0, backgroundColor: '#0284c7', borderColor: '#0ea5e9' }]}
+                    style={[styles.smartRulesNavBtn, { flex: 1, paddingVertical: isDesktop ? 7 : 5, paddingHorizontal: 4, marginVertical: 0, backgroundColor: '#0284c7', borderColor: '#0ea5e9' }]}
                     onPress={() => setShowUmpireGallery(true)}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.smartRulesNavBtnText, { color: '#ffffff' }]} numberOfLines={1}>🏁 Umpire Hand Signals</Text>
+                    <Text style={[styles.smartRulesNavBtnText, { color: '#ffffff', fontSize: isDesktop ? 12 : 10.5 }]} numberOfLines={1}>
+                      {isDesktop ? '🏁 Umpire Hand Signals' : '🏁 Signals'}
+                    </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.smartRulesNavBtn, { flex: isDesktop ? 1 : undefined, minWidth: isDesktop ? 0 : '100%', marginBottom: 0, backgroundColor: '#0e7490', borderColor: '#0891b2' }]}
+                    style={[styles.smartRulesNavBtn, { flex: 1, paddingVertical: isDesktop ? 7 : 5, paddingHorizontal: 4, marginVertical: 0, backgroundColor: '#0e7490', borderColor: '#0891b2' }]}
                     onPress={() => setShowDlsModal(true)}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.smartRulesNavBtnText, { color: '#ffffff' }]} numberOfLines={1}>🧮 DLS & VJD Methods</Text>
+                    <Text style={[styles.smartRulesNavBtnText, { color: '#ffffff', fontSize: isDesktop ? 12 : 10.5 }]} numberOfLines={1}>
+                      {isDesktop ? '🧮 DLS & VJD Methods' : '🧮 DLS / VJD'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
 
@@ -10641,12 +10651,15 @@ const getStyles = (isDesktop: boolean) =>
       width: '100%',
       backgroundColor: '#f8f6f0'
     },
-    scroll: { flexGrow: 1 },
+    scroll: {
+      flexGrow: 1,
+      paddingBottom: isDesktop ? 40 : 120
+    },
     mainLayout: {
       flex: 1,
       width: '100%',
-      padding: isDesktop ? 22 : 6,
-      justifyContent: 'space-between'
+      padding: isDesktop ? 22 : 8,
+      justifyContent: isDesktop ? 'space-between' : 'flex-start'
     },
 
     inningsBreakBanner: {
@@ -13287,8 +13300,8 @@ const getStyles = (isDesktop: boolean) =>
     },
     engineKeypadBtn: {
       flex: 1,
-      minHeight: 46,
-      height: isDesktop ? 54 : 46,
+      minHeight: isDesktop ? 54 : 44,
+      height: isDesktop ? 54 : 44,
       borderRadius: isDesktop ? 10 : 8,
       alignItems: 'center',
       justifyContent: 'center',
