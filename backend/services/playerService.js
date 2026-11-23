@@ -991,7 +991,6 @@ class PlayerService {
     const teamId = profile?.teamId || profile?.team_id;
 
     const query = {
-      type: { $in: ['MATCH_SCHEDULED', 'MATCH_RESCHEDULED'] },
       recipient_role: 'PLAYER',
       $or: [
         { recipient_id: { $in: playerIds } },

@@ -163,6 +163,8 @@ const MatchSchema = new mongoose.Schema({
     pitchReport: { type: String, default: 'Normal Good Pitch' },
     comments: { type: String, default: '' }
   },
+  notes: { type: String, default: '' },
+  match_notes: { type: String, default: '' },
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
 }, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });

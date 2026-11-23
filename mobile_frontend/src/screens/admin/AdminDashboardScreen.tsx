@@ -563,6 +563,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   // Match Schedules State
   const [matchesList, setMatchesList] = useState<any[]>(INITIAL_MATCHES);
   const [matchFilter, setMatchFilter] = useState<MatchFilterStatus>('all');
+  const [matchFilterDropdownOpen, setMatchFilterDropdownOpen] = useState<boolean>(false);
   const [matchSearchQuery, setMatchSearchQuery] = useState<string>('');
   const [isMatchesLoading, setIsMatchesLoading] = useState<boolean>(false);
   const [venuesList, setVenuesList] = useState<any[]>([]);
@@ -4392,81 +4393,143 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     </View>
                   )}
 
-                  {/* Status Filter Pills with distinctive colors */}
-                  <View style={styles.filterPillsRow}>
-                    <TouchableOpacity
-                      style={[styles.filterPill, matchFilter === 'all' && styles.filterPillActive]}
-                      onPress={() => setMatchFilter('all')}
-                    >
-                      <Text style={[styles.filterPillText, matchFilter === 'all' && styles.filterPillTextActive]}>
-                        All ({matchesList.length})
-                      </Text>
-                    </TouchableOpacity>
+                  {/* Status Filter Dropdown Selector & Refresh */}
+                  {(() => {
+                    const matchFilterOptions = [
+                      { key: 'all' as MatchFilterStatus, label: 'All Fixtures', count: matchesList.length, icon: '📋', color: '#0f172a' },
+                      ...(pendingPostponementCount > 0
+                        ? [{ key: 'REQUESTS' as MatchFilterStatus, label: 'Postponement Requests', count: pendingPostponementCount, icon: '⚠️', color: '#b91c1c' }]
+                        : []),
+                      { key: 'SCHEDULED' as MatchFilterStatus, label: 'Scheduled Fixtures', count: scheduledMatchesCount, icon: '🗓️', color: '#2563eb' },
+                      { key: 'LIVE' as MatchFilterStatus, label: 'Live Matches', count: liveMatchesCount, icon: '🔴', color: '#dc2626' },
+                      { key: 'COMPLETED' as MatchFilterStatus, label: 'Completed Matches', count: completedMatchesCount, icon: '✓', color: '#16a34a' },
+                      { key: 'CANCELLED' as MatchFilterStatus, label: 'Cancelled Fixtures', count: cancelledMatchesCount, icon: '✕', color: '#64748b' },
+                      { key: 'POSTPONED' as MatchFilterStatus, label: 'Postponed Matches', count: postponedMatchesCount, icon: '⏸️', color: '#d97706' },
+                    ];
+                    const activeMatchFilterOption = matchFilterOptions.find(o => o.key === matchFilter) || matchFilterOptions[0];
 
-                    {pendingPostponementCount > 0 && (
-                      <TouchableOpacity
-                        style={[styles.filterPill, matchFilter === 'REQUESTS' && { backgroundColor: '#fee2e2', borderColor: '#ef4444', borderWidth: 1.5 }]}
-                        onPress={() => setMatchFilter('REQUESTS')}
-                      >
-                        <Text style={[styles.filterPillText, { color: '#b91c1c', fontWeight: '800' }]}>
-                          ⚠️ Requests ({pendingPostponementCount})
-                        </Text>
-                      </TouchableOpacity>
-                    )}
+                    return (
+                      <View style={{ marginTop: 10, zIndex: 100 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                          <View style={{ flex: 1, position: 'relative' }}>
+                            <TouchableOpacity
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                backgroundColor: '#ffffff',
+                                borderWidth: 1.5,
+                                borderColor: activeMatchFilterOption.color === '#0f172a' ? '#cbd5e1' : activeMatchFilterOption.color,
+                                borderRadius: 10,
+                                paddingHorizontal: 14,
+                                paddingVertical: 10
+                              }}
+                              onPress={() => setMatchFilterDropdownOpen(!matchFilterDropdownOpen)}
+                              activeOpacity={0.8}
+                            >
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                                <Text style={{ fontSize: 15 }}>{activeMatchFilterOption.icon}</Text>
+                                <Text style={{ fontSize: 13, fontWeight: '700', color: activeMatchFilterOption.color }} numberOfLines={1}>
+                                  {activeMatchFilterOption.label}
+                                </Text>
+                              </View>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <View style={{ backgroundColor: activeMatchFilterOption.color, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+                                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#ffffff' }}>
+                                    {activeMatchFilterOption.count}
+                                  </Text>
+                                </View>
+                                <Text style={{ fontSize: 12, color: '#64748b', fontWeight: 'bold' }}>
+                                  {matchFilterDropdownOpen ? '▲' : '▼'}
+                                </Text>
+                              </View>
+                            </TouchableOpacity>
 
-                    <TouchableOpacity
-                      style={[styles.filterPill, matchFilter === 'SCHEDULED' && styles.filterPillActiveScheduled]}
-                      onPress={() => setMatchFilter('SCHEDULED')}
-                    >
-                      <Text style={[styles.filterPillText, matchFilter === 'SCHEDULED' && styles.filterPillTextActiveScheduled]}>
-                        🗓 Scheduled ({scheduledMatchesCount})
-                      </Text>
-                    </TouchableOpacity>
+                            {/* Dropdown Menu */}
+                            {matchFilterDropdownOpen && (
+                              <View
+                                style={{
+                                  position: 'absolute',
+                                  top: 48,
+                                  left: 0,
+                                  right: 0,
+                                  backgroundColor: '#ffffff',
+                                  borderRadius: 10,
+                                  borderWidth: 1.5,
+                                  borderColor: '#e2e8f0',
+                                  shadowColor: '#000',
+                                  shadowOffset: { width: 0, height: 4 },
+                                  shadowOpacity: 0.15,
+                                  shadowRadius: 10,
+                                  elevation: 12,
+                                  zIndex: 1000,
+                                  overflow: 'hidden'
+                                }}
+                              >
+                                {matchFilterOptions.map((opt) => {
+                                  const isSelected = matchFilter === opt.key;
+                                  return (
+                                    <TouchableOpacity
+                                      key={opt.key}
+                                      style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        paddingHorizontal: 14,
+                                        paddingVertical: 11,
+                                        backgroundColor: isSelected ? '#f8fafc' : '#ffffff',
+                                        borderBottomWidth: 1,
+                                        borderBottomColor: '#f1f5f9'
+                                      }}
+                                      onPress={() => {
+                                        setMatchFilter(opt.key);
+                                        setMatchFilterDropdownOpen(false);
+                                      }}
+                                      activeOpacity={0.7}
+                                    >
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                        <Text style={{ fontSize: 15 }}>{opt.icon}</Text>
+                                        <Text style={{ fontSize: 13, fontWeight: isSelected ? '800' : '600', color: opt.color }}>
+                                          {opt.label}
+                                        </Text>
+                                      </View>
+                                      <View
+                                        style={{
+                                          backgroundColor: isSelected ? opt.color : '#f1f5f9',
+                                          paddingHorizontal: 8,
+                                          paddingVertical: 3,
+                                          borderRadius: 12
+                                        }}
+                                      >
+                                        <Text
+                                          style={{
+                                            fontSize: 11,
+                                            fontWeight: '800',
+                                            color: isSelected ? '#ffffff' : '#475569'
+                                          }}
+                                        >
+                                          {opt.count}
+                                        </Text>
+                                      </View>
+                                    </TouchableOpacity>
+                                  );
+                                })}
+                              </View>
+                            )}
+                          </View>
 
-                    <TouchableOpacity
-                      style={[styles.filterPill, matchFilter === 'LIVE' && styles.filterPillActiveLive]}
-                      onPress={() => setMatchFilter('LIVE')}
-                    >
-                      <Text style={[styles.filterPillText, matchFilter === 'LIVE' && styles.filterPillTextActiveLive]}>
-                        🔴 Live ({liveMatchesCount})
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.filterPill, matchFilter === 'COMPLETED' && styles.filterPillActiveCompleted]}
-                      onPress={() => setMatchFilter('COMPLETED')}
-                    >
-                      <Text style={[styles.filterPillText, matchFilter === 'COMPLETED' && styles.filterPillTextActiveCompleted]}>
-                        ✓ Completed ({completedMatchesCount})
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.filterPill, matchFilter === 'CANCELLED' && styles.filterPillActiveCancelled]}
-                      onPress={() => setMatchFilter('CANCELLED')}
-                    >
-                      <Text style={[styles.filterPillText, matchFilter === 'CANCELLED' && styles.filterPillTextActiveCancelled]}>
-                        ✕ Cancelled ({cancelledMatchesCount})
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.filterPill, matchFilter === 'POSTPONED' && { backgroundColor: '#fef3c7', borderColor: '#f59e0b', borderWidth: 1 }]}
-                      onPress={() => setMatchFilter('POSTPONED')}
-                    >
-                      <Text style={[styles.filterPillText, matchFilter === 'POSTPONED' && { color: '#b45309', fontWeight: '700' }]}>
-                        ⏸️ Postponed ({postponedMatchesCount})
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.refreshBtnSm}
-                      onPress={loadMatchesAndLogistics}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.refreshBtnSmText}>🔄 Refresh</Text>
-                    </TouchableOpacity>
-                  </View>
+                          {/* Refresh Button */}
+                          <TouchableOpacity
+                            style={[styles.refreshBtnSm, { height: 42, paddingHorizontal: 14, justifyContent: 'center' }]}
+                            onPress={loadMatchesAndLogistics}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.refreshBtnSmText}>🔄 Refresh</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })()}
                 </View>
 
                 {/* FIXTURES LIST CONTAINER */}
