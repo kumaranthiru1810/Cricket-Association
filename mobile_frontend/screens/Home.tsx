@@ -3746,14 +3746,6 @@ export default function HomeScreen() {
                 <Text style={styles.footerColHeading}>Operations Hub</Text>
                 <TouchableOpacity
                   onPress={() => {
-                    setActiveOpTab('admin');
-                    navigate('Admin');
-                  }}
-                >
-                  <Text style={styles.footerLink}>› Admin Setup (Manage College)</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
                     setActiveOpTab('institutions');
                     navigate('Admin');
                   }}
@@ -3796,9 +3788,6 @@ export default function HomeScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => navigate('Login', { initialRole: 'SCORER' })}>
                   <Text style={styles.footerLink}>› Match Scorer Portal</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => navigate('Login', { initialRole: 'ADMIN' })}>
-                  <Text style={styles.footerLink}>› Administrator Portal</Text>
                 </TouchableOpacity>
               </View>
             </View>

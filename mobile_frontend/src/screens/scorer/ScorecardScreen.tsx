@@ -556,6 +556,23 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
     );
   }
 
+  if (!currentInnings) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+        <Text style={{ fontSize: 18, fontWeight: '700', color: '#1e293b', marginBottom: 8 }}>Innings In Preparation</Text>
+        <Text style={{ fontSize: 14, color: '#64748b', textAlign: 'center', marginBottom: 20 }}>
+          Innings details have not been initialized yet for {match.teamA || 'Team A'} vs {match.teamB || 'Team B'}.
+        </Text>
+        <TouchableOpacity style={styles.actionBtn} onPress={() => loadScorecard()}>
+          <Text style={styles.actionBtnText}>Refresh</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.actionBtn, { marginTop: 12, backgroundColor: '#f1f5f9' }]} onPress={handleBack}>
+          <Text style={[styles.actionBtnText, { color: '#475569' }]}>Back to Previous</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* 1. UNIFIED RESPONSIVE HEADER WITH SAFE AREA INSETS */}
@@ -725,11 +742,11 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
           {/* ACTIVE INNINGS HERO CARD */}
           <View style={styles.inningsHeroCard}>
             <View style={styles.heroLeft}>
-              <Text style={styles.heroBattingTeam}>{currentInnings.battingTeam}</Text>
-              <Text style={styles.heroVersus}>vs {currentInnings.bowlingTeam || (match.teamA === currentInnings.battingTeam ? match.teamB : match.teamA)}</Text>
+              <Text style={styles.heroBattingTeam}>{currentInnings?.battingTeam || match?.teamA || 'Batting Team'}</Text>
+              <Text style={styles.heroVersus}>vs {currentInnings?.bowlingTeam || (match?.teamA === (currentInnings?.battingTeam || match?.teamA) ? match?.teamB : match?.teamA) || 'Bowling Team'}</Text>
             </View>
             <View style={styles.heroRight}>
-              <Text style={styles.heroScoreText}>{currentInnings.score}</Text>
+              <Text style={styles.heroScoreText}>{currentInnings?.score || '0/0 (0.0)'}</Text>
               {inningsStats && (
                 <Text style={styles.heroRunRateText}>Run Rate: {inningsStats.runRate} RPO</Text>
               )}
@@ -822,7 +839,7 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
               ───────────────────────────────────────────────────────────── */}
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionHeaderTitle}>🏏 Batting Scorecard</Text>
-            <Text style={styles.sectionHeaderSub}>Innings of {currentInnings.battingTeam}</Text>
+            <Text style={styles.sectionHeaderSub}>Innings of {currentInnings?.battingTeam || 'Batting Team'}</Text>
           </View>
 
           <View style={styles.tableWrapper}>
@@ -1109,7 +1126,7 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                 <View style={{ flex: 1 }}>
                   <Text style={styles.fowTitle}>🤝 Key Batting Partnerships</Text>
                   <Text style={{ fontSize: 11, fontWeight: '700', color: '#b45309' }}>
-                    {currentInnings.battingTeam} • Boundary & Strike Rotation Analysis
+                    {currentInnings?.battingTeam || 'Batting Team'} • Boundary & Strike Rotation Analysis
                   </Text>
                 </View>
               </View>

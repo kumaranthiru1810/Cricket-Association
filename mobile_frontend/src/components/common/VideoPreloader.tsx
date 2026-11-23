@@ -34,10 +34,6 @@ function NativeVideoComponent({ onProgress, onEnded, contentFit = 'contain' }: N
       if (player.duration) {
         const pct = (event.currentTime / player.duration) * 100;
         onProgress(Math.min(100, pct));
-        // Cinematic synchronization: reveal website at video climax
-        if (event.currentTime >= Math.max(player.duration - 0.4, 0)) {
-          onEnded();
-        }
       }
     });
 
@@ -188,10 +184,6 @@ export default function VideoPreloader({ onComplete }: VideoPreloaderProps) {
     if (video && video.duration) {
       const pct = (video.currentTime / video.duration) * 100;
       setProgress(Math.min(100, pct));
-      // Exact synchronization: trigger website reveal at 6.9s when bails lock in with sound
-      if (video.currentTime >= 6.9) {
-        handleDismiss();
-      }
     }
   };
 
@@ -257,7 +249,7 @@ export default function VideoPreloader({ onComplete }: VideoPreloaderProps) {
                 height: '100%',
                 maxWidth: '100vw',
                 maxHeight: '100vh',
-                objectFit: 'contain',
+                objectFit: 'cover',
                 objectPosition: 'center center',
                 backgroundColor: 'transparent',
                 zIndex: 1,
@@ -271,7 +263,7 @@ export default function VideoPreloader({ onComplete }: VideoPreloaderProps) {
           <NativeVideoComponent
             onProgress={(pct) => setProgress(pct)}
             onEnded={() => handleDismiss()}
-            contentFit="contain"
+            contentFit="cover"
           />
         )}
       </TouchableOpacity>
