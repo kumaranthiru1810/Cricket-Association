@@ -167,10 +167,25 @@ html {
   font-size: clamp(14px, 0.9rem + 0.35vw, 16px);
 }
 
-h1, .h1 { font-size: clamp(1.75rem, 4vw + 1rem, 2.75rem); }
-h2, .h2 { font-size: clamp(1.35rem, 2.5vw + 0.8rem, 2.1rem); }
-h3, .h3 { font-size: clamp(1.15rem, 1.8vw + 0.6rem, 1.6rem); }
-h4, .h4 { font-size: clamp(1rem, 1.2vw + 0.5rem, 1.3rem); }
+h1,
+.h1 {
+  font-size: clamp(1.75rem, 4vw + 1rem, 2.75rem);
+}
+
+h2,
+.h2 {
+  font-size: clamp(1.35rem, 2.5vw + 0.8rem, 2.1rem);
+}
+
+h3,
+.h3 {
+  font-size: clamp(1.15rem, 1.8vw + 0.6rem, 1.6rem);
+}
+
+h4,
+.h4 {
+  font-size: clamp(1rem, 1.2vw + 0.5rem, 1.3rem);
+}
 
 body {
   font-family: var(--font-body);
@@ -7599,6 +7614,7 @@ body.theme-light .page-login-box {
   margin-bottom: 1.5rem;
   overflow-x: auto;
 }
+
 .unified-login-tab {
   flex: 1;
   min-width: 68px;
@@ -7614,22 +7630,27 @@ body.theme-light .page-login-box {
   transition: all 0.2s ease;
   white-space: nowrap;
 }
+
 .unified-login-tab:hover {
   color: var(--gold-bright);
 }
+
 .unified-login-tab.active {
   background: linear-gradient(135deg, #d4af37, #f59e0b);
   color: #020612 !important;
   font-weight: 800;
   box-shadow: 0 2px 8px rgba(212, 175, 55, 0.35);
 }
+
 body.theme-light .unified-login-tabs {
   background: #e2e8f0;
   border-color: rgba(184, 134, 11, 0.3);
 }
+
 body.theme-light .unified-login-tab {
   color: #475569;
 }
+
 body.theme-light .unified-login-tab.active {
   background: linear-gradient(135deg, #b8860b, #d4af37);
   color: #ffffff !important;
@@ -8636,6 +8657,7 @@ button,
 
 /* Prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
+
   *,
   *::before,
   *::after {
@@ -8709,6 +8731,7 @@ button,
 
 /* 2. Mobile Landscape & Phablets (480px to 767px) */
 @media (min-width: 480px) and (max-width: 767px) {
+
   .grid-3col,
   .grid-4col {
     grid-template-columns: repeat(2, 1fr);
@@ -8757,5 +8780,3 @@ button,
     padding-bottom: var(--sab);
   }
 }
-
-

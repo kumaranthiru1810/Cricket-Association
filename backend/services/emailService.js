@@ -9,15 +9,18 @@
  * 2. Replace the sendOtpNotification implementation below with provider client calls.
  */
 
+const mailer = require('../config/mailer');
+
 async function sendOtpNotification({ toEmail, toPhone, recipientRole, otpCode, requestId }) {
   // Never log OTP values in production plain text files or return to clients.
   // In dev mode, log metadata confirmation that dispatch was triggered.
   console.log(`[EmailService] OTP Dispatch triggered for recipient: ${toEmail || toPhone} (Role: ${recipientRole}, RequestId: ${requestId})`);
 
   // Documented hook point for external providers:
-  if (process.env.SMTP_HOST) {
-    // Example SMTP integration:
-     await transporter.sendMail({ from: process.env.SMTP_FROM, to: toEmail, subject: 'Admin Security OTP', text: "hi" });
+  if (toEmail) {
+    try {
+      await mailer.sendOtpEmail({ toEmail, otp: otpCode, recipientRole });
+    } catch (_e) {}
   }
 
   return {

@@ -165,4 +165,71 @@ All notable changes made to the Cricket Association Management & Live Scoring pr
   - Firefox Desktop & Mobile: Font rendering, SVG icons, and CSS Grid layout verified.
   - Zero remaining responsive design defects.
 
+## Phase 6: Code Quality, Modularization & Repository Cleanup
+- **Giant Backend Files Modularization**:
+  - `backend/models/`: Modularized monolithic schema definitions from `config/db.js` into independent Mongoose models:
+    - `User.js`, `Tournament.js`, `Team.js`, `Player.js`, `Match.js`, `Innings.js`, `Scorer.js`, `Notification.js`, `News.js`, `Official.js`, `AuditLog.js`, `CricketLaw.js`, `MasterSetting.js`, and `AdminSecurity.js`.
+    - Added centralized models re-export in `backend/models/index.js`.
+  - `backend/config/db.js`:
+    - Refactored into a concise database connection manager, ping utility, and automated compound indexer.
+    - Preserved SQL-emulation shim `db.query` calling the modular models with complete backwards compatibility.
+  - `backend/services/auth/`: Modularized `services/authService.js` (~104KB) into domain and role-specific sub-services:
+    - `scorerAuth.js`: Scorer registration, login OTP dispatch/verification, account approvals.
+    - `teamAuth.js`: Team registration, OTP verification, squad/club approvals.
+    - `playerAuth.js`: Player OTP login, team finder, profile registration.
+    - `umpireAuth.js`: Umpire registration, qualification verification, status review.
+    - `adminAuth.js`: Super Admin & Standard Admin authentication, universal credential verification.
+    - `passwordResetAuth.js`: Multi-step password reset OTP dispatch and confirmation.
+    - Refactored `backend/services/authService.js` into a lightweight facade delegating cleanly to each sub-service while preserving all legacy method signatures.
+  - `backend/services/scoring/`: Modularized monolithic scoring engine `services/scoringEngine.js` (~91KB) into focused domain modules:
+    - `deliveryHelpers.js`: Commentary generation, dismissal formatting, player maps, squad size all-out logic.
+    - `deliveryService.js`: Ball-by-ball delivery recording, legal/illegal balls, strike rotation, bowler changes.
+    - `inningsService.js`: Over completion, innings declaration, match conclusion, break management, revised overs.
+    - `undoEditService.js`: Delivery undo and retrospective delivery edit with full innings recalculation.
+    - `wicketService.js`: Non-delivery dismissals (retired hurt, timed out, mankading) and batter substitutions.
+    - `extrasService.js`: Penalty runs (5 runs) and extras allocations.
+    - `superOverService.js`: Super over setup and transitions.
+    - Refactored `backend/services/scoringEngine.js` into an exported facade preserving 100% public function compatibility.
+- **Route Alias Cleanup & API Documentation**:
+  - Audited frontend API calls (`mobile_frontend/src/services/api.ts` and `mobile_frontend/src/admin/services/adminApi.ts`).
+  - Removed unused and duplicate route aliases from `backend/routes/authRoutes.js` (`/register-otp`, `/verify-register-otp`, `/team/check-exists`, `/request-reset-otp`, `/verify-reset-otp`, `/reset-password`, `/find-team`).
+  - Removed duplicate `/api/teams` mount in `backend/server.js`, standardizing on `/api/team`.
+  - Added unified `/api/auth/register` endpoint in `authController.js` supporting all portal registration roles.
+  - Authored comprehensive `backend/docs/API_DOCUMENTATION.md` detailing every active REST route, payload schemas, query parameters, authentication tiers, and Socket.IO real-time scoring events.
+- **Request Body Validation & Error Formatting**:
+  - Integrated `zod` schema validator across all critical POST/PUT/PATCH endpoints in `backend/middleware/validationMiddleware.js`:
+    - `deliverySchema`: Numeric run bounds (0-7), legal ball booleans, dismissal enums.
+    - `loginSchema` & `adminLoginSchema`: Email and password string constraints.
+    - `otpRequestSchema` & `otpVerifySchema`: 6-digit OTP regex checks and email formats.
+    - `resetPasswordSchema`: Password strength and confirmation checks.
+    - `scorerRegistrationSchema`, `playerRegistrationSchema`, `teamRegistrationSchema`, `umpireRegistrationSchema`: Phone numbers, names, and association fields.
+    - `penaltySchema`, `changeBatterSchema`, `changeBowlerSchema`, `superOverSchema`, `revisedOversSchema`.
+  - Configured validation middleware to return consistent HTTP 400 responses:
+    `{ success: false, message: "Validation Error: ...", code: "VALIDATION_ERROR", errors: [...] }`.
+  - Standardized `backend/server.js` global error handler to return `{ success: false, message, code }` with accurate HTTP status codes and zero stack traces exposed in production (`NODE_ENV === 'production'`).
+  - Created automated validation test suite `backend/tests/test_validation_errors.js` validating schema enforcement and error codes.
+- **Junk & Misplaced Files Cleanup**:
+  - Removed root junk files: `sample.txt`, `scorecard_dump.json`.
+  - Removed redundant `demo_match_presentation/` directory (~14.8MB).
+  - Relocated Windows runner `start.bat` to `scripts/start.bat`.
+  - Moved misplaced root backend tests (`test_player_module.js`, `test_scorer_module.js`, `test_team_module.js`) into `backend/tests/`.
+  - Moved dev-only seeding scripts (`populateGenuinePlayers.js`, `seed_complete_m003_scorecard.js`) into `scripts/dev-only/` and added `NODE_ENV === 'production'` execution guards to prevent accidental execution on production databases.
+- **Linting, Code Quality & CI Pipeline**:
+  - Configured ESLint (Flat Config) and Prettier for `backend` (`backend/eslint.config.js`, `backend/.prettierrc`, `backend/.prettierignore`).
+  - Configured ESLint and Prettier for `mobile_frontend` (`mobile_frontend/.prettierrc`, `mobile_frontend/.prettierignore`).
+  - Added `npm run lint` script to both packages.
+  - Fixed all ESLint errors across backend controllers, mailer, and route definitions.
+  - Updated `.github/workflows/ci.yml` to include `npm run lint` under the `backend-test` job.
+- **Documentation & Database Utilities**:
+  - Rewrote root `README.md` with official platform description, architecture overview, comprehensive environment variables table, Docker instructions, testing guide, and database operations.
+  - Created automated database backup and restore scripts in `scripts/`:
+    - `scripts/backup_mongo.sh`: Timestamped, gzipped `mongodump` utility with automated Node.js JSON fallback.
+    - `scripts/restore_mongo.sh`: Safe `mongorestore` utility with `--drop` support and automated Node.js JSON fallback.
+  - Both backup scripts are marked executable and documented.
+- **Automated Verification**:
+  - All 70+ automated tests passing (46 core scoring tests, 6 cricket logic audit tests, 4 critical security tests, 4 high-severity security tests, 5 speed/scalability tests, and 5 request validation tests).
+  - Backend ESLint passes with 0 errors.
+  - Frontend TypeScript verification passes with 0 errors (`npx tsc --noEmit`).
+
+
 
