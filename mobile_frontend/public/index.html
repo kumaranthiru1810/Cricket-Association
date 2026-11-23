@@ -52,10 +52,10 @@
     <meta name="twitter:title" content="Cricket Federation of Virudhunagar District" />
     <meta name="twitter:description" content="Official cricket portal featuring live scorecards, tournament fixtures, and wagon wheel analytics." />
 
-    <!-- Video Preload & Connection Pre-warming for Instant Streaming -->
-    <link rel="preload" href="/preloader.mp4" as="video" type="video/mp4" crossorigin="anonymous" />
-    <link rel="preconnect" href="http://localhost:5000" crossorigin />
-    <link rel="dns-prefetch" href="http://localhost:5000" />
+    <!-- Resource Hints & Font Optimization (Outfit + Barlow with font-display: swap) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Barlow:wght@600;700&display=swap" media="print" onload="this.media='all'" />
 
     <!-- Structured Data JSON-LD for Google & Search Engine Rich Snippets -->
     <script type="application/ld+json">
@@ -232,15 +232,12 @@
       /* CINEMATIC PRELOADER & GRAND WEBSITE ENTRANCE ANIMATIONS     */
       /* ============================================================ */
       body.cfvd-preloader-active {
-        overflow: hidden !important;
+        overflow: hidden;
       }
 
       body.cfvd-preloader-active #root {
         opacity: 0;
-        transform: scale(0.93) translateY(24px);
-        filter: blur(14px) brightness(0.75);
         pointer-events: none;
-        will-change: transform, opacity, filter;
       }
 
       /* Grand Website Entrance Animation upon Video Completion */
@@ -446,12 +443,13 @@
           webkit-playsinline
           preload="auto"
           style="
-            width: 100%;
-            height: 100%;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
             max-width: 100vw;
             max-height: 100vh;
             max-height: 100dvh;
-            object-fit: contain;
+            object-fit: cover;
             object-position: center center;
             background: transparent;
           "
@@ -459,7 +457,6 @@
           <source src="/preloader.mp4" type="video/mp4" />
           <source src="./preloader.mp4" type="video/mp4" />
           <source src="/assets/preloader.mp4" type="video/mp4" />
-          <source src="http://localhost:5000/uploads/preloader.mp4" type="video/mp4" />
         </video>
       </div>
 
@@ -698,13 +695,6 @@
           if (video.duration && progressBar) {
             var pct = (video.currentTime / video.duration) * 100;
             progressBar.style.width = Math.min(100, pct) + '%';
-          }
-
-          // Cinematic Synchronization: When the video reaches its climax,
-          // trigger the stadium flash and reveal the website smoothly!
-          if (video.duration && video.currentTime >= Math.max(video.duration - 0.4, 0) && !transitionTriggered) {
-            transitionTriggered = true;
-            window.__dismissCfvdPreloader(false);
           }
         });
 

@@ -9,7 +9,9 @@
     "migrate": "node migrations/migrate.js",
     "seed": "node seeds/seed.js",
     "seed:settings": "node scripts/importMasterSettings.js",
-    "test": "node tests/runTests.js && node tests/test_cricket_logic_fixes.js && node tests/test_security_audit.js && node tests/test_phase3_speed.js",
+    "test": "NODE_ENV=test node tests/runTests.js && NODE_ENV=test node tests/test_cricket_logic_fixes.js && NODE_ENV=test node tests/test_security_audit.js && NODE_ENV=test node tests/test_phase3_speed.js && NODE_ENV=test node tests/test_validation_errors.js",
+    "lint": "eslint .",
+    "format": "prettier --write .",
     "test:rules": "node tests/test_cricket_rules_engine.js",
     "test:umpire": "node tests/test_umpire_module.js",
     "test:security": "node tests/securityVerification.js",
@@ -31,11 +33,14 @@
     "multer": "^2.5.0",
     "nodemailer": "^10.0.13",
     "sharp": "^0.35.5",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "chokidar": "^5.0.0",
-    "nodemon": "^3.1.14"
+    "eslint": "^10.15.0",
+    "nodemon": "^3.1.14",
+    "prettier": "^3.10.1"
   },
   "overrides": {
     "braces": "^3.0.3"

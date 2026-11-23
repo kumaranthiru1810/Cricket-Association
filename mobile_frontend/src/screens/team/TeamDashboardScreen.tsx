@@ -32,7 +32,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import { TeamApi, getCurrentUser, ScorerApi, SOCKET_URL } from '../../services/api';
+import { TeamApi, getCurrentUser, ScorerApi, SOCKET_URL, resolveImageUrl } from '../../services/api';
 import { showError, showSuccess } from '../../utils/sweetalert';
 import {
   RefreshIcon,
@@ -463,15 +463,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
 
   // Resolve full URI for team photo / logo (handles base64 data URLs, absolute URLs, relative upload paths)
   const resolvePhotoUrl = (photoUri?: string | null): string | null => {
-    if (!photoUri || typeof photoUri !== 'string') return null;
-    const trimmed = photoUri.trim();
-    if (!trimmed || trimmed === 'null' || trimmed === 'undefined') return null;
-    if (trimmed.startsWith('data:image/') || trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('blob:')) {
-      return trimmed;
-    }
-    const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-    const base = SOCKET_URL || 'http://localhost:5000';
-    return `${base}${cleanPath}`;
+    return resolveImageUrl(photoUri);
   };
 
   // Open Interactive Photo Crop Modal
@@ -3150,6 +3142,20 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                                 {reason}
                               </Text>
                             </View>
+
+                            {/* Match Situation at Postponement */}
+                            {Boolean(m.postponement?.postponed_score_display || m.postponedScoreDisplay || m.scoreA) && (
+                              <View style={{ backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa', borderRadius: 8, padding: 10, marginTop: 8 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: '#c2410c', textTransform: 'uppercase' }}>
+                                  📊 Match Situation at Postponement
+                                </Text>
+                                <Text style={{ fontSize: 13, color: '#9a3412', fontWeight: '700', marginTop: 3 }}>
+                                  {m.postponement?.postponed_score_display || m.postponedScoreDisplay || (
+                                    m.scoreA ? `${m.teamA}: ${m.scoreA}${m.scoreB && m.scoreB !== 'Yet to bat' ? ` • ${m.teamB}: ${m.scoreB}` : ''}` : 'Postponed before match start (0 overs bowled)'
+                                  )}
+                                </Text>
+                              </View>
+                            )}
 
                             {/* Rescheduled Date Status */}
                             <View style={{ backgroundColor: reschedDate ? '#ecfdf5' : '#f8fafc', borderWidth: 1, borderColor: reschedDate ? '#a7f3d0' : '#e2e8f0', borderRadius: 8, padding: 10, marginTop: 8 }}>

@@ -175,7 +175,6 @@ app.use('/api/admin', adminRoutes);
 
 // Team Registration, Login & Management APIs
 app.use('/api/team', teamRoutes);
-app.use('/api/teams', teamRoutes);
 
 // Player Registration, Login & Profile APIs
 app.use('/api/player', playerRoutes);
@@ -219,15 +218,19 @@ app.delete('/api/master-settings/:id', requireAdminAuth, (req, res) => {
   masterSettingController.deleteSetting(req, res);
 });
 
-// Security 8: Global Error Handler - Debug mode OFF in production
+// Security 8: Global Error Handler - Consistent response format { success: false, message, code }
 app.use((err, req, res, next) => {
-  console.error('Unhandled Server Error:', err);
   const isProd = process.env.NODE_ENV === 'production';
-  res.status(err.status || 500).json({
+  const status = err.status || err.statusCode || 500;
+  const code = err.code || (status === 400 ? 'BAD_REQUEST' : (status === 401 ? 'UNAUTHORIZED' : (status === 403 ? 'FORBIDDEN' : (status === 404 ? 'NOT_FOUND' : (status === 409 ? 'CONFLICT' : 'INTERNAL_SERVER_ERROR')))));
+  const message = isProd && status === 500
+    ? 'An unexpected error occurred. Please contact support.'
+    : (err.message || 'Internal Server Error');
+
+  res.status(status).json({
     success: false,
-    message: isProd && (!err.status || err.status === 500)
-      ? 'An unexpected error occurred. Please contact support.'
-      : (err.message || 'Internal Server Error'),
+    message,
+    code,
     ...(!isProd && { stack: err.stack })
   });
 });
@@ -242,7 +245,7 @@ function handleGracefulShutdown(signal) {
     try {
       await db.close();
       console.log('Database connections closed cleanly.');
-    } catch (_) {}
+    } catch (_) { }
     process.exit(0);
   });
 

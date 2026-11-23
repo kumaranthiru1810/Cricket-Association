@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, Linking, useWindowDimensions } from 'react-native';
 import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
 
 export interface MatchData {
@@ -58,7 +58,7 @@ export function formatScoreWithTotalOvers(scoreStr?: string, maxOvers?: number):
 
 interface Props {
   match: MatchData;
-  variant?: 'live' | 'upcoming' | 'completed';
+  variant?: 'live' | 'upcoming' | 'completed' | 'postponed';
 }
 
 export interface ScheduleTimeline {
@@ -198,6 +198,9 @@ function getTeamInitial(name: string, shortName?: string): string {
 
 export default function MatchCard({ match, variant = 'upcoming' }: Props) {
   const { navigate } = useScorerNavigation();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 640;
+  const styles = getStyles(isMobile);
 
   const handleAction = () => {
     if (match.status === 'Upcoming' || variant === 'upcoming') {
@@ -244,10 +247,10 @@ export default function MatchCard({ match, variant = 'upcoming' }: Props) {
     return (
       <View style={[styles.card, styles.liveCard]}>
         <View style={styles.liveHeader}>
-          <Text style={styles.tournamentText}>
+          <Text style={styles.tournamentText} numberOfLines={1}>
             🏆 {match.tournament || match.tournament_name || 'Association Match'}
           </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', flexShrink: 0 }}>
             {timeline.daysDiff > 0 ? (
               <View style={styles.liveDurationBadge}>
                 <Text style={styles.liveDurationText}>⏳ {timeline.daysDiff} DAYS ONGOING</Text>
@@ -266,7 +269,7 @@ export default function MatchCard({ match, variant = 'upcoming' }: Props) {
         
         <View style={styles.liveTeamsRow}>
           <View style={styles.teamCol}>
-            <Text style={styles.liveTeamName}>{match.teamA}</Text>
+            <Text style={styles.liveTeamName} numberOfLines={1}>{match.teamA}</Text>
             <Text style={styles.liveScore}>{formatScoreWithTotalOvers(match.scoreA, totalMatchOvers)}</Text>
           </View>
           <View style={styles.vsCol}>
@@ -278,8 +281,8 @@ export default function MatchCard({ match, variant = 'upcoming' }: Props) {
             </View>
           </View>
           <View style={styles.teamColRight}>
-            <Text style={styles.liveTeamNameRight}>{match.teamB}</Text>
-            <Text style={[styles.liveScoreRight, { fontSize: match.scoreB ? 24 : 14, color: match.scoreB ? '#1e293b' : '#64748b' }]}>
+            <Text style={styles.liveTeamNameRight} numberOfLines={1}>{match.teamB}</Text>
+            <Text style={[styles.liveScoreRight, { fontSize: match.scoreB ? (isMobile ? 15 : 20) : (isMobile ? 12 : 14), color: match.scoreB ? '#1e293b' : '#64748b' }]}>
               {formatScoreWithTotalOvers(match.scoreB, totalMatchOvers)}
             </Text>
           </View>
@@ -296,6 +299,7 @@ export default function MatchCard({ match, variant = 'upcoming' }: Props) {
         <View style={styles.metaRow}>
           <TouchableOpacity
             activeOpacity={0.7}
+            style={{ flex: 1, minWidth: 0 }}
             onPress={() => {
               const v = match.venue || 'Virudhunagar Cricket Ground';
               const url = match.venue_maps_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v + (v.toLowerCase().includes('virudhunagar') || v.toLowerCase().includes('sivakasi') ? '' : ', Virudhunagar'))}`;
@@ -573,19 +577,22 @@ export default function MatchCard({ match, variant = 'upcoming' }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isMobile: boolean) => StyleSheet.create({
   card: {
     backgroundColor: '#ffffff',
     borderColor: '#e2e8f0',
     borderWidth: 1.5,
     borderRadius: 10,
-    padding: 16,
+    padding: isMobile ? 12 : 16,
     marginBottom: 16,
     shadowColor: '#0f172a',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 8,
-    elevation: 2
+    elevation: 2,
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden'
   },
   liveCard: {
     borderColor: '#fca5a5',
@@ -613,18 +620,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 8,
     marginBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
-    paddingBottom: 10
+    paddingBottom: 10,
+    width: '100%'
   },
   tournamentCol: {
     flex: 1,
-    paddingRight: 10
+    minWidth: 140,
+    paddingRight: 6
   },
   tournamentBadgeText: {
     color: '#b45309',
-    fontSize: 12.5,
+    fontSize: isMobile ? 11.5 : 12.5,
     fontWeight: '800',
     letterSpacing: 0.6,
     marginBottom: 5
@@ -632,6 +643,7 @@ const styles = StyleSheet.create({
   formatTagRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 6
   },
   formatPill: {
@@ -676,6 +688,7 @@ const styles = StyleSheet.create({
   },
   headerBadgesCol: {
     alignItems: 'flex-end',
+    flexWrap: 'wrap',
     gap: 4
   },
   overdueDangerBadge: {
@@ -743,7 +756,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 10,
     marginBottom: 14,
-    gap: 8
+    gap: 8,
+    width: '100%'
   },
   overdueBannerIcon: {
     fontSize: 20
@@ -767,10 +781,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 8,
-    marginBottom: 12
+    marginBottom: 12,
+    width: '100%'
   },
   teamSideCol: {
     flex: 1,
+    minWidth: 0,
     alignItems: 'flex-start'
   },
   teamAvatar: {
@@ -796,7 +812,7 @@ const styles = StyleSheet.create({
   },
   teamNameTitle: {
     color: '#0f172a',
-    fontSize: 15,
+    fontSize: isMobile ? 13.5 : 15,
     fontWeight: '800',
     textTransform: 'capitalize',
     letterSpacing: 0.2
@@ -808,9 +824,10 @@ const styles = StyleSheet.create({
     marginTop: 2
   },
   matchupVsCol: {
-    width: 60,
+    width: isMobile ? 44 : 60,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    flexShrink: 0
   },
   vsLine: {
     width: 1,
@@ -842,21 +859,26 @@ const styles = StyleSheet.create({
 
   // 4. SCHEDULE & VENUE META STRIP
   scheduleVenueStrip: {
-    flexDirection: 'row',
+    flexDirection: isMobile ? 'column' : 'row',
     backgroundColor: '#f8fafc',
     borderRadius: 6,
     padding: 10,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#e2e8f0'
+    borderColor: '#e2e8f0',
+    width: '100%',
+    gap: isMobile ? 6 : 0
   },
   metaInfoItem: {
-    flex: 1
+    flex: 1,
+    minWidth: 0
   },
   metaInfoDivider: {
-    width: 1,
+    width: isMobile ? '100%' : 1,
+    height: isMobile ? 1 : 'auto',
     backgroundColor: '#e2e8f0',
-    marginHorizontal: 10
+    marginHorizontal: isMobile ? 0 : 10,
+    marginVertical: isMobile ? 4 : 0
   },
   metaInfoLabel: {
     color: '#64748b',
@@ -878,16 +900,20 @@ const styles = StyleSheet.create({
     borderColor: '#bbf7d0',
     borderRadius: 8,
     padding: 10,
-    marginBottom: 14
+    marginBottom: 14,
+    width: '100%'
   },
   officialsHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 4,
     marginBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#dcfce7',
-    paddingBottom: 4
+    paddingBottom: 4,
+    width: '100%'
   },
   officialsSectionLabel: {
     color: '#166534',
@@ -907,17 +933,23 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
   officialsGrid: {
-    flexDirection: 'row',
-    alignItems: 'flex-start'
+    flexDirection: isMobile ? 'column' : 'row',
+    alignItems: 'flex-start',
+    width: '100%',
+    gap: isMobile ? 8 : 0
   },
   officialCol: {
-    flex: 1
+    flex: 1,
+    minWidth: 0,
+    width: isMobile ? '100%' : 'auto'
   },
   officialsColDivider: {
-    width: 1,
+    width: isMobile ? '100%' : 1,
+    height: isMobile ? 1 : 'auto',
     backgroundColor: '#dcfce7',
     alignSelf: 'stretch',
-    marginHorizontal: 10
+    marginHorizontal: isMobile ? 0 : 10,
+    marginVertical: isMobile ? 6 : 0
   },
   officialRoleHeader: {
     flexDirection: 'row',
@@ -984,7 +1016,8 @@ const styles = StyleSheet.create({
   // 6. ACTION AREA
   actionRow: {
     alignItems: 'center',
-    gap: 6
+    gap: 6,
+    width: '100%'
   },
   proStartBtn: {
     backgroundColor: '#b45309',
@@ -1016,25 +1049,31 @@ const styles = StyleSheet.create({
   compactOfficialsStrip: {
     backgroundColor: '#f8fafc',
     paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 4,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#e2e8f0'
+    borderColor: '#e2e8f0',
+    width: '100%'
   },
   compactOfficialsText: {
     color: '#475569',
-    fontSize: 10.5
+    fontSize: 10.5,
+    lineHeight: 15
   },
 
   // LIVE STYLES
   liveHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
     borderBottomWidth: 1,
     borderBottomColor: '#fecaca',
     paddingBottom: 8,
-    marginBottom: 10
+    marginBottom: 10,
+    width: '100%'
   },
   liveIndicatorRow: {
     flexDirection: 'row',
@@ -1055,24 +1094,27 @@ const styles = StyleSheet.create({
   },
   tournamentText: {
     color: '#b45309',
-    fontSize: 11.5,
+    fontSize: isMobile ? 11 : 11.5,
     fontWeight: '800',
     letterSpacing: 0.5,
-    textTransform: 'uppercase'
+    textTransform: 'uppercase',
+    flex: 1,
+    minWidth: 120
   },
   liveTeamsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12
+    marginBottom: 12,
+    width: '100%'
   },
-  teamCol: { flex: 1 },
-  teamColRight: { flex: 1, alignItems: 'flex-end' },
-  vsCol: { minWidth: 64, alignItems: 'center', paddingHorizontal: 4 },
-  liveTeamName: { color: '#0f172a', fontSize: 14, fontWeight: '700', marginBottom: 2 },
-  liveTeamNameRight: { color: '#0f172a', fontSize: 14, fontWeight: '700', marginBottom: 2, textAlign: 'right' },
-  liveScore: { color: '#0f172a', fontSize: 20, fontWeight: '900' },
-  liveScoreRight: { color: '#0f172a', fontSize: 20, fontWeight: '900', textAlign: 'right' },
+  teamCol: { flex: 1, minWidth: 0, paddingRight: 4 },
+  teamColRight: { flex: 1, minWidth: 0, alignItems: 'flex-end', paddingLeft: 4 },
+  vsCol: { width: isMobile ? 44 : 64, alignItems: 'center', paddingHorizontal: 2, flexShrink: 0 },
+  liveTeamName: { color: '#0f172a', fontSize: isMobile ? 13 : 14, fontWeight: '700', marginBottom: 2 },
+  liveTeamNameRight: { color: '#0f172a', fontSize: isMobile ? 13 : 14, fontWeight: '700', marginBottom: 2, textAlign: 'right' },
+  liveScore: { color: '#0f172a', fontSize: isMobile ? 15 : 20, fontWeight: '900' },
+  liveScoreRight: { color: '#0f172a', fontSize: isMobile ? 15 : 20, fontWeight: '900', textAlign: 'right' },
   liveVs: { color: '#94a3b8', fontSize: 12, fontWeight: 'bold' },
   liveOversBadge: {
     backgroundColor: '#eff6ff',
@@ -1103,20 +1145,22 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    marginBottom: 10
+    marginBottom: 10,
+    width: '100%'
   },
   liveRevisedBannerText: {
     color: '#b45309',
     fontSize: 11,
     fontWeight: '800'
   },
-  metaRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  metaText: { color: '#64748b', fontSize: 11 },
+  metaRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 10, width: '100%' },
+  metaText: { color: '#64748b', fontSize: 11, lineHeight: 16 },
   primaryBtn: {
     backgroundColor: '#eab308',
     padding: 11,
     borderRadius: 6,
-    alignItems: 'center'
+    alignItems: 'center',
+    width: '100%'
   },
   primaryBtnText: { color: '#ffffff', fontWeight: '800', fontSize: 12, letterSpacing: 0.5 },
 
@@ -1140,23 +1184,31 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: '#16a34a',
     backgroundColor: '#ffffff',
-    padding: 14,
-    marginBottom: 12
+    padding: isMobile ? 12 : 14,
+    marginBottom: 12,
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden'
   },
   completedHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 6,
     marginBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#f8fafc',
-    paddingBottom: 6
+    paddingBottom: 6,
+    width: '100%'
   },
   completedTournamentText: {
     color: '#b45309',
     fontSize: 11.5,
     fontWeight: '800',
-    letterSpacing: 0.5
+    letterSpacing: 0.5,
+    flex: 1,
+    minWidth: 120
   },
   completedVenueSub: {
     color: '#64748b',
@@ -1184,7 +1236,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderWidth: 1,
     borderColor: '#f1f5f9',
-    marginBottom: 8
+    marginBottom: 8,
+    width: '100%'
   },
   completedTeamScoreRow: {
     flexDirection: 'row',
@@ -1209,7 +1262,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 8,
     borderRadius: 4,
-    marginBottom: 8
+    marginBottom: 8,
+    width: '100%'
   },
   completedResultText: {
     color: '#15803d',
@@ -1220,9 +1274,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
     paddingTop: 6,
     borderTopWidth: 1,
-    borderTopColor: '#f8fafc'
+    borderTopColor: '#f8fafc',
+    width: '100%'
   },
   completedOfficialsLine: {
     color: '#64748b',

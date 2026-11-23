@@ -9,6 +9,8 @@
  * 6. DB indexes verified
  */
 
+process.env.NODE_ENV = 'test';
+
 const assert = require('assert');
 const http = require('http');
 const { app, server } = require('../server');
@@ -70,10 +72,14 @@ async function runPhase3Tests() {
 }
 
 if (require.main === module) {
-  runPhase3Tests().catch(err => {
-    console.error('Phase 3 verification failed:', err);
-    process.exit(1);
-  });
+  runPhase3Tests()
+    .then(() => {
+      process.exit(0);
+    })
+    .catch(err => {
+      console.error('Phase 3 verification failed:', err);
+      process.exit(1);
+    });
 }
 
 module.exports = runPhase3Tests;

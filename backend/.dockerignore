@@ -1,9 +1,15 @@
 node_modules
 npm-debug.log
+yarn-error.log
 .git
 .gitignore
 .env
-.env.*
+.env*
+uploads
 tests
 coverage
-
+docs
+demo_match_presentation
+scripts/dev-only
+backups
+*.md

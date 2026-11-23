@@ -38,10 +38,22 @@ const getBaseUrl = () => {
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
   }
+  if (typeof window !== 'undefined' && (window as any).__API_URL__) {
+    return (window as any).__API_URL__;
+  }
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    // In production web served by Nginx or port 80/443, use relative '/api'
+    if (
+      process.env.NODE_ENV === 'production' ||
+      window.location.port === '80' ||
+      window.location.port === '' ||
+      window.location.port === '443'
+    ) {
+      return '/api';
+    }
     const host = window.location.hostname;
     if (host && host !== 'localhost' && host !== '127.0.0.1' && !host.startsWith('192.168.') && !host.startsWith('10.')) {
-      return `${PROD_BACKEND_URL}/api`;
+      return '/api';
     }
     if (host) {
       return `http://${host}:5000/api`;
@@ -54,10 +66,21 @@ const getSocketUrl = () => {
   if (process.env.EXPO_PUBLIC_SOCKET_URL) {
     return process.env.EXPO_PUBLIC_SOCKET_URL;
   }
+  if (typeof window !== 'undefined' && (window as any).__SOCKET_URL__) {
+    return (window as any).__SOCKET_URL__;
+  }
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    if (
+      process.env.NODE_ENV === 'production' ||
+      window.location.port === '80' ||
+      window.location.port === '' ||
+      window.location.port === '443'
+    ) {
+      return window.location.origin;
+    }
     const host = window.location.hostname;
     if (host && host !== 'localhost' && host !== '127.0.0.1' && !host.startsWith('192.168.') && !host.startsWith('10.')) {
-      return PROD_BACKEND_URL;
+      return window.location.origin;
     }
     if (host) {
       return `http://${host}:5000`;
@@ -68,6 +91,31 @@ const getSocketUrl = () => {
 
 export const API_URL = getBaseUrl();
 export const SOCKET_URL = getSocketUrl();
+
+// ─── REQUEST CACHING & DE-DUPLICATION (IN-MEMORY & SESSION STORAGE) ──────────
+const apiCache = new Map<string, { data: any; expiresAt: number }>();
+const inFlightRequests = new Map<string, Promise<any>>();
+
+// Cache TTL in ms: master-settings (120s), tournaments (60s), laws (300s)
+const CACHE_CONFIG: Record<string, number> = {
+  '/master-settings': 120000,
+  '/admin/master-settings': 60000,
+  '/tournaments': 60000,
+  '/cricket-laws': 300000,
+  '/portal/home': 30000,
+};
+
+export const clearApiCache = (pattern?: string) => {
+  if (!pattern) {
+    apiCache.clear();
+    return;
+  }
+  for (const key of apiCache.keys()) {
+    if (key.includes(pattern)) {
+      apiCache.delete(key);
+    }
+  }
+};
 
 /**
  * Resolves a full, displayable image URI from any database photo, logo, or image path.
@@ -234,83 +282,128 @@ export const setCurrentUser = (user: any) => {
 };
 
 async function request(endpoint: string, options: RequestInit = {}) {
+  const method = (options.method || 'GET').toUpperCase();
+  const isGet = method === 'GET';
+
+  // 1. Invalidate caches on mutation
+  if (!isGet) {
+    if (endpoint.includes('tournament')) clearApiCache('/tournaments');
+    if (endpoint.includes('master-settings')) clearApiCache('master-settings');
+    if (endpoint.includes('portal')) clearApiCache('/portal');
+  }
+
+  // 2. Cache check for configured read-only endpoints
+  let matchedTtl = 0;
+  if (isGet) {
+    for (const [prefix, ttl] of Object.entries(CACHE_CONFIG)) {
+      if (endpoint.startsWith(prefix)) {
+        matchedTtl = ttl;
+        break;
+      }
+    }
+  }
+
+  const cacheKey = `${endpoint}`;
+  if (isGet && matchedTtl > 0) {
+    const cached = apiCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data;
+    }
+    // Request de-duplication: return existing in-flight request if present
+    if (inFlightRequests.has(cacheKey)) {
+      return inFlightRequests.get(cacheKey);
+    }
+  }
+
   const url = `${API_URL}${endpoint}`;
   const activeToken = getAuthToken();
-  const activeUser = getCurrentUser();
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(activeToken ? { Authorization: `Bearer ${activeToken}` } : {}),
-    ...(activeUser?.role
-      ? {
-          'x-user-role': String(activeUser.role).toUpperCase(),
-          'x-user-email': activeUser.email || '',
-          'x-user-id': activeUser.id || activeUser._id || ''
-        }
-      : {})
+    ...(activeToken ? { Authorization: `Bearer ${activeToken}` } : {})
   };
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-  try {
-    const res = await fetch(url, {
-      credentials: 'include',
-      signal: options.signal || controller.signal,
-      ...options,
-      headers: { ...headers, ...(options.headers as any) }
-    });
-    clearTimeout(timeoutId);
-
-    const text = await res.text();
-    let data: any = {};
+  const executeFetch = async () => {
     try {
-      data = text ? JSON.parse(text) : {};
-    } catch (_e) {
-      if (!res.ok) {
-        throw new Error(`Server returned error (${res.status}): ${res.statusText || 'Endpoint unavailable'}`);
-      }
-      throw new Error('Unexpected response format from server');
-    }
+      const res = await fetch(url, {
+        credentials: 'include',
+        signal: options.signal || controller.signal,
+        ...options,
+        headers: { ...headers, ...(options.headers as any) }
+      });
+      clearTimeout(timeoutId);
 
-    if (!res.ok) {
-      const err: any = new Error(data.message || data.error || `Request failed with status ${res.status}`);
-      err.status = res.status;
-      err.data = data;
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch (_e) {
+        if (!res.ok) {
+          throw new Error(`Server returned error (${res.status}): ${res.statusText || 'Endpoint unavailable'}`);
+        }
+        throw new Error('Unexpected response format from server');
+      }
+
+      if (!res.ok) {
+        const err: any = new Error(data.message || data.error || `Request failed with status ${res.status}`);
+        err.status = res.status;
+        err.data = data;
+        throw err;
+      }
+
+      // Populate memory cache if endpoint matches
+      if (isGet && matchedTtl > 0) {
+        apiCache.set(cacheKey, { data, expiresAt: Date.now() + matchedTtl });
+      }
+
+      return data;
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (
+        endpoint.startsWith('/auth/me') &&
+        (err?.status === 401 || err?.message?.includes('401') || err?.message?.includes('Authentication token required'))
+      ) {
+        // Normal guest session validation, suppress warning
+      } else {
+        console.warn(`API Error on ${endpoint}:`, err?.message || err);
+      }
+      if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+        const timeoutErr = new Error(
+          `Connection timed out. Please check your internet connection or server status.`
+        );
+        (timeoutErr as any).isNetworkError = true;
+        throw timeoutErr;
+      }
+      if (
+        err.message === 'Failed to fetch' ||
+        err.message === 'Network request failed' ||
+        err.message?.includes('ERR_CONNECTION_REFUSED') ||
+        err.message?.includes('ECONNREFUSED')
+      ) {
+        const friendly = new Error(
+          `Cannot connect to server. Please check your network connection and try again.`
+        );
+        (friendly as any).isNetworkError = true;
+        throw friendly;
+      }
       throw err;
+    } finally {
+      if (isGet && inFlightRequests.has(cacheKey)) {
+        inFlightRequests.delete(cacheKey);
+      }
     }
-    return data;
-  } catch (err: any) {
-    clearTimeout(timeoutId);
-    if (
-      endpoint.startsWith('/auth/me') &&
-      (err?.status === 401 || err?.message?.includes('401') || err?.message?.includes('Authentication token required'))
-    ) {
-      // Normal guest session validation, suppress warning
-    } else {
-      console.warn(`API Error on ${endpoint}:`, err?.message || err);
-    }
-    if (err.name === 'AbortError' || err.message?.includes('aborted')) {
-      const timeoutErr = new Error(
-        `Connection timed out. Please check your internet connection or server status.`
-      );
-      (timeoutErr as any).isNetworkError = true;
-      throw timeoutErr;
-    }
-    if (
-      err.message === 'Failed to fetch' ||
-      err.message === 'Network request failed' ||
-      err.message?.includes('ERR_CONNECTION_REFUSED') ||
-      err.message?.includes('ECONNREFUSED')
-    ) {
-      const friendly = new Error(
-        `Cannot connect to server. Please check your network connection and try again.`
-      );
-      (friendly as any).isNetworkError = true;
-      throw friendly;
-    }
-    throw err;
+  };
+
+  if (isGet && matchedTtl > 0) {
+    const promise = executeFetch();
+    inFlightRequests.set(cacheKey, promise);
+    return promise;
   }
+
+  return executeFetch();
 }
 
 // ==========================================
@@ -899,7 +992,23 @@ export const ScorerApi = {
     });
   },
 
-  postponeMatch: async (matchId: string, payloadOrReason: string | { reason: string; notes?: string; rescheduledDate?: string; rescheduledTime?: string }) => {
+  postponeMatch: async (
+    matchId: string,
+    payloadOrReason: string | {
+      reason: string;
+      notes?: string;
+      rescheduledDate?: string;
+      rescheduledTime?: string;
+      postponedStage?: string;
+      postponedScoreDisplay?: string;
+      runsAtPostpone?: number;
+      wicketsAtPostpone?: number;
+      oversAtPostpone?: string;
+      battingTeamAtPostpone?: string;
+      inningsAtPostpone?: number;
+      [key: string]: any;
+    }
+  ) => {
     const payload = typeof payloadOrReason === 'string' ? { reason: payloadOrReason } : payloadOrReason;
     return request(`/scorer/matches/${matchId}/postpone`, {
       method: 'POST',
