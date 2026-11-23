@@ -231,14 +231,14 @@ export default function ScorerDashboardScreen() {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Image source={require('../../../assets/logo_transparent.png')} style={styles.logo} resizeMode="contain" />
-          <View>
-            <Text style={styles.title}>Scorer Dashboard</Text>
-            <Text style={styles.subtitle}>Official Match Scoring Console</Text>
+          <View style={{ flexShrink: 1, minWidth: 0 }}>
+            <Text style={styles.title} numberOfLines={1}>Scorer Dashboard</Text>
+            <Text style={styles.subtitle} numberOfLines={1}>Official Match Scoring Console</Text>
           </View>
         </View>
         <View style={styles.headerRight}>
           <View style={styles.scorerInfo}>
-            <Text style={styles.scorerName}>{profile?.name || 'Official Scorer'}</Text>
+            <Text style={styles.scorerName} numberOfLines={1}>{profile?.name || 'Official Scorer'}</Text>
             <Text style={styles.scorerId}>{profile?.id || 'SCORER'}</Text>
           </View>
           <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
@@ -532,36 +532,46 @@ export default function ScorerDashboardScreen() {
 }
 
 const getStyles = (isDesktop: boolean) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'transparent' },
+  container: { flex: 1, backgroundColor: 'transparent', width: '100%', maxWidth: '100%', overflow: 'hidden' },
   
   // HEADER
   header: {
-    padding: 14,
-    paddingHorizontal: isDesktop ? 24 : 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    padding: 12,
+    paddingHorizontal: isDesktop ? 24 : 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    rowGap: 8,
     borderBottomColor: '#e2e8f0',
     borderBottomWidth: 1,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2,
+    width: '100%',
+    maxWidth: '100%'
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center' },
-  logo: { width: 32, height: 32, marginRight: 10 },
-  title: { color: '#1e293b', fontSize: 16, fontWeight: 'bold', letterSpacing: 0.5 },
-  subtitle: { color: '#b45309', fontSize: 11, marginTop: 1, fontWeight: '600' },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: isDesktop ? 220 : 160 },
+  logo: { width: 32, height: 32, marginRight: 8, flexShrink: 0 },
+  title: { color: '#1e293b', fontSize: isDesktop ? 16 : 14, fontWeight: 'bold', letterSpacing: 0.5 },
+  subtitle: { color: '#b45309', fontSize: isDesktop ? 11 : 10, marginTop: 1, fontWeight: '600' },
   
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: isDesktop ? 12 : 8, flexShrink: 0 },
   scorerInfo: { alignItems: 'flex-end' },
-  scorerName: { color: '#1e293b', fontSize: 13, fontWeight: '700' },
-  scorerId: { color: '#64748b', fontSize: 11 },
+  scorerName: { color: '#1e293b', fontSize: isDesktop ? 13 : 11.5, fontWeight: '700' },
+  scorerId: { color: '#64748b', fontSize: isDesktop ? 11 : 9.5 },
   
-  logoutBtn: { backgroundColor: '#fef2f2', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 6, borderWidth: 1, borderColor: '#fca5a5' },
-  logoutText: { color: '#dc2626', fontWeight: 'bold', fontSize: 12 },
+  logoutBtn: { backgroundColor: '#fef2f2', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#fca5a5' },
+  logoutText: { color: '#dc2626', fontWeight: 'bold', fontSize: 11 },
   
   // LAYOUT
-  scroll: { flexGrow: 1 },
-  contentWrapper: { padding: isDesktop ? 24 : 14, paddingBottom: 32 },
+  scroll: { flexGrow: 1, width: '100%', maxWidth: '100%' },
+  contentWrapper: { 
+    padding: isDesktop ? 24 : 12, 
+    paddingBottom: 32,
+    width: '100%',
+    maxWidth: 900,
+    alignSelf: 'center'
+  },
 
   // QUICK BANNERS
   liveBanner: {
@@ -572,9 +582,11 @@ const getStyles = (isDesktop: boolean) => StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#f43f5e',
     borderRadius: 8,
-    padding: 14,
+    padding: 12,
     marginBottom: 16,
-    gap: 12,
+    gap: 10,
+    width: '100%',
+    maxWidth: '100%',
     shadowColor: '#f43f5e',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -596,9 +608,11 @@ const getStyles = (isDesktop: boolean) => StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#3b82f6',
     borderRadius: 8,
-    padding: 14,
+    padding: 12,
     marginBottom: 16,
-    gap: 12,
+    gap: 10,
+    width: '100%',
+    maxWidth: '100%',
     shadowColor: '#3b82f6',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -615,16 +629,17 @@ const getStyles = (isDesktop: boolean) => StyleSheet.create({
   tabsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 18
+    gap: 6,
+    marginBottom: 16,
+    width: '100%'
   },
   tabButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.85)',
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderRadius: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 14
+    paddingVertical: 6,
+    paddingHorizontal: 10
   },
   tabButtonActive: {
     backgroundColor: '#0f172a',
