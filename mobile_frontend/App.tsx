@@ -1,23 +1,34 @@
-import React, { useEffect } from 'react';
-import { StyleSheet, Platform, View } from 'react-native';
+import React, { useEffect, Suspense, lazy } from 'react';
+import { StyleSheet, Platform, View, ActivityIndicator, Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator, { useAppNavigation, AppScreenName, checkScreenAccess } from './src/navigation/AppNavigator';
 import { getCurrentUser } from './src/services/api';
 import HomeScreen from './screens/Home';
-import LoginScreen from './src/screens/auth/LoginScreen';
-import RegistrationScreen from './src/screens/auth/RegistrationScreen';
-import ScorerNavigator from './src/navigation/ScorerNavigator';
-import PlayerDashboardScreen from './src/screens/player/PlayerDashboardScreen';
-import TeamDashboardScreen from './src/screens/team/TeamDashboardScreen';
-import AdminDashboardScreen from './src/screens/admin/AdminDashboardScreen';
-import AdminLoginPage from './src/admin/pages/AdminLoginPage';
-import UmpireDashboardScreen from './src/screens/umpire/UmpireDashboardScreen';
-import ScorecardScreen from './src/screens/scorer/ScorecardScreen';
-import TeamPublicProfileScreen from './src/screens/team/TeamPublicProfileScreen';
-import PlayerPublicProfileScreen from './src/screens/player/PlayerPublicProfileScreen';
 import ErrorBoundary from './src/components/common/ErrorBoundary';
 import './src/utils/sweetalert';
+
+// ─── LAZY LOADED PORTALS & SCREENS (DYNAMIC CODE SPLITTING) ──────────────────
+// Public visitors download ONLY HomeScreen. Admin, Scorer, Umpire, Team, and Player
+// bundles are fetched on demand when navigated.
+const LoginScreen = lazy(() => import('./src/screens/auth/LoginScreen'));
+const RegistrationScreen = lazy(() => import('./src/screens/auth/RegistrationScreen'));
+const ScorerNavigator = lazy(() => import('./src/navigation/ScorerNavigator'));
+const PlayerDashboardScreen = lazy(() => import('./src/screens/player/PlayerDashboardScreen'));
+const TeamDashboardScreen = lazy(() => import('./src/screens/team/TeamDashboardScreen'));
+const AdminDashboardScreen = lazy(() => import('./src/screens/admin/AdminDashboardScreen'));
+const AdminLoginPage = lazy(() => import('./src/admin/pages/AdminLoginPage'));
+const UmpireDashboardScreen = lazy(() => import('./src/screens/umpire/UmpireDashboardScreen'));
+const ScorecardScreen = lazy(() => import('./src/screens/scorer/ScorecardScreen'));
+const TeamPublicProfileScreen = lazy(() => import('./src/screens/team/TeamPublicProfileScreen'));
+const PlayerPublicProfileScreen = lazy(() => import('./src/screens/player/PlayerPublicProfileScreen'));
+
+const PortalLoadingFallback = () => (
+  <View style={styles.fallbackContainer}>
+    <ActivityIndicator size="large" color="#eab308" />
+    <Text style={styles.fallbackText}>Loading Portal...</Text>
+  </View>
+);
 
 function MainAppShell() {
   const { currentScreen, navigate, goBack, params } = useAppNavigation();
@@ -140,42 +151,60 @@ function MainAppShell() {
 
   if (currentScreen === 'AdminLogin') {
     return (
-      <AdminLoginPage
-        onLoginSuccess={() => navigate('Admin')}
-        onBackToHome={() => navigate('Home')}
-      />
+      <Suspense fallback={<PortalLoadingFallback />}>
+        <AdminLoginPage
+          onLoginSuccess={() => navigate('Admin')}
+          onBackToHome={() => navigate('Home')}
+        />
+      </Suspense>
     );
   }
 
   if (currentScreen === 'Login') {
-    return <LoginScreen onExit={() => navigate('Home')} />;
+    return (
+      <Suspense fallback={<PortalLoadingFallback />}>
+        <LoginScreen onExit={() => navigate('Home')} />
+      </Suspense>
+    );
   }
 
   if (currentScreen === 'Registration') {
-    return <RegistrationScreen onExit={() => navigate('Home')} />;
+    return (
+      <Suspense fallback={<PortalLoadingFallback />}>
+        <RegistrationScreen onExit={() => navigate('Home')} />
+      </Suspense>
+    );
   }
 
   if (currentScreen === 'Scorecard') {
-    return <ScorecardScreen onExit={() => navigate('Home')} initialMatchId={params?.matchId} initialParams={params} />;
+    return (
+      <Suspense fallback={<PortalLoadingFallback />}>
+        <ScorecardScreen onExit={() => navigate('Home')} initialMatchId={params?.matchId} initialParams={params} />
+      </Suspense>
+    );
   }
 
   if (currentScreen === 'TeamDetail') {
     return (
-      <TeamPublicProfileScreen
-        onExit={() => navigate('Home')}
-        initialTeamId={params?.teamId || params?.id}
-        initialTeamName={params?.teamName || params?.name}
-      />
+      <Suspense fallback={<PortalLoadingFallback />}>
+        <TeamPublicProfileScreen
+          onExit={() => navigate('Home')}
+          initialTeamId={params?.teamId || params?.id}
+          initialTeamName={params?.teamName || params?.name}
+        />
+      </Suspense>
     );
   }
 
   if (currentScreen === 'PlayerDetail') {
     return (
-      <PlayerPublicProfileScreen
-        onExit={() => navigate('Home')}
-        initialPlayerId={params?.playerId || params?.id}
-        initialPlayerName={params?.playerName || params?.name}
-      />
+      <Suspense fallback={<PortalLoadingFallback />}>
+        <PlayerPublicProfileScreen
+          onExit={() => navigate('Home')}
+          initialPlayerId={params?.playerId || params?.id}
+          initialPlayerName={params?.playerName || params?.name}
+        />
+      </Suspense>
     );
   }
 
@@ -187,7 +216,11 @@ function MainAppShell() {
       navigate('Home');
       return null;
     }
-    return <ScorerNavigator onExit={(target?: any) => navigate(target || 'Home')} initialParams={params} />;
+    return (
+      <Suspense fallback={<PortalLoadingFallback />}>
+        <ScorerNavigator onExit={(target?: any) => navigate(target || 'Home')} initialParams={params} />
+      </Suspense>
+    );
   }
 
   if (currentScreen === 'Umpire') {
@@ -196,7 +229,11 @@ function MainAppShell() {
       navigate('Home');
       return null;
     }
-    return <UmpireDashboardScreen onExit={() => navigate('Home')} initialParams={params} />;
+    return (
+      <Suspense fallback={<PortalLoadingFallback />}>
+        <UmpireDashboardScreen onExit={() => navigate('Home')} initialParams={params} />
+      </Suspense>
+    );
   }
 
   if (currentScreen === 'Player') {
@@ -205,7 +242,11 @@ function MainAppShell() {
       navigate('Home');
       return null;
     }
-    return <PlayerDashboardScreen onExit={() => navigate('Home')} initialParams={params} />;
+    return (
+      <Suspense fallback={<PortalLoadingFallback />}>
+        <PlayerDashboardScreen onExit={() => navigate('Home')} initialParams={params} />
+      </Suspense>
+    );
   }
 
   if (currentScreen === 'Team' || currentScreen === 'Coach') {
@@ -214,20 +255,30 @@ function MainAppShell() {
       navigate('Home');
       return null;
     }
-    return <TeamDashboardScreen onExit={() => navigate('Home')} initialParams={params} />;
+    return (
+      <Suspense fallback={<PortalLoadingFallback />}>
+        <TeamDashboardScreen onExit={() => navigate('Home')} initialParams={params} />
+      </Suspense>
+    );
   }
 
   if (currentScreen === 'Admin') {
     const access = checkScreenAccess('Admin', currentUser);
     if (!access.allowed) {
       return (
-        <AdminLoginPage
-          onLoginSuccess={() => navigate('Admin')}
-          onBackToHome={() => navigate('Home')}
-        />
+        <Suspense fallback={<PortalLoadingFallback />}>
+          <AdminLoginPage
+            onLoginSuccess={() => navigate('Admin')}
+            onBackToHome={() => navigate('Home')}
+          />
+        </Suspense>
       );
     }
-    return <AdminDashboardScreen onExit={() => navigate('AdminLogin')} initialParams={params} />;
+    return (
+      <Suspense fallback={<PortalLoadingFallback />}>
+        <AdminDashboardScreen onExit={() => navigate('AdminLogin')} initialParams={params} />
+      </Suspense>
+    );
   }
 
   // Home Screen rendered as pure React Native component (no iframe, no bundled.html)
@@ -255,6 +306,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#020612'
+  },
+  fallbackContainer: {
+    flex: 1,
+    backgroundColor: '#020612',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: '100dvh' as any,
+    gap: 12
+  },
+  fallbackText: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    fontWeight: '600'
   }
 });
 

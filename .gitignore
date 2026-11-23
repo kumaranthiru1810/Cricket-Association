@@ -48,6 +48,16 @@ cricket1/
 backend/uploads/players/
 uploads/players/
 
+# Generated bundles & scratch files
+bundled.html
+inlineHtml.ts
+*.html.bundle
+scratch/
+scratch_*.html
+*preview*.html
+*_backup.*
+
+
 # Generated bundled HTML & PDF presentations (large binary/bundled files)
 *.pdf
 bundled.html

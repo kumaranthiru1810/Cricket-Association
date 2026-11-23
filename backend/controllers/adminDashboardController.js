@@ -92,7 +92,7 @@ class AdminDashboardController {
             req.ip || '127.0.0.1'
           ]
         );
-      } catch (e) {}
+      } catch (e) { }
 
       return res.status(200).json({
         success: true,
@@ -174,7 +174,7 @@ class AdminDashboardController {
             status: 'PENDING'
           });
         });
-      } catch (e) {}
+      } catch (e) { }
 
       try {
         const teamRegistrationModel = require('../models/teamRegistrationModel');
@@ -190,7 +190,7 @@ class AdminDashboardController {
             status: 'PENDING'
           });
         });
-      } catch (e) {}
+      } catch (e) { }
 
       try {
         const pUmpires = await db.models.User.find({ role: 'UMPIRE', status: 'PENDING' }).sort({ created_at: -1 }).lean();
@@ -205,7 +205,7 @@ class AdminDashboardController {
             status: 'PENDING'
           });
         });
-      } catch (e) {}
+      } catch (e) { }
 
       try {
         const pPlayers = await db.models.User.find({ role: 'PLAYER', status: 'PENDING' }).sort({ created_at: -1 }).lean();
@@ -220,7 +220,7 @@ class AdminDashboardController {
             status: 'PENDING'
           });
         });
-      } catch (e) {}
+      } catch (e) { }
 
       const pendingApprovals = pendingList.length;
 
@@ -1100,7 +1100,7 @@ class AdminDashboardController {
             queryId,
             { $set: { status: isApprove ? 'APPROVED' : 'REJECTED', approved_at: isApprove ? new Date() : null, rejected_at: isApprove ? null : new Date(), rejection_reason: reason || null, updated_at: new Date() } }
           );
-        } catch (e) {}
+        } catch (e) { }
 
         await notificationModel.create({
           type: 'APPROVAL_UPDATE',
@@ -1154,7 +1154,7 @@ class AdminDashboardController {
             queryId,
             { $set: { status: isApprove ? 'ACTIVE' : 'REJECTED', updated_at: new Date() } }
           );
-        } catch (e) {}
+        } catch (e) { }
 
         await notificationModel.create({
           type: 'APPROVAL_UPDATE',
@@ -1173,7 +1173,7 @@ class AdminDashboardController {
           details: `${cleanType} ${id} ${isApprove ? 'approved' : 'rejected'}: ${reason || 'Processed by administrator'}`,
           ip_address: req.ip || '127.0.0.1'
         });
-      } catch (e) {}
+      } catch (e) { }
 
       return res.status(200).json({
         success: true,

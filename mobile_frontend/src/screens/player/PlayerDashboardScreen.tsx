@@ -24,7 +24,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
-import { PlayerApi, ScorerApi, getCurrentUser, setCurrentUser, setAuthToken, SOCKET_URL } from '../../services/api';
+import { PlayerApi, ScorerApi, getCurrentUser, setCurrentUser, setAuthToken, SOCKET_URL, resolveImageUrl } from '../../services/api';
 import {
   RefreshIcon,
   MenuIcon,
@@ -353,15 +353,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
 
   // Resolve full URI for profile photo (handles data URLs, absolute URLs, and relative upload paths)
   const resolvePhotoUrl = (photoUri?: string | null): string | null => {
-    if (!photoUri || typeof photoUri !== 'string') return null;
-    const trimmed = photoUri.trim();
-    if (!trimmed) return null;
-    if (trimmed.startsWith('data:image/') || trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-      return trimmed;
-    }
-    const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-    const base = SOCKET_URL || 'http://localhost:5000';
-    return `${base}${cleanPath}`;
+    return resolveImageUrl(photoUri);
   };
 
   // Open Interactive Photo Crop Modal

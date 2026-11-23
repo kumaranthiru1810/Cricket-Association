@@ -7,10 +7,12 @@
 
 (function () {
   const API_BASE = (function () {
-    if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+    if (typeof window !== 'undefined' && window.REACT_APP_API_URL) return window.REACT_APP_API_URL.replace(/\/+$/, '') + '/api';
+    if (typeof window !== 'undefined' && window.location) {
+      if (window.location.port === '80' || window.location.port === '' || window.location.port === '443') return '/api';
       return `http://${window.location.hostname}:5000/api`;
     }
-    return 'http://localhost:5000/api';
+    return '/api';
   })();
 
   async function loadDynamicPortalData() {
