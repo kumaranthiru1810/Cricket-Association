@@ -6,6 +6,13 @@
  */
 
 require('dotenv').config();
+
+// Critical Startup Check: Enforce strong JWT_SECRET in production
+if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'cricket_super_secret_jwt_2026' || process.env.JWT_SECRET.length < 16)) {
+  console.error('FATAL ERROR: A strong JWT_SECRET environment variable is required in production!');
+  process.exit(1);
+}
+
 const http = require('http');
 const express = require('express');
 const cors = require('cors');
@@ -58,9 +65,9 @@ initSocket(server);
 app.use(cors(getCorsOptions()));
 app.options('*', cors(getCorsOptions()));
 
-// Security 4: Payload size limiting (prevent memory exhaustion denial of service)
-app.use(express.json({ limit: '25mb' }));
-app.use(express.urlencoded({ limit: '25mb', extended: true }));
+// Security 4: Payload size limiting (1MB standard limit; file uploads handled via multer)
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ limit: '1mb', extended: true }));
 app.use(cookieParser());
 
 // Static file serving for uploaded photos and media
@@ -150,11 +157,12 @@ app.use('/api/portal', portalRoutes);
 app.use('/api/cricket-laws', cricketLawsRoutes);
 
 // Public & Resilient Master Settings Dynamic Options API
+const { requireAdminAuth } = require('./middleware/authMiddleware');
 const masterSettingController = require('./controllers/masterSettingController');
 app.get('/api/master-settings', (req, res) => masterSettingController.getSettings(req, res));
-app.post('/api/master-settings', (req, res) => masterSettingController.createSetting(req, res));
-app.put('/api/master-settings/:id', (req, res) => masterSettingController.updateSetting(req, res));
-app.delete('/api/master-settings/:id', (req, res) => masterSettingController.deleteSetting(req, res));
+app.post('/api/master-settings', requireAdminAuth, (req, res) => masterSettingController.createSetting(req, res));
+app.put('/api/master-settings/:id', requireAdminAuth, (req, res) => masterSettingController.updateSetting(req, res));
+app.delete('/api/master-settings/:id', requireAdminAuth, (req, res) => masterSettingController.deleteSetting(req, res));
 
 // Security 8: Global Error Handler - Debug mode OFF in production
 app.use((err, req, res, next) => {
@@ -170,30 +178,6 @@ app.use((err, req, res, next) => {
 });
 
 if (require.main === module) {
-  // Gracefully ensure port is free before starting
-  if (process.platform === 'win32') {
-    try {
-      const { execSync } = require('child_process');
-      const output = execSync(`netstat -ano | findstr :${PORT}`).toString();
-      const lines = output.split('\n');
-      const pids = new Set();
-      for (const line of lines) {
-        const parts = line.trim().split(/\s+/);
-        if (parts.length >= 5 && parts[1].includes(`:${PORT}`) && parts[3] === 'LISTENING') {
-          const pid = parts[4];
-          if (pid && pid !== String(process.pid) && pid !== '0') {
-            pids.add(pid);
-          }
-        }
-      }
-      pids.forEach((pid) => {
-        try {
-          execSync(`taskkill /F /PID ${pid}`);
-        } catch (_e) {}
-      });
-    } catch (_e) {}
-  }
-
   server.on('error', (err) => {
     console.error('Server error:', err);
   });

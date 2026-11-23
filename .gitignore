@@ -43,3 +43,18 @@ yarn-error.*
 
 # nested cloned directory
 cricket1/
+
+# Uploaded player photos & media (PII)
+backend/uploads/players/
+uploads/players/
+
+# Generated bundled HTML & PDF presentations (large binary/bundled files)
+*.pdf
+bundled.html
+inlineHtml.ts
+demo_match_presentation/
+mobile_frontend/assets_web/bundled.html
+mobile_frontend/assets_web/inlineHtml.ts
+mobile_frontend/public/bundled.html
+mobile_frontend/public/inlineHtml.ts
+mobile_frontend/dist/

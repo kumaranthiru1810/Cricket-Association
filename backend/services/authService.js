@@ -255,11 +255,12 @@ class AuthService {
 
     console.log(`\n🔑 [PASSWORD RESET 4-DIGIT OTP] Email: ${cleanEmail} | Role: ${user.role || role} | 4-Digit OTP: ${rawOtp}\n`);
 
+    const isProd = process.env.NODE_ENV === 'production';
     return {
       success: true,
       message: `A 4-digit verification code has been sent to ${cleanEmail}.`,
       email: cleanEmail,
-      otp: rawOtp
+      ...(!isProd ? { otp: rawOtp } : {})
     };
   }
 
@@ -565,7 +566,7 @@ class AuthService {
     const token = jwt.sign(
       { id: user.id, name: user.name, email: user.email, role: 'SCORER', certificationLevel: certLevel },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '24h' }
     );
 
     return {
@@ -725,6 +726,10 @@ class AuthService {
 
     if (mailResult && !mailResult.success && mailResult.smtpError) {
       console.warn(`⚠️ [SMTP DELIVERY WARNING] Could not send OTP email to ${user.email}: ${mailResult.smtpError}`);
+      const isDev = process.env.NODE_ENV !== 'production';
+      if (!isDev) {
+        throw { status: 500, message: 'Failed to dispatch OTP email. Please try again in a few moments.' };
+      }
       console.warn(`🔑 [DEV FALLBACK OTP] Active OTP for ${user.email} is: ${rawOtp}`);
       return {
         success: true,
@@ -764,7 +769,7 @@ class AuthService {
       const token = jwt.sign(
         { id: adminUser?.id || 'ADM-1001', name: adminUser?.name || 'Administrator', email: cleanEmail, role: 'ADMIN' },
         JWT_SECRET,
-        { expiresIn: '7d' }
+        { expiresIn: '24h' }
       );
       return {
         success: true,
@@ -822,7 +827,7 @@ class AuthService {
     const token = jwt.sign(
       { id: user.id || user.email, name: user.name, email: user.email, role: user.role },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '24h' }
     );
 
     return {
@@ -876,8 +881,19 @@ class AuthService {
       throw { status: 403, message: 'Access denied: User is not authorized as an administrator.' };
     }
 
-    const validPasswords = ['1234', 'admin123', 'CFVD@Admin2026', '#cricketfederation.'];
-    const isPasswordValid = validPasswords.includes(cleanPass) || (user.password_hash && user.password_hash === cleanPass);
+    const bcrypt = require('bcryptjs');
+    let isPasswordValid = false;
+    if (user.password_hash) {
+      try {
+        isPasswordValid = await bcrypt.compare(cleanPass, user.password_hash);
+      } catch (e) {
+        isPasswordValid = false;
+      }
+    }
+    // Allow dev admin bypass only in non-production testing environment
+    if (!isPasswordValid && process.env.NODE_ENV !== 'production' && cleanEmail === 'admin@example.com' && cleanPass === '1234') {
+      isPasswordValid = true;
+    }
 
     if (!isPasswordValid) {
       throw { status: 401, message: 'Invalid administrator password.' };
@@ -886,7 +902,7 @@ class AuthService {
     const token = jwt.sign(
       { id: user.id, name: user.name, email: user.email, role: 'ADMIN' },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '24h' }
     );
 
     // Add audit log
@@ -1142,7 +1158,7 @@ class AuthService {
       'Team@2026#',
       'Player@2026#'
     ];
-    if (DEV_PASSWORDS.includes(cleanCredential)) {
+    if (process.env.NODE_ENV !== 'production' && DEV_PASSWORDS.includes(cleanCredential)) {
       isPasswordValid = true;
     }
 
@@ -1193,7 +1209,7 @@ class AuthService {
         ...(teamId ? { teamId, team_id: teamId } : {})
       },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '24h' }
     );
 
     return {
@@ -1323,7 +1339,7 @@ class AuthService {
     const token = jwt.sign(
       { id: authResult.user.id, name: authResult.user.name, email: authResult.user.email, role: 'COACH', teamId, teamName },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '24h' }
     );
 
     return {
@@ -1407,7 +1423,7 @@ class AuthService {
             teamId: existingUser.team_id || null
           },
           JWT_SECRET,
-          { expiresIn: '7d' }
+          { expiresIn: '24h' }
         );
 
         return {
@@ -1469,7 +1485,7 @@ class AuthService {
         teamId: teamReg.id
       },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '24h' }
     );
 
     return {

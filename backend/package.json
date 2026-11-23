@@ -9,7 +9,7 @@
     "migrate": "node migrations/migrate.js",
     "seed": "node seeds/seed.js",
     "seed:settings": "node scripts/importMasterSettings.js",
-    "test": "node tests/runTests.js",
+    "test": "node tests/runTests.js && node tests/test_cricket_logic_fixes.js && node tests/test_security_audit.js",
     "test:rules": "node tests/test_cricket_rules_engine.js",
     "test:umpire": "node tests/test_umpire_module.js",
     "test:security": "node tests/securityVerification.js",
@@ -26,7 +26,6 @@
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^7.7.0",
     "mongoose": "^9.10.4",
-    "mysql2": "^3.24.5",
     "nodemailer": "^10.0.13",
     "socket.io": "^4.8.1"
   },

@@ -17,8 +17,8 @@ function verifyToken(req, res, next) {
   }
 
   if (token) {
-    // Support dev tokens in non-production or matching dev admin pattern
-    if (token.startsWith('dev_admin') || token.includes('admin_cfvd') || token === 'dev_admin_cfvd_token_2026') {
+    // Support dev tokens in non-production environment ONLY
+    if (process.env.NODE_ENV !== 'production' && (token.startsWith('dev_admin') || token.includes('admin_cfvd') || token === 'dev_admin_cfvd_token_2026')) {
       req.user = {
         id: 'ADM-1001',
         email: 'admin@cfvd.org',
@@ -101,6 +101,16 @@ async function requireScorerAuth(req, res, next) {
         });
       }
 
+      // Check token_version for immediate session invalidation
+      if (req.user.tv !== undefined && user.token_version !== undefined) {
+        if (Number(req.user.tv) !== Number(user.token_version)) {
+          return res.status(401).json({
+            success: false,
+            message: 'Unauthorized: Session invalidated due to security update. Please log in again.'
+          });
+        }
+      }
+
       // Role check: Scorer or Admin
       const isAllowedRole = user.role === 'SCORER' || user.role === 'ADMIN';
       if (!isAllowedRole) {
@@ -165,8 +175,8 @@ async function verifyMatchPermission(req, res, next) {
       });
     }
 
-    // Admin and Match Scorer have access to all matches
-    if (req.user && (req.user.role === 'ADMIN' || req.user.role === 'SCORER')) {
+    // Admin has access to all matches
+    if (req.user && req.user.role === 'ADMIN') {
       req.match = match;
       return next();
     }
@@ -218,6 +228,16 @@ function requireAdminAuth(req, res, next) {
           success: false,
           message: 'Unauthorized: User account not found in database.'
         });
+      }
+
+      // Check token_version for immediate session invalidation
+      if (req.user.tv !== undefined && user.token_version !== undefined) {
+        if (Number(req.user.tv) !== Number(user.token_version)) {
+          return res.status(401).json({
+            success: false,
+            message: 'Unauthorized: Session invalidated due to security update. Please log in again.'
+          });
+        }
       }
 
       // Check token_version if provided in token (immediate invalidation upon role change or demotion)
@@ -291,6 +311,16 @@ async function requirePlayerAuth(req, res, next) {
         });
       }
 
+      // Check token_version for immediate session invalidation
+      if (req.user.tv !== undefined && user.token_version !== undefined) {
+        if (Number(req.user.tv) !== Number(user.token_version)) {
+          return res.status(401).json({
+            success: false,
+            message: 'Unauthorized: Session invalidated due to security update. Please log in again.'
+          });
+        }
+      }
+
       // Role check: Player or Admin
       const isAllowedRole = user.role === 'PLAYER' || user.role === 'ADMIN';
       if (!isAllowedRole) {
@@ -352,6 +382,16 @@ async function requireTeamAuth(req, res, next) {
           success: false,
           message: 'Unauthorized: User account not found in database.'
         });
+      }
+
+      // Check token_version for immediate session invalidation
+      if (req.user.tv !== undefined && user.token_version !== undefined) {
+        if (Number(req.user.tv) !== Number(user.token_version)) {
+          return res.status(401).json({
+            success: false,
+            message: 'Unauthorized: Session invalidated due to security update. Please log in again.'
+          });
+        }
       }
 
       // Role check: COACH, TEAM, or ADMIN
@@ -455,6 +495,16 @@ async function requireUmpireAuth(req, res, next) {
         });
       }
 
+      // Check token_version for immediate session invalidation
+      if (req.user.tv !== undefined && user.token_version !== undefined) {
+        if (Number(req.user.tv) !== Number(user.token_version)) {
+          return res.status(401).json({
+            success: false,
+            message: 'Unauthorized: Session invalidated due to security update. Please log in again.'
+          });
+        }
+      }
+
       // Role check: Umpire, Admin, or Scorer
       const isAllowedRole = user.role === 'UMPIRE' || user.role === 'ADMIN' || user.role === 'SCORER';
       if (!isAllowedRole) {
@@ -520,8 +570,8 @@ async function verifyUmpireMatchPermission(req, res, next) {
       });
     }
 
-    // Admin and Match Scorer have access to all matches
-    if (req.user && (req.user.role === 'ADMIN' || req.user.role === 'SCORER')) {
+    // Admin has access to all matches
+    if (req.user && req.user.role === 'ADMIN') {
       req.match = match;
       return next();
     }

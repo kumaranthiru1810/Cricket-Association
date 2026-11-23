@@ -5,7 +5,19 @@
 
 const express = require('express');
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
 const db = require('../config/db');
+
+const contactRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'Too many contact form submissions from this IP. Please try again after 15 minutes.'
+  }
+});
 
 /**
  * GET /api/portal/home
@@ -1110,20 +1122,34 @@ router.get('/events', async (req, res) => {
 
 /**
  * POST /api/portal/contact
- * Handle Contact Form submission
+ * Handle Contact Form submission with rate limiting and length validation
  */
-router.post('/contact', async (req, res) => {
+router.post('/contact', contactRateLimiter, async (req, res) => {
   try {
-    const { name, email, subject, message } = req.body;
+    const { name, email, subject, message } = req.body || {};
     if (!name || !email || !message) {
       return res.status(400).json({ success: false, error: 'Name, email, and message are required.' });
+    }
+
+    const trimmedName = String(name).trim();
+    const trimmedEmail = String(email).trim().toLowerCase();
+    const trimmedSubject = String(subject || '').trim();
+    const trimmedMessage = String(message).trim();
+
+    if (trimmedName.length > 100 || trimmedEmail.length > 120 || trimmedSubject.length > 200 || trimmedMessage.length > 2000) {
+      return res.status(400).json({ success: false, error: 'Input exceeds maximum allowed length.' });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      return res.status(400).json({ success: false, error: 'Please provide a valid email address.' });
     }
 
     await db.models.Notification.create({
       id: `NOTIF-CNT-${Date.now()}`,
       type: 'CONTACT_FORM',
-      title: `Contact Message: ${subject || 'General Inquiry'}`,
-      message: `From ${name} (${email}): ${message}`,
+      title: `Contact Message: ${trimmedSubject || 'General Inquiry'}`,
+      message: `From ${trimmedName} (${trimmedEmail}): ${trimmedMessage}`,
       status: 'UNREAD'
     });
 

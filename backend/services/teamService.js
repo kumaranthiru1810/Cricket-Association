@@ -10,7 +10,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { pool, getUseMemoryFallback, memoryDb } = require('../config/db');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'cricket_team_jwt_secret_2025';
+const JWT_SECRET = process.env.JWT_SECRET || 'cricket_super_secret_jwt_2026';
 const BCRYPT_ROUNDS = 10;
 
 // ──────────────────────────────────────────────
@@ -226,7 +226,7 @@ async function loginTeam({ email, password }) {
       teamName: team.team_name,
       district: district ? district.name : '',
     };
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });
 
     return {
       message: 'Login successful.',
@@ -274,7 +274,7 @@ async function loginTeam({ email, password }) {
     teamName: account.team_name,
     district: account.district_name,
   };
-  const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+  const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });
 
   return {
     message: 'Login successful.',

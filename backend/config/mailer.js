@@ -14,7 +14,7 @@ function getSmtpConfig() {
   const rawUser = process.env.SMTP_USER || 'cricketfederation21@gmail.com';
   const rawPass = process.env.SMTP_PASS || process.env.SMTP_PASSWORD || '';
   const user = rawUser ? rawUser.replace(/^"|"$/g, '').trim() : '';
-  // Gmail app passwords can have spaces (e.g. "rkwu lzke kklq znig"); strip them cleanly
+  // Gmail app passwords can have spaces (e.g. "abcd efgh ijkl mnop"); strip them cleanly
   const pass = rawPass ? rawPass.replace(/^"|"$/g, '').replace(/\s+/g, '').trim() : '';
   const secure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : (port === 465);
   const from = process.env.SMTP_FROM
@@ -26,6 +26,10 @@ function getSmtpConfig() {
 }
 
 const SUPER_ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || 'admin@cfvd.org').toLowerCase().trim();
+
+function attachDevOtp(otp) {
+  return (process.env.NODE_ENV !== 'production' && otp) ? { otp } : {};
+}
 
 let activeTransporter = null;
 let transporterType = 'NONE'; // 'GMAIL' | 'ETHEREAL' | 'VIRTUAL' | 'NONE'
@@ -434,11 +438,11 @@ async function sendSuperAdminVerificationEmail({
         return { success: true, message: `OTP sent to ${toEmail}`, messageId: data.id, provider: 'RESEND' };
       } else {
         console.warn(`⚠️ Resend API notice for ${toEmail}:`, data);
-        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND', otp };
+        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND', ...attachDevOtp(otp) };
       }
     } catch (apiErr) {
       console.warn(`⚠️ Resend fetch error for ${toEmail}:`, apiErr.message);
-      return { success: false, error: apiErr.message, provider: 'RESEND', otp };
+      return { success: false, error: apiErr.message, provider: 'RESEND', ...attachDevOtp(otp) };
     }
   }
 
@@ -625,11 +629,11 @@ async function sendAdminApprovalEmail({
         return { success: true, message: `OTP sent to ${toEmail}`, messageId: data.id, provider: 'RESEND' };
       } else {
         console.warn(`⚠️ Resend API notice for ${toEmail}:`, data);
-        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND', otp };
+        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND', ...attachDevOtp(otp) };
       }
     } catch (apiErr) {
       console.warn(`⚠️ Resend fetch error for ${toEmail}:`, apiErr.message);
-      return { success: false, error: apiErr.message, provider: 'RESEND', otp };
+      return { success: false, error: apiErr.message, provider: 'RESEND', ...attachDevOtp(otp) };
     }
   }
 
@@ -731,11 +735,11 @@ async function sendOtpEmail({ toEmail, userName, otp }) {
         return { success: true, message: `OTP sent to ${toEmail}`, messageId: data.id, provider: 'RESEND' };
       } else {
         console.warn(`⚠️ Resend API notice for ${toEmail}:`, data);
-        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND', otp };
+        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND', ...attachDevOtp(otp) };
       }
     } catch (apiErr) {
       console.warn(`⚠️ Resend fetch error for ${toEmail}:`, apiErr.message);
-      return { success: false, error: apiErr.message, provider: 'RESEND', otp };
+      return { success: false, error: apiErr.message, provider: 'RESEND', ...attachDevOtp(otp) };
     }
   }
 
@@ -753,7 +757,7 @@ async function sendOtpEmail({ toEmail, userName, otp }) {
       return { success: true, message: `OTP sent to ${toEmail}` };
     } catch (err) {
       console.warn(`Delivery note to ${toEmail}:`, err.message);
-      return { success: true, message: `OTP generated`, otp };
+      return { success: false, error: err.message, message: `OTP delivery failed: ${err.message}`, ...attachDevOtp(otp) };
     }
   }
   return { success: true, message: `OTP dispatched to ${toEmail}` };
@@ -829,11 +833,11 @@ async function sendPlayerTeamEmail({ toEmail, playerName, teamNames }) {
         return { success: true, message: `OTP sent to ${toEmail}`, messageId: data.id, provider: 'RESEND' };
       } else {
         console.warn(`⚠️ Resend API notice for ${toEmail}:`, data);
-        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND', otp };
+        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND', ...attachDevOtp(otp) };
       }
     } catch (apiErr) {
       console.warn(`⚠️ Resend fetch error for ${toEmail}:`, apiErr.message);
-      return { success: false, error: apiErr.message, provider: 'RESEND', otp };
+      return { success: false, error: apiErr.message, provider: 'RESEND', ...attachDevOtp(otp) };
     }
   }
 
@@ -1021,11 +1025,11 @@ async function sendDualAdminApprovalEmail({
         return { success: true, message: `OTP sent to ${toEmail}`, messageId: data.id, provider: 'RESEND' };
       } else {
         console.warn(`⚠️ Resend API notice for ${toEmail}:`, data);
-        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND', otp };
+        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND', ...attachDevOtp(otp) };
       }
     } catch (apiErr) {
       console.warn(`⚠️ Resend fetch error for ${toEmail}:`, apiErr.message);
-      return { success: false, error: apiErr.message, provider: 'RESEND', otp };
+      return { success: false, error: apiErr.message, provider: 'RESEND', ...attachDevOtp(otp) };
     }
   }
 
@@ -1137,11 +1141,11 @@ async function sendCandidateVerificationEmail({
         return { success: true, message: `OTP sent to ${toEmail}`, messageId: data.id, provider: 'RESEND' };
       } else {
         console.warn(`⚠️ Resend API notice for ${toEmail}:`, data);
-        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND', otp };
+        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND', ...attachDevOtp(otp) };
       }
     } catch (apiErr) {
       console.warn(`⚠️ Resend fetch error for ${toEmail}:`, apiErr.message);
-      return { success: false, error: apiErr.message, provider: 'RESEND', otp };
+      return { success: false, error: apiErr.message, provider: 'RESEND', ...attachDevOtp(otp) };
     }
   }
 

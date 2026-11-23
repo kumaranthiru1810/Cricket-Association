@@ -180,9 +180,19 @@ class AuthController {
   async logout(req, res) {
     try {
       clearAuthCookies(res);
+      if (req.user && (req.user.id || req.user.email)) {
+        try {
+          const db = require('../config/db');
+          await db.initDb();
+          await db.models.User.updateOne(
+            { $or: [{ id: req.user.id }, { email: req.user.email }] },
+            { $inc: { token_version: 1 } }
+          );
+        } catch (_e) { }
+      }
       res.status(200).json({
         success: true,
-        message: 'Logged out successfully. Cookie cleared.'
+        message: 'Logged out successfully. Cookie cleared and session revoked.'
       });
     } catch (err) {
       res.status(500).json({

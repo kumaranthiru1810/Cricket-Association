@@ -5,6 +5,11 @@
 
 const db = require('../config/db');
 
+function escapeRegex(str) {
+  if (typeof str !== 'string') return '';
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 class ContentModel {
   get Model() {
     return db.models.News;
@@ -23,7 +28,8 @@ class ContentModel {
     const query = {};
 
     if (category && category !== 'ALL') {
-      query.category = new RegExp(`^${category}$`, 'i');
+      const safeCat = escapeRegex(category.trim());
+      query.category = new RegExp(`^${safeCat}$`, 'i');
     }
 
     if (status && status !== 'ALL') {
@@ -31,7 +37,7 @@ class ContentModel {
     }
 
     if (search && search.trim()) {
-      const q = search.trim();
+      const q = escapeRegex(search.trim());
       query.$or = [
         { title: new RegExp(q, 'i') },
         { summary: new RegExp(q, 'i') },
