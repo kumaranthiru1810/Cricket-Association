@@ -52,6 +52,8 @@ import {
   validateScheduleTime,
   validateScheduleDateTime
 } from '../../utils/dateTimeValidation';
+import { CalendarPickerModal } from '../../components/common/CalendarPickerModal';
+import { ClockPickerModal } from '../../components/common/ClockPickerModal';
 
 // Asset references
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
@@ -625,6 +627,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   const [venueSearchQuery, setVenueSearchQuery] = useState<string>('');
   const [customTournamentInput, setCustomTournamentInput] = useState<string>('');
   const [notifyTeamsOnTimeChange, setNotifyTeamsOnTimeChange] = useState<boolean>(true);
+  const [calendarModalVisible, setCalendarModalVisible] = useState<boolean>(false);
+  const [clockModalVisible, setClockModalVisible] = useState<boolean>(false);
 
   // Match Inspection, Cancel, Postpone & Reschedule Modals
   const [selectedMatchModal, setSelectedMatchModal] = useState<any | null>(null);
@@ -1108,6 +1112,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     setEligibleClubsDropdownOpen(false);
     setFormatDropdownOpen(false);
     setScorerDropdownOpen(false);
+    setCalendarModalVisible(false);
+    setClockModalVisible(false);
     setTournamentSearchQuery('');
     setTeamSearchQueryA('');
     setTeamSearchQueryB('');
@@ -1146,7 +1152,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     } else {
       setEditingMatch(null);
       const firstTeam = availableTeams[0];
-      const secondTeam = availableTeams[1];
+      const secondTeam = availableTeams.find(t => (t.id !== firstTeam?.id && t.name !== firstTeam?.name)) || (availableTeams[1]?.id !== firstTeam?.id ? availableTeams[1] : null);
       const defaultTeamAId = firstTeam?.id || '';
       const defaultTeamAName = firstTeam?.name || '';
       const defaultTeamBId = secondTeam?.id || '';
@@ -5660,7 +5666,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                             <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
                               {availableTeams
-                                .filter(tm => !teamSearchQueryA || tm.name.toLowerCase().includes(teamSearchQueryA.toLowerCase()))
+                                .filter(tm => {
+                                  if (scheduleForm.team_b_name && (tm.name.toLowerCase().trim() === scheduleForm.team_b_name.toLowerCase().trim() || (scheduleForm.team_b_id && tm.id === scheduleForm.team_b_id))) {
+                                    return false;
+                                  }
+                                  return !teamSearchQueryA || tm.name.toLowerCase().includes(teamSearchQueryA.toLowerCase());
+                                })
                                 .map(tm => (
                                   <TouchableOpacity
                                     key={`dd-a-${tm.id}`}
@@ -5739,7 +5750,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                             <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
                               {availableTeams
-                                .filter(tm => !teamSearchQueryB || tm.name.toLowerCase().includes(teamSearchQueryB.toLowerCase()))
+                                .filter(tm => {
+                                  if (scheduleForm.team_a_name && (tm.name.toLowerCase().trim() === scheduleForm.team_a_name.toLowerCase().trim() || (scheduleForm.team_a_id && tm.id === scheduleForm.team_a_id))) {
+                                    return false;
+                                  }
+                                  return !teamSearchQueryB || tm.name.toLowerCase().includes(teamSearchQueryB.toLowerCase());
+                                })
                                 .map(tm => (
                                   <TouchableOpacity
                                     key={`dd-b-${tm.id}`}
@@ -5765,6 +5781,16 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       </View>
                     </View>
                   </View>
+
+                  {/* Duplicate Team Selection Alert */}
+                  {scheduleForm.team_a_name && scheduleForm.team_b_name &&
+                   scheduleForm.team_a_name.trim().toLowerCase() === scheduleForm.team_b_name.trim().toLowerCase() && (
+                    <View style={{ backgroundColor: '#fee2e2', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#fca5a5', marginTop: 10 }}>
+                      <Text style={{ fontSize: 12, color: '#991b1b', fontWeight: '700' }}>
+                        ⚠️ Team 1 and Team 2 cannot be the same club. Please select two different competing clubs.
+                      </Text>
+                    </View>
+                  )}
 
                   {/* Venue and Stadium Selection with Google Maps Integration */}
                   <View style={[styles.formSectionCard, { marginTop: 14 }]}>
@@ -5914,86 +5940,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       ) : null}
                     </View>
 
-                    {/* Selected Ground Details & Google Maps Live Link Card */}
-                    {(() => {
-                      if (!scheduleForm.venue) return null;
-                      const matchedVenue = availableVenues.find(v => (v?.name || '').toLowerCase().trim() === (scheduleForm?.venue || '').toLowerCase().trim());
-                      const isDbGround = Boolean(matchedVenue && !matchedVenue.id?.startsWith('VEN-CUSTOM'));
-                      const locationDisplay = matchedVenue?.location || 'Virudhunagar District, Tamil Nadu';
-                      const capacityDisplay = matchedVenue?.capacity || '1,500+ spectators';
-                      const lightsDisplay = matchedVenue?.floodlights ? 'Available (Day / Night)' : 'Daylight Only';
-                      const mapsLink = scheduleForm.venue_maps_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(scheduleForm.venue + ' ' + locationDisplay)}`;
 
-                      return (
-                        <View style={{
-                          marginTop: 10,
-                          padding: 12,
-                          backgroundColor: '#f8fafc',
-                          borderRadius: 8,
-                          borderWidth: 1.5,
-                          borderColor: '#cbd5e1'
-                        }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
-                            <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>
-                              🏟️ {scheduleForm.venue}
-                            </Text>
-                            <View style={{
-                              backgroundColor: isDbGround ? '#ecfdf5' : '#eff6ff',
-                              paddingHorizontal: 8,
-                              paddingVertical: 3,
-                              borderRadius: 6,
-                              borderWidth: 1,
-                              borderColor: isDbGround ? '#a7f3d0' : '#bfdbfe'
-                            }}>
-                              <Text style={{ fontSize: 11, fontWeight: '700', color: isDbGround ? '#059669' : '#1d4ed8' }}>
-                                {isDbGround ? '✓ Official District Ground' : '📍 Google Maps Verified Turf'}
-                              </Text>
-                            </View>
-                          </View>
-
-                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
-                            <Text style={{ fontSize: 12, color: '#475569' }}>
-                              📍 Location: <Text style={{ fontWeight: '600', color: '#1e293b' }}>{locationDisplay}</Text>
-                            </Text>
-                            <Text style={{ fontSize: 12, color: '#475569' }}>
-                              👥 Capacity: <Text style={{ fontWeight: '600', color: '#1e293b' }}>{capacityDisplay}</Text>
-                            </Text>
-                            <Text style={{ fontSize: 12, color: '#475569' }}>
-                              💡 Lights: <Text style={{ fontWeight: '600', color: '#1e293b' }}>{lightsDisplay}</Text>
-                            </Text>
-                          </View>
-
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
-                            <TouchableOpacity
-                              onPress={() => {
-                                if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                                  window.open(mapsLink, '_blank');
-                                } else {
-                                  Linking.openURL(mapsLink).catch(() => { });
-                                }
-                              }}
-                              style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                gap: 4,
-                                backgroundColor: '#2563eb',
-                                paddingHorizontal: 10,
-                                paddingVertical: 5,
-                                borderRadius: 6
-                              }}
-                            >
-                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#ffffff' }}>🗺️ Open Location in Google Maps ↗</Text>
-                            </TouchableOpacity>
-                          </View>
-
-                          {matchedVenue?.description ? (
-                            <Text style={{ fontSize: 11.5, color: '#64748b', marginTop: 6, fontStyle: 'italic' }}>
-                              {matchedVenue.description}
-                            </Text>
-                          ) : null}
-                        </View>
-                      );
-                    })()}
                   </View>
                 </View>
               )}
@@ -6627,6 +6574,48 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           </View>
         </View>
       </Modal>
+
+      {/* Interactive Calendar Picker Modal */}
+      <CalendarPickerModal
+        visible={calendarModalVisible}
+        title="Select Match Schedule Date"
+        initialDate={scheduleForm.match_date}
+        minDate={getTodayKolkata()}
+        onClose={() => setCalendarModalVisible(false)}
+        onSelectDate={(newDate) => {
+          setScheduleForm(prev => {
+            const checkTime = validateScheduleTime(newDate, prev.match_time);
+            return {
+              ...prev,
+              match_date: newDate,
+              match_time: checkTime.isValid ? prev.match_time : getDefaultScheduleDateTime().time
+            };
+          });
+          setCalendarModalVisible(false);
+          setScheduleFormError(null);
+        }}
+      />
+
+      {/* Interactive Clock Picker Modal */}
+      <ClockPickerModal
+        visible={clockModalVisible}
+        title="Select Match Start Time"
+        initialTime={scheduleForm.match_time}
+        onClose={() => setClockModalVisible(false)}
+        onSelectTime={(formattedTime) => {
+          const checkTime = validateScheduleTime(scheduleForm.match_date, formattedTime);
+          if (!checkTime.isValid) {
+            setScheduleFormError(checkTime.error || 'Match time cannot be in the past for today.');
+          } else {
+            setScheduleFormError(null);
+          }
+          setScheduleForm(prev => ({
+            ...prev,
+            match_time: formattedTime
+          }));
+          setClockModalVisible(false);
+        }}
+      />
 
       {/* ─────────────────────────────────────────────────────────────
           12B. GOOGLE MAPS VENUE LOCATION PICKER MODAL
@@ -10888,6 +10877,42 @@ const styles: any = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
     padding: 12
+  },
+  fieldActionTriggerBtn: {
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    cursor: 'pointer'
+  },
+  fieldActionTriggerBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#92400e'
+  },
+  fieldCalendarIconBtn: {
+    width: 36,
+    height: 36,
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer'
+  },
+  fieldClockIconBtn: {
+    width: 36,
+    height: 36,
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer'
   },
   formSectionCard: {
     width: '100%',
