@@ -63,6 +63,51 @@ export const Header: React.FC<HeaderProps> = ({
   // Active Nav State (Underline style)
   const [internalActiveNav, setInternalActiveNav] = useState<string>('home');
   const activeNav = propActiveNav !== undefined ? propActiveNav : internalActiveNav;
+  const [hoveredNav, setHoveredNav] = useState<string | null>(null);
+
+  // Inject Left-to-Right Hover Underline CSS for Web
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const styleId = 'cfvd-nav-underline-hover-css';
+    if (document.getElementById(styleId)) return;
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      .cfvd-nav-link {
+        position: relative !important;
+        cursor: pointer !important;
+        overflow: visible !important;
+      }
+      .cfvd-nav-underline {
+        position: absolute !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 3px !important;
+        background-color: #f5c43d !important;
+        border-radius: 2px 2px 0 0 !important;
+        transform: scaleX(0) !important;
+        transform-origin: left !important;
+        transition: transform 0.28s cubic-bezier(0.25, 1, 0.5, 1) !important;
+        pointer-events: none !important;
+      }
+      .cfvd-nav-link:hover .cfvd-nav-underline,
+      .cfvd-nav-link.cfvd-nav-active .cfvd-nav-underline {
+        transform: scaleX(1) !important;
+      }
+      .cfvd-nav-link:hover .cfvd-nav-text,
+      .cfvd-nav-link.cfvd-nav-active .cfvd-nav-text {
+        color: #ffffff !important;
+        transition: color 0.18s ease !important;
+      }
+      .cfvd-nav-link:hover .cfvd-nav-icon,
+      .cfvd-nav-link.cfvd-nav-active .cfvd-nav-icon {
+        color: #f5c43d !important;
+        transition: color 0.18s ease !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }, []);
 
   // Search Modal state
   const [searchModalOpen, setSearchModalOpen] = useState(false);
@@ -120,6 +165,7 @@ export const Header: React.FC<HeaderProps> = ({
             about: 'cfvd-section-about',
             grounds: 'cfvd-section-grounds',
             news: 'cfvd-section-news',
+            contact: 'cfvd-section-contact',
           };
           const targetId = idMap[secName] || secName;
           const el = document.getElementById(targetId);
@@ -198,7 +244,7 @@ export const Header: React.FC<HeaderProps> = ({
           </View>
         </TouchableOpacity>
 
-        {/* Desktop Navigation Links with Clean Underline Indicator */}
+        {/* Desktop Navigation Links with Clean Left-to-Right Hover Underline */}
         {!isMobile && (
           <View style={styles.desktopNav}>
             {/* Home Link */}
@@ -208,22 +254,34 @@ export const Header: React.FC<HeaderProps> = ({
                 activeNav === 'home' && styles.navUnderlineItemActive,
               ]}
               onPress={() => handleNavClick('home', handleScrollToTop)}
+              onMouseEnter={() => setHoveredNav('home')}
+              onMouseLeave={() => setHoveredNav(null)}
               activeOpacity={0.8}
+              {...({ className: `cfvd-nav-link ${activeNav === 'home' ? 'cfvd-nav-active' : ''}` } as any)}
             >
               <Ionicons
                 name="home"
-                size={15}
-                color={activeNav === 'home' ? '#f5c43d' : '#cbd5e1'}
-                style={{ marginRight: 6 }}
+                size={14}
+                color={activeNav === 'home' || hoveredNav === 'home' ? '#f5c43d' : '#cbd5e1'}
+                style={{ marginRight: 5 }}
+                {...({ className: 'cfvd-nav-icon' } as any)}
               />
               <Text
                 style={[
                   styles.navUnderlineText,
-                  activeNav === 'home' && styles.navUnderlineTextActive,
+                  (activeNav === 'home' || hoveredNav === 'home') && styles.navUnderlineTextActive,
                 ]}
+                {...({ className: 'cfvd-nav-text' } as any)}
               >
                 Home
               </Text>
+              <View
+                style={[
+                  styles.navUnderlineBar,
+                  (activeNav === 'home' || hoveredNav === 'home') && styles.navUnderlineBarActive,
+                ]}
+                {...({ className: 'cfvd-nav-underline' } as any)}
+              />
             </TouchableOpacity>
 
             {/* Match Centre Link */}
@@ -233,22 +291,71 @@ export const Header: React.FC<HeaderProps> = ({
                 activeNav === 'matchCentre' && styles.navUnderlineItemActive,
               ]}
               onPress={() => handleNavClick('matchCentre', () => handleScrollToSection('matchCentre'))}
+              onMouseEnter={() => setHoveredNav('matchCentre')}
+              onMouseLeave={() => setHoveredNav(null)}
               activeOpacity={0.8}
+              {...({ className: `cfvd-nav-link ${activeNav === 'matchCentre' ? 'cfvd-nav-active' : ''}` } as any)}
             >
               <MaterialCommunityIcons
                 name="cricket"
-                size={16}
-                color={activeNav === 'matchCentre' ? '#f5c43d' : '#cbd5e1'}
-                style={{ marginRight: 6 }}
+                size={15}
+                color={activeNav === 'matchCentre' || hoveredNav === 'matchCentre' ? '#f5c43d' : '#cbd5e1'}
+                style={{ marginRight: 5 }}
+                {...({ className: 'cfvd-nav-icon' } as any)}
               />
               <Text
                 style={[
                   styles.navUnderlineText,
-                  activeNav === 'matchCentre' && styles.navUnderlineTextActive,
+                  (activeNav === 'matchCentre' || hoveredNav === 'matchCentre') && styles.navUnderlineTextActive,
                 ]}
+                {...({ className: 'cfvd-nav-text' } as any)}
               >
                 Match Centre
               </Text>
+              <View
+                style={[
+                  styles.navUnderlineBar,
+                  (activeNav === 'matchCentre' || hoveredNav === 'matchCentre') && styles.navUnderlineBarActive,
+                ]}
+                {...({ className: 'cfvd-nav-underline' } as any)}
+              />
+            </TouchableOpacity>
+
+            {/* Tournaments Link */}
+            <TouchableOpacity
+              style={[
+                styles.navUnderlineItem,
+                activeNav === 'tournaments' && styles.navUnderlineItemActive,
+              ]}
+              onPress={() => handleNavClick('tournaments', () => handleScrollToSection('tournaments'))}
+              onMouseEnter={() => setHoveredNav('tournaments')}
+              onMouseLeave={() => setHoveredNav(null)}
+              activeOpacity={0.8}
+              {...({ className: `cfvd-nav-link ${activeNav === 'tournaments' ? 'cfvd-nav-active' : ''}` } as any)}
+            >
+              <Ionicons
+                name="ribbon-outline"
+                size={14}
+                color={activeNav === 'tournaments' || hoveredNav === 'tournaments' ? '#f5c43d' : '#cbd5e1'}
+                style={{ marginRight: 5 }}
+                {...({ className: 'cfvd-nav-icon' } as any)}
+              />
+              <Text
+                style={[
+                  styles.navUnderlineText,
+                  (activeNav === 'tournaments' || hoveredNav === 'tournaments') && styles.navUnderlineTextActive,
+                ]}
+                {...({ className: 'cfvd-nav-text' } as any)}
+              >
+                Tournaments
+              </Text>
+              <View
+                style={[
+                  styles.navUnderlineBar,
+                  (activeNav === 'tournaments' || hoveredNav === 'tournaments') && styles.navUnderlineBarActive,
+                ]}
+                {...({ className: 'cfvd-nav-underline' } as any)}
+              />
             </TouchableOpacity>
 
             {/* Standings Link */}
@@ -258,48 +365,146 @@ export const Header: React.FC<HeaderProps> = ({
                 activeNav === 'pointsTable' && styles.navUnderlineItemActive,
               ]}
               onPress={() => handleNavClick('pointsTable', () => handleScrollToSection('pointsTable'))}
+              onMouseEnter={() => setHoveredNav('pointsTable')}
+              onMouseLeave={() => setHoveredNav(null)}
               activeOpacity={0.8}
+              {...({ className: `cfvd-nav-link ${activeNav === 'pointsTable' ? 'cfvd-nav-active' : ''}` } as any)}
             >
               <Ionicons
                 name="trophy-outline"
-                size={15}
-                color={activeNav === 'pointsTable' ? '#f5c43d' : '#cbd5e1'}
-                style={{ marginRight: 6 }}
+                size={14}
+                color={activeNav === 'pointsTable' || hoveredNav === 'pointsTable' ? '#f5c43d' : '#cbd5e1'}
+                style={{ marginRight: 5 }}
+                {...({ className: 'cfvd-nav-icon' } as any)}
               />
               <Text
                 style={[
                   styles.navUnderlineText,
-                  activeNav === 'pointsTable' && styles.navUnderlineTextActive,
+                  (activeNav === 'pointsTable' || hoveredNav === 'pointsTable') && styles.navUnderlineTextActive,
                 ]}
+                {...({ className: 'cfvd-nav-text' } as any)}
               >
                 Standings
               </Text>
+              <View
+                style={[
+                  styles.navUnderlineBar,
+                  (activeNav === 'pointsTable' || hoveredNav === 'pointsTable') && styles.navUnderlineBarActive,
+                ]}
+                {...({ className: 'cfvd-nav-underline' } as any)}
+              />
             </TouchableOpacity>
 
             {/* Player Ratings Link */}
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={[
                 styles.navUnderlineItem,
                 activeNav === 'stats' && styles.navUnderlineItemActive,
               ]}
               onPress={() => handleNavClick('stats', () => handleScrollToSection('stats'))}
+              onMouseEnter={() => setHoveredNav('stats')}
+              onMouseLeave={() => setHoveredNav(null)}
               activeOpacity={0.8}
+              {...({ className: `cfvd-nav-link ${activeNav === 'stats' ? 'cfvd-nav-active' : ''}` } as any)}
             >
               <Ionicons
                 name="star-outline"
-                size={15}
-                color={activeNav === 'stats' ? '#f5c43d' : '#cbd5e1'}
-                style={{ marginRight: 6 }}
+                size={14}
+                color={activeNav === 'stats' || hoveredNav === 'stats' ? '#f5c43d' : '#cbd5e1'}
+                style={{ marginRight: 5 }}
+                {...({ className: 'cfvd-nav-icon' } as any)}
               />
               <Text
                 style={[
                   styles.navUnderlineText,
-                  activeNav === 'stats' && styles.navUnderlineTextActive,
+                  (activeNav === 'stats' || hoveredNav === 'stats') && styles.navUnderlineTextActive,
                 ]}
+                {...({ className: 'cfvd-nav-text' } as any)}
               >
                 Player Ratings
               </Text>
-            </TouchableOpacity>
+              <View
+                style={[
+                  styles.navUnderlineBar,
+                  (activeNav === 'stats' || hoveredNav === 'stats') && styles.navUnderlineBarActive,
+                ]}
+                {...({ className: 'cfvd-nav-underline' } as any)}
+              />
+            </TouchableOpacity> */}
+
+            {/* Grounds Link */}
+            {/* <TouchableOpacity
+              style={[
+                styles.navUnderlineItem,
+                activeNav === 'grounds' && styles.navUnderlineItemActive,
+              ]}
+              onPress={() => handleNavClick('grounds', () => handleScrollToSection('grounds'))}
+              onMouseEnter={() => setHoveredNav('grounds')}
+              onMouseLeave={() => setHoveredNav(null)}
+              activeOpacity={0.8}
+              {...({ className: `cfvd-nav-link ${activeNav === 'grounds' ? 'cfvd-nav-active' : ''}` } as any)}
+            >
+              <Ionicons
+                name="location-outline"
+                size={14}
+                color={activeNav === 'grounds' || hoveredNav === 'grounds' ? '#f5c43d' : '#cbd5e1'}
+                style={{ marginRight: 5 }}
+                {...({ className: 'cfvd-nav-icon' } as any)}
+              />
+              <Text
+                style={[
+                  styles.navUnderlineText,
+                  (activeNav === 'grounds' || hoveredNav === 'grounds') && styles.navUnderlineTextActive,
+                ]}
+                {...({ className: 'cfvd-nav-text' } as any)}
+              >
+                Grounds
+              </Text>
+              <View
+                style={[
+                  styles.navUnderlineBar,
+                  (activeNav === 'grounds' || hoveredNav === 'grounds') && styles.navUnderlineBarActive,
+                ]}
+                {...({ className: 'cfvd-nav-underline' } as any)}
+              />
+            </TouchableOpacity> */}
+
+            {/* About Link */}
+            {/* <TouchableOpacity
+              style={[
+                styles.navUnderlineItem,
+                activeNav === 'about' && styles.navUnderlineItemActive,
+              ]}
+              onPress={() => handleNavClick('about', () => handleScrollToSection('about'))}
+              onMouseEnter={() => setHoveredNav('about')}
+              onMouseLeave={() => setHoveredNav(null)}
+              activeOpacity={0.8}
+              {...({ className: `cfvd-nav-link ${activeNav === 'about' ? 'cfvd-nav-active' : ''}` } as any)}
+            >
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={14}
+                color={activeNav === 'about' || hoveredNav === 'about' ? '#f5c43d' : '#cbd5e1'}
+                style={{ marginRight: 5 }}
+                {...({ className: 'cfvd-nav-icon' } as any)}
+              />
+              <Text
+                style={[
+                  styles.navUnderlineText,
+                  (activeNav === 'about' || hoveredNav === 'about') && styles.navUnderlineTextActive,
+                ]}
+                {...({ className: 'cfvd-nav-text' } as any)}
+              >
+                About
+              </Text>
+              <View
+                style={[
+                  styles.navUnderlineBar,
+                  (activeNav === 'about' || hoveredNav === 'about') && styles.navUnderlineBarActive,
+                ]}
+                {...({ className: 'cfvd-nav-underline' } as any)}
+              />
+            </TouchableOpacity> */}
 
             {/* Register Link */}
             <TouchableOpacity
@@ -308,22 +513,34 @@ export const Header: React.FC<HeaderProps> = ({
                 activeNav === 'register' && styles.navUnderlineItemActive,
               ]}
               onPress={() => handleNavClick('register', () => navigate('Registration'))}
+              onMouseEnter={() => setHoveredNav('register')}
+              onMouseLeave={() => setHoveredNav(null)}
               activeOpacity={0.8}
+              {...({ className: `cfvd-nav-link ${activeNav === 'register' ? 'cfvd-nav-active' : ''}` } as any)}
             >
               <Ionicons
                 name="document-text-outline"
-                size={15}
-                color={activeNav === 'register' ? '#f5c43d' : '#cbd5e1'}
-                style={{ marginRight: 6 }}
+                size={14}
+                color={activeNav === 'register' || hoveredNav === 'register' ? '#f5c43d' : '#cbd5e1'}
+                style={{ marginRight: 5 }}
+                {...({ className: 'cfvd-nav-icon' } as any)}
               />
               <Text
                 style={[
                   styles.navUnderlineText,
-                  activeNav === 'register' && styles.navUnderlineTextActive,
+                  (activeNav === 'register' || hoveredNav === 'register') && styles.navUnderlineTextActive,
                 ]}
+                {...({ className: 'cfvd-nav-text' } as any)}
               >
                 Register
               </Text>
+              <View
+                style={[
+                  styles.navUnderlineBar,
+                  (activeNav === 'register' || hoveredNav === 'register') && styles.navUnderlineBarActive,
+                ]}
+                {...({ className: 'cfvd-nav-underline' } as any)}
+              />
             </TouchableOpacity>
           </View>
         )}
@@ -476,7 +693,10 @@ export const Header: React.FC<HeaderProps> = ({
             <MaterialCommunityIcons name="cricket" size={19} color="#f5c43d" style={{ marginRight: 10 }} />
             <Text style={styles.mobileNavText}>Match Centre & Live Scores</Text>
           </TouchableOpacity>
-
+          <TouchableOpacity style={styles.mobileNavItem} onPress={() => handleScrollToSection('tournaments')}>
+            <Ionicons name="ribbon-outline" size={18} color="#f5c43d" style={{ marginRight: 10 }} />
+            <Text style={styles.mobileNavText}>Tournaments & Championships</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.mobileNavItem} onPress={() => handleScrollToSection('pointsTable')}>
             <Ionicons name="trophy-outline" size={18} color="#f5c43d" style={{ marginRight: 10 }} />
             <Text style={styles.mobileNavText}>Standings & Points Table</Text>
@@ -489,14 +709,17 @@ export const Header: React.FC<HeaderProps> = ({
             <Ionicons name="people-outline" size={18} color="#f5c43d" style={{ marginRight: 10 }} />
             <Text style={styles.mobileNavText}>District Talent Directory</Text>
           </TouchableOpacity>
-
+          <TouchableOpacity style={styles.mobileNavItem} onPress={() => handleScrollToSection('grounds')}>
+            <Ionicons name="location-outline" size={18} color="#f5c43d" style={{ marginRight: 10 }} />
+            <Text style={styles.mobileNavText}>Grounds & Facilities</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.mobileNavItem} onPress={() => handleScrollToSection('about')}>
             <Ionicons name="shield-checkmark-outline" size={18} color="#f5c43d" style={{ marginRight: 10 }} />
             <Text style={styles.mobileNavText}>About CFVD Heritage</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.mobileNavItem} onPress={() => handleScrollToSection('grounds')}>
-            <Ionicons name="location-outline" size={18} color="#f5c43d" style={{ marginRight: 10 }} />
-            <Text style={styles.mobileNavText}>Grounds & Facilities</Text>
+          <TouchableOpacity style={styles.mobileNavItem} onPress={() => handleScrollToSection('contact')}>
+            <Ionicons name="mail-outline" size={18} color="#f5c43d" style={{ marginRight: 10 }} />
+            <Text style={styles.mobileNavText}>Contact & Secretariat</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.mobileNavItem, { borderBottomWidth: 0, marginTop: 6 }]}
@@ -613,28 +836,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
-    gap: 8,
-    marginHorizontal: 16,
+    gap: 2,
+    marginHorizontal: 8,
     height: '100%',
   },
   navUnderlineItem: {
     height: 48,
-    paddingHorizontal: 12,
-    marginHorizontal: 2,
+    paddingHorizontal: 10,
+    marginHorizontal: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomWidth: 3,
-    borderBottomColor: 'transparent',
+    position: 'relative',
   },
-  navUnderlineItemActive: {
-    borderBottomColor: '#f5c43d', // Underline style for active nav item
+  navUnderlineItemActive: {},
+  navUnderlineBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: '#f5c43d',
+    borderTopLeftRadius: 2,
+    borderTopRightRadius: 2,
+    transform: [{ scaleX: 0 }],
+    ...(Platform.OS === 'web' ? ({
+      transformOrigin: 'left',
+      transition: 'transform 0.28s cubic-bezier(0.25, 1, 0.5, 1)',
+    } as any) : {}),
+  },
+  navUnderlineBarActive: {
+    transform: [{ scaleX: 1 }],
   },
   navUnderlineText: {
     color: '#cbd5e1',
-    fontSize: 13.5,
+    fontSize: 12.5,
     fontWeight: '600',
-    letterSpacing: 0.2,
+    letterSpacing: 0.1,
   },
   navUnderlineTextActive: {
     color: '#ffffff',
