@@ -2604,7 +2604,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         {/* MAIN SCROLL CONTENT AREA */}
         <ScrollView
           style={styles.mainScrollView}
-          contentContainerStyle={styles.scrollContentContainer}
+          contentContainerStyle={[styles.scrollContentContainer, !isDesktop && { paddingHorizontal: 10, paddingVertical: 14 }]}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.contentConstrained}>
@@ -4611,25 +4611,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                 {/* SEARCH & FILTER TOOLBAR */}
                 <View style={styles.filterToolbarCard}>
-                  <View style={styles.searchBoxWrap}>
-                    <Text style={styles.searchIcon}>🔍</Text>
-                    <TextInput
-                      style={styles.searchInput}
-                      placeholder="Search fixtures by team name, venue, tournament, or ID..."
-                      placeholderTextColor="#94a3b8"
-                      value={matchSearchQuery}
-                      onChangeText={setMatchSearchQuery}
-                    />
-                    {matchSearchQuery ? (
-                      <TouchableOpacity onPress={() => setMatchSearchQuery('')}>
-                        <Text style={{ color: '#94a3b8', fontSize: 16 }}>✕</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-
                   {/* Urgent Pending Postponements Banner in Schedules */}
                   {pendingPostponementCount > 0 && (
-                    <View style={{ backgroundColor: '#fff1f2', borderColor: '#f43f5e', borderWidth: 1.5, borderRadius: 10, padding: 12, marginBottom: 12 }}>
+                    <View style={{ backgroundColor: '#fff1f2', borderColor: '#f43f5e', borderWidth: 1.5, borderRadius: 10, padding: 12, marginBottom: 12, width: '100%' }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
                         <Text style={{ color: '#9f1239', fontWeight: '800', fontSize: 13 }}>
                           ⚠️ {pendingPostponementCount} Umpire Postponement Request(s) Awaiting Admin Decision
@@ -4644,25 +4628,41 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     </View>
                   )}
 
-                  {/* Status Filter Dropdown Selector & Refresh */}
-                  {(() => {
-                    const matchFilterOptions = [
-                      { key: 'all' as MatchFilterStatus, label: 'All Fixtures', count: matchesList.length, icon: '📋', color: '#0f172a' },
-                      ...(pendingPostponementCount > 0
-                        ? [{ key: 'REQUESTS' as MatchFilterStatus, label: 'Postponement Requests', count: pendingPostponementCount, icon: '⚠️', color: '#b91c1c' }]
-                        : []),
-                      { key: 'SCHEDULED' as MatchFilterStatus, label: 'Scheduled Fixtures', count: scheduledMatchesCount, icon: '🗓️', color: '#2563eb' },
-                      { key: 'LIVE' as MatchFilterStatus, label: 'Live Matches', count: liveMatchesCount, icon: '🔴', color: '#dc2626' },
-                      { key: 'COMPLETED' as MatchFilterStatus, label: 'Completed Matches', count: completedMatchesCount, icon: '✓', color: '#16a34a' },
-                      { key: 'CANCELLED' as MatchFilterStatus, label: 'Cancelled Fixtures', count: cancelledMatchesCount, icon: '✕', color: '#64748b' },
-                      { key: 'POSTPONED' as MatchFilterStatus, label: 'Postponed Matches', count: postponedMatchesCount, icon: '⏸️', color: '#d97706' },
-                    ];
-                    const activeMatchFilterOption = matchFilterOptions.find(o => o.key === matchFilter) || matchFilterOptions[0];
+                  <View style={[styles.filterControlsRow, !isDesktop && { flexDirection: 'column', alignItems: 'stretch' }]}>
+                    <View style={styles.searchBoxWrap}>
+                      <Text style={styles.searchIcon}>🔍</Text>
+                      <TextInput
+                        style={styles.searchInput}
+                        placeholder="Search fixtures by team name, venue, tournament, or ID..."
+                        placeholderTextColor="#94a3b8"
+                        value={matchSearchQuery}
+                        onChangeText={setMatchSearchQuery}
+                      />
+                      {matchSearchQuery ? (
+                        <TouchableOpacity onPress={() => setMatchSearchQuery('')}>
+                          <Text style={{ color: '#94a3b8', fontSize: 16 }}>✕</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
 
-                    return (
-                      <View style={{ marginTop: 10, zIndex: 100 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                          <View style={{ flex: 1, position: 'relative' }}>
+                    {/* Status Filter Dropdown Selector & Refresh */}
+                    {(() => {
+                      const matchFilterOptions = [
+                        { key: 'all' as MatchFilterStatus, label: 'All Fixtures', count: matchesList.length, icon: '📋', color: '#0f172a' },
+                        ...(pendingPostponementCount > 0
+                          ? [{ key: 'REQUESTS' as MatchFilterStatus, label: 'Postponement Requests', count: pendingPostponementCount, icon: '⚠️', color: '#b91c1c' }]
+                          : []),
+                        { key: 'SCHEDULED' as MatchFilterStatus, label: 'Scheduled Fixtures', count: scheduledMatchesCount, icon: '🗓️', color: '#2563eb' },
+                        { key: 'LIVE' as MatchFilterStatus, label: 'Live Matches', count: liveMatchesCount, icon: '🔴', color: '#dc2626' },
+                        { key: 'COMPLETED' as MatchFilterStatus, label: 'Completed Matches', count: completedMatchesCount, icon: '✓', color: '#16a34a' },
+                        { key: 'CANCELLED' as MatchFilterStatus, label: 'Cancelled Fixtures', count: cancelledMatchesCount, icon: '✕', color: '#64748b' },
+                        { key: 'POSTPONED' as MatchFilterStatus, label: 'Postponed Matches', count: postponedMatchesCount, icon: '⏸️', color: '#d97706' },
+                      ];
+                      const activeMatchFilterOption = matchFilterOptions.find(o => o.key === matchFilter) || matchFilterOptions[0];
+
+                      return (
+                        <View style={[styles.filterRightActions, !isDesktop && { width: '100%' }]}>
+                          <View style={{ flex: isDesktop ? 0 : 1, width: isDesktop ? 220 : undefined, position: 'relative', zIndex: 1000 }}>
                             <TouchableOpacity
                               style={{
                                 flexDirection: 'row',
@@ -4671,14 +4671,14 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 backgroundColor: '#ffffff',
                                 borderWidth: 1.5,
                                 borderColor: activeMatchFilterOption.color === '#0f172a' ? '#cbd5e1' : activeMatchFilterOption.color,
-                                borderRadius: 10,
-                                paddingHorizontal: 14,
-                                paddingVertical: 10
+                                borderRadius: 8,
+                                paddingHorizontal: 12,
+                                height: 40
                               }}
                               onPress={() => setMatchFilterDropdownOpen(!matchFilterDropdownOpen)}
                               activeOpacity={0.8}
                             >
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
                                 <Text style={{ fontSize: 15 }}>{activeMatchFilterOption.icon}</Text>
                                 <Text style={{ fontSize: 13, fontWeight: '700', color: activeMatchFilterOption.color }} numberOfLines={1}>
                                   {activeMatchFilterOption.label}
@@ -4701,19 +4701,17 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               <View
                                 style={{
                                   position: 'absolute',
-                                  top: 48,
+                                  top: 44,
                                   left: 0,
                                   right: 0,
+                                  minWidth: 220,
                                   backgroundColor: '#ffffff',
                                   borderRadius: 10,
                                   borderWidth: 1.5,
-                                  borderColor: '#e2e8f0',
-                                  shadowColor: '#000',
-                                  shadowOffset: { width: 0, height: 4 },
-                                  shadowOpacity: 0.15,
-                                  shadowRadius: 10,
-                                  elevation: 12,
-                                  zIndex: 1000,
+                                  borderColor: '#cbd5e1',
+                                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                                  elevation: 25,
+                                  zIndex: 9999,
                                   overflow: 'hidden'
                                 }}
                               >
@@ -4771,16 +4769,16 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                           {/* Refresh Button */}
                           <TouchableOpacity
-                            style={[styles.refreshBtnSm, { height: 42, paddingHorizontal: 14, justifyContent: 'center' }]}
+                            style={[styles.refreshBtnSm, { height: 40, paddingHorizontal: 14, justifyContent: 'center' }]}
                             onPress={loadMatchesAndLogistics}
                             activeOpacity={0.8}
                           >
                             <Text style={styles.refreshBtnSmText}>🔄 Refresh</Text>
                           </TouchableOpacity>
                         </View>
-                      </View>
-                    );
-                  })()}
+                      );
+                    })()}
+                  </View>
                 </View>
 
                 {/* FIXTURES LIST CONTAINER */}
@@ -4838,8 +4836,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           ]}
                         >
                           {/* Top Header Row */}
-                          <View style={styles.itemCardTop}>
-                            <View style={styles.itemTitleRow}>
+                          <View style={[styles.itemCardTop, !isDesktop && { flexDirection: 'column', alignItems: 'flex-start', gap: 10 }]}>
+                            <View style={[styles.itemTitleRow, { flex: 1, minWidth: 0, width: '100%' }]}>
                               <View style={[
                                 styles.itemCrest,
                                 isLive && { backgroundColor: '#ef4444' },
@@ -4850,23 +4848,23 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               ]}>
                                 <Text style={styles.itemCrestText}>{isLive ? '🔴' : (isPostponed ? '⏸️' : '🏏')}</Text>
                               </View>
-                              <View style={styles.itemTitleCol}>
+                              <View style={[styles.itemTitleCol, { flex: 1, minWidth: 0 }]}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                  <Text style={styles.itemName}>
+                                  <Text style={styles.itemName} numberOfLines={2}>
                                     {m.team_a_name || m.team_a_id} <Text style={{ color: '#d97706' }}>vs</Text> {m.team_b_name || m.team_b_id}
                                   </Text>
                                   <View style={styles.matchIdBadge}>
                                     <Text style={styles.matchIdBadgeText}>{m.id}</Text>
                                   </View>
                                 </View>
-                                <Text style={styles.itemSub}>
+                                <Text style={styles.itemSub} numberOfLines={2}>
                                   🏆 {m.tournament_name || m.tournament_display_name || 'District Championship'} • {m.match_type || 'T20'} ({m.overs_per_side || 20} Overs)
                                 </Text>
                               </View>
                             </View>
 
                             {/* Status Badge */}
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: isDesktop ? 'auto' : 'flex-start' }}>
                               {isScheduled && (
                                 <View style={[styles.statusBadge, styles.badgeScheduled]}>
                                   <Text style={styles.badgeScheduledText}>📅 SCHEDULED</Text>
@@ -8576,13 +8574,13 @@ const styles: any = StyleSheet.create({
   },
   navyStatCard: {
     flex: 1,
-    minWidth: 260,
+    minWidth: 200,
     width: '100%',
     backgroundColor: '#0a1432',
     borderRadius: 16,
     borderWidth: 1.5,
     borderColor: 'rgba(254, 215, 102, 0.45)',
-    padding: 20,
+    padding: 16,
     boxShadow: '0 6px 24px rgba(10, 20, 50, 0.15)',
     elevation: 3
   },
@@ -8786,7 +8784,7 @@ const styles: any = StyleSheet.create({
   },
   searchBox: {
     flex: 1,
-    minWidth: 260,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8fafc',
@@ -8976,13 +8974,16 @@ const styles: any = StyleSheet.create({
   itemMetaGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 16,
+    gap: 12,
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
-    paddingTop: 12
+    paddingTop: 10,
+    width: '100%'
   },
   metaCell: {
-    minWidth: 150
+    flex: 1,
+    minWidth: 120,
+    maxWidth: '100%'
   },
   metaLabel: {
     fontSize: 11,
@@ -9787,25 +9788,35 @@ const styles: any = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 18,
+    padding: 14,
+    marginBottom: 16,
+    position: 'relative',
+    zIndex: 50,
+    elevation: 4,
+    width: '100%'
+  },
+  filterControlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 12
+    gap: 10,
+    width: '100%'
+  },
+  filterRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
   },
   searchBoxWrap: {
     flex: 1,
-    minWidth: 260,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8fafc',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#cbd5e1',
-    paddingHorizontal: 12
+    paddingHorizontal: 12,
+    height: 40
   },
   filterPillsRow: {
     flexDirection: 'row',
@@ -9851,20 +9862,25 @@ const styles: any = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    padding: 18
+    padding: 14,
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden'
   },
   itemCardTop: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 14
+    gap: 10,
+    marginBottom: 12
   },
   itemTitleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12
+    alignItems: 'flex-start',
+    gap: 10,
+    flex: 1,
+    minWidth: 0
   },
   itemCrest: {
     width: 44,
@@ -9882,12 +9898,15 @@ const styles: any = StyleSheet.create({
     fontWeight: '900'
   },
   itemTitleCol: {
-    gap: 3
+    flex: 1,
+    minWidth: 0,
+    gap: 2
   },
   itemName: {
-    fontSize: 17,
+    fontSize: 15.5,
     fontWeight: '800',
-    color: '#0f172a'
+    color: '#0f172a',
+    flexShrink: 1
   },
   matchIdBadge: {
     backgroundColor: '#f1f5f9',
@@ -10176,12 +10195,13 @@ const styles: any = StyleSheet.create({
   // Distinct Match Schedules Highlight & Operations Cards
   schedulesStatCard: {
     flex: 1,
-    minWidth: 320,
+    minWidth: 200,
+    width: '100%',
     backgroundColor: '#ffffff',
     borderRadius: 14,
     borderWidth: 1.5,
     borderColor: '#f59e0b',
-    padding: 22,
+    padding: 16,
     shadowColor: '#f59e0b',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
@@ -10190,12 +10210,13 @@ const styles: any = StyleSheet.create({
   },
   schedulesOpsCard: {
     flex: 1,
-    minWidth: 320,
+    minWidth: 200,
+    width: '100%',
     backgroundColor: '#ffffff',
     borderRadius: 14,
     borderWidth: 1.5,
     borderColor: '#f59e0b',
-    padding: 22,
+    padding: 16,
     shadowColor: '#f59e0b',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
@@ -11931,13 +11952,13 @@ const styles: any = StyleSheet.create({
   // Scorer Management Royal Violet / Indigo Card Styles
   scorerStatCard: {
     flex: 1,
-    minWidth: 260,
+    minWidth: 200,
     width: '100%',
     backgroundColor: '#ffffff',
     borderRadius: 16,
     borderWidth: 1.5,
     borderColor: '#e0e7ff',
-    padding: 20,
+    padding: 16,
     boxShadow: '0 8px 30px rgba(79, 70, 229, 0.08)',
     elevation: 3
   },
@@ -11990,13 +12011,13 @@ const styles: any = StyleSheet.create({
   // Team Registration Emerald & Athletic Gold Card Styles
   teamStatCard: {
     flex: 1,
-    minWidth: 260,
+    minWidth: 200,
     width: '100%',
     backgroundColor: '#ffffff',
     borderRadius: 16,
     borderWidth: 1.5,
     borderColor: '#d1fae5',
-    padding: 20,
+    padding: 16,
     boxShadow: '0 8px 30px rgba(5, 150, 105, 0.08)',
     elevation: 3
   },
@@ -12049,13 +12070,13 @@ const styles: any = StyleSheet.create({
   // Umpire Management Ocean Sapphire & Electric Cyan Styles
   umpireStatCard: {
     flex: 1,
-    minWidth: 260,
+    minWidth: 200,
     width: '100%',
     backgroundColor: '#ffffff',
     borderRadius: 16,
     borderWidth: 1.5,
     borderColor: '#bae6fd',
-    padding: 20,
+    padding: 16,
     boxShadow: '0 8px 30px rgba(2, 132, 199, 0.08)',
     elevation: 3
   },

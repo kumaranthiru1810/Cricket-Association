@@ -3290,7 +3290,8 @@ const styles: any = StyleSheet.create({
   },
   tourCard: {
     width: Platform.OS === 'web' ? 'calc(50% - 8px)' : '100%',
-    minWidth: 320,
+    minWidth: 240,
+    maxWidth: '100%',
     backgroundColor: '#ffffff',
     borderRadius: 14,
     borderWidth: 1,
@@ -4803,8 +4804,8 @@ const styles: any = StyleSheet.create({
   },
   approvedTeamCard: {
     flex: 1,
-    minWidth: 280,
-    maxWidth: 380,
+    minWidth: 240,
+    maxWidth: '100%',
     backgroundColor: '#ffffff',
     borderRadius: 12,
     borderWidth: 1,
