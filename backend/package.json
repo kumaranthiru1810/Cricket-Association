@@ -15,7 +15,8 @@
     "test:rules": "node tests/test_cricket_rules_engine.js",
     "test:umpire": "node tests/test_umpire_module.js",
     "test:security": "node tests/securityVerification.js",
-    "view-db": "node scripts/viewDb.js"
+    "view-db": "node scripts/viewDb.js",
+    "build": "echo Backend build ready"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
