@@ -114,22 +114,22 @@ async function seedDefaultData() {
       await User.insertMany([
         {
           id: 'ADM-1001',
-          name: 'System Administrator',
+          name: 'System User (Former Admin)',
           email: 'admin@example.com',
           mobile: '9876543210',
-          role: 'ADMIN',
-          status: 'ACTIVE',
+          role: 'USER',
+          status: 'INACTIVE',
           password_hash: defaultPasswordHash
         },
         {
           id: 'ADM-1002',
-          name: 'Chief Administrator',
+          name: 'CFVD User (Former Admin)',
           email: 'admin@cfvd.org',
           mobile: '9876543210',
-          role: 'ADMIN',
-          status: 'ACTIVE',
-          is_super_admin: true,
-          admin_level: 'Permanent Super Administrator',
+          role: 'USER',
+          status: 'INACTIVE',
+          is_super_admin: false,
+          admin_level: 'Standard User',
           password_hash: adminPasswordHash
         },
         {
@@ -143,11 +143,13 @@ async function seedDefaultData() {
         },
         {
           id: 'ADM-1004',
-          name: 'Athilingam (Admin & Scorer)',
+          name: 'Athilingam (Super Admin)',
           email: 'athilingam3336@gmail.com',
           mobile: '9876543212',
           role: 'ADMIN',
           status: 'ACTIVE',
+          is_super_admin: true,
+          admin_level: 'Permanent Super Administrator',
           password_hash: athiPasswordHash
         },
         {
@@ -340,9 +342,9 @@ async function seedDefaultData() {
       { upsert: true }
     );
 
-    // Guarantee admin@cfvd.org is the sole permanent Super Admin across the system
+    // Guarantee athilingam3336@gmail.com is the permanent Super Admin across the system
     await User.updateOne(
-      { email: 'admin@cfvd.org' },
+      { email: 'athilingam3336@gmail.com' },
       {
         $set: {
           is_super_admin: true,
@@ -353,8 +355,20 @@ async function seedDefaultData() {
       }
     );
     await User.updateMany(
-      { email: { $ne: 'admin@cfvd.org' }, role: 'ADMIN' },
+      { email: { $ne: 'athilingam3336@gmail.com' }, role: 'ADMIN' },
       { $set: { is_super_admin: false } }
+    );
+    // Explicitly strip ADMIN role from admin@example.com and admin@cfvd.org
+    await User.updateMany(
+      { email: { $in: ['admin@example.com', 'admin@cfvd.org'] } },
+      {
+        $set: {
+          role: 'USER',
+          is_super_admin: false,
+          admin_level: 'Standard User',
+          status: 'INACTIVE'
+        }
+      }
     );
 
     // Seed Scorers

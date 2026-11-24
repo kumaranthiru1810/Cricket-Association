@@ -297,7 +297,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   const [notification, setNotification] = useState<string | null>(null);
   const [pendingTournamentsCount, setPendingTournamentsCount] = useState<number>(0);
 
-  const adminEmail = initialParams?.adminEmail || currentUser?.email || 'admin@cfvd.org';
+  const adminEmail = initialParams?.adminEmail || currentUser?.email || 'athilingam3336@gmail.com';
 
   // Dual-Admin Security Modal State (Promote / Add Admin, Remove / Demote Admin, Audit Log)
   const [securityModalVisible, setSecurityModalVisible] = useState<boolean>(false);

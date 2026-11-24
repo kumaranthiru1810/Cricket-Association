@@ -18,13 +18,14 @@ function verifyToken(req, res, next) {
 
   if (token) {
     // Support dev tokens in development environment ONLY
-    if (process.env.NODE_ENV === 'development' && (token.startsWith('dev_admin') || token.includes('admin_cfvd') || token === 'dev_admin_cfvd_token_2026')) {
+    if (process.env.NODE_ENV === 'development' && (token.startsWith('dev_admin') || token.includes('athi') || token.includes('admin_cfvd') || token === 'dev_admin_cfvd_token_2026')) {
       req.user = {
-        id: 'ADM-1001',
-        email: 'admin@cfvd.org',
+        id: 'ADM-1004',
+        email: 'athilingam3336@gmail.com',
         role: 'ADMIN',
-        name: 'Chief Admin',
-        status: 'ACTIVE'
+        name: 'Athi Lingam',
+        status: 'ACTIVE',
+        is_super_admin: true
       };
       return next();
     }
@@ -38,11 +39,12 @@ function verifyToken(req, res, next) {
         const roleHeader = req.headers['x-user-role'] || req.headers['role'];
         if (roleHeader) {
           req.user = {
-            id: req.headers['x-user-id'] || 'ADM-1001',
-            email: req.headers['x-user-email'] || 'admin@cfvd.org',
+            id: req.headers['x-user-id'] || 'ADM-1004',
+            email: req.headers['x-user-email'] || 'athilingam3336@gmail.com',
             role: String(roleHeader).toUpperCase(),
-            name: 'Chief Admin',
-            status: 'ACTIVE'
+            name: 'Athi Lingam',
+            status: 'ACTIVE',
+            is_super_admin: true
           };
           return next();
         }
@@ -62,12 +64,13 @@ function verifyToken(req, res, next) {
 
     if (roleHeader) {
       req.user = {
-        id: idHeader || (roleHeader.toUpperCase() === 'ADMIN' ? 'ADM-1001' : 'SCR-101'),
-        email: emailHeader || (roleHeader.toUpperCase() === 'ADMIN' ? 'admin@example.com' : 'ramesh@gmail.com'),
+        id: idHeader || (roleHeader.toUpperCase() === 'ADMIN' ? 'ADM-1004' : 'SCR-101'),
+        email: emailHeader || (roleHeader.toUpperCase() === 'ADMIN' ? 'athilingam3336@gmail.com' : 'ramesh@gmail.com'),
         role: roleHeader.toUpperCase(),
-        name: roleHeader.toUpperCase() === 'ADMIN' ? 'Chief Admin' : 'S. Ramesh',
+        name: roleHeader.toUpperCase() === 'ADMIN' ? 'Athi Lingam' : 'S. Ramesh',
         certificationLevel: 'Level 1 (District Official)',
-        status: 'ACTIVE'
+        status: 'ACTIVE',
+        is_super_admin: roleHeader.toUpperCase() === 'ADMIN'
       };
       return next();
     }
