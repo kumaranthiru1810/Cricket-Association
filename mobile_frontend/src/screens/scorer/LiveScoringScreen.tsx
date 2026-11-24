@@ -2058,24 +2058,65 @@ export default function LiveScoringScreen() {
   const handleFieldingActionSelect = async (action: string) => {
     setSelectedFieldingAction(action);
     setShowFieldingModal(false);
-    const fielderObj = bowlingSquad.find(f => f.id === selectedFielderId);
+
+    const fieldersList = (bowlingSquad && bowlingSquad.length > 0 ? bowlingSquad : (matchInfo?.teamBPlayers || matchInfo?.teamAPlayers || []));
+    let fielderId = selectedFielderId;
+    if (!fielderId && fieldersList.length > 0) {
+      fielderId = fieldersList[0].id;
+      setSelectedFielderId(fielderId);
+    }
+    const fielderObj = fieldersList.find((f: any) => f.id === fielderId);
     const fielderName = fielderObj ? fielderObj.name : 'Active Fielder';
 
     // Map to FieldingEventType for instant broadcast animation
     let fType: FieldingEventType = 'CLEAN_COLLECT';
-    if (action.includes('Direct Hit')) fType = 'DIRECT_HIT';
-    else if (action.includes('Boundary Save') || action.includes('Slide')) fType = 'BOUNDARY_SAVE';
-    else if (action.includes('Pick and Throw')) fType = 'PICK_AND_THROW';
-    else if (action.includes('Relay Throw')) fType = 'RELAY_THROW';
-    else if (action.includes('Dropped Catch') || action.includes('Misfield')) fType = 'MISFIELD';
-    else if (action.includes('Overthrow')) fType = 'OVERTHROW';
+    let impactBadge = 'CLEAN COLLECT';
+    let impactScore = 1;
+    if (action.includes('Direct Hit')) {
+      fType = 'DIRECT_HIT';
+      impactBadge = 'DIRECT HIT';
+      impactScore = 3;
+    } else if (action.includes('Boundary Save') || action.includes('Slide')) {
+      fType = 'BOUNDARY_SAVE';
+      impactBadge = '4 RUNS SAVED';
+      impactScore = 4;
+    } else if (action.includes('Pick and Throw')) {
+      fType = 'PICK_AND_THROW';
+      impactBadge = 'SHARP PICK & THROW';
+      impactScore = 2;
+    } else if (action.includes('Relay Throw')) {
+      fType = 'RELAY_THROW';
+      impactBadge = 'RELAY THROW';
+      impactScore = 2;
+    } else if (action.includes('Dropped Catch') || action.includes('Misfield')) {
+      fType = 'MISFIELD';
+      impactBadge = 'MISFIELD';
+      impactScore = -1;
+    } else if (action.includes('Overthrow')) {
+      fType = 'OVERTHROW';
+      impactBadge = 'OVERTHROW CONCEDED';
+      impactScore = -2;
+    }
 
     setActiveFieldingEvent({
       type: fType,
       fielderName: fielderName,
-      teamName: matchInfo?.bowlingTeam || 'Fielding Team',
-      details: `${fielderName} executed ${action} • Logged for match scorecard`
+      teamName: matchInfo?.bowlingTeam || 'Fielding Side',
+      details: `${fielderName} executed ${action} • Counted for Best Fielder rating`,
+      badge: impactBadge,
+      impactScore: impactScore
     });
+
+    // Background sync: attach to commentary & match events
+    try {
+      await ScorerApi.getFieldingCommentary(matchId, {
+        fieldingPosition: selectedFieldPosition || 'Cover',
+        fielderId: fielderId || undefined,
+        fielderName: fielderName
+      });
+    } catch (err) {
+      // Non-blocking background sync
+    }
   };
 
   const handleWicketClick = () => {
@@ -5000,7 +5041,7 @@ export default function LiveScoringScreen() {
 
       {/* 2b. POSTPONE MATCH MODAL */}
       <Modal
-        visible={showPostponeModal}
+        visible={showPostponeModal && !(clockPickerVisible && clockPickerTarget === 'RESCHEDULE_TIME')}
         transparent
         animationType="fade"
         onRequestClose={() => {
@@ -6643,17 +6684,20 @@ export default function LiveScoringScreen() {
             <Text style={styles.fieldSubLabel}>SELECT ACTIVE FIELDER:</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12, marginTop: 4 }}>
               <View style={{ flexDirection: 'row', gap: 6 }}>
-                {bowlingSquad.map((f) => (
-                  <TouchableOpacity
-                    key={`fld-${f.id}`}
-                    style={[styles.quickReasonChip, selectedFielderId === f.id && styles.quickReasonChipActive]}
-                    onPress={() => setSelectedFielderId(f.id)}
-                  >
-                    <Text style={[styles.quickReasonChipText, selectedFielderId === f.id && styles.quickReasonChipTextActive]}>
-                      🧤 {f.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {((bowlingSquad && bowlingSquad.length > 0 ? bowlingSquad : (matchInfo?.teamBPlayers || matchInfo?.teamAPlayers || [])) as any[]).map((f: any) => {
+                  const isSelected = selectedFielderId ? selectedFielderId === f.id : (bowlingSquad[0]?.id === f.id);
+                  return (
+                    <TouchableOpacity
+                      key={`fld-${f.id}`}
+                      style={[styles.quickReasonChip, isSelected && styles.quickReasonChipActive]}
+                      onPress={() => setSelectedFielderId(f.id)}
+                    >
+                      <Text style={[styles.quickReasonChipText, isSelected && styles.quickReasonChipTextActive]}>
+                        🧤 {f.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </ScrollView>
 
@@ -7928,15 +7972,15 @@ export default function LiveScoringScreen() {
                     style={[
                       styles.enginePrimaryBtn,
                       {
-                        backgroundColor: autoPromptWagonWheel ? '#0284c7' : '#047857',
-                        borderColor: autoPromptWagonWheel ? '#0369a1' : '#059669',
+                        backgroundColor: selectedFieldingAction ? '#0284c7' : '#047857',
+                        borderColor: selectedFieldingAction ? '#0369a1' : '#059669',
                       }
                     ]}
-                    onPress={() => setAutoPromptWagonWheel(!autoPromptWagonWheel)}
+                    onPress={() => setShowFieldingModal(true)}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.enginePrimaryBtnText}>
-                      {autoPromptWagonWheel ? '🎯 Wagon Wheel' : '⚡ Fast Mode'}
+                    <Text style={styles.enginePrimaryBtnText} numberOfLines={1}>
+                      {selectedFieldingAction ? `🧤 ${selectedFieldingAction}` : '🧤 Fielding Type'}
                     </Text>
                   </TouchableOpacity>
                 </View>

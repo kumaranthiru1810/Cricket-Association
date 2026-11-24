@@ -291,6 +291,9 @@ async function dispatchMatchScheduleNotifications(db, match, { isRescheduled = f
   const notifDocs = [];
   const type = isRescheduled ? 'MATCH_RESCHEDULED' : 'MATCH_SCHEDULED';
 
+  const notesText = (match.notes || match.match_notes || '').trim();
+  const notesSuffix = notesText ? `\n\n📝 Match Notes:\n${notesText}` : '';
+
   // 1. Notification for Team A
   notifDocs.push({
     id: `NOTIF-M-${match.id}-TEAM-A-${timestamp}`,
@@ -300,9 +303,9 @@ async function dispatchMatchScheduleNotifications(db, match, { isRescheduled = f
     team_id: teamAId,
     team_name: teamAName,
     title: isRescheduled ? `📅 Fixture Rescheduled vs ${teamBName}` : `🏏 Match Scheduled vs ${teamBName}`,
-    message: isRescheduled
+    message: (isRescheduled
       ? `Your match vs ${teamBName} has been rescheduled to ${date} at ${time} at ${venue}.`
-      : `Your match vs ${teamBName} has been scheduled on ${date} at ${time} at ${venue}.`,
+      : `Your match vs ${teamBName} has been scheduled on ${date} at ${time} at ${venue}.`) + notesSuffix,
     reference_id: match.id,
     link: mapLink,
     status: 'UNREAD'
@@ -320,14 +323,31 @@ async function dispatchMatchScheduleNotifications(db, match, { isRescheduled = f
       team_id: teamAId,
       team_name: teamAName,
       title: isRescheduled ? `📅 Match Rescheduled vs ${teamBName}` : `🏏 Match Scheduled vs ${teamBName}`,
-      message: isRescheduled
+      message: (isRescheduled
         ? `Your team ${teamAName} match vs ${teamBName} has been rescheduled to ${date} at ${time} at ${venue}.`
-        : `Your team ${teamAName} is scheduled to play against ${teamBName} on ${date} at ${time} at ${venue}.`,
+        : `Your team ${teamAName} is scheduled to play against ${teamBName} on ${date} at ${time} at ${venue}.`) + notesSuffix,
       reference_id: match.id,
       link: mapLink,
       status: 'UNREAD'
     });
   }
+
+  // Broadcast notification for any logged-in players of Team A
+  notifDocs.push({
+    id: `NOTIF-M-${match.id}-TEAM-A-PLAYERS-${timestamp}`,
+    type,
+    recipient_role: 'PLAYER',
+    recipient_id: `TEAM-${teamAId}-PLAYERS`,
+    team_id: teamAId,
+    team_name: teamAName,
+    title: isRescheduled ? `📅 Match Rescheduled vs ${teamBName}` : `🏏 Match Scheduled vs ${teamBName}`,
+    message: (isRescheduled
+      ? `Your team ${teamAName} match vs ${teamBName} has been rescheduled to ${date} at ${time} at ${venue}.`
+      : `Your team ${teamAName} is scheduled to play against ${teamBName} on ${date} at ${time} at ${venue}.`) + notesSuffix,
+    reference_id: match.id,
+    link: mapLink,
+    status: 'UNREAD'
+  });
 
   // 3. Notification for Team B
   notifDocs.push({
@@ -338,9 +358,9 @@ async function dispatchMatchScheduleNotifications(db, match, { isRescheduled = f
     team_id: teamBId,
     team_name: teamBName,
     title: isRescheduled ? `📅 Fixture Rescheduled vs ${teamAName}` : `🏏 Match Scheduled vs ${teamAName}`,
-    message: isRescheduled
+    message: (isRescheduled
       ? `Your match vs ${teamAName} has been rescheduled to ${date} at ${time} at ${venue}.`
-      : `Your match vs ${teamAName} has been scheduled on ${date} at ${time} at ${venue}.`,
+      : `Your match vs ${teamAName} has been scheduled on ${date} at ${time} at ${venue}.`) + notesSuffix,
     reference_id: match.id,
     link: mapLink,
     status: 'UNREAD'
@@ -358,14 +378,31 @@ async function dispatchMatchScheduleNotifications(db, match, { isRescheduled = f
       team_id: teamBId,
       team_name: teamBName,
       title: isRescheduled ? `📅 Match Rescheduled vs ${teamAName}` : `🏏 Match Scheduled vs ${teamAName}`,
-      message: isRescheduled
+      message: (isRescheduled
         ? `Your team ${teamBName} match vs ${teamAName} has been rescheduled to ${date} at ${time} at ${venue}.`
-        : `Your team ${teamBName} is scheduled to play against ${teamAName} on ${date} at ${time} at ${venue}.`,
+        : `Your team ${teamBName} is scheduled to play against ${teamAName} on ${date} at ${time} at ${venue}.`) + notesSuffix,
       reference_id: match.id,
       link: mapLink,
       status: 'UNREAD'
     });
   }
+
+  // Broadcast notification for any logged-in players of Team B
+  notifDocs.push({
+    id: `NOTIF-M-${match.id}-TEAM-B-PLAYERS-${timestamp}`,
+    type,
+    recipient_role: 'PLAYER',
+    recipient_id: `TEAM-${teamBId}-PLAYERS`,
+    team_id: teamBId,
+    team_name: teamBName,
+    title: isRescheduled ? `📅 Match Rescheduled vs ${teamAName}` : `🏏 Match Scheduled vs ${teamAName}`,
+    message: (isRescheduled
+      ? `Your team ${teamBName} match vs ${teamAName} has been rescheduled to ${date} at ${time} at ${venue}.`
+      : `Your team ${teamBName} is scheduled to play against ${teamAName} on ${date} at ${time} at ${venue}.`) + notesSuffix,
+    reference_id: match.id,
+    link: mapLink,
+    status: 'UNREAD'
+  });
 
   if (notifDocs.length > 0) {
     await db.models.Notification.insertMany(notifDocs);
@@ -482,6 +519,7 @@ async function scheduleMatch(fixtureData, adminEmail) {
     }
   }
 
+  const matchNotes = (fixtureData.notes || fixtureData.match_notes || '').trim();
   const matchId = fixtureData.id || `M-${Date.now()}`;
   const match = await db.models.Match.create({
     id: matchId,
@@ -503,7 +541,9 @@ async function scheduleMatch(fixtureData, adminEmail) {
     umpire1_id: umpire1_id || null,
     umpire2_id: umpire2_id || null,
     umpire1_name: resolvedUmpire1Name || (umpire1_id ? 'Official Umpire 1' : null),
-    umpire2_name: resolvedUmpire2Name || (umpire2_id ? 'Official Umpire 2' : null)
+    umpire2_name: resolvedUmpire2Name || (umpire2_id ? 'Official Umpire 2' : null),
+    notes: matchNotes,
+    match_notes: matchNotes
   });
 
   await addAuditLog({
@@ -515,10 +555,12 @@ async function scheduleMatch(fixtureData, adminEmail) {
   });
 
   // Dispatch targeted Notifications strictly to Team A, Team B, and their squad players
-  try {
-    await dispatchMatchScheduleNotifications(db, match, { isRescheduled: false });
-  } catch (notifErr) {
-    console.warn('Failed to dispatch match schedule notification:', notifErr.message);
+  if (fixtureData.notify_teams_and_coaches !== false && fixtureData.notify_teams !== false) {
+    try {
+      await dispatchMatchScheduleNotifications(db, match, { isRescheduled: false });
+    } catch (notifErr) {
+      console.warn('Failed to dispatch match schedule notification:', notifErr.message);
+    }
   }
 
   return match.toObject();
@@ -599,6 +641,10 @@ async function updateMatch(matchId, fixtureData, adminEmail) {
     match.umpire2_id = fixtureData.umpire2_id;
     if (fixtureData.umpire2_name) match.umpire2_name = fixtureData.umpire2_name;
   }
+  if (fixtureData.notes !== undefined || fixtureData.match_notes !== undefined) {
+    match.notes = fixtureData.notes !== undefined ? fixtureData.notes : fixtureData.match_notes;
+    match.match_notes = match.notes;
+  }
   if (fixtureData.status && !isLive) match.status = fixtureData.status;
 
   match.updated_at = new Date();
@@ -611,6 +657,14 @@ async function updateMatch(matchId, fixtureData, adminEmail) {
     result: `Match ${matchId} updated/rescheduled`,
     details: `Updated details for ${match.match_date} at ${match.venue}`
   });
+
+  if (fixtureData.notify_teams_and_coaches === true || fixtureData.notify_teams === true) {
+    try {
+      await dispatchMatchScheduleNotifications(db, match, { isRescheduled: true });
+    } catch (notifErr) {
+      console.warn('Failed to dispatch match reschedule notification:', notifErr.message);
+    }
+  }
 
   return match.toObject();
 }

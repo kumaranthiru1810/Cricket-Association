@@ -1545,9 +1545,9 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                   <View style={styles.itemCardHeaderRow}>
                     <View style={styles.itemTitleGroup}>
                       <View style={styles.itemTitleBadgeRow}>
-                        <Text style={styles.itemNameText}>Latest Federation Notice</Text>
+                        <Text style={styles.itemNameText}>Latest Federation Notice &amp; Match Schedule</Text>
                         <View style={styles.badgeGold}>
-                          <Text style={styles.badgeGoldText}>📢 Official</Text>
+                          <Text style={styles.badgeGoldText}>📢 Official Inbox</Text>
                         </View>
                       </View>
                       <Text style={styles.itemIdGradeText}>
@@ -1557,6 +1557,36 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                   </View>
                   <Text style={styles.noticeTitleBold}>{notifications[0]?.title}</Text>
                   <Text style={styles.noticeBodyText}>{notifications[0]?.message}</Text>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 }}>
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 }}
+                      onPress={() => setActiveTab('notifications')}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#1e293b' }}>
+                        📬 Open Inbox / All Notices ({notifications.length}) →
+                      </Text>
+                    </TouchableOpacity>
+
+                    {notifications[0]?.link ? (
+                      <TouchableOpacity
+                        style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 }}
+                        onPress={() => {
+                          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                            window.open(notifications[0].link, '_blank');
+                          } else {
+                            Linking.openURL(notifications[0].link).catch(() => {});
+                          }
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#2563eb' }}>
+                          📍 View Venue Map ↗
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
                 </View>
               )}
             </View>
