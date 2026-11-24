@@ -5180,7 +5180,7 @@ export default function LiveScoringScreen() {
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                           <Text style={{ fontSize: 12 }}>✏️</Text>
                           <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#b45309' }}>
-                            Custom Umpire (வேறு நடுவர் சுயமாக எழுத)
+                            Custom / Non-Panel Umpire
                           </Text>
                         </View>
                         {isCustomUmpire1 && <Text style={{ color: '#d97706', fontWeight: '900', fontSize: 12 }}>✓</Text>}
@@ -5197,7 +5197,7 @@ export default function LiveScoringScreen() {
                     </Text>
                     <TextInput
                       style={[styles.customNameInput, { borderColor: '#f59e0b', backgroundColor: '#fffbeb', paddingVertical: 7 }]}
-                      placeholder="Enter custom umpire name (நடுவர் பெயர் எழுத)..."
+                      placeholder="Enter custom umpire name..."
                       placeholderTextColor="#94a3b8"
                       value={umpire1Name}
                       onChangeText={setUmpire1Name}
@@ -5416,7 +5416,7 @@ export default function LiveScoringScreen() {
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                           <Text style={{ fontSize: 12 }}>✏️</Text>
                           <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#b45309' }}>
-                            Custom Umpire (வேறு நடுவர் சுயமாக எழுத)
+                            Custom / Non-Panel Umpire
                           </Text>
                         </View>
                         {isCustomUmpire2 && <Text style={{ color: '#d97706', fontWeight: '900', fontSize: 12 }}>✓</Text>}
@@ -5433,7 +5433,7 @@ export default function LiveScoringScreen() {
                     </Text>
                     <TextInput
                       style={[styles.customNameInput, { borderColor: '#f59e0b', backgroundColor: '#fffbeb', paddingVertical: 7 }]}
-                      placeholder="Enter custom umpire name (நடுவர் பெயர் எழுத)..."
+                      placeholder="Enter custom umpire name..."
                       placeholderTextColor="#94a3b8"
                       value={umpire2Name}
                       onChangeText={setUmpire2Name}
@@ -5562,7 +5562,7 @@ export default function LiveScoringScreen() {
                 {isSubmittingUmpire ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.modalConfirmText}>✓ SUBMIT ASSESSMENT (பதிவு செய்க)</Text>
+                  <Text style={styles.modalConfirmText}>✓ SUBMIT UMPIRE ASSESSMENT</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -7571,9 +7571,9 @@ export default function LiveScoringScreen() {
                 )}
               </View>
 
-              {/* 3. CUSTOM TYPE / EDITABLE TEXT INPUT ("eluthura marium") */}
+              {/* 3. CUSTOM TYPE / EDITABLE TEXT INPUT */}
               <View style={{ marginTop: 12 }}>
-                <Text style={styles.fieldSubLabel}>✏️ CUSTOM ACTION / NOTES (விருப்பக் குறிப்பு எழுத):</Text>
+                <Text style={styles.fieldSubLabel}>✏️ CUSTOM ACTION / NOTES:</Text>
                 <TextInput
                   style={{
                     backgroundColor: '#f8fafc',
@@ -7626,7 +7626,7 @@ export default function LiveScoringScreen() {
               activeOpacity={0.85}
             >
               <Text style={{ color: '#ffffff', fontSize: 13.5, fontWeight: '900' }}>
-                ✓ RECORD FIELDING ACTION (பதிவு செய்க)
+                ✓ RECORD FIELDING ACTION
               </Text>
             </TouchableOpacity>
           </View>

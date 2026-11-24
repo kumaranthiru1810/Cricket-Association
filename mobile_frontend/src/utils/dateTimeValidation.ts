@@ -467,11 +467,11 @@ export function calculateOfficialMatchTimings(timeStr: string): OfficialMatchTim
     firstBallTime: '08:30 AM',
     tossWindow: '08:00 AM to 08:15 AM',
     reportingTime: '08:00 AM',
-    sessionLabel: 'காலை ஆட்டம் (Morning Session)',
+    sessionLabel: 'Morning Session',
     rulesTamil: {
-      tossRule: 'டாஸ் போடும் நேரம்:- 08.00 AM to 08.15 AM & 01.00 PM to 01.15 PM',
-      firstBallRule: 'முதல் பந்து காலை 08.30 மணிக்கும் மதியம் 01.30 மணிக்கும் வீசப்பட வேண்டும்.',
-      rule15: 'விதி 15: இன்னிங்ஸ் தொடங்குவதற்கு குறைந்தபட்சம் 9 வீரர்கள் ஆட்டத்தின் தொடக்கத்தில் இருக்க வேண்டும்.'
+      tossRule: 'Toss Window: 08:00 AM to 08:15 AM & 01:00 PM to 01:15 PM',
+      firstBallRule: 'First Ball: Must be delivered at 08:30 AM (Morning) & 01:30 PM (Afternoon)',
+      rule15: 'Rule 15: A minimum of 9 players must be present at the start of each innings.'
     }
   };
 
@@ -484,7 +484,7 @@ export function calculateOfficialMatchTimings(timeStr: string): OfficialMatchTim
       firstBallTime: '08:30 AM',
       tossWindow: '08:00 AM to 08:15 AM',
       reportingTime: '08:00 AM',
-      sessionLabel: 'காலை ஆட்டம் (Morning Session)'
+      sessionLabel: 'Morning Session'
     };
   }
   if (clean === '01:30 PM' || clean === '1:30 PM') {
@@ -493,7 +493,7 @@ export function calculateOfficialMatchTimings(timeStr: string): OfficialMatchTim
       firstBallTime: '01:30 PM',
       tossWindow: '01:00 PM to 01:15 PM',
       reportingTime: '01:00 PM',
-      sessionLabel: 'மதிய ஆட்டம் (Afternoon Session)'
+      sessionLabel: 'Afternoon Session'
     };
   }
 
@@ -518,7 +518,7 @@ export function calculateOfficialMatchTimings(timeStr: string): OfficialMatchTim
     firstBallTime: parsed.formatted12,
     tossWindow: `${fmt(tossStartMin)} to ${fmt(tossEndMin)}`,
     reportingTime: fmt(tossStartMin),
-    sessionLabel: isMorning ? 'காலை ஆட்டம் (Morning Session)' : 'மதிய / மாலை ஆட்டம் (Afternoon/Evening Session)',
+    sessionLabel: isMorning ? 'Morning Session' : 'Afternoon / Evening Session',
     rulesTamil: fallback.rulesTamil
   };
 }

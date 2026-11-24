@@ -6364,7 +6364,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               {/* Toss Timing Box */}
                               <View style={styles.timingCardItem}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                                  <Text style={styles.timingLabelTamil}>🪙 டாஸ் போடும் நேரம்</Text>
+                                  <Text style={styles.timingLabelTamil}>🪙 Toss Window</Text>
                                   <Text style={styles.timingTagText}>Toss Window</Text>
                                 </View>
                                 <Text style={styles.timingValueText}>{timings.tossWindow}</Text>
@@ -6374,7 +6374,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               {/* First Ball Throw Time Box */}
                               <View style={[styles.timingCardItem, { borderColor: '#f59e0b', backgroundColor: '#fffbeb' }]}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                                  <Text style={[styles.timingLabelTamil, { color: '#b45309' }]}>🏏 முதல் பந்து வீசும் நேரம்</Text>
+                                  <Text style={[styles.timingLabelTamil, { color: '#b45309' }]}>🏏 First Ball Delivery</Text>
                                   <Text style={[styles.timingTagText, { backgroundColor: '#fef3c7', color: '#b45309' }]}>First Ball</Text>
                                 </View>
                                 <Text style={[styles.timingValueText, { color: '#92400e' }]}>{timings.firstBallTime}</Text>
@@ -6384,10 +6384,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               {/* Scorer Reporting Time */}
                               <View style={[styles.timingCardItem, { borderColor: '#3b82f6', backgroundColor: '#eff6ff' }]}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                                  <Text style={[styles.timingLabelTamil, { color: '#1d4ed8' }]}>⏰ ஸ்கோரர் வருகை நேரம்</Text>
+                                  <Text style={[styles.timingLabelTamil, { color: '#1d4ed8' }]}>⏰ Scorer Reporting</Text>
                                   <Text style={[styles.timingTagText, { backgroundColor: '#dbeafe', color: '#1d4ed8' }]}>Reporting</Text>
                                 </View>
-                                <Text style={[styles.timingValueText, { color: '#1e40af' }]}>{timings.reportingTime}</Text>
+                                <Text style={styles.timingValueText}>{timings.reportingTime}</Text>
                                 <Text style={[styles.timingSubtext, { color: '#2563eb' }]}>At Scorer Booth & Team List Verification</Text>
                               </View>
                             </View>
@@ -6397,10 +6397,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                         {/* Official Association Rules Notice */}
                         <View style={styles.scorerRuleNotice}>
                           <Text style={styles.scorerRuleNoticeText}>
-                            📜 <Text style={{ fontWeight: '700' }}>அசோசியேஷன் விதிமுறை:</Text> டாஸ் போடும் நேரம்: 08.00 AM to 08.15 AM & 01.00 PM to 01.15 PM. முதல் பந்து காலை 08.30 மணிக்கும் மதியம் 01.30 மணிக்கும் வீசப்பட வேண்டும்.
+                            📜 <Text style={{ fontWeight: '700' }}>Association Timings Rule:</Text> Toss window: 08:00 AM to 08:15 AM (Morning) & 01:00 PM to 01:15 PM (Afternoon). First ball: 08:30 AM & 01:30 PM.
                           </Text>
                           <Text style={[styles.scorerRuleNoticeText, { marginTop: 4, color: '#0369a1' }]}>
-                            🔔 Scorer லாகின் செய்யும் போது இந்த நேரங்கள் பாப்அப் (Popup) ஆக தோன்றும். சரி (OK) அளித்த பின்னரே ஸ்கோரர் உள்ளே நுழைய முடியும்.
+                            🔔 When the Scorer logs in, these mandatory timings will appear as an acknowledgement popup before portal entry.
                           </Text>
                         </View>
                       </View>

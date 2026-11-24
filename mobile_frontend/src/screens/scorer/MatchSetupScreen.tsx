@@ -142,7 +142,7 @@ export default function MatchSetupScreen() {
     if (presentA.length < 9) {
       showWarning(
         'Rule 15: Minimum 9 Players Required',
-        `இன்னிங்ஸ் தொடங்குவதற்கு குறைந்தபட்சம் 9 வீரர்கள் ஆட்டத்தின் தொடக்கத்தில் இருக்க வேண்டும்.\n\n${teamA.name} has only ${presentA.length} players marked present. Please mark attendance for at least 9 players before starting.`
+        `Rule 15: A minimum of 9 players must be present at the start of each innings.\n\n${teamA.name} has only ${presentA.length} players marked present. Please mark attendance for at least 9 players before starting.`
       );
       return;
     }
@@ -150,7 +150,7 @@ export default function MatchSetupScreen() {
     if (presentB.length < 9) {
       showWarning(
         'Rule 15: Minimum 9 Players Required',
-        `இன்னிங்ஸ் தொடங்குவதற்கு குறைந்தபட்சம் 9 வீரர்கள் ஆட்டத்தின் தொடக்கத்தில் இருக்க வேண்டும்.\n\n${teamB.name} has only ${presentB.length} players marked present. Please mark attendance for at least 9 players before starting.`
+        `Rule 15: A minimum of 9 players must be present at the start of each innings.\n\n${teamB.name} has only ${presentB.length} players marked present. Please mark attendance for at least 9 players before starting.`
       );
       return;
     }
@@ -490,7 +490,7 @@ export default function MatchSetupScreen() {
                       Association Rule 15 • Match Attendance Requirement
                     </Text>
                     <Text style={styles.rule15Tamil}>
-                      "15. இன்னிங்ஸ் தொடங்குவதற்கு குறைந்தபட்சம் 9 வீரர்கள் ஆட்டத்தின் தொடக்கத்தில் இருக்க வேண்டும்."
+                      "Rule 15: A minimum of 9 players must be present at the start of each innings."
                     </Text>
                     <Text style={styles.rule15Sub}>
                       Official Scorer: Mark checkboxes for each attending player. At least 9 players must be marked Present per team before starting the match.

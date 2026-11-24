@@ -628,7 +628,7 @@ export default function ScorerDashboardScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.ackModalTitleTamil}>
-                    அதிகாரப்பூர்வ ஆட்ட நெறிமுறைகள் & நேர அட்டவணை
+                    Official Match Protocols & Timings Schedule
                   </Text>
                   <Text style={styles.ackModalSubtitle}>
                     Official Match Protocol & Timings • Scorer Verification
@@ -676,37 +676,37 @@ export default function ScorerDashboardScreen() {
                     {/* Toss Window Box */}
                     <View style={styles.ackTimingItem}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                        <Text style={styles.ackTimingLabelTamil}>🪙 டாஸ் போடும் நேரம்</Text>
+                        <Text style={styles.ackTimingLabelTamil}>🪙 Toss Window</Text>
                         <Text style={styles.ackTimingTag}>Toss Window</Text>
                       </View>
                       <Text style={styles.ackTimingValue}>
                         {timingAckMatch?.toss_time_window || timings.tossWindow}
                       </Text>
-                      <Text style={styles.ackTimingHint}>15 - 30 நிமிடங்கள் முன்பு</Text>
+                      <Text style={styles.ackTimingHint}>15 - 30 minutes before first ball</Text>
                     </View>
 
                     {/* First Ball Delivery Box */}
                     <View style={[styles.ackTimingItem, { borderColor: '#f59e0b', backgroundColor: '#fffbeb' }]}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                        <Text style={[styles.ackTimingLabelTamil, { color: '#b45309' }]}>🏏 முதல் பந்து வீசும் நேரம்</Text>
+                        <Text style={[styles.ackTimingLabelTamil, { color: '#b45309' }]}>🏏 First Ball Time</Text>
                         <Text style={[styles.ackTimingTag, { backgroundColor: '#fef3c7', color: '#b45309' }]}>First Ball</Text>
                       </View>
                       <Text style={[styles.ackTimingValue, { color: '#92400e' }]}>
                         {timingAckMatch?.first_ball_time || timingAckMatch?.match_time || timings.firstBallTime}
                       </Text>
-                      <Text style={[styles.ackTimingHint, { color: '#b45309' }]}>கட்டாய பந்து வீச்சு நேரம்</Text>
+                      <Text style={[styles.ackTimingHint, { color: '#b45309' }]}>Mandatory delivery deadline</Text>
                     </View>
 
                     {/* Scorer Reporting Time */}
                     <View style={[styles.ackTimingItem, { borderColor: '#3b82f6', backgroundColor: '#eff6ff' }]}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                        <Text style={[styles.ackTimingLabelTamil, { color: '#1d4ed8' }]}>⏰ ஸ்கோரர் வருகை நேரம்</Text>
+                        <Text style={[styles.ackTimingLabelTamil, { color: '#1d4ed8' }]}>⏰ Scorer Reporting Time</Text>
                         <Text style={[styles.ackTimingTag, { backgroundColor: '#dbeafe', color: '#1d4ed8' }]}>Reporting</Text>
                       </View>
                       <Text style={[styles.ackTimingValue, { color: '#1e40af' }]}>
                         {timingAckMatch?.scorer_reporting_time || timings.reportingTime}
                       </Text>
-                      <Text style={[styles.ackTimingHint, { color: '#2563eb' }]}>ஸ்கோரர் பூத் வருகை & பட்டியல் சரிபார்ப்பு</Text>
+                      <Text style={[styles.ackTimingHint, { color: '#2563eb' }]}>Scorer booth arrival & roster check</Text>
                     </View>
                   </View>
                 );
@@ -714,18 +714,18 @@ export default function ScorerDashboardScreen() {
 
               {/* Official Association Rules Card */}
               <View style={styles.ackRulesBox}>
-                <Text style={styles.ackRulesHeader}>📜 தமிழ்நாடு கிரிக்கெட் அசோசியேஷன் விதிமுறைகள்:</Text>
+                <Text style={styles.ackRulesHeader}>📜 Official Association Rules & Standard Timings:</Text>
                 <View style={{ marginTop: 6, gap: 5 }}>
-                  <Text style={styles.ackRuleLine}>• <Text style={{ fontWeight: '700' }}>டாஸ் போடும் நேரம்:</Text> 08.00 AM to 08.15 AM & 01.00 PM to 01.15 PM</Text>
-                  <Text style={styles.ackRuleLine}>• <Text style={{ fontWeight: '700' }}>முதல் பந்து:</Text> காலை 08.30 மணிக்கும் மதியம் 01.30 மணிக்கும் வீசப்பட வேண்டும்.</Text>
-                  <Text style={styles.ackRuleLine}>• <Text style={{ fontWeight: '700' }}>விதி 15:</Text> இன்னிங்ஸ் தொடங்குவதற்கு குறைந்தபட்சம் 9 வீரர்கள் ஆட்டத்தின் தொடக்கத்தில் இருக்க வேண்டும்.</Text>
+                  <Text style={styles.ackRuleLine}>• <Text style={{ fontWeight: '700' }}>Toss Window:</Text> 08:00 AM to 08:15 AM (Morning) & 01:00 PM to 01:15 PM (Afternoon)</Text>
+                  <Text style={styles.ackRuleLine}>• <Text style={{ fontWeight: '700' }}>First Ball:</Text> Must be delivered at 08:30 AM (Morning) & 01:30 PM (Afternoon)</Text>
+                  <Text style={styles.ackRuleLine}>• <Text style={{ fontWeight: '700' }}>Rule 15:</Text> A minimum of 9 players must be present at the start of each innings.</Text>
                 </View>
               </View>
 
               {/* Scorer Consent Box */}
               <View style={styles.ackConsentBox}>
                 <Text style={styles.ackConsentText}>
-                  🛡️ நான் மேற்கண்ட ஆட்ட நேரங்கள் மற்றும் டாஸ் நெறிமுறைகளை ஏற்றுக்கொள்கிறேன். நேரத்திற்குள் அதிகாரப்பூர்வ ஸ்கோரிங் செய்ய ஒப்புதல் அளிக்கிறேன்.
+                  🛡️ I acknowledge the scheduled match timings and toss protocols, and agree to officiate promptly in accordance with Association rules.
                 </Text>
               </View>
             </ScrollView>
@@ -737,7 +737,7 @@ export default function ScorerDashboardScreen() {
               activeOpacity={0.85}
             >
               <Text style={styles.ackSubmitBtnText}>
-                ✓ சரி / ஒப்புதல் & போர்ட்டலுக்குள் நுழையவும் (OK & Enter Portal)
+                ✓ Acknowledge & Enter Scorer Portal
               </Text>
             </TouchableOpacity>
           </View>
