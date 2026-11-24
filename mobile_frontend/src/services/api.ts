@@ -160,7 +160,6 @@ export const getAuthToken = (): string | null => {
       sessionStorage.getItem('cfvd_admin_token') ||
       null
     );
-    if (found) return found;
   }
   if (token) return token;
   return null;
@@ -337,7 +336,6 @@ async function request(endpoint: string, options: RequestInit = {}) {
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(isAdminEndpoint ? { 'x-user-role': 'ADMIN', 'x-user-email': 'admin@cfvd.org' } : {}),
     ...(activeToken ? { Authorization: `Bearer ${activeToken}` } : {})
   };
 
