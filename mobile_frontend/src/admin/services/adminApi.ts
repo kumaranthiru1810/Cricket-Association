@@ -82,10 +82,9 @@ export const setStoredAdminUser = (user: any | null, remember = true) => {
 };
 
 async function adminRequest(endpoint: string, options: RequestInit = {}) {
-  const token = getStoredAdminToken() || 'dev_admin_cfvd_token_2026';
+  const token = getStoredAdminToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    'x-user-role': 'ADMIN',
     ...(token ? { Authorization: `Bearer ${token}` } : {})
   };
 
