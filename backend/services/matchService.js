@@ -80,16 +80,22 @@ class MatchService {
     match.result_summary = '';
     match.target_runs = undefined;
 
-    // If team has not allocated, use provided playing XI; if already allocated by coach, preserve coach's official 11!
-    if (teamAPlayingXI && Array.isArray(teamAPlayingXI) && teamAPlayingXI.length > 0) {
-      if (!match.team_a_playing_xi || match.team_a_playing_xi.length === 0) {
-        match.team_a_playing_xi = teamAPlayingXI;
-      }
+    // Association Rule 15: At least 9 players must be present at the start of the match to begin innings
+    if (teamAPlayingXI && Array.isArray(teamAPlayingXI) && teamAPlayingXI.length > 0 && teamAPlayingXI.length < 9) {
+      throw { status: 400, message: `Rule 15 Violation: ${match.team_a_name || 'Team A'} has only ${teamAPlayingXI.length} players present. At least 9 players must be present to begin the match.` };
     }
-    if (teamBPlayingXI && Array.isArray(teamBPlayingXI) && teamBPlayingXI.length > 0) {
-      if (!match.team_b_playing_xi || match.team_b_playing_xi.length === 0) {
-        match.team_b_playing_xi = teamBPlayingXI;
-      }
+    if (teamBPlayingXI && Array.isArray(teamBPlayingXI) && teamBPlayingXI.length > 0 && teamBPlayingXI.length < 9) {
+      throw { status: 400, message: `Rule 15 Violation: ${match.team_b_name || 'Team B'} has only ${teamBPlayingXI.length} players present. At least 9 players must be present to begin the match.` };
+    }
+
+    // Record verified match attendance and official Playing XI
+    if (teamAPlayingXI && Array.isArray(teamAPlayingXI) && teamAPlayingXI.length >= 9) {
+      match.team_a_playing_xi = teamAPlayingXI;
+      match.team_a_attendance = teamAPlayingXI;
+    }
+    if (teamBPlayingXI && Array.isArray(teamBPlayingXI) && teamBPlayingXI.length >= 9) {
+      match.team_b_playing_xi = teamBPlayingXI;
+      match.team_b_attendance = teamBPlayingXI;
     }
     await match.save();
 
