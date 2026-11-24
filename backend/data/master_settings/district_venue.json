@@ -1,0 +1,38 @@
+[
+  {
+    "id": "VEN-01",
+    "category": "district_venue",
+    "name": "Kamarajar District Stadium",
+    "code": "KDS",
+    "description": "Virudhunagar Headquarters Main Turf Stadium",
+    "is_active": true,
+    "sort_order": 1
+  },
+  {
+    "id": "VEN-02",
+    "category": "district_venue",
+    "name": "Municipal Cricket Complex",
+    "code": "MCC",
+    "description": "Municipal Cricket Complex, Sivakasi",
+    "is_active": true,
+    "sort_order": 2
+  },
+  {
+    "id": "VEN-03",
+    "category": "district_venue",
+    "name": "Rajapalayam RAC Ground",
+    "code": "RAC",
+    "description": "PACR Road, Rajapalayam",
+    "is_active": true,
+    "sort_order": 3
+  },
+  {
+    "id": "VEN-04",
+    "category": "district_venue",
+    "name": "Aruppukottai Pavilion Turf Ground",
+    "code": "APTG",
+    "description": "Pavilion Turf Ground, Aruppukottai",
+    "is_active": true,
+    "sort_order": 4
+  }
+]
