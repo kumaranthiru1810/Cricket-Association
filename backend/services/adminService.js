@@ -120,19 +120,35 @@ async function getOfficials() {
   await db.initDb();
   const [officials, users] = await Promise.all([
     db.models.Official.find({}).sort({ name: 1 }).lean(),
-    db.models.User.find({ role: { $in: ['UMPIRE', 'SCORER'] } }).sort({ name: 1 }).lean()
+    db.models.User.find({
+      $or: [
+        { role: { $in: ['UMPIRE', 'SCORER'] } },
+        { role: { $regex: /scorer|umpire/i } },
+        { scorer_details: { $exists: true, $ne: null } },
+        { umpire_details: { $exists: true, $ne: null } },
+        { id: { $regex: /^(SCR|UMP)/i } }
+      ]
+    }).sort({ name: 1 }).lean()
   ]);
 
   const list = [...officials];
-  const seenIds = new Set(officials.map(o => o.id));
+  const seenIds = new Set(officials.map(o => o.id || (o._id ? String(o._id) : '')));
 
   (users || []).forEach(u => {
-    if (!seenIds.has(u.id)) {
-      seenIds.add(u.id);
+    const uid = u.id || (u._id ? String(u._id) : '');
+    if (uid && !seenIds.has(uid)) {
+      seenIds.add(uid);
+      let effectiveRole = (u.role || '').toUpperCase();
+      if (effectiveRole !== 'SCORER' && effectiveRole !== 'UMPIRE') {
+        if (u.scorer_details) effectiveRole = 'SCORER';
+        else if (u.umpire_details) effectiveRole = 'UMPIRE';
+        else if (uid.startsWith('SCR')) effectiveRole = 'SCORER';
+        else if (uid.startsWith('UMP')) effectiveRole = 'UMPIRE';
+      }
       list.push({
-        id: u.id,
+        id: uid,
         name: u.name,
-        role: u.role,
+        role: effectiveRole || 'SCORER',
         email: u.email,
         phone: u.mobile || '—',
         status: u.status || 'ACTIVE'

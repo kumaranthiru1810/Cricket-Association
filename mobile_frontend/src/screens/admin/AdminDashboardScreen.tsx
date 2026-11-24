@@ -1005,6 +1005,46 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     return list;
   }, [officialsList, umpires]);
 
+  // Comprehensive accredited match scorers for dynamic selection
+  const availableScorers = useMemo(() => {
+    const list: any[] = [];
+    const seen = new Set<string>();
+
+    (officialsList || []).forEach((o: any) => {
+      const r = (o.role || o.type || '').toUpperCase();
+      const isScorer = r.includes('SCOR') || (o.id && String(o.id).toUpperCase().startsWith('SCR')) || Boolean(o.scorer_details) || !o.role;
+      if (isScorer) {
+        const id = o.id || o.scorerId;
+        if (id && !seen.has(id)) {
+          seen.add(id);
+          list.push({
+            id,
+            name: o.name || o.scorerName || id,
+            role: o.role || 'Official Scorer',
+            email: o.email || '',
+            phone: o.phone || o.mobile || ''
+          });
+        }
+      }
+    });
+
+    (scorers || []).forEach((s: any) => {
+      const id = s.scorerId || s.id;
+      if (id && !seen.has(id)) {
+        seen.add(id);
+        list.push({
+          id,
+          name: s.scorerName || s.name || id,
+          role: s.grade || s.role || 'Certified Scorer',
+          email: s.email || '',
+          phone: s.phone || ''
+        });
+      }
+    });
+
+    return list;
+  }, [officialsList, scorers]);
+
   // Dynamic Time Delay calculator for Weather / Rain adjustments
   const applyDynamicTimeDelay = (minutesToAdd: number) => {
     try {
@@ -1171,7 +1211,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       const defaultTeamBName = secondTeam?.name || '';
       const defaultTour = tournamentsList[0]?.name || '';
       const defaultTourId = tournamentsList[0]?.id || '';
-      const defaultScorer = officialsList.find(o => (o.role || '').toUpperCase().includes('SCOR'))?.id || '';
+      const defaultScorerObj = availableScorers[0] || officialsList.find(o => (o.role || '').toUpperCase().includes('SCOR'));
+      const defaultScorer = defaultScorerObj?.id || '';
+      const defaultScorerName = defaultScorerObj?.name || '';
       setCustomTournamentInput(defaultTour);
 
       const formData = {
@@ -1188,7 +1230,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         match_type: 'T20',
         overs: 20,
         assigned_scorer_id: defaultScorer,
-        assigned_scorer_name: '',
+        assigned_scorer_name: defaultScorerName,
         umpire1_id: '',
         umpire1_name: '',
         umpire2_id: '',
@@ -6255,12 +6297,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     {scorerDropdownOpen && (
                       <View style={[styles.dropdownTablePanelCompact, { marginTop: 4 }]}>
                         <ScrollView style={styles.dropdownTableScrollCompact} nestedScrollEnabled={true}>
-                          {officialsList
-                            .filter((o: any) => {
-                              const r = (o.role || o.type || '').toUpperCase();
-                              const matchesRole = r.includes('SCOR') || (o.id && String(o.id).startsWith('SCR')) || !o.role;
-                              const matchesQuery = !scorerSearch || (o.name || '').toLowerCase().includes(scorerSearch.toLowerCase()) || (o.id || '').toLowerCase().includes(scorerSearch.toLowerCase());
-                              return matchesRole && matchesQuery;
+                          {availableScorers
+                            .filter((sc: any) => {
+                              const matchesQuery = !scorerSearch || (sc.name || '').toLowerCase().includes(scorerSearch.toLowerCase()) || (sc.id || '').toLowerCase().includes(scorerSearch.toLowerCase());
+                              return matchesQuery;
                             })
                             .map((sc: any) => (
                               <TouchableOpacity
@@ -6273,14 +6313,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 }}
                               >
                                 <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>👤 {sc.name}</Text>
-                                <Text style={{ fontSize: 11, color: '#64748b' }}>{sc.id} • {sc.email || sc.phone || 'Registered Scorer'}</Text>
+                                <Text style={{ fontSize: 11, color: '#64748b' }}>{sc.id} • {sc.email || sc.phone || sc.role || 'Certified Scorer'}</Text>
                               </TouchableOpacity>
                             ))}
-                          {officialsList.filter((o: any) => {
-                            const r = (o.role || o.type || '').toUpperCase();
-                            const matchesRole = r.includes('SCOR') || (o.id && String(o.id).startsWith('SCR')) || !o.role;
-                            const matchesQuery = !scorerSearch || (o.name || '').toLowerCase().includes(scorerSearch.toLowerCase()) || (o.id || '').toLowerCase().includes(scorerSearch.toLowerCase());
-                            return matchesRole && matchesQuery;
+                          {availableScorers.filter((sc: any) => {
+                            const matchesQuery = !scorerSearch || (sc.name || '').toLowerCase().includes(scorerSearch.toLowerCase()) || (sc.id || '').toLowerCase().includes(scorerSearch.toLowerCase());
+                            return matchesQuery;
                           }).length === 0 && (
                             <View style={{ padding: 10, alignItems: 'center' }}>
                               <Text style={{ fontSize: 11.5, color: '#94a3b8' }}>No matching scorers found. You can type any scorer name above.</Text>
@@ -6529,7 +6567,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       <View style={styles.summaryDetailItem}>
                         <Text style={styles.summaryDetailKey}>👤 Scorer</Text>
                         <Text style={styles.summaryDetailVal} numberOfLines={1}>
-                          {scheduleForm.assigned_scorer_name || officialsList.find(o => o.id === scheduleForm.assigned_scorer_id)?.name || scheduleForm.assigned_scorer_id || 'Assigned'}
+                          {scheduleForm.assigned_scorer_name || availableScorers.find(o => o.id === scheduleForm.assigned_scorer_id)?.name || officialsList.find(o => o.id === scheduleForm.assigned_scorer_id)?.name || scheduleForm.assigned_scorer_id || 'Assigned'}
                         </Text>
                       </View>
                       {(scheduleForm.umpire1_name || scheduleForm.umpire2_name) ? (
@@ -6650,6 +6688,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         visible={clockModalVisible}
         title="Select Match Start Time"
         initialTime={scheduleForm.match_time}
+        selectedDate={scheduleForm.match_date}
+        disablePast={true}
         onClose={() => setClockModalVisible(false)}
         onSelectTime={(formattedTime) => {
           const checkTime = validateScheduleTime(scheduleForm.match_date, formattedTime);

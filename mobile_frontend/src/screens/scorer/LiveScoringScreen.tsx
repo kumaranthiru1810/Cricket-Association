@@ -4051,6 +4051,8 @@ export default function LiveScoringScreen() {
                 ? getCurrentTimeFormatted()
                 : undefined)
         }
+        selectedDate={clockPickerTarget === 'RESCHEDULE_TIME' ? rescheduledDateInput : new Date().toISOString().split('T')[0]}
+        disablePast={true}
         onClose={() => setClockPickerVisible(false)}
         onSelectTime={handleClockPickerSelect}
       />

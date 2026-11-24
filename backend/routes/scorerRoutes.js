@@ -580,4 +580,25 @@ router.post('/matches/:matchId/umpire-decisions', verifyMatchPermission, async (
   }
 });
 
+// Accredited officials and venues directory for scorers and match operations
+router.get('/officials', async (req, res) => {
+  try {
+    const adminService = require('../services/adminService');
+    const officials = await adminService.getOfficials();
+    res.json({ success: true, officials });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get('/venues', async (req, res) => {
+  try {
+    const adminService = require('../services/adminService');
+    const venues = await adminService.getVenues();
+    res.json({ success: true, venues });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;

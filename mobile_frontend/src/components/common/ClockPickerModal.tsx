@@ -15,6 +15,8 @@ export interface ClockPickerModalProps {
   title?: string;
   initialTime?: string;
   referenceStartTime?: string;
+  selectedDate?: string; // YYYY-MM-DD
+  disablePast?: boolean;
   onClose: () => void;
   onSelectTime: (formattedTime: string) => void;
 }
@@ -112,6 +114,8 @@ export const ClockPickerModal: React.FC<ClockPickerModalProps> = ({
   title = 'Select Time',
   initialTime,
   referenceStartTime,
+  selectedDate,
+  disablePast = true,
   onClose,
   onSelectTime
 }) => {
@@ -120,15 +124,90 @@ export const ClockPickerModal: React.FC<ClockPickerModalProps> = ({
   const [period, setPeriod] = useState<'AM' | 'PM'>('AM');
   const [mode, setMode] = useState<'HOUR' | 'MINUTE'>('HOUR');
 
+  // Check if selected date is today
+  const isToday = useMemo(() => {
+    if (!selectedDate) return false;
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${y}-${m}-${d}`;
+    return selectedDate === todayStr;
+  }, [selectedDate]);
+
+  // Current real-time clock state for min-time bounds
+  const currentNow = useMemo(() => {
+    const now = new Date();
+    const h24 = now.getHours();
+    const m = now.getMinutes();
+    const p: 'AM' | 'PM' = h24 >= 12 ? 'PM' : 'AM';
+    const h12 = h24 % 12 || 12;
+    const totalMinutes = h24 * 60 + m;
+    return { h24, m, p, h12, totalMinutes };
+  }, [visible]);
+
+  // Check if AM button is disabled (if today and it's already PM)
+  const isAmDisabled = Boolean(isToday && disablePast && currentNow.h24 >= 12);
+
+  // Check if an hour node on clock face is in the past
+  const isHourDisabled = (h: number, curPeriod: 'AM' | 'PM') => {
+    if (!isToday || !disablePast) return false;
+    let h24 = h % 12;
+    if (curPeriod === 'PM') h24 += 12;
+    return h24 < currentNow.h24;
+  };
+
+  // Check if a minute node on clock face is in the past
+  const isMinuteDisabled = (m: number) => {
+    if (!isToday || !disablePast) return false;
+    let h24 = selectedHour % 12;
+    if (period === 'PM') h24 += 12;
+    if (h24 < currentNow.h24) return true;
+    if (h24 === currentNow.h24 && m < currentNow.m) return true;
+    return false;
+  };
+
+  // Check if currently selected time is in the past for today
+  const isSelectedTimePast = useMemo(() => {
+    if (!isToday || !disablePast) return false;
+    let h24 = selectedHour % 12;
+    if (period === 'PM') h24 += 12;
+    const totalMins = h24 * 60 + selectedMinute;
+    return totalMins < currentNow.totalMinutes;
+  }, [isToday, disablePast, selectedHour, selectedMinute, period, currentNow]);
+
   useEffect(() => {
     if (visible) {
       const parsed = parseTimeString(initialTime);
-      setSelectedHour(parsed.hour);
-      setSelectedMinute(parsed.minute);
-      setPeriod(parsed.period);
+      let h = parsed.hour;
+      let m = parsed.minute;
+      let p = parsed.period;
+
+      if (isToday && disablePast) {
+        let h24 = h % 12;
+        if (p === 'PM') h24 += 12;
+        const initTotalMinutes = h24 * 60 + m;
+
+        // If initial time has already passed for today, clamp to next upcoming 5-minute interval
+        if (initTotalMinutes < currentNow.totalMinutes) {
+          const nextMins = currentNow.totalMinutes + 5;
+          const roundedMins = Math.ceil(nextMins / 5) * 5;
+          let newH24 = Math.floor(roundedMins / 60);
+          const newMin = roundedMins % 60;
+          p = newH24 >= 12 ? 'PM' : 'AM';
+          h = newH24 % 12 || 12;
+          m = newMin;
+        } else if (p === 'AM' && currentNow.h24 >= 12) {
+          p = 'PM';
+        }
+      }
+
+      setSelectedHour(h);
+      setSelectedMinute(m);
+      setPeriod(p);
       setMode('HOUR');
     }
-  }, [visible, initialTime]);
+  }, [visible, initialTime, isToday, disablePast, currentNow]);
 
   const clockSize = 240;
   const radius = 90;
@@ -152,7 +231,14 @@ export const ClockPickerModal: React.FC<ClockPickerModalProps> = ({
   const handleSetCurrentTime = () => {
     const now = new Date();
     let h = now.getHours();
-    const m = now.getMinutes();
+    let m = now.getMinutes();
+    if (isToday && disablePast) {
+      // Round to next 5 minutes
+      const total = h * 60 + m + 5;
+      const rounded = Math.ceil(total / 5) * 5;
+      h = Math.floor(rounded / 60);
+      m = rounded % 60;
+    }
     const p: 'AM' | 'PM' = h >= 12 ? 'PM' : 'AM';
     h = h % 12 || 12;
     setSelectedHour(h);
@@ -166,6 +252,10 @@ export const ClockPickerModal: React.FC<ClockPickerModalProps> = ({
     let totalMins = (base.hour % 12 + (base.period === 'PM' ? 12 : 0)) * 60 + base.minute + offsetMinutes;
     totalMins = (totalMins % 1440 + 1440) % 1440;
 
+    if (isToday && disablePast && totalMins < currentNow.totalMinutes) {
+      totalMins = currentNow.totalMinutes + 5;
+    }
+
     let newH = Math.floor(totalMins / 60);
     const newM = totalMins % 60;
     const newP: 'AM' | 'PM' = newH >= 12 ? 'PM' : 'AM';
@@ -176,7 +266,23 @@ export const ClockPickerModal: React.FC<ClockPickerModalProps> = ({
     setPeriod(newP);
   };
 
+  // Check if stepping backward by 1m or 5m would result in past time
+  const canStepMinus1 = useMemo(() => {
+    if (!isToday || !disablePast) return true;
+    let h24 = selectedHour % 12;
+    if (period === 'PM') h24 += 12;
+    return (h24 * 60 + selectedMinute - 1) >= currentNow.totalMinutes;
+  }, [isToday, disablePast, selectedHour, selectedMinute, period, currentNow]);
+
+  const canStepMinus5 = useMemo(() => {
+    if (!isToday || !disablePast) return true;
+    let h24 = selectedHour % 12;
+    if (period === 'PM') h24 += 12;
+    return (h24 * 60 + selectedMinute - 5) >= currentNow.totalMinutes;
+  }, [isToday, disablePast, selectedHour, selectedMinute, period, currentNow]);
+
   const handleConfirm = () => {
+    if (isSelectedTimePast) return;
     const formatted = `${selectedHour}:${String(selectedMinute).padStart(2, '0')} ${period.toLowerCase()}`;
     onSelectTime(formatted);
   };
@@ -204,7 +310,19 @@ export const ClockPickerModal: React.FC<ClockPickerModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          {/* Big Time Display Display */}
+          {/* Today Past-Time Protection Banner */}
+          {isToday && disablePast && (
+            <View style={[styles.pastTimeNotice, isSelectedTimePast && styles.pastTimeNoticeError]}>
+              <Text style={{ fontSize: 13 }}>{isSelectedTimePast ? '⚠️' : '⏰'}</Text>
+              <Text style={[styles.pastTimeNoticeText, isSelectedTimePast && styles.pastTimeNoticeTextError]}>
+                {isSelectedTimePast
+                  ? `Time passed today. Please pick an upcoming time after ${currentNow.h12}:${String(currentNow.m).padStart(2, '0')} ${currentNow.p}.`
+                  : `Past hours & minutes are blurred & disabled for today's match.`}
+              </Text>
+            </View>
+          )}
+
+          {/* Big Time Display */}
           <View style={styles.timeDisplayCard}>
             <View style={styles.digitsRow}>
               {/* Hour Box */}
@@ -236,11 +354,23 @@ export const ClockPickerModal: React.FC<ClockPickerModalProps> = ({
               {/* AM / PM Toggle */}
               <View style={styles.periodCol}>
                 <TouchableOpacity
-                  style={[styles.periodBtn, period === 'AM' && styles.periodBtnActive]}
-                  onPress={() => setPeriod('AM')}
-                  activeOpacity={0.8}
+                  style={[
+                    styles.periodBtn,
+                    period === 'AM' && styles.periodBtnActive,
+                    isAmDisabled && styles.periodBtnDisabled
+                  ]}
+                  disabled={isAmDisabled}
+                  onPress={() => {
+                    if (isAmDisabled) return;
+                    setPeriod('AM');
+                  }}
+                  activeOpacity={isAmDisabled ? 1 : 0.8}
                 >
-                  <Text style={[styles.periodText, period === 'AM' && styles.periodTextActive]}>AM</Text>
+                  <Text style={[
+                    styles.periodText,
+                    period === 'AM' && styles.periodTextActive,
+                    isAmDisabled && styles.periodTextDisabled
+                  ]}>AM</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.periodBtn, period === 'PM' && styles.periodBtnActive]}
@@ -287,21 +417,29 @@ export const ClockPickerModal: React.FC<ClockPickerModalProps> = ({
                   const x = center + radius * Math.cos(rad);
                   const y = center + radius * Math.sin(rad);
                   const isSelected = selectedHour === h;
+                  const disabled = isHourDisabled(h, period);
 
                   return (
                     <TouchableOpacity
                       key={`hour-${h}`}
+                      disabled={disabled}
                       style={[
                         styles.numberNode,
-                        { left: x - 18, top: y - 18 }
+                        { left: x - 18, top: y - 18 },
+                        disabled && styles.numberNodeDisabled
                       ]}
                       onPress={() => {
+                        if (disabled) return;
                         setSelectedHour(h);
                         setMode('MINUTE'); // smoothly transition to minute selection
                       }}
-                      activeOpacity={0.7}
+                      activeOpacity={disabled ? 1 : 0.7}
                     >
-                      <Text style={[styles.nodeText, isSelected && styles.nodeTextSelected]}>
+                      <Text style={[
+                        styles.nodeText,
+                        isSelected && styles.nodeTextSelected,
+                        disabled && styles.nodeTextDisabled
+                      ]}>
                         {h}
                       </Text>
                     </TouchableOpacity>
@@ -314,18 +452,28 @@ export const ClockPickerModal: React.FC<ClockPickerModalProps> = ({
                   const x = center + radius * Math.cos(rad);
                   const y = center + radius * Math.sin(rad);
                   const isSelected = selectedMinute === m;
+                  const disabled = isMinuteDisabled(m);
 
                   return (
                     <TouchableOpacity
                       key={`min-${m}`}
+                      disabled={disabled}
                       style={[
                         styles.numberNode,
-                        { left: x - 18, top: y - 18 }
+                        { left: x - 18, top: y - 18 },
+                        disabled && styles.numberNodeDisabled
                       ]}
-                      onPress={() => setSelectedMinute(m)}
-                      activeOpacity={0.7}
+                      onPress={() => {
+                        if (disabled) return;
+                        setSelectedMinute(m);
+                      }}
+                      activeOpacity={disabled ? 1 : 0.7}
                     >
-                      <Text style={[styles.nodeText, isSelected && styles.nodeTextSelected]}>
+                      <Text style={[
+                        styles.nodeText,
+                        isSelected && styles.nodeTextSelected,
+                        disabled && styles.nodeTextDisabled
+                      ]}>
                         {String(m).padStart(2, '0')}
                       </Text>
                     </TouchableOpacity>
@@ -338,18 +486,26 @@ export const ClockPickerModal: React.FC<ClockPickerModalProps> = ({
           {/* Minute Adjuster Stepper */}
           <View style={styles.stepperRow}>
             <TouchableOpacity
-              style={styles.stepBtn}
-              onPress={() => setSelectedMinute((prev) => (prev - 5 + 60) % 60)}
-              activeOpacity={0.7}
+              style={[styles.stepBtn, !canStepMinus5 && styles.stepBtnDisabled]}
+              disabled={!canStepMinus5}
+              onPress={() => {
+                if (!canStepMinus5) return;
+                setSelectedMinute((prev) => (prev - 5 + 60) % 60);
+              }}
+              activeOpacity={canStepMinus5 ? 0.7 : 1}
             >
-              <Text style={styles.stepBtnText}>-5m</Text>
+              <Text style={[styles.stepBtnText, !canStepMinus5 && styles.stepBtnTextDisabled]}>-5m</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.stepBtn}
-              onPress={() => setSelectedMinute((prev) => (prev - 1 + 60) % 60)}
-              activeOpacity={0.7}
+              style={[styles.stepBtn, !canStepMinus1 && styles.stepBtnDisabled]}
+              disabled={!canStepMinus1}
+              onPress={() => {
+                if (!canStepMinus1) return;
+                setSelectedMinute((prev) => (prev - 1 + 60) % 60);
+              }}
+              activeOpacity={canStepMinus1 ? 0.7 : 1}
             >
-              <Text style={styles.stepBtnText}>-1m</Text>
+              <Text style={[styles.stepBtnText, !canStepMinus1 && styles.stepBtnTextDisabled]}>-1m</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.stepBtn, { backgroundColor: '#fef3c7', borderColor: '#fde68a' }]}
@@ -398,8 +554,15 @@ export const ClockPickerModal: React.FC<ClockPickerModalProps> = ({
             <TouchableOpacity style={styles.cancelBtn} onPress={onClose} activeOpacity={0.7}>
               <Text style={styles.cancelBtnText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.confirmBtn} onPress={handleConfirm} activeOpacity={0.8}>
-              <Text style={styles.confirmBtnText}>SET TIME</Text>
+            <TouchableOpacity
+              style={[styles.confirmBtn, isSelectedTimePast && styles.confirmBtnDisabled]}
+              disabled={isSelectedTimePast}
+              onPress={handleConfirm}
+              activeOpacity={isSelectedTimePast ? 1 : 0.8}
+            >
+              <Text style={[styles.confirmBtnText, isSelectedTimePast && styles.confirmBtnTextDisabled]}>
+                {isSelectedTimePast ? 'PAST TIME' : 'SET TIME'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -650,10 +813,65 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#d97706'
   },
+  confirmBtnDisabled: {
+    backgroundColor: '#cbd5e1',
+    opacity: 0.65
+  },
   confirmBtnText: {
     fontSize: 13,
     fontWeight: '700',
     color: '#ffffff'
+  },
+  confirmBtnTextDisabled: {
+    color: '#64748b'
+  },
+  numberNodeDisabled: {
+    opacity: 0.22,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  nodeTextDisabled: {
+    color: '#94a3b8'
+  },
+  periodBtnDisabled: {
+    opacity: 0.25,
+    backgroundColor: '#f1f5f9'
+  },
+  periodTextDisabled: {
+    color: '#94a3b8'
+  },
+  stepBtnDisabled: {
+    opacity: 0.25,
+    backgroundColor: '#f8fafc'
+  },
+  stepBtnTextDisabled: {
+    color: '#94a3b8'
+  },
+  pastTimeNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    marginBottom: 10
+  },
+  pastTimeNoticeError: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fecaca'
+  },
+  pastTimeNoticeText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#15803d',
+    flex: 1
+  },
+  pastTimeNoticeTextError: {
+    color: '#b91c1c'
   }
 });
 

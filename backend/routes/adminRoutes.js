@@ -13,6 +13,30 @@ const { requireAdminAuth } = require('../middleware/authMiddleware');
 
 const masterSettingController = require('../controllers/masterSettingController');
 
+/**
+ * Public/Accredited Directory Reads:
+ * GET /api/admin/officials & GET /api/admin/venues
+ * Read access for certified scorers, umpires, and venues is accessible for match scheduling and official directories.
+ * Creation, modification, and deletion strictly require ADMIN authorization below.
+ */
+router.get('/officials', async (req, res) => {
+  try {
+    const officials = await adminService.getOfficials();
+    res.json({ success: true, officials });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get('/venues', async (req, res) => {
+  try {
+    const venues = await adminService.getVenues();
+    res.json({ success: true, venues });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Enforce ADMIN role across all administrative management routes
 router.use(requireAdminAuth);
 
@@ -59,18 +83,9 @@ router.patch('/users/:id/status', async (req, res) => {
 });
 
 /**
- * GET /api/admin/officials & POST /api/admin/officials
- * Officials Management (scorers, umpires, match officials)
+ * POST /api/admin/officials & DELETE /api/admin/officials/:id
+ * Officials Management (scorers, umpires, match officials) - Admin Mutations
  */
-router.get('/officials', async (req, res) => {
-  try {
-    const officials = await adminService.getOfficials();
-    res.json({ success: true, officials });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 router.post('/officials', async (req, res) => {
   try {
     const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
@@ -92,18 +107,9 @@ router.delete('/officials/:id', async (req, res) => {
 });
 
 /**
- * GET /api/admin/venues & POST /api/admin/venues
- * Venue & Ground Management
+ * POST /api/admin/venues & DELETE /api/admin/venues/:id
+ * Venue & Ground Management - Admin Mutations
  */
-router.get('/venues', async (req, res) => {
-  try {
-    const venues = await adminService.getVenues();
-    res.json({ success: true, venues });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 router.post('/venues', async (req, res) => {
   try {
     const adminEmail = req.adminUser?.email || 'admin@cfvd.org';

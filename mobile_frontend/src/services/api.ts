@@ -144,6 +144,16 @@ let currentUser: any = null;
 export const getAuthToken = (): string | null => {
   if (token) return token;
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const isSpecialAdminRoute =
+      window.location.pathname.includes('/admin') ||
+      window.location.search.includes('admin') ||
+      window.location.hash.includes('admin');
+    if (isSpecialAdminRoute) {
+      const adminTok =
+        localStorage.getItem('cfvd_admin_token') ||
+        sessionStorage.getItem('cfvd_admin_token');
+      if (adminTok) return adminTok;
+    }
     return (
       localStorage.getItem('auth_token') ||
       localStorage.getItem('team_token') ||
@@ -316,7 +326,13 @@ async function request(endpoint: string, options: RequestInit = {}) {
   }
 
   const url = `${API_URL}${endpoint}`;
-  const activeToken = getAuthToken();
+  let activeToken = getAuthToken();
+  if (endpoint.startsWith('/admin') && Platform.OS === 'web' && typeof window !== 'undefined') {
+    const adminTok =
+      localStorage.getItem('cfvd_admin_token') ||
+      sessionStorage.getItem('cfvd_admin_token');
+    if (adminTok) activeToken = adminTok;
+  }
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -944,7 +960,15 @@ export const ScorerApi = {
   },
 
   getOfficials: async () => {
-    return request('/admin/officials');
+    try {
+      const res = await request('/admin/officials');
+      if (res && Array.isArray(res.officials) && res.officials.length > 0) return res;
+    } catch (_e) {}
+    try {
+      const scorerRes = await request('/scorer/officials');
+      if (scorerRes && Array.isArray(scorerRes.officials) && scorerRes.officials.length > 0) return scorerRes;
+    } catch (_e) {}
+    return { officials: [] };
   },
 
   saveOfficial: async (data: any) => {
@@ -955,7 +979,15 @@ export const ScorerApi = {
   },
 
   getVenues: async () => {
-    return request('/admin/venues');
+    try {
+      const res = await request('/admin/venues');
+      if (res && Array.isArray(res.venues) && res.venues.length > 0) return res;
+    } catch (_e) {}
+    try {
+      const scorerRes = await request('/scorer/venues');
+      if (scorerRes && Array.isArray(scorerRes.venues) && scorerRes.venues.length > 0) return scorerRes;
+    } catch (_e) {}
+    return { venues: [] };
   },
 
   saveVenue: async (data: any) => {
