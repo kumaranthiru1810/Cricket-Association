@@ -357,6 +357,7 @@ export default function LiveScoringScreen() {
   // Delivery Submission State
   const [isSubmittingDelivery, setIsSubmittingDelivery] = useState<boolean>(false);
   const [isUndoing, setIsUndoing] = useState<boolean>(false);
+  const [isUndoingDelivery, setIsUndoingDelivery] = useState<boolean>(false);
   const [isStartingNextInnings, setIsStartingNextInnings] = useState<boolean>(false);
 
   // Comprehensive Wicket & Dismissal State
@@ -3219,7 +3220,6 @@ export default function LiveScoringScreen() {
   };
 
   // --- 10. UNDO LAST DELIVERY HANDLER (Edit Mode) ---
-  const [isUndoingDelivery, setIsUndoingDelivery] = useState(false);
   const handleUndoLastDelivery = async () => {
     const lastDel = recentDeliveries && recentDeliveries.length > 0 ? recentDeliveries[0] : null;
     setIsUndoingDelivery(true);
@@ -3458,7 +3458,7 @@ export default function LiveScoringScreen() {
     : (matchInfo?.bowlingTeam || matchInfo?.teamB || 'Team B');
 
   // Dynamically resolve active fielding squad based on current innings (Swaps automatically in 2nd innings)
-  const activeFieldingSquad = useMemo(() => {
+  const activeFieldingSquad = (() => {
     const isSecondInn = currentInningsNum === 2;
 
     // In 2nd innings, bowling team is Team A. In 1st innings, bowling team is Team B.
@@ -3492,7 +3492,7 @@ export default function LiveScoringScreen() {
     });
 
     return result;
-  }, [bowlingSquad, currentInningsNum, matchInfo]);
+  })();
 
   // Unique, deduplicated fielding squad (for fielder dropdown)
   const rawFielderList = activeFieldingSquad;
