@@ -599,7 +599,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     umpire2_id: '',
     umpire2_name: '',
     show_on_team_home: true,
-    match_notes: ''
+    match_notes: '',
+    timing_mode: 'AUTO' as 'AUTO' | 'MANUAL',
+    toss_time_window: '',
+    first_ball_time: '',
+    scorer_reporting_time: ''
   });
   const currentDateTimeVal = useMemo(() => {
     return validateScheduleDateTime(scheduleForm.match_date, scheduleForm.match_time);
@@ -1198,7 +1202,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         umpire2_id: matchToEdit.umpire2_id || '',
         umpire2_name: matchToEdit.umpire2_name || '',
         show_on_team_home: matchToEdit.show_on_team_home !== false,
-        match_notes: matchToEdit.notes || matchToEdit.match_notes || ''
+        match_notes: matchToEdit.notes || matchToEdit.match_notes || '',
+        timing_mode: ((matchToEdit.toss_time_window || matchToEdit.first_ball_time) ? 'MANUAL' : 'AUTO') as 'AUTO' | 'MANUAL',
+        toss_time_window: matchToEdit.toss_time_window || '',
+        first_ball_time: matchToEdit.first_ball_time || '',
+        scorer_reporting_time: matchToEdit.scorer_reporting_time || ''
       };
       setScheduleForm(formData);
       initialScheduleFormRef.current = { ...formData };
@@ -1237,7 +1245,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         umpire2_id: '',
         umpire2_name: '',
         show_on_team_home: true,
-        match_notes: ''
+        match_notes: '',
+        timing_mode: 'AUTO' as 'AUTO' | 'MANUAL',
+        toss_time_window: '',
+        first_ball_time: '',
+        scorer_reporting_time: ''
       };
       setScheduleForm(formData);
       initialScheduleFormRef.current = { ...formData };
@@ -1504,6 +1516,17 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     setIsSubmittingSchedule(true);
     try {
       const officialTimings = calculateOfficialMatchTimings(cleanTime);
+      const isManualTiming = scheduleForm.timing_mode === 'MANUAL';
+      const effectiveTossWindow = (isManualTiming && scheduleForm.toss_time_window?.trim())
+        ? scheduleForm.toss_time_window.trim()
+        : officialTimings.tossWindow;
+      const effectiveFirstBall = (isManualTiming && scheduleForm.first_ball_time?.trim())
+        ? scheduleForm.first_ball_time.trim()
+        : officialTimings.firstBallTime;
+      const effectiveReporting = (isManualTiming && scheduleForm.scorer_reporting_time?.trim())
+        ? scheduleForm.scorer_reporting_time.trim()
+        : officialTimings.reportingTime;
+
       const payload = {
         tournament_id: tournament_id || effectiveTourName.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 24),
         tournament_name: effectiveTourName,
@@ -1518,9 +1541,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         assigned_scorer_id: scheduleForm.assigned_scorer_id || scheduleForm.assigned_scorer_name || 'SCR-101',
         assigned_scorer_name: scheduleForm.assigned_scorer_name || scheduleForm.assigned_scorer_id || '',
         scorer_name: scheduleForm.assigned_scorer_name || scheduleForm.assigned_scorer_id || '',
-        toss_time_window: officialTimings.tossWindow,
-        first_ball_time: officialTimings.firstBallTime,
-        scorer_reporting_time: officialTimings.reportingTime,
+        toss_time_window: effectiveTossWindow,
+        first_ball_time: effectiveFirstBall,
+        scorer_reporting_time: effectiveReporting,
         umpire1_id: umpire1_id || '',
         umpire1_name: umpire1_name || '',
         umpire2_id: umpire2_id || '',
@@ -5583,65 +5606,71 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             {/* ───────────────────────────────────────────────────────
                 GUIDED 3-STEP PROGRESS INDICATOR (Requirement 2)
                 ─────────────────────────────────────────────────────── */}
-            <View style={styles.stepProgressBar}>
-              {/* Step 1: Tournament */}
-              <TouchableOpacity
-                style={[styles.stepItem, scheduleStep === 1 && styles.stepItemActive, scheduleStep > 1 && styles.stepItemDone]}
-                onPress={() => setScheduleStep(1)}
-                activeOpacity={0.8}
+            <View style={styles.stepProgressBarContainer}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.stepProgressBar}
               >
-                <View style={[styles.stepCircle, scheduleStep === 1 && styles.stepCircleActive, scheduleStep > 1 && styles.stepCircleDone]}>
-                  <Text style={[styles.stepCircleText, (scheduleStep === 1 || scheduleStep > 1) && styles.stepCircleTextActive]}>
-                    {scheduleStep > 1 ? '✓' : '1'}
-                  </Text>
-                </View>
-                <View style={styles.stepTextWrap}>
-                  <Text style={[styles.stepNumberLabel, scheduleStep === 1 && styles.stepNumberLabelActive]}>STEP 1</Text>
-                  <Text style={[styles.stepTitleLabel, scheduleStep === 1 && styles.stepTitleLabelActive]}>Tournament</Text>
-                </View>
-              </TouchableOpacity>
+                {/* Step 1: Tournament */}
+                <TouchableOpacity
+                  style={[styles.stepItem, scheduleStep === 1 && styles.stepItemActive, scheduleStep > 1 && styles.stepItemDone]}
+                  onPress={() => setScheduleStep(1)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.stepCircle, scheduleStep === 1 && styles.stepCircleActive, scheduleStep > 1 && styles.stepCircleDone]}>
+                    <Text style={[styles.stepCircleText, (scheduleStep === 1 || scheduleStep > 1) && styles.stepCircleTextActive]}>
+                      {scheduleStep > 1 ? '✓' : '1'}
+                    </Text>
+                  </View>
+                  <View style={styles.stepTextWrap}>
+                    <Text style={[styles.stepNumberLabel, scheduleStep === 1 && styles.stepNumberLabelActive]}>STEP 1</Text>
+                    <Text style={[styles.stepTitleLabel, scheduleStep === 1 && styles.stepTitleLabelActive]}>Tournament</Text>
+                  </View>
+                </TouchableOpacity>
 
-              <View style={[styles.stepConnectorLine, scheduleStep >= 2 && styles.stepConnectorLineActive]} />
+                <View style={[styles.stepConnectorLine, scheduleStep >= 2 && styles.stepConnectorLineActive]} />
 
-              {/* Step 2: Teams & Venue */}
-              <TouchableOpacity
-                style={[styles.stepItem, scheduleStep === 2 && styles.stepItemActive, scheduleStep > 2 && styles.stepItemDone]}
-                onPress={() => {
-                  if (scheduleForm.tournament_name) setScheduleStep(2);
-                }}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.stepCircle, scheduleStep === 2 && styles.stepCircleActive, scheduleStep > 2 && styles.stepCircleDone]}>
-                  <Text style={[styles.stepCircleText, (scheduleStep === 2 || scheduleStep > 2) && styles.stepCircleTextActive]}>
-                    {scheduleStep > 2 ? '✓' : '2'}
-                  </Text>
-                </View>
-                <View style={styles.stepTextWrap}>
-                  <Text style={[styles.stepNumberLabel, scheduleStep === 2 && styles.stepNumberLabelActive]}>STEP 2</Text>
-                  <Text style={[styles.stepTitleLabel, scheduleStep === 2 && styles.stepTitleLabelActive]}>Teams & Venue</Text>
-                </View>
-              </TouchableOpacity>
+                {/* Step 2: Teams & Venue */}
+                <TouchableOpacity
+                  style={[styles.stepItem, scheduleStep === 2 && styles.stepItemActive, scheduleStep > 2 && styles.stepItemDone]}
+                  onPress={() => {
+                    if (scheduleForm.tournament_name) setScheduleStep(2);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.stepCircle, scheduleStep === 2 && styles.stepCircleActive, scheduleStep > 2 && styles.stepCircleDone]}>
+                    <Text style={[styles.stepCircleText, (scheduleStep === 2 || scheduleStep > 2) && styles.stepCircleTextActive]}>
+                      {scheduleStep > 2 ? '✓' : '2'}
+                    </Text>
+                  </View>
+                  <View style={styles.stepTextWrap}>
+                    <Text style={[styles.stepNumberLabel, scheduleStep === 2 && styles.stepNumberLabelActive]}>STEP 2</Text>
+                    <Text style={[styles.stepTitleLabel, scheduleStep === 2 && styles.stepTitleLabelActive]}>Teams & Venue</Text>
+                  </View>
+                </TouchableOpacity>
 
-              <View style={[styles.stepConnectorLine, scheduleStep >= 3 && styles.stepConnectorLineActive]} />
+                <View style={[styles.stepConnectorLine, scheduleStep >= 3 && styles.stepConnectorLineActive]} />
 
-              {/* Step 3: Match Details */}
-              <TouchableOpacity
-                style={[styles.stepItem, scheduleStep === 3 && styles.stepItemActive]}
-                onPress={() => {
-                  if (scheduleForm.tournament_name && scheduleForm.team_a_id && scheduleForm.team_b_id && scheduleForm.venue) {
-                    setScheduleStep(3);
-                  }
-                }}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.stepCircle, scheduleStep === 3 && styles.stepCircleActive]}>
-                  <Text style={[styles.stepCircleText, scheduleStep === 3 && styles.stepCircleTextActive]}>3</Text>
-                </View>
-                <View style={styles.stepTextWrap}>
-                  <Text style={[styles.stepNumberLabel, scheduleStep === 3 && styles.stepNumberLabelActive]}>STEP 3</Text>
-                  <Text style={[styles.stepTitleLabel, scheduleStep === 3 && styles.stepTitleLabelActive]}>Match Details</Text>
-                </View>
-              </TouchableOpacity>
+                {/* Step 3: Match Details */}
+                <TouchableOpacity
+                  style={[styles.stepItem, scheduleStep === 3 && styles.stepItemActive]}
+                  onPress={() => {
+                    if (scheduleForm.tournament_name && scheduleForm.team_a_id && scheduleForm.team_b_id && scheduleForm.venue) {
+                      setScheduleStep(3);
+                    }
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.stepCircle, scheduleStep === 3 && styles.stepCircleActive]}>
+                    <Text style={[styles.stepCircleText, scheduleStep === 3 && styles.stepCircleTextActive]}>3</Text>
+                  </View>
+                  <View style={styles.stepTextWrap}>
+                    <Text style={[styles.stepNumberLabel, scheduleStep === 3 && styles.stepNumberLabelActive]}>STEP 3</Text>
+                    <Text style={[styles.stepTitleLabel, scheduleStep === 3 && styles.stepTitleLabelActive]}>Match Details</Text>
+                  </View>
+                </TouchableOpacity>
+              </ScrollView>
             </View>
 
             {/* Scrollable Form Body */}
@@ -6339,10 +6368,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                         <View style={styles.scorerInfoHeaderRow}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                             <Text style={{ fontSize: 16 }}>📋</Text>
-                            <Text style={styles.scorerInfoTitle}>Scorer Information</Text>
+                            <Text style={styles.scorerInfoTitle}>Scorer Information & Match Timings</Text>
                           </View>
                           <View style={styles.scorerInfoBadge}>
-                            <Text style={styles.scorerInfoBadgeText}>⚡ Auto Calculated</Text>
+                            <Text style={styles.scorerInfoBadgeText}>
+                              {scheduleForm.timing_mode === 'MANUAL' ? '✏️ Custom Timings' : '⚡ Auto Calculated'}
+                            </Text>
                           </View>
                         </View>
 
@@ -6356,40 +6387,246 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           </Text>
                         </View>
 
-                        {/* Official Match Timings Grid */}
+                        {/* Official Match Timings Header & Mode Selector */}
                         {(() => {
-                          const timings = calculateOfficialMatchTimings(scheduleForm.match_time);
+                          const autoTimings = calculateOfficialMatchTimings(scheduleForm.match_time);
+                          const isAuto = scheduleForm.timing_mode !== 'MANUAL';
+                          
+                          // Displayed values:
+                          const displayToss = (!isAuto && scheduleForm.toss_time_window) 
+                            ? scheduleForm.toss_time_window 
+                            : autoTimings.tossWindow;
+                          const displayFirstBall = (!isAuto && scheduleForm.first_ball_time) 
+                            ? scheduleForm.first_ball_time 
+                            : autoTimings.firstBallTime;
+                          const displayReporting = (!isAuto && scheduleForm.scorer_reporting_time) 
+                            ? scheduleForm.scorer_reporting_time 
+                            : autoTimings.reportingTime;
+
                           return (
-                            <View style={styles.timingsGrid}>
-                              {/* Toss Timing Box */}
-                              <View style={styles.timingCardItem}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                                  <Text style={styles.timingLabelTamil}>🪙 Toss Window</Text>
-                                  <Text style={styles.timingTagText}>Toss Window</Text>
+                            <View style={styles.timingsCardSection}>
+                              {/* Header & Mode Switcher */}
+                              <View style={styles.timingModeHeaderRow}>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.timingSectionTitle}>🕒 Match Timings & Schedule Directives</Text>
+                                  <Text style={styles.timingSectionSubtitle}>
+                                    Configure toss window, first ball delivery deadline, and scorer reporting
+                                  </Text>
                                 </View>
-                                <Text style={styles.timingValueText}>{timings.tossWindow}</Text>
-                                <Text style={styles.timingSubtext}>15 - 30 mins before first ball</Text>
+                                
+                                {/* Mode Selector Buttons */}
+                                <View style={styles.timingModeToggleGroup}>
+                                  <TouchableOpacity
+                                    style={[styles.timingModeBtn, isAuto && styles.timingModeBtnActive]}
+                                    onPress={() => {
+                                      setScheduleForm(prev => ({
+                                        ...prev,
+                                        timing_mode: 'AUTO',
+                                        toss_time_window: autoTimings.tossWindow,
+                                        first_ball_time: autoTimings.firstBallTime,
+                                        scorer_reporting_time: autoTimings.reportingTime
+                                      }));
+                                    }}
+                                    activeOpacity={0.8}
+                                  >
+                                    <Text style={[styles.timingModeBtnText, isAuto && styles.timingModeBtnTextActive]}>
+                                      ⚡ Auto Calculate
+                                    </Text>
+                                  </TouchableOpacity>
+
+                                  <TouchableOpacity
+                                    style={[styles.timingModeBtn, !isAuto && styles.timingModeBtnActive]}
+                                    onPress={() => {
+                                      setScheduleForm(prev => ({
+                                        ...prev,
+                                        timing_mode: 'MANUAL',
+                                        toss_time_window: prev.toss_time_window || autoTimings.tossWindow,
+                                        first_ball_time: prev.first_ball_time || autoTimings.firstBallTime,
+                                        scorer_reporting_time: prev.scorer_reporting_time || autoTimings.reportingTime
+                                      }));
+                                    }}
+                                    activeOpacity={0.8}
+                                  >
+                                    <Text style={[styles.timingModeBtnText, !isAuto && styles.timingModeBtnTextActive]}>
+                                      ✏️ Manual Custom
+                                    </Text>
+                                  </TouchableOpacity>
+                                </View>
                               </View>
 
-                              {/* First Ball Throw Time Box */}
-                              <View style={[styles.timingCardItem, { borderColor: '#f59e0b', backgroundColor: '#fffbeb' }]}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                                  <Text style={[styles.timingLabelTamil, { color: '#b45309' }]}>🏏 First Ball Delivery</Text>
-                                  <Text style={[styles.timingTagText, { backgroundColor: '#fef3c7', color: '#b45309' }]}>First Ball</Text>
-                                </View>
-                                <Text style={[styles.timingValueText, { color: '#92400e' }]}>{timings.firstBallTime}</Text>
-                                <Text style={[styles.timingSubtext, { color: '#b45309' }]}>Mandatory Delivery Deadline</Text>
-                              </View>
+                              {/* Timings Display / Editing Body */}
+                              {isAuto ? (
+                                <View style={styles.timingsGrid}>
+                                  {/* Auto Mode Info Banner */}
+                                  <View style={styles.timingAutoBanner}>
+                                    <Text style={styles.timingAutoBannerText}>
+                                      ⚡ <Text style={{ fontWeight: '700' }}>Auto Mode Active:</Text> Timings calculated from Match Start Time ({scheduleForm.match_time || '12:45 PM'}).
+                                    </Text>
+                                    <TouchableOpacity
+                                      style={styles.timingRecalcBtn}
+                                      onPress={() => {
+                                        const recomputed = calculateOfficialMatchTimings(scheduleForm.match_time);
+                                        setScheduleForm(prev => ({
+                                          ...prev,
+                                          timing_mode: 'AUTO',
+                                          toss_time_window: recomputed.tossWindow,
+                                          first_ball_time: recomputed.firstBallTime,
+                                          scorer_reporting_time: recomputed.reportingTime
+                                        }));
+                                      }}
+                                    >
+                                      <Text style={styles.timingRecalcBtnText}>🔄 Recalculate</Text>
+                                    </TouchableOpacity>
+                                  </View>
 
-                              {/* Scorer Reporting Time */}
-                              <View style={[styles.timingCardItem, { borderColor: '#3b82f6', backgroundColor: '#eff6ff' }]}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                                  <Text style={[styles.timingLabelTamil, { color: '#1d4ed8' }]}>⏰ Scorer Reporting</Text>
-                                  <Text style={[styles.timingTagText, { backgroundColor: '#dbeafe', color: '#1d4ed8' }]}>Reporting</Text>
+                                  {/* Toss Timing Box */}
+                                  <View style={styles.timingCardItem}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                                      <Text style={styles.timingLabelTamil}>🪙 Toss Window</Text>
+                                      <Text style={styles.timingTagText}>Toss Window</Text>
+                                    </View>
+                                    <Text style={styles.timingValueText}>{displayToss}</Text>
+                                    <Text style={styles.timingSubtext}>15 - 30 mins before first ball</Text>
+                                  </View>
+
+                                  {/* First Ball Throw Time Box */}
+                                  <View style={[styles.timingCardItem, { borderColor: '#f59e0b', backgroundColor: '#fffbeb' }]}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                                      <Text style={[styles.timingLabelTamil, { color: '#b45309' }]}>🏏 First Ball Delivery</Text>
+                                      <Text style={[styles.timingTagText, { backgroundColor: '#fef3c7', color: '#b45309' }]}>First Ball</Text>
+                                    </View>
+                                    <Text style={[styles.timingValueText, { color: '#92400e' }]}>{displayFirstBall}</Text>
+                                    <Text style={[styles.timingSubtext, { color: '#b45309' }]}>Mandatory Delivery Deadline</Text>
+                                  </View>
+
+                                  {/* Scorer Reporting Time */}
+                                  <View style={[styles.timingCardItem, { borderColor: '#3b82f6', backgroundColor: '#eff6ff' }]}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                                      <Text style={[styles.timingLabelTamil, { color: '#1d4ed8' }]}>⏰ Scorer Reporting</Text>
+                                      <Text style={[styles.timingTagText, { backgroundColor: '#dbeafe', color: '#1d4ed8' }]}>Reporting</Text>
+                                    </View>
+                                    <Text style={styles.timingValueText}>{displayReporting}</Text>
+                                    <Text style={[styles.timingSubtext, { color: '#2563eb' }]}>At Scorer Booth & Team List Verification</Text>
+                                  </View>
                                 </View>
-                                <Text style={styles.timingValueText}>{timings.reportingTime}</Text>
-                                <Text style={[styles.timingSubtext, { color: '#2563eb' }]}>At Scorer Booth & Team List Verification</Text>
-                              </View>
+                              ) : (
+                                /* Manual Mode Input Fields */
+                                <View style={styles.timingManualContainer}>
+                                  <View style={styles.timingManualBanner}>
+                                    <Text style={styles.timingManualBannerText}>
+                                      ✏️ <Text style={{ fontWeight: '700' }}>Manual Entry Active:</Text> Type or edit custom timings below, or click preset chips for quick setup.
+                                    </Text>
+                                  </View>
+
+                                  {/* 1. Toss Time Window Input */}
+                                  <View style={styles.timingInputCard}>
+                                    <View style={styles.fieldLabelRow}>
+                                      <Text style={styles.formFieldLabel}>🪙 Toss Window *</Text>
+                                      <Text style={styles.fieldSubBadge}>Manual</Text>
+                                    </View>
+                                    <TextInput
+                                      style={styles.formTextInputCompact}
+                                      value={scheduleForm.toss_time_window || ''}
+                                      onChangeText={(val) => setScheduleForm(prev => ({ ...prev, toss_time_window: val }))}
+                                      placeholder="e.g. 08:00 AM to 08:15 AM"
+                                      placeholderTextColor="#94a3b8"
+                                    />
+                                    {/* Preset Chips */}
+                                    <View style={styles.timingPresetChipsRow}>
+                                      <TouchableOpacity
+                                        style={styles.timingPresetChip}
+                                        onPress={() => setScheduleForm(prev => ({ ...prev, toss_time_window: '08:00 AM to 08:15 AM' }))}
+                                      >
+                                        <Text style={styles.timingPresetChipText}>🌅 08:00 - 08:15 AM</Text>
+                                      </TouchableOpacity>
+                                      <TouchableOpacity
+                                        style={styles.timingPresetChip}
+                                        onPress={() => setScheduleForm(prev => ({ ...prev, toss_time_window: '01:00 PM to 01:15 PM' }))}
+                                      >
+                                        <Text style={styles.timingPresetChipText}>☀️ 01:00 - 01:15 PM</Text>
+                                      </TouchableOpacity>
+                                      <TouchableOpacity
+                                        style={[styles.timingPresetChip, { backgroundColor: '#f1f5f9' }]}
+                                        onPress={() => setScheduleForm(prev => ({ ...prev, toss_time_window: autoTimings.tossWindow }))}
+                                      >
+                                        <Text style={[styles.timingPresetChipText, { color: '#475569' }]}>⚡ Auto: {autoTimings.tossWindow}</Text>
+                                      </TouchableOpacity>
+                                    </View>
+                                  </View>
+
+                                  {/* 2. First Ball Delivery Input */}
+                                  <View style={styles.timingInputCard}>
+                                    <View style={styles.fieldLabelRow}>
+                                      <Text style={styles.formFieldLabel}>🏏 First Ball Delivery Deadline *</Text>
+                                      <Text style={[styles.fieldSubBadge, { borderColor: '#fde68a', backgroundColor: '#fef3c7', color: '#b45309' }]}>Delivery</Text>
+                                    </View>
+                                    <TextInput
+                                      style={styles.formTextInputCompact}
+                                      value={scheduleForm.first_ball_time || ''}
+                                      onChangeText={(val) => setScheduleForm(prev => ({ ...prev, first_ball_time: val }))}
+                                      placeholder="e.g. 08:30 AM or 01:30 PM"
+                                      placeholderTextColor="#94a3b8"
+                                    />
+                                    {/* Preset Chips */}
+                                    <View style={styles.timingPresetChipsRow}>
+                                      <TouchableOpacity
+                                        style={styles.timingPresetChip}
+                                        onPress={() => setScheduleForm(prev => ({ ...prev, first_ball_time: '08:30 AM' }))}
+                                      >
+                                        <Text style={styles.timingPresetChipText}>08:30 AM</Text>
+                                      </TouchableOpacity>
+                                      <TouchableOpacity
+                                        style={styles.timingPresetChip}
+                                        onPress={() => setScheduleForm(prev => ({ ...prev, first_ball_time: '01:30 PM' }))}
+                                      >
+                                        <Text style={styles.timingPresetChipText}>01:30 PM</Text>
+                                      </TouchableOpacity>
+                                      <TouchableOpacity
+                                        style={styles.timingPresetChip}
+                                        onPress={() => setScheduleForm(prev => ({ ...prev, first_ball_time: scheduleForm.match_time || '08:30 AM' }))}
+                                      >
+                                        <Text style={styles.timingPresetChipText}>Match Time ({scheduleForm.match_time || '08:30 AM'})</Text>
+                                      </TouchableOpacity>
+                                    </View>
+                                  </View>
+
+                                  {/* 3. Scorer Reporting Time Input */}
+                                  <View style={styles.timingInputCard}>
+                                    <View style={styles.fieldLabelRow}>
+                                      <Text style={styles.formFieldLabel}>⏰ Scorer Reporting Time *</Text>
+                                      <Text style={[styles.fieldSubBadge, { borderColor: '#bfdbfe', backgroundColor: '#eff6ff', color: '#1d4ed8' }]}>Reporting</Text>
+                                    </View>
+                                    <TextInput
+                                      style={styles.formTextInputCompact}
+                                      value={scheduleForm.scorer_reporting_time || ''}
+                                      onChangeText={(val) => setScheduleForm(prev => ({ ...prev, scorer_reporting_time: val }))}
+                                      placeholder="e.g. 08:00 AM or 01:00 PM"
+                                      placeholderTextColor="#94a3b8"
+                                    />
+                                    {/* Preset Chips */}
+                                    <View style={styles.timingPresetChipsRow}>
+                                      <TouchableOpacity
+                                        style={styles.timingPresetChip}
+                                        onPress={() => setScheduleForm(prev => ({ ...prev, scorer_reporting_time: '08:00 AM' }))}
+                                      >
+                                        <Text style={styles.timingPresetChipText}>08:00 AM</Text>
+                                      </TouchableOpacity>
+                                      <TouchableOpacity
+                                        style={styles.timingPresetChip}
+                                        onPress={() => setScheduleForm(prev => ({ ...prev, scorer_reporting_time: '01:00 PM' }))}
+                                      >
+                                        <Text style={styles.timingPresetChipText}>01:00 PM</Text>
+                                      </TouchableOpacity>
+                                      <TouchableOpacity
+                                        style={[styles.timingPresetChip, { backgroundColor: '#f1f5f9' }]}
+                                        onPress={() => setScheduleForm(prev => ({ ...prev, scorer_reporting_time: autoTimings.reportingTime }))}
+                                      >
+                                        <Text style={[styles.timingPresetChipText, { color: '#475569' }]}>⚡ Auto: {autoTimings.reportingTime}</Text>
+                                      </TouchableOpacity>
+                                    </View>
+                                  </View>
+                                </View>
+                              )}
                             </View>
                           );
                         })()}
@@ -9008,7 +9245,7 @@ const styles: any = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16
+    padding: 8
   },
   modalDialogLarge: {
     backgroundColor: '#ffffff',
@@ -10783,14 +11020,16 @@ const styles: any = StyleSheet.create({
   // ─────────────────────────────────────────────────────────────
   scheduleModalDialog: {
     maxWidth: 820,
-    maxHeight: '92%',
-    height: '90%',
+    width: '96%',
+    maxHeight: '94%',
+    height: '92%',
     display: 'flex',
-    flexDirection: 'column'
+    flexDirection: 'column',
+    overflow: 'hidden'
   },
   scheduleModalBodyScroll: {
     flex: 1,
-    paddingHorizontal: 22,
+    paddingHorizontal: 16,
     paddingVertical: 14
   },
   formErrorBoxCompact: {
@@ -10804,22 +11043,26 @@ const styles: any = StyleSheet.create({
   },
 
   // 3-Step Guided Progress Indicator (Requirement 2)
+  stepProgressBarContainer: {
+    backgroundColor: '#f8fafc',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    width: '100%'
+  },
   stepProgressBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#f8fafc',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0'
+    minWidth: '100%',
+    paddingHorizontal: 14,
+    paddingVertical: 10
   },
   stepItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     paddingVertical: 4,
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
     borderRadius: 8
   },
   stepItemActive: {},
@@ -10861,7 +11104,7 @@ const styles: any = StyleSheet.create({
     color: '#0f172a'
   },
   stepTitleLabel: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '700',
     color: '#64748b'
   },
@@ -10871,9 +11114,10 @@ const styles: any = StyleSheet.create({
   },
   stepConnectorLine: {
     flex: 1,
+    minWidth: 12,
     height: 2,
     backgroundColor: '#e2e8f0',
-    marginHorizontal: 8
+    marginHorizontal: 6
   },
   stepConnectorLineActive: {
     backgroundColor: '#16a34a'
@@ -11184,7 +11428,7 @@ const styles: any = StyleSheet.create({
   // Two column grid & compact cards
   colFormCard: {
     flex: 1,
-    minWidth: 280,
+    minWidth: 240,
     backgroundColor: '#ffffff',
     borderRadius: 10,
     borderWidth: 1,
@@ -12560,5 +12804,122 @@ const styles: any = StyleSheet.create({
     fontSize: 11.5,
     lineHeight: 17,
     color: '#0369a1'
+  },
+  timingsCardSection: {
+    marginTop: 8,
+    marginBottom: 10
+  },
+  timingModeHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 10
+  },
+  timingSectionTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  timingSectionSubtitle: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 1
+  },
+  timingModeToggleGroup: {
+    flexDirection: 'row',
+    backgroundColor: '#e2e8f0',
+    borderRadius: 8,
+    padding: 2,
+    gap: 2
+  },
+  timingModeBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6
+  },
+  timingModeBtnActive: {
+    backgroundColor: '#0f172a'
+  },
+  timingModeBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569'
+  },
+  timingModeBtnTextActive: {
+    color: '#ffffff',
+    fontWeight: '800'
+  },
+  timingAutoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    gap: 8,
+    flexWrap: 'wrap',
+    marginBottom: 8
+  },
+  timingAutoBannerText: {
+    fontSize: 11.5,
+    color: '#1d4ed8',
+    flex: 1
+  },
+  timingRecalcBtn: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6
+  },
+  timingRecalcBtnText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  timingManualContainer: {
+    gap: 10
+  },
+  timingManualBanner: {
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7
+  },
+  timingManualBannerText: {
+    fontSize: 11.5,
+    color: '#92400e'
+  },
+  timingInputCard: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    padding: 10
+  },
+  timingPresetChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6
+  },
+  timingPresetChip: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5
+  },
+  timingPresetChipText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#334155'
   }
 } as any);
