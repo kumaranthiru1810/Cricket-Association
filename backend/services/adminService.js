@@ -184,7 +184,7 @@ async function saveOfficial({ id, name, role, email, phone, status = 'ACTIVE' },
  */
 async function getVenues() {
   await db.initDb();
-  return db.models.Venue.find({}).lean();
+  return venueModel.getAll();
 }
 
 /**
@@ -192,19 +192,14 @@ async function getVenues() {
  */
 async function saveVenue({ id, name, location, capacity, floodlights, description }, adminEmail) {
   await db.initDb();
-  const venId = id || `VEN-${Date.now()}`;
-  const venue = await db.models.Venue.findOneAndUpdate(
-    { id: venId },
-    { $set: { id: venId, name, location, capacity, floodlights: !!floodlights, description } },
-    { upsert: true, returnDocument: 'after' }
-  ).lean();
+  const venue = await venueModel.save({ id, name, location, capacity, floodlights, description });
 
   await addAuditLog({
     action: 'SAVE_VENUE',
     initiated_by: adminEmail,
     target_user: name,
     result: `Venue ${name} saved`,
-    details: `Venue saved at ${location}`
+    details: `Venue saved at ${location || 'Virudhunagar'}`
   });
 
   return venue;
@@ -1638,7 +1633,7 @@ async function deleteOfficial(id, adminEmail) {
 
 async function deleteVenue(id, adminEmail) {
   await db.initDb();
-  await db.models.Venue.deleteOne({ id });
+  const deleted = await venueModel.delete(id);
   await addAuditLog({
     action: 'DELETE_VENUE',
     initiated_by: adminEmail,
@@ -1646,7 +1641,7 @@ async function deleteVenue(id, adminEmail) {
     result: `Venue ${id} deleted`,
     details: 'Venue deleted from system'
   });
-  return { success: true, message: 'Venue deleted successfully' };
+  return { success: true, message: 'Venue deleted successfully', data: deleted };
 }
 
 // -------------------------------------------------------------

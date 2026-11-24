@@ -482,7 +482,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
   // State for Teams, Scorers, Umpires
   const [scorers, setScorers] = useState<any[]>(DEFAULT_CFVD_SCORERS);
-  const [teams, setTeams] = useState<any[]>(DEFAULT_CFVD_TEAMS);
+  const [teams, setTeams] = useState<any[]>([]);
   const [umpires, setUmpires] = useState<any[]>(DEFAULT_CFVD_UMPIRES);
   const [newsList, setNewsList] = useState<any[]>([]);
 
@@ -705,8 +705,18 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   const loadDataFromBackend = async () => {
     setIsLoading(true);
     try {
-      // 1. Fetch live registrations from backend
-      const regRes = await ScorerApi.getAllRegistrations();
+      // 1. Fetch live registrations and registered teams from backend
+      const [regRes, teamsRes] = await Promise.all([
+        ScorerApi.getAllRegistrations().catch(err => {
+          console.warn('[AdminDashboardScreen] getAllRegistrations error:', err);
+          return { success: false, registrations: [] };
+        }),
+        ScorerApi.getTeams().catch(err => {
+          console.warn('[AdminDashboardScreen] getTeams error:', err);
+          return { success: false, teams: [] };
+        })
+      ]);
+
       const rawRegs: any[] =
         regRes && regRes.success
           ? Array.isArray(regRes.registrations)
@@ -720,11 +730,15 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 : []
           : [];
 
-      if (rawRegs.length > 0) {
-        const backendTeams: any[] = [];
-        const backendScorers: any[] = [];
-        const backendUmpires: any[] = [];
+      const rawTeams: any[] =
+        teamsRes && (Array.isArray(teamsRes.teams) ? teamsRes.teams : (Array.isArray(teamsRes.data) ? teamsRes.data : []));
 
+      const backendTeams: any[] = [];
+      const backendScorers: any[] = [];
+      const backendUmpires: any[] = [];
+      const seenTeamNames = new Set<string>();
+
+      if (rawRegs.length > 0) {
         rawRegs.forEach((r: any, idx: number) => {
           let normStatus = 'Pending';
           const s = (r.status || '').toUpperCase();
@@ -732,9 +746,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           else if (s === 'REJECTED') normStatus = 'Rejected';
 
           if (r.type === 'TEAM') {
+            const tName = (r.name || r.team_name || '').trim();
+            if (tName) seenTeamNames.add(tName.toLowerCase());
             backendTeams.push({
               teamId: r.id || r.mongoId || `TEAM-${idx + 101}`,
-              teamName: r.name,
+              teamName: tName || 'Registered Club',
               coach: { name: r.contactName || r.name, email: r.contactEmail || r.email || '' },
               taluk: r.taluk || r.details?.taluk || 'Virudhunagar',
               status: normStatus,
@@ -792,15 +808,48 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             });
           }
         });
-
-        setTeams(backendTeams.length > 0 ? backendTeams : DEFAULT_CFVD_TEAMS);
-        setScorers(backendScorers.length > 0 ? backendScorers : DEFAULT_CFVD_SCORERS);
-        setUmpires(backendUmpires.length > 0 ? backendUmpires : DEFAULT_CFVD_UMPIRES);
-      } else {
-        setTeams(DEFAULT_CFVD_TEAMS);
-        setScorers(DEFAULT_CFVD_SCORERS);
-        setUmpires(DEFAULT_CFVD_UMPIRES);
       }
+
+      // Also merge any teams directly from getTeams() that were not in registrations list
+      if (rawTeams.length > 0) {
+        rawTeams.forEach((t: any, idx: number) => {
+          const tName = (t.team_name || t.name || '').trim();
+          if (tName && !seenTeamNames.has(tName.toLowerCase())) {
+            seenTeamNames.add(tName.toLowerCase());
+            let normStatus = 'Pending';
+            const s = (t.status || '').toUpperCase();
+            if (s === 'APPROVED' || s === 'ACTIVE') normStatus = 'Approved';
+            else if (s === 'REJECTED') normStatus = 'Rejected';
+
+            backendTeams.push({
+              teamId: t.id || t.team_id || t._id || `TEAM-${idx + 201}`,
+              teamName: tName,
+              coach: { name: t.coach_name || 'Coach', email: t.coach_email || t.email || '' },
+              taluk: t.taluk || t.city || 'Virudhunagar',
+              status: normStatus,
+              adminApprovalStatus: normStatus,
+              registrationDate: t.created_at || new Date().toISOString(),
+              approvedAt: t.approved_at || null,
+              approvedBy: t.approved_by || (normStatus === 'Approved' ? 'admin@cfvd.org' : null),
+              rejectedAt: t.rejected_at || null,
+              rejectionReason: t.rejection_reason || null,
+              members: (Array.isArray(t.players) ? t.players : []).map((p: any) => ({
+                ...p,
+                name: p.name || p.playerName || 'Player',
+                playerName: p.name || p.playerName || 'Player',
+                email: p.email || p.playerEmail || '',
+                playerEmail: p.email || p.playerEmail || '',
+                jerseyNumber: p.jersey_number || p.jerseyNumber,
+                role: p.role || 'Player'
+              }))
+            });
+          }
+        });
+      }
+
+      setTeams(backendTeams);
+      setScorers(backendScorers.length > 0 ? backendScorers : DEFAULT_CFVD_SCORERS);
+      setUmpires(backendUmpires.length > 0 ? backendUmpires : DEFAULT_CFVD_UMPIRES);
 
       // 2. Fetch live news from MongoDB
       const newsRes = await ScorerApi.getNews();
