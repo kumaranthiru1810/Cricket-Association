@@ -51,7 +51,8 @@ import {
   parseTimeString,
   validateScheduleDate,
   validateScheduleTime,
-  validateScheduleDateTime
+  validateScheduleDateTime,
+  calculateOfficialMatchTimings
 } from '../../utils/dateTimeValidation';
 import { CalendarPickerModal } from '../../components/common/CalendarPickerModal';
 import { ClockPickerModal } from '../../components/common/ClockPickerModal';
@@ -1502,6 +1503,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     // 5. Submit to Backend API
     setIsSubmittingSchedule(true);
     try {
+      const officialTimings = calculateOfficialMatchTimings(cleanTime);
       const payload = {
         tournament_id: tournament_id || effectiveTourName.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 24),
         tournament_name: effectiveTourName,
@@ -1516,6 +1518,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         assigned_scorer_id: scheduleForm.assigned_scorer_id || scheduleForm.assigned_scorer_name || 'SCR-101',
         assigned_scorer_name: scheduleForm.assigned_scorer_name || scheduleForm.assigned_scorer_id || '',
         scorer_name: scheduleForm.assigned_scorer_name || scheduleForm.assigned_scorer_id || '',
+        toss_time_window: officialTimings.tossWindow,
+        first_ball_time: officialTimings.firstBallTime,
+        scorer_reporting_time: officialTimings.reportingTime,
         umpire1_id: umpire1_id || '',
         umpire1_name: umpire1_name || '',
         umpire2_id: umpire2_id || '',
@@ -6325,6 +6330,79 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                             </View>
                           )}
                         </ScrollView>
+                      </View>
+                    )}
+
+                    {/* SCORER INFORMATION & OFFICIAL MATCH TIMINGS CARD */}
+                    {Boolean(scheduleForm.assigned_scorer_name || scheduleForm.assigned_scorer_id || scheduleForm.match_time) && (
+                      <View style={styles.scorerInfoCard}>
+                        <View style={styles.scorerInfoHeaderRow}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={{ fontSize: 16 }}>📋</Text>
+                            <Text style={styles.scorerInfoTitle}>Scorer Information</Text>
+                          </View>
+                          <View style={styles.scorerInfoBadge}>
+                            <Text style={styles.scorerInfoBadgeText}>⚡ Auto Calculated</Text>
+                          </View>
+                        </View>
+
+                        {/* Scorer Details */}
+                        <View style={styles.scorerDetailsRow}>
+                          <Text style={styles.scorerNameText}>
+                            👤 {scheduleForm.assigned_scorer_name || scheduleForm.assigned_scorer_id || 'Athi Lingam'}
+                          </Text>
+                          <Text style={styles.scorerRoleSubtext}>
+                            Official Match Scorer • Virudhunagar District Cricket Panel
+                          </Text>
+                        </View>
+
+                        {/* Official Match Timings Grid */}
+                        {(() => {
+                          const timings = calculateOfficialMatchTimings(scheduleForm.match_time);
+                          return (
+                            <View style={styles.timingsGrid}>
+                              {/* Toss Timing Box */}
+                              <View style={styles.timingCardItem}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                                  <Text style={styles.timingLabelTamil}>🪙 டாஸ் போடும் நேரம்</Text>
+                                  <Text style={styles.timingTagText}>Toss Window</Text>
+                                </View>
+                                <Text style={styles.timingValueText}>{timings.tossWindow}</Text>
+                                <Text style={styles.timingSubtext}>15 - 30 mins before first ball</Text>
+                              </View>
+
+                              {/* First Ball Throw Time Box */}
+                              <View style={[styles.timingCardItem, { borderColor: '#f59e0b', backgroundColor: '#fffbeb' }]}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                                  <Text style={[styles.timingLabelTamil, { color: '#b45309' }]}>🏏 முதல் பந்து வீசும் நேரம்</Text>
+                                  <Text style={[styles.timingTagText, { backgroundColor: '#fef3c7', color: '#b45309' }]}>First Ball</Text>
+                                </View>
+                                <Text style={[styles.timingValueText, { color: '#92400e' }]}>{timings.firstBallTime}</Text>
+                                <Text style={[styles.timingSubtext, { color: '#b45309' }]}>Mandatory Delivery Deadline</Text>
+                              </View>
+
+                              {/* Scorer Reporting Time */}
+                              <View style={[styles.timingCardItem, { borderColor: '#3b82f6', backgroundColor: '#eff6ff' }]}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                                  <Text style={[styles.timingLabelTamil, { color: '#1d4ed8' }]}>⏰ ஸ்கோரர் வருகை நேரம்</Text>
+                                  <Text style={[styles.timingTagText, { backgroundColor: '#dbeafe', color: '#1d4ed8' }]}>Reporting</Text>
+                                </View>
+                                <Text style={[styles.timingValueText, { color: '#1e40af' }]}>{timings.reportingTime}</Text>
+                                <Text style={[styles.timingSubtext, { color: '#2563eb' }]}>At Scorer Booth & Team List Verification</Text>
+                              </View>
+                            </View>
+                          );
+                        })()}
+
+                        {/* Official Association Rules Notice */}
+                        <View style={styles.scorerRuleNotice}>
+                          <Text style={styles.scorerRuleNoticeText}>
+                            📜 <Text style={{ fontWeight: '700' }}>அசோசியேஷன் விதிமுறை:</Text> டாஸ் போடும் நேரம்: 08.00 AM to 08.15 AM & 01.00 PM to 01.15 PM. முதல் பந்து காலை 08.30 மணிக்கும் மதியம் 01.30 மணிக்கும் வீசப்பட வேண்டும்.
+                          </Text>
+                          <Text style={[styles.scorerRuleNoticeText, { marginTop: 4, color: '#0369a1' }]}>
+                            🔔 Scorer லாகின் செய்யும் போது இந்த நேரங்கள் பாப்அப் (Popup) ஆக தோன்றும். சரி (OK) அளித்த பின்னரே ஸ்கோரர் உள்ளே நுழைய முடியும்.
+                          </Text>
+                        </View>
                       </View>
                     )}
                   </View>
@@ -12373,5 +12451,114 @@ const styles: any = StyleSheet.create({
     fontSize: 9.5,
     fontWeight: '900',
     letterSpacing: 0.8
+  },
+
+  // Scorer Information & Match Timings Card
+  scorerInfoCard: {
+    marginTop: 12,
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 14,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2
+  },
+  scorerInfoHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    marginBottom: 10
+  },
+  scorerInfoTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  scorerInfoBadge: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#86efac',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2
+  },
+  scorerInfoBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#15803d'
+  },
+  scorerDetailsRow: {
+    marginBottom: 10,
+    backgroundColor: '#f8fafc',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  scorerNameText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  scorerRoleSubtext: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2
+  },
+  timingsGrid: {
+    flexDirection: 'column',
+    gap: 8,
+    marginBottom: 10
+  },
+  timingCardItem: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    padding: 10
+  },
+  timingLabelTamil: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#1e293b'
+  },
+  timingTagText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#475569',
+    backgroundColor: '#e2e8f0',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4
+  },
+  timingValueText: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0f172a',
+    marginTop: 2
+  },
+  timingSubtext: {
+    fontSize: 10.5,
+    color: '#64748b',
+    marginTop: 2
+  },
+  scorerRuleNotice: {
+    backgroundColor: '#f0f9ff',
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+    borderRadius: 8,
+    padding: 10
+  },
+  scorerRuleNoticeText: {
+    fontSize: 11.5,
+    lineHeight: 17,
+    color: '#0369a1'
   }
 } as any);

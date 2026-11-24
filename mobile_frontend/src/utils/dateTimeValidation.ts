@@ -444,3 +444,82 @@ export function validateScheduleDateTime(matchDate?: string, matchTime?: string)
   };
 }
 
+export interface OfficialMatchTimings {
+  firstBallTime: string;
+  tossWindow: string;
+  reportingTime: string;
+  sessionLabel: string;
+  rulesTamil: {
+    tossRule: string;
+    firstBallRule: string;
+    rule15: string;
+  };
+}
+
+/**
+ * Calculates official association match timings (Toss window, First ball delivery, Scorer arrival).
+ * Based on official CFVD Association rules:
+ * - Toss: 08:00 AM to 08:15 AM & 01:00 PM to 01:15 PM (or 15-30m prior to first ball)
+ * - First ball: 08:30 AM (morning) & 01:30 PM (afternoon)
+ */
+export function calculateOfficialMatchTimings(timeStr: string): OfficialMatchTimings {
+  const fallback: OfficialMatchTimings = {
+    firstBallTime: '08:30 AM',
+    tossWindow: '08:00 AM to 08:15 AM',
+    reportingTime: '08:00 AM',
+    sessionLabel: 'காலை ஆட்டம் (Morning Session)',
+    rulesTamil: {
+      tossRule: 'டாஸ் போடும் நேரம்:- 08.00 AM to 08.15 AM & 01.00 PM to 01.15 PM',
+      firstBallRule: 'முதல் பந்து காலை 08.30 மணிக்கும் மதியம் 01.30 மணிக்கும் வீசப்பட வேண்டும்.',
+      rule15: 'விதி 15: இன்னிங்ஸ் தொடங்குவதற்கு குறைந்தபட்சம் 9 வீரர்கள் ஆட்டத்தின் தொடக்கத்தில் இருக்க வேண்டும்.'
+    }
+  };
+
+  if (!timeStr) return fallback;
+
+  const clean = timeStr.trim().toUpperCase();
+  if (clean === '08:30 AM' || clean === '8:30 AM') {
+    return {
+      ...fallback,
+      firstBallTime: '08:30 AM',
+      tossWindow: '08:00 AM to 08:15 AM',
+      reportingTime: '08:00 AM',
+      sessionLabel: 'காலை ஆட்டம் (Morning Session)'
+    };
+  }
+  if (clean === '01:30 PM' || clean === '1:30 PM') {
+    return {
+      ...fallback,
+      firstBallTime: '01:30 PM',
+      tossWindow: '01:00 PM to 01:15 PM',
+      reportingTime: '01:00 PM',
+      sessionLabel: 'மதிய ஆட்டம் (Afternoon Session)'
+    };
+  }
+
+  const parsed = parseTimeString(timeStr);
+  if (!parsed) return fallback;
+
+  const totalMin = parsed.totalMinutes;
+  const tossStartMin = (totalMin - 30 + 1440) % 1440;
+  const tossEndMin = (totalMin - 15 + 1440) % 1440;
+
+  const fmt = (min: number) => {
+    let hh = Math.floor(min / 60);
+    const mm = min % 60;
+    const p = hh >= 12 ? 'PM' : 'AM';
+    hh = hh % 12;
+    if (hh === 0) hh = 12;
+    return `${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')} ${p}`;
+  };
+
+  const isMorning = totalMin < 12 * 60;
+  return {
+    firstBallTime: parsed.formatted12,
+    tossWindow: `${fmt(tossStartMin)} to ${fmt(tossEndMin)}`,
+    reportingTime: fmt(tossStartMin),
+    sessionLabel: isMorning ? 'காலை ஆட்டம் (Morning Session)' : 'மதிய / மாலை ஆட்டம் (Afternoon/Evening Session)',
+    rulesTamil: fallback.rulesTamil
+  };
+}
+

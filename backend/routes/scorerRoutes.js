@@ -134,6 +134,24 @@ router.get('/matches/:matchId', async (req, res) => {
   }
 });
 
+// Scorer Match Timing & Protocol Acknowledgement
+router.post('/matches/:matchId/acknowledge-protocol', async (req, res) => {
+  try {
+    await db.initDb();
+    const match = await db.models.Match.findOne({ id: req.params.matchId });
+    if (!match) {
+      return res.status(404).json({ success: false, message: 'Match not found' });
+    }
+    match.scorer_acknowledged = true;
+    match.scorer_acknowledged_at = new Date();
+    match.scorer_acknowledged_by = req.user?.id || req.user?.email || req.body?.scorer_id || 'OFFICIAL_SCORER';
+    await match.save();
+    res.json({ success: true, message: 'Official match protocol and timings acknowledged successfully.', match: match.toObject() });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Match Setup before match starts
 router.get('/matches/:matchId/setup', verifyMatchPermission, async (req, res) => {
   try {

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image, useWindowDimensions, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image, useWindowDimensions, Platform, ActivityIndicator, Modal } from 'react-native';
 import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
 import MatchCard from '../../components/scorer/MatchCard';
 import SharedFooter from '../../components/scorer/SharedFooter';
 import { ScorerApi, getCurrentUser, logoutAndClearAllSessions } from '../../services/api';
 import { showInfo, showConfirm } from '../../utils/sweetalert';
+import { getTodayKolkata, calculateOfficialMatchTimings } from '../../utils/dateTimeValidation';
 
 export default function ScorerDashboardScreen() {
   const { navigate, onExit, params } = useScorerNavigation();
@@ -15,6 +16,8 @@ export default function ScorerDashboardScreen() {
   const [matches, setMatches] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [profile, setProfile] = useState<any>(params?.user || getCurrentUser() || { name: 'Official Scorer', id: 'SCORER', association: 'Virudhunagar District' });
+  const [timingAckMatch, setTimingAckMatch] = useState<any>(null);
+  const [showTimingAckModal, setShowTimingAckModal] = useState<boolean>(false);
   const [selectedFilter, setSelectedFilter] = useState<string | null>(() => {
     if (typeof window !== 'undefined' && window.location) {
       try {
@@ -115,6 +118,29 @@ export default function ScorerDashboardScreen() {
     setMatches(assignedMatches);
     setIsLoading(false);
 
+    // Mandatory Match Timings Protocol Check (Popup on Scorer Login)
+    try {
+      const todayStr = getTodayKolkata();
+      const matchToAcknowledge = assignedMatches.find((m: any) => {
+        const mDate = (m.match_date || m.date || '').split('T')[0].trim();
+        const status = (m.status || '').toUpperCase();
+        return mDate === todayStr && status !== 'COMPLETED' && status !== 'CANCELLED' && status !== 'ABANDONED';
+      }) || assignedMatches.find((m: any) => {
+        const status = (m.status || '').toUpperCase();
+        return (status === 'SCHEDULED' || status === 'UPCOMING' || status === 'TOSS');
+      });
+
+      if (matchToAcknowledge) {
+        const matchId = matchToAcknowledge.id || matchToAcknowledge._id;
+        const ackKey = `cfvd_scorer_ack_${matchId}_${todayStr}`;
+        const alreadyAcked = (typeof window !== 'undefined' && window.localStorage?.getItem(ackKey) === 'true') || matchToAcknowledge.scorer_acknowledged;
+        if (!alreadyAcked) {
+          setTimingAckMatch(matchToAcknowledge);
+          setShowTimingAckModal(true);
+        }
+      }
+    } catch (_ackErr) {}
+
     // Load profile
     try {
       const user = getCurrentUser();
@@ -127,6 +153,29 @@ export default function ScorerDashboardScreen() {
         }
       }
     } catch (_e) {}
+  };
+
+  const handleAcknowledgeTimings = async () => {
+    if (!timingAckMatch) return;
+    const todayStr = getTodayKolkata();
+    const matchId = timingAckMatch.id || timingAckMatch._id;
+    const ackKey = `cfvd_scorer_ack_${matchId}_${todayStr}`;
+
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(ackKey, 'true');
+      }
+      await ScorerApi.acknowledgeProtocol(matchId, {
+        scorer_id: profile?.id || profile?.scorerId || 'SCR-101',
+        scorer_name: profile?.name || 'Official Scorer'
+      });
+    } catch (_err) {
+      // Non-blocking fallback
+    }
+
+    setMatches(prev => prev.map(m => (m.id === matchId ? { ...m, scorer_acknowledged: true } : m)));
+    setShowTimingAckModal(false);
+    setTimingAckMatch(null);
   };
 
   const handleLogout = async () => {
@@ -561,6 +610,139 @@ export default function ScorerDashboardScreen() {
 
         <SharedFooter />
       </ScrollView>
+
+      {/* MANDATORY SCORER TIMING PROTOCOL ACKNOWLEDGEMENT POPUP */}
+      <Modal
+        visible={showTimingAckModal && Boolean(timingAckMatch)}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {}}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.ackModalContainer}>
+            {/* Modal Federation Header */}
+            <View style={styles.ackModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={styles.ackModalIconBadge}>
+                  <Text style={{ fontSize: 24 }}>🏏</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.ackModalTitleTamil}>
+                    அதிகாரப்பூர்வ ஆட்ட நெறிமுறைகள் & நேர அட்டவணை
+                  </Text>
+                  <Text style={styles.ackModalSubtitle}>
+                    Official Match Protocol & Timings • Scorer Verification
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+              {/* Fixture Overview Box */}
+              {timingAckMatch && (
+                <View style={styles.ackFixtureCard}>
+                  <Text style={styles.ackTournamentText}>
+                    🏆 {timingAckMatch.tournament_name || timingAckMatch.tournament || 'Virudhunagar Premier League 2026'}
+                  </Text>
+                  <View style={styles.ackTeamsRow}>
+                    <Text style={styles.ackTeamName}>
+                      {timingAckMatch.teamA?.name || timingAckMatch.team_a_name || 'Team A'}
+                    </Text>
+                    <View style={styles.ackVsBadge}>
+                      <Text style={styles.ackVsBadgeText}>VS</Text>
+                    </View>
+                    <Text style={styles.ackTeamName}>
+                      {timingAckMatch.teamB?.name || timingAckMatch.team_b_name || 'Team B'}
+                    </Text>
+                  </View>
+                  <View style={styles.ackMetaRow}>
+                    <Text style={styles.ackMetaText}>
+                      📅 {timingAckMatch.match_date || timingAckMatch.date}
+                    </Text>
+                    <Text style={styles.ackMetaText}>
+                      📍 {timingAckMatch.venue || 'Kamarajar District Stadium'}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Highlighted Timings Grid */}
+              {(() => {
+                const timings = calculateOfficialMatchTimings(
+                  timingAckMatch?.match_time || timingAckMatch?.time || '08:30 AM'
+                );
+                return (
+                  <View style={styles.ackTimingsGrid}>
+                    {/* Toss Window Box */}
+                    <View style={styles.ackTimingItem}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <Text style={styles.ackTimingLabelTamil}>🪙 டாஸ் போடும் நேரம்</Text>
+                        <Text style={styles.ackTimingTag}>Toss Window</Text>
+                      </View>
+                      <Text style={styles.ackTimingValue}>
+                        {timingAckMatch?.toss_time_window || timings.tossWindow}
+                      </Text>
+                      <Text style={styles.ackTimingHint}>15 - 30 நிமிடங்கள் முன்பு</Text>
+                    </View>
+
+                    {/* First Ball Delivery Box */}
+                    <View style={[styles.ackTimingItem, { borderColor: '#f59e0b', backgroundColor: '#fffbeb' }]}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <Text style={[styles.ackTimingLabelTamil, { color: '#b45309' }]}>🏏 முதல் பந்து வீசும் நேரம்</Text>
+                        <Text style={[styles.ackTimingTag, { backgroundColor: '#fef3c7', color: '#b45309' }]}>First Ball</Text>
+                      </View>
+                      <Text style={[styles.ackTimingValue, { color: '#92400e' }]}>
+                        {timingAckMatch?.first_ball_time || timingAckMatch?.match_time || timings.firstBallTime}
+                      </Text>
+                      <Text style={[styles.ackTimingHint, { color: '#b45309' }]}>கட்டாய பந்து வீச்சு நேரம்</Text>
+                    </View>
+
+                    {/* Scorer Reporting Time */}
+                    <View style={[styles.ackTimingItem, { borderColor: '#3b82f6', backgroundColor: '#eff6ff' }]}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <Text style={[styles.ackTimingLabelTamil, { color: '#1d4ed8' }]}>⏰ ஸ்கோரர் வருகை நேரம்</Text>
+                        <Text style={[styles.ackTimingTag, { backgroundColor: '#dbeafe', color: '#1d4ed8' }]}>Reporting</Text>
+                      </View>
+                      <Text style={[styles.ackTimingValue, { color: '#1e40af' }]}>
+                        {timingAckMatch?.scorer_reporting_time || timings.reportingTime}
+                      </Text>
+                      <Text style={[styles.ackTimingHint, { color: '#2563eb' }]}>ஸ்கோரர் பூத் வருகை & பட்டியல் சரிபார்ப்பு</Text>
+                    </View>
+                  </View>
+                );
+              })()}
+
+              {/* Official Association Rules Card */}
+              <View style={styles.ackRulesBox}>
+                <Text style={styles.ackRulesHeader}>📜 தமிழ்நாடு கிரிக்கெட் அசோசியேஷன் விதிமுறைகள்:</Text>
+                <View style={{ marginTop: 6, gap: 5 }}>
+                  <Text style={styles.ackRuleLine}>• <Text style={{ fontWeight: '700' }}>டாஸ் போடும் நேரம்:</Text> 08.00 AM to 08.15 AM & 01.00 PM to 01.15 PM</Text>
+                  <Text style={styles.ackRuleLine}>• <Text style={{ fontWeight: '700' }}>முதல் பந்து:</Text> காலை 08.30 மணிக்கும் மதியம் 01.30 மணிக்கும் வீசப்பட வேண்டும்.</Text>
+                  <Text style={styles.ackRuleLine}>• <Text style={{ fontWeight: '700' }}>விதி 15:</Text> இன்னிங்ஸ் தொடங்குவதற்கு குறைந்தபட்சம் 9 வீரர்கள் ஆட்டத்தின் தொடக்கத்தில் இருக்க வேண்டும்.</Text>
+                </View>
+              </View>
+
+              {/* Scorer Consent Box */}
+              <View style={styles.ackConsentBox}>
+                <Text style={styles.ackConsentText}>
+                  🛡️ நான் மேற்கண்ட ஆட்ட நேரங்கள் மற்றும் டாஸ் நெறிமுறைகளை ஏற்றுக்கொள்கிறேன். நேரத்திற்குள் அதிகாரப்பூர்வ ஸ்கோரிங் செய்ய ஒப்புதல் அளிக்கிறேன்.
+                </Text>
+              </View>
+            </ScrollView>
+
+            {/* Mandatory Action Button */}
+            <TouchableOpacity
+              style={styles.ackSubmitBtn}
+              onPress={handleAcknowledgeTimings}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.ackSubmitBtnText}>
+                ✓ சரி / ஒப்புதல் & போர்ட்டலுக்குள் நுழையவும் (OK & Enter Portal)
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -755,5 +937,200 @@ const getStyles = (isDesktop: boolean) => StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 3
+  },
+
+  // MANDATORY ACKNOWLEDGEMENT MODAL
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16
+  },
+  ackModalContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 580,
+    padding: isDesktop ? 22 : 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+    borderWidth: 2,
+    borderColor: '#d97706'
+  },
+  ackModalHeader: {
+    paddingBottom: 14,
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#f1f5f9',
+    marginBottom: 14
+  },
+  ackModalIconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#fffbeb',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#f59e0b'
+  },
+  ackModalTitleTamil: {
+    fontSize: isDesktop ? 15.5 : 14,
+    fontWeight: '900',
+    color: '#0f172a'
+  },
+  ackModalSubtitle: {
+    fontSize: 11,
+    color: '#b45309',
+    fontWeight: '700',
+    marginTop: 2
+  },
+  ackFixtureCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 12
+  },
+  ackTournamentText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6
+  },
+  ackTeamsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginVertical: 4
+  },
+  ackTeamName: {
+    fontSize: isDesktop ? 16 : 14.5,
+    fontWeight: '900',
+    color: '#0f172a',
+    textAlign: 'center',
+    flex: 1
+  },
+  ackVsBadge: {
+    backgroundColor: '#d97706',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2
+  },
+  ackVsBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#ffffff'
+  },
+  ackMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    flexWrap: 'wrap'
+  },
+  ackMetaText: {
+    fontSize: 11.5,
+    color: '#475569',
+    fontWeight: '700'
+  },
+  ackTimingsGrid: {
+    flexDirection: 'column',
+    gap: 8,
+    marginBottom: 12
+  },
+  ackTimingItem: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    padding: 10
+  },
+  ackTimingLabelTamil: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#1e293b'
+  },
+  ackTimingTag: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#475569',
+    backgroundColor: '#e2e8f0',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4
+  },
+  ackTimingValue: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0f172a',
+    marginTop: 2
+  },
+  ackTimingHint: {
+    fontSize: 10.5,
+    color: '#64748b',
+    marginTop: 2
+  },
+  ackRulesBox: {
+    backgroundColor: '#fffbeb',
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#fcd34d',
+    padding: 12,
+    marginBottom: 12
+  },
+  ackRulesHeader: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#92400e'
+  },
+  ackRuleLine: {
+    fontSize: 11.5,
+    lineHeight: 17,
+    color: '#78350f'
+  },
+  ackConsentBox: {
+    backgroundColor: '#f0fdf4',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    padding: 10,
+    marginBottom: 12
+  },
+  ackConsentText: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: '#166534',
+    fontWeight: '600'
+  },
+  ackSubmitBtn: {
+    backgroundColor: '#15803d',
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#15803d',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4
+  },
+  ackSubmitBtnText: {
+    color: '#ffffff',
+    fontSize: isDesktop ? 14 : 12.5,
+    fontWeight: '900',
+    textAlign: 'center'
   }
 });

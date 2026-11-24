@@ -1246,6 +1246,13 @@ export const ScorerApi = {
     });
   },
 
+  acknowledgeProtocol: async (matchId: string, data?: any) => {
+    return request(`/scorer/matches/${matchId}/acknowledge-protocol`, {
+      method: 'POST',
+      body: JSON.stringify(data || {})
+    });
+  },
+
   // --- LIVE SCORING ENGINE ---
   getLiveState: async (matchId: string) => {
     try {

@@ -13,7 +13,7 @@ const db = require('../config/db');
 const otpService = require('./otpService');
 const { sendOtpEmail } = require('../config/mailer');
 const contentModel = require('../models/contentModel');
-const { validateScheduleDateTime } = require('../utils/dateTimeValidation');
+const { validateScheduleDateTime, calculateOfficialMatchTimings } = require('../utils/dateTimeValidation');
 
 /**
  * Creates an audit log entry in MongoDB
@@ -535,6 +535,20 @@ async function scheduleMatch(fixtureData, adminEmail) {
     }
   }
 
+  let resolvedScorerName = fixtureData.assigned_scorer_name || fixtureData.scorer_name || null;
+  if (!resolvedScorerName && assigned_scorer_id) {
+    const scDoc = await db.models.User.findOne({ $or: [{ id: assigned_scorer_id }, { email: assigned_scorer_id }, { name: assigned_scorer_id }] }).lean();
+    if (scDoc) resolvedScorerName = scDoc.name;
+  }
+  if (!resolvedScorerName) {
+    resolvedScorerName = assigned_scorer_id || 'Official Scorer';
+  }
+
+  const officialTimings = calculateOfficialMatchTimings(cleanTime);
+  const toss_time_window = fixtureData.toss_time_window || officialTimings.tossWindow;
+  const first_ball_time = fixtureData.first_ball_time || officialTimings.firstBallTime;
+  const scorer_reporting_time = fixtureData.scorer_reporting_time || officialTimings.reportingTime;
+
   const matchNotes = (fixtureData.notes || fixtureData.match_notes || '').trim();
   const matchId = fixtureData.id || `M-${Date.now()}`;
   const match = await db.models.Match.create({
@@ -554,6 +568,12 @@ async function scheduleMatch(fixtureData, adminEmail) {
     stage: stage || 'LEAGUE',
     status: 'SCHEDULED',
     assigned_scorer_id: assigned_scorer_id || 'SCR-101',
+    assigned_scorer_name: resolvedScorerName,
+    scorer_name: resolvedScorerName,
+    toss_time_window,
+    first_ball_time,
+    scorer_reporting_time,
+    schedule_confirmation_status: 'CONFIRMED',
     umpire1_id: umpire1_id || null,
     umpire2_id: umpire2_id || null,
     umpire1_name: resolvedUmpire1Name || (umpire1_id ? 'Official Umpire 1' : null),
@@ -643,11 +663,22 @@ async function updateMatch(matchId, fixtureData, adminEmail) {
     }
     match.match_date = dtValidation.cleanDate;
     match.match_time = dtValidation.parsedTime.formatted12;
+    const officialTimings = calculateOfficialMatchTimings(match.match_time);
+    match.toss_time_window = fixtureData.toss_time_window || officialTimings.tossWindow;
+    match.first_ball_time = fixtureData.first_ball_time || officialTimings.firstBallTime;
+    match.scorer_reporting_time = fixtureData.scorer_reporting_time || officialTimings.reportingTime;
+  } else if (fixtureData.toss_time_window || fixtureData.first_ball_time) {
+    if (fixtureData.toss_time_window) match.toss_time_window = fixtureData.toss_time_window;
+    if (fixtureData.first_ball_time) match.first_ball_time = fixtureData.first_ball_time;
   }
 
   if (fixtureData.match_type) match.match_type = fixtureData.match_type;
   if (fixtureData.overs_per_side || fixtureData.overs) match.overs_per_side = Number(fixtureData.overs_per_side || fixtureData.overs);
-  if (fixtureData.assigned_scorer_id) match.assigned_scorer_id = fixtureData.assigned_scorer_id;
+  if (fixtureData.assigned_scorer_id) {
+    match.assigned_scorer_id = fixtureData.assigned_scorer_id;
+    if (fixtureData.assigned_scorer_name) match.assigned_scorer_name = fixtureData.assigned_scorer_name;
+    if (fixtureData.scorer_name) match.scorer_name = fixtureData.scorer_name;
+  }
   if (fixtureData.stage) match.stage = fixtureData.stage;
   if (fixtureData.umpire1_id !== undefined) {
     match.umpire1_id = fixtureData.umpire1_id;
@@ -915,6 +946,10 @@ async function rescheduleMatch(matchId, { newDate, newTime, reason }, adminEmail
 
   match.match_date = cleanDate;
   match.match_time = cleanTime;
+  const officialTimings = calculateOfficialMatchTimings(cleanTime);
+  match.toss_time_window = officialTimings.tossWindow;
+  match.first_ball_time = officialTimings.firstBallTime;
+  match.scorer_reporting_time = officialTimings.reportingTime;
   match.status = 'SCHEDULED';
   match.status_comment = `Rescheduled to ${cleanDate} ${cleanTime}. ${cleanReason}`;
   match.result_summary = null;
