@@ -161,7 +161,7 @@ export default function FindTeamModal({
                     if (errorMessage) setErrorMessage(null);
                   }}
                   placeholder="e.g. saravanan.r@strikerscc.org"
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor="#94a3b8"
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -189,7 +189,7 @@ export default function FindTeamModal({
                 >
                   {isLoading ? (
                     <View style={styles.btnLoadingRow}>
-                      <ActivityIndicator size="small" color="#0f172a" />
+                      <ActivityIndicator size="small" color="#ffffff" />
                       <Text style={[styles.submitBtnText, { marginLeft: 8 }]}>
                         Searching...
                       </Text>
@@ -233,23 +233,23 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
     padding: 16
   },
   backdrop: {
     ...StyleSheet.absoluteFill
   },
   modalCard: {
-    backgroundColor: '#0f172a',
-    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(217, 119, 6, 0.35)',
+    borderColor: '#e2e8f0',
     overflow: 'hidden',
     width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.18,
+    shadowRadius: 28,
     elevation: 12
   },
   modalCardDesktop: {
@@ -262,11 +262,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 22,
     paddingVertical: 18,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(51, 65, 85, 0.6)',
-    backgroundColor: '#1e293b'
+    borderBottomColor: '#f1f5f9',
+    backgroundColor: '#ffffff'
   },
   titleRow: {
     flexDirection: 'row',
@@ -277,9 +277,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(217, 119, 6, 0.15)',
+    backgroundColor: '#fef3c7',
     borderWidth: 1,
-    borderColor: '#d97706',
+    borderColor: '#fde047',
     justifyContent: 'center',
     alignItems: 'center'
   },
@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
     fontSize: 20
   },
   modalTitle: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: 0.3
@@ -302,24 +302,24 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: '#f1f5f9',
     justifyContent: 'center',
     alignItems: 'center'
   },
   closeBtnText: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 16,
     fontWeight: 'bold'
   },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    backgroundColor: '#fef2f2',
     borderLeftWidth: 4,
     borderLeftColor: '#ef4444',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    marginHorizontal: 20,
+    marginHorizontal: 22,
     marginTop: 16,
     borderRadius: 8
   },
@@ -328,17 +328,17 @@ const styles = StyleSheet.create({
     marginRight: 8
   },
   errorBannerText: {
-    color: '#fca5a5',
+    color: '#b91c1c',
     fontSize: 13,
     fontWeight: '600',
     flex: 1,
     lineHeight: 18
   },
   body: {
-    padding: 20
+    padding: 22
   },
   instructionText: {
-    color: '#94a3b8',
+    color: '#475569',
     fontSize: 13.5,
     lineHeight: 20,
     marginBottom: 20
@@ -347,24 +347,25 @@ const styles = StyleSheet.create({
     marginBottom: 22
   },
   fieldLabel: {
-    color: '#e2e8f0',
+    color: '#334155',
     fontSize: 13,
     fontWeight: '700',
     marginBottom: 8,
     letterSpacing: 0.2
   },
   input: {
-    backgroundColor: '#020617',
+    backgroundColor: '#f8fafc',
     borderWidth: 1.5,
-    borderColor: '#334155',
+    borderColor: '#cbd5e1',
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 14.5
   },
   inputError: {
-    borderColor: '#ef4444'
+    borderColor: '#ef4444',
+    backgroundColor: '#fff5f5'
   },
   actionsRow: {
     flexDirection: 'row',
@@ -377,10 +378,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#475569'
+    borderColor: '#cbd5e1',
+    backgroundColor: '#f8fafc'
   },
   cancelBtnText: {
-    color: '#cbd5e1',
+    color: '#475569',
     fontSize: 14,
     fontWeight: '600'
   },
@@ -393,7 +395,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     shadowColor: '#d97706',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 4
   },
@@ -405,7 +407,7 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   submitBtnText: {
-    color: '#0f172a',
+    color: '#ffffff',
     fontSize: 14.5,
     fontWeight: '800',
     letterSpacing: 0.3
@@ -429,34 +431,34 @@ const styles = StyleSheet.create({
     fontSize: 30
   },
   successTitle: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 19,
     fontWeight: '800',
     marginBottom: 8
   },
   successDesc: {
-    color: '#94a3b8',
+    color: '#475569',
     fontSize: 13.5,
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 20
   },
   emailHighlight: {
-    color: '#f59e0b',
+    color: '#d97706',
     fontWeight: '700'
   },
   teamResultBox: {
     width: '100%',
-    backgroundColor: '#1e293b',
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
-    borderColor: 'rgba(217, 119, 6, 0.4)',
+    borderColor: '#e2e8f0',
     borderRadius: 12,
     padding: 16,
     marginBottom: 20,
     alignItems: 'center'
   },
   teamResultLabel: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -464,7 +466,7 @@ const styles = StyleSheet.create({
     marginBottom: 10
   },
   teamPill: {
-    backgroundColor: 'rgba(217, 119, 6, 0.2)',
+    backgroundColor: '#fef3c7',
     borderWidth: 1,
     borderColor: '#f59e0b',
     borderRadius: 8,
@@ -473,7 +475,7 @@ const styles = StyleSheet.create({
     marginVertical: 4
   },
   teamPillText: {
-    color: '#fef08a',
+    color: '#92400e',
     fontSize: 16,
     fontWeight: '800'
   },
@@ -485,7 +487,7 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   continueBtnText: {
-    color: '#0f172a',
+    color: '#ffffff',
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0.3

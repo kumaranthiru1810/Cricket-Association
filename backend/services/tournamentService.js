@@ -141,15 +141,30 @@ class TournamentService {
     const teamIds = tournament.teams || [];
     let participatingTeams = [];
     if (teamIds.length > 0) {
+      const validObjIds = teamIds.filter(id => typeof id === 'string' && id.match(/^[0-9a-fA-F]{24}$/));
       const [regularTeams, regTeams] = await Promise.all([
-        db.models.Team.find({ id: { $in: teamIds } }).lean(),
-        db.models.TeamRegistration.find({ id: { $in: teamIds } }).lean()
+        db.models.Team.find({
+          $or: [
+            { id: { $in: teamIds } },
+            { team_id: { $in: teamIds } },
+            { name: { $in: teamIds } },
+            { team_name: { $in: teamIds } },
+            ...(validObjIds.map(id => ({ _id: id })))
+          ]
+        }).lean(),
+        db.models.TeamRegistration.find({
+          $or: [
+            { id: { $in: teamIds } },
+            { team_name: { $in: teamIds } },
+            ...(validObjIds.map(id => ({ _id: id })))
+          ]
+        }).lean()
       ]);
 
       const teamMap = {};
       regularTeams.forEach(rt => {
-        teamMap[rt.id] = {
-          id: rt.id,
+        const item = {
+          id: rt.id || rt.team_id || rt._id?.toString(),
           team_id: rt.team_id || rt.id,
           name: rt.name || rt.team_name,
           short_name: rt.short_name || 'VND',
@@ -160,23 +175,29 @@ class TournamentService {
           vice_captain: rt.vice_captain || '—',
           status: rt.status || 'ACTIVE'
         };
+        if (rt.id) teamMap[rt.id] = item;
+        if (rt.team_id) teamMap[rt.team_id] = item;
+        if (rt._id) teamMap[rt._id.toString()] = item;
+        if (rt.name) teamMap[rt.name] = item;
+        if (rt.team_name) teamMap[rt.team_name] = item;
       });
 
       regTeams.forEach(reg => {
-        if (!teamMap[reg.id]) {
-          teamMap[reg.id] = {
-            id: reg.id,
-            team_id: reg.id,
-            name: reg.team_name,
-            short_name: reg.team_name.split(' ').map(w => w[0]).join('').slice(0, 4).toUpperCase(),
-            coach_name: reg.coach_name,
-            coach_email: reg.coach_email,
-            city: reg.city || reg.taluk || 'Virudhunagar',
-            captain: '—',
-            vice_captain: '—',
-            status: reg.status
-          };
-        }
+        const item = {
+          id: reg.id || reg._id?.toString(),
+          team_id: reg.id || reg._id?.toString(),
+          name: reg.team_name,
+          short_name: reg.team_name ? reg.team_name.split(' ').map(w => w[0]).join('').slice(0, 4).toUpperCase() : 'VND',
+          coach_name: reg.coach_name || '—',
+          coach_email: reg.coach_email || '',
+          city: reg.city || reg.taluk || 'Virudhunagar',
+          captain: '—',
+          vice_captain: '—',
+          status: reg.status || 'PENDING'
+        };
+        if (reg.id && !teamMap[reg.id]) teamMap[reg.id] = item;
+        if (reg._id && !teamMap[reg._id.toString()]) teamMap[reg._id.toString()] = item;
+        if (reg.team_name && !teamMap[reg.team_name]) teamMap[reg.team_name] = item;
       });
 
       participatingTeams = teamIds.map(tid => teamMap[tid] || { id: tid, name: tid });
@@ -238,21 +259,16 @@ class TournamentService {
       throw { status: 400, message: `A tournament with name '${cleanName}' already exists. Please choose a unique name.` };
     }
 
-    // Validate Dates
-    if (!payload.start_date || !String(payload.start_date).trim()) {
-      throw { status: 400, message: 'Tournament Start Date is required.' };
-    }
-    if (!payload.end_date || !String(payload.end_date).trim()) {
-      throw { status: 400, message: 'Tournament End Date is required.' };
-    }
-
-    const startDate = new Date(payload.start_date);
-    const endDate = new Date(payload.end_date);
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-      throw { status: 400, message: 'Start Date and End Date must be valid dates (YYYY-MM-DD).' };
-    }
-    if (endDate < startDate) {
-      throw { status: 400, message: 'Tournament End Date cannot be before Start Date.' };
+    // Validate Dates if supplied
+    if (payload.start_date && payload.end_date) {
+      const startDate = new Date(payload.start_date);
+      const endDate = new Date(payload.end_date);
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        throw { status: 400, message: 'Start Date and End Date must be valid dates (YYYY-MM-DD).' };
+      }
+      if (endDate < startDate) {
+        throw { status: 400, message: 'Tournament End Date cannot be before Start Date.' };
+      }
     }
 
     // Validate Registration Dates if supplied
@@ -308,8 +324,8 @@ class TournamentService {
       overs_per_match: Number(payload.overs_per_match || payload.overs || 20),
       season: payload.season || '2026',
       venue: (payload.venue || 'Kamarajar District Stadium').trim(),
-      start_date: payload.start_date,
-      end_date: payload.end_date,
+      start_date: payload.start_date || null,
+      end_date: payload.end_date || null,
       registration_start_date: payload.registration_start_date || null,
       registration_end_date: payload.registration_end_date || null,
       max_teams: maxTeams,
@@ -600,13 +616,39 @@ class TournamentService {
     });
 
     // Fetch team names for readable fixture creation
+    const validTeamsObjIds = teams.filter(id => typeof id === 'string' && id.match(/^[0-9a-fA-F]{24}$/));
     const [teamDocs, regDocs] = await Promise.all([
-      db.models.Team.find({ id: { $in: teams } }).lean(),
-      db.models.TeamRegistration.find({ id: { $in: teams } }).lean()
+      db.models.Team.find({
+        $or: [
+          { id: { $in: teams } },
+          { team_id: { $in: teams } },
+          { name: { $in: teams } },
+          { team_name: { $in: teams } },
+          ...(validTeamsObjIds.map(id => ({ _id: id })))
+        ]
+      }).lean(),
+      db.models.TeamRegistration.find({
+        $or: [
+          { id: { $in: teams } },
+          { team_name: { $in: teams } },
+          ...(validTeamsObjIds.map(id => ({ _id: id })))
+        ]
+      }).lean()
     ]);
     const teamNameMap = {};
-    teamDocs.forEach(t => { teamNameMap[t.id] = t.name || t.team_name; });
-    regDocs.forEach(t => { if (!teamNameMap[t.id]) teamNameMap[t.id] = t.team_name; });
+    teamDocs.forEach(t => {
+      const name = t.name || t.team_name;
+      if (t.id) teamNameMap[t.id] = name;
+      if (t.team_id) teamNameMap[t.team_id] = name;
+      if (t._id) teamNameMap[t._id.toString()] = name;
+      if (t.name) teamNameMap[t.name] = name;
+    });
+    regDocs.forEach(t => {
+      const name = t.team_name;
+      if (t.id && !teamNameMap[t.id]) teamNameMap[t.id] = name;
+      if (t._id && !teamNameMap[t._id.toString()]) teamNameMap[t._id.toString()] = name;
+      if (t.team_name && !teamNameMap[t.team_name]) teamNameMap[t.team_name] = name;
+    });
 
     const tournamentType = options.tournament_type || tournament.tournament_type || 'LEAGUE';
     const roundRobinType = options.round_robin_type || tournament.format_config?.round_robin_type || 'SINGLE';
@@ -762,13 +804,37 @@ class TournamentService {
     const teamIds = tournament.teams || [];
     let teams = cachedTeams;
     if (!teams) {
+      const validTidsObjIds = teamIds.filter(id => typeof id === 'string' && id.match(/^[0-9a-fA-F]{24}$/));
       const [regTeams, appTeams] = await Promise.all([
-        db.models.Team.find({ id: { $in: teamIds } }).lean(),
-        db.models.TeamRegistration.find({ id: { $in: teamIds } }).lean()
+        db.models.Team.find({
+          $or: [
+            { id: { $in: teamIds } },
+            { team_id: { $in: teamIds } },
+            { name: { $in: teamIds } },
+            { team_name: { $in: teamIds } },
+            ...(validTidsObjIds.map(id => ({ _id: id })))
+          ]
+        }).lean(),
+        db.models.TeamRegistration.find({
+          $or: [
+            { id: { $in: teamIds } },
+            { team_name: { $in: teamIds } },
+            ...(validTidsObjIds.map(id => ({ _id: id })))
+          ]
+        }).lean()
       ]);
       const teamMap = {};
-      regTeams.forEach(t => { teamMap[t.id] = t.name || t.team_name; });
-      appTeams.forEach(t => { if (!teamMap[t.id]) teamMap[t.id] = t.team_name; });
+      regTeams.forEach(t => {
+        const name = t.name || t.team_name;
+        if (t.id) teamMap[t.id] = name;
+        if (t.team_id) teamMap[t.team_id] = name;
+        if (t._id) teamMap[t._id.toString()] = name;
+      });
+      appTeams.forEach(t => {
+        const name = t.team_name;
+        if (t.id && !teamMap[t.id]) teamMap[t.id] = name;
+        if (t._id && !teamMap[t._id.toString()]) teamMap[t._id.toString()] = name;
+      });
       teams = teamIds.map(id => ({ id, name: teamMap[id] || id }));
     }
 

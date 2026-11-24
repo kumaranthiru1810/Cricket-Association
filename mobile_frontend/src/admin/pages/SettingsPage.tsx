@@ -107,6 +107,14 @@ export const DYNAMIC_CATEGORIES: DynamicCategoryDef[] = [
     singular: 'State',
     description: 'Affiliated states and regional territories for match and player origin.',
     placeholder: 'e.g. Tamil Nadu, Kerala, Karnataka'
+  },
+  {
+    key: 'district_venue',
+    label: 'Primary District Venue / Stadium',
+    iconText: '🏟️',
+    singular: 'Venue / Stadium',
+    description: 'Configure and manage official district stadiums, grounds, and match venues.',
+    placeholder: 'e.g. Kamarajar District Stadium, Sivakasi Cricket Ground'
   }
 ];
 
@@ -177,6 +185,12 @@ export const DEFAULT_MASTER_SETTINGS: Record<string, MasterSettingItem[]> = {
     { id: 'MSET-STATE-05', category: 'state', name: 'Telangana', code: 'TS', description: 'Telangana State, India', is_active: true, sort_order: 5 },
     { id: 'MSET-STATE-06', category: 'state', name: 'Pondicherry', code: 'PY', description: 'Puducherry Union Territory, India', is_active: true, sort_order: 6 },
     { id: 'MSET-STATE-07', category: 'state', name: 'Other', code: 'OTHER', description: 'Other Indian States / Union Territories', is_active: true, sort_order: 7 }
+  ],
+  district_venue: [
+    { id: 'VEN-01', category: 'district_venue', name: 'Kamarajar District Stadium', code: 'KDS', description: 'Virudhunagar Headquarters Main Turf Stadium', is_active: true, sort_order: 1 },
+    { id: 'VEN-02', category: 'district_venue', name: 'Municipal Cricket Complex', code: 'MCC', description: 'Municipal Cricket Complex, Sivakasi', is_active: true, sort_order: 2 },
+    { id: 'VEN-03', category: 'district_venue', name: 'Rajapalayam RAC Ground', code: 'RAC', description: 'PACR Road, Rajapalayam', is_active: true, sort_order: 3 },
+    { id: 'VEN-04', category: 'district_venue', name: 'Aruppukottai Pavilion Turf Ground', code: 'APTG', description: 'Pavilion Turf Ground, Aruppukottai', is_active: true, sort_order: 4 }
   ]
 };
 
@@ -344,6 +358,11 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
             detail: { category: activeTab, item: createdItem }
           })
         );
+        window.dispatchEvent(
+          new CustomEvent('venues_updated', {
+            detail: { venue: createdItem }
+          })
+        );
       }
 
       showToast(res?.message || `Added "${trimmedName}" to database successfully!`, 'success');
@@ -378,6 +397,11 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
         window.dispatchEvent(
           new CustomEvent('master_settings_updated', {
             detail: { category: activeTab, deletedId: target.id, deletedName: target.name }
+          })
+        );
+        window.dispatchEvent(
+          new CustomEvent('venues_updated', {
+            detail: { deletedId: target.id, deletedName: target.name }
           })
         );
       }

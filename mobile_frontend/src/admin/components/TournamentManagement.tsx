@@ -22,8 +22,10 @@ import {
   Image
 } from 'react-native';
 import { ScorerApi, API_URL, resolveImageUrl } from '../../services/api';
+import { adminApi } from '../services/adminApi';
 import { showSuccess, showError, showWarning, showConfirm } from '../../utils/sweetalert';
 import { useDebounce } from '../../utils/debounce';
+import { Ionicons } from '@expo/vector-icons';
 
 export interface TournamentManagementProps {
   onOpenScheduler?: (tournament: any, match?: any) => void;
@@ -34,6 +36,29 @@ type TournamentFilterStatus = 'ALL' | 'UPCOMING' | 'ONGOING' | 'COMPLETED' | 'CA
 type TournamentTab = 'overview' | 'teams' | 'schedule' | 'points' | 'stats' | 'rules';
 type TournamentType = 'LEAGUE' | 'KNOCKOUT' | 'LEAGUE_KNOCKOUT';
 type MatchFormat = 'T10' | 'T20' | 'ODI' | 'CUSTOM';
+
+// Web select inline style to ensure appearance: none and full width render across all browsers
+const webSelectStyle: any = {
+  width: '100%',
+  minHeight: 44,
+  boxSizing: 'border-box',
+  paddingLeft: 14,
+  paddingRight: 38,
+  paddingTop: 10,
+  paddingBottom: 10,
+  fontSize: 14,
+  fontWeight: '600',
+  borderRadius: 8,
+  border: '1.5px solid #cbd5e1',
+  backgroundColor: '#ffffff',
+  color: '#0f172a',
+  outline: 'none',
+  cursor: 'pointer',
+  WebkitAppearance: 'none',
+  MozAppearance: 'none',
+  appearance: 'none',
+  display: 'block'
+};
 
 export const TournamentManagement: React.FC<TournamentManagementProps> = ({
   onOpenScheduler,
@@ -80,7 +105,9 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
 
   // Form Fields
   const [formName, setFormName] = useState<string>('');
+  const [formNameError, setFormNameError] = useState<string | null>(null);
   const [formShortName, setFormShortName] = useState<string>('');
+  const [formShortNameError, setFormShortNameError] = useState<string | null>(null);
   const [formLogoUrl, setFormLogoUrl] = useState<string>('');
   const [formDescription, setFormDescription] = useState<string>('');
   const [formTournamentType, setFormTournamentType] = useState<TournamentType>('LEAGUE');
@@ -91,13 +118,44 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
   const [formOvers, setFormOvers] = useState<string>('20');
   const [formSeason, setFormSeason] = useState<string>('2026');
 
+  // Season Year Picker Modal State
+  const [showYearPicker, setShowYearPicker] = useState<boolean>(false);
+  const [pickerDecadeStart, setPickerDecadeStart] = useState<number>(() => {
+    const yr = parseInt(formSeason, 10) || new Date().getFullYear();
+    return Math.floor(yr / 10) * 10;
+  });
+
+  // Tournament Name live validation: letters, numbers, spaces, and underscore only
+  const handleTournamentNameChange = (val: string) => {
+    setFormName(val);
+    if (!val.trim()) {
+      setFormNameError('Tournament Name is required.');
+    } else if (!/^[a-zA-Z0-9_\s]+$/.test(val)) {
+      setFormNameError('Only letters, numbers, spaces, and underscores (_) are allowed.');
+    } else {
+      setFormNameError(null);
+    }
+  };
+
+  // Tournament Short Name live validation: letters, numbers, spaces, and underscore only
+  const handleTournamentShortNameChange = (val: string) => {
+    setFormShortName(val);
+    if (!val.trim()) {
+      setFormShortNameError('Short Name / Abbreviation is required.');
+    } else if (!/^[a-zA-Z0-9_\s]+$/.test(val)) {
+      setFormShortNameError('Only letters, numbers, spaces, and underscores (_) are allowed.');
+    } else {
+      setFormShortNameError(null);
+    }
+  };
+
   // Schedule & Rules Fields
   const [formStartDate, setFormStartDate] = useState<string>('');
   const [formEndDate, setFormEndDate] = useState<string>('');
   const [formRegStartDate, setFormRegStartDate] = useState<string>('');
   const [formRegEndDate, setFormRegEndDate] = useState<string>('');
   const [formVenue, setFormVenue] = useState<string>('Kamarajar District Stadium');
-  const [formMaxTeams, setFormMaxTeams] = useState<string>('16');
+  const [formMaxTeams, setFormMaxTeams] = useState<string>('8');
   const [formMinTeams, setFormMinTeams] = useState<string>('2');
   const [formPointsWin, setFormPointsWin] = useState<string>('2');
   const [formPointsTie, setFormPointsTie] = useState<string>('1');
@@ -261,36 +319,102 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
 
   const loadTeamsFromDb = async () => {
     try {
-      const res = await ScorerApi.getAllRegistrations();
-      const raw = res?.registrations || res?.data || [];
-      const approved: any[] = [];
-      raw.forEach((r: any) => {
-        const s = (r.status || '').toUpperCase();
-        if (r.type === 'TEAM' && (s === 'APPROVED' || s === 'ACTIVE')) {
-          approved.push({
-            id: r.id || r.mongoId,
-            team_id: r.id,
-            name: r.name,
-            team_name: r.name,
-            coach_name: r.contactName || r.name,
-            coach_email: r.email || r.contactEmail || '',
-            taluk: r.taluk || r.details?.taluk || 'Virudhunagar',
-            status: 'Approved'
+      const [regRes, teamsRes, adminTeamsRes] = await Promise.all([
+        ScorerApi.getAllRegistrations().catch(err => {
+          console.warn('[TournamentManagement] getAllRegistrations error:', err);
+          return { success: false, registrations: [] };
+        }),
+        ScorerApi.getTeams().catch(err => {
+          console.warn('[TournamentManagement] getTeams error:', err);
+          return { success: false, teams: [] };
+        }),
+        adminApi.getTeams().catch(err => {
+          console.warn('[TournamentManagement] adminApi.getTeams error:', err);
+          return { success: false, data: [] };
+        })
+      ]);
+
+      const raw = regRes?.registrations || regRes?.data || [];
+      const teamsList = teamsRes?.teams || teamsRes?.data || [];
+      const adminTeamsList = adminTeamsRes?.data || adminTeamsRes?.teams || (Array.isArray(adminTeamsRes) ? adminTeamsRes : []);
+      const allTeams: any[] = [];
+      const seenIds = new Set<string>();
+
+      const addTeam = (teamId: string, name: string, coachName: string, coachEmail: string, taluk: string, status: string) => {
+        const tName = (name || '').trim();
+        const tid = teamId || tName;
+        const key = (tid || tName).toLowerCase();
+        if (key && !seenIds.has(key)) {
+          seenIds.add(key);
+          const s = (status || 'PENDING').toUpperCase();
+          const isApproved = s === 'APPROVED' || s === 'ACTIVE';
+          allTeams.push({
+            id: tid || `TM-${allTeams.length + 1}`,
+            team_id: tid,
+            name: tName || 'Registered Team',
+            team_name: tName || 'Registered Team',
+            coach_name: coachName || 'Official',
+            coach_email: coachEmail || '',
+            taluk: taluk || 'Virudhunagar',
+            status: isApproved ? 'Approved' : 'Pending'
           });
         }
-      });
+      };
 
-      // Also fetch from /api/matches or fallback
-      if (approved.length === 0) {
-        // Fallback default clubs
-        setDbTeams([
-          { id: 'TM-01', name: 'Sattur Spartans', coach_name: 'K. Muthu', taluk: 'Virudhunagar' },
-          { id: 'TM-02', name: 'Virudhunagar Strikers', coach_name: 'S. Ganesan', taluk: 'Sivakasi' },
-          { id: 'TM-03', name: 'Rajapalayam Royals', coach_name: 'R. Subramanian', taluk: 'Rajapalayam' },
-          { id: 'TM-04', name: 'Aruppukottai Aces', coach_name: 'V. Raman', taluk: 'Aruppukottai' }
-        ]);
+      // 1. Process registrations from database
+      if (Array.isArray(raw)) {
+        raw.forEach((r: any) => {
+          if (r.type === 'TEAM') {
+            addTeam(
+              r.id || r.mongoId || r._id,
+              r.name || r.team_name,
+              r.contactName || r.coach_name || r.name,
+              r.email || r.contactEmail || r.coach_email,
+              r.taluk || r.details?.taluk || r.city,
+              r.status
+            );
+          }
+        });
+      }
+
+      // 2. Process teams from /auth/teams
+      if (Array.isArray(teamsList)) {
+        teamsList.forEach((t: any) => {
+          addTeam(
+            t.id || t.team_id || t._id,
+            t.team_name || t.name,
+            t.coach_name,
+            t.coach_email,
+            t.taluk || t.city,
+            t.status
+          );
+        });
+      }
+
+      // 3. Process teams from adminApi.getTeams() (/admin/teams-list)
+      if (Array.isArray(adminTeamsList)) {
+        adminTeamsList.forEach((t: any) => {
+          addTeam(
+            t.id || t.teamId || t.team_id || t._id,
+            t.name || t.teamName || t.team_name,
+            t.coachName || t.coach_name,
+            t.coachEmail || t.coach_email,
+            t.city || t.taluk,
+            t.status
+          );
+        });
+      }
+
+      if (allTeams.length > 0) {
+        setDbTeams(allTeams);
       } else {
-        setDbTeams(approved);
+        // Fallback default clubs only if database is completely empty
+        setDbTeams([
+          { id: 'TM-01', name: 'Sattur Spartans', coach_name: 'K. Muthu', taluk: 'Virudhunagar', status: 'Approved' },
+          { id: 'TM-02', name: 'Virudhunagar Strikers', coach_name: 'S. Ganesan', taluk: 'Sivakasi', status: 'Approved' },
+          { id: 'TM-03', name: 'Rajapalayam Royals', coach_name: 'R. Subramanian', taluk: 'Rajapalayam', status: 'Approved' },
+          { id: 'TM-04', name: 'Aruppukottai Aces', coach_name: 'V. Raman', taluk: 'Aruppukottai', status: 'Approved' }
+        ]);
       }
     } catch (err) {
       console.warn('Load teams error:', err);
@@ -328,33 +452,61 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
   const loadVenuesFromDb = async () => {
     try {
       const res = await ScorerApi.getVenues();
-      if (res && res.venues) {
-        setDbVenues(res.venues);
+      let loaded: any[] = [];
+      if (res && Array.isArray(res.venues) && res.venues.length > 0) {
+        loaded = res.venues;
+      } else if (res && Array.isArray(res.data) && res.data.length > 0) {
+        loaded = res.data;
+      } else if (res && Array.isArray(res) && res.length > 0) {
+        loaded = res;
+      }
+      if (loaded.length > 0) {
+        setDbVenues(loaded);
       } else {
         setDbVenues([
           { id: 'VEN-01', name: 'Kamarajar District Stadium', location: 'Virudhunagar' },
-          { id: 'VEN-02', name: 'Sivakasi Cricket Ground', location: 'Sivakasi' },
-          { id: 'VEN-03', name: 'PACR Sports Complex', location: 'Rajapalayam' },
+          { id: 'VEN-02', name: 'Municipal Cricket Complex', location: 'Sivakasi' },
+          { id: 'VEN-03', name: 'Rajapalayam RAC Ground', location: 'Rajapalayam' },
           { id: 'VEN-04', name: 'Aruppukottai Pavilion Turf Ground', location: 'Aruppukottai' }
         ]);
       }
     } catch (err) {
       setDbVenues([
         { id: 'VEN-01', name: 'Kamarajar District Stadium', location: 'Virudhunagar' },
-        { id: 'VEN-02', name: 'Sivakasi Cricket Ground', location: 'Sivakasi' }
+        { id: 'VEN-02', name: 'Municipal Cricket Complex', location: 'Sivakasi' },
+        { id: 'VEN-03', name: 'Rajapalayam RAC Ground', location: 'Rajapalayam' },
+        { id: 'VEN-04', name: 'Aruppukottai Pavilion Turf Ground', location: 'Aruppukottai' }
       ]);
     }
   };
 
+  // Listen for dynamic venue updates from Settings
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const handleVenueUpdate = () => {
+        loadVenuesFromDb();
+      };
+      window.addEventListener('venues_updated', handleVenueUpdate);
+      window.addEventListener('master_settings_updated', handleVenueUpdate);
+      return () => {
+        window.removeEventListener('venues_updated', handleVenueUpdate);
+        window.removeEventListener('master_settings_updated', handleVenueUpdate);
+      };
+    }
+  }, []);
+
   // ── Open Create Tournament Wizard ─────────────────────────────────────
   const handleOpenCreateWizard = () => {
+    loadTeamsFromDb();
     setIsEditMode(false);
     setEditingTournamentId(null);
     setWizardStep(1);
 
     // Default pre-fills
     setFormName('');
+    setFormNameError(null);
     setFormShortName('');
+    setFormShortNameError(null);
     setFormLogoUrl('');
     setFormDescription('Annual premier district championship organized by Cricket Federation of Virudhunagar District.');
     setFormTournamentType('LEAGUE');
@@ -363,7 +515,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
     setFormBallType('Red Leather');
     setFormMatchFormat('T20');
     setFormOvers('20');
-    setFormSeason('2026');
+    setFormSeason(String(new Date().getFullYear()));
 
     const today = new Date();
     const plus30 = new Date(today.getTime() + 30 * 86400000);
@@ -373,7 +525,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
     setFormRegEndDate(new Date(today.getTime() + 7 * 86400000).toISOString().split('T')[0]);
 
     setFormVenue('Kamarajar District Stadium');
-    setFormMaxTeams('16');
+    setFormMaxTeams('8');
     setFormMinTeams('2');
     setFormPointsWin('2');
     setFormPointsTie('1');
@@ -400,7 +552,9 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
     setWizardStep(1);
 
     setFormName(tour.name || '');
+    setFormNameError(null);
     setFormShortName(tour.short_name || '');
+    setFormShortNameError(null);
     setFormLogoUrl(tour.logo_url || '');
     setFormDescription(tour.description || '');
     setFormTournamentType(tour.tournament_type || 'LEAGUE');
@@ -417,7 +571,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
     setFormRegEndDate(tour.registration_end_date || '');
     setFormVenue(tour.venue || 'Kamarajar District Stadium');
 
-    setFormMaxTeams(String(tour.max_teams || 16));
+    setFormMaxTeams(String(tour.max_teams && tour.max_teams >= 8 ? tour.max_teams : 8));
     setFormMinTeams(String(tour.min_teams || 2));
     setFormPointsWin(String(tour.points_win !== undefined ? tour.points_win : 2));
     setFormPointsTie(String(tour.points_tie !== undefined ? tour.points_tie : 1));
@@ -439,29 +593,59 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
   // ── Step Navigation & Validations ─────────────────────────────────────
   const handleProceedToStep2 = async () => {
     if (!formName.trim()) {
+      setFormNameError('Tournament Name is required.');
       await showWarning('Required Field', 'Tournament Name is required.');
       return;
     }
+    if (!/^[a-zA-Z0-9_\s]+$/.test(formName.trim())) {
+      setFormNameError('Only letters, numbers, spaces, and underscores (_) are allowed. Special characters are not allowed.');
+      await showWarning(
+        'Invalid Tournament Name',
+        'Tournament Name can only contain letters, numbers, spaces, and underscores (_). Special characters are not allowed.'
+      );
+      return;
+    }
+    if (!formShortName.trim()) {
+      setFormShortNameError('Short Name / Abbreviation is required.');
+      await showWarning('Required Field', 'Short Name / Abbreviation is required.');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_\s]+$/.test(formShortName.trim())) {
+      setFormShortNameError('Only letters, numbers, spaces, and underscores (_) are allowed. Special characters are not allowed.');
+      await showWarning(
+        'Invalid Short Name',
+        'Short Name / Abbreviation can only contain letters, numbers, spaces, and underscores (_). Special characters are not allowed.'
+      );
+      return;
+    }
+    if (formMatchFormat === 'CUSTOM') {
+      const oversNum = parseInt(formOvers, 10);
+      if (!formOvers.trim() || isNaN(oversNum) || oversNum <= 0) {
+        await showWarning('Invalid Custom Overs', 'Please enter a valid number of overs per match (greater than 0).');
+        return;
+      }
+    }
+    setFormNameError(null);
+    setFormShortNameError(null);
     setWizardStep(2);
   };
 
   const handleProceedToStep3 = async () => {
-    if (!formStartDate || !formEndDate) {
-      await showWarning('Required Fields', 'Both Start Date and End Date are required.');
-      return;
+    if (formStartDate && formEndDate) {
+      const s = new Date(formStartDate);
+      const e = new Date(formEndDate);
+      if (e < s) {
+        await showWarning('Invalid Dates', 'Tournament End Date cannot be before Start Date.');
+        return;
+      }
     }
-    const s = new Date(formStartDate);
-    const e = new Date(formEndDate);
-    if (e < s) {
-      await showWarning('Invalid Dates', 'Tournament End Date cannot be before Start Date.');
-      return;
-    }
+    loadTeamsFromDb();
     setWizardStep(3);
   };
 
   const handleProceedToStep4 = async () => {
     const minT = parseInt(formMinTeams, 10) || 2;
-    const maxT = parseInt(formMaxTeams, 10) || 16;
+    const maxT = parseInt(formMaxTeams, 10) || 8;
     if (selectedTeamIds.length < minT) {
       await showWarning(
         'Team Selection Notice',
@@ -472,7 +656,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
     if (selectedTeamIds.length > maxT) {
       await showWarning(
         'Maximum Limit Exceeded',
-        `Selected team count (${selectedTeamIds.length}) exceeds maximum allowed teams (${maxT}).`
+        `A tournament can have at most ${maxT} participating teams. Currently selected: ${selectedTeamIds.length}.`
       );
       return;
     }
@@ -481,12 +665,12 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
 
   // ── Toggle Team Selection ─────────────────────────────────────────────
   const toggleTeamSelection = (teamId: string) => {
-    const maxT = parseInt(formMaxTeams, 10) || 16;
+    const maxT = parseInt(formMaxTeams, 10) || 8;
     if (selectedTeamIds.includes(teamId)) {
       setSelectedTeamIds(selectedTeamIds.filter(id => id !== teamId));
     } else {
       if (selectedTeamIds.length >= maxT) {
-        showWarning('Limit Reached', `Maximum team capacity is set to ${maxT} teams.`);
+        showWarning('Limit Reached', `Only ${maxT} teams can be selected for this tournament.`);
         return;
       }
       setSelectedTeamIds([...selectedTeamIds, teamId]);
@@ -494,7 +678,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
   };
 
   const selectAllTeams = () => {
-    const maxT = parseInt(formMaxTeams, 10) || 16;
+    const maxT = parseInt(formMaxTeams, 10) || 8;
     const allFiltered = filteredTeams.slice(0, maxT).map(t => t.id);
     setSelectedTeamIds(allFiltered);
   };
@@ -507,8 +691,41 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
   const handleSubmitTournament = async () => {
     if (!formName.trim()) {
       setWizardStep(1);
+      setFormNameError('Tournament Name is required.');
       await showWarning('Validation Error', 'Tournament Name is required.');
       return;
+    }
+    if (!/^[a-zA-Z0-9_\s]+$/.test(formName.trim())) {
+      setWizardStep(1);
+      setFormNameError('Only letters, numbers, spaces, and underscores (_) are allowed. Special characters are not allowed.');
+      await showWarning(
+        'Invalid Tournament Name',
+        'Tournament Name can only contain letters, numbers, spaces, and underscores (_). Special characters are not allowed.'
+      );
+      return;
+    }
+    if (!formShortName.trim()) {
+      setWizardStep(1);
+      setFormShortNameError('Short Name / Abbreviation is required.');
+      await showWarning('Validation Error', 'Short Name / Abbreviation is required.');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_\s]+$/.test(formShortName.trim())) {
+      setWizardStep(1);
+      setFormShortNameError('Only letters, numbers, spaces, and underscores (_) are allowed. Special characters are not allowed.');
+      await showWarning(
+        'Invalid Short Name',
+        'Short Name / Abbreviation can only contain letters, numbers, spaces, and underscores (_). Special characters are not allowed.'
+      );
+      return;
+    }
+    if (formMatchFormat === 'CUSTOM') {
+      const oversNum = parseInt(formOvers, 10);
+      if (!formOvers.trim() || isNaN(oversNum) || oversNum <= 0) {
+        setWizardStep(1);
+        await showWarning('Invalid Custom Overs', 'Please enter a valid number of overs per match (greater than 0).');
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -529,7 +746,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
       end_date: formEndDate,
       registration_start_date: formRegStartDate || null,
       registration_end_date: formRegEndDate || null,
-      max_teams: parseInt(formMaxTeams, 10) || 16,
+      max_teams: parseInt(formMaxTeams, 10) || 8,
       min_teams: parseInt(formMinTeams, 10) || 2,
       points_win: parseInt(formPointsWin, 10) || 2,
       points_tie: parseInt(formPointsTie, 10) || 1,
@@ -550,10 +767,18 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
 
     try {
       if (isEditMode && editingTournamentId) {
-        await ScorerApi.updateTournament(editingTournamentId, payload);
+        try {
+          await ScorerApi.updateTournament(editingTournamentId, payload);
+        } catch (_uErr) {
+          await adminApi.updateTournament(editingTournamentId, payload);
+        }
         await showSuccess('Tournament Updated', `Championship '${payload.name}' has been updated successfully.`);
       } else {
-        await ScorerApi.createTournament(payload);
+        try {
+          await ScorerApi.createTournament(payload);
+        } catch (_cErr) {
+          await adminApi.createTournament(payload);
+        }
         await showSuccess('Tournament Created', `Official Tournament '${payload.name}' has been created with ${selectedTeamIds.length} team(s).`);
       }
       setWizardOpen(false);
@@ -1565,7 +1790,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
               {[
                 { step: 1, label: '1. Basic Information' },
                 { step: 2, label: '2. Schedule & Rules' },
-                { step: 3, label: `3. Team Selection (${selectedTeamIds.length})` },
+                { step: 3, label: `3. Team Selection (${selectedTeamIds.length}/${formMaxTeams || 8})` },
                 { step: 4, label: '4. Format Configuration' }
               ].map(item => {
                 const active = wizardStep === item.step;
@@ -1576,8 +1801,8 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                     style={[styles.stepperItem, active && styles.stepperItemActive]}
                     onPress={() => {
                       if (item.step === 1) setWizardStep(1);
-                      else if (item.step === 2 && formName.trim()) setWizardStep(2);
-                      else if (item.step === 3 && formStartDate && formEndDate) setWizardStep(3);
+                      else if (item.step === 2 && formName.trim() && formShortName.trim()) setWizardStep(2);
+                      else if (item.step === 3 && formName.trim() && formShortName.trim()) setWizardStep(3);
                       else if (item.step === 4 && selectedTeamIds.length >= 2) setWizardStep(4);
                     }}
                   >
@@ -1606,49 +1831,60 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                     <View style={styles.formColFull}>
                       <Text style={styles.inputLabel}>Tournament Name *</Text>
                       <TextInput
-                        style={styles.textInput}
+                        style={[styles.textInput, formNameError ? styles.textInputError : null]}
                         placeholder="e.g. Virudhunagar Premier League 2026"
                         placeholderTextColor="#94a3b8"
                         value={formName}
-                        onChangeText={setFormName}
+                        onChangeText={handleTournamentNameChange}
                       />
+                      {formNameError && (
+                        <Text style={styles.formFieldErrorText}>⚠️ {formNameError}</Text>
+                      )}
                     </View>
                   </View>
 
                   <View style={styles.formRow}>
                     <View style={styles.formColHalf}>
-                      <Text style={styles.inputLabel}>Short Name / Abbreviation</Text>
+                      <Text style={styles.inputLabel}>Short Name / Abbreviation *</Text>
                       <TextInput
-                        style={styles.textInput}
+                        style={[styles.textInput, formShortNameError ? styles.textInputError : null]}
                         placeholder="e.g. VPL 2026"
                         placeholderTextColor="#94a3b8"
                         value={formShortName}
-                        onChangeText={setFormShortName}
+                        onChangeText={handleTournamentShortNameChange}
                       />
+                      {formShortNameError && (
+                        <Text style={styles.formFieldErrorText}>⚠️ {formShortNameError}</Text>
+                      )}
                     </View>
 
                     <View style={styles.formColHalf}>
-                      <Text style={styles.inputLabel}>Season</Text>
-                      <TextInput
-                        style={styles.textInput}
-                        placeholder="2026"
-                        placeholderTextColor="#94a3b8"
-                        value={formSeason}
-                        onChangeText={setFormSeason}
-                      />
-                    </View>
-                  </View>
-
-                  <View style={styles.formRow}>
-                    <View style={styles.formColFull}>
-                      <Text style={styles.inputLabel}>Tournament Logo URL</Text>
-                      <TextInput
-                        style={styles.textInput}
-                        placeholder="https://example.com/logo.png or leave blank for default crest"
-                        placeholderTextColor="#94a3b8"
-                        value={formLogoUrl}
-                        onChangeText={setFormLogoUrl}
-                      />
+                      <Text style={styles.inputLabel}>Season (Year) *</Text>
+                      <View style={styles.seasonInputWrapper}>
+                        <TextInput
+                          style={styles.seasonTextInput}
+                          value={formSeason}
+                          onChangeText={(val) => {
+                            const clean = val.replace(/[^0-9]/g, '').slice(0, 4);
+                            setFormSeason(clean);
+                          }}
+                          placeholder="e.g. 2026"
+                          placeholderTextColor="#94a3b8"
+                          keyboardType="numeric"
+                          maxLength={4}
+                        />
+                        <TouchableOpacity
+                          style={styles.seasonCalendarBtn}
+                          onPress={() => {
+                            const yr = parseInt(formSeason, 10) || new Date().getFullYear();
+                            setPickerDecadeStart(Math.floor(yr / 10) * 10);
+                            setShowYearPicker(true);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="calendar-outline" size={20} color="#0a2540" />
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   </View>
 
@@ -1659,12 +1895,15 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                         <select
                           value={formTournamentType}
                           onChange={(e: any) => setFormTournamentType(e.target.value as TournamentType)}
-                          style={styles.nativeSelect as any}
+                          style={webSelectStyle}
                         >
                           <option value="LEAGUE">League (Round Robin)</option>
                           <option value="KNOCKOUT">Knockout (Bracket Elimination)</option>
                           <option value="LEAGUE_KNOCKOUT">League + Knockout (Group Stage + Playoffs)</option>
                         </select>
+                        <View style={styles.selectChevron}>
+                          <Text style={styles.selectChevronText}>▾</Text>
+                        </View>
                       </View>
                     </View>
 
@@ -1679,26 +1918,58 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                             if (val === 'T10') setFormOvers('10');
                             else if (val === 'T20') setFormOvers('20');
                             else if (val === 'ODI') setFormOvers('50');
+                            else if (val === 'CUSTOM') {
+                              if (['10', '20', '50'].includes(formOvers)) setFormOvers('');
+                            }
                           }}
-                          style={styles.nativeSelect as any}
+                          style={webSelectStyle}
                         >
                           <option value="T20">T20 (20 Overs per side)</option>
                           <option value="T10">T10 (10 Overs per side)</option>
                           <option value="ODI">One Day (50 Overs per side)</option>
                           <option value="CUSTOM">Custom Overs</option>
                         </select>
+                        <View style={styles.selectChevron}>
+                          <Text style={styles.selectChevronText}>▾</Text>
+                        </View>
                       </View>
                     </View>
                   </View>
 
+                  {/* Extra field when Custom Overs is selected - accepts only numbers and stores in DB */}
+                  {formMatchFormat === 'CUSTOM' && (
+                    <View style={styles.formRow}>
+                      <View style={styles.formColFull}>
+                        <Text style={styles.inputLabel}>Custom Overs Per Side / Match *</Text>
+                        <View style={{ position: 'relative', width: '100%', justifyContent: 'center' }}>
+                          <TextInput
+                            style={[styles.textInput, { paddingRight: 68 }]}
+                            placeholder="Enter overs per match (e.g. 15, 25, 30, 45)"
+                            placeholderTextColor="#94a3b8"
+                            keyboardType="number-pad"
+                            value={formOvers}
+                            onChangeText={(val) => {
+                              const clean = val.replace(/[^0-9]/g, '');
+                              setFormOvers(clean);
+                            }}
+                            maxLength={3}
+                          />
+                          <View style={styles.inputSuffixBadge}>
+                            <Text style={styles.inputSuffixBadgeText}>Overs</Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+
                   <View style={styles.formRow}>
-                    <View style={styles.formColThird}>
+                    <View style={styles.formColFull}>
                       <Text style={styles.inputLabel}>Category / Age Group</Text>
                       <View style={styles.selectWrap}>
                         <select
                           value={formCategory}
                           onChange={(e: any) => setFormCategory(e.target.value)}
-                          style={styles.nativeSelect as any}
+                          style={webSelectStyle}
                         >
                           <option value="Senior Men">Senior Men</option>
                           <option value="Under-19">Under-19 District</option>
@@ -1707,41 +1978,54 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                           <option value="Senior Women">Senior Women</option>
                           <option value="Open District">Open District Championship</option>
                         </select>
+                        <View style={styles.selectChevron}>
+                          <Text style={styles.selectChevronText}>▾</Text>
+                        </View>
                       </View>
                     </View>
+                  </View>
 
-                    <View style={styles.formColThird}>
+                  <View style={styles.formRow}>
+                    <View style={styles.formColHalf}>
                       <Text style={styles.inputLabel}>Gender</Text>
                       <View style={styles.selectWrap}>
                         <select
                           value={formGender}
                           onChange={(e: any) => setFormGender(e.target.value)}
-                          style={styles.nativeSelect as any}
+                          style={webSelectStyle}
                         >
                           <option value="Men">Men</option>
                           <option value="Women">Women</option>
                           <option value="Open">Open</option>
                         </select>
+                        <View style={styles.selectChevron}>
+                          <Text style={styles.selectChevronText}>▾</Text>
+                        </View>
                       </View>
                     </View>
 
-                    <View style={styles.formColThird}>
+                    <View style={styles.formColHalf}>
                       <Text style={styles.inputLabel}>Ball Type</Text>
                       <View style={styles.selectWrap}>
                         <select
                           value={formBallType}
                           onChange={(e: any) => setFormBallType(e.target.value)}
-                          style={styles.nativeSelect as any}
+                          style={webSelectStyle}
                         >
                           <option value="Red Leather">Red Leather</option>
                           <option value="White Leather">White Leather</option>
                           <option value="Pink Leather">Pink Leather</option>
                           <option value="Tennis">Heavy Tennis Ball</option>
                         </select>
+                        <View style={styles.selectChevron}>
+                          <Text style={styles.selectChevronText}>▾</Text>
+                        </View>
                       </View>
                     </View>
                   </View>
 
+                  {/* Tournament Description - commented out as requested */}
+                  {/*
                   <View style={styles.formRow}>
                     <View style={styles.formColFull}>
                       <Text style={styles.inputLabel}>Tournament Description</Text>
@@ -1755,6 +2039,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                       />
                     </View>
                   </View>
+                  */}
                 </View>
               )}
 
@@ -1763,9 +2048,11 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                 <View style={styles.formSection}>
                   <Text style={styles.sectionHeading}>Championship Schedule & Playing Rules</Text>
 
+                  {/* Championship Dates & Registration Window - commented out as requested */}
+                  {/*
                   <View style={styles.formRow}>
                     <View style={styles.formColHalf}>
-                      <Text style={styles.inputLabel}>Championship Start Date *</Text>
+                      <Text style={styles.inputLabel}>Championship Start Date</Text>
                       <input
                         type="date"
                         value={formStartDate}
@@ -1775,7 +2062,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                     </View>
 
                     <View style={styles.formColHalf}>
-                      <Text style={styles.inputLabel}>Championship End Date *</Text>
+                      <Text style={styles.inputLabel}>Championship End Date</Text>
                       <input
                         type="date"
                         value={formEndDate}
@@ -1806,6 +2093,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                       />
                     </View>
                   </View>
+                  */}
 
                   <View style={styles.formRow}>
                     <View style={styles.formColFull}>
@@ -1814,14 +2102,17 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                         <select
                           value={formVenue}
                           onChange={(e: any) => setFormVenue(e.target.value)}
-                          style={styles.nativeSelect as any}
+                          style={webSelectStyle}
                         >
                           {dbVenues.map(v => (
                             <option key={v.id || v.name} value={v.name}>
-                              {v.name} ({v.location || 'Virudhunagar'})
+                              {v.name} {v.location ? `(${v.location})` : ''}
                             </option>
                           ))}
                         </select>
+                        <View style={styles.selectChevron}>
+                          <Text style={styles.selectChevronText}>▾</Text>
+                        </View>
                       </View>
                     </View>
                   </View>
@@ -1962,6 +2253,9 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                       value={teamSearchQuery}
                       onChangeText={setTeamSearchQuery}
                     />
+                    <TouchableOpacity style={styles.btnSmallAction} onPress={loadTeamsFromDb}>
+                      <Text style={styles.btnSmallActionText}>🔄 Refresh</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity style={styles.btnSmallAction} onPress={selectAllTeams}>
                       <Text style={styles.btnSmallActionText}>Select All</Text>
                     </TouchableOpacity>
@@ -2001,9 +2295,27 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                             </View>
 
                             <View style={{ flex: 1, marginLeft: 10 }}>
-                              <Text style={styles.teamCardName} numberOfLines={1}>
-                                {t.name || t.team_name}
-                              </Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 4 }}>
+                                <Text style={[styles.teamCardName, { flex: 1, marginRight: 8 }]} numberOfLines={1}>
+                                  {t.name || t.team_name}
+                                </Text>
+                                <View style={{
+                                  paddingHorizontal: 7,
+                                  paddingVertical: 2,
+                                  borderRadius: 10,
+                                  backgroundColor: t.status === 'Approved' ? '#ecfdf5' : '#fffbeb',
+                                  borderWidth: 1,
+                                  borderColor: t.status === 'Approved' ? '#a7f3d0' : '#fde68a'
+                                }}>
+                                  <Text style={{
+                                    fontSize: 10,
+                                    fontWeight: '700',
+                                    color: t.status === 'Approved' ? '#047857' : '#b45309'
+                                  }}>
+                                    {t.status || 'Club'}
+                                  </Text>
+                                </View>
+                              </View>
                               <Text style={styles.teamCardCoach}>
                                 Coach: {t.coach_name || 'Official'} • {t.taluk || 'Virudhunagar'}
                               </Text>
@@ -2726,6 +3038,96 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
           </View>
         </View>
       </Modal>
+
+      {/* ── Season Year Picker Modal (Like input type="year") ── */}
+      {showYearPicker && (
+        <Modal
+          transparent
+          animationType="fade"
+          visible={showYearPicker}
+          onRequestClose={() => setShowYearPicker(false)}
+        >
+          <TouchableOpacity
+            style={styles.yearPickerOverlay}
+            activeOpacity={1}
+            onPress={() => setShowYearPicker(false)}
+          >
+            <View
+              style={styles.yearPickerCard}
+              onStartShouldSetResponder={() => true}
+            >
+              <View style={styles.yearPickerHeader}>
+                <TouchableOpacity
+                  style={styles.yearPickerNavBtn}
+                  onPress={() => setPickerDecadeStart(pickerDecadeStart - 12)}
+                >
+                  <Ionicons name="chevron-back" size={16} color="#334155" />
+                </TouchableOpacity>
+                <Text style={styles.yearPickerTitle}>
+                  {pickerDecadeStart} – {pickerDecadeStart + 11}
+                </Text>
+                <TouchableOpacity
+                  style={styles.yearPickerNavBtn}
+                  onPress={() => setPickerDecadeStart(pickerDecadeStart + 12)}
+                >
+                  <Ionicons name="chevron-forward" size={16} color="#334155" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.yearPickerGrid}>
+                {Array.from({ length: 12 }, (_, i) => pickerDecadeStart + i).map((yr) => {
+                  const isSelected = String(yr) === String(formSeason);
+                  const isCurrentYear = yr === new Date().getFullYear();
+                  return (
+                    <TouchableOpacity
+                      key={yr}
+                      style={[
+                        styles.yearPickerCell,
+                        isSelected && styles.yearPickerCellSelected,
+                        isCurrentYear && !isSelected && styles.yearPickerCellCurrent
+                      ]}
+                      onPress={() => {
+                        setFormSeason(String(yr));
+                        setShowYearPicker(false);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.yearPickerCellText,
+                          isSelected && styles.yearPickerCellTextSelected,
+                          isCurrentYear && !isSelected && styles.yearPickerCellTextCurrent
+                        ]}
+                      >
+                        {yr}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <View style={styles.yearPickerFooter}>
+                <TouchableOpacity
+                  style={styles.yearPickerQuickBtn}
+                  onPress={() => {
+                    const thisYr = new Date().getFullYear();
+                    setFormSeason(String(thisYr));
+                    setPickerDecadeStart(Math.floor(thisYr / 10) * 10);
+                    setShowYearPicker(false);
+                  }}
+                >
+                  <Text style={styles.yearPickerQuickText}>Current Year ({new Date().getFullYear()})</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.yearPickerCloseBtn}
+                  onPress={() => setShowYearPicker(false)}
+                >
+                  <Text style={styles.yearPickerCloseText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      )}
     </View>
   );
 };
@@ -3145,7 +3547,11 @@ const styles: any = StyleSheet.create({
 
   // Form
   wizardBody: {
-    flex: 1
+    flex: 1,
+    ...(Platform.OS === 'web' ? {
+      scrollbarWidth: 'thin' as any,
+      scrollbarColor: '#cbd5e1 transparent' as any
+    } : {})
   },
   formSection: {
     gap: 12
@@ -3178,41 +3584,253 @@ const styles: any = StyleSheet.create({
   },
   textInput: {
     backgroundColor: '#ffffff',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#cbd5e1',
-    borderRadius: 6,
+    borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 13,
+    paddingVertical: 9,
+    fontSize: 13.5,
     color: '#0f172a',
-    outlineStyle: 'none'
+    outlineStyle: 'none' as any
+  },
+  textInputError: {
+    borderColor: '#ef4444',
+    backgroundColor: '#fff5f5'
+  },
+  formFieldErrorText: {
+    fontSize: 11.5,
+    color: '#dc2626',
+    fontWeight: '600',
+    marginTop: 4
   },
   nativeSelect: {
     width: '100%',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    fontSize: 13,
-    borderRadius: 6,
-    borderWidth: 1,
+    height: 44,
+    boxSizing: 'border-box' as any,
+    paddingLeft: 14,
+    paddingRight: 38,
+    paddingVertical: 10,
+    fontSize: 14,
+    fontWeight: '600',
+    borderRadius: 8,
+    borderWidth: 1.5,
     borderColor: '#cbd5e1',
     backgroundColor: '#ffffff',
     color: '#0f172a',
-    outlineStyle: 'none'
+    outlineStyle: 'none' as any,
+    cursor: 'pointer' as any,
+    appearance: 'none' as any,
+    WebkitAppearance: 'none' as any,
+    MozAppearance: 'none' as any
   },
   selectWrap: {
-    width: '100%'
+    width: '100%',
+    position: 'relative',
+    justifyContent: 'center',
+    flex: 1
+  },
+  selectChevron: {
+    position: 'absolute',
+    right: 14,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    pointerEvents: 'none' as any,
+    zIndex: 2
+  },
+  selectChevronText: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: 'bold'
   },
   nativeDateInput: {
     width: '100%',
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    fontSize: 13,
-    borderRadius: 6,
-    borderWidth: 1,
+    height: 44,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    fontSize: 13.5,
+    borderRadius: 8,
+    borderWidth: 1.5,
     borderColor: '#cbd5e1',
     backgroundColor: '#ffffff',
     color: '#0f172a',
-    outlineStyle: 'none'
+    outlineStyle: 'none' as any
+  },
+
+  // Season Year Input & Calendar Button
+  seasonInputWrapper: {
+    position: 'relative',
+    width: '100%',
+    justifyContent: 'center'
+  },
+  seasonTextInput: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingLeft: 14,
+    paddingRight: 48,
+    height: 44,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+    outlineStyle: 'none' as any
+  },
+  inputSuffixBadge: {
+    position: 'absolute',
+    right: 8,
+    top: 6,
+    bottom: 6,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  inputSuffixBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b'
+  },
+  seasonCalendarBtn: {
+    position: 'absolute',
+    right: 6,
+    top: 5,
+    bottom: 5,
+    width: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 6,
+    backgroundColor: '#f1f5f9',
+    cursor: 'pointer' as any
+  },
+  calendarIconText: {
+    fontSize: 18
+  },
+
+  // Year Picker Modal
+  yearPickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20
+  },
+  yearPickerCard: {
+    width: 360,
+    maxWidth: '95%',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
+    shadowRadius: 28,
+    elevation: 20
+  },
+  yearPickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9'
+  },
+  yearPickerNavBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    cursor: 'pointer' as any
+  },
+  yearPickerNavText: {
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: 'bold'
+  },
+  yearPickerTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  yearPickerGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'space-between',
+    marginBottom: 16
+  },
+  yearPickerCell: {
+    width: '31%',
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    cursor: 'pointer' as any
+  },
+  yearPickerCellSelected: {
+    backgroundColor: '#d97706',
+    borderColor: '#b45309'
+  },
+  yearPickerCellCurrent: {
+    borderColor: '#d97706',
+    borderWidth: 1.5
+  },
+  yearPickerCellText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#334155'
+  },
+  yearPickerCellTextSelected: {
+    color: '#ffffff'
+  },
+  yearPickerCellTextCurrent: {
+    color: '#d97706'
+  },
+  yearPickerFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+    paddingTop: 12
+  },
+  yearPickerQuickBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#fde047',
+    cursor: 'pointer' as any
+  },
+  yearPickerQuickText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#854d0e'
+  },
+  yearPickerCloseBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    cursor: 'pointer' as any
+  },
+  yearPickerCloseText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569'
   },
 
   // Points Config Box
@@ -3608,7 +4226,11 @@ const styles: any = StyleSheet.create({
   },
   detailsContentScroll: {
     flex: 1,
-    backgroundColor: '#f8fafc'
+    backgroundColor: '#f8fafc',
+    ...(Platform.OS === 'web' ? {
+      scrollbarWidth: 'thin' as any,
+      scrollbarColor: '#cbd5e1 transparent' as any
+    } : {})
   },
 
   // Details Summary Grid
