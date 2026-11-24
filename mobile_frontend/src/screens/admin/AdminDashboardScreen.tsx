@@ -608,6 +608,56 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   const currentDateTimeVal = useMemo(() => {
     return validateScheduleDateTime(scheduleForm.match_date, scheduleForm.match_time);
   }, [scheduleForm.match_date, scheduleForm.match_time]);
+
+  const manualTimingsVal = useMemo(() => {
+    if (scheduleForm.timing_mode !== 'MANUAL') {
+      return { isValid: true, tossError: null, firstBallError: null, reportingError: null };
+    }
+
+    // 1. Toss
+    let tossError: string | null = null;
+    const rawToss = (scheduleForm.toss_time_window || '').trim();
+    if (!rawToss) {
+      tossError = 'Toss window is required.';
+    } else {
+      const tossStart = rawToss.split(' to ')[0].trim();
+      const check = validateScheduleTime(scheduleForm.match_date, tossStart);
+      if (!check.isValid) {
+        tossError = check.error || 'Invalid toss start time.';
+      }
+    }
+
+    // 2. First Ball
+    let firstBallError: string | null = null;
+    const rawFb = (scheduleForm.first_ball_time || '').trim();
+    if (!rawFb) {
+      firstBallError = 'First ball deadline is required.';
+    } else {
+      const check = validateScheduleTime(scheduleForm.match_date, rawFb);
+      if (!check.isValid) {
+        firstBallError = check.error || 'Invalid first ball time.';
+      }
+    }
+
+    // 3. Reporting
+    let reportingError: string | null = null;
+    const rawRep = (scheduleForm.scorer_reporting_time || '').trim();
+    if (!rawRep) {
+      reportingError = 'Scorer reporting time is required.';
+    } else {
+      const check = validateScheduleTime(scheduleForm.match_date, rawRep);
+      if (!check.isValid) {
+        reportingError = check.error || 'Invalid reporting time.';
+      }
+    }
+
+    return {
+      isValid: !tossError && !firstBallError && !reportingError,
+      tossError,
+      firstBallError,
+      reportingError
+    };
+  }, [scheduleForm.timing_mode, scheduleForm.match_date, scheduleForm.toss_time_window, scheduleForm.first_ball_time, scheduleForm.scorer_reporting_time]);
   const [umpire1DropdownOpen, setUmpire1DropdownOpen] = useState<boolean>(false);
   const [umpire2DropdownOpen, setUmpire2DropdownOpen] = useState<boolean>(false);
   const [umpireSearch1, setUmpireSearch1] = useState<string>('');
@@ -636,6 +686,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   const [notifyTeamsOnTimeChange, setNotifyTeamsOnTimeChange] = useState<boolean>(true);
   const [calendarModalVisible, setCalendarModalVisible] = useState<boolean>(false);
   const [clockModalVisible, setClockModalVisible] = useState<boolean>(false);
+  const [activeTimingClockTarget, setActiveTimingClockTarget] = useState<'MATCH_TIME' | 'TOSS_START' | 'FIRST_BALL' | 'REPORTING'>('MATCH_TIME');
 
   // Match Inspection, Cancel, Postpone & Reschedule Modals
   const [selectedMatchModal, setSelectedMatchModal] = useState<any | null>(null);
@@ -1437,6 +1488,16 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       setScheduleFormError(dtValidation.error || 'Invalid match schedule date or time.');
       await showWarning('Invalid Date / Time', dtValidation.error || 'Matches must be scheduled for future dates and times.');
       return;
+    }
+
+    if (scheduleForm.timing_mode === 'MANUAL') {
+      if (!manualTimingsVal.isValid) {
+        setScheduleStep(3);
+        const err = manualTimingsVal.tossError || manualTimingsVal.firstBallError || manualTimingsVal.reportingError || 'Please correct timing errors.';
+        setScheduleFormError(err);
+        await showWarning('Invalid Match Timings', err);
+        return;
+      }
     }
 
     const cleanDate = dtValidation.cleanDate;
@@ -6309,7 +6370,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                         />
                         <TouchableOpacity
                           style={styles.fieldClockBtn}
-                          onPress={() => setClockModalVisible(true)}
+                          onPress={() => {
+                            setActiveTimingClockTarget('MATCH_TIME');
+                            setClockModalVisible(true);
+                          }}
                           activeOpacity={0.7}
                         >
                           <Text style={{ fontSize: 13 }}>🕒</Text>
@@ -6571,13 +6635,35 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                       <Text style={styles.formFieldLabel}>🪙 Toss Window *</Text>
                                       <Text style={styles.fieldSubBadge}>Manual</Text>
                                     </View>
-                                    <TextInput
-                                      style={styles.formTextInputCompact}
-                                      value={scheduleForm.toss_time_window || ''}
-                                      onChangeText={(val) => setScheduleForm(prev => ({ ...prev, toss_time_window: val }))}
-                                      placeholder="e.g. 08:00 AM to 08:15 AM"
-                                      placeholderTextColor="#94a3b8"
-                                    />
+                                    <View style={styles.timeInputContainer}>
+                                      <TextInput
+                                        style={[
+                                          styles.formTextInputCompact,
+                                          { paddingRight: 80 },
+                                          manualTimingsVal.tossError ? { borderColor: '#dc2626', borderWidth: 1.5 } : null
+                                        ]}
+                                        value={scheduleForm.toss_time_window || ''}
+                                        onChangeText={(val) => setScheduleForm(prev => ({ ...prev, toss_time_window: val }))}
+                                        placeholder="e.g. 08:00 AM to 08:15 AM"
+                                        placeholderTextColor="#94a3b8"
+                                      />
+                                      <TouchableOpacity
+                                        style={styles.fieldClockBtn}
+                                        onPress={() => {
+                                          setActiveTimingClockTarget('TOSS_START');
+                                          setClockModalVisible(true);
+                                        }}
+                                        activeOpacity={0.7}
+                                      >
+                                        <Text style={{ fontSize: 13 }}>🕒</Text>
+                                        <Text style={styles.fieldClockBtnText}>Clock</Text>
+                                      </TouchableOpacity>
+                                    </View>
+                                    {manualTimingsVal.tossError ? (
+                                      <Text style={{ fontSize: 11, color: '#dc2626', marginTop: 4, fontWeight: '600' }}>
+                                        ⚠️ {manualTimingsVal.tossError}
+                                      </Text>
+                                    ) : null}
                                     {/* Preset Chips */}
                                     <View style={styles.timingPresetChipsRow}>
                                       <TouchableOpacity
@@ -6607,13 +6693,35 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                       <Text style={styles.formFieldLabel}>🏏 First Ball Delivery Deadline *</Text>
                                       <Text style={[styles.fieldSubBadge, { borderColor: '#fde68a', backgroundColor: '#fef3c7', color: '#b45309' }]}>Delivery</Text>
                                     </View>
-                                    <TextInput
-                                      style={styles.formTextInputCompact}
-                                      value={scheduleForm.first_ball_time || ''}
-                                      onChangeText={(val) => setScheduleForm(prev => ({ ...prev, first_ball_time: val }))}
-                                      placeholder="e.g. 08:30 AM or 01:30 PM"
-                                      placeholderTextColor="#94a3b8"
-                                    />
+                                    <View style={styles.timeInputContainer}>
+                                      <TextInput
+                                        style={[
+                                          styles.formTextInputCompact,
+                                          { paddingRight: 80 },
+                                          manualTimingsVal.firstBallError ? { borderColor: '#dc2626', borderWidth: 1.5 } : null
+                                        ]}
+                                        value={scheduleForm.first_ball_time || ''}
+                                        onChangeText={(val) => setScheduleForm(prev => ({ ...prev, first_ball_time: val }))}
+                                        placeholder="e.g. 08:30 AM or 01:30 PM"
+                                        placeholderTextColor="#94a3b8"
+                                      />
+                                      <TouchableOpacity
+                                        style={styles.fieldClockBtn}
+                                        onPress={() => {
+                                          setActiveTimingClockTarget('FIRST_BALL');
+                                          setClockModalVisible(true);
+                                        }}
+                                        activeOpacity={0.7}
+                                      >
+                                        <Text style={{ fontSize: 13 }}>🕒</Text>
+                                        <Text style={styles.fieldClockBtnText}>Clock</Text>
+                                      </TouchableOpacity>
+                                    </View>
+                                    {manualTimingsVal.firstBallError ? (
+                                      <Text style={{ fontSize: 11, color: '#dc2626', marginTop: 4, fontWeight: '600' }}>
+                                        ⚠️ {manualTimingsVal.firstBallError}
+                                      </Text>
+                                    ) : null}
                                     {/* Preset Chips */}
                                     <View style={styles.timingPresetChipsRow}>
                                       <TouchableOpacity
@@ -6643,13 +6751,35 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                       <Text style={styles.formFieldLabel}>⏰ Scorer Reporting Time *</Text>
                                       <Text style={[styles.fieldSubBadge, { borderColor: '#bfdbfe', backgroundColor: '#eff6ff', color: '#1d4ed8' }]}>Reporting</Text>
                                     </View>
-                                    <TextInput
-                                      style={styles.formTextInputCompact}
-                                      value={scheduleForm.scorer_reporting_time || ''}
-                                      onChangeText={(val) => setScheduleForm(prev => ({ ...prev, scorer_reporting_time: val }))}
-                                      placeholder="e.g. 08:00 AM or 01:00 PM"
-                                      placeholderTextColor="#94a3b8"
-                                    />
+                                    <View style={styles.timeInputContainer}>
+                                      <TextInput
+                                        style={[
+                                          styles.formTextInputCompact,
+                                          { paddingRight: 80 },
+                                          manualTimingsVal.reportingError ? { borderColor: '#dc2626', borderWidth: 1.5 } : null
+                                        ]}
+                                        value={scheduleForm.scorer_reporting_time || ''}
+                                        onChangeText={(val) => setScheduleForm(prev => ({ ...prev, scorer_reporting_time: val }))}
+                                        placeholder="e.g. 08:00 AM or 01:00 PM"
+                                        placeholderTextColor="#94a3b8"
+                                      />
+                                      <TouchableOpacity
+                                        style={styles.fieldClockBtn}
+                                        onPress={() => {
+                                          setActiveTimingClockTarget('REPORTING');
+                                          setClockModalVisible(true);
+                                        }}
+                                        activeOpacity={0.7}
+                                      >
+                                        <Text style={{ fontSize: 13 }}>🕒</Text>
+                                        <Text style={styles.fieldClockBtnText}>Clock</Text>
+                                      </TouchableOpacity>
+                                    </View>
+                                    {manualTimingsVal.reportingError ? (
+                                      <Text style={{ fontSize: 11, color: '#dc2626', marginTop: 4, fontWeight: '600' }}>
+                                        ⚠️ {manualTimingsVal.reportingError}
+                                      </Text>
+                                    ) : null}
                                     {/* Preset Chips */}
                                     <View style={styles.timingPresetChipsRow}>
                                       <TouchableOpacity
@@ -6997,13 +7127,13 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   <TouchableOpacity
                     style={[
                       styles.btnPrimaryGreenCompact,
-                      (!currentDateTimeVal.isValid || isSubmittingSchedule) && {
+                      (!currentDateTimeVal.isValid || !manualTimingsVal.isValid || isSubmittingSchedule) && {
                         backgroundColor: '#94a3b8',
                         opacity: 0.6
                       }
                     ]}
                     onPress={handleSaveSchedule}
-                    disabled={isSubmittingSchedule || !currentDateTimeVal.isValid}
+                    disabled={isSubmittingSchedule || !currentDateTimeVal.isValid || !manualTimingsVal.isValid}
                     activeOpacity={0.85}
                   >
                     {isSubmittingSchedule ? (
@@ -7048,23 +7178,79 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       {/* Interactive Clock Picker Modal */}
       <ClockPickerModal
         visible={clockModalVisible}
-        title="Select Match Start Time"
-        initialTime={scheduleForm.match_time}
+        title={
+          activeTimingClockTarget === 'TOSS_START'
+            ? 'Select Toss Window Start Time'
+            : activeTimingClockTarget === 'FIRST_BALL'
+              ? 'Select First Ball Delivery Deadline'
+              : activeTimingClockTarget === 'REPORTING'
+                ? 'Select Scorer Reporting Time'
+                : 'Select Match Start Time'
+        }
+        initialTime={
+          activeTimingClockTarget === 'TOSS_START'
+            ? ((scheduleForm.toss_time_window || '').split(' to ')[0].trim() || '08:00 AM')
+            : activeTimingClockTarget === 'FIRST_BALL'
+              ? (scheduleForm.first_ball_time || scheduleForm.match_time || '08:30 AM')
+              : activeTimingClockTarget === 'REPORTING'
+                ? (scheduleForm.scorer_reporting_time || '08:00 AM')
+                : (scheduleForm.match_time || '08:30 AM')
+        }
         selectedDate={scheduleForm.match_date}
         disablePast={true}
-        onClose={() => setClockModalVisible(false)}
+        onClose={() => {
+          setClockModalVisible(false);
+          setActiveTimingClockTarget('MATCH_TIME');
+        }}
         onSelectTime={(formattedTime) => {
-          const checkTime = validateScheduleTime(scheduleForm.match_date, formattedTime);
+          const parsed = parseTimeString(formattedTime);
+          const cleanFormatted = parsed ? parsed.formatted12 : formattedTime;
+          const checkTime = validateScheduleTime(scheduleForm.match_date, cleanFormatted);
+
           if (!checkTime.isValid) {
-            setScheduleFormError(checkTime.error || 'Match time cannot be in the past for today.');
+            setScheduleFormError(checkTime.error || 'Time cannot be in the past for today.');
           } else {
             setScheduleFormError(null);
           }
-          setScheduleForm(prev => ({
-            ...prev,
-            match_time: formattedTime
-          }));
+
+          if (activeTimingClockTarget === 'TOSS_START') {
+            if (parsed) {
+              const startMin = parsed.totalMinutes;
+              const endMin = (startMin + 15) % 1440;
+              let endHh = Math.floor(endMin / 60);
+              const endMm = endMin % 60;
+              const endP = endHh >= 12 ? 'PM' : 'AM';
+              endHh = endHh % 12 || 12;
+              const endFmt = `${String(endHh).padStart(2, '0')}:${String(endMm).padStart(2, '0')} ${endP}`;
+              setScheduleForm(prev => ({
+                ...prev,
+                toss_time_window: `${cleanFormatted} to ${endFmt}`
+              }));
+            } else {
+              setScheduleForm(prev => ({
+                ...prev,
+                toss_time_window: cleanFormatted
+              }));
+            }
+          } else if (activeTimingClockTarget === 'FIRST_BALL') {
+            setScheduleForm(prev => ({
+              ...prev,
+              first_ball_time: cleanFormatted
+            }));
+          } else if (activeTimingClockTarget === 'REPORTING') {
+            setScheduleForm(prev => ({
+              ...prev,
+              scorer_reporting_time: cleanFormatted
+            }));
+          } else {
+            setScheduleForm(prev => ({
+              ...prev,
+              match_time: cleanFormatted
+            }));
+          }
+
           setClockModalVisible(false);
+          setActiveTimingClockTarget('MATCH_TIME');
         }}
       />
 
@@ -7571,7 +7757,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               value={rescheduleTimeInput}
               onChangeText={(text) => {
                 setRescheduleTimeInput(text);
-                const val = validateScheduleTime(text, rescheduleDateInput);
+                const val = validateScheduleTime(rescheduleDateInput, text);
                 setRescheduleErrors(prev => ({ ...prev, timeError: val.isValid ? null : val.error }));
               }}
               placeholder="e.g. 09:30 AM"

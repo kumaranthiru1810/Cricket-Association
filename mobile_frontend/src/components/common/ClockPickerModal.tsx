@@ -9,6 +9,7 @@ import {
   Platform
 } from 'react-native';
 import Svg, { Line, Circle } from 'react-native-svg';
+import { getKolkataNow } from '../../utils/dateTimeValidation';
 
 export interface ClockPickerModalProps {
   visible: boolean;
@@ -124,25 +125,22 @@ export const ClockPickerModal: React.FC<ClockPickerModalProps> = ({
   const [period, setPeriod] = useState<'AM' | 'PM'>('AM');
   const [mode, setMode] = useState<'HOUR' | 'MINUTE'>('HOUR');
 
-  // Check if selected date is today
+  // Check if selected date is today (in Asia/Kolkata)
   const isToday = useMemo(() => {
     if (!selectedDate) return false;
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    const todayStr = `${y}-${m}-${d}`;
-    return selectedDate === todayStr;
+    const cleanDate = selectedDate.split('T')[0].trim();
+    const now = getKolkataNow();
+    return cleanDate === now.dateStr;
   }, [selectedDate]);
 
-  // Current real-time clock state for min-time bounds
+  // Current real-time clock state for min-time bounds (in Asia/Kolkata)
   const currentNow = useMemo(() => {
-    const now = new Date();
-    const h24 = now.getHours();
-    const m = now.getMinutes();
+    const now = getKolkataNow();
+    const h24 = now.hours;
+    const m = now.minutes;
     const p: 'AM' | 'PM' = h24 >= 12 ? 'PM' : 'AM';
     const h12 = h24 % 12 || 12;
-    const totalMinutes = h24 * 60 + m;
+    const totalMinutes = now.totalMinutes;
     return { h24, m, p, h12, totalMinutes };
   }, [visible]);
 
@@ -229,9 +227,9 @@ export const ClockPickerModal: React.FC<ClockPickerModalProps> = ({
 
   // Set to current device time
   const handleSetCurrentTime = () => {
-    const now = new Date();
-    let h = now.getHours();
-    let m = now.getMinutes();
+    const now = getKolkataNow();
+    let h = now.hours;
+    let m = now.minutes;
     if (isToday && disablePast) {
       // Round to next 5 minutes
       const total = h * 60 + m + 5;
