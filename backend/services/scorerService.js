@@ -655,7 +655,15 @@ class ScorerService {
         teamBPlayingXI: match.team_b_playing_xi || [],
         currentBreak: match.current_break || null,
         statusComment: match.status_comment || '',
-        breaks: match.breaks || []
+        breaks: match.breaks || [],
+        umpire1_id: match.umpire1_id || null,
+        umpire2_id: match.umpire2_id || null,
+        umpire1_name: match.umpire1_name || null,
+        umpire2_name: match.umpire2_name || null,
+        umpire1Name: match.umpire1_name || null,
+        umpire2Name: match.umpire2_name || null,
+        assigned_scorer_name: match.assigned_scorer_name || match.scorer_name || null,
+        umpire_assessment: match.umpire_assessment || null
       },
       innings: {
         id: currentInnings.id,
@@ -1021,7 +1029,15 @@ class ScorerService {
         time: match.match_time || '09:30 AM',
         overs: match.overs_per_side || 20,
         status: statusUpper === 'LIVE' ? 'Live' : (statusUpper === 'COMPLETED' ? 'Completed' : 'Upcoming'),
-        result: match.result_summary || 'Match in progress'
+        result: match.result_summary || 'Match in progress',
+        umpire1_id: match.umpire1_id || null,
+        umpire2_id: match.umpire2_id || null,
+        umpire1_name: match.umpire1_name || null,
+        umpire2_name: match.umpire2_name || null,
+        umpire1Name: match.umpire1_name || null,
+        umpire2Name: match.umpire2_name || null,
+        assigned_scorer_name: match.assigned_scorer_name || match.scorer_name || null,
+        umpire_assessment: match.umpire_assessment || null
       },
       tournament: match.tournament_name || 'VPL 2026',
       teamA: (teamMap[match.team_a_id] && teamMap[match.team_a_id].name) || 'Team A',

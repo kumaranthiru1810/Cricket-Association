@@ -605,20 +605,34 @@ class InningsService {
     const match = await db.models.Match.findOne({ id: matchId });
     if (!match) throw { status: 404, message: 'Match not found.' };
 
+    const u1 = assessmentData.umpire1 || assessmentData.umpire1Name || match.umpire1_name || '';
+    const u2 = assessmentData.umpire2 || assessmentData.umpire2Name || match.umpire2_name || '';
+    const r1 = parseInt(assessmentData.rating1 || assessmentData.umpire1Rating, 10) || 8;
+    const r2 = parseInt(assessmentData.rating2 || assessmentData.umpire2Rating, 10) || 8;
+
     match.umpire_assessment = {
-      umpire1: assessmentData.umpire1 || '',
-      rating1: assessmentData.rating1 || 5,
-      umpire2: assessmentData.umpire2 || '',
-      rating2: assessmentData.rating2 || 5,
+      umpire1: u1,
+      rating1: r1,
+      umpire2: u2,
+      rating2: r2,
       pitchReport: assessmentData.pitchReport || 'Good sporting pitch',
       comments: assessmentData.comments || ''
     };
+
+    // If scorer changed/customized umpires, update match record
+    if (u1) match.umpire1_name = u1;
+    if (u2) match.umpire2_name = u2;
+    if (assessmentData.umpire1Id) match.umpire1_id = assessmentData.umpire1Id;
+    if (assessmentData.umpire2Id) match.umpire2_id = assessmentData.umpire2Id;
+
     await match.save();
 
     return {
       success: true,
       message: 'Umpire assessment saved successfully.',
-      data: match.umpire_assessment
+      data: match.umpire_assessment,
+      umpire1_name: match.umpire1_name,
+      umpire2_name: match.umpire2_name
     };
   }
 

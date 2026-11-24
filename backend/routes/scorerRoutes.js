@@ -506,6 +506,17 @@ router.post('/matches/:matchId/umpire-assessment', verifyMatchPermission, async 
   }
 });
 
+// Officials List (Umpires & Scorers for Match & Assessment)
+router.get('/officials', async (req, res) => {
+  try {
+    const adminService = require('../services/adminService');
+    const officials = await adminService.getOfficials();
+    res.json({ success: true, officials });
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
 // Slide Menu: Change Team (Before first ball)
 router.post('/matches/:matchId/change-team', verifyMatchPermission, async (req, res) => {
   try {

@@ -421,19 +421,25 @@ export default function MatchSetupScreen() {
                 <Text style={styles.cardHeader}>Match Officials</Text>
                 <View style={styles.officialsGrid}>
                   <View style={styles.officialPill}>
-                    <Text style={styles.officialRole}>Umpire 1</Text>
-                    <Text style={styles.officialName} numberOfLines={1}>K. Sundaram (TNCA)</Text>
+                    <Text style={styles.officialRole}>Umpire 1 (Lead)</Text>
+                    <Text style={styles.officialName} numberOfLines={1}>
+                      {setupData?.umpire1_name || setupData?.umpire1Name || 'K. Sundaram (TNCA)'}
+                    </Text>
                   </View>
                   <View style={styles.officialPill}>
-                    <Text style={styles.officialRole}>Umpire 2</Text>
-                    <Text style={styles.officialName} numberOfLines={1}>P. Velmurugan (TNCA)</Text>
+                    <Text style={styles.officialRole}>Umpire 2 (Square Leg)</Text>
+                    <Text style={styles.officialName} numberOfLines={1}>
+                      {setupData?.umpire2_name || setupData?.umpire2Name || 'P. Velmurugan (TNCA)'}
+                    </Text>
                   </View>
                   <View style={styles.officialPill}>
-                    <Text style={styles.officialRole}>Scorer</Text>
-                    <Text style={styles.officialName} numberOfLines={1}>S. Ramesh (SCR-101)</Text>
+                    <Text style={styles.officialRole}>Official Scorer</Text>
+                    <Text style={styles.officialName} numberOfLines={1}>
+                      {setupData?.assigned_scorer_name || setupData?.scorer_name || 'S. Ramesh (SCR-101)'}
+                    </Text>
                   </View>
                   <View style={styles.officialPill}>
-                    <Text style={styles.officialRole}>Referee</Text>
+                    <Text style={styles.officialRole}>Match Referee</Text>
                     <Text style={styles.officialName} numberOfLines={1}>R. Senthil Kumar</Text>
                   </View>
                 </View>

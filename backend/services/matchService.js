@@ -44,7 +44,15 @@ class MatchService {
       teamBAllocationStatus: match.team_b_allocation_status || 'PENDING',
       tossWinner: match.toss_winner_id,
       tossDecision: match.toss_decision,
-      status: match.status
+      status: match.status,
+      umpire1_id: match.umpire1_id || null,
+      umpire2_id: match.umpire2_id || null,
+      umpire1_name: match.umpire1_name || null,
+      umpire2_name: match.umpire2_name || null,
+      umpire1Name: match.umpire1_name || null,
+      umpire2Name: match.umpire2_name || null,
+      assigned_scorer_name: match.assigned_scorer_name || match.scorer_name || null,
+      umpire_assessment: match.umpire_assessment || null
     };
   }
 
