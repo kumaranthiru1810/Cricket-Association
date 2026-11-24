@@ -342,7 +342,7 @@ class ScorerService {
               timestamp: latestDel.created_at ? new Date(latestDel.created_at).getTime() : Date.now()
             };
           }
-        } catch (_delErr) {}
+        } catch (_delErr) { }
       }
 
       return {
@@ -489,7 +489,7 @@ class ScorerService {
     // Batters in this innings
     const batters = await db.models.InningsBatter.find({ innings_id: currentInnings.id }).sort({ batting_position: 1 }).lean();
     const playerMap = await this.getPlayerMap();
-    
+
     // Resolve robust squads from official players & registered teams (Filtered to allocated Playing XI)
     const battingSquad = await this.getSquadForTeam(currentInnings.batting_team_id, match);
     const bowlingSquad = await this.getSquadForTeam(currentInnings.bowling_team_id, match);
@@ -1114,12 +1114,12 @@ class ScorerService {
     if (lastDelivery) {
       await db.models.Delivery.updateOne(
         { id: lastDelivery.id },
-        { 
-          $set: { 
+        {
+          $set: {
             fielding_position: pos,
             fielder_name: assignedFielder,
             commentary: commentary
-          } 
+          }
         }
       );
     }

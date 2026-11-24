@@ -138,7 +138,7 @@ function getCorsOptions() {
       'X-Webhook-Signature',
       'Accept',
       'Origin',
-      ...(process.env.NODE_ENV !== 'production' ? ['x-user-role', 'x-user-email', 'x-user-id', 'scorer-id'] : [])
+      ...(process.env.NODE_ENV !== 'production' ? ['x-user-role', 'x-user-email', 'x-user-id', 'scorer-id', 'role'] : [])
     ]
   };
 }
