@@ -248,9 +248,21 @@ export default function HomeScreen() {
       playerRatings: 'stats',
       clubs: 'about',
       rules: 'about',
+      heritage: 'about',
+      contactUs: 'contact',
+      secretariat: 'contact',
     };
     const resolvedKey = posKeyMap[secName] || secName;
 
+    // 1. First attempt: Use measured React Native layout position
+    const recordedY = sectionPositions[resolvedKey] ?? sectionPositions[secName];
+    if (typeof recordedY === 'number' && recordedY > 0) {
+      try {
+        mainScrollRef.current?.scrollTo({ y: Math.max(0, recordedY - 10), animated: true });
+      } catch (_e) {}
+    }
+
+    // 2. On Web: ensure DOM scroll happens smoothly on the actual scrollable container
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       const idMap: Record<string, string> = {
         matchCentre: 'cfvd-section-match-centre',
@@ -263,43 +275,56 @@ export default function HomeScreen() {
         about: 'cfvd-section-about',
         grounds: 'cfvd-section-grounds',
         news: 'cfvd-section-news',
+        contact: 'cfvd-section-contact',
       };
 
       const targetId = idMap[secName] || idMap[resolvedKey] || secName;
       const el = document.getElementById(targetId);
 
       if (el) {
-        // Scroll the ScrollView's DOM node directly using precise bounding geometry
-        const scrollNode =
-          (mainScrollRef.current as any)?.getScrollableNode?.() ||
-          (mainScrollRef.current as any)?._nativeRef ||
-          el.closest('[style*="overflow"]') ||
-          document.querySelector('[data-class~="r-overflowY-1v1zgw7"]') ||
-          document.querySelector('div[style*="overflow-y"]') ||
-          document.documentElement;
-
-        if (scrollNode && typeof scrollNode.getBoundingClientRect === 'function') {
-          const scrollRect = scrollNode.getBoundingClientRect();
-          const elRect = el.getBoundingClientRect();
-          const targetY = scrollNode.scrollTop + (elRect.top - scrollRect.top);
-          scrollNode.scrollTo({ top: Math.max(0, targetY - 10), behavior: 'smooth' });
-          return;
-        }
-
-        // Fallback: window scroll or standard scrollIntoView with scrollMarginTop
-        if (typeof window !== 'undefined') {
-          const winTargetY = window.scrollY + el.getBoundingClientRect().top - 95;
-          window.scrollTo({ top: Math.max(0, winTargetY), behavior: 'smooth' });
-        }
+        // Native browser scrollIntoView respects scrollMarginTop
         try {
           el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         } catch (_err) {}
+
+        // Find scrollable ancestor element (ScrollView in web)
+        let scrollParent: HTMLElement | null = null;
+        let curr: HTMLElement | null = el.parentElement;
+        while (curr && curr !== document.body && curr !== document.documentElement) {
+          const computed = window.getComputedStyle(curr);
+          if (computed.overflowY === 'auto' || computed.overflowY === 'scroll') {
+            scrollParent = curr;
+            break;
+          }
+          curr = curr.parentElement;
+        }
+
+        const scrollNode =
+          scrollParent ||
+          (mainScrollRef.current as any)?.getScrollableNode?.() ||
+          (mainScrollRef.current as any)?._nativeRef;
+
+        if (scrollNode && typeof scrollNode.getBoundingClientRect === 'function' && scrollNode !== document.documentElement && scrollNode !== document.body) {
+          const scrollRect = scrollNode.getBoundingClientRect();
+          const elRect = el.getBoundingClientRect();
+          const computedTargetY = scrollNode.scrollTop + (elRect.top - scrollRect.top);
+          scrollNode.scrollTo({ top: Math.max(0, computedTargetY - 15), behavior: 'smooth' });
+          return;
+        }
+
+        // Window scroll fallback
+        if (typeof window !== 'undefined' && document.documentElement.scrollHeight > window.innerHeight) {
+          const winTargetY = window.scrollY + el.getBoundingClientRect().top - 95;
+          window.scrollTo({ top: Math.max(0, winTargetY), behavior: 'smooth' });
+        }
         return;
       }
     }
 
-    const y = sectionPositions[resolvedKey] || sectionPositions[secName] || 0;
-    mainScrollRef.current?.scrollTo({ y: Math.max(0, y - 10), animated: true });
+    // 3. Fallback for native mobile
+    if (typeof recordedY === 'number') {
+      mainScrollRef.current?.scrollTo({ y: Math.max(0, recordedY - 10), animated: true });
+    }
   };
 
   // State: Mobile Nav Menu
@@ -664,7 +689,21 @@ export default function HomeScreen() {
             scrollToSection('news');
           }
         }}
-        onScrollToTop={() => mainScrollRef.current?.scrollTo({ y: 0, animated: true })}
+        onScrollToTop={() => {
+          if (Platform.OS === 'web' && typeof document !== 'undefined') {
+            try {
+              const scrollNode =
+                (mainScrollRef.current as any)?.getScrollableNode?.() ||
+                (mainScrollRef.current as any)?._nativeRef ||
+                document.querySelector('div[class*="r-overflowY"]');
+              if (scrollNode && typeof scrollNode.scrollTo === 'function') {
+                scrollNode.scrollTo({ top: 0, behavior: 'smooth' });
+              }
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            } catch (_e) {}
+          }
+          mainScrollRef.current?.scrollTo({ y: 0, animated: true });
+        }}
         isMobile={isMobile}
         mobileNavOpen={mobileNavOpen}
         setMobileNavOpen={setMobileNavOpen}
@@ -3637,7 +3676,15 @@ export default function HomeScreen() {
         </View> */}
 
         {/* ─── 14. CONTACT SECRETARIAT ───────────────────────────────────── */}
-        <View style={styles.section}>
+        <View
+          nativeID="cfvd-section-contact"
+          {...({ id: 'cfvd-section-contact' } as any)}
+          style={styles.section}
+          onLayout={e => {
+            const layout = e.nativeEvent.layout;
+            setSectionPositions(prev => ({ ...prev, contact: layout.y }));
+          }}
+        >
           <View style={[styles.container, containerResponsiveStyle]}>
             <View style={styles.sectionHead}>
               <View style={styles.sectionTagBadge}>
@@ -4529,4 +4576,3 @@ export default function HomeScreen() {
     </View>
   );
 }
-

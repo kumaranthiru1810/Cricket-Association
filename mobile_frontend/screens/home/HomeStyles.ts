@@ -5,8 +5,8 @@
 
 import { StyleSheet, Platform } from 'react-native';
 
-export // ─── STYLESHEET ───────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
+// ─── STYLESHEET ───────────────────────────────────────────────────────────────
+export const styles = StyleSheet.create({
   rootContainer: {
     flex: 1,
     backgroundColor: '#f6f2e9',
