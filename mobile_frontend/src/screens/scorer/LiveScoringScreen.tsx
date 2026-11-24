@@ -166,6 +166,18 @@ const SHOT_TYPE_OPTIONS = [
   'No Shot'
 ];
 
+export const FIELDING_ACTIONS = [
+  { label: 'Clean Collect', icon: '⚡', desc: 'Clean ball gathering & pickup' },
+  { label: 'Pick and Throw', icon: '🎯', desc: 'Sharp pick up and return throw' },
+  { label: 'Relay Throw', icon: '🔄', desc: 'Outfield relay to keeper/bowler' },
+  { label: 'Direct Hit', icon: '💥', desc: 'Direct hit on the stumps' },
+  { label: 'Boundary Save (4 Runs Saved)', icon: '🛡️', desc: 'Spectacular sliding boundary stop' },
+  { label: 'Slide and Miss', icon: '🏃', desc: 'Attempted slide but missed ball' },
+  { label: 'Misfield', icon: '⚠️', desc: 'Fumble or misjudged collection' },
+  { label: 'Dropped Catch', icon: '❌', desc: 'Spilled catching opportunity' },
+  { label: 'Overthrow Conceded', icon: '🚨', desc: 'Errant throw allowing extra runs' }
+];
+
 const LiveDrawerClock = React.memo(({ textStyle }: { textStyle: any }) => {
   const [timeStr, setTimeStr] = useState<string>('');
   useEffect(() => {
@@ -607,6 +619,11 @@ export default function LiveScoringScreen() {
   const [deadBallReason, setDeadBallReason] = useState<string>('Umpire intervention / Play stopped');
   const [showFieldingModal, setShowFieldingModal] = useState<boolean>(false);
   const [selectedFieldingAction, setSelectedFieldingAction] = useState<string>('Clean Collect');
+  const [isFielderModalDropdownOpen, setIsFielderModalDropdownOpen] = useState<boolean>(false);
+  const [fielderModalSearchQuery, setFielderModalSearchQuery] = useState<string>('');
+  const [customFielderModalName, setCustomFielderModalName] = useState<string>('');
+  const [isFieldingActionDropdownOpen, setIsFieldingActionDropdownOpen] = useState<boolean>(false);
+  const [customFieldingActionText, setCustomFieldingActionText] = useState<string>('');
   const [showWagonWheelModal, setShowWagonWheelModal] = useState<boolean>(false);
   const [selectedWagonSector, setSelectedWagonSector] = useState<string>('Cover');
   const [pendingBoundaryRun, setPendingBoundaryRun] = useState<number | null>(null);
@@ -2056,43 +2073,47 @@ export default function LiveScoringScreen() {
   };
 
   const handleFieldingActionSelect = async (action: string) => {
-    setSelectedFieldingAction(action);
+    const finalAction = (customFieldingActionText && customFieldingActionText.trim()) ? customFieldingActionText.trim() : action;
+    setSelectedFieldingAction(finalAction);
     setShowFieldingModal(false);
+    setIsFielderModalDropdownOpen(false);
+    setIsFieldingActionDropdownOpen(false);
 
-    const fieldersList = (bowlingSquad && bowlingSquad.length > 0 ? bowlingSquad : (matchInfo?.teamBPlayers || matchInfo?.teamAPlayers || []));
+    const fieldersList = (activeFieldingSquad && activeFieldingSquad.length > 0) ? activeFieldingSquad : (bowlingSquad || []);
     let fielderId = selectedFielderId;
     if (!fielderId && fieldersList.length > 0) {
       fielderId = fieldersList[0].id;
       setSelectedFielderId(fielderId);
     }
     const fielderObj = fieldersList.find((f: any) => f.id === fielderId);
-    const fielderName = fielderObj ? fielderObj.name : 'Active Fielder';
+    const fielderName = customFielderModalName.trim() || (fielderObj ? fielderObj.name : 'Active Fielder');
 
     // Map to FieldingEventType for instant broadcast animation
     let fType: FieldingEventType = 'CLEAN_COLLECT';
     let impactBadge = 'CLEAN COLLECT';
     let impactScore = 1;
-    if (action.includes('Direct Hit')) {
+    const lower = finalAction.toLowerCase();
+    if (lower.includes('direct hit')) {
       fType = 'DIRECT_HIT';
       impactBadge = 'DIRECT HIT';
       impactScore = 3;
-    } else if (action.includes('Boundary Save') || action.includes('Slide')) {
+    } else if (lower.includes('boundary save') || lower.includes('slide') || lower.includes('4 runs')) {
       fType = 'BOUNDARY_SAVE';
       impactBadge = '4 RUNS SAVED';
       impactScore = 4;
-    } else if (action.includes('Pick and Throw')) {
+    } else if (lower.includes('pick and throw') || lower.includes('pick & throw')) {
       fType = 'PICK_AND_THROW';
       impactBadge = 'SHARP PICK & THROW';
       impactScore = 2;
-    } else if (action.includes('Relay Throw')) {
+    } else if (lower.includes('relay')) {
       fType = 'RELAY_THROW';
       impactBadge = 'RELAY THROW';
       impactScore = 2;
-    } else if (action.includes('Dropped Catch') || action.includes('Misfield')) {
+    } else if (lower.includes('dropped catch') || lower.includes('misfield') || lower.includes('fumble')) {
       fType = 'MISFIELD';
       impactBadge = 'MISFIELD';
       impactScore = -1;
-    } else if (action.includes('Overthrow')) {
+    } else if (lower.includes('overthrow')) {
       fType = 'OVERTHROW';
       impactBadge = 'OVERTHROW CONCEDED';
       impactScore = -2;
@@ -2101,11 +2122,14 @@ export default function LiveScoringScreen() {
     setActiveFieldingEvent({
       type: fType,
       fielderName: fielderName,
-      teamName: matchInfo?.bowlingTeam || 'Fielding Side',
-      details: `${fielderName} executed ${action} • Counted for Best Fielder rating`,
+      teamName: currentBowlingTeam || matchInfo?.bowlingTeam || 'Fielding Side',
+      details: `${fielderName} (${currentBowlingTeam}) executed ${finalAction} • Counted for Best Fielder rating`,
       badge: impactBadge,
       impactScore: impactScore
     });
+
+    // Reset custom input
+    setCustomFieldingActionText('');
 
     // Background sync: attach to commentary & match events
     try {
@@ -3361,18 +3385,54 @@ export default function LiveScoringScreen() {
 
   const selectedChangeBowlerObj = (bowlingSquad || []).find((p) => p.id === selectedChangeBowlerId);
 
+  const currentInningsNum = matchInfo?.currentInningsNumber || 1;
+  const currentBattingTeam = (currentInningsNum === 2)
+    ? (matchInfo?.teamB || 'Team B')
+    : (matchInfo?.battingTeam || matchInfo?.teamA || 'Team A');
+
+  const currentBowlingTeam = (currentInningsNum === 2)
+    ? (matchInfo?.teamA || 'Team A')
+    : (matchInfo?.bowlingTeam || matchInfo?.teamB || 'Team B');
+
+  // Dynamically resolve active fielding squad based on current innings (Swaps automatically in 2nd innings)
+  const activeFieldingSquad = useMemo(() => {
+    const isSecondInn = currentInningsNum === 2;
+
+    // In 2nd innings, bowling team is Team A. In 1st innings, bowling team is Team B.
+    const fallbackList = isSecondInn
+      ? (matchInfo?.teamAPlayingXI?.length ? matchInfo.teamAPlayingXI : (matchInfo?.teamAPlayers || []))
+      : (matchInfo?.teamBPlayingXI?.length ? matchInfo.teamBPlayingXI : (matchInfo?.teamBPlayers || []));
+
+    let squad: any[] = (bowlingSquad && bowlingSquad.length > 0) ? [...bowlingSquad] : [];
+
+    if (squad.length === 0 && fallbackList.length > 0) {
+      squad = fallbackList.map((p: any, idx: number) => {
+        if (typeof p === 'string') return { id: p, name: p, role: 'FIELDER' };
+        return {
+          id: p.id || `fld-${idx}`,
+          name: p.name || p.player_name || `Player ${idx + 1}`,
+          role: p.role || 'FIELDER'
+        };
+      });
+    }
+
+    // Deduplicate
+    const seen = new Set<string>();
+    const result: any[] = [];
+    squad.forEach((p: any) => {
+      if (!p || !p.name) return;
+      const key = (p.name || '').trim().toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push(p);
+      }
+    });
+
+    return result;
+  }, [bowlingSquad, currentInningsNum, matchInfo]);
+
   // Unique, deduplicated fielding squad (for fielder dropdown)
-  const seenFielderNames = new Set<string>();
-  const seenFielderIds = new Set<string>();
-  const rawFielderList: any[] = [];
-  (bowlingSquad || []).forEach((f) => {
-    if (!f || !f.name) return;
-    const cleanName = f.name.trim().toLowerCase();
-    if (seenFielderNames.has(cleanName) || seenFielderIds.has(f.id)) return;
-    seenFielderNames.add(cleanName);
-    seenFielderIds.add(f.id);
-    rawFielderList.push(f);
-  });
+  const rawFielderList = activeFieldingSquad;
 
   const filteredFielders = fielderSearchQuery.trim()
     ? rawFielderList.filter((f) => {
@@ -6672,68 +6732,319 @@ export default function LiveScoringScreen() {
         visible={showFieldingModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowFieldingModal(false)}
+        onRequestClose={() => {
+          setShowFieldingModal(false);
+          setIsFielderModalDropdownOpen(false);
+          setIsFieldingActionDropdownOpen(false);
+        }}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxWidth: 460 }]}>
+          <View style={[styles.modalContent, { maxWidth: 460, maxHeight: '92%' }]}>
             <View style={styles.revisedModalHeader}>
-              <Text style={styles.revisedModalTitle}>FIELDING TYPE</Text>
-              <TouchableOpacity style={styles.redCloseBtn} onPress={() => setShowFieldingModal(false)}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                <Text style={{ fontSize: 20 }}>🧤</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.revisedModalTitle}>FIELDING TYPE</Text>
+                  <Text style={{ fontSize: 11, color: '#f59e0b', fontWeight: '800' }}>
+                    🛡️ {currentBowlingTeam} ({activeFieldingSquad.length} Fielders • Innings {currentInningsNum})
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.redCloseBtn}
+                onPress={() => {
+                  setShowFieldingModal(false);
+                  setIsFielderModalDropdownOpen(false);
+                  setIsFieldingActionDropdownOpen(false);
+                }}
+              >
                 <Text style={styles.redCloseBtnText}>✕</Text>
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.fieldSubLabel}>SELECT ACTIVE FIELDER:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12, marginTop: 4 }}>
-              <View style={{ flexDirection: 'row', gap: 6 }}>
-                {((bowlingSquad && bowlingSquad.length > 0 ? bowlingSquad : (matchInfo?.teamBPlayers || matchInfo?.teamAPlayers || [])) as any[]).map((f: any) => {
-                  const isSelected = selectedFielderId ? selectedFielderId === f.id : (bowlingSquad[0]?.id === f.id);
-                  return (
-                    <TouchableOpacity
-                      key={`fld-${f.id}`}
-                      style={[styles.quickReasonChip, isSelected && styles.quickReasonChipActive]}
-                      onPress={() => setSelectedFielderId(f.id)}
-                    >
-                      <Text style={[styles.quickReasonChipText, isSelected && styles.quickReasonChipTextActive]}>
-                        🧤 {f.name}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+              {/* 1. SELECT ACTIVE FIELDER (DROPDOWN & QUICK SELECT) */}
+              <View style={{ marginTop: 8 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.fieldSubLabel}>SELECT ACTIVE FIELDER (DROPDOWN):</Text>
+                  <Text style={{ fontSize: 10, color: '#0284c7', fontWeight: '800' }}>
+                    {currentBowlingTeam}
+                  </Text>
+                </View>
+
+                {/* Dropdown Selector Button */}
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: 11,
+                    backgroundColor: '#f8fafc',
+                    borderWidth: 1.5,
+                    borderColor: isFielderModalDropdownOpen ? '#3b82f6' : '#cbd5e1',
+                    borderRadius: 8,
+                    marginTop: 4
+                  }}
+                  onPress={() => {
+                    setIsFielderModalDropdownOpen(!isFielderModalDropdownOpen);
+                    setIsFieldingActionDropdownOpen(false);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                    <Text style={{ fontSize: 15 }}>🧤</Text>
+                    <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0f172a' }} numberOfLines={1}>
+                      {activeFieldingSquad.find(p => p.id === selectedFielderId)?.name || customFielderModalName || (activeFieldingSquad[0]?.name ? `${activeFieldingSquad[0].name} (Default)` : `Choose ${currentBowlingTeam} Fielder...`)}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 13, color: '#64748b' }}>{isFielderModalDropdownOpen ? '▲' : '▼'}</Text>
+                </TouchableOpacity>
+
+                {/* Dropdown Popover List */}
+                {isFielderModalDropdownOpen && (
+                  <View style={{
+                    backgroundColor: '#ffffff',
+                    borderWidth: 1.5,
+                    borderColor: '#3b82f6',
+                    borderRadius: 8,
+                    marginTop: 4,
+                    padding: 8,
+                    maxHeight: 210,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.12,
+                    shadowRadius: 6,
+                    elevation: 5
+                  }}>
+                    {/* Search Field inside Dropdown */}
+                    <TextInput
+                      style={{
+                        backgroundColor: '#f1f5f9',
+                        borderRadius: 6,
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        fontSize: 12,
+                        color: '#0f172a',
+                        marginBottom: 6
+                      }}
+                      placeholder="🔍 Search fielder name..."
+                      placeholderTextColor="#94a3b8"
+                      value={fielderModalSearchQuery}
+                      onChangeText={setFielderModalSearchQuery}
+                    />
+
+                    <ScrollView nestedScrollEnabled style={{ maxHeight: 150 }}>
+                      {activeFieldingSquad
+                        .filter(f => !fielderModalSearchQuery.trim() || f.name.toLowerCase().includes(fielderModalSearchQuery.trim().toLowerCase()))
+                        .map(f => {
+                          const isSel = selectedFielderId === f.id;
+                          return (
+                            <TouchableOpacity
+                              key={`modal-fld-dd-${f.id}`}
+                              style={{
+                                paddingVertical: 8,
+                                paddingHorizontal: 10,
+                                borderRadius: 6,
+                                backgroundColor: isSel ? '#eff6ff' : 'transparent',
+                                flexDirection: 'row',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                              }}
+                              onPress={() => {
+                                setSelectedFielderId(f.id);
+                                setCustomFielderModalName('');
+                                setIsFielderModalDropdownOpen(false);
+                              }}
+                            >
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={{ fontSize: 12 }}>🧤</Text>
+                                <Text style={{ fontSize: 13, fontWeight: isSel ? '800' : '600', color: isSel ? '#1d4ed8' : '#1e293b' }}>
+                                  {f.name}
+                                </Text>
+                              </View>
+                              {isSel && <Text style={{ color: '#2563eb', fontWeight: '900', fontSize: 11.5 }}>✓ Selected</Text>}
+                            </TouchableOpacity>
+                          );
+                        })}
+                      {activeFieldingSquad.length === 0 && (
+                        <View style={{ padding: 10, alignItems: 'center' }}>
+                          <Text style={{ fontSize: 12, color: '#94a3b8' }}>No fielders found for {currentBowlingTeam}.</Text>
+                        </View>
+                      )}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {/* Quick Fielder Horizontal Chips below Dropdown */}
+                <Text style={{ fontSize: 10.5, color: '#64748b', fontWeight: '700', marginTop: 8, marginBottom: 4 }}>
+                  QUICK CHIPS ({currentBowlingTeam}):
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    {activeFieldingSquad.map((f: any) => {
+                      const isSelected = selectedFielderId ? selectedFielderId === f.id : (activeFieldingSquad[0]?.id === f.id);
+                      return (
+                        <TouchableOpacity
+                          key={`fld-quick-${f.id}`}
+                          style={[styles.quickReasonChip, isSelected && styles.quickReasonChipActive]}
+                          onPress={() => {
+                            setSelectedFielderId(f.id);
+                            setCustomFielderModalName('');
+                          }}
+                        >
+                          <Text style={[styles.quickReasonChipText, isSelected && styles.quickReasonChipTextActive]}>
+                            🧤 {f.name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              </View>
+
+              {/* 2. SELECT FIELDING ACTION (DROPDOWN) */}
+              <View style={{ marginTop: 6 }}>
+                <Text style={styles.fieldSubLabel}>FIELDING ACTION (DROPDOWN):</Text>
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: 11,
+                    backgroundColor: '#f8fafc',
+                    borderWidth: 1.5,
+                    borderColor: isFieldingActionDropdownOpen ? '#3b82f6' : '#cbd5e1',
+                    borderRadius: 8,
+                    marginTop: 4
+                  }}
+                  onPress={() => {
+                    setIsFieldingActionDropdownOpen(!isFieldingActionDropdownOpen);
+                    setIsFielderModalDropdownOpen(false);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontSize: 15 }}>
+                      {FIELDING_ACTIONS.find(a => a.label === selectedFieldingAction)?.icon || '⚡'}
+                    </Text>
+                    <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0f172a' }}>
+                      {selectedFieldingAction || 'Select Fielding Action'}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 13, color: '#64748b' }}>{isFieldingActionDropdownOpen ? '▲' : '▼'}</Text>
+                </TouchableOpacity>
+
+                {/* Action Dropdown List */}
+                {isFieldingActionDropdownOpen && (
+                  <View style={{
+                    backgroundColor: '#ffffff',
+                    borderWidth: 1.5,
+                    borderColor: '#3b82f6',
+                    borderRadius: 8,
+                    marginTop: 4,
+                    padding: 6,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.12,
+                    shadowRadius: 6,
+                    elevation: 5
+                  }}>
+                    <ScrollView nestedScrollEnabled style={{ maxHeight: 200 }}>
+                      {FIELDING_ACTIONS.map(action => {
+                        const isActionSel = selectedFieldingAction === action.label;
+                        return (
+                          <TouchableOpacity
+                            key={`action-dd-${action.label}`}
+                            style={{
+                              paddingVertical: 8,
+                              paddingHorizontal: 10,
+                              borderRadius: 6,
+                              backgroundColor: isActionSel ? '#eff6ff' : 'transparent',
+                              flexDirection: 'row',
+                              justifyContent: 'space-between',
+                              alignItems: 'center'
+                            }}
+                            onPress={() => {
+                              setSelectedFieldingAction(action.label);
+                              setIsFieldingActionDropdownOpen(false);
+                            }}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <Text style={{ fontSize: 14 }}>{action.icon}</Text>
+                              <View>
+                                <Text style={{ fontSize: 13, fontWeight: isActionSel ? '800' : '600', color: isActionSel ? '#1d4ed8' : '#1e293b' }}>
+                                  {action.label}
+                                </Text>
+                                <Text style={{ fontSize: 10, color: '#64748b' }}>{action.desc}</Text>
+                              </View>
+                            </View>
+                            {isActionSel && <Text style={{ color: '#2563eb', fontWeight: '900', fontSize: 12 }}>✓</Text>}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
+
+              {/* 3. CUSTOM TYPE / EDITABLE TEXT INPUT ("eluthura marium") */}
+              <View style={{ marginTop: 12 }}>
+                <Text style={styles.fieldSubLabel}>✏️ CUSTOM ACTION / NOTES (விருப்பக் குறிப்பு எழுத):</Text>
+                <TextInput
+                  style={{
+                    backgroundColor: '#f8fafc',
+                    borderWidth: 1.5,
+                    borderColor: '#cbd5e1',
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 9,
+                    fontSize: 12.5,
+                    color: '#0f172a',
+                    marginTop: 4
+                  }}
+                  placeholder="Type custom note (e.g. Diving stop at cover point, Bullet throw to keeper...)"
+                  placeholderTextColor="#94a3b8"
+                  value={customFieldingActionText}
+                  onChangeText={setCustomFieldingActionText}
+                />
+              </View>
+
+              {/* Action Summary Preview Box */}
+              <View style={{ marginTop: 12, backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#86efac', borderRadius: 8, padding: 9 }}>
+                <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#166534', textTransform: 'uppercase' }}>
+                  Preview:
+                </Text>
+                <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#14532d', marginTop: 2 }}>
+                  🧤 {activeFieldingSquad.find(p => p.id === selectedFielderId)?.name || customFielderModalName || activeFieldingSquad[0]?.name || 'Active Fielder'} ({currentBowlingTeam}) • {customFieldingActionText.trim() || selectedFieldingAction}
+                </Text>
               </View>
             </ScrollView>
 
-            <Text style={styles.fieldSubLabel}>FIELDING ACTION:</Text>
-            <View style={{ marginTop: 6, gap: 6 }}>
-              {[
-                'Clean Collect',
-                'Pick and Throw',
-                'Relay Throw',
-                'Direct Hit',
-                'Boundary Save (4 Runs Saved)',
-                'Slide and Miss',
-                'Misfield',
-                'Dropped Catch',
-                'Overthrow Conceded'
-              ].map((action) => (
-                <TouchableOpacity
-                  key={action}
-                  style={[
-                    styles.extraModalItem,
-                    selectedFieldingAction === action && { backgroundColor: '#1e3a8a', borderColor: '#3b82f6' }
-                  ]}
-                  onPress={() => handleFieldingActionSelect(action)}
-                >
-                  <Text style={[
-                    styles.extraModalItemTitle,
-                    selectedFieldingAction === action && { color: '#93c5fd', fontWeight: 'bold' }
-                  ]}>
-                    {action}
-                  </Text>
-                  <Text style={[styles.drawerMenuChevron, selectedFieldingAction === action && { color: '#93c5fd' }]}>✓</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            {/* CONFIRM & SUBMIT BUTTON */}
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#15803d',
+                borderRadius: 8,
+                paddingVertical: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: 12,
+                shadowColor: '#15803d',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.2,
+                shadowRadius: 4,
+                elevation: 3
+              }}
+              onPress={() => {
+                const actionToApply = customFieldingActionText.trim() || selectedFieldingAction;
+                handleFieldingActionSelect(actionToApply);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={{ color: '#ffffff', fontSize: 13.5, fontWeight: '900' }}>
+                ✓ RECORD FIELDING ACTION (பதிவு செய்க)
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
