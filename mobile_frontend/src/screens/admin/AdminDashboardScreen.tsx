@@ -4665,7 +4665,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                   cx={60}
                                   cy={60}
                                   r={radius}
-                                  stroke="#1e293b"
+                                  stroke="#e2e8f0"
                                   strokeWidth={16}
                                   fill="none"
                                 />
@@ -4694,7 +4694,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 x={60}
                                 y={57}
                                 textAnchor="middle"
-                                fill="#ffffff"
+                                fill="#0f172a"
                                 fontSize="18"
                                 fontWeight="900"
                               >
@@ -4787,11 +4787,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       <View style={styles.scheduleInfoBoxModern}>
                         <View style={styles.scheduleInfoRow}>
                           <Text style={styles.scheduleInfoLabel}>• Approved Teams Available:</Text>
-                          <Text style={styles.scheduleInfoVal}>{allClubsList.length}</Text>
+                          <Text style={styles.scheduleInfoVal}>{availableTeams.length}</Text>
                         </View>
                         <View style={styles.scheduleInfoRow}>
                           <Text style={styles.scheduleInfoLabel}>• Venues Registered:</Text>
-                          <Text style={styles.scheduleInfoVal}>{venuesList.length}</Text>
+                          <Text style={styles.scheduleInfoVal}>{availableVenues.length}</Text>
                         </View>
                         <View style={styles.scheduleInfoRow}>
                           <Text style={styles.scheduleInfoLabel}>• Accredited Scorers & Officials:</Text>
@@ -4855,7 +4855,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                       return (
                         <View style={[styles.filterRightActions, !isDesktop && { width: '100%' }]}>
-                          <View style={{ flex: isDesktop ? 0 : 1, width: isDesktop ? 220 : undefined, position: 'relative', zIndex: 1000 }}>
+                          <View style={[isDesktop ? { width: 225, flexShrink: 0 } : { flex: 1, minWidth: 160 }, { position: 'relative', zIndex: 1000 }]}>
                             <TouchableOpacity
                               style={{
                                 flexDirection: 'row',

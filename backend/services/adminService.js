@@ -13,6 +13,7 @@ const db = require('../config/db');
 const otpService = require('./otpService');
 const { sendOtpEmail } = require('../config/mailer');
 const contentModel = require('../models/contentModel');
+const venueModel = require('../models/venueModel');
 const { validateScheduleDateTime, calculateOfficialMatchTimings } = require('../utils/dateTimeValidation');
 
 /**

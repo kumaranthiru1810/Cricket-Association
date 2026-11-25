@@ -268,7 +268,7 @@ class TeamAuth {
   }
 
   async getTeams(status = null) {
-    return teamRegistrationModel.getTeams(status);
+    return teamRegistrationModel.getAll(status);
   }
 }
 
