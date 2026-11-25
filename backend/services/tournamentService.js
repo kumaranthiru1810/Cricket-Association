@@ -75,7 +75,7 @@ class TournamentService {
 
     const todayStr = new Date().toISOString().split('T')[0];
 
-    return rawTournaments.map(t => {
+    const enriched = rawTournaments.map(t => {
       const matchStats = matchesByTour[t.id] || { total: 0, scheduled: 0, live: 0, completed: 0, cancelled: 0 };
       const regStat = regStatsByTour[t.id] || { total: 0, pending: 0, approved: 0, rejected: 0 };
       
@@ -118,6 +118,24 @@ class TournamentService {
         match_stats: matchStats
       };
     });
+
+    // Enforce strictly one tournament per normalized name
+    const uniqueByName = new Map();
+    enriched.forEach(t => {
+      const key = (t.name || '').trim().toLowerCase() || t.id;
+      const existing = uniqueByName.get(key);
+      if (!existing) {
+        uniqueByName.set(key, t);
+      } else {
+        const existingScore = (existing.match_stats?.total || 0) * 10 + (existing.approved_teams_count || 0);
+        const currentScore = (t.match_stats?.total || 0) * 10 + (t.approved_teams_count || 0);
+        if (currentScore > existingScore) {
+          uniqueByName.set(key, t);
+        }
+      }
+    });
+
+    return Array.from(uniqueByName.values());
   }
 
   /**

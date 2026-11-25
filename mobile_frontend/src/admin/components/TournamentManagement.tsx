@@ -886,9 +886,15 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
     }
   };
 
-  // ── Filtered Tournaments List ──────────────────────────────────────────
+  // ── Filtered Tournaments List (strictly one tournament per name) ──────────
   const filteredTournaments = useMemo(() => {
+    const seenNames = new Set<string>();
     return tournaments.filter(t => {
+      const nameKey = (t.name || '').trim().toLowerCase();
+      if (nameKey) {
+        if (seenNames.has(nameKey)) return false;
+        seenNames.add(nameKey);
+      }
       // Status filter
       if (statusFilter !== 'ALL') {
         const s = (t.status || 'UPCOMING').toUpperCase();

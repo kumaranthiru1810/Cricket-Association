@@ -210,9 +210,20 @@ async function saveVenue({ id, name, location, capacity, floodlights, descriptio
 async function saveTournament(tournamentData, adminEmail) {
   await db.initDb();
   const tourId = tournamentData.id || `T-${Date.now()}`;
+  const cleanName = (tournamentData.name || '').trim();
+  if (cleanName) {
+    const escaped = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const duplicate = await db.models.Tournament.findOne({
+      name: { $regex: new RegExp(`^${escaped}$`, 'i') },
+      id: { $ne: tourId }
+    }).lean();
+    if (duplicate) {
+      throw new Error(`A tournament with name '${cleanName}' already exists. Only one tournament per name is allowed.`);
+    }
+  }
   const tournament = await db.models.Tournament.findOneAndUpdate(
     { id: tourId },
-    { $set: { id: tourId, ...tournamentData } },
+    { $set: { id: tourId, ...tournamentData, ...(cleanName ? { name: cleanName } : {}) } },
     { upsert: true, returnDocument: 'after' }
   ).lean();
 
@@ -1556,7 +1567,15 @@ async function getMatches() {
 
 async function getTournaments() {
   await db.initDb();
-  return db.models.Tournament.find({}).sort({ start_date: -1 }).lean();
+  const all = await db.models.Tournament.find({}).sort({ start_date: -1 }).lean();
+  const seenNames = new Set();
+  return (all || []).filter(t => {
+    const key = (t.name || '').trim().toLowerCase();
+    if (!key) return true;
+    if (seenNames.has(key)) return false;
+    seenNames.add(key);
+    return true;
+  });
 }
 
 async function getTeams() {
