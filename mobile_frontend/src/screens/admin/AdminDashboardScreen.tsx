@@ -491,6 +491,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   const [scorerSearchQuery, setScorerSearchQuery] = useState<string>('');
 
   const [teamFilter, setTeamFilter] = useState<FilterStatus>('all');
+  const [teamFilterDropdownOpen, setTeamFilterDropdownOpen] = useState<boolean>(false);
   const [teamSearchQuery, setTeamSearchQuery] = useState<string>('');
 
   const [umpireFilter, setUmpireFilter] = useState<FilterStatus>('all');
@@ -3710,7 +3711,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 </View>
 
                 {/* TEAMS TOOLBAR */}
-                <View style={styles.toolbarCard}>
+                <View style={[styles.toolbarCard, { zIndex: 50, position: 'relative' }]}>
                   <View style={styles.searchBox}>
                     <Text style={styles.searchIcon}>🔍</Text>
                     <TextInput
@@ -3722,43 +3723,95 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     />
                   </View>
 
-                  <View style={styles.filterPillsGroup}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, position: 'relative', zIndex: 100 }}>
                     <Text style={styles.filterStatusLabel}>Filter Status:</Text>
-                    <TouchableOpacity
-                      style={[styles.filterPill, teamFilter === 'all' && styles.filterPillActive]}
-                      onPress={() => setTeamFilter('all')}
-                    >
-                      <Text style={[styles.filterPillText, teamFilter === 'all' && styles.filterPillTextActive]}>
-                        All ({teamTotal})
-                      </Text>
-                    </TouchableOpacity>
+                    <View style={{ position: 'relative', minWidth: 165 }}>
+                      <TouchableOpacity
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          backgroundColor: '#f8fafc',
+                          borderWidth: 1.5,
+                          borderColor: teamFilterDropdownOpen ? '#059669' : '#cbd5e1',
+                          borderRadius: 8,
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          gap: 8
+                        }}
+                        onPress={() => setTeamFilterDropdownOpen(prev => !prev)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0f172a' }}>
+                          {teamFilter === 'all'
+                            ? `All (${teamTotal})`
+                            : teamFilter === 'Pending'
+                              ? `Pending (${teamPending})`
+                              : teamFilter === 'Approved'
+                                ? `Approved (${teamApproved})`
+                                : `Rejected (${teamRejected})`}
+                        </Text>
+                        <Text style={{ fontSize: 10, color: '#64748b', fontWeight: '800' }}>
+                          {teamFilterDropdownOpen ? '▲' : '▼'}
+                        </Text>
+                      </TouchableOpacity>
 
-                    <TouchableOpacity
-                      style={[styles.filterPill, teamFilter === 'Pending' && styles.filterPillActive]}
-                      onPress={() => setTeamFilter('Pending')}
-                    >
-                      <Text style={[styles.filterPillText, teamFilter === 'Pending' && styles.filterPillTextActive]}>
-                        Pending ({teamPending})
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.filterPill, teamFilter === 'Approved' && styles.filterPillActive]}
-                      onPress={() => setTeamFilter('Approved')}
-                    >
-                      <Text style={[styles.filterPillText, teamFilter === 'Approved' && styles.filterPillTextActive]}>
-                        Approved ({teamApproved})
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.filterPill, teamFilter === 'Rejected' && styles.filterPillActive]}
-                      onPress={() => setTeamFilter('Rejected')}
-                    >
-                      <Text style={[styles.filterPillText, teamFilter === 'Rejected' && styles.filterPillTextActive]}>
-                        Rejected ({teamRejected})
-                      </Text>
-                    </TouchableOpacity>
+                      {teamFilterDropdownOpen && (
+                        <View
+                          style={{
+                            position: 'absolute',
+                            top: 42,
+                            left: 0,
+                            right: 0,
+                            minWidth: 185,
+                            backgroundColor: '#ffffff',
+                            borderWidth: 1,
+                            borderColor: '#cbd5e1',
+                            borderRadius: 8,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 6 },
+                            shadowOpacity: 0.14,
+                            shadowRadius: 12,
+                            elevation: 12,
+                            zIndex: 9999,
+                            overflow: 'hidden'
+                          }}
+                        >
+                          {[
+                            { key: 'all' as FilterStatus, label: `All (${teamTotal})` },
+                            { key: 'Pending' as FilterStatus, label: `Pending (${teamPending})` },
+                            { key: 'Approved' as FilterStatus, label: `Approved (${teamApproved})` },
+                            { key: 'Rejected' as FilterStatus, label: `Rejected (${teamRejected})` }
+                          ].map(opt => {
+                            const isSelected = teamFilter === opt.key;
+                            return (
+                              <TouchableOpacity
+                                key={opt.key}
+                                style={{
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  paddingHorizontal: 12,
+                                  paddingVertical: 10,
+                                  backgroundColor: isSelected ? '#ecfdf5' : '#ffffff',
+                                  borderBottomWidth: 1,
+                                  borderBottomColor: '#f1f5f9'
+                                }}
+                                onPress={() => {
+                                  setTeamFilter(opt.key);
+                                  setTeamFilterDropdownOpen(false);
+                                }}
+                              >
+                                <Text style={{ fontSize: 12.5, fontWeight: isSelected ? '800' : '600', color: isSelected ? '#065f46' : '#334155' }}>
+                                  {opt.label}
+                                </Text>
+                                {isSelected && <Text style={{ fontSize: 12, fontWeight: '800', color: '#059669' }}>✓</Text>}
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      )}
+                    </View>
                   </View>
                 </View>
 
@@ -3841,7 +3894,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                     </View>
                                   )}
                                   <View style={styles.badgeCategoryIndigo}>
-                                    <Text style={styles.badgeCategoryIndigoText}>🏏 {t.members?.length || 15} Squad Players</Text>
+                                    <Text style={styles.badgeCategoryIndigoText}>🏏 {t.members?.length ?? 0} Players</Text>
                                   </View>
                                   <View style={styles.badgeCategoryPurple}>
                                     <Text style={styles.badgeCategoryPurpleText}>📍 {t.taluk || 'Virudhunagar'}</Text>
@@ -3868,7 +3921,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 onPress={() => setSelectedSquadModal(t)}
                                 activeOpacity={0.8}
                               >
-                                <Text style={styles.btnActionViewEmeraldText}>👁 Squad ({t.members?.length || 15})</Text>
+                                <Text style={styles.btnActionViewEmeraldText}>👁 View Team ({t.members?.length ?? 0})</Text>
                               </TouchableOpacity>
 
                               {isPending ? (
@@ -3919,7 +3972,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                             </View>
                             <View style={styles.metaCell}>
                               <Text style={styles.metaLabel}>Registered Squad</Text>
-                              <Text style={styles.metaVal}>{t.members?.length || 15} Members Verified</Text>
+                              <Text style={styles.metaVal}>{t.members?.length ?? 0} Players Registered</Text>
                             </View>
                             <View style={styles.metaCell}>
                               <Text style={styles.metaLabel}>Submission Date</Text>
@@ -5308,10 +5361,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         <View style={styles.modalOverlay}>
           <View style={styles.modalDialogLarge}>
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1, paddingRight: 10 }}>
                 <Text style={styles.modalTitle}>{selectedSquadModal?.teamName}</Text>
                 <Text style={styles.modalSubtitle}>
-                  Taluk: {selectedSquadModal?.taluk} • Coach: {selectedSquadModal?.coach?.name} • Official 15-Member Squad Roster
+                  ID: {selectedSquadModal?.teamId} • Taluk: {selectedSquadModal?.taluk || 'Virudhunagar'} • Total Players: {selectedSquadModal?.members?.length ?? 0}
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setSelectedSquadModal(null)} style={styles.modalCloseBtn}>
@@ -5320,6 +5373,46 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             </View>
 
             <ScrollView style={styles.modalBodyScroll} showsVerticalScrollIndicator={true}>
+              {/* Team Overview & Player Count Summary Banner */}
+              <View style={{
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                gap: 10,
+                backgroundColor: '#f8fafc',
+                borderWidth: 1,
+                borderColor: '#e2e8f0',
+                borderRadius: 10,
+                padding: 12,
+                marginBottom: 14
+              }}>
+                <View style={{ flex: 1, minWidth: 130 }}>
+                  <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Total Squad Players</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#059669', marginTop: 2 }}>
+                    🏏 {selectedSquadModal?.members?.length ?? 0} Players
+                  </Text>
+                </View>
+                <View style={{ flex: 1, minWidth: 150 }}>
+                  <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Head Coach</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a', marginTop: 2 }}>
+                    {selectedSquadModal?.coach?.name || 'Head Coach'}
+                  </Text>
+                  {Boolean(selectedSquadModal?.coach?.email) && (
+                    <Text style={{ fontSize: 11.5, color: '#475569' }}>{selectedSquadModal.coach.email}</Text>
+                  )}
+                </View>
+                <View style={{ flex: 1, minWidth: 120 }}>
+                  <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Approval Status</Text>
+                  <Text style={{
+                    fontSize: 13,
+                    fontWeight: '800',
+                    marginTop: 2,
+                    color: selectedSquadModal?.status === 'Approved' ? '#059669' : selectedSquadModal?.status === 'Rejected' ? '#dc2626' : '#d97706'
+                  }}>
+                    {selectedSquadModal?.status || 'Pending'}
+                  </Text>
+                </View>
+              </View>
+
               <View style={styles.squadTableContainer}>
                 <View style={styles.squadTableHeader}>
                   <Text style={[styles.thCell, { width: 45 }]}>#</Text>
