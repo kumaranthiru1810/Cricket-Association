@@ -1180,4 +1180,38 @@ router.post('/contact', contactRateLimiter, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/portal/home-popup
+ * Public endpoint returning the dynamic Home Portal Popup configuration
+ */
+router.get('/home-popup', async (req, res) => {
+  try {
+    await db.initDb();
+    const record = await db.models.MasterSetting.findOne({ id: 'PORTAL_HOME_POPUP' }).lean();
+    let config = {
+      enabled: false,
+      presetKey: 'match_notice',
+      badgeText: 'OFFICIAL MATCH & RULES NOTICE',
+      imageKey: 'stadium',
+      customImageUrl: '',
+      title: 'Virudhunagar Premier League 2026 — Match & Rules Notice',
+      message: 'Check upcoming match schedules, venue allocations, and official CFVD tournament rules & regulations before match day.',
+      highlightText: 'All participating teams must report 45 minutes prior to toss with verified squad IDs.',
+      buttonText: 'View Match Schedules →',
+      buttonDestination: 'matches'
+    };
+
+    if (record?.description) {
+      try {
+        const parsed = JSON.parse(record.description);
+        config = { ...config, ...parsed, enabled: Boolean(record.is_active) };
+      } catch (_e) {}
+    }
+
+    res.json({ success: true, popup: config });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;

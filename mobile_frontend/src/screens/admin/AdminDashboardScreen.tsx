@@ -43,6 +43,7 @@ import CalculationSettingsManagement from '../../admin/components/CalculationSet
 import SettingsPage from '../../admin/pages/SettingsPage';
 import UsersPage from '../../admin/pages/UsersPage';
 import DualAdminSecurityModal from '../../components/admin/DualAdminSecurityModal';
+import { HomePopupManagerModal } from '../../components/admin/HomePopupManagerModal';
 import {
   getKolkataNow,
   getTodayKolkata,
@@ -719,6 +720,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
   // News Publish form
   const [newNewsTitle, setNewNewsTitle] = useState<string>('');
+  const [showHomePopupModal, setShowHomePopupModal] = useState<boolean>(false);
   const [newNewsCategory, setNewNewsCategory] = useState<string>('ANNOUNCEMENT');
   const [newNewsAuthor, setNewNewsAuthor] = useState<string>('CFVD Secretariat');
 
@@ -4521,19 +4523,47 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             {activeTab === 'content' && (
               <View>
                 {/* Header Box */}
-                <View style={styles.contentTopCard}>
-                  <View style={styles.contentTopLeft}>
+                <View style={[styles.contentTopCard, { flexWrap: 'wrap', gap: 12 }]}>
+                  <View style={[styles.contentTopLeft, { flex: 1, minWidth: 240 }]}>
                     <View style={styles.goldIconBox}>
                       <Text style={{ fontSize: 16 }}>📰</Text>
                     </View>
-                    <View>
+                    <View style={{ flex: 1 }}>
                       <Text style={styles.contentTopTitle}>Official News, Circulars & Media Management</Text>
                       <Text style={styles.contentTopSub}>
                         Create, publish, and delete official tournament announcements, press releases, match reports, and circulars shown across the portal.
                       </Text>
                     </View>
                   </View>
+                  <TouchableOpacity
+                    onPress={() => setShowHomePopupModal(true)}
+                    activeOpacity={0.85}
+                    style={{
+                      backgroundColor: '#f59e0b',
+                      paddingHorizontal: 14,
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
+                      shadowColor: '#d97706',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.25,
+                      shadowRadius: 4,
+                      elevation: 3
+                    }}
+                  >
+                    <Text style={{ fontSize: 15 }}>📢</Text>
+                    <Text style={{ color: '#0f172a', fontWeight: '900', fontSize: 13 }}>
+                      Home Popup Alert
+                    </Text>
+                  </TouchableOpacity>
                 </View>
+
+                <HomePopupManagerModal
+                  visible={showHomePopupModal}
+                  onClose={() => setShowHomePopupModal(false)}
+                />
 
                 {/* Publish Form Box */}
                 <View style={styles.newsFormCard}>

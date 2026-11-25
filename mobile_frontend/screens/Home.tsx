@@ -31,7 +31,8 @@ import { StatusBar } from 'expo-status-bar';
 import { io } from 'socket.io-client';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppNavigation } from '../src/navigation/AppNavigator';
-import { ScorerApi, PlayerApi, getCurrentUser, setCurrentUser, setAuthToken, logoutAndClearAllSessions, SOCKET_URL, resolveImageUrl } from '../src/services/api';
+import { ScorerApi, PlayerApi, getCurrentUser, setCurrentUser, setAuthToken, logoutAndClearAllSessions, SOCKET_URL, API_URL, resolveImageUrl } from '../src/services/api';
+import { HomePopupConfig, resolveHomePopupImageSource } from '../src/utils/homePopupAssets';
 import { getStoredAdminToken, getStoredAdminUser } from '../src/admin/services/adminApi';
 import { MatchHighlightsBanner } from '../src/components/common/MatchHighlightsBanner';
 import {
@@ -235,6 +236,26 @@ export default function HomeScreen() {
       ])
     ).start();
   }, [pulseAnim]);
+
+  // Home Portal Dynamic Popup State
+  const [homePopupConfig, setHomePopupConfig] = useState<HomePopupConfig | null>(null);
+  const [showHomePopup, setShowHomePopup] = useState<boolean>(false);
+
+  useEffect(() => {
+    let mounted = true;
+    fetch(`${API_URL}/portal/home-popup`)
+      .then(r => r.json())
+      .then(data => {
+        if (mounted && data?.success && data.popup?.enabled) {
+          setHomePopupConfig(data.popup);
+          setShowHomePopup(true);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Section Scroll Reference
   const mainScrollRef = useRef<any>(null);
@@ -4572,6 +4593,149 @@ export default function HomeScreen() {
       {/* Full-Screen Video Preloader / Intro Player */}
       {showIntroVideo && (
         <VideoPreloader onComplete={() => setShowIntroVideo(false)} />
+      )}
+
+      {/* Dynamic Admin-Controlled Home Portal Popup */}
+      {homePopupConfig && (
+        <Modal
+          visible={showHomePopup}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowHomePopup(false)}
+        >
+          <View style={{
+            flex: 1,
+            backgroundColor: 'rgba(15, 23, 42, 0.72)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 16
+          }}>
+            <View style={{
+              width: '100%',
+              maxWidth: 460,
+              backgroundColor: '#ffffff',
+              borderRadius: 18,
+              overflow: 'hidden',
+              borderWidth: 1.5,
+              borderColor: '#fde68a',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 12 },
+              shadowOpacity: 0.25,
+              shadowRadius: 24,
+              elevation: 14
+            }}>
+              <View style={{ position: 'relative' }}>
+                <Image
+                  source={resolveHomePopupImageSource(homePopupConfig.imageKey, homePopupConfig.customImageUrl)}
+                  style={{ width: '100%', height: 160 }}
+                  resizeMode="cover"
+                />
+                <View style={{
+                  position: 'absolute',
+                  top: 12,
+                  left: 12,
+                  backgroundColor: '#d97706',
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  borderRadius: 6
+                }}>
+                  <Text style={{ color: '#ffffff', fontSize: 10.5, fontWeight: '800' }}>
+                    🏏 {homePopupConfig.badgeText || 'OFFICIAL CFVD NOTICE'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setShowHomePopup(false)}
+                  activeOpacity={0.8}
+                  style={{
+                    position: 'absolute',
+                    top: 10,
+                    right: 10,
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <Text style={{ color: '#ffffff', fontSize: 14, fontWeight: '800' }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ padding: 18 }}>
+                <Text style={{ fontSize: 17, fontWeight: '900', color: '#0f172a', lineHeight: 23 }}>
+                  {homePopupConfig.title}
+                </Text>
+                {Boolean(homePopupConfig.message) && (
+                  <Text style={{ fontSize: 13.5, color: '#475569', marginTop: 8, lineHeight: 20 }}>
+                    {homePopupConfig.message}
+                  </Text>
+                )}
+                {Boolean(homePopupConfig.highlightText) && (
+                  <View style={{
+                    backgroundColor: '#fffbeb',
+                    borderWidth: 1,
+                    borderColor: '#fde68a',
+                    borderRadius: 10,
+                    paddingHorizontal: 12,
+                    paddingVertical: 9,
+                    marginTop: 12
+                  }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#92400e', lineHeight: 17 }}>
+                      ⚖️ {homePopupConfig.highlightText}
+                    </Text>
+                  </View>
+                )}
+
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShowHomePopup(false);
+                      const dest = homePopupConfig.buttonDestination;
+                      if (dest === 'register') {
+                        router.push('/register');
+                      } else if (dest === 'rules') {
+                        scrollToSection('rules');
+                      } else if (dest === 'tournaments') {
+                        scrollToSection('tournaments');
+                      } else {
+                        scrollToSection('matchCentre');
+                      }
+                    }}
+                    activeOpacity={0.85}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#d97706',
+                      borderRadius: 10,
+                      paddingVertical: 12,
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <Text style={{ color: '#ffffff', fontSize: 13.5, fontWeight: '800' }}>
+                      {homePopupConfig.buttonText || 'View Details →'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setShowHomePopup(false)}
+                    activeOpacity={0.8}
+                    style={{
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: '#cbd5e1',
+                      backgroundColor: '#f8fafc',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <Text style={{ color: '#475569', fontSize: 13, fontWeight: '700' }}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </View>
+        </Modal>
       )}
     </View>
   );

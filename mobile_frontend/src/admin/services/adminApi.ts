@@ -630,5 +630,16 @@ export const adminApi = {
       }
       throw adminErr;
     }
+  },
+
+  getHomePopup: async () => {
+    return adminRequest('/admin/home-popup');
+  },
+
+  updateHomePopup: async (config: any) => {
+    return adminRequest('/admin/home-popup', {
+      method: 'PUT',
+      body: JSON.stringify(config)
+    });
   }
 };

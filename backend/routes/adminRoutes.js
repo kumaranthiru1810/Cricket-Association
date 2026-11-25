@@ -824,6 +824,79 @@ router.post('/master-settings', (req, res) => masterSettingController.createSett
 router.put('/master-settings/:id', (req, res) => masterSettingController.updateSetting(req, res));
 router.delete('/master-settings/:id', (req, res) => masterSettingController.deleteSetting(req, res));
 
+// HOME PORTAL POPUP ALERT (Admin Dynamic Config)
+router.get('/home-popup', async (req, res) => {
+  try {
+    const db = require('../config/db');
+    await db.initDb();
+    const record = await db.models.MasterSetting.findOne({ id: 'PORTAL_HOME_POPUP' }).lean();
+    let config = {
+      enabled: false,
+      presetKey: 'match_notice',
+      badgeText: 'OFFICIAL MATCH & RULES NOTICE',
+      imageKey: 'stadium',
+      customImageUrl: '',
+      title: 'Virudhunagar Premier League 2026 — Match & Rules Notice',
+      message: 'Check upcoming match schedules, venue allocations, and official CFVD tournament rules & regulations before match day.',
+      highlightText: 'All participating teams must report 45 minutes prior to toss with verified squad IDs.',
+      buttonText: 'View Match Schedules →',
+      buttonDestination: 'matches'
+    };
+    if (record?.description) {
+      try {
+        const parsed = JSON.parse(record.description);
+        config = { ...config, ...parsed, enabled: Boolean(record.is_active) };
+      } catch (_e) {}
+    }
+    res.json({ success: true, popup: config });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.put('/home-popup', async (req, res) => {
+  try {
+    const db = require('../config/db');
+    await db.initDb();
+    const payload = {
+      enabled: Boolean(req.body.enabled),
+      presetKey: String(req.body.presetKey || 'custom'),
+      badgeText: String(req.body.badgeText || 'OFFICIAL CFVD NOTICE').trim(),
+      imageKey: String(req.body.imageKey || 'stadium'),
+      customImageUrl: String(req.body.customImageUrl || '').trim(),
+      title: String(req.body.title || '').trim(),
+      message: String(req.body.message || '').trim(),
+      highlightText: String(req.body.highlightText || '').trim(),
+      buttonText: String(req.body.buttonText || 'View Details →').trim(),
+      buttonDestination: String(req.body.buttonDestination || 'matches')
+    };
+
+    if (!payload.title) {
+      return res.status(400).json({ success: false, error: 'Popup title is required.' });
+    }
+
+    await db.models.MasterSetting.findOneAndUpdate(
+      { id: 'PORTAL_HOME_POPUP' },
+      {
+        $set: {
+          id: 'PORTAL_HOME_POPUP',
+          category: 'portal_home_popup',
+          name: 'Home Portal Popup',
+          code: 'HOME_POPUP_CONFIG',
+          description: JSON.stringify(payload),
+          is_active: payload.enabled,
+          updated_at: new Date()
+        }
+      },
+      { upsert: true, new: true }
+    );
+
+    res.json({ success: true, popup: payload, message: 'Home Portal Popup settings saved.' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ACCESS CONTROL & DUAL-ADMIN APPROVAL SYSTEM
 // ─────────────────────────────────────────────────────────────────────────────
