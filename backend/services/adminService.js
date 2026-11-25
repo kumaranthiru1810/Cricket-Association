@@ -123,11 +123,10 @@ async function getOfficials() {
     db.models.User.find({
       $or: [
         { role: { $in: ['UMPIRE', 'SCORER'] } },
-        { role: { $regex: /scorer|umpire/i } },
-        { scorer_details: { $exists: true, $ne: null } },
-        { umpire_details: { $exists: true, $ne: null } },
+        { role: { $regex: /^(scorer|umpire)$/i } },
         { id: { $regex: /^(SCR|UMP)/i } }
-      ]
+      ],
+      status: { $nin: ['REJECTED', 'SUSPENDED'] }
     }).sort({ name: 1 }).lean()
   ]);
 
@@ -140,19 +139,19 @@ async function getOfficials() {
       seenIds.add(uid);
       let effectiveRole = (u.role || '').toUpperCase();
       if (effectiveRole !== 'SCORER' && effectiveRole !== 'UMPIRE') {
-        if (u.scorer_details) effectiveRole = 'SCORER';
-        else if (u.umpire_details) effectiveRole = 'UMPIRE';
-        else if (uid.startsWith('SCR')) effectiveRole = 'SCORER';
-        else if (uid.startsWith('UMP')) effectiveRole = 'UMPIRE';
+        if (uid.toUpperCase().startsWith('SCR')) effectiveRole = 'SCORER';
+        else if (uid.toUpperCase().startsWith('UMP')) effectiveRole = 'UMPIRE';
       }
-      list.push({
-        id: uid,
-        name: u.name,
-        role: effectiveRole || 'SCORER',
-        email: u.email,
-        phone: u.mobile || '—',
-        status: u.status || 'ACTIVE'
-      });
+      if (effectiveRole === 'SCORER' || effectiveRole === 'UMPIRE') {
+        list.push({
+          id: uid,
+          name: u.name,
+          role: effectiveRole,
+          email: u.email,
+          phone: u.mobile || '—',
+          status: u.status || 'ACTIVE'
+        });
+      }
     }
   });
 

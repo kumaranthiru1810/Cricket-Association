@@ -1110,18 +1110,23 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     return list;
   }, [officialsList, umpires]);
 
-  // Comprehensive accredited match scorers for dynamic selection
+  // Comprehensive accredited match scorers for dynamic selection (strictly SCORER role only)
   const availableScorers = useMemo(() => {
     const list: any[] = [];
     const seen = new Set<string>();
+    const seenEmails = new Set<string>();
 
     (officialsList || []).forEach((o: any) => {
       const r = (o.role || o.type || '').toUpperCase();
-      const isScorer = r.includes('SCOR') || (o.id && String(o.id).toUpperCase().startsWith('SCR')) || Boolean(o.scorer_details) || !o.role;
-      if (isScorer) {
+      const statusUpper = (o.status || '').toUpperCase();
+      const isInactive = statusUpper === 'REJECTED' || statusUpper === 'SUSPENDED' || statusUpper === 'PENDING';
+      const isScorer = r === 'SCORER' || r.includes('SCOR') || (o.id && String(o.id).toUpperCase().startsWith('SCR'));
+      if (isScorer && !isInactive) {
         const id = o.id || o.scorerId;
-        if (id && !seen.has(id)) {
+        const emailKey = (o.email || '').trim().toLowerCase();
+        if (id && !seen.has(id) && (!emailKey || !seenEmails.has(emailKey))) {
           seen.add(id);
+          if (emailKey) seenEmails.add(emailKey);
           list.push({
             id,
             name: o.name || o.scorerName || id,
@@ -1135,8 +1140,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
     (scorers || []).forEach((s: any) => {
       const id = s.scorerId || s.id;
-      if (id && !seen.has(id)) {
+      const statusUpper = (s.status || '').toUpperCase();
+      const isApproved = !statusUpper || statusUpper === 'APPROVED' || statusUpper === 'ACTIVE';
+      const emailKey = (s.email || '').trim().toLowerCase();
+      if (id && isApproved && !seen.has(id) && (!emailKey || !seenEmails.has(emailKey))) {
         seen.add(id);
+        if (emailKey) seenEmails.add(emailKey);
         list.push({
           id,
           name: s.scorerName || s.name || id,
