@@ -1009,13 +1009,35 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
     setEditPlayerModalVisible(true);
   };
 
-  const handleSaveNewPlayer = async () => {
-    if (!playerForm.name.trim()) {
-      setPlayerFormFeedback({ message: 'Player name is required.', type: 'error' });
-      return;
+  const validatePlayerForm = (): string | null => {
+    const cleanName = playerForm.name.trim();
+    if (!cleanName || cleanName.length < 2) {
+      return 'Full Name must be at least 2 characters.';
     }
-    if (!playerForm.email.trim()) {
-      setPlayerFormFeedback({ message: 'Player email is required.', type: 'error' });
+    if (!/^[A-Za-z][A-Za-z\s.'-]{1,}$/.test(cleanName)) {
+      return 'Full Name should contain only letters, spaces, and dots.';
+    }
+    const cleanEmail = playerForm.email.trim().toLowerCase();
+    if (!cleanEmail || !/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(cleanEmail)) {
+      return 'Please enter a valid email address (e.g. ravi@gmail.com).';
+    }
+    const cleanMobile = playerForm.mobile.replace(/\D/g, '');
+    if (!/^\d{10}$/.test(cleanMobile)) {
+      return 'Please enter a valid 10-digit mobile number (numbers only).';
+    }
+    if (playerForm.jerseyNumber.trim()) {
+      const jNum = Number(playerForm.jerseyNumber.trim());
+      if (!Number.isInteger(jNum) || jNum < 1 || jNum > 999) {
+        return 'Jersey Number must be between 1 and 999.';
+      }
+    }
+    return null;
+  };
+
+  const handleSaveNewPlayer = async () => {
+    const validationError = validatePlayerForm();
+    if (validationError) {
+      setPlayerFormFeedback({ message: validationError, type: 'error' });
       return;
     }
     setIsSavingPlayer(true);
@@ -1027,12 +1049,12 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
 
       await TeamApi.addPlayer({
         name: playerForm.name.trim(),
-        email: playerForm.email.trim(),
+        email: playerForm.email.trim().toLowerCase(),
         role: playerForm.role,
         jerseyNumber: playerForm.jerseyNumber ? Number(playerForm.jerseyNumber) : undefined,
         battingStyle: playerForm.battingStyle,
         bowlingStyle: finalBowling,
-        mobile: playerForm.mobile
+        mobile: playerForm.mobile.replace(/\D/g, '')
       });
       setPlayerFormFeedback({ message: 'Player added successfully!', type: 'success' });
       const squadRes = await TeamApi.getSquad();
@@ -1048,8 +1070,9 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
 
   const handleUpdatePlayer = async () => {
     if (!editingPlayer) return;
-    if (!playerForm.name.trim()) {
-      setPlayerFormFeedback({ message: 'Player name is required.', type: 'error' });
+    const validationError = validatePlayerForm();
+    if (validationError) {
+      setPlayerFormFeedback({ message: validationError, type: 'error' });
       return;
     }
     setIsSavingPlayer(true);
@@ -1062,12 +1085,12 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
 
       await TeamApi.updatePlayer(playerId, {
         name: playerForm.name.trim(),
-        email: playerForm.email.trim(),
+        email: playerForm.email.trim().toLowerCase(),
         role: playerForm.role,
         jerseyNumber: playerForm.jerseyNumber ? Number(playerForm.jerseyNumber) : undefined,
         battingStyle: playerForm.battingStyle,
         bowlingStyle: finalBowling,
-        mobile: playerForm.mobile
+        mobile: playerForm.mobile.replace(/\D/g, '')
       });
       setPlayerFormFeedback({ message: 'Player updated successfully!', type: 'success' });
       const squadRes = await TeamApi.getSquad();
@@ -1241,9 +1264,10 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
           style={styles.playerFormInput}
           placeholder="e.g. 7"
           placeholderTextColor="#94a3b8"
-          keyboardType="numeric"
+          keyboardType="number-pad"
+          maxLength={3}
           value={playerForm.jerseyNumber}
-          onChangeText={v => setPlayerForm(f => ({ ...f, jerseyNumber: v }))}
+          onChangeText={v => setPlayerForm(f => ({ ...f, jerseyNumber: v.replace(/\D/g, '').slice(0, 3) }))}
         />
 
         {/* Batting Style Select */}
@@ -1294,14 +1318,15 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
         )}
 
         {/* Mobile Number */}
-        <Text style={styles.playerFormLabel}>Mobile Number</Text>
+        <Text style={styles.playerFormLabel}>Mobile Number <Text style={{ color: '#ef4444' }}>*</Text> (10 Digits)</Text>
         <TextInput
           style={styles.playerFormInput}
-          placeholder="e.g. 9876543210"
+          placeholder="Enter 10-digit mobile number"
           placeholderTextColor="#94a3b8"
-          keyboardType="phone-pad"
+          keyboardType="number-pad"
+          maxLength={10}
           value={playerForm.mobile}
-          onChangeText={v => setPlayerForm(f => ({ ...f, mobile: v }))}
+          onChangeText={v => setPlayerForm(f => ({ ...f, mobile: v.replace(/\D/g, '').slice(0, 10) }))}
         />
       </View>
     );
@@ -3548,14 +3573,14 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
         onRequestClose={() => setAddPlayerModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { maxHeight: '92%', width: '95%', maxWidth: 500 }]}>
+          <View style={[styles.modalContainer, { maxHeight: '92%', width: '95%', maxWidth: 500 }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalHeaderTitle}>➕ Add New Player</Text>
-              <TouchableOpacity onPress={() => setAddPlayerModalVisible(false)}>
-                <Text style={styles.modalCloseBtn}>✕</Text>
+              <TouchableOpacity onPress={() => setAddPlayerModalVisible(false)} style={styles.modalCloseBtn}>
+                <Text style={styles.modalCloseBtnText}>✕</Text>
               </TouchableOpacity>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={{ padding: 16 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ padding: 18, backgroundColor: '#ffffff' }}>
               {renderPlayerFormFields()}
 
               {/* Feedback */}
@@ -3587,14 +3612,14 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
         onRequestClose={() => setEditPlayerModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { maxHeight: '92%', width: '95%', maxWidth: 500 }]}>
+          <View style={[styles.modalContainer, { maxHeight: '92%', width: '95%', maxWidth: 500 }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalHeaderTitle}>✏️ Edit Player</Text>
-              <TouchableOpacity onPress={() => setEditPlayerModalVisible(false)}>
-                <Text style={styles.modalCloseBtn}>✕</Text>
+              <TouchableOpacity onPress={() => setEditPlayerModalVisible(false)} style={styles.modalCloseBtn}>
+                <Text style={styles.modalCloseBtnText}>✕</Text>
               </TouchableOpacity>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={{ padding: 16 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ padding: 18, backgroundColor: '#ffffff' }}>
               {renderPlayerFormFields()}
 
               {/* Feedback */}
