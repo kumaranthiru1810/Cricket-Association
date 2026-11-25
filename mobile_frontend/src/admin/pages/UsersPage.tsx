@@ -33,6 +33,8 @@ export const UsersPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
 
   // Edit / View Modal
   const [activeUser, setActiveUser] = useState<any | null>(null);
@@ -600,40 +602,93 @@ export const UsersPage: React.FC = () => {
         }
       />
 
-      {/* Role Filter Bar */}
-      <View style={styles.filtersBar}>
-        <View style={styles.filterGroup}>
-          <Text style={styles.filterLabel}>Role Filter:</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipsRow}>
-            {['ALL', 'ADMIN', 'SCORER', 'PLAYER', 'USER'].map(r => (
+      {/* Role & Status Filter Dropdowns */}
+      <View style={[styles.filtersBar, { zIndex: 50, position: 'relative' }]}>
+        <View style={styles.filterDropdownsRow}>
+          {/* Role Filter Dropdown */}
+          <View style={[styles.filterDropdownCol, roleDropdownOpen && { zIndex: 100 }]}>
+            <Text style={styles.filterLabel}>Role Filter:</Text>
+            <View style={{ position: 'relative', flex: 1 }}>
               <TouchableOpacity
-                key={r}
-                style={[styles.filterChip, roleFilter === r && styles.filterChipActive]}
-                onPress={() => setRoleFilter(r)}
+                style={[styles.dropdownTrigger, roleDropdownOpen && styles.dropdownTriggerActive]}
+                onPress={() => {
+                  setRoleDropdownOpen(prev => !prev);
+                  setStatusDropdownOpen(false);
+                }}
+                activeOpacity={0.8}
               >
-                <Text style={[styles.filterChipText, roleFilter === r && styles.filterChipTextActive]}>
-                  {r === 'ADMIN' ? 'ADMINISTRATORS' : r}
+                <Text style={styles.dropdownTriggerText} numberOfLines={1}>
+                  {roleFilter === 'ADMIN' ? 'ADMINISTRATORS' : roleFilter}
                 </Text>
+                <Text style={styles.dropdownCaret}>{roleDropdownOpen ? '▲' : '▼'}</Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+              {roleDropdownOpen && (
+                <View style={styles.dropdownMenu}>
+                  {['ALL', 'ADMIN', 'SCORER', 'PLAYER', 'USER'].map(r => {
+                    const label = r === 'ADMIN' ? 'ADMINISTRATORS' : r;
+                    const isSelected = roleFilter === r;
+                    return (
+                      <TouchableOpacity
+                        key={r}
+                        style={[styles.dropdownMenuItem, isSelected && styles.dropdownMenuItemActive]}
+                        onPress={() => {
+                          setRoleFilter(r);
+                          setRoleDropdownOpen(false);
+                        }}
+                      >
+                        <Text style={[styles.dropdownMenuItemText, isSelected && styles.dropdownMenuItemTextActive]}>
+                          {label}
+                        </Text>
+                        {isSelected && <Text style={styles.dropdownCheck}>✓</Text>}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          </View>
 
-        <View style={styles.filterGroup}>
-          <Text style={styles.filterLabel}>Status:</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipsRow}>
-            {['ALL', 'ACTIVE', 'PENDING', 'SUSPENDED'].map(s => (
+          {/* Status Filter Dropdown */}
+          <View style={[styles.filterDropdownCol, statusDropdownOpen && { zIndex: 100 }]}>
+            <Text style={styles.filterLabel}>Status:</Text>
+            <View style={{ position: 'relative', flex: 1 }}>
               <TouchableOpacity
-                key={s}
-                style={[styles.filterChip, statusFilter === s && styles.filterChipActive]}
-                onPress={() => setStatusFilter(s)}
+                style={[styles.dropdownTrigger, statusDropdownOpen && styles.dropdownTriggerActive]}
+                onPress={() => {
+                  setStatusDropdownOpen(prev => !prev);
+                  setRoleDropdownOpen(false);
+                }}
+                activeOpacity={0.8}
               >
-                <Text style={[styles.filterChipText, statusFilter === s && styles.filterChipTextActive]}>
-                  {s}
+                <Text style={styles.dropdownTriggerText} numberOfLines={1}>
+                  {statusFilter}
                 </Text>
+                <Text style={styles.dropdownCaret}>{statusDropdownOpen ? '▲' : '▼'}</Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
+              {statusDropdownOpen && (
+                <View style={styles.dropdownMenu}>
+                  {['ALL', 'ACTIVE', 'PENDING', 'SUSPENDED'].map(s => {
+                    const isSelected = statusFilter === s;
+                    return (
+                      <TouchableOpacity
+                        key={s}
+                        style={[styles.dropdownMenuItem, isSelected && styles.dropdownMenuItemActive]}
+                        onPress={() => {
+                          setStatusFilter(s);
+                          setStatusDropdownOpen(false);
+                        }}
+                      >
+                        <Text style={[styles.dropdownMenuItemText, isSelected && styles.dropdownMenuItemTextActive]}>
+                          {s}
+                        </Text>
+                        {isSelected && <Text style={styles.dropdownCheck}>✓</Text>}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          </View>
         </View>
       </View>
 
@@ -1085,6 +1140,91 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8
+  },
+  filterDropdownsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 14
+  },
+  filterDropdownCol: {
+    flex: 1,
+    minWidth: 220,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    position: 'relative'
+  },
+  dropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 38
+  },
+  dropdownTriggerActive: {
+    borderColor: '#0f2452',
+    backgroundColor: '#ffffff'
+  },
+  dropdownTriggerText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0f172a',
+    flex: 1,
+    marginRight: 8
+  },
+  dropdownCaret: {
+    fontSize: 10,
+    color: '#64748b',
+    fontWeight: '800'
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: 42,
+    left: 0,
+    right: 0,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    elevation: 12,
+    zIndex: 999,
+    overflow: 'hidden'
+  },
+  dropdownMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9'
+  },
+  dropdownMenuItemActive: {
+    backgroundColor: '#eff6ff'
+  },
+  dropdownMenuItemText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#334155'
+  },
+  dropdownMenuItemTextActive: {
+    fontWeight: '800',
+    color: '#0f2452'
+  },
+  dropdownCheck: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0f2452'
   },
   filterChipsRow: {
     flexDirection: 'row',
