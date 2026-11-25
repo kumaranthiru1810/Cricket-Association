@@ -495,6 +495,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   const [teamSearchQuery, setTeamSearchQuery] = useState<string>('');
 
   const [umpireFilter, setUmpireFilter] = useState<FilterStatus>('all');
+  const [umpireFilterDropdownOpen, setUmpireFilterDropdownOpen] = useState<boolean>(false);
   const [umpireSearchQuery, setUmpireSearchQuery] = useState<string>('');
   const [selectedUmpireForView, setSelectedUmpireForView] = useState<any | null>(null);
 
@@ -3301,9 +3302,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                 {/* Dynamic Live Umpire Status Strip */}
                 <View style={[styles.dynamicRegistryStrip, { backgroundColor: '#f0f9ff', borderColor: '#bae6fd' }]}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
                     <Text style={{ fontSize: 16 }}>⚖️</Text>
-                    <Text style={[styles.dynamicRegistryText, { color: '#0369a1' }]}>
+                    <Text style={[styles.dynamicRegistryText, { color: '#0369a1', flexShrink: 1 }]}>
                       LIVE UMPIRE REGISTRY • {umpireTotal} Officials • {umpireApproved} Accredited • {umpirePending} Pending Review
                     </Text>
                   </View>
@@ -3328,7 +3329,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 </View>
 
                 {/* SEARCH & FILTER TOOLBAR */}
-                <View style={styles.toolbarCard}>
+                <View style={[styles.toolbarCard, { zIndex: 50, position: 'relative' }]}>
                   <View style={styles.searchBox}>
                     <Text style={styles.searchIcon}>🔍</Text>
                     <TextInput
@@ -3340,43 +3341,95 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     />
                   </View>
 
-                  <View style={styles.filterPillsGroup}>
+                  <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 10, position: 'relative', zIndex: 100 }, !isDesktop && { width: '100%', justifyContent: 'space-between' }]}>
                     <Text style={styles.filterStatusLabel}>Filter Status:</Text>
-                    <TouchableOpacity
-                      style={[styles.filterPill, umpireFilter === 'all' && styles.filterPillActive]}
-                      onPress={() => setUmpireFilter('all')}
-                    >
-                      <Text style={[styles.filterPillText, umpireFilter === 'all' && styles.filterPillTextActive]}>
-                        All ({umpireTotal})
-                      </Text>
-                    </TouchableOpacity>
+                    <View style={{ position: 'relative', minWidth: 165, flex: !isDesktop ? 1 : undefined }}>
+                      <TouchableOpacity
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          backgroundColor: '#f8fafc',
+                          borderWidth: 1.5,
+                          borderColor: umpireFilterDropdownOpen ? '#0284c7' : '#cbd5e1',
+                          borderRadius: 8,
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          gap: 8
+                        }}
+                        onPress={() => setUmpireFilterDropdownOpen(prev => !prev)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0f172a' }}>
+                          {umpireFilter === 'all'
+                            ? `All (${umpireTotal})`
+                            : umpireFilter === 'Pending'
+                              ? `Pending (${umpirePending})`
+                              : umpireFilter === 'Approved'
+                                ? `Approved (${umpireApproved})`
+                                : `Rejected (${umpireRejected})`}
+                        </Text>
+                        <Text style={{ fontSize: 10, color: '#64748b', fontWeight: '800' }}>
+                          {umpireFilterDropdownOpen ? '▲' : '▼'}
+                        </Text>
+                      </TouchableOpacity>
 
-                    <TouchableOpacity
-                      style={[styles.filterPill, umpireFilter === 'Pending' && styles.filterPillActive]}
-                      onPress={() => setUmpireFilter('Pending')}
-                    >
-                      <Text style={[styles.filterPillText, umpireFilter === 'Pending' && styles.filterPillTextActive]}>
-                        Pending ({umpirePending})
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.filterPill, umpireFilter === 'Approved' && styles.filterPillActive]}
-                      onPress={() => setUmpireFilter('Approved')}
-                    >
-                      <Text style={[styles.filterPillText, umpireFilter === 'Approved' && styles.filterPillTextActive]}>
-                        Approved ({umpireApproved})
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.filterPill, umpireFilter === 'Rejected' && styles.filterPillActive]}
-                      onPress={() => setUmpireFilter('Rejected')}
-                    >
-                      <Text style={[styles.filterPillText, umpireFilter === 'Rejected' && styles.filterPillTextActive]}>
-                        Rejected ({umpireRejected})
-                      </Text>
-                    </TouchableOpacity>
+                      {umpireFilterDropdownOpen && (
+                        <View
+                          style={{
+                            position: 'absolute',
+                            top: 42,
+                            left: 0,
+                            right: 0,
+                            minWidth: 185,
+                            backgroundColor: '#ffffff',
+                            borderWidth: 1,
+                            borderColor: '#cbd5e1',
+                            borderRadius: 8,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 6 },
+                            shadowOpacity: 0.14,
+                            shadowRadius: 12,
+                            elevation: 12,
+                            zIndex: 9999,
+                            overflow: 'hidden'
+                          }}
+                        >
+                          {[
+                            { key: 'all' as FilterStatus, label: `All (${umpireTotal})` },
+                            { key: 'Pending' as FilterStatus, label: `Pending (${umpirePending})` },
+                            { key: 'Approved' as FilterStatus, label: `Approved (${umpireApproved})` },
+                            { key: 'Rejected' as FilterStatus, label: `Rejected (${umpireRejected})` }
+                          ].map(opt => {
+                            const isSelected = umpireFilter === opt.key;
+                            return (
+                              <TouchableOpacity
+                                key={opt.key}
+                                style={{
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  paddingHorizontal: 12,
+                                  paddingVertical: 10,
+                                  backgroundColor: isSelected ? '#f0f9ff' : '#ffffff',
+                                  borderBottomWidth: 1,
+                                  borderBottomColor: '#f1f5f9'
+                                }}
+                                onPress={() => {
+                                  setUmpireFilter(opt.key);
+                                  setUmpireFilterDropdownOpen(false);
+                                }}
+                              >
+                                <Text style={{ fontSize: 12.5, fontWeight: isSelected ? '800' : '600', color: isSelected ? '#0369a1' : '#334155' }}>
+                                  {opt.label}
+                                </Text>
+                                {isSelected && <Text style={{ fontSize: 12, fontWeight: '800', color: '#0284c7' }}>✓</Text>}
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      )}
+                    </View>
                   </View>
                 </View>
 
@@ -3407,9 +3460,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           ]}
                         >
                           <View style={styles.itemCardHeaderRow}>
-                            <View style={styles.itemTitleGroup}>
+                            <View style={[styles.itemTitleGroup, !isDesktop && { minWidth: '100%' }]}>
                               <View style={styles.itemTitleBadgeRow}>
-                                <Text style={styles.itemNameText}>{u.umpireName}</Text>
+                                <Text style={[styles.itemNameText, { flexShrink: 1 }]}>{u.umpireName}</Text>
                                 {isApproved && (
                                   <View style={styles.badgeConfirmed}>
                                     <Text style={styles.badgeConfirmedText}>✔ Approved</Text>
