@@ -641,5 +641,16 @@ export const adminApi = {
       method: 'PUT',
       body: JSON.stringify(config)
     });
+  },
+
+  getEmblemSequence: async () => {
+    return adminRequest('/admin/emblem-sequence');
+  },
+
+  updateEmblemSequence: async (config: { enabled: boolean; sequence: string[] }) => {
+    return adminRequest('/admin/emblem-sequence', {
+      method: 'PUT',
+      body: JSON.stringify(config)
+    });
   }
 };

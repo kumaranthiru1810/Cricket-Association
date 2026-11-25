@@ -1214,4 +1214,35 @@ router.get('/home-popup', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/portal/emblem-sequence
+ * Public endpoint returning the dynamic Emblem Ball Tap Sequence config for Admin Portal access
+ */
+router.get('/emblem-sequence', async (req, res) => {
+  try {
+    await db.initDb();
+    const record = await db.models.MasterSetting.findOne({ id: 'ADMIN_EMBLEM_SEQUENCE' }).lean();
+    let config = {
+      enabled: true,
+      sequence: ['LEFT', 'RIGHT', 'LEFT', 'RIGHT', 'CENTER']
+    };
+
+    if (record?.description) {
+      try {
+        const parsed = JSON.parse(record.description);
+        if (Array.isArray(parsed.sequence)) {
+          config = {
+            enabled: Boolean(record.is_active),
+            sequence: parsed.sequence
+          };
+        }
+      } catch (_e) {}
+    }
+
+    res.json({ success: true, config });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;

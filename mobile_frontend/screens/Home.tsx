@@ -133,13 +133,42 @@ export default function HomeScreen() {
   // Pattern: LEFT -> RIGHT -> LEFT -> RIGHT -> CENTER (Strictly 5 taps in order)
   const secretTapHistory = useRef<string[]>([]);
   const secretTimeoutRef = useRef<any>(null);
+  const [emblemSequenceConfig, setEmblemSequenceConfig] = useState<{
+    enabled: boolean;
+    sequence: Array<'LEFT' | 'RIGHT' | 'CENTER'>;
+  }>({
+    enabled: true,
+    sequence: ['LEFT', 'RIGHT', 'LEFT', 'RIGHT', 'CENTER']
+  });
+
+  useEffect(() => {
+    let mounted = true;
+    fetch(`${API_URL}/portal/emblem-sequence`)
+      .then(r => r.json())
+      .then(data => {
+        if (mounted && data?.success && data.config) {
+          setEmblemSequenceConfig({
+            enabled: Boolean(data.config.enabled),
+            sequence: Array.isArray(data.config.sequence) ? data.config.sequence : []
+          });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleSecretBallTap = (ball: 'LEFT' | 'RIGHT' | 'CENTER') => {
+    if (!emblemSequenceConfig.enabled || emblemSequenceConfig.sequence.length === 0) {
+      return;
+    }
+
     if (secretTimeoutRef.current) {
       clearTimeout(secretTimeoutRef.current);
     }
 
-    const EXPECTED_SEQUENCE = ['LEFT', 'RIGHT', 'LEFT', 'RIGHT', 'CENTER'];
+    const EXPECTED_SEQUENCE = emblemSequenceConfig.sequence;
     const currentStep = secretTapHistory.current.length;
     const expected = EXPECTED_SEQUENCE[currentStep];
 
@@ -147,8 +176,8 @@ export default function HomeScreen() {
       const nextHistory = [...secretTapHistory.current, ball];
       secretTapHistory.current = nextHistory;
 
-      // When all 5 taps match perfectly:
-      if (nextHistory.length === 5) {
+      // When all taps in the configured sequence match perfectly:
+      if (nextHistory.length === EXPECTED_SEQUENCE.length) {
         secretTapHistory.current = [];
         // Check if user has an active authenticated admin session on this device/mobile
         const existingToken = getStoredAdminToken();

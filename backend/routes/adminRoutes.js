@@ -897,6 +897,72 @@ router.put('/home-popup', async (req, res) => {
   }
 });
 
+// ADMIN EMBLEM STEALTH ACCESS SEQUENCE (Enable/Disable + Custom Ball Order)
+router.get('/emblem-sequence', async (req, res) => {
+  try {
+    const db = require('../config/db');
+    await db.initDb();
+    const record = await db.models.MasterSetting.findOne({ id: 'ADMIN_EMBLEM_SEQUENCE' }).lean();
+    let config = {
+      enabled: true,
+      sequence: ['LEFT', 'RIGHT', 'LEFT', 'RIGHT', 'CENTER']
+    };
+    if (record?.description) {
+      try {
+        const parsed = JSON.parse(record.description);
+        if (Array.isArray(parsed.sequence)) {
+          config = {
+            enabled: Boolean(record.is_active),
+            sequence: parsed.sequence
+          };
+        }
+      } catch (_e) {}
+    }
+    res.json({ success: true, config });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.put('/emblem-sequence', async (req, res) => {
+  try {
+    const db = require('../config/db');
+    await db.initDb();
+    const enabled = Boolean(req.body.enabled);
+    const rawSeq = Array.isArray(req.body.sequence) ? req.body.sequence : [];
+    const allowed = new Set(['LEFT', 'RIGHT', 'CENTER']);
+    const sequence = rawSeq.map(s => String(s).toUpperCase().trim()).filter(s => allowed.has(s));
+
+    if (enabled && (sequence.length < 1 || sequence.length > 12)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Sequence must contain between 1 and 12 ball taps when enabled.'
+      });
+    }
+
+    const payload = { enabled, sequence };
+    await db.models.MasterSetting.findOneAndUpdate(
+      { id: 'ADMIN_EMBLEM_SEQUENCE' },
+      {
+        $set: {
+          id: 'ADMIN_EMBLEM_SEQUENCE',
+          category: 'admin_security',
+          name: 'Admin Emblem Stealth Sequence',
+          code: 'ADMIN_EMBLEM_SEQUENCE',
+          description: JSON.stringify(payload),
+          is_active: enabled,
+          updated_at: new Date()
+        }
+      },
+      { upsert: true, new: true }
+    );
+
+    res.json({ success: true, config: payload, message: 'Admin Emblem access sequence updated.' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ACCESS CONTROL & DUAL-ADMIN APPROVAL SYSTEM
 // ─────────────────────────────────────────────────────────────────────────────

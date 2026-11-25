@@ -23,6 +23,7 @@ import {
   Modal,
   ActivityIndicator,
   Platform,
+  Switch,
   useWindowDimensions
 } from 'react-native';
 import PageHeader from '../components/PageHeader';
@@ -235,6 +236,56 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
   const [itemToDelete, setItemToDelete] = useState<MasterSettingItem | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
+  // Admin Emblem Stealth Sequence State
+  const [emblemEnabled, setEmblemEnabled] = useState<boolean>(true);
+  const [emblemSequence, setEmblemSequence] = useState<Array<'LEFT' | 'RIGHT' | 'CENTER'>>([
+    'LEFT', 'RIGHT', 'LEFT', 'RIGHT', 'CENTER'
+  ]);
+  const [emblemSaving, setEmblemSaving] = useState<boolean>(false);
+  const [emblemExpanded, setEmblemExpanded] = useState<boolean>(false);
+
+  useEffect(() => {
+    adminApi
+      .getEmblemSequence()
+      .then((res: any) => {
+        if (res?.success && res.config) {
+          setEmblemEnabled(Boolean(res.config.enabled));
+          if (Array.isArray(res.config.sequence)) {
+            setEmblemSequence(res.config.sequence);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSaveEmblemSequence = async (nextEnabled = emblemEnabled, nextSeq = emblemSequence) => {
+    if (nextEnabled && nextSeq.length === 0) {
+      showToast('Please add at least 1 ball click to the sequence, or turn off emblem access.', 'error');
+      return;
+    }
+    setEmblemSaving(true);
+    try {
+      const res = await adminApi.updateEmblemSequence({
+        enabled: nextEnabled,
+        sequence: nextSeq
+      });
+      if (res?.success) {
+        showToast(
+          nextEnabled
+            ? `Emblem admin access updated (${nextSeq.length} clicks)`
+            : 'Emblem admin access disabled on Home page',
+          'success'
+        );
+      } else {
+        showToast(res?.error || 'Failed to save emblem sequence.', 'error');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to save emblem sequence.', 'error');
+    } finally {
+      setEmblemSaving(false);
+    }
+  };
+
   // Sync initialCategory when route changes
   useEffect(() => {
     if (initialCategory && initialCategory !== 'association' && initialCategory !== 'settings') {
@@ -428,6 +479,208 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
           ...(activeCategoryDef ? [{ label: activeCategoryDef.label }] : [])
         ]}
       />
+
+      {/* STEALTH ADMIN EMBLEM ACCESS SECURITY CARD */}
+      <View style={{
+        backgroundColor: '#ffffff',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: emblemEnabled ? '#fde68a' : '#e2e8f0',
+        padding: isMobile ? 14 : 16,
+        marginBottom: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 4,
+        elevation: 2
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <View style={{ flex: 1, minWidth: 220 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <Text style={{ fontSize: 15, fontWeight: '900', color: '#0f172a' }}>
+                🔐 Home Emblem Admin Login Trigger
+              </Text>
+              <View style={{
+                backgroundColor: emblemEnabled ? '#dcfce7' : '#fee2e2',
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 6
+              }}>
+                <Text style={{ fontSize: 10.5, fontWeight: '800', color: emblemEnabled ? '#166534' : '#991b1b' }}>
+                  {emblemEnabled ? `ACTIVE • ${emblemSequence.length} CLICKS` : 'DISABLED'}
+                </Text>
+              </View>
+            </View>
+            <Text style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>
+              Control whether tapping the Left, Right &amp; Center balls on the Home crest opens Admin Login, and customize the exact click order.
+            </Text>
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Switch
+              value={emblemEnabled}
+              onValueChange={(val) => {
+                setEmblemEnabled(val);
+                handleSaveEmblemSequence(val, emblemSequence);
+              }}
+              trackColor={{ false: '#cbd5e1', true: '#f59e0b' }}
+              thumbColor="#ffffff"
+            />
+            <TouchableOpacity
+              onPress={() => setEmblemExpanded(prev => !prev)}
+              activeOpacity={0.8}
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 8,
+                backgroundColor: emblemExpanded ? '#fef3c7' : '#f8fafc',
+                borderWidth: 1,
+                borderColor: emblemExpanded ? '#f59e0b' : '#cbd5e1'
+              }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '700', color: emblemExpanded ? '#92400e' : '#334155' }}>
+                {emblemExpanded ? '▲ Hide Sequence' : '⚙️ Configure Sequence'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {emblemExpanded && (
+          <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+            <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#475569', textTransform: 'uppercase', marginBottom: 8 }}>
+              Tap Ball Buttons in Desired Order (1 to 12 Clicks)
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+              {[
+                { key: 'LEFT' as const, label: '+ Left Ball (9 o\'clock)' },
+                { key: 'CENTER' as const, label: '+ Center Ball (In-Flight)' },
+                { key: 'RIGHT' as const, label: '+ Right Ball (3 o\'clock)' }
+              ].map(btn => (
+                <TouchableOpacity
+                  key={btn.key}
+                  disabled={emblemSequence.length >= 12}
+                  onPress={() => setEmblemSequence(prev => (prev.length < 12 ? [...prev, btn.key] : prev))}
+                  activeOpacity={0.8}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    backgroundColor: '#fffbeb',
+                    borderWidth: 1,
+                    borderColor: '#f59e0b',
+                    opacity: emblemSequence.length >= 12 ? 0.5 : 1
+                  }}
+                >
+                  <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#92400e' }}>{btn.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Current Sequence Order */}
+            <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#64748b', marginBottom: 6 }}>
+              Configured Sequence Order ({emblemSequence.length} clicks — tap a step to remove):
+            </Text>
+            <View style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: 6,
+              backgroundColor: '#f8fafc',
+              borderWidth: 1,
+              borderColor: '#e2e8f0',
+              borderRadius: 10,
+              padding: 10,
+              minHeight: 46,
+              alignItems: 'center'
+            }}>
+              {emblemSequence.length === 0 ? (
+                <Text style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>
+                  No clicks added yet. Tap Left, Center, or Right Ball above to build your sequence.
+                </Text>
+              ) : (
+                emblemSequence.map((ball, idx) => (
+                  <TouchableOpacity
+                    key={`${ball}-${idx}`}
+                    onPress={() => setEmblemSequence(prev => prev.filter((_, i) => i !== idx))}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 5,
+                      backgroundColor: '#ffffff',
+                      borderWidth: 1,
+                      borderColor: '#cbd5e1',
+                      borderRadius: 8,
+                      paddingHorizontal: 9,
+                      paddingVertical: 5
+                    }}
+                  >
+                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0f172a' }}>
+                      {idx + 1}. {ball === 'LEFT' ? '◀ Left' : ball === 'RIGHT' ? '▶ Right' : '🎯 Center'}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#ef4444', fontWeight: '800' }}>✕</Text>
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+
+            {/* Counts & Action Row */}
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 10,
+              marginTop: 12
+            }}>
+              <Text style={{ fontSize: 12, color: '#475569', fontWeight: '600' }}>
+                Left: {emblemSequence.filter(b => b === 'LEFT').length} • Center: {emblemSequence.filter(b => b === 'CENTER').length} • Right: {emblemSequence.filter(b => b === 'RIGHT').length}
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                <TouchableOpacity
+                  onPress={() => setEmblemSequence([])}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: '#e2e8f0',
+                    backgroundColor: '#ffffff'
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748b' }}>Clear</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setEmblemSequence(['LEFT', 'RIGHT', 'LEFT', 'RIGHT', 'CENTER'])}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: '#cbd5e1',
+                    backgroundColor: '#f8fafc'
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>Reset Default (5)</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleSaveEmblemSequence(emblemEnabled, emblemSequence)}
+                  disabled={emblemSaving}
+                  style={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    backgroundColor: '#d97706',
+                    opacity: emblemSaving ? 0.6 : 1
+                  }}
+                >
+                  <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#ffffff' }}>
+                    {emblemSaving ? 'Saving...' : '✓ Save Sequence'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+      </View>
 
       {/* DYNAMIC CATEGORY DROPDOWN */}
       <View style={[styles.tabBarContainer, { position: 'relative', zIndex: 1000 }]}>
