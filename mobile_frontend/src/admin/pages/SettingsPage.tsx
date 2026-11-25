@@ -216,6 +216,7 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
   };
 
   const [activeTab, setActiveTab] = useState<string>(getInitialTab());
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [items, setItems] = useState<MasterSettingItem[]>(
     DEFAULT_MASTER_SETTINGS[getInitialTab()] || []
@@ -428,36 +429,110 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
         ]}
       />
 
-      {/* DYNAMIC CATEGORY PILLS */}
-      <View style={styles.tabBarContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabBarScroll}
-        >
-          {DYNAMIC_CATEGORIES.map(cat => {
-            const isActive = activeTab === cat.key;
-            return (
-              <TouchableOpacity
-                key={cat.key}
-                style={[styles.tabPill, isActive && styles.tabPillActive]}
-                onPress={() => {
-                  setActiveTab(cat.key);
-                  setSearchQuery('');
-                  if (onNavigate) {
-                    onNavigate(`/admin/settings/${cat.key.replace(/_/g, '-')}`);
-                  }
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.tabPillIcon}>{cat.iconText}</Text>
-                <Text style={[styles.tabPillText, isActive && styles.tabPillTextActive]}>
-                  {cat.label}
+      {/* DYNAMIC CATEGORY DROPDOWN */}
+      <View style={[styles.tabBarContainer, { position: 'relative', zIndex: 1000 }]}>
+        <View style={{
+          flexDirection: isMobile ? 'column' : 'row',
+          alignItems: isMobile ? 'stretch' : 'center',
+          gap: 10
+        }}>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: '#475569' }}>
+            Lookup Category:
+          </Text>
+          <View style={{ position: 'relative', flex: isMobile ? undefined : 1, maxWidth: isMobile ? '100%' : 400, zIndex: 1000 }}>
+            <TouchableOpacity
+              onPress={() => setCategoryDropdownOpen(prev => !prev)}
+              activeOpacity={0.8}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: '#ffffff',
+                borderWidth: 1.5,
+                borderColor: categoryDropdownOpen ? '#d97706' : '#cbd5e1',
+                borderRadius: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 11,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.05,
+                shadowRadius: 3,
+                elevation: 2
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                <Text style={{ fontSize: 15 }}>{activeCategoryDef?.iconText || '📍'}</Text>
+                <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0f172a' }} numberOfLines={1}>
+                  {activeCategoryDef?.label || 'Select Category'}
                 </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+              </View>
+              <Text style={{ fontSize: 12, color: '#64748b', marginLeft: 8 }}>
+                {categoryDropdownOpen ? '▲' : '▼'}
+              </Text>
+            </TouchableOpacity>
+
+            {categoryDropdownOpen && (
+              <View style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                marginTop: 6,
+                backgroundColor: '#ffffff',
+                borderWidth: 1,
+                borderColor: '#e2e8f0',
+                borderRadius: 12,
+                paddingVertical: 6,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.14,
+                shadowRadius: 16,
+                elevation: 12,
+                zIndex: 2000
+              }}>
+                {DYNAMIC_CATEGORIES.map(cat => {
+                  const isActive = activeTab === cat.key;
+                  return (
+                    <TouchableOpacity
+                      key={cat.key}
+                      onPress={() => {
+                        setActiveTab(cat.key);
+                        setSearchQuery('');
+                        setCategoryDropdownOpen(false);
+                        if (onNavigate) {
+                          onNavigate(`/admin/settings/${cat.key.replace(/_/g, '-')}`);
+                        }
+                      }}
+                      activeOpacity={0.7}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingHorizontal: 14,
+                        paddingVertical: 10,
+                        backgroundColor: isActive ? '#fef3c7' : 'transparent'
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                        <Text style={{ fontSize: 15 }}>{cat.iconText}</Text>
+                        <Text style={{
+                          fontSize: 13.5,
+                          fontWeight: isActive ? '800' : '600',
+                          color: isActive ? '#92400e' : '#334155'
+                        }}>
+                          {cat.label}
+                        </Text>
+                      </View>
+                      {isActive && (
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#d97706' }}>✓</Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        </View>
       </View>
 
       {/* Dynamic Category Management View */}
