@@ -736,11 +736,13 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
   };
 
   // Open Scorecard Modal
-  const handleOpenScorecard = async (matchId: string) => {
+  const handleOpenScorecard = async (matchId: string, silent = false) => {
     setSelectedScorecardMatchId(matchId);
-    setIsLoadingScorecard(true);
-    setScorecardData(null);
-    setActiveInningsTab(0);
+    if (!silent) {
+      setIsLoadingScorecard(true);
+      setScorecardData(null);
+      setActiveInningsTab(0);
+    }
 
     try {
       const res = await TeamApi.getScorecard(matchId);
@@ -749,11 +751,25 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
         setScorecardData(raw);
       }
     } catch (err: any) {
-      showError('Scorecard Error', err?.message || 'Could not retrieve match scorecard.');
+      if (!silent) {
+        showError('Scorecard Error', err?.message || 'Could not retrieve match scorecard.');
+      }
     } finally {
-      setIsLoadingScorecard(false);
+      if (!silent) {
+        setIsLoadingScorecard(false);
+      }
     }
   };
+
+  // Auto-refresh Live Match Scorecard every 4 seconds while modal is open
+  useEffect(() => {
+    const matchStatus = (scorecardData?.status || scorecardData?.match?.status || '').toUpperCase();
+    if (!selectedScorecardMatchId || matchStatus !== 'LIVE') return;
+    const interval = setInterval(() => {
+      handleOpenScorecard(selectedScorecardMatchId, true);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [selectedScorecardMatchId, scorecardData?.status, scorecardData?.match?.status]);
 
   // Mark notification read
   const handleMarkNotifRead = async (id: string) => {
@@ -4300,16 +4316,37 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContainer, { maxWidth: 700 }]}>
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.modalHeaderTitle}>Official Match Scorecard</Text>
-                <Text style={styles.modalHeaderSub}>Match #{selectedScorecardMatchId}</Text>
+                <Text style={styles.modalHeaderSub}>
+                  {scorecardData?.teamA && scorecardData?.teamB
+                    ? `${scorecardData.teamA} vs ${scorecardData.teamB} • #${selectedScorecardMatchId}`
+                    : `Match #${selectedScorecardMatchId}`}
+                </Text>
               </View>
-              <TouchableOpacity
-                style={styles.modalCloseBtn}
-                onPress={() => setSelectedScorecardMatchId(null)}
-              >
-                <Text style={styles.modalCloseBtnText}>✕</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {selectedScorecardMatchId && (
+                  <TouchableOpacity
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
+                      borderRadius: 8,
+                      backgroundColor: '#fef3c7',
+                      borderWidth: 1,
+                      borderColor: '#fde68a'
+                    }}
+                    onPress={() => handleOpenScorecard(selectedScorecardMatchId, false)}
+                  >
+                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#92400e' }}>↻ Refresh</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.modalCloseBtn}
+                  onPress={() => setSelectedScorecardMatchId(null)}
+                >
+                  <Text style={styles.modalCloseBtnText}>✕</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {isLoadingScorecard ? (
@@ -4319,12 +4356,28 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
               </View>
             ) : scorecardData ? (
               <ScrollView style={styles.scorecardModalScroll}>
-                {/* Result Highlight */}
-                {scorecardData.result && (
-                  <View style={styles.scorecardResultCard}>
-                    <Text style={styles.scorecardResultText}>🏆 {scorecardData.result}</Text>
-                  </View>
-                )}
+                {/* Status & Result Highlight */}
+                {(() => {
+                  const st = (scorecardData.status || scorecardData.match?.status || 'Upcoming').toUpperCase();
+                  const isLive = st === 'LIVE';
+                  const isCompleted = st === 'COMPLETED';
+                  return (
+                    <View style={[
+                      styles.scorecardResultCard,
+                      isLive && { backgroundColor: '#fef2f2', borderColor: '#fecaca' },
+                      !isLive && !isCompleted && { backgroundColor: '#fffbeb', borderColor: '#fde68a' }
+                    ]}>
+                      <Text style={[
+                        styles.scorecardResultText,
+                        isLive && { color: '#dc2626' },
+                        !isLive && !isCompleted && { color: '#92400e' }
+                      ]}>
+                        {isLive ? '🔴 LIVE: ' : isCompleted ? '🏆 ' : '⏳ '}
+                        {scorecardData.result || (isLive ? 'Match in progress' : 'Match scheduled — not started yet')}
+                      </Text>
+                    </View>
+                  );
+                })()}
 
                 {/* Innings Tabs */}
                 {scorecardData.innings && scorecardData.innings.length > 1 && (
@@ -4342,20 +4395,25 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                           styles.inningsTabBtnText,
                           activeInningsTab === i && styles.inningsTabBtnTextActive
                         ]}>
-                          {inn.teamName || `Innings ${i + 1}`} ({inn.totalRuns || inn.runs || 0}/{inn.wickets || 0})
+                          {inn.battingTeam || inn.teamName || `Innings ${i + 1}`} ({inn.totalRuns ?? inn.runs ?? 0}/{inn.wickets ?? 0})
                         </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
                 )}
 
-                {/* Active Innings Batting Table */}
+                {/* Active Innings Batting & Bowling Cards */}
                 {(() => {
                   const currentInnings = scorecardData.innings?.[activeInningsTab] || scorecardData.innings?.[0];
                   if (!currentInnings) {
+                    const st = (scorecardData.status || scorecardData.match?.status || 'Upcoming').toUpperCase();
                     return (
                       <View style={styles.emptyCard}>
-                        <Text style={styles.emptyText}>Detailed innings data not available.</Text>
+                        <Text style={styles.emptyText}>
+                          {st === 'LIVE'
+                            ? '🏏 Match is live! Waiting for the opening delivery from the official scorer.'
+                            : '⏳ Toss & live scoring have not started yet. Live scores will appear here automatically once the match begins.'}
+                        </Text>
                       </View>
                     );
                   }
@@ -4365,6 +4423,43 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
 
                   return (
                     <View>
+                      {/* Live Innings Score Summary Banner */}
+                      <View style={{
+                        backgroundColor: '#0f172a',
+                        borderRadius: 12,
+                        padding: 14,
+                        marginBottom: 14,
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: 8
+                      }}>
+                        <View>
+                          <Text style={{ color: '#f8fafc', fontSize: 15, fontWeight: '900' }}>
+                            {currentInnings.battingTeam || currentInnings.teamName || 'Batting Team'}
+                          </Text>
+                          {currentInnings.extras?.breakdown ? (
+                            <Text style={{ color: '#94a3b8', fontSize: 11.5, marginTop: 2 }}>
+                              Extras: {currentInnings.extras.total || 0} ({currentInnings.extras.breakdown})
+                            </Text>
+                          ) : null}
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={{ color: '#fbbf24', fontSize: 20, fontWeight: '900' }}>
+                            {currentInnings.totalRuns ?? currentInnings.runs ?? 0}/{currentInnings.wickets ?? 0}
+                            <Text style={{ color: '#cbd5e1', fontSize: 13, fontWeight: '700' }}>
+                              {' '}({currentInnings.overs || '0.0'}/{currentInnings.totalOvers || 20} Ov)
+                            </Text>
+                          </Text>
+                          {currentInnings.currentBowler?.name ? (
+                            <Text style={{ color: '#38bdf8', fontSize: 11.5, fontWeight: '700', marginTop: 2 }}>
+                              Bowling: {currentInnings.currentBowler.name}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </View>
+
                       <View style={styles.inningsContentCard}>
                         <Text style={styles.sectionHeader}>Batting Card</Text>
                         <View style={styles.scorecardTable}>
@@ -4416,7 +4511,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                               <Text style={[styles.tableDataCell, { flex: 1, textAlign: 'center' }]}>{bw.runs ?? 0}</Text>
                               <Text style={[styles.tableDataCellBold, { flex: 1, textAlign: 'center', color: '#f59e0b' }]}>{bw.wickets ?? 0}</Text>
                               <Text style={[styles.tableDataCell, { flex: 1.5, textAlign: 'center' }]}>
-                                {bw.economy ? Number(bw.economy).toFixed(1) : bw.overs ? ((bw.runs / bw.overs)).toFixed(1) : '0.0'}
+                                {bw.economy !== undefined && bw.economy !== null ? Number(bw.economy).toFixed(2) : '0.00'}
                               </Text>
                             </View>
                           ))}

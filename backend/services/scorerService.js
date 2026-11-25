@@ -1015,6 +1015,14 @@ class ScorerService {
     }));
 
     const statusUpper = (match.status || 'SCHEDULED').toUpperCase();
+    const statusLabel = statusUpper === 'LIVE' ? 'Live' : (statusUpper === 'COMPLETED' ? 'Completed' : (statusUpper === 'POSTPONED' ? 'Postponed' : 'Upcoming'));
+    const defaultResult = statusUpper === 'LIVE'
+      ? 'Match in progress'
+      : (statusUpper === 'COMPLETED'
+        ? 'Match completed'
+        : (statusUpper === 'POSTPONED'
+          ? 'Match postponed'
+          : 'Match scheduled — not started yet'));
 
     return {
       matchId: match.id,
@@ -1028,8 +1036,8 @@ class ScorerService {
         date: match.match_date || '2026-10-06',
         time: match.match_time || '09:30 AM',
         overs: match.overs_per_side || 20,
-        status: statusUpper === 'LIVE' ? 'Live' : (statusUpper === 'COMPLETED' ? 'Completed' : 'Upcoming'),
-        result: match.result_summary || 'Match in progress',
+        status: statusLabel,
+        result: match.result_summary || defaultResult,
         umpire1_id: match.umpire1_id || null,
         umpire2_id: match.umpire2_id || null,
         umpire1_name: match.umpire1_name || null,
@@ -1045,8 +1053,10 @@ class ScorerService {
       venue: match.venue || 'Kamarajar Stadium, Virudhunagar',
       venue_maps_url: match.venue_maps_url || (match.venue ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(match.venue + (match.venue.toLowerCase().includes('virudhunagar') ? '' : ', Virudhunagar'))}` : 'https://www.google.com/maps/search/?api=1&query=Kamarajar+District+Stadium+Virudhunagar'),
       date: match.match_date || '2026-10-06',
-      status: statusUpper === 'LIVE' ? 'Live' : (statusUpper === 'COMPLETED' ? 'Completed' : 'Upcoming'),
-      result: match.result_summary || 'Match in progress',
+      time: match.match_time || '09:30 AM',
+      overs: match.overs_per_side || 20,
+      status: statusLabel,
+      result: match.result_summary || defaultResult,
       innings: formattedInnings
     };
   }
