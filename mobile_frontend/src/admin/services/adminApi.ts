@@ -136,7 +136,11 @@ export const adminApi = {
 
   // 3. Users Management
   getUsers: async (params?: { search?: string; role?: string; status?: string }) => {
-    const query = new URLSearchParams(params as any).toString();
+    const cleanParams: Record<string, string> = {};
+    if (params?.search) cleanParams.search = params.search;
+    if (params?.role && params.role !== 'ALL') cleanParams.role = params.role;
+    if (params?.status && params.status !== 'ALL') cleanParams.status = params.status;
+    const query = new URLSearchParams(cleanParams).toString();
     return adminRequest(`/admin/users${query ? '?' + query : ''}`);
   },
 

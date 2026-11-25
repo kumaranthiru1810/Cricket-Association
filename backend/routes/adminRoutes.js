@@ -59,8 +59,8 @@ router.get('/overview', async (req, res) => {
  */
 router.get('/users', async (req, res) => {
   try {
-    const { role } = req.query;
-    const users = await adminService.getUsers(role);
+    const { role, status } = req.query;
+    const users = await adminService.getUsers(role, status);
     res.json({ success: true, users });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

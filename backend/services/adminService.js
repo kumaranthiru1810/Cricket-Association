@@ -63,10 +63,15 @@ async function getAdminOverview() {
 /**
  * List all users with optional role filtering
  */
-async function getUsers(role = null) {
+async function getUsers(role = null, status = null) {
   await db.initDb();
   const query = {};
-  if (role && role !== 'ALL') query.role = role.toUpperCase();
+  if (role && role !== 'ALL' && role !== 'undefined' && role !== 'null') {
+    query.role = String(role).toUpperCase();
+  }
+  if (status && status !== 'ALL' && status !== 'undefined' && status !== 'null') {
+    query.status = String(status).toUpperCase();
+  }
   const users = await db.models.User.find(query).sort({ created_at: -1 }).lean();
   return users.map(u => ({
     ...u,
