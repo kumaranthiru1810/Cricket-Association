@@ -338,6 +338,27 @@
           object-position: center center !important;
         }
       }
+      /* Main Video Responsive Sizing: Full-screen cover in landscape, full-view contain in portrait */
+      #cfvd-preloader-video {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+        max-width: 100vw;
+        max-height: 100vh;
+        max-height: 100dvh;
+        object-fit: cover;
+        object-position: center center;
+        background: transparent;
+      }
+
+      @media (max-aspect-ratio: 1/1) {
+        #cfvd-preloader-video {
+          object-fit: contain;
+        }
+      }
     </style>
   </head>
   <body class="cfvd-preloader-active">
@@ -442,17 +463,6 @@
           playsinline
           webkit-playsinline
           preload="auto"
-          style="
-            width: 100vw;
-            height: 100vh;
-            height: 100dvh;
-            max-width: 100vw;
-            max-height: 100vh;
-            max-height: 100dvh;
-            object-fit: cover;
-            object-position: center center;
-            background: transparent;
-          "
         >
           <source src="/preloader.mp4" type="video/mp4" />
           <source src="./preloader.mp4" type="video/mp4" />

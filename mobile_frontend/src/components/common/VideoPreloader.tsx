@@ -72,7 +72,7 @@ interface VideoPreloaderProps {
 export default function VideoPreloader({ onComplete }: VideoPreloaderProps) {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
-  const isMobile = width < 768 || width < height;
+  const isPortrait = height > width;
   const isNarrow = width < 420;
 
   const [isDismissed, setIsDismissed] = useState<boolean>(false);
@@ -245,11 +245,12 @@ export default function VideoPreloader({ onComplete }: VideoPreloaderProps) {
               webkit-playsinline="true"
               preload="auto"
               style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
                 width: '100%',
                 height: '100%',
-                maxWidth: '100vw',
-                maxHeight: '100vh',
-                objectFit: 'cover',
+                objectFit: isPortrait ? 'contain' : 'cover',
                 objectPosition: 'center center',
                 backgroundColor: 'transparent',
                 zIndex: 1,
@@ -263,7 +264,7 @@ export default function VideoPreloader({ onComplete }: VideoPreloaderProps) {
           <NativeVideoComponent
             onProgress={(pct) => setProgress(pct)}
             onEnded={() => handleDismiss()}
-            contentFit="cover"
+            contentFit={isPortrait ? 'contain' : 'cover'}
           />
         )}
       </TouchableOpacity>
@@ -294,15 +295,18 @@ export default function VideoPreloader({ onComplete }: VideoPreloaderProps) {
 
 const styles = StyleSheet.create({
   overlay: {
-    position: 'absolute',
+    position: Platform.OS === 'web' ? ('fixed' as any) : 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
+    width: '100%',
+    height: '100%',
     backgroundColor: '#020612',
     zIndex: 999999,
     justifyContent: 'center',
-    alignItems: 'center'
+    alignItems: 'center',
+    overflow: 'hidden'
   },
   videoWrapper: {
     width: '100%',
