@@ -185,6 +185,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
   // Filter States
   const [matchFilter, setMatchFilter] = useState<'ALL' | 'LIVE' | 'SCHEDULED' | 'POSTPONED' | 'COMPLETED'>('ALL');
   const [squadSearchQuery, setSquadSearchQuery] = useState<string>('');
+  const [squadRoleFilter, setSquadRoleFilter] = useState<'ALL' | 'BATTER' | 'BOWLER' | 'ALL_ROUNDER' | 'KEEPER'>('ALL');
 
   // Read-Only Scorecard Modal State
   const [selectedScorecardMatchId, setSelectedScorecardMatchId] = useState<string | null>(null);
@@ -859,6 +860,13 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
   // Filtered squad
   const filteredSquad = useMemo(() => {
     return squad.filter(p => {
+      if (squadRoleFilter !== 'ALL') {
+        const r = (p.role || '').toUpperCase();
+        if (squadRoleFilter === 'BATTER' && !r.includes('BAT')) return false;
+        if (squadRoleFilter === 'BOWLER' && !r.includes('BOWL')) return false;
+        if (squadRoleFilter === 'ALL_ROUNDER' && !r.includes('ALL') && !r.includes('ROUND')) return false;
+        if (squadRoleFilter === 'KEEPER' && !r.includes('KEEP') && !r.includes('WK')) return false;
+      }
       if (!squadSearchQuery.trim()) return true;
       const q = squadSearchQuery.toLowerCase();
       return (
@@ -868,7 +876,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
         String(p.jersey || p.jerseyNumber || '').includes(q)
       );
     });
-  }, [squad, squadSearchQuery]);
+  }, [squad, squadSearchQuery, squadRoleFilter]);
 
   // Squad role counts
   const batterCount = squad.filter(p => (p.role || '').toUpperCase().includes('BAT')).length;
@@ -2042,20 +2050,36 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                         </View>
                       </View>
 
-                      {/* Role breakdown chips */}
+                      {/* Interactive Role Filter Chips */}
                       <View style={styles.roleChipsRow}>
-                        <View style={styles.roleChip}>
-                          <Text style={styles.roleChipText}>🏏 Batters: {batterCount}</Text>
-                        </View>
-                        <View style={styles.roleChip}>
-                          <Text style={styles.roleChipText}>⚡ Bowlers: {bowlerCount}</Text>
-                        </View>
-                        <View style={styles.roleChip}>
-                          <Text style={styles.roleChipText}>🌟 All-Rounders: {allRounderCount}</Text>
-                        </View>
-                        <View style={styles.roleChip}>
-                          <Text style={styles.roleChipText}>🧤 Keepers: {keeperCount}</Text>
-                        </View>
+                        {[
+                          { key: 'ALL' as const, label: `All (${squad.length})` },
+                          { key: 'BATTER' as const, label: `🏏 Batters: ${batterCount}` },
+                          { key: 'BOWLER' as const, label: `⚡ Bowlers: ${bowlerCount}` },
+                          { key: 'ALL_ROUNDER' as const, label: `🌟 All-Rounders: ${allRounderCount}` },
+                          { key: 'KEEPER' as const, label: `🧤 Keepers: ${keeperCount}` }
+                        ].map(chip => {
+                          const isActive = squadRoleFilter === chip.key;
+                          return (
+                            <TouchableOpacity
+                              key={chip.key}
+                              activeOpacity={0.75}
+                              onPress={() => setSquadRoleFilter(prev => (prev === chip.key && chip.key !== 'ALL') ? 'ALL' : chip.key)}
+                              style={[
+                                styles.roleChip,
+                                isActive && { backgroundColor: '#fef3c7', borderColor: '#f59e0b' },
+                                Platform.OS === 'web' && ({ cursor: 'pointer' } as any)
+                              ]}
+                            >
+                              <Text style={[
+                                styles.roleChipText,
+                                isActive && { color: '#92400e', fontWeight: '800' }
+                              ]}>
+                                {chip.label}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
                       </View>
 
                       {/* Squad Search Bar */}
