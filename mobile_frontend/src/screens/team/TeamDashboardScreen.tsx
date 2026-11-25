@@ -196,9 +196,13 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
   const [isEditProfileVisible, setIsEditProfileVisible] = useState<boolean>(false);
   const [editCoachPhone, setEditCoachPhone] = useState<string>('');
   const [editCertification, setEditCertification] = useState<string>('');
+  const [certDropdownOpen, setCertDropdownOpen] = useState<boolean>(false);
+  const [isCustomCert, setIsCustomCert] = useState<boolean>(false);
   const [editHomeGround, setEditHomeGround] = useState<string>('');
   const [editCaptain, setEditCaptain] = useState<string>('');
   const [editViceCaptain, setEditViceCaptain] = useState<string>('');
+  const [captainDropdownOpen, setCaptainDropdownOpen] = useState<boolean>(false);
+  const [viceCaptainDropdownOpen, setViceCaptainDropdownOpen] = useState<boolean>(false);
   const [editPhoto, setEditPhoto] = useState<string | null>(null);
   const [isSavingProfile, setIsSavingProfile] = useState<boolean>(false);
   const [profileFeedback, setProfileFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -211,10 +215,12 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
   const [cropRotation, setCropRotation] = useState<number>(0);
   const [imageNaturalDimensions, setImageNaturalDimensions] = useState<{ width: number; height: number }>({ width: 300, height: 300 });
   const [isCropping, setIsCropping] = useState<boolean>(false);
+  const [isCropDragging, setIsCropDragging] = useState<boolean>(false);
 
   const cropPanRef = React.useRef(cropPan);
   cropPanRef.current = cropPan;
   const startPanRef = React.useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const webDragStartRef = React.useRef<{ clientX: number; clientY: number; panX: number; panY: number } | null>(null);
 
   const panResponder = React.useMemo(
     () =>
@@ -582,15 +588,31 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
     }
   };
 
+  const CERTIFICATION_PRESETS = [
+    'BCCI / TNCA Level 1 Certified',
+    'BCCI / TNCA Level 2 Certified',
+    'BCCI / TNCA Level 3 Certified',
+    'District / Club Certified Coach'
+  ];
+
   const handleOpenEditProfile = () => {
     if (profile) {
-      setEditCoachPhone(profile.coachPhone || profile.coach_phone || '');
-      setEditCertification(profile.certification || profile.coach_certification || 'BCCI / TNCA Level 2 Certified');
+      const rawPhone = String(profile.coachPhone || profile.coach_phone || '');
+      const digitsOnly = rawPhone.replace(/\D/g, '');
+      setEditCoachPhone(digitsOnly.length > 10 ? digitsOnly.slice(-10) : digitsOnly);
+
+      const currentCert = (profile.certification || profile.coach_certification || 'BCCI / TNCA Level 2 Certified').trim();
+      setEditCertification(currentCert);
+      setIsCustomCert(Boolean(currentCert) && !CERTIFICATION_PRESETS.includes(currentCert));
+
       setEditHomeGround(profile.homeGround || profile.home_ground || 'Kamarajar Stadium Sports Complex, Virudhunagar');
       setEditCaptain(profile.captain || '');
       setEditViceCaptain(profile.viceCaptain || profile.vice_captain || '');
       setEditPhoto(profile.photo || profile.logo || profile.image_path || null);
     }
+    setCertDropdownOpen(false);
+    setCaptainDropdownOpen(false);
+    setViceCaptainDropdownOpen(false);
     setProfileFeedback(null);
     setIsEditProfileVisible(true);
   };
@@ -670,11 +692,18 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
   // Save Profile Updates (Safe fields + Direct DB Logo/Photo storage)
   const handleSaveProfile = async () => {
     setProfileFeedback(null);
+
+    const cleanPhone = editCoachPhone.replace(/\D/g, '');
+    if (!/^\d{10}$/.test(cleanPhone)) {
+      setProfileFeedback({ message: 'Please enter a valid 10-digit mobile number (numbers only).', type: 'error' });
+      return;
+    }
+
     setIsSavingProfile(true);
 
     try {
       const updates = {
-        coachPhone: editCoachPhone.trim(),
+        coachPhone: cleanPhone,
         certification: editCertification.trim(),
         homeGround: editHomeGround.trim(),
         captain: editCaptain.trim(),
@@ -776,11 +805,11 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
     'Virudhunagar 1st Division League 2026';
   const captain =
     profile?.captain ||
-    'R. Saravanan';
+    '';
   const viceCaptain =
     profile?.viceCaptain ||
     profile?.vice_captain ||
-    'M. Karthi';
+    '';
   const homeGround =
     profile?.homeGround ||
     profile?.home_ground ||
@@ -3415,8 +3444,8 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                           </TouchableOpacity>
                         </View>
 
-                        <View style={{ flex: 1, marginLeft: 16 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={{ flex: 1, marginLeft: 16, minWidth: 0 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                             <Text style={styles.teamProfileHeroTitle}>{teamName}</Text>
                             <View style={styles.verifiedMiniBadge}>
                               <Ionicons name="checkmark-circle" size={13} color="#15803d" />
@@ -3464,16 +3493,39 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                       </View>
                       <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Appointed Captain:</Text>
-                        <Text style={[styles.detailValueBold, { color: '#f59e0b' }]}>{captain}</Text>
+                        <Text style={[styles.detailValueBold, { color: captain ? '#d97706' : '#94a3b8' }]}>
+                          {captain || 'Not Assigned'}
+                        </Text>
                       </View>
                       <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Appointed Vice-Captain:</Text>
-                        <Text style={styles.detailValueBold}>{viceCaptain}</Text>
+                        <Text style={[styles.detailValueBold, { color: viceCaptain ? '#0f172a' : '#94a3b8' }]}>
+                          {viceCaptain || 'Not Assigned'}
+                        </Text>
                       </View>
+
+                      {(!captain || !viceCaptain) && (
+                        <View style={{
+                          backgroundColor: '#fffbeb',
+                          borderWidth: 1,
+                          borderColor: '#fde68a',
+                          borderRadius: 10,
+                          padding: 12,
+                          marginTop: 12,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 10
+                        }}>
+                          <Ionicons name="alert-circle-outline" size={18} color="#d97706" />
+                          <Text style={{ flex: 1, fontSize: 12, color: '#92400e', fontWeight: '600', lineHeight: 17 }}>
+                            Reminder: Please choose your Team Captain and Vice-Captain from your squad in Team Login (tap "Update Contact & Captaincy Info" below).
+                          </Text>
+                        </View>
+                      )}
 
                       <TouchableOpacity
                         style={styles.actionBtnFull}
-                        onPress={() => setIsEditProfileVisible(true)}
+                        onPress={handleOpenEditProfile}
                       >
                         <Text style={styles.actionBtnFullText}>Update Contact & Captaincy Info</Text>
                       </TouchableOpacity>
@@ -3678,10 +3730,6 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                         <Ionicons name="images-outline" size={14} color="#1e40af" style={{ marginRight: 5 }} />
                         <Text style={styles.btnPickLogoText}>Choose Image</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={styles.btnCameraLogo} onPress={handleTakePhoto} activeOpacity={0.8}>
-                        <Ionicons name="camera-outline" size={14} color="#065f46" style={{ marginRight: 5 }} />
-                        <Text style={styles.btnCameraLogoText}>Camera</Text>
-                      </TouchableOpacity>
                     </View>
 
                     {editPhoto ? (
@@ -3713,48 +3761,119 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
               </View>
 
               {/* Locked Field: Team Name */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Registered Team Name (Locked by Association)</Text>
+              <View style={styles.inputGroup} pointerEvents="none">
+                <Text style={styles.inputLabel}>🔒 Registered Team Name (Fixed by Association)</Text>
                 <TextInput
                   style={[styles.inputField, styles.inputFieldDisabled]}
                   value={teamName}
                   editable={false}
+                  selectTextOnFocus={false}
                 />
               </View>
 
               {/* Locked Field: Team ID */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Official Team ID (Locked)</Text>
+              <View style={styles.inputGroup} pointerEvents="none">
+                <Text style={styles.inputLabel}>🔒 Official Team ID (Fixed)</Text>
                 <TextInput
                   style={[styles.inputField, styles.inputFieldDisabled]}
                   value={teamId}
                   editable={false}
+                  selectTextOnFocus={false}
                 />
               </View>
 
-              {/* Editable Field: Coach Mobile */}
+              {/* Editable Field: Coach Mobile (10-digit numbers only) */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Coach Mobile / Contact Phone *</Text>
+                <Text style={styles.inputLabel}>Coach Mobile / Contact Phone * (10 Digits)</Text>
                 <TextInput
                   style={styles.inputField}
                   value={editCoachPhone}
-                  onChangeText={setEditCoachPhone}
-                  placeholder="+91 94431 XXXXX"
+                  onChangeText={(text) => setEditCoachPhone(text.replace(/\D/g, '').slice(0, 10))}
+                  placeholder="Enter 10-digit mobile number"
                   placeholderTextColor="#64748b"
-                  keyboardType="phone-pad"
+                  keyboardType="number-pad"
+                  maxLength={10}
                 />
               </View>
 
-              {/* Editable Field: Certification */}
-              <View style={styles.inputGroup}>
+              {/* Editable Field: Certification Dropdown + Custom */}
+              <View style={[styles.inputGroup, { zIndex: 300 }]}>
                 <Text style={styles.inputLabel}>Coaching Certification / License</Text>
-                <TextInput
-                  style={styles.inputField}
-                  value={editCertification}
-                  onChangeText={setEditCertification}
-                  placeholder="e.g. BCCI / TNCA Level 2"
-                  placeholderTextColor="#64748b"
-                />
+                <TouchableOpacity
+                  onPress={() => {
+                    setCertDropdownOpen(prev => !prev);
+                    setCaptainDropdownOpen(false);
+                    setViceCaptainDropdownOpen(false);
+                  }}
+                  activeOpacity={0.8}
+                  style={[styles.inputField, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                >
+                  <Text style={{ fontSize: 13.5, color: '#0f172a', fontWeight: '600', flex: 1 }} numberOfLines={1}>
+                    {isCustomCert ? 'Custom (Enter Manually)' : (editCertification || 'Select Certification')}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#64748b', marginLeft: 8 }}>
+                    {certDropdownOpen ? '▲' : '▼'}
+                  </Text>
+                </TouchableOpacity>
+                {certDropdownOpen && (
+                  <View style={{
+                    backgroundColor: '#ffffff',
+                    borderWidth: 1,
+                    borderColor: '#cbd5e1',
+                    borderRadius: 10,
+                    marginTop: 4,
+                    paddingVertical: 4,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.12,
+                    shadowRadius: 8,
+                    elevation: 6
+                  }}>
+                    {[...CERTIFICATION_PRESETS, 'Custom (Enter Manually)'].map(opt => {
+                      const isCustomOption = opt === 'Custom (Enter Manually)';
+                      const isSelected = isCustomOption ? isCustomCert : (!isCustomCert && editCertification === opt);
+                      return (
+                        <TouchableOpacity
+                          key={opt}
+                          onPress={() => {
+                            if (isCustomOption) {
+                              setIsCustomCert(true);
+                              if (CERTIFICATION_PRESETS.includes(editCertification)) {
+                                setEditCertification('');
+                              }
+                            } else {
+                              setIsCustomCert(false);
+                              setEditCertification(opt);
+                            }
+                            setCertDropdownOpen(false);
+                          }}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            paddingHorizontal: 12,
+                            paddingVertical: 10,
+                            backgroundColor: isSelected ? '#fef3c7' : 'transparent'
+                          }}
+                        >
+                          <Text style={{ fontSize: 13, fontWeight: isSelected ? '700' : '500', color: isSelected ? '#92400e' : '#334155' }}>
+                            {opt}
+                          </Text>
+                          {isSelected && <Text style={{ color: '#d97706', fontWeight: '800' }}>✓</Text>}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+                {isCustomCert && (
+                  <TextInput
+                    style={[styles.inputField, { marginTop: 8 }]}
+                    value={editCertification}
+                    onChangeText={setEditCertification}
+                    placeholder="Enter your custom coaching certification"
+                    placeholderTextColor="#64748b"
+                  />
+                )}
               </View>
 
               {/* Editable Field: Home Ground */}
@@ -3769,28 +3888,140 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                 />
               </View>
 
-              {/* Editable Field: Appointed Captain */}
-              <View style={styles.inputGroup}>
+              {/* Editable Field: Appointed Captain (Squad Picker + Reminder) */}
+              <View style={[styles.inputGroup, { zIndex: 200 }]}>
                 <Text style={styles.inputLabel}>Appointed Team Captain</Text>
-                <TextInput
-                  style={styles.inputField}
-                  value={editCaptain}
-                  onChangeText={setEditCaptain}
-                  placeholder="e.g. Suresh Kumar"
-                  placeholderTextColor="#64748b"
-                />
+                <TouchableOpacity
+                  onPress={() => {
+                    setCaptainDropdownOpen(prev => !prev);
+                    setViceCaptainDropdownOpen(false);
+                    setCertDropdownOpen(false);
+                  }}
+                  activeOpacity={0.8}
+                  style={[styles.inputField, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                >
+                  <Text style={{ fontSize: 13.5, color: editCaptain ? '#0f172a' : '#94a3b8', fontWeight: '600', flex: 1 }} numberOfLines={1}>
+                    {editCaptain || 'Choose Captain from Squad'}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#64748b', marginLeft: 8 }}>
+                    {captainDropdownOpen ? '▲' : '▼'}
+                  </Text>
+                </TouchableOpacity>
+                {captainDropdownOpen && (
+                  <View style={{
+                    backgroundColor: '#ffffff',
+                    borderWidth: 1,
+                    borderColor: '#cbd5e1',
+                    borderRadius: 10,
+                    marginTop: 4,
+                    maxHeight: 180,
+                    paddingVertical: 4
+                  }}>
+                    <ScrollView nestedScrollEnabled>
+                      <TouchableOpacity
+                        onPress={() => { setEditCaptain(''); setCaptainDropdownOpen(false); }}
+                        style={{ paddingHorizontal: 12, paddingVertical: 9 }}
+                      >
+                        <Text style={{ fontSize: 12.5, color: '#64748b', fontStyle: 'italic' }}>— Not Assigned —</Text>
+                      </TouchableOpacity>
+                      {squad.length > 0 ? squad.map((p: any, idx: number) => {
+                        const pName = p.name || p.playerName || '';
+                        const isSelected = editCaptain === pName;
+                        return (
+                          <TouchableOpacity
+                            key={p.id || p.playerId || idx}
+                            onPress={() => { setEditCaptain(pName); setCaptainDropdownOpen(false); }}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              paddingHorizontal: 12,
+                              paddingVertical: 9,
+                              backgroundColor: isSelected ? '#fef3c7' : 'transparent'
+                            }}
+                          >
+                            <Text style={{ fontSize: 13, fontWeight: isSelected ? '700' : '500', color: '#0f172a' }}>
+                              {pName} {p.role ? `(${p.role})` : ''}
+                            </Text>
+                            {isSelected && <Text style={{ color: '#d97706', fontWeight: '800' }}>✓</Text>}
+                          </TouchableOpacity>
+                        );
+                      }) : (
+                        <Text style={{ padding: 12, fontSize: 12, color: '#64748b' }}>
+                          No players in squad yet. Add players first to choose Captain.
+                        </Text>
+                      )}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
 
-              {/* Editable Field: Appointed Vice-Captain */}
-              <View style={styles.inputGroup}>
+              {/* Editable Field: Appointed Vice-Captain (Squad Picker) */}
+              <View style={[styles.inputGroup, { zIndex: 100 }]}>
                 <Text style={styles.inputLabel}>Appointed Vice-Captain</Text>
-                <TextInput
-                  style={styles.inputField}
-                  value={editViceCaptain}
-                  onChangeText={setEditViceCaptain}
-                  placeholder="e.g. Vijay Anand"
-                  placeholderTextColor="#64748b"
-                />
+                <TouchableOpacity
+                  onPress={() => {
+                    setViceCaptainDropdownOpen(prev => !prev);
+                    setCaptainDropdownOpen(false);
+                    setCertDropdownOpen(false);
+                  }}
+                  activeOpacity={0.8}
+                  style={[styles.inputField, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                >
+                  <Text style={{ fontSize: 13.5, color: editViceCaptain ? '#0f172a' : '#94a3b8', fontWeight: '600', flex: 1 }} numberOfLines={1}>
+                    {editViceCaptain || 'Choose Vice-Captain from Squad'}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#64748b', marginLeft: 8 }}>
+                    {viceCaptainDropdownOpen ? '▲' : '▼'}
+                  </Text>
+                </TouchableOpacity>
+                {viceCaptainDropdownOpen && (
+                  <View style={{
+                    backgroundColor: '#ffffff',
+                    borderWidth: 1,
+                    borderColor: '#cbd5e1',
+                    borderRadius: 10,
+                    marginTop: 4,
+                    maxHeight: 180,
+                    paddingVertical: 4
+                  }}>
+                    <ScrollView nestedScrollEnabled>
+                      <TouchableOpacity
+                        onPress={() => { setEditViceCaptain(''); setViceCaptainDropdownOpen(false); }}
+                        style={{ paddingHorizontal: 12, paddingVertical: 9 }}
+                      >
+                        <Text style={{ fontSize: 12.5, color: '#64748b', fontStyle: 'italic' }}>— Not Assigned —</Text>
+                      </TouchableOpacity>
+                      {squad.length > 0 ? squad.map((p: any, idx: number) => {
+                        const pName = p.name || p.playerName || '';
+                        const isSelected = editViceCaptain === pName;
+                        return (
+                          <TouchableOpacity
+                            key={p.id || p.playerId || idx}
+                            onPress={() => { setEditViceCaptain(pName); setViceCaptainDropdownOpen(false); }}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              paddingHorizontal: 12,
+                              paddingVertical: 9,
+                              backgroundColor: isSelected ? '#fef3c7' : 'transparent'
+                            }}
+                          >
+                            <Text style={{ fontSize: 13, fontWeight: isSelected ? '700' : '500', color: '#0f172a' }}>
+                              {pName} {p.role ? `(${p.role})` : ''}
+                            </Text>
+                            {isSelected && <Text style={{ color: '#d97706', fontWeight: '800' }}>✓</Text>}
+                          </TouchableOpacity>
+                        );
+                      }) : (
+                        <Text style={{ padding: 12, fontSize: 12, color: '#64748b' }}>
+                          No players in squad yet. Add players first to choose Vice-Captain.
+                        </Text>
+                      )}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
 
               {/* Save & Cancel Actions */}
@@ -3850,11 +4081,49 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
             {/* Viewport Frame */}
             <View style={styles.cropViewportWrapper}>
               <View
-                style={styles.cropContainer}
+                style={[
+                  styles.cropContainer,
+                  Platform.OS === 'web' && ({
+                    cursor: isCropDragging ? 'grabbing' : 'grab',
+                    userSelect: 'none'
+                  } as any)
+                ]}
                 {...panResponder.panHandlers}
+                {...(Platform.OS === 'web'
+                  ? {
+                      onMouseDown: (e: any) => {
+                        e.preventDefault();
+                        setIsCropDragging(true);
+                        webDragStartRef.current = {
+                          clientX: e.clientX,
+                          clientY: e.clientY,
+                          panX: cropPanRef.current.x,
+                          panY: cropPanRef.current.y
+                        };
+                      },
+                      onMouseMove: (e: any) => {
+                        if (!webDragStartRef.current) return;
+                        const dx = e.clientX - webDragStartRef.current.clientX;
+                        const dy = e.clientY - webDragStartRef.current.clientY;
+                        setCropPan({
+                          x: Math.round(webDragStartRef.current.panX + dx),
+                          y: Math.round(webDragStartRef.current.panY + dy)
+                        });
+                      },
+                      onMouseUp: () => {
+                        webDragStartRef.current = null;
+                        setIsCropDragging(false);
+                      },
+                      onMouseLeave: () => {
+                        webDragStartRef.current = null;
+                        setIsCropDragging(false);
+                      }
+                    }
+                  : {})}
               >
                 {rawImageToCrop ? (
                   <View
+                    pointerEvents="none"
                     style={{
                       position: 'absolute',
                       left: 130 + cropPan.x,
@@ -3874,6 +4143,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                         marginTop: -((imageNaturalDimensions.height || 300) * (240 / Math.max(1, Math.min(imageNaturalDimensions.width || 300, imageNaturalDimensions.height || 300)))) / 2
                       }}
                       resizeMode="cover"
+                      {...(Platform.OS === 'web' ? ({ draggable: false } as any) : {})}
                     />
                   </View>
                 ) : null}
@@ -5049,12 +5319,14 @@ const styles: any = StyleSheet.create({
     fontWeight: '900'
   },
   verifiedMiniBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    flexDirection: 'row',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
     backgroundColor: '#dcfce7',
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    gap: 4
   },
   verifiedMiniBadgeText: {
     color: '#16a34a',
