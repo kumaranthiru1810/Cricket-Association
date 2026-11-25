@@ -972,14 +972,18 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   const availableTeams = useMemo(() => {
     const list: any[] = [];
     const ids = new Set<string>();
+    const names = new Set<string>();
 
     allClubsList.forEach((c: any) => {
       const id = c.id || c.team_id || c.teamId;
-      if (id && !ids.has(id)) {
+      const teamName = (c.name || c.team_name || c.teamName || id || '').trim();
+      const nameKey = teamName.toLowerCase();
+      if (id && !ids.has(id) && (!nameKey || !names.has(nameKey))) {
         ids.add(id);
+        if (nameKey) names.add(nameKey);
         list.push({
           id,
-          name: c.name || c.team_name || c.teamName || id,
+          name: teamName || id,
           taluk: c.taluk || 'Virudhunagar',
           coachName: c.coach?.name || c.coach_name || 'Head Coach',
           coachEmail: c.coach?.email || c.coach_email || `${id.toLowerCase()}@cfvd.org`
@@ -989,11 +993,14 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
     teams.forEach((t: any) => {
       const id = t.teamId || t.id;
-      if (id && !ids.has(id)) {
+      const teamName = (t.teamName || t.name || id || '').trim();
+      const nameKey = teamName.toLowerCase();
+      if (id && !ids.has(id) && (!nameKey || !names.has(nameKey))) {
         ids.add(id);
+        if (nameKey) names.add(nameKey);
         list.push({
           id,
-          name: t.teamName || t.name || id,
+          name: teamName || id,
           taluk: t.taluk || 'District League',
           coachName: t.coach?.name || 'Head Coach',
           coachEmail: t.coach?.email || `${(t.teamName || id).toLowerCase().replace(/\s+/g, '')}@cfvd.org`
@@ -1651,6 +1658,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         tournament_name: effectiveTourName,
         team_a_id,
         team_b_id,
+        team_a_name: team_a_name || teamAName,
+        team_b_name: team_b_name || teamBName,
         venue,
         venue_maps_url: venue_maps_url || (venue ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue + ' Virudhunagar Tamil Nadu')}` : ''),
         match_date: cleanDate,
