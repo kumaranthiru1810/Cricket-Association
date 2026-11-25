@@ -3059,7 +3059,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                             </View>
 
                             {/* Action Buttons */}
-                            <View style={[styles.itemActionsRow, { flexWrap: 'wrap' }]}>
+                            <View style={[styles.itemActionsRow, { flexWrap: 'wrap' }, !isDesktop && { width: '100%', marginTop: 4 }]}>
                               {s.phone && s.phone !== '—' && (
                                 <TouchableOpacity
                                   style={styles.btnActionCall}
@@ -3449,7 +3449,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                             </View>
 
                             {/* Action Buttons */}
-                            <View style={[styles.itemActionsRow, { flexWrap: 'wrap' }]}>
+                            <View style={[styles.itemActionsRow, { flexWrap: 'wrap' }, !isDesktop && { width: '100%', marginTop: 4 }]}>
                               {u.phone && u.phone !== '—' && (
                                 <TouchableOpacity
                                   style={styles.btnActionCall}
@@ -3796,7 +3796,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           ]}
                         >
                           <View style={styles.itemCardHeaderRow}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'flex-start', flex: 1, minWidth: isDesktop ? 260 : '100%' }}>
                               {/* Colorful Team Initial Crest */}
                               <View style={[styles.teamCrestAvatar, { backgroundColor: crestBg }]}>
                                 <Text style={styles.teamCrestText}>{initials}</Text>
@@ -3804,7 +3804,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                               <View style={styles.itemTitleGroup}>
                                 <View style={styles.itemTitleBadgeRow}>
-                                  <Text style={styles.itemNameText}>{t.teamName}</Text>
+                                  <Text style={[styles.itemNameText, { flexShrink: 1 }]}>{t.teamName}</Text>
                                   {isApproved && (
                                     <View style={styles.badgeConfirmed}>
                                       <Text style={styles.badgeConfirmedText}>✔ Approved</Text>
@@ -3851,7 +3851,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                             </View>
 
                             {/* Action Buttons */}
-                            <View style={[styles.itemActionsRow, { flexWrap: 'wrap' }]}>
+                            <View style={[styles.itemActionsRow, { flexWrap: 'wrap' }, !isDesktop && { width: '100%', marginTop: 4 }]}>
                               {Boolean(t.coach?.email) && (
                                 <TouchableOpacity
                                   style={styles.btnActionEmail}
@@ -3924,7 +3924,15 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                             <View style={styles.metaCell}>
                               <Text style={styles.metaLabel}>Submission Date</Text>
                               <Text style={styles.metaVal}>
-                                {t.registrationDate ? new Date(t.registrationDate).toLocaleDateString() : 'Active'}
+                                {(() => {
+                                  if (!t.registrationDate) return 'Active';
+                                  const d = new Date(t.registrationDate);
+                                  if (isNaN(d.getTime())) return String(t.registrationDate);
+                                  const dd = String(d.getDate()).padStart(2, '0');
+                                  const mm = String(d.getMonth() + 1).padStart(2, '0');
+                                  const yyyy = d.getFullYear();
+                                  return `${dd}-${mm}-${yyyy}`;
+                                })()}
                               </Text>
                             </View>
                           </View>
@@ -8988,7 +8996,8 @@ const styles: any = StyleSheet.create({
   },
   searchBox: {
     flex: 1,
-    minWidth: 0,
+    minWidth: 200,
+    maxWidth: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8fafc',
@@ -9011,7 +9020,9 @@ const styles: any = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    flexWrap: 'wrap'
+    flexWrap: 'wrap',
+    maxWidth: '100%',
+    flexShrink: 1
   },
   filterStatusLabel: {
     fontSize: 12.5,
@@ -9075,7 +9086,8 @@ const styles: any = StyleSheet.create({
   },
   itemTitleGroup: {
     flex: 1,
-    minWidth: 240
+    minWidth: 0,
+    flexShrink: 1
   },
   itemTitleBadgeRow: {
     flexDirection: 'row',
