@@ -848,7 +848,7 @@ class AdminDashboardController {
 
       // 1. Scorers (from User and Scorer models)
       try {
-        const scorers = await db.models.User.find({ role: 'SCORER' }).sort({ created_at: -1 }).lean();
+        const scorers = await db.models.User.find({ role: 'SCORER', status: { $ne: 'DELETED' } }).sort({ created_at: -1 }).lean();
         scorers.forEach(s => {
           const ph = s.mobile || s.phone || s.scorer_details?.mobile || s.scorer_details?.phone || '-';
           const adh = s.aadhaar || s.scorer_details?.aadhaar || s.aadhaar_number || '-';
@@ -881,6 +881,7 @@ class AdminDashboardController {
         const teamRegistrationModel = require('../models/teamRegistrationModel');
         const teamRegs = await teamRegistrationModel.getAll();
         (teamRegs || []).forEach(t => {
+          if (t.status === 'DELETED') return;
           const cPhone = t.coach_phone || t.coach_mobile || t.phone || t.mobile || '-';
           const cAadhaar = t.coach_aadhaar || t.aadhaar || '-';
           items.push({
@@ -915,7 +916,7 @@ class AdminDashboardController {
 
       // 3. Umpires (from User model role: UMPIRE)
       try {
-        const umpires = await db.models.User.find({ role: 'UMPIRE' }).sort({ created_at: -1 }).lean();
+        const umpires = await db.models.User.find({ role: 'UMPIRE', status: { $ne: 'DELETED' } }).sort({ created_at: -1 }).lean();
         umpires.forEach(u => {
           const uPh = u.mobile || u.phone || u.umpire_details?.mobile || '-';
           const uAdh = u.aadhaar || u.umpire_details?.aadhaar || u.aadhaar_number || '-';
@@ -946,7 +947,7 @@ class AdminDashboardController {
 
       // 4. Players (from User model role: PLAYER)
       try {
-        const players = await db.models.User.find({ role: 'PLAYER' }).sort({ created_at: -1 }).limit(50).lean();
+        const players = await db.models.User.find({ role: 'PLAYER', status: { $ne: 'DELETED' } }).sort({ created_at: -1 }).limit(50).lean();
         players.forEach(p => {
           const pPh = p.mobile || p.phone || p.player_details?.mobile || p.player_details?.phone || '-';
           const pAdh = p.aadhaar || p.player_details?.aadhaar || p.aadhaar_number || '-';
@@ -991,12 +992,22 @@ class AdminDashboardController {
       await db.initDb();
       const mongoose = require('mongoose');
       const { type, id } = req.params;
-      const { action, reason } = req.body; // action: 'approve' | 'reject'
-      const isApprove = action === 'approve';
+      const { action, reason } = req.body; // action: 'approve' | 'reject' | 'delete' | 'restore'
       const cleanType = (type || '').toUpperCase();
       const notificationModel = require('../models/notificationModel');
       const authService = require('../services/authService');
       const teamRegistrationModel = require('../models/teamRegistrationModel');
+
+      if (action === 'delete') {
+        const result = await authService.deleteRegistration(id, cleanType, req.adminUser ? req.adminUser.email : 'ADMIN');
+        return res.status(200).json(result);
+      }
+      if (action === 'restore') {
+        const result = await authService.restoreRegistration(id, cleanType, req.adminUser ? req.adminUser.email : 'ADMIN');
+        return res.status(200).json(result);
+      }
+
+      const isApprove = action === 'approve';
 
       const isMongoId = mongoose.Types.ObjectId.isValid(id);
       const queryId = isMongoId ? { $or: [{ id }, { _id: id }] } : { id };

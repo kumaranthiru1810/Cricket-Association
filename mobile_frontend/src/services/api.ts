@@ -735,6 +735,20 @@ export const ScorerApi = {
     });
   },
 
+  deleteRegistration: async (id: string, type: string = 'TEAM') => {
+    return request('/auth/admin/delete-registration', {
+      method: 'POST',
+      body: JSON.stringify({ id, type })
+    });
+  },
+
+  restoreRegistration: async (id: string, type: string = 'TEAM') => {
+    return request('/auth/admin/restore-registration', {
+      method: 'POST',
+      body: JSON.stringify({ id, type })
+    });
+  },
+
   updateScorerStatus: async (idOrEmail: string, status: string, reason?: string) => {
     return request('/auth/admin/scorer-status', {
       method: 'POST',

@@ -481,6 +481,30 @@ class AuthController {
       res.status(400).json({ success: false, message: err.message });
     }
   }
+
+  async deleteRegistration(req, res) {
+    try {
+      const { id, type } = req.body;
+      const targetId = id || req.params.id;
+      const adminId = req.user?.email || 'ADMIN';
+      const result = await authService.deleteRegistration(targetId, type || 'TEAM', adminId);
+      res.status(200).json(result);
+    } catch (err) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  }
+
+  async restoreRegistration(req, res) {
+    try {
+      const { id, type } = req.body;
+      const targetId = id || req.params.id;
+      const adminId = req.user?.email || 'ADMIN';
+      const result = await authService.restoreRegistration(targetId, type || 'TEAM', adminId);
+      res.status(200).json(result);
+    } catch (err) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  }
 }
 
 const authController = new AuthController();

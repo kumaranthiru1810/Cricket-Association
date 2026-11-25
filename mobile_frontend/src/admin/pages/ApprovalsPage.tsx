@@ -24,11 +24,11 @@ export const ApprovalsPage: React.FC = () => {
   // View Modal
   const [activeItem, setActiveItem] = useState<any | null>(null);
 
-  // Approve / Reject Dialog
+  // Approve / Reject / Delete Dialog
   const [dialogState, setDialogState] = useState<{
     visible: boolean;
     item: any;
-    action: 'approve' | 'reject';
+    action: 'approve' | 'reject' | 'delete';
     reason: string;
   }>({
     visible: false,
@@ -36,6 +36,15 @@ export const ApprovalsPage: React.FC = () => {
     action: 'approve',
     reason: ''
   });
+
+  // Undo Toast state
+  const [undoToast, setUndoToast] = useState<{
+    visible: boolean;
+    item: any;
+    index: number;
+  } | null>(null);
+
+  const undoTimerRef = React.useRef<any>(null);
 
   const loadApprovals = async () => {
     setLoading(true);
@@ -55,7 +64,7 @@ export const ApprovalsPage: React.FC = () => {
     loadApprovals();
   }, []);
 
-  const handleOpenActionDialog = (item: any, action: 'approve' | 'reject') => {
+  const handleOpenActionDialog = (item: any, action: 'approve' | 'reject' | 'delete') => {
     setDialogState({
       visible: true,
       item,
@@ -68,6 +77,24 @@ export const ApprovalsPage: React.FC = () => {
     const { item, action, reason } = dialogState;
     if (!item) return;
 
+    if (action === 'delete') {
+      const idx = approvals.findIndex((a) => a.id === item.id);
+      setApprovals((prev) => prev.filter((a) => a.id !== item.id));
+      setDialogState({ visible: false, item: null, action: 'approve', reason: '' });
+
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      setUndoToast({ visible: true, item, index: idx >= 0 ? idx : 0 });
+      undoTimerRef.current = setTimeout(() => setUndoToast(null), 9000);
+
+      try {
+        await adminApi.handleApproval(item.type, item.id, 'delete', reason);
+        showToast(`${item.applicantName || 'Applicant'} deleted successfully.`, 'info');
+      } catch (e: any) {
+        showToast(`Delete failed: ${e.message}`, 'error');
+      }
+      return;
+    }
+
     try {
       await adminApi.handleApproval(item.type, item.id, action, reason);
       showToast(
@@ -78,6 +105,26 @@ export const ApprovalsPage: React.FC = () => {
       loadApprovals();
     } catch (e: any) {
       showToast(`Action failed: ${e.message}`, 'error');
+    }
+  };
+
+  const handleUndoDelete = async () => {
+    if (!undoToast) return;
+    const { item, index } = undoToast;
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoToast(null);
+
+    setApprovals((prev) => {
+      const next = [...prev];
+      next.splice(Math.min(index, next.length), 0, item);
+      return next;
+    });
+
+    try {
+      await adminApi.handleApproval(item.type, item.id, 'restore');
+      showToast(`✓ ${item.applicantName || 'Record'} restored successfully!`, 'success');
+    } catch (e: any) {
+      showToast(`Restore failed: ${e.message}`, 'error');
     }
   };
 
@@ -210,6 +257,14 @@ export const ApprovalsPage: React.FC = () => {
               </TouchableOpacity>
             </>
           )}
+
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.deleteBtn]}
+            onPress={() => handleOpenActionDialog(item, 'delete')}
+            accessibilityLabel="Delete"
+          >
+            <Text style={{ fontSize: 13 }}>🗑️</Text>
+          </TouchableOpacity>
         </View>
       )
     }
@@ -406,6 +461,8 @@ export const ApprovalsPage: React.FC = () => {
               <Text style={styles.confirmTitle}>
                 {dialogState.action === 'approve'
                   ? 'Confirm Approval'
+                  : dialogState.action === 'delete'
+                  ? '🗑️ Confirm Deletion'
                   : 'Confirm Rejection'}
               </Text>
               <Text style={styles.confirmMsg}>
@@ -436,6 +493,14 @@ export const ApprovalsPage: React.FC = () => {
                 </View>
               )}
 
+              {dialogState.action === 'delete' && (
+                <View style={{ marginTop: 12, padding: 10, backgroundColor: '#fef2f2', borderRadius: 6, borderLeftWidth: 4, borderLeftColor: '#ef4444' }}>
+                  <Text style={{ fontSize: 12, color: '#991b1b', fontWeight: '600', lineHeight: 18 }}>
+                    ⚠️ This removes this application from the active approvals queue. You can restore it immediately using Undo.
+                  </Text>
+                </View>
+              )}
+
               <View style={styles.confirmActions}>
                 <TouchableOpacity
                   style={styles.cancelBtn}
@@ -454,7 +519,9 @@ export const ApprovalsPage: React.FC = () => {
                 <TouchableOpacity
                   style={[
                     styles.confirmExecuteBtn,
-                    dialogState.action === 'reject'
+                    dialogState.action === 'delete'
+                      ? { backgroundColor: '#dc2626', borderColor: '#b91c1c' }
+                      : dialogState.action === 'reject'
                       ? styles.confirmRejectBtn
                       : styles.confirmApproveBtn
                   ]}
@@ -463,6 +530,8 @@ export const ApprovalsPage: React.FC = () => {
                   <Text style={styles.confirmExecuteText}>
                     {dialogState.action === 'approve'
                       ? 'Confirm Approve'
+                      : dialogState.action === 'delete'
+                      ? '🗑️ Confirm Delete'
                       : 'Confirm Reject'}
                   </Text>
                 </TouchableOpacity>
@@ -470,6 +539,24 @@ export const ApprovalsPage: React.FC = () => {
             </View>
           </View>
         </Modal>
+      )}
+
+      {/* Floating Responsive Undo Toast */}
+      {undoToast && undoToast.visible && (
+        <View style={styles.floatingUndoToast}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+            <Text style={{ fontSize: 16 }}>🗑️</Text>
+            <Text style={styles.floatingUndoText} numberOfLines={1}>
+              "{undoToast.item?.applicantName || 'Application'}" deleted.
+            </Text>
+          </View>
+          <TouchableOpacity style={styles.floatingUndoBtn} onPress={handleUndoDelete}>
+            <Text style={styles.floatingUndoBtnText}>↩️ Undo</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setUndoToast(null)} style={{ padding: 4 }}>
+            <Text style={{ color: '#94a3b8', fontWeight: '800', fontSize: 14 }}>✕</Text>
+          </TouchableOpacity>
+        </View>
       )}
     </View>
   );
@@ -570,6 +657,47 @@ const styles = StyleSheet.create({
   rejectBtn: {
     backgroundColor: '#FEF2F2',
     borderColor: '#FECACA'
+  },
+  deleteBtn: {
+    backgroundColor: '#FFF1F2',
+    borderColor: '#FDA4AF'
+  },
+  floatingUndoToast: {
+    position: 'fixed' as any,
+    bottom: 24,
+    right: 24,
+    zIndex: 9999,
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#d4af37',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    maxWidth: 440,
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 15
+  },
+  floatingUndoText: {
+    color: '#f8fafc',
+    fontSize: 13,
+    fontWeight: '700'
+  },
+  floatingUndoBtn: {
+    backgroundColor: '#f59e0b',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6
+  },
+  floatingUndoBtnText: {
+    color: '#000000',
+    fontSize: 12,
+    fontWeight: '800'
   },
   modalOverlay: {
     flex: 1,

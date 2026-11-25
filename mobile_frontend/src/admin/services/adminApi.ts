@@ -424,7 +424,7 @@ export const adminApi = {
     return adminRequest('/admin/approvals');
   },
 
-  handleApproval: async (type: string, id: string, action: 'approve' | 'reject', reason?: string) => {
+  handleApproval: async (type: string, id: string, action: 'approve' | 'reject' | 'delete' | 'restore', reason?: string) => {
     return adminRequest(`/admin/approvals/${type}/${id}`, {
       method: 'POST',
       body: JSON.stringify({ action, reason })

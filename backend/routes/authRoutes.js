@@ -81,6 +81,8 @@ router.post('/admin/reject-registration', requireAdminAuth, (req, res) => {
   }
   return authController.rejectTeam({ params: { id }, body: { id, reason } }, res);
 });
+router.post('/admin/delete-registration', requireAdminAuth, (req, res) => authController.deleteRegistration(req, res));
+router.post('/admin/restore-registration', requireAdminAuth, (req, res) => authController.restoreRegistration(req, res));
 router.post('/admin/scorer-status', requireAdminAuth, (req, res) => authController.updateScorerStatus(req, res));
 router.post('/admin/umpire-status', requireAdminAuth, (req, res) => authController.updateUmpireStatus(req, res));
 router.get('/admin/notifications', requireAdminAuth, (req, res) => authController.getAdminNotifications(req, res));
