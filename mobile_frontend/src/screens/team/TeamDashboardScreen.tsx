@@ -4566,15 +4566,15 @@ const styles: any = StyleSheet.create({
     marginTop: 1
   },
 
-  // Match Day Alert Banner
+  // Match Day Alert Banner (Yellow & White Theme)
   matchDayAlertBanner: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#fffbeb',
     borderRadius: 14,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1.5,
     borderColor: '#f59e0b',
-    shadowColor: '#000',
+    shadowColor: '#d97706',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     elevation: 3
@@ -4588,37 +4588,38 @@ const styles: any = StyleSheet.create({
   matchDayBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: '#fef2f2',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: '#ef4444'
+    borderColor: '#fca5a5'
   },
   matchDayBadgeDot: {
     fontSize: 8,
     marginRight: 4
   },
   matchDayBadgeText: {
-    color: '#f87171',
+    color: '#dc2626',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5
   },
   matchDayDateText: {
-    color: '#fbbf24',
+    color: '#b45309',
     fontSize: 12,
-    fontWeight: '700'
+    fontWeight: '800'
   },
   matchDayTitleText: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 18,
     fontWeight: '900',
     marginBottom: 4
   },
   matchDayMetaText: {
-    color: '#94a3b8',
+    color: '#475569',
     fontSize: 12,
+    fontWeight: '600',
     marginBottom: 12
   },
   matchDayActionsRow: {
@@ -4627,20 +4628,20 @@ const styles: any = StyleSheet.create({
     flexWrap: 'wrap'
   },
   matchDayMapBtn: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#ffffff',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155'
+    borderWidth: 1.5,
+    borderColor: '#f59e0b'
   },
   matchDayMapBtnText: {
-    color: '#cbd5e1',
+    color: '#b45309',
     fontSize: 11.5,
     fontWeight: '700'
   },
   matchDaySquadBtn: {
-    backgroundColor: '#d97706',
+    backgroundColor: '#f59e0b',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8
@@ -4861,7 +4862,7 @@ const styles: any = StyleSheet.create({
   },
   scorecardTriggerBtn: {
     alignSelf: 'flex-start',
-    backgroundColor: '#0a2540',
+    backgroundColor: '#d97706',
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 6
@@ -4998,7 +4999,7 @@ const styles: any = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#0a2540',
+    backgroundColor: '#d97706',
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -5078,8 +5079,8 @@ const styles: any = StyleSheet.create({
     alignItems: 'center'
   },
   tournamentSubTabBtnActive: {
-    backgroundColor: '#0a2540',
-    borderColor: '#0a2540'
+    backgroundColor: '#d97706',
+    borderColor: '#d97706'
   },
   tournamentSubTabBtnText: {
     fontSize: 12.5,
@@ -5326,8 +5327,8 @@ const styles: any = StyleSheet.create({
     borderColor: '#cbd5e1'
   },
   filterPillActive: {
-    backgroundColor: '#0a2540',
-    borderColor: '#0a2540'
+    backgroundColor: '#d97706',
+    borderColor: '#d97706'
   },
   filterPillText: {
     fontSize: 11.5,
@@ -5461,7 +5462,7 @@ const styles: any = StyleSheet.create({
     marginTop: 2
   },
   btnInspectScorecard: {
-    backgroundColor: '#0a2540',
+    backgroundColor: '#d97706',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6
@@ -5787,7 +5788,7 @@ const styles: any = StyleSheet.create({
     alignItems: 'center'
   },
   inningsTabBtnActive: {
-    backgroundColor: '#0a2540'
+    backgroundColor: '#d97706'
   },
   inningsTabBtnText: {
     fontSize: 11.5,
@@ -5919,7 +5920,7 @@ const styles: any = StyleSheet.create({
 
   // ── Squad Player Add & Edit Styles (Registration-aligned) ─────────────
   addPlayerBtn: {
-    backgroundColor: '#0a2540',
+    backgroundColor: '#d97706',
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 8,
@@ -5979,7 +5980,7 @@ const styles: any = StyleSheet.create({
     fontWeight: '800'
   },
   playerSaveBtn: {
-    backgroundColor: '#0a2540',
+    backgroundColor: '#d97706',
     padding: 14,
     borderRadius: 10,
     alignItems: 'center',
