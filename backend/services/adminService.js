@@ -820,7 +820,15 @@ async function postponeMatch(matchId, optionsOrReason, adminEmail = 'admin@cfvd.
     rescheduled_date: rescheduledDate,
     rescheduled_time: rescheduledTime,
     rescheduled_at: (rescheduledDate || rescheduledTime) ? new Date() : null,
-    rescheduled_by: (rescheduledDate || rescheduledTime) ? adminEmail : null,
+    rescheduled_by: (rescheduledDate || rescheduledTime) ? {
+      user_id: adminEmail,
+      role: actorRole,
+      name: actorName
+    } : {
+      user_id: null,
+      role: null,
+      name: ''
+    },
     postponed_stage: finalStage,
     postponed_score_display: finalScoreDisplay,
     score_at_postponement: finalScoreDisplay,

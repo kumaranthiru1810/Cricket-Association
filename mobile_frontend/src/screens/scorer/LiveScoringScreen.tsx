@@ -662,7 +662,7 @@ export default function LiveScoringScreen() {
   const [showWagonWheelModal, setShowWagonWheelModal] = useState<boolean>(false);
   const [selectedWagonSector, setSelectedWagonSector] = useState<string>('Cover');
   const [pendingBoundaryRun, setPendingBoundaryRun] = useState<number | null>(null);
-  const [autoPromptWagonWheel, setAutoPromptWagonWheel] = useState<boolean>(false);
+  const [autoPromptWagonWheel, setAutoPromptWagonWheel] = useState<boolean>(true);
   const lastScoreTapTimeRef = useRef<number>(0);
 
   // 7. Umpire Assessment Modal State (Prepopulated from Match Schedule & Customizable by Scorer)

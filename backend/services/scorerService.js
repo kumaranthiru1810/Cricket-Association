@@ -484,15 +484,21 @@ class ScorerService {
     const allInningsDocs = await db.models.Innings.find({ match_id: matchId }).sort({ innings_number: 1 }).lean();
 
     const battingTeam = teamMap[currentInnings.batting_team_id] || teamA;
-    const bowlingTeam = teamMap[currentInnings.bowling_team_id] || teamB;
+    let bowlingTeam = teamMap[currentInnings.bowling_team_id] || teamB;
+    if (bowlingTeam?.id && battingTeam?.id && bowlingTeam.id === battingTeam.id) {
+      bowlingTeam = (battingTeam.id === teamA?.id) ? teamB : teamA;
+    }
+
+    const resolvedBattingTeamId = battingTeam?.id || currentInnings.batting_team_id;
+    const resolvedBowlingTeamId = bowlingTeam?.id || currentInnings.bowling_team_id;
 
     // Batters in this innings
     const batters = await db.models.InningsBatter.find({ innings_id: currentInnings.id }).sort({ batting_position: 1 }).lean();
     const playerMap = await this.getPlayerMap();
 
     // Resolve robust squads from official players & registered teams (Filtered to allocated Playing XI)
-    const battingSquad = await this.getSquadForTeam(currentInnings.batting_team_id, match);
-    const bowlingSquad = await this.getSquadForTeam(currentInnings.bowling_team_id, match);
+    const battingSquad = await this.getSquadForTeam(resolvedBattingTeamId, match);
+    const bowlingSquad = await this.getSquadForTeam(resolvedBowlingTeamId, match);
 
     // Active striker & non-striker
     const dismissedBatters = (batters || []).filter(b => b.is_out).map(b => b.player_id);
