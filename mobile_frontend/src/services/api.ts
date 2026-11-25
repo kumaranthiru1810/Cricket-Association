@@ -571,8 +571,17 @@ export const ScorerApi = {
       body: JSON.stringify({ email, password, role, teamName })
     });
     if (res.token) {
-      setAuthToken(res.token, res.user?.role || role);
-      if (res.user) setCurrentUser(res.user);
+      const resolvedRole = (role && role.toUpperCase() !== 'ADMIN')
+        ? role.toUpperCase()
+        : (res.user?.role || role);
+      setAuthToken(res.token, resolvedRole);
+      if (res.user) {
+        setCurrentUser({
+          ...res.user,
+          role: resolvedRole,
+          portalRole: resolvedRole
+        });
+      }
     }
     return res;
   },
@@ -623,8 +632,17 @@ export const ScorerApi = {
       body: JSON.stringify({ email, otp, role: role || 'SCORER' })
     });
     if (res.token) {
-      setAuthToken(res.token, res.user?.role || role);
-      if (res.user) setCurrentUser(res.user);
+      const resolvedRole = (role && role.toUpperCase() !== 'ADMIN')
+        ? role.toUpperCase()
+        : (res.user?.role || role);
+      setAuthToken(res.token, resolvedRole);
+      if (res.user) {
+        setCurrentUser({
+          ...res.user,
+          role: resolvedRole,
+          portalRole: resolvedRole
+        });
+      }
     }
     return res;
   },

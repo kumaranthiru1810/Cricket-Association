@@ -124,7 +124,7 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
         const res = await ScorerApi.loginWithPassword(input, '', 'PLAYER', teamName.trim());
         if (res?.token) {
           setAuthToken(res.token, 'PLAYER');
-          if (res.user) setCurrentUser(res.user);
+          if (res.user) setCurrentUser({ ...res.user, role: 'PLAYER', portalRole: 'PLAYER' });
         }
         setStatusMessage(res?.message || 'Login successful!');
         setStatusType('success');
@@ -175,7 +175,7 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
 
       if (res?.token) {
         setAuthToken(res.token, activeRole);
-        if (res.user) setCurrentUser(res.user);
+        if (res.user) setCurrentUser({ ...res.user, role: activeRole, portalRole: activeRole });
       }
 
       setStatusMessage(res?.message || 'Login successful! Redirecting...');

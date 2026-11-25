@@ -89,8 +89,16 @@ export default function HomeScreen() {
       ScorerApi.getMe()
         .then((res: any) => {
           if (res && res.success && res.user) {
-            setCurrentUser(res.user);
-            setSessionUser(res.user);
+            const portalRole = cached?.portalRole && cached.portalRole !== 'ADMIN'
+              ? cached.portalRole
+              : res.user.role;
+            const mergedUser = {
+              ...res.user,
+              role: portalRole,
+              ...(cached?.portalRole ? { portalRole: cached.portalRole } : {})
+            };
+            setCurrentUser(mergedUser);
+            setSessionUser(mergedUser);
           }
         })
         .catch(() => {
