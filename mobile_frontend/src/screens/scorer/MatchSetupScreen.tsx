@@ -39,6 +39,20 @@ export default function MatchSetupScreen() {
   const [tossDecision, setTossDecision] = useState<'BAT' | 'BOWL'>('BAT');
   const [matchOvers, setMatchOvers] = useState<string>('20');
 
+  // Rule 5: Post-Toss Delay Timer & Over-Reduction Penalty State
+  const [delayTimerRunning, setDelayTimerRunning] = useState<boolean>(false);
+  const [delayElapsedSeconds, setDelayElapsedSeconds] = useState<number>(0);
+  const [delayPenaltySkipped, setDelayPenaltySkipped] = useState<boolean>(false);
+  const [delayPenaltyAppliedOvers, setDelayPenaltyAppliedOvers] = useState<number>(0);
+
+  useEffect(() => {
+    if (!delayTimerRunning) return;
+    const id = setInterval(() => {
+      setDelayElapsedSeconds(prev => prev + 1);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [delayTimerRunning]);
+
   useEffect(() => {
     loadSetupData();
   }, [matchId]);
@@ -135,22 +149,24 @@ export default function MatchSetupScreen() {
       return;
     }
 
-    // Association Rule 15: At least 9 players must be present at the start of the match
+    // Association Rule 15: Dynamic minimum players configured by Admin
+    const rule15Enabled = setupData?.rule15?.enabled !== false;
+    const minRequiredPlayers = rule15Enabled ? (setupData?.rule15?.minPlayers ?? 9) : 1;
     const presentA = (setupData?.teamAPlayers || []).filter((p: any) => attendanceA[p.id]);
     const presentB = (setupData?.teamBPlayers || []).filter((p: any) => attendanceB[p.id]);
 
-    if (presentA.length < 9) {
+    if (presentA.length < minRequiredPlayers) {
       showWarning(
-        'Rule 15: Minimum 9 Players Required',
-        `Rule 15: A minimum of 9 players must be present at the start of each innings.\n\n${teamA.name} has only ${presentA.length} players marked present. Please mark attendance for at least 9 players before starting.`
+        `Rule 15: Minimum ${minRequiredPlayers} Players Required`,
+        `Rule 15: A minimum of ${minRequiredPlayers} players must be present at the start of each innings.\n\n${teamA.name} has only ${presentA.length} players marked present. Please mark attendance for at least ${minRequiredPlayers} players before starting.`
       );
       return;
     }
 
-    if (presentB.length < 9) {
+    if (presentB.length < minRequiredPlayers) {
       showWarning(
-        'Rule 15: Minimum 9 Players Required',
-        `Rule 15: A minimum of 9 players must be present at the start of each innings.\n\n${teamB.name} has only ${presentB.length} players marked present. Please mark attendance for at least 9 players before starting.`
+        `Rule 15: Minimum ${minRequiredPlayers} Players Required`,
+        `Rule 15: A minimum of ${minRequiredPlayers} players must be present at the start of each innings.\n\n${teamB.name} has only ${presentB.length} players marked present. Please mark attendance for at least ${minRequiredPlayers} players before starting.`
       );
       return;
     }
@@ -162,6 +178,8 @@ export default function MatchSetupScreen() {
         tossDecision,
         overs: parsedOvers,
         totalOvers: parsedOvers,
+        delayPenaltyOvers: delayPenaltySkipped ? 0 : delayPenaltyAppliedOvers,
+        delayPenaltySkipped,
         teamAPlayingXI: presentA.map((p: any) => p.id),
         teamBPlayingXI: presentB.map((p: any) => p.id),
         teamAAttendance: presentA.map((p: any) => p.id),
@@ -303,6 +321,20 @@ export default function MatchSetupScreen() {
                     <Text style={styles.detailLabel}>MATCH STATUS</Text>
                     <Text style={[styles.detailVal, { color: '#eab308' }]}>{setupData?.status || 'SCHEDULED'}</Text>
                   </View>
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailLabel}>TOURNAMENT FORMAT</Text>
+                    <Text style={styles.detailVal} numberOfLines={1}>
+                      {setupData?.tournamentRules?.tournament_format_label || 'Single Round Robin'}
+                    </Text>
+                  </View>
+                  {setupData?.tournamentRules?.match_stage ? (
+                    <View style={styles.detailItem}>
+                      <Text style={styles.detailLabel}>STAGE</Text>
+                      <Text style={styles.detailVal} numberOfLines={1}>
+                        {String(setupData.tournamentRules.match_stage).replace(/_/g, ' ')}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
               </View>
 
@@ -405,6 +437,137 @@ export default function MatchSetupScreen() {
                   <Text style={{ fontSize: 10.5, color: '#64748b', marginTop: 4 }}>
                     Change 20 to 15, 10 or custom overs before starting. Match will begin with this overs limit.
                   </Text>
+
+                  {/* RULE 5: POST-TOSS DELAY TIMER & OVER/BALL PENALTY (WITH SKIP) */}
+                  {(() => {
+                    const tr = setupData?.tournamentRules || {};
+                    if (tr.delay_penalty_enabled === false) return null;
+                    const intervalVal = Number(tr.delay_interval_value || 4);
+                    const intervalUnit = ['HOURS', 'MINUTES', 'SECONDS'].includes(tr.delay_interval_unit)
+                      ? tr.delay_interval_unit
+                      : 'MINUTES';
+                    const intervalSec = intervalUnit === 'HOURS'
+                      ? intervalVal * 3600
+                      : (intervalUnit === 'SECONDS' ? intervalVal : intervalVal * 60);
+                    const reduceUnit = tr.delay_reduce_unit === 'BALLS' ? 'BALLS' : 'OVERS';
+                    const amountPerStep = Number(tr.delay_overs_reduced_per_interval || 1);
+                    const baseOvers = Number(setupData?.overs || 20);
+                    const intervalsElapsed = Math.floor(delayElapsedSeconds / Math.max(1, intervalSec));
+                    const rawReduced = delayPenaltySkipped ? 0 : intervalsElapsed * amountPerStep;
+                    const oversEquivalent = reduceUnit === 'BALLS' ? Math.floor(rawReduced / 6) : rawReduced;
+                    const secsToNext = intervalSec - (delayElapsedSeconds % Math.max(1, intervalSec));
+                    const hrsDisp = String(Math.floor(delayElapsedSeconds / 3600)).padStart(2, '0');
+                    const minsDisp = String(Math.floor((delayElapsedSeconds % 3600) / 60)).padStart(2, '0');
+                    const secsDisp = String(delayElapsedSeconds % 60).padStart(2, '0');
+                    const unitShort = intervalUnit === 'HOURS' ? 'hr' : (intervalUnit === 'SECONDS' ? 'sec' : 'min');
+                    const penaltyShort = reduceUnit === 'BALLS' ? 'Balls' : 'Ov';
+
+                    return (
+                      <View style={{
+                        marginTop: 10,
+                        padding: 10,
+                        borderRadius: 10,
+                        backgroundColor: delayPenaltySkipped ? '#f8fafc' : '#fff7ed',
+                        borderWidth: 1,
+                        borderColor: delayPenaltySkipped ? '#cbd5e1' : '#fed7aa'
+                      }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                          <Text style={{ fontSize: 11.5, fontWeight: '800', color: delayPenaltySkipped ? '#475569' : '#9a3412' }}>
+                            ⏱️ Rule 5 • Field Delay Timer (-{amountPerStep} {penaltyShort} / {intervalVal} {unitShort})
+                          </Text>
+                          <Text style={{ fontSize: 13, fontWeight: '900', color: '#0f172a', fontVariant: ['tabular-nums'] }}>
+                            {intervalUnit === 'HOURS' ? `${hrsDisp}:${minsDisp}:${secsDisp}` : `${minsDisp}:${secsDisp}`}
+                          </Text>
+                        </View>
+
+                        <Text style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
+                          {delayPenaltySkipped
+                            ? 'Delay penalty skipped / waived by Scorer.'
+                            : `Penalty due: -${rawReduced} ${penaltyShort}${reduceUnit === 'BALLS' && rawReduced >= 6 ? ` (-${oversEquivalent} Ov)` : ''} • Next -${amountPerStep} ${penaltyShort} in ${secsToNext}s`}
+                        </Text>
+
+                        <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                          {!delayPenaltySkipped && (
+                            <>
+                              <TouchableOpacity
+                                onPress={() => setDelayTimerRunning(r => !r)}
+                                style={{
+                                  paddingHorizontal: 10,
+                                  paddingVertical: 6,
+                                  borderRadius: 6,
+                                  backgroundColor: delayTimerRunning ? '#dc2626' : '#0f766e'
+                                }}
+                              >
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#ffffff' }}>
+                                  {delayTimerRunning ? '⏸ Pause' : '▶ Start Timer'}
+                                </Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={() => {
+                                  setDelayTimerRunning(false);
+                                  setDelayElapsedSeconds(0);
+                                  setDelayPenaltyAppliedOvers(0);
+                                  setMatchOvers(String(baseOvers));
+                                }}
+                                style={{
+                                  paddingHorizontal: 10,
+                                  paddingVertical: 6,
+                                  borderRadius: 6,
+                                  backgroundColor: '#e2e8f0'
+                                }}
+                              >
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>Reset</Text>
+                              </TouchableOpacity>
+                              {oversEquivalent > 0 && (
+                                <TouchableOpacity
+                                  onPress={() => {
+                                    const reduced = Math.max(1, baseOvers - oversEquivalent);
+                                    setMatchOvers(String(reduced));
+                                    setDelayPenaltyAppliedOvers(oversEquivalent);
+                                  }}
+                                  style={{
+                                    paddingHorizontal: 10,
+                                    paddingVertical: 6,
+                                    borderRadius: 6,
+                                    backgroundColor: '#ea580c'
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#ffffff' }}>
+                                    Apply (-{oversEquivalent} Ov → {Math.max(1, baseOvers - oversEquivalent)} Ov)
+                                  </Text>
+                                </TouchableOpacity>
+                              )}
+                            </>
+                          )}
+                          <TouchableOpacity
+                            onPress={() => {
+                              if (delayPenaltySkipped) {
+                                setDelayPenaltySkipped(false);
+                              } else {
+                                setDelayTimerRunning(false);
+                                setDelayPenaltySkipped(true);
+                                setDelayPenaltyAppliedOvers(0);
+                                setMatchOvers(String(baseOvers));
+                              }
+                            }}
+                            style={{
+                              paddingHorizontal: 10,
+                              paddingVertical: 6,
+                              borderRadius: 6,
+                              borderWidth: 1,
+                              borderColor: '#94a3b8',
+                              backgroundColor: '#ffffff',
+                              marginLeft: 'auto'
+                            }}
+                          >
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#334155' }}>
+                              {delayPenaltySkipped ? '↺ Re-enable Penalty' : '⏭️ Skip Penalty'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })()}
                 </View>
 
                 {tossWinnerName ? (
@@ -472,7 +635,9 @@ export default function MatchSetupScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.cardHeader}>Match Squad Attendance &amp; Playing Squad</Text>
                     <Text style={styles.sectionHelp}>
-                      Scorer Attendance Checklist • Tap players to mark Present (Min 9 players per team)
+                      {setupData?.rule15?.enabled === false
+                        ? 'Scorer Attendance Checklist • Tap players to mark Present (Min 1 player per team)'
+                        : `Scorer Attendance Checklist • Tap players to mark Present (Min ${setupData?.rule15?.minPlayers ?? 9} players per team)`}
                     </Text>
                   </View>
                   <View style={styles.xiMainBadge}>
@@ -483,20 +648,34 @@ export default function MatchSetupScreen() {
                 </View>
 
                 {/* ASSOCIATION RULE 15 ATTENDANCE BANNER */}
-                <View style={styles.rule15Banner}>
-                  <Text style={styles.rule15Icon}>📜</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.rule15Title}>
-                      Association Rule 15 • Match Attendance Requirement
-                    </Text>
-                    <Text style={styles.rule15Tamil}>
-                      "Rule 15: A minimum of 9 players must be present at the start of each innings."
-                    </Text>
-                    <Text style={styles.rule15Sub}>
-                      Official Scorer: Mark checkboxes for each attending player. At least 9 players must be marked Present per team before starting the match.
-                    </Text>
-                  </View>
-                </View>
+                {(() => {
+                  const r15Enabled = setupData?.rule15?.enabled !== false;
+                  const minReq = r15Enabled ? (setupData?.rule15?.minPlayers ?? 9) : 1;
+                  const customText = setupData?.rule15?.ruleText?.trim();
+                  const bannerQuote = customText
+                    ? customText
+                    : (r15Enabled
+                      ? `Rule 15: A minimum of ${minReq} players must be present at the start of each innings.`
+                      : 'Rule 15 minimum player check is currently waived by Admin.');
+                  return (
+                    <View style={styles.rule15Banner}>
+                      <Text style={styles.rule15Icon}>📜</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.rule15Title}>
+                          Association Rule 15 • Match Attendance Requirement
+                        </Text>
+                        <Text style={styles.rule15Tamil}>
+                          &quot;{bannerQuote}&quot;
+                        </Text>
+                        <Text style={styles.rule15Sub}>
+                          {r15Enabled
+                            ? `Official Scorer: Mark checkboxes for each attending player. At least ${minReq} players must be marked Present per team before starting the match.`
+                            : 'Official Scorer: Mark checkboxes for attending players before starting the match.'}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })()}
 
                 {/* Mobile Tab Switcher */}
                 {!isDesktop && (
@@ -529,9 +708,13 @@ export default function MatchSetupScreen() {
                         <View style={{ flex: 1, minWidth: 0 }}>
                           <Text style={styles.teamColTitle} numberOfLines={1}>{teamA.name}</Text>
                           <Text style={styles.teamColSub}>
-                            {teamAPlayers.filter((p: any) => attendanceA[p.id]).length >= 9
-                              ? `✅ ${teamAPlayers.filter((p: any) => attendanceA[p.id]).length} Present (Min 9 Met)`
-                              : `⚠️ Only ${teamAPlayers.filter((p: any) => attendanceA[p.id]).length} Present (Rule 15: Need 9)`}
+                            {(() => {
+                              const minReq = setupData?.rule15?.enabled === false ? 1 : (setupData?.rule15?.minPlayers ?? 9);
+                              const countA = teamAPlayers.filter((p: any) => attendanceA[p.id]).length;
+                              return countA >= minReq
+                                ? `✅ ${countA} Present (Min ${minReq} Met)`
+                                : `⚠️ Only ${countA} Present (Rule 15: Need ${minReq})`;
+                            })()}
                           </Text>
                         </View>
                         {/* Attendance Quick Action Buttons */}
@@ -566,9 +749,13 @@ export default function MatchSetupScreen() {
                         <View style={{ flex: 1, minWidth: 0 }}>
                           <Text style={styles.teamColTitle} numberOfLines={1}>{teamB.name}</Text>
                           <Text style={styles.teamColSub}>
-                            {teamBPlayers.filter((p: any) => attendanceB[p.id]).length >= 9
-                              ? `✅ ${teamBPlayers.filter((p: any) => attendanceB[p.id]).length} Present (Min 9 Met)`
-                              : `⚠️ Only ${teamBPlayers.filter((p: any) => attendanceB[p.id]).length} Present (Rule 15: Need 9)`}
+                            {(() => {
+                              const minReq = setupData?.rule15?.enabled === false ? 1 : (setupData?.rule15?.minPlayers ?? 9);
+                              const countB = teamBPlayers.filter((p: any) => attendanceB[p.id]).length;
+                              return countB >= minReq
+                                ? `✅ ${countB} Present (Min ${minReq} Met)`
+                                : `⚠️ Only ${countB} Present (Rule 15: Need ${minReq})`;
+                            })()}
                           </Text>
                         </View>
                         {/* Attendance Quick Action Buttons */}

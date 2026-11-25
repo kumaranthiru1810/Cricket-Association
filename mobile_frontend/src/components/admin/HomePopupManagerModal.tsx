@@ -36,11 +36,17 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
   const [saving, setSaving] = useState(false);
   const [destDropdownOpen, setDestDropdownOpen] = useState(false);
   const [feedback, setFeedback] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  // Tournament selector
+  const [tournaments, setTournaments] = useState<any[]>([]);
+  const [tourDropdownOpen, setTourDropdownOpen] = useState(false);
+  const [selectedTournamentId, setSelectedTournamentId] = useState('');
 
   useEffect(() => {
     if (!visible) return;
     setFeedback(null);
     setDestDropdownOpen(false);
+    setTourDropdownOpen(false);
+    setSelectedTournamentId('');
     setLoading(true);
     adminApi
       .getHomePopup()
@@ -51,6 +57,13 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    // Load tournaments for quick-fill dropdown
+    adminApi
+      .getTournaments()
+      .then((res: any) => {
+        if (res?.success) setTournaments(res.tournaments || []);
+      })
+      .catch(() => {});
   }, [visible]);
 
   const handleSave = async () => {
@@ -94,29 +107,29 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
       }}>
         <View style={{
           width: '100%',
-          maxWidth: 680,
-          maxHeight: '92%',
+          maxWidth: isMobile ? '100%' : 700,
+          maxHeight: isMobile ? '98%' : '92%',
           backgroundColor: '#ffffff',
-          borderRadius: 16,
+          borderRadius: isMobile ? 12 : 16,
           overflow: 'hidden',
           borderWidth: 1,
-          borderColor: '#e2e8f0',
+          borderColor: '#1e293b',
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 10 },
-          shadowOpacity: 0.2,
-          shadowRadius: 20,
-          elevation: 12
+          shadowOpacity: 0.3,
+          shadowRadius: 24,
+          elevation: 14
         }}>
-          {/* Header */}
+          {/* Header — dark navy */}
           <View style={{
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
             paddingHorizontal: 18,
             paddingVertical: 14,
-            backgroundColor: '#fffbeb',
-            borderBottomWidth: 1,
-            borderBottomColor: '#fde68a'
+            backgroundColor: '#0f172a',
+            borderBottomWidth: 2,
+            borderBottomColor: '#f59e0b'
           }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
               <View style={{
@@ -130,16 +143,16 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
                 <Text style={{ fontSize: 18 }}>📢</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 16, fontWeight: '900', color: '#0f172a' }}>
+                <Text style={{ fontSize: 16, fontWeight: '900', color: '#ffffff' }}>
                   Home Portal Popup Alert
                 </Text>
-                <Text style={{ fontSize: 11.5, color: '#64748b' }}>
+                <Text style={{ fontSize: 11.5, color: '#94a3b8' }}>
                   Manage official Match Day notices, Rules &amp; Championship announcements on Home Page
                 </Text>
               </View>
             </View>
             <TouchableOpacity onPress={onClose} style={{ padding: 6 }}>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: '#64748b' }}>✕</Text>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: '#94a3b8' }}>✕</Text>
             </TouchableOpacity>
           </View>
 
@@ -190,6 +203,122 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
                 />
               </View>
 
+              {/* Tournament Quick-Fill Selector */}
+              {tournaments.length > 0 && (
+                <View style={{ marginBottom: 16, zIndex: 800 }}>
+                  <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#475569', marginBottom: 6, textTransform: 'uppercase' }}>
+                    🏆 Link to a Tournament (Auto-Fill)
+                  </Text>
+                  <View style={{ position: 'relative' }}>
+                    <TouchableOpacity
+                      onPress={() => setTourDropdownOpen(p => !p)}
+                      activeOpacity={0.85}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        borderWidth: 1.5,
+                        borderColor: tourDropdownOpen ? '#1e40af' : '#cbd5e1',
+                        borderRadius: 10,
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        backgroundColor: selectedTournamentId ? '#eff6ff' : '#ffffff'
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                        <Text style={{ fontSize: 15 }}>🏏</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: selectedTournamentId ? '#1d4ed8' : '#94a3b8', flex: 1 }} numberOfLines={1}>
+                          {selectedTournamentId
+                            ? (tournaments.find(t => t._id === selectedTournamentId)?.name || 'Selected')
+                            : 'Select a tournament to auto-fill notice...'}
+                        </Text>
+                      </View>
+                      <Text style={{ fontSize: 11, color: '#64748b' }}>{tourDropdownOpen ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                    {tourDropdownOpen && (
+                      <View style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        right: 0,
+                        marginTop: 4,
+                        backgroundColor: '#ffffff',
+                        borderWidth: 1,
+                        borderColor: '#e2e8f0',
+                        borderRadius: 10,
+                        zIndex: 1200,
+                        elevation: 12,
+                        maxHeight: 200,
+                        overflow: 'hidden'
+                      }}>
+                        <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} style={{ maxHeight: 200 }}>
+                          {tournaments.map(t => (
+                            <TouchableOpacity
+                              key={t._id}
+                              onPress={() => {
+                                setSelectedTournamentId(t._id);
+                                setTourDropdownOpen(false);
+                                // Auto-fill announcement fields from tournament
+                                const fmt = t.matchFormat || t.format || 'T20';
+                                const overs = t.overs || t.oversPerMatch || '20';
+                                const venue = t.primaryVenue || t.venue || '';
+                                const season = t.season || new Date().getFullYear();
+                                setConfig(prev => ({
+                                  ...prev,
+                                  title: `${t.name} — Season ${season}`,
+                                  message: `${fmt} (${overs} Overs) Championship${venue ? ` at ${venue}` : ''}. Check live scores, fixtures and standings on the portal.`,
+                                  badgeText: `${t.shortName || t.name.substring(0, 12).toUpperCase()} ${season}`,
+                                  highlightText: t.registrationDeadline
+                                    ? `Registration Deadline: ${t.registrationDeadline}`
+                                    : prev.highlightText,
+                                  buttonText: 'View Championship →',
+                                  buttonDestination: 'live-scores'
+                                }));
+                              }}
+                              style={{
+                                paddingHorizontal: 14,
+                                paddingVertical: 10,
+                                borderBottomWidth: 1,
+                                borderBottomColor: '#f1f5f9',
+                                backgroundColor: selectedTournamentId === t._id ? '#eff6ff' : 'transparent',
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 8
+                              }}
+                            >
+                              <View style={{
+                                width: 28, height: 28, borderRadius: 6,
+                                backgroundColor: '#1e40af',
+                                alignItems: 'center', justifyContent: 'center'
+                              }}>
+                                <Text style={{ fontSize: 11, fontWeight: '900', color: '#ffffff' }}>
+                                  {(t.shortName || t.name || '?').substring(0, 2).toUpperCase()}
+                                </Text>
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0f172a' }} numberOfLines={1}>{t.name}</Text>
+                                <Text style={{ fontSize: 11, color: '#64748b' }}>
+                                  {t.matchFormat || t.format || 'T20'} · Season {t.season || '2026'}
+                                  {t.status ? ` · ${t.status}` : ''}
+                                </Text>
+                              </View>
+                              {selectedTournamentId === t._id && (
+                                <Text style={{ fontSize: 14, color: '#1d4ed8' }}>✓</Text>
+                              )}
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    )}
+                  </View>
+                  {selectedTournamentId && (
+                    <TouchableOpacity onPress={() => { setSelectedTournamentId(''); }} style={{ marginTop: 4 }}>
+                      <Text style={{ fontSize: 11, color: '#94a3b8' }}>✕ Clear selection</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+
               {/* Quick Presets */}
               <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#475569', marginBottom: 8, textTransform: 'uppercase' }}>
                 ⚡ Quick Presets (1-Click Fill)
@@ -201,21 +330,37 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
                     <TouchableOpacity
                       key={p.key}
                       onPress={() => setConfig(prev => ({ ...prev, ...p.values }))}
-                      activeOpacity={0.8}
+                      activeOpacity={0.75}
                       style={{
-                        flex: 1,
-                        minWidth: 160,
-                        backgroundColor: isActive ? '#fffbeb' : '#ffffff',
-                        borderWidth: 1.5,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 8,
+                        paddingHorizontal: 14,
+                        paddingVertical: 10,
+                        borderRadius: 24,
+                        borderWidth: 2,
                         borderColor: isActive ? '#d97706' : '#e2e8f0',
-                        borderRadius: 10,
-                        padding: 10
+                        backgroundColor: isActive ? '#fffbeb' : '#f8fafc',
+                        shadowColor: isActive ? '#d97706' : '#000',
+                        shadowOffset: { width: 0, height: isActive ? 2 : 1 },
+                        shadowOpacity: isActive ? 0.18 : 0.06,
+                        shadowRadius: isActive ? 6 : 2,
+                        elevation: isActive ? 4 : 1
                       }}
                     >
-                      <Text style={{ fontSize: 13, fontWeight: '800', color: isActive ? '#92400e' : '#0f172a' }}>
-                        {p.icon} {p.label}
-                      </Text>
-                      <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{p.subtitle}</Text>
+                      <Text style={{ fontSize: 17 }}>{p.icon}</Text>
+                      <View>
+                        <Text style={{ fontSize: 12.5, fontWeight: '800', color: isActive ? '#92400e' : '#1e293b' }}>
+                          {p.label}
+                        </Text>
+                        <Text style={{ fontSize: 10.5, color: '#64748b' }}>{p.subtitle}</Text>
+                      </View>
+                      {isActive && (
+                        <View style={{
+                          width: 8, height: 8, borderRadius: 4,
+                          backgroundColor: '#d97706', marginLeft: 2
+                        }} />
+                      )}
                     </TouchableOpacity>
                   );
                 })}
@@ -262,9 +407,48 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
 
               {config.imageKey === 'custom' && (
                 <View style={{ marginBottom: 12 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155', marginBottom: 4 }}>
-                    Custom Image URL
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155', marginBottom: 6 }}>
+                    Custom Banner Image
                   </Text>
+                  {/* Upload button — web only */}
+                  <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        const input = (document as any).createElement('input');
+                        input.type = 'file';
+                        input.accept = 'image/*';
+                        input.onchange = (e: any) => {
+                          const file = e.target?.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = (ev: any) => {
+                            const dataUrl = ev.target?.result as string;
+                            if (dataUrl) setConfig(prev => ({ ...prev, customImageUrl: dataUrl }));
+                          };
+                          reader.readAsDataURL(file);
+                        };
+                        input.click();
+                      }}
+                      style={{
+                        backgroundColor: '#f59e0b',
+                        paddingHorizontal: 14,
+                        paddingVertical: 9,
+                        borderRadius: 8,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#ffffff' }}>📁 Upload Image</Text>
+                    </TouchableOpacity>
+                    <Text style={{ fontSize: 11.5, color: '#94a3b8', flex: 1 }}>or paste URL below</Text>
+                  </View>
+                  {/* Preview thumbnail if image selected */}
+                  {Boolean(config.customImageUrl) && (
+                    <View style={{ marginBottom: 8, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#e2e8f0' }}>
+                      <Image source={{ uri: config.customImageUrl }} style={{ width: '100%', height: 72 }} resizeMode="cover" />
+                    </View>
+                  )}
                   <TextInput
                     style={{
                       borderWidth: 1,
@@ -558,8 +742,8 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
             paddingHorizontal: 18,
             paddingVertical: 12,
             borderTopWidth: 1,
-            borderTopColor: '#e2e8f0',
-            backgroundColor: '#f8fafc'
+            borderTopColor: '#1e293b',
+            backgroundColor: '#0f172a'
           }}>
             <TouchableOpacity
               onPress={onClose}
@@ -568,11 +752,11 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
                 paddingVertical: 10,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: '#cbd5e1',
-                backgroundColor: '#ffffff'
+                borderColor: '#334155',
+                backgroundColor: '#1e293b'
               }}
             >
-              <Text style={{ fontSize: 13, fontWeight: '700', color: '#475569' }}>Cancel</Text>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#94a3b8' }}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleSave}
@@ -581,11 +765,11 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
                 paddingHorizontal: 18,
                 paddingVertical: 10,
                 borderRadius: 8,
-                backgroundColor: '#d97706',
+                backgroundColor: '#f59e0b',
                 opacity: saving ? 0.6 : 1
               }}
             >
-              <Text style={{ fontSize: 13, fontWeight: '800', color: '#ffffff' }}>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>
                 {saving ? 'Saving...' : '✓ Save & Apply Settings'}
               </Text>
             </TouchableOpacity>

@@ -718,6 +718,24 @@ export default function LiveScoringScreen() {
   const [showEndMatchModal, setShowEndMatchModal] = useState<boolean>(false);
   const [endMatchResult, setEndMatchResult] = useState<'WIN' | 'TIE'>('WIN');
   const [winnerTeamId, setWinnerTeamId] = useState<string>('');
+  const [isWalkover, setIsWalkover] = useState<boolean>(false);
+  const [bonusPointWinner, setBonusPointWinner] = useState<boolean>(false);
+  const [bonusPointLoserPenalty, setBonusPointLoserPenalty] = useState<boolean>(false);
+  const [tournamentRules, setTournamentRules] = useState<any>({
+    powerplay_overs: 5,
+    max_outside_powerplay: 2,
+    max_outside_post_powerplay: 5,
+    max_on_side_fielders: 5,
+    max_on_side_behind_crease: 2,
+    free_hit_on_all_noballs: true,
+    points_win: 4,
+    points_loss: 0,
+    points_tie: 2,
+    points_bonus_win: 1,
+    points_bonus_loss: -1,
+    points_walkover_win: 4,
+    points_walkover_loss: -1
+  });
   const [isSuperOverSelected, setIsSuperOverSelected] = useState<boolean>(false);
   const [superOverBattingTeam, setSuperOverBattingTeam] = useState<string>('');
   const [playerOfMatchInput, setPlayerOfMatchInput] = useState<string>('');
@@ -1412,6 +1430,10 @@ export default function LiveScoringScreen() {
       setIsInningsBreak(isBreak);
       setIsMatchEnded(Boolean(isCompleted));
 
+      if (d.tournamentRules) {
+        setTournamentRules(d.tournamentRules);
+      }
+
       if (d.match) {
         const teamAName = d.match.teamA || d.innings?.battingTeam || 'Team A';
         const teamBName = d.match.teamB || d.innings?.bowlingTeam || 'Team B';
@@ -1620,7 +1642,10 @@ export default function LiveScoringScreen() {
     let runsBatter = 0;
     let runsExtras = 0;
 
-    if (type === 'normal') {
+    if (customOpts.extraType === 'PENALTY') {
+      runsBatter = 0;
+      runsExtras = Number(customOpts.runsExtras ?? (run > 0 ? run : 5));
+    } else if (type === 'normal') {
       runsBatter = run;
       runsExtras = 0;
     } else if (type === 'wide') {
@@ -1655,7 +1680,8 @@ export default function LiveScoringScreen() {
       bowlerId: bowler?.id,
       runsBatter,
       runsExtras,
-      extraType: extraTypeMap[type] || 'NONE',
+      extraType: customOpts.extraType || extraTypeMap[type] || 'NONE',
+      noBallReason: customOpts.noBallReason || undefined,
       wicket: false,
       fieldingPosition: finalFieldingPos,
       shotType: selectedShotType,
@@ -1689,7 +1715,7 @@ export default function LiveScoringScreen() {
       isOverComplete
     };
 
-    const isLegal = type !== 'wide' && type !== 'noball';
+    const isLegal = type !== 'wide' && type !== 'noball' && customOpts.extraType !== 'PENALTY';
     const totalDelRuns = runsBatter + runsExtras;
 
     // 1. Instant update to total team runs
@@ -1773,7 +1799,8 @@ export default function LiveScoringScreen() {
       runsBatter,
       runsExtras,
       extra: type !== 'normal',
-      extraType: extraTypeMap[type] || 'NONE',
+      extraType: customOpts.extraType || extraTypeMap[type] || 'NONE',
+      noBallReason: customOpts.noBallReason || undefined,
       wicket: false,
       text: ballLabel,
       overNumber: ovNum
@@ -2022,6 +2049,16 @@ export default function LiveScoringScreen() {
       finalReason = `${moreRunsSelected} Running Runs (Between Wickets)`;
     } else if (moreRunsReasonKey === 'PENALTY') {
       finalReason = `Penalty 5 Runs (Law 28 - Helmet Hit)`;
+    } else if (moreRunsReasonKey === 'FIELDING_VIOLATION_NB') {
+      const ppOv = Number(tournamentRules?.powerplay_overs ?? 5);
+      const curOv = Math.floor((balls || 0) / 6) + 1;
+      const inPP = curOv <= ppOv;
+      const maxOut = inPP ? (tournamentRules?.max_outside_powerplay ?? 2) : (tournamentRules?.max_outside_post_powerplay ?? 5);
+      finalReason = `Rule 8 Fielding Violation (${inPP ? `Powerplay Ov ${curOv}/${ppOv}: Max ${maxOut} outside` : `Post-PP: Max ${maxOut} outside`}, Max ${tournamentRules?.max_on_side_fielders ?? 5} leg-side, Max ${tournamentRules?.max_on_side_behind_crease ?? 2} behind crease) — No Ball + Free Hit`;
+    } else if (moreRunsReasonKey === 'RULE_PENALTY_RUNS') {
+      finalReason = `Rule Violation Penalty (+${moreRunsSelected} Runs • Law 41 Unfair Play / Time Wasting)`;
+    } else if (moreRunsReasonKey === 'OFFICIAL_WARNING') {
+      finalReason = `Official Umpire Warning (Rule Violation • 0 Runs)`;
     } else if (moreRunsReason) {
       finalReason = moreRunsReason;
     }
@@ -2039,7 +2076,17 @@ export default function LiveScoringScreen() {
     setShowMoreRunsModal(false);
     const totalR = moreRunsSelected;
 
-    if (moreRunsReasonKey === 'WIDE' || finalReason.toLowerCase().includes('wide')) {
+    if (moreRunsReasonKey === 'OFFICIAL_WARNING') {
+      setAiCommentary(`⚠️ OFFICIAL UMPIRE WARNING: ${finalReason}`);
+      const warnMsg = 'Official Umpire Warning recorded (0 runs, no wicket/ball penalty).';
+      Platform.OS === 'web' ? window.alert(warnMsg) : Alert.alert('Warning Logged', warnMsg);
+    } else if (moreRunsReasonKey === 'FIELDING_VIOLATION_NB') {
+      await handleScore(0, 'noball', {
+        extraType: 'NO_BALL',
+        noBallReason: 'FIELDING_RESTRICTION',
+        remarks: finalReason
+      });
+    } else if (moreRunsReasonKey === 'WIDE' || finalReason.toLowerCase().includes('wide')) {
       await handleScore(1, 'wide', {
         runsExtras: totalR,
         extraType: 'WIDE',
@@ -2050,7 +2097,7 @@ export default function LiveScoringScreen() {
         extraType: 'NO_BALL',
         remarks: finalReason
       });
-    } else if (moreRunsReasonKey === 'PENALTY' || finalReason.toLowerCase().includes('penalty')) {
+    } else if (moreRunsReasonKey === 'PENALTY' || moreRunsReasonKey === 'RULE_PENALTY_RUNS' || finalReason.toLowerCase().includes('penalty')) {
       await handleScore(0, 'normal', {
         runsExtras: totalR,
         extraType: 'PENALTY',
@@ -2887,13 +2934,21 @@ export default function LiveScoringScreen() {
       let summary = '';
       if (endMatchResult === 'WIN') {
         const wTeamName = winnerTeamId === matchInfo?.teamAId ? matchInfo?.teamA : matchInfo?.teamB;
-        summary = `${wTeamName} won the match`;
+        summary = isWalkover ? `${wTeamName} won by Walkover` : `${wTeamName} won the match`;
       } else {
         summary = 'Match Tied';
       }
+      const forfeitedId = isWalkover && endMatchResult === 'WIN'
+        ? (winnerTeamId === matchInfo?.teamAId ? matchInfo?.teamBId : matchInfo?.teamAId)
+        : null;
       await ScorerApi.endMatch(matchId, {
         resultText: summary,
-        playerOfMatch: playerOfMatchInput.trim()
+        playerOfMatch: playerOfMatchInput.trim(),
+        winnerId: endMatchResult === 'WIN' ? winnerTeamId : 'TIE',
+        isWalkover: endMatchResult === 'WIN' ? isWalkover : false,
+        walkoverForfeitedTeamId: forfeitedId,
+        bonusPointWinner: endMatchResult === 'WIN' && !isWalkover ? bonusPointWinner : false,
+        bonusPointLoserPenalty: endMatchResult === 'WIN' && !isWalkover ? bonusPointLoserPenalty : false
       });
       setShowEndMatchModal(false);
       await loadLiveState(false);
@@ -6051,6 +6106,66 @@ export default function LiveScoringScreen() {
                     </TouchableOpacity>
                   </View>
                 </View>
+
+                <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setIsWalkover(w => !w);
+                      if (!isWalkover) {
+                        setBonusPointWinner(false);
+                        setBonusPointLoserPenalty(false);
+                      }
+                    }}
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 7,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: isWalkover ? '#dc2626' : '#cbd5e1',
+                      backgroundColor: isWalkover ? '#fef2f2' : '#f8fafc'
+                    }}
+                  >
+                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: isWalkover ? '#991b1b' : '#334155' }}>
+                      {isWalkover
+                        ? `✅ Walkover (+${tournamentRules?.points_walkover_win ?? 4} / ${tournamentRules?.points_walkover_loss ?? -1})`
+                        : 'Walkover Win'}
+                    </Text>
+                  </TouchableOpacity>
+                  {!isWalkover && (
+                    <>
+                      <TouchableOpacity
+                        onPress={() => setBonusPointWinner(b => !b)}
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 7,
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: bonusPointWinner ? '#059669' : '#cbd5e1',
+                          backgroundColor: bonusPointWinner ? '#ecfdf5' : '#f8fafc'
+                        }}
+                      >
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: bonusPointWinner ? '#065f46' : '#334155' }}>
+                          {bonusPointWinner ? `✅ Bonus Win (+${tournamentRules?.points_bonus_win ?? 1})` : `Bonus Win (+${tournamentRules?.points_bonus_win ?? 1})`}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => setBonusPointLoserPenalty(b => !b)}
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 7,
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: bonusPointLoserPenalty ? '#d97706' : '#cbd5e1',
+                          backgroundColor: bonusPointLoserPenalty ? '#fffbeb' : '#f8fafc'
+                        }}
+                      >
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: bonusPointLoserPenalty ? '#92400e' : '#334155' }}>
+                          {bonusPointLoserPenalty ? `✅ Loser Penalty (${tournamentRules?.points_bonus_loss ?? -1})` : `Loser Penalty (${tournamentRules?.points_bonus_loss ?? -1})`}
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </View>
               </View>
             )}
 
@@ -6513,9 +6628,34 @@ export default function LiveScoringScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 12, fontWeight: '500' }}>
-              Select run value and specific delivery reason (e.g. Wide + 4 boundary, overthrows, penalties):
+            <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 8, fontWeight: '500' }}>
+              Select run value, delivery reason, or apply a Tournament Rule Violation penalty:
             </Text>
+
+            {/* Active Tournament Rule Context Banner */}
+            {(() => {
+              const ppOv = Number(tournamentRules?.powerplay_overs ?? 5);
+              const curOv = Math.floor((balls || 0) / 6) + 1;
+              const inPP = curOv <= ppOv;
+              const maxOut = inPP
+                ? Number(tournamentRules?.max_outside_powerplay ?? 2)
+                : Number(tournamentRules?.max_outside_post_powerplay ?? 5);
+              return (
+                <View style={{
+                  paddingHorizontal: 10,
+                  paddingVertical: 7,
+                  borderRadius: 8,
+                  backgroundColor: inPP ? '#fef3c7' : '#f1f5f9',
+                  borderWidth: 1,
+                  borderColor: inPP ? '#f59e0b' : '#cbd5e1',
+                  marginBottom: 10
+                }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: inPP ? '#92400e' : '#334155' }}>
+                    {inPP ? `⚡ Powerplay Active (Ov ${curOv}/${ppOv})` : `🛡️ Post-Powerplay (Ov ${curOv})`} • Max {maxOut} Outside • Max {tournamentRules?.max_on_side_fielders ?? 5} Leg-Side • Max {tournamentRules?.max_on_side_behind_crease ?? 2} Behind Crease
+                  </Text>
+                </View>
+              );
+            })()}
 
             {/* Quick Run Selection Buttons */}
             <Text style={{ fontSize: 11, fontWeight: '800', color: '#1e293b', textTransform: 'uppercase', marginBottom: 6 }}>
@@ -6555,7 +6695,10 @@ export default function LiveScoringScreen() {
                 { key: 'NO_BALL', label: `No Ball + ${moreRunsSelected - 1} (Bat Boundary)` },
                 { key: 'OVERTHROW', label: `${moreRunsSelected} Overthrow Runs (All Extras)` },
                 { key: 'RUNNING', label: `${moreRunsSelected} Running Runs (Between Wickets)` },
-                { key: 'PENALTY', label: `Penalty 5 Runs (Law 28 - Helmet Hit)` }
+                { key: 'PENALTY', label: `Penalty 5 Runs (Law 28 - Helmet Hit)` },
+                { key: 'FIELDING_VIOLATION_NB', label: `🚫 Rule 8 Fielding Violation → No-Ball (+1 Run${tournamentRules?.free_hit_on_all_noballs !== false ? ' + Free Hit' : ''})` },
+                { key: 'RULE_PENALTY_RUNS', label: `⚖️ Rule Break → +${moreRunsSelected} Penalty Runs (Law 41 / Unfair Play)` },
+                { key: 'OFFICIAL_WARNING', label: `⚠️ Rule Break → Official Umpire Warning (0 Runs)` }
               ].map((reasonItem) => {
                 const isSelected = moreRunsReasonKey === reasonItem.key;
                 return (
@@ -8975,6 +9118,56 @@ export default function LiveScoringScreen() {
                     </TouchableOpacity>
                   </View>
                 )}
+
+                {/* Live Rule 8: Powerplay & Fielding Restrictions Pill + 1-Tap Fielding Violation No-Ball */}
+                {(() => {
+                  const ppOvers = Number(tournamentRules?.powerplay_overs ?? 5);
+                  const curOverNum = Math.floor((balls || 0) / 6) + 1;
+                  const inPP = curOverNum <= ppOvers;
+                  const maxOut = inPP
+                    ? Number(tournamentRules?.max_outside_powerplay ?? 2)
+                    : Number(tournamentRules?.max_outside_post_powerplay ?? 5);
+                  const maxLeg = Number(tournamentRules?.max_on_side_fielders ?? 5);
+                  const maxCrease = Number(tournamentRules?.max_on_side_behind_crease ?? 2);
+                  return (
+                    <View style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: 6,
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      marginBottom: 8,
+                      borderRadius: 8,
+                      backgroundColor: inPP ? '#fef3c7' : '#f1f5f9',
+                      borderWidth: 1,
+                      borderColor: inPP ? '#f59e0b' : '#cbd5e1'
+                    }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: inPP ? '#92400e' : '#334155', flex: 1 }}>
+                        {inPP ? `⚡ POWERPLAY (Ov ${curOverNum}/${ppOvers})` : `🛡️ POST-PP (Ov ${curOverNum})`} • Max {maxOut} Outside • Max {maxLeg} Leg-Side • Max {maxCrease} Behind Crease
+                      </Text>
+                      <TouchableOpacity
+                        disabled={matchStatus !== 'LIVE' || isInningsBreak || isMatchEnded}
+                        onPress={() => handleScore(0, 'noball', {
+                          noBallReason: 'FIELDING_RESTRICTION',
+                          remarks: 'Rule 8 Fielding Restriction Violation — No Ball + Free Hit'
+                        })}
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 6,
+                          backgroundColor: '#dc2626',
+                          opacity: (matchStatus !== 'LIVE' || isInningsBreak || isMatchEnded) ? 0.4 : 1
+                        }}
+                      >
+                        <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#ffffff' }}>
+                          🚫 Fielding NB
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })()}
 
                 {/* Cricket Rules, Umpire Signals & DLS/VJD Quick Navigation Buttons */}
                 <View style={{ flexDirection: 'row', gap: isDesktop ? 8 : 4, marginBottom: isDesktop ? 10 : 6, flexWrap: 'nowrap' }}>

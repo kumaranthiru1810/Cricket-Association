@@ -638,7 +638,54 @@ class ScorerService {
     }
     if (!nonStrikerName) nonStrikerName = 'Non-Striker';
 
+    const tournamentDoc = await db.models.Tournament.findOne({
+      $or: [
+        ...(match.tournament_id ? [{ id: match.tournament_id }] : []),
+        ...(match.tournament_name ? [{ name: match.tournament_name }] : [])
+      ]
+    }).lean();
+
+    const FORMAT_LABELS = {
+      SINGLE_ROUND_ROBIN: 'Single Round Robin',
+      DOUBLE_ROUND_ROBIN: 'Double Round Robin',
+      SINGLE_ELIMINATION: 'Single Elimination',
+      DOUBLE_ELIMINATION: 'Double Elimination',
+      GROUP_KNOCKOUT: 'Group + Knockout',
+      LEAGUE_PLAYOFFS: 'League + Playoffs',
+      LEAGUE: tournamentDoc?.format_config?.round_robin_type === 'DOUBLE' ? 'Double Round Robin' : 'Single Round Robin',
+      KNOCKOUT: 'Single Elimination',
+      LEAGUE_KNOCKOUT: 'League + Playoffs',
+      GROUP_SUPER_LEAGUE: 'Group + Knockout'
+    };
+    const rawFormat = tournamentDoc?.tournament_type || 'SINGLE_ROUND_ROBIN';
+
+    const tournamentRules = {
+      tournament_type: rawFormat,
+      tournament_format_label: FORMAT_LABELS[rawFormat] || 'Single Round Robin',
+      match_stage: match.stage || 'LEAGUE_STAGE',
+      powerplay_overs: tournamentDoc?.playing_rules?.powerplay_overs ?? 5,
+      max_outside_powerplay: tournamentDoc?.playing_rules?.max_outside_powerplay ?? 2,
+      max_outside_post_powerplay: tournamentDoc?.playing_rules?.max_outside_post_powerplay ?? 5,
+      max_on_side_fielders: tournamentDoc?.playing_rules?.max_on_side_fielders ?? 5,
+      max_on_side_behind_crease: tournamentDoc?.playing_rules?.max_on_side_behind_crease ?? 2,
+      free_hit_on_all_noballs: tournamentDoc?.playing_rules?.free_hit_on_all_noballs !== false,
+      delay_penalty_enabled: tournamentDoc?.playing_rules?.delay_penalty_enabled !== false,
+      delay_interval_value: tournamentDoc?.playing_rules?.delay_interval_value ?? 4,
+      delay_interval_unit: tournamentDoc?.playing_rules?.delay_interval_unit || 'MINUTES',
+      delay_reduce_unit: tournamentDoc?.playing_rules?.delay_reduce_unit || 'OVERS',
+      delay_overs_reduced_per_interval: tournamentDoc?.playing_rules?.delay_overs_reduced_per_interval ?? 1,
+      tie_handling: tournamentDoc?.playing_rules?.tie_handling || 'SHARE_POINTS',
+      points_win: tournamentDoc?.points_win ?? 4,
+      points_loss: tournamentDoc?.points_loss ?? 0,
+      points_tie: tournamentDoc?.points_tie ?? 2,
+      points_bonus_win: tournamentDoc?.points_bonus_win ?? 1,
+      points_bonus_loss: tournamentDoc?.points_bonus_loss ?? -1,
+      points_walkover_win: tournamentDoc?.points_walkover_win ?? 4,
+      points_walkover_loss: tournamentDoc?.points_walkover_loss ?? -1
+    };
+
     return {
+      tournamentRules,
       match: {
         id: match.id,
         tournament: match.tournament_name || 'VPL 2026',

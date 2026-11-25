@@ -18,6 +18,11 @@ export default function ScorerDashboardScreen() {
   const [profile, setProfile] = useState<any>(params?.user || getCurrentUser() || { name: 'Official Scorer', id: 'SCORER', association: 'Virudhunagar District' });
   const [timingAckMatch, setTimingAckMatch] = useState<any>(null);
   const [showTimingAckModal, setShowTimingAckModal] = useState<boolean>(false);
+  const [rule15Config, setRule15Config] = useState<{ enabled: boolean; minPlayers: number; ruleText: string }>({
+    enabled: true,
+    minPlayers: 9,
+    ruleText: ''
+  });
   const [selectedFilter, setSelectedFilter] = useState<string | null>(() => {
     if (typeof window !== 'undefined' && window.location) {
       try {
@@ -37,6 +42,17 @@ export default function ScorerDashboardScreen() {
 
   useEffect(() => {
     loadDashboardData();
+    ScorerApi.getRule15Config()
+      .then((res: any) => {
+        if (res?.success && res.config) {
+          setRule15Config({
+            enabled: res.config.enabled !== false,
+            minPlayers: typeof res.config.minPlayers === 'number' ? res.config.minPlayers : 9,
+            ruleText: typeof res.config.ruleText === 'string' ? res.config.ruleText : ''
+          });
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const loadDashboardData = async () => {
@@ -718,7 +734,7 @@ export default function ScorerDashboardScreen() {
                 <View style={{ marginTop: 6, gap: 5 }}>
                   <Text style={styles.ackRuleLine}>• <Text style={{ fontWeight: '700' }}>Toss Window:</Text> 08:00 AM to 08:15 AM (Morning) & 01:00 PM to 01:15 PM (Afternoon)</Text>
                   <Text style={styles.ackRuleLine}>• <Text style={{ fontWeight: '700' }}>First Ball:</Text> Must be delivered at 08:30 AM (Morning) & 01:30 PM (Afternoon)</Text>
-                  <Text style={styles.ackRuleLine}>• <Text style={{ fontWeight: '700' }}>Rule 15:</Text> A minimum of 9 players must be present at the start of each innings.</Text>
+                  <Text style={styles.ackRuleLine}>• <Text style={{ fontWeight: '700' }}>Rule 15:</Text> {rule15Config.ruleText.trim() || (rule15Config.enabled ? `A minimum of ${rule15Config.minPlayers} players must be present at the start of each innings.` : 'Minimum player attendance check is currently waived by Admin.')}</Text>
                 </View>
               </View>
 

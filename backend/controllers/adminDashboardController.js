@@ -518,7 +518,7 @@ class AdminDashboardController {
     try {
       const { search, status } = req.query;
       const [teams, playerCountsResult, teamPlayerCountsResult] = await Promise.all([
-        db.models.Team.find({}).select('id team_id name team_name short_name city taluk coach_name coach_email logo photo image_path status stats').sort({ name: 1 }).lean(),
+        db.models.Team.find({}).select('id team_id name team_name short_name city taluk coach_name coach_email logo photo image_path status stats created_at createdAt').sort({ created_at: 1, name: 1 }).lean(),
         db.models.Player.aggregate([{ $group: { _id: '$team_id', count: { $sum: 1 } } }]),
         db.models.TeamPlayer.aggregate([{ $group: { _id: '$team_id', count: { $sum: 1 } } }])
       ]);
@@ -539,6 +539,7 @@ class AdminDashboardController {
         photo: t.photo || t.logo || t.image_path || null,
         image_path: t.image_path || t.photo || t.logo || null,
         status: (t.status || 'ACTIVE').toUpperCase(),
+        created_at: t.created_at || t.createdAt || null,
         playerCount: playerCounts[t.id] || (playerCounts[t.team_id] || 15)
       }));
 

@@ -652,5 +652,27 @@ export const adminApi = {
       method: 'PUT',
       body: JSON.stringify(config)
     });
+  },
+
+  getRule15Config: async () => {
+    return adminRequest('/admin/rule-15');
+  },
+
+  updateRule15Config: async (config: { enabled: boolean; minPlayers: number; ruleText?: string }) => {
+    return adminRequest('/admin/rule-15', {
+      method: 'PUT',
+      body: JSON.stringify(config)
+    });
+  },
+
+  getCommitteeMembers: async () => {
+    return adminRequest('/admin/committee-members');
+  },
+
+  updateCommitteeMembers: async (config: any) => {
+    return adminRequest('/admin/committee-members', {
+      method: 'PUT',
+      body: JSON.stringify(config)
+    });
   }
 };

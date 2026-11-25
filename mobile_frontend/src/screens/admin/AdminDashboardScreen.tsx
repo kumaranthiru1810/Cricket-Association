@@ -5871,11 +5871,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     </Text>
 
                   </View>
-                  <Text style={styles.modalSubtitle}>
-                    {editingMatch
-                      ? `Update match logistics, timing, venue, or accredited officials for Match ${editingMatch.id}`
-                      : 'Configure tournament assignment, competing clubs, timing adjustments and automated team alerts'}
-                  </Text>
+                  {editingMatch ? (
+                    <Text style={styles.modalSubtitle}>
+                      {`Update match logistics, timing, venue, or accredited officials for Match ${editingMatch.id}`}
+                    </Text>
+                  ) : null}
                 </View>
               </View>
 
@@ -5999,9 +5999,6 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   <View style={styles.stepHeaderCard}>
                     <View style={styles.stepHeaderCardLeft}>
                       <Text style={styles.stepHeaderTitle}>🏆 Select Tournament Championship</Text>
-                      <Text style={styles.stepHeaderSubtitle}>
-                        Assign this fixture to an affiliated district tournament or enter a sanctioned championship.
-                      </Text>
                     </View>
                     <View style={styles.stepTagPill}>
                       <Text style={styles.stepTagPillText}>AFFILIATED SEASON 2026</Text>
@@ -6180,9 +6177,6 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   <View style={styles.stepHeaderCard}>
                     <View style={styles.stepHeaderCardLeft}>
                       <Text style={styles.stepHeaderTitle}>🏏 Teams & Venue</Text>
-                      <Text style={styles.stepHeaderSubtitle}>
-                        Select or enter Team 1, Team 2, and the ground venue for this fixture.
-                      </Text>
                     </View>
                     <View style={styles.stepTagPill}>
                       <Text style={styles.stepTagPillText}>STEP 2 OF 3</Text>
@@ -6515,9 +6509,6 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   <View style={styles.stepHeaderCard}>
                     <View style={styles.stepHeaderCardLeft}>
                       <Text style={styles.stepHeaderTitle}>⚙️ Match Details & Officials</Text>
-                      <Text style={styles.stepHeaderSubtitle}>
-                        Set fixture date, start time, overs format, scorer and match umpires.
-                      </Text>
                     </View>
                     <View style={styles.stepTagPill}>
                       <Text style={styles.stepTagPillText}>STEP 3 OF 3</Text>

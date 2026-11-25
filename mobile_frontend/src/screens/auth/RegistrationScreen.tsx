@@ -220,6 +220,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   const isMobile = windowWidth < 640;
 
   const [activeRole, setActiveRole] = useState<RegistrationRole>(getInitialRole());
+  const [isDemoFilled, setIsDemoFilled] = useState<boolean>(false);
+  const [isSampleSquadFilled, setIsSampleSquadFilled] = useState<boolean>(false);
   const activeRoleObj = REGISTRATION_ROLES.find((r) => r.key === activeRole) || REGISTRATION_ROLES[0];
 
   const openPicker = (title: string, options: string[], selectedValue: string, onSelect: (val: string) => void) => {
@@ -633,11 +635,66 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     setStatusType(null);
   };
 
-  // Quick fill helper for demo/testing registration across all 4 roles
+  // Quick fill / one-click clear helper for demo/testing registration across all 4 roles
   const handleDemoFill = () => {
     setFieldErrors({});
     setStatusMessage(null);
     setStatusType(null);
+
+    if (isDemoFilled) {
+      setPassword('');
+      setConfirmPassword('');
+      setIsEmailVerified(false);
+      setOtpCode('');
+
+      if (activeRole === 'PLAYER') {
+        setPName('');
+        setPEmail('');
+        setPMobile('');
+        setPAadhaar('');
+        setPRole('Batsman');
+        setPCategory('Senior Men');
+        setPTaluk('Virudhunagar');
+        setPBattingStyle('Right-Handed Batsman');
+        setPClub('');
+        setPAgreed(false);
+      } else if (activeRole === 'TEAM') {
+        setTeamName('');
+        setCoachName('');
+        setCoachEmail('');
+        setCoachMobile('');
+        setCoachAadhaar('');
+        setTeamTaluk('Virudhunagar');
+        setPlayers([]);
+        setTeamAgreed(false);
+        setIsSampleSquadFilled(false);
+      } else if (activeRole === 'SCORER') {
+        setSName('');
+        setSEmail('');
+        setSMobile('');
+        setSTaluk('Virudhunagar');
+        setSLevel('District Certified');
+        setSAgreed(false);
+      } else if (activeRole === 'UMPIRE') {
+        setUName('');
+        setUEmail('');
+        setUMobile('');
+        setUDob('');
+        setUGender('Male');
+        setUExperience('');
+        setUYearsOfExperience('');
+        setUQualification('District Certified Umpire');
+        setUDistrict('Virudhunagar');
+        setUState('Tamil Nadu');
+        setUSpecialization('On-field Umpire');
+        setUAgreed(false);
+      }
+
+      setIsDemoFilled(false);
+      setStatusMessage('🧹 Demo data cleared.');
+      setStatusType('success');
+      return;
+    }
 
     const demoPass = 'test1234'; // ggignore
     setPassword(demoPass);
@@ -656,7 +713,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setPBattingStyle('Right-Handed Batsman');
       setPClub('Virudhunagar Strikers CC');
       setPAgreed(true);
-      setStatusMessage('⚡ Demo Player details filled! Scroll down to inspect or click Submit.');
+      setStatusMessage('⚡ Demo Player details filled! Click "✕ Clear Demo" to reset.');
       setStatusType('success');
     } else if (activeRole === 'TEAM') {
       setTeamName('Virudhunagar Super Strikers CC');
@@ -675,8 +732,9 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
         aadhaar: `5432 9876 ${String(1000 + idx + 1)}`
       }));
       setPlayers(squad);
+      setIsSampleSquadFilled(true);
       setTeamAgreed(true);
-      setStatusMessage('⚡ Demo Team & 15 Squad Players filled! Scroll down to inspect or click Submit.');
+      setStatusMessage('⚡ Demo Team & 15 Squad Players filled! Click "✕ Clear Demo" to reset.');
       setStatusType('success');
     } else if (activeRole === 'SCORER') {
       setSName('Ramesh Kumar');
@@ -685,7 +743,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setSTaluk('Virudhunagar');
       setSLevel('District Certified');
       setSAgreed(true);
-      setStatusMessage('⚡ Demo Official Scorer filled! Scroll down to inspect or click Submit.');
+      setStatusMessage('⚡ Demo Official Scorer filled! Click "✕ Clear Demo" to reset.');
       setStatusType('success');
     } else if (activeRole === 'UMPIRE') {
       setUName('Sundaram');
@@ -700,9 +758,10 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setUState('Tamil Nadu');
       setUSpecialization('On-field Umpire');
       setUAgreed(true);
-      setStatusMessage('⚡ Demo Official Umpire filled! Scroll down to inspect or click Submit.');
+      setStatusMessage('⚡ Demo Official Umpire filled! Click "✕ Clear Demo" to reset.');
       setStatusType('success');
     }
+    setIsDemoFilled(true);
   };
 
   // Step 1: Send Email Verification OTP
@@ -1157,6 +1216,14 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   };
 
   const handleAutoFillSampleSquad = () => {
+    if (isSampleSquadFilled && players.length > 0) {
+      setPlayers([]);
+      setIsSampleSquadFilled(false);
+      setStatusMessage('🧹 Sample squad cleared.');
+      setStatusType('success');
+      return;
+    }
+
     if (!teamName.trim()) setTeamName('Virudhunagar Strikers Cricket Club');
     if (!coachName.trim()) setCoachName('S. Murugan (NIS Certified Coach)');
     if (!coachEmail.trim()) setCoachEmail('coach.murugan@strikerscc.org');
@@ -1174,7 +1241,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     }));
 
     setPlayers(squad);
-    setStatusMessage('⚡ Sample squad loaded! Coach details and all 15 squad players added with Phone & Aadhaar numbers.');
+    setIsSampleSquadFilled(true);
+    setStatusMessage('⚡ Sample squad loaded! Click "✕ Clear Squad" to remove.');
     setStatusType('success');
   };
 
@@ -1889,7 +1957,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                       <Text style={styles.sectionHeaderText}>🏏 PLAYER PERSONAL & CRICKETING PROFILE</Text>
                       <TouchableOpacity onPress={handleDemoFill}>
-                        <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
+                        <Text style={styles.demoFillLink}>{isDemoFilled ? '✕ Clear Demo' : '⚡ Demo Fill'}</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -2261,7 +2329,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                       <Text style={styles.sectionHeaderText}>🛡️ TEAM CLUB & COACH PROFILE</Text>
                       <TouchableOpacity onPress={handleDemoFill}>
-                        <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
+                        <Text style={styles.demoFillLink}>{isDemoFilled ? '✕ Clear Demo' : '⚡ Demo Fill'}</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -2504,7 +2572,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       Squad Players ({players.length} added)
                     </Text>
                     <TouchableOpacity style={styles.autoFillBtn} onPress={handleAutoFillSampleSquad}>
-                      <Text style={styles.autoFillBtnText}>⚡ Fill Sample Squad</Text>
+                      <Text style={styles.autoFillBtnText}>{isSampleSquadFilled && players.length > 0 ? '✕ Clear Squad' : '⚡ Fill Sample Squad'}</Text>
                     </TouchableOpacity>
                   </View>
 
@@ -2518,7 +2586,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       </View>
                     )}
                     {/* Row 1: Name and Email */}
-                    <View style={styles.formRow}>
+                    <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
                       <View style={{ flex: 1 }}>
                         <TextInput
                           style={[styles.input, { marginBottom: 0 }, fieldErrors.squadPlayerName && styles.inputError]}
@@ -2648,7 +2716,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     </View>
 
                     {/* Row 3: Role and Add/Update button */}
-                    <View style={[styles.formRow, { marginTop: 8, marginBottom: 0 }]}>
+                    <View style={[styles.formRow, { marginTop: 8, marginBottom: 0 }, isMobile && { flexDirection: 'column' }]}>
                       <DropdownField
                         label="Squad Role"
                         value={squadPlayerRole}
@@ -2753,7 +2821,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                       <Text style={styles.sectionHeaderText}>📋 OFFICIAL SCORER ENROLLMENT</Text>
                       <TouchableOpacity onPress={handleDemoFill}>
-                        <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
+                        <Text style={styles.demoFillLink}>{isDemoFilled ? '✕ Clear Demo' : '⚡ Demo Fill'}</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -2801,7 +2869,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                   </View>
 
                   {/* Row 2: Official Scorer Email */}
-                  <View style={styles.formRow}>
+                  <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Official Scorer Email *</Text>
                       <TextInput
@@ -2937,7 +3005,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                       <Text style={styles.sectionHeaderText}>⚖️ OFFICIAL UMPIRE REGISTRATION & ACCREDITATION</Text>
                       <TouchableOpacity onPress={handleDemoFill}>
-                        <Text style={styles.demoFillLink}>⚡ Demo Fill</Text>
+                        <Text style={styles.demoFillLink}>{isDemoFilled ? '✕ Clear Demo' : '⚡ Demo Fill'}</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -2985,7 +3053,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                   </View>
 
                   {/* Row 2: Official Umpire Email */}
-                  <View style={styles.formRow}>
+                  <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.label}>Official Umpire Email *</Text>
                       <TextInput

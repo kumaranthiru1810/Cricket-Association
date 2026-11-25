@@ -336,7 +336,15 @@ class DeliveryService {
 
     let nextIsFreeHit = false;
     if (extraType === 'NO_BALL') {
-      nextIsFreeHit = true;
+      const tournamentDoc = await db.models.Tournament.findOne({
+        $or: [
+          ...(match.tournament_id ? [{ id: match.tournament_id }] : []),
+          ...(match.tournament_name ? [{ name: match.tournament_name }] : [])
+        ]
+      }).lean();
+      const freeHitAll = tournamentDoc?.playing_rules?.free_hit_on_all_noballs !== false;
+      const nbReason = String(deliveryData.noBallReason || deliveryData.no_ball_reason || '').toUpperCase();
+      nextIsFreeHit = freeHitAll || !nbReason || nbReason === 'OVERSTEP';
     } else if (wasDeliveryFreeHit) {
       if (extraType === 'WIDE') {
         nextIsFreeHit = true;

@@ -72,6 +72,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
+    maxWidth: '100%',
+    flexShrink: 1,
     gap: 6,
     marginTop: 6,
     marginBottom: 4,
@@ -86,6 +88,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
+    maxWidth: '100%',
+    flexShrink: 1,
     gap: 6,
   },
   chip: {

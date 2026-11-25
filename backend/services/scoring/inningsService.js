@@ -310,6 +310,21 @@ class InningsService {
     if (payload.playerOfMatch) {
       match.player_of_match = payload.playerOfMatch;
     }
+    if (payload.winnerId !== undefined) {
+      match.winner_id = payload.winnerId;
+    }
+    if (payload.isWalkover !== undefined) {
+      match.is_walkover = Boolean(payload.isWalkover);
+    }
+    if (payload.walkoverForfeitedTeamId !== undefined) {
+      match.walkover_forfeited_team_id = payload.walkoverForfeitedTeamId;
+    }
+    if (payload.bonusPointWinner !== undefined) {
+      match.bonus_point_winner = Boolean(payload.bonusPointWinner);
+    }
+    if (payload.bonusPointLoserPenalty !== undefined) {
+      match.bonus_point_loser_penalty = Boolean(payload.bonusPointLoserPenalty);
+    }
     await match.save();
 
     try {

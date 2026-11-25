@@ -348,21 +348,62 @@ class TournamentService {
       registration_end_date: payload.registration_end_date || null,
       max_teams: maxTeams,
       min_teams: minTeams,
-      points_win: Number(payload.points_win !== undefined ? payload.points_win : 2),
-      points_tie: Number(payload.points_tie !== undefined ? payload.points_tie : 1),
-      points_no_result: Number(payload.points_no_result !== undefined ? payload.points_no_result : 1),
+      points_win: Number(payload.points_win !== undefined ? payload.points_win : 4),
+      points_loss: Number(payload.points_loss !== undefined ? payload.points_loss : 0),
+      points_tie: Number(payload.points_tie !== undefined ? payload.points_tie : 2),
+      points_no_result: Number(payload.points_no_result !== undefined ? payload.points_no_result : 2),
+      points_bonus_win: Number(payload.points_bonus_win !== undefined ? payload.points_bonus_win : 1),
+      points_bonus_loss: Number(payload.points_bonus_loss !== undefined ? payload.points_bonus_loss : -1),
+      points_walkover_win: Number(payload.points_walkover_win !== undefined ? payload.points_walkover_win : 4),
+      points_walkover_loss: Number(payload.points_walkover_loss !== undefined ? payload.points_walkover_loss : -1),
       playing_xi_size: Number(payload.playing_xi_size || 11),
       substitute_count: Number(payload.substitute_count || 4),
       allow_super_over: payload.allow_super_over !== false,
       allow_dls: Boolean(payload.allow_dls),
       rules: (payload.rules || 'Standard ICC / TNCA Playing Conditions').trim(),
+      playing_rules: {
+        powerplay_overs: Number(payload.playing_rules?.powerplay_overs ?? 5),
+        max_outside_powerplay: Number(payload.playing_rules?.max_outside_powerplay ?? 2),
+        max_outside_post_powerplay: Number(payload.playing_rules?.max_outside_post_powerplay ?? 5),
+        max_on_side_fielders: Number(payload.playing_rules?.max_on_side_fielders ?? 5),
+        max_on_side_behind_crease: Number(payload.playing_rules?.max_on_side_behind_crease ?? 2),
+        free_hit_on_all_noballs: payload.playing_rules?.free_hit_on_all_noballs !== false,
+        delay_penalty_enabled: payload.playing_rules?.delay_penalty_enabled !== false,
+        delay_interval_value: Number(payload.playing_rules?.delay_interval_value ?? 4),
+        delay_interval_unit: ['HOURS', 'MINUTES', 'SECONDS'].includes(payload.playing_rules?.delay_interval_unit)
+          ? payload.playing_rules.delay_interval_unit
+          : 'MINUTES',
+        delay_reduce_unit: payload.playing_rules?.delay_reduce_unit === 'BALLS' ? 'BALLS' : 'OVERS',
+        delay_overs_reduced_per_interval: Number(payload.playing_rules?.delay_overs_reduced_per_interval ?? 1),
+        tie_handling: payload.playing_rules?.tie_handling === 'SUPER_OVER' ? 'SUPER_OVER' : 'SHARE_POINTS'
+      },
       format_config: {
-        round_robin_type: payload.format_config?.round_robin_type || 'SINGLE',
+        round_robin_type: payload.tournament_type === 'DOUBLE_ROUND_ROBIN'
+          ? 'DOUBLE'
+          : (payload.tournament_type === 'SINGLE_ROUND_ROBIN' ? 'SINGLE' : (payload.format_config?.round_robin_type || 'SINGLE')),
         knockout_stages: payload.format_config?.knockout_stages || ['Semi Final', 'Final'],
         qualifying_teams_count: Number(payload.format_config?.qualifying_teams_count || 4),
-        qualification_rules: payload.format_config?.qualification_rules || 'Top qualifying teams advance to knockout stage'
+        qualification_rules: payload.format_config?.qualification_rules || 'Top qualifying teams advance to knockout stage',
+        group_count: Number(payload.format_config?.group_count ?? 5),
+        allow_extra_group: payload.format_config?.allow_extra_group !== false,
+        teams_per_group: Number(payload.format_config?.teams_per_group ?? 8),
+        qualifiers_per_group: Number(payload.format_config?.qualifiers_per_group ?? 2),
+        super_league_enabled: payload.format_config?.super_league_enabled !== false,
+        super_league_groups: Number(payload.format_config?.super_league_groups ?? 4),
+        super_league_qualifiers_per_group: Number(payload.format_config?.super_league_qualifiers_per_group ?? 1),
+        include_semifinals: payload.format_config?.include_semifinals !== false,
+        include_final: payload.format_config?.include_final !== false
       },
       teams,
+      winner_team_id: payload.winner_team_id || null,
+      winner_team_name: String(payload.winner_team_name || '').trim(),
+      runner_up_team_id: payload.runner_up_team_id || null,
+      runner_up_team_name: String(payload.runner_up_team_name || '').trim(),
+      awards_config: {
+        winner_trophy_title: String(payload.awards_config?.winner_trophy_title || 'Championship Winner Trophy').trim(),
+        runner_up_trophy_title: String(payload.awards_config?.runner_up_trophy_title || 'Runner-Up Trophy').trim(),
+        potm_every_match: payload.awards_config?.potm_every_match !== false
+      },
       status: initialStatus,
       created_by: adminEmail || 'admin@cfvd.org'
     };
@@ -429,15 +470,26 @@ class TournamentService {
       ...(payload.max_teams && { max_teams: Number(payload.max_teams) }),
       ...(payload.min_teams && { min_teams: Number(payload.min_teams) }),
       ...(payload.points_win !== undefined && { points_win: Number(payload.points_win) }),
+      ...(payload.points_loss !== undefined && { points_loss: Number(payload.points_loss) }),
       ...(payload.points_tie !== undefined && { points_tie: Number(payload.points_tie) }),
       ...(payload.points_no_result !== undefined && { points_no_result: Number(payload.points_no_result) }),
+      ...(payload.points_bonus_win !== undefined && { points_bonus_win: Number(payload.points_bonus_win) }),
+      ...(payload.points_bonus_loss !== undefined && { points_bonus_loss: Number(payload.points_bonus_loss) }),
+      ...(payload.points_walkover_win !== undefined && { points_walkover_win: Number(payload.points_walkover_win) }),
+      ...(payload.points_walkover_loss !== undefined && { points_walkover_loss: Number(payload.points_walkover_loss) }),
       ...(payload.playing_xi_size && { playing_xi_size: Number(payload.playing_xi_size) }),
       ...(payload.substitute_count && { substitute_count: Number(payload.substitute_count) }),
       ...(payload.allow_super_over !== undefined && { allow_super_over: Boolean(payload.allow_super_over) }),
       ...(payload.allow_dls !== undefined && { allow_dls: Boolean(payload.allow_dls) }),
       ...(payload.rules && { rules: payload.rules }),
+      ...(payload.playing_rules && { playing_rules: payload.playing_rules }),
       ...(payload.format_config && { format_config: payload.format_config }),
       ...(Array.isArray(payload.teams) && { teams: payload.teams }),
+      ...(payload.winner_team_id !== undefined && { winner_team_id: payload.winner_team_id }),
+      ...(payload.winner_team_name !== undefined && { winner_team_name: String(payload.winner_team_name).trim() }),
+      ...(payload.runner_up_team_id !== undefined && { runner_up_team_id: payload.runner_up_team_id }),
+      ...(payload.runner_up_team_name !== undefined && { runner_up_team_name: String(payload.runner_up_team_name).trim() }),
+      ...(payload.awards_config && { awards_config: payload.awards_config }),
       ...(payload.status && { status: payload.status.toUpperCase() }),
       updatedAt: new Date()
     };
@@ -668,8 +720,12 @@ class TournamentService {
       if (t.team_name && !teamNameMap[t.team_name]) teamNameMap[t.team_name] = name;
     });
 
-    const tournamentType = options.tournament_type || tournament.tournament_type || 'LEAGUE';
-    const roundRobinType = options.round_robin_type || tournament.format_config?.round_robin_type || 'SINGLE';
+    const tournamentType = options.tournament_type || tournament.tournament_type || 'SINGLE_ROUND_ROBIN';
+    const roundRobinType = tournamentType === 'DOUBLE_ROUND_ROBIN'
+      ? 'DOUBLE'
+      : tournamentType === 'SINGLE_ROUND_ROBIN'
+        ? 'SINGLE'
+        : (options.round_robin_type || tournament.format_config?.round_robin_type || 'SINGLE');
     const venue = options.venue || tournament.venue || 'Kamarajar District Stadium';
     const matchType = options.match_format || tournament.match_format || 'T20';
     const oversPerSide = Number(options.overs_per_match || tournament.overs_per_match || 20);
@@ -684,13 +740,119 @@ class TournamentService {
 
     // Helper: calculate date for match index
     const getMatchDate = (index, total) => {
-      const dayOffset = Math.floor((index / Math.max(1, total)) * totalDays);
-      const d = new Date(startDate.getTime() + dayOffset * 86400000);
+      const offsetDays = Math.floor((index / Math.max(1, total)) * totalDays);
+      const d = new Date(startDate.getTime() + offsetDays * 86400000);
       return d.toISOString().split('T')[0];
     };
 
+    if (tournamentType === 'GROUP_SUPER_LEAGUE' || tournamentType === 'GROUP_KNOCKOUT') {
+      const baseGroupCount = Math.max(2, Number(tournament.format_config?.group_count || 5));
+      const teamsPerGroup = Math.max(2, Number(tournament.format_config?.teams_per_group || 8));
+      const allowExtra = tournament.format_config?.allow_extra_group !== false;
+      const effectiveGroupCount = (allowExtra && teams.length > baseGroupCount * teamsPerGroup)
+        ? baseGroupCount + 1
+        : baseGroupCount;
+
+      const groups = Array.from({ length: effectiveGroupCount }, () => []);
+      teams.forEach((teamId, idx) => {
+        groups[idx % effectiveGroupCount].push(teamId);
+      });
+
+      const pairs = [];
+      groups.forEach((grpTeams, gIdx) => {
+        const groupLabel = `GROUP_${String.fromCharCode(65 + gIdx)}`;
+        for (let i = 0; i < grpTeams.length; i++) {
+          for (let j = i + 1; j < grpTeams.length; j++) {
+            pairs.push({ teamA: grpTeams[i], teamB: grpTeams[j], stage: groupLabel });
+          }
+        }
+      });
+
+      for (let i = 0; i < pairs.length; i++) {
+        const p = pairs[i];
+        const matchId = `M-${tournament.id.slice(-4)}-${String(matchCounter).padStart(3, '0')}`;
+        generatedFixtures.push({
+          id: matchId,
+          tournament_id: tournament.id,
+          tournament_name: tournament.name,
+          team_a_id: p.teamA,
+          team_b_id: p.teamB,
+          team_a_name: teamNameMap[p.teamA] || p.teamA,
+          team_b_name: teamNameMap[p.teamB] || p.teamB,
+          venue,
+          match_date: getMatchDate(i, pairs.length),
+          match_time: i % 2 === 0 ? '09:30 AM' : '02:00 PM',
+          match_type: matchType,
+          overs_per_side: oversPerSide,
+          stage: p.stage,
+          status: 'SCHEDULED',
+          assigned_scorer_id: 'SCR-101',
+          umpire1_id: 'UMP-101',
+          umpire2_id: 'UMP-102'
+        });
+        matchCounter++;
+      }
+
+      if (generatedFixtures.length > 0) {
+        await db.models.Match.insertMany(generatedFixtures);
+        const ts = Date.now();
+        const notifBatch = [];
+        generatedFixtures.forEach((m, idx) => {
+          notifBatch.push({
+            id: `NOTIF-M-${m.id}-TEAM-A-${ts}-${idx}`,
+            type: 'MATCH_SCHEDULED',
+            recipient_role: 'TEAM',
+            recipient_id: m.team_a_id,
+            team_id: m.team_a_id,
+            team_name: m.team_a_name,
+            title: `🏏 Match Scheduled vs ${m.team_b_name}`,
+            message: `Your match vs ${m.team_b_name} (${m.stage}) has been scheduled on ${m.match_date} at ${m.match_time} at ${m.venue}.`,
+            reference_id: m.id,
+            status: 'UNREAD'
+          });
+          notifBatch.push({
+            id: `NOTIF-M-${m.id}-TEAM-B-${ts}-${idx}`,
+            type: 'MATCH_SCHEDULED',
+            recipient_role: 'TEAM',
+            recipient_id: m.team_b_id,
+            team_id: m.team_b_id,
+            team_name: m.team_b_name,
+            title: `🏏 Match Scheduled vs ${m.team_a_name}`,
+            message: `Your match vs ${m.team_a_name} (${m.stage}) has been scheduled on ${m.match_date} at ${m.match_time} at ${m.venue}.`,
+            reference_id: m.id,
+            status: 'UNREAD'
+          });
+        });
+        if (notifBatch.length > 0) {
+          await db.models.Notification.insertMany(notifBatch).catch(() => {});
+        }
+      }
+
+      await this._logAudit(
+        'GENERATE_TOURNAMENT_MATCHES',
+        adminEmail,
+        tournament.name,
+        `Generated ${generatedFixtures.length} Group Stage fixtures across ${effectiveGroupCount} groups`,
+        `Type: GROUP_SUPER_LEAGUE, Teams: ${teams.length}`
+      );
+
+      return {
+        tournament_id: tournament.id,
+        tournament_name: tournament.name,
+        generated_count: generatedFixtures.length,
+        groups: effectiveGroupCount,
+        fixtures: generatedFixtures
+      };
+    }
+
     // 1. LEAGUE / ROUND-ROBIN GENERATION
-    if (tournamentType === 'LEAGUE' || tournamentType === 'LEAGUE_KNOCKOUT') {
+    if (
+      tournamentType === 'LEAGUE' ||
+      tournamentType === 'SINGLE_ROUND_ROBIN' ||
+      tournamentType === 'DOUBLE_ROUND_ROBIN' ||
+      tournamentType === 'LEAGUE_KNOCKOUT' ||
+      tournamentType === 'LEAGUE_PLAYOFFS'
+    ) {
       const pairings = [];
       const n = teams.length;
 
@@ -741,13 +903,15 @@ class TournamentService {
       });
     }
 
-    // 2. KNOCKOUT TOURNAMENT GENERATION
-    if (tournamentType === 'KNOCKOUT') {
+    // 2. KNOCKOUT / ELIMINATION TOURNAMENT GENERATION
+    if (tournamentType === 'KNOCKOUT' || tournamentType === 'SINGLE_ELIMINATION' || tournamentType === 'DOUBLE_ELIMINATION') {
       const n = teams.length;
-      let stageName = 'FINAL';
-      if (n > 8) stageName = 'ROUND_OF_16';
-      else if (n > 4) stageName = 'QUARTER_FINAL';
-      else if (n > 2) stageName = 'SEMI_FINAL';
+      let stageName = tournamentType === 'DOUBLE_ELIMINATION' ? 'WINNERS_BRACKET_R1' : 'FINAL';
+      if (tournamentType !== 'DOUBLE_ELIMINATION') {
+        if (n > 8) stageName = 'ROUND_OF_16';
+        else if (n > 4) stageName = 'QUARTER_FINAL';
+        else if (n > 2) stageName = 'SEMI_FINAL';
+      }
 
       // Seed initial round matches
       for (let i = 0; i < Math.floor(n / 2); i++) {
@@ -815,9 +979,14 @@ class TournamentService {
       throw { status: 404, message: `Tournament with ID '${tournamentId}' not found.` };
     }
 
-    const pointsWin = Number(tournament.points_win !== undefined ? tournament.points_win : 2);
-    const pointsTie = Number(tournament.points_tie !== undefined ? tournament.points_tie : 1);
-    const pointsNoResult = Number(tournament.points_no_result !== undefined ? tournament.points_no_result : 1);
+    const pointsWin = Number(tournament.points_win !== undefined ? tournament.points_win : 4);
+    const pointsLoss = Number(tournament.points_loss !== undefined ? tournament.points_loss : 0);
+    const pointsTie = Number(tournament.points_tie !== undefined ? tournament.points_tie : (pointsWin / 2));
+    const pointsNoResult = Number(tournament.points_no_result !== undefined ? tournament.points_no_result : (pointsWin / 2));
+    const pointsBonusWin = Number(tournament.points_bonus_win !== undefined ? tournament.points_bonus_win : 1);
+    const pointsBonusLoss = Number(tournament.points_bonus_loss !== undefined ? tournament.points_bonus_loss : -1);
+    const pointsWalkoverWin = Number(tournament.points_walkover_win !== undefined ? tournament.points_walkover_win : 4);
+    const pointsWalkoverLoss = Number(tournament.points_walkover_loss !== undefined ? tournament.points_walkover_loss : -1);
 
     const teamIds = tournament.teams || [];
     let teams = cachedTeams;
@@ -1016,18 +1185,19 @@ class TournamentService {
         standings[teamB].points += pointsNoResult;
         standings[teamA].form.push('NR');
         standings[teamB].form.push('NR');
-      } else if (winner === teamA) {
-        standings[teamA].won++;
-        standings[teamA].points += pointsWin;
-        standings[teamA].form.push('W');
-        standings[teamB].lost++;
-        standings[teamB].form.push('L');
-      } else if (winner === teamB) {
-        standings[teamB].won++;
-        standings[teamB].points += pointsWin;
-        standings[teamB].form.push('W');
-        standings[teamA].lost++;
-        standings[teamA].form.push('L');
+      } else if (winner === teamA || winner === teamB) {
+        const loser = winner === teamA ? teamB : teamA;
+        standings[winner].won++;
+        standings[loser].lost++;
+        if (m.is_walkover) {
+          standings[winner].points += pointsWalkoverWin;
+          standings[loser].points += pointsWalkoverLoss;
+        } else {
+          standings[winner].points += pointsWin + (m.bonus_point_winner ? pointsBonusWin : 0);
+          standings[loser].points += pointsLoss + (m.bonus_point_loser_penalty ? pointsBonusLoss : 0);
+        }
+        standings[winner].form.push('W');
+        standings[loser].form.push('L');
       } else {
         // Fallback default
         standings[teamA].no_result++;

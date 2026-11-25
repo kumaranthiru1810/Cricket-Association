@@ -277,6 +277,7 @@ export default function HomeScreen() {
   // Home Portal Dynamic Popup State
   const [homePopupConfig, setHomePopupConfig] = useState<HomePopupConfig | null>(null);
   const [showHomePopup, setShowHomePopup] = useState<boolean>(false);
+  const [committeeConfig, setCommitteeConfig] = useState<any>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -289,6 +290,16 @@ export default function HomeScreen() {
         }
       })
       .catch(() => {});
+
+    fetch(`${API_URL}/portal/committee-members`)
+      .then(r => r.json())
+      .then(data => {
+        if (mounted && data?.success && data.config?.enabled) {
+          setCommitteeConfig(data.config);
+        }
+      })
+      .catch(() => {});
+
     return () => {
       mounted = false;
     };
@@ -3805,6 +3816,120 @@ export default function HomeScreen() {
             </View>
           </View>
         </View>
+
+        {/* ─── 14B. TOURNAMENT COMMITTEE & OFFICE BEARERS ───────────────── */}
+        {committeeConfig?.enabled && (
+          <View style={{ backgroundColor: '#f8fafc', paddingVertical: 28, borderTopWidth: 1, borderTopColor: '#e2e8f0' }}>
+            <View style={[styles.container, containerResponsiveStyle]}>
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#b45309', letterSpacing: 1, textTransform: 'uppercase' }}>
+                  Official District Administration
+                </Text>
+                <Text style={{ fontSize: isMobile ? 19 : 23, fontWeight: '900', color: '#0f172a', marginTop: 2 }}>
+                  👥 {committeeConfig.sectionTitle || 'Tournament Committee & Office Bearers'}
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 16, alignItems: 'stretch' }}>
+                {/* Committee Roles Card */}
+                <View style={{
+                  flex: 1.2,
+                  backgroundColor: '#ffffff',
+                  borderRadius: 14,
+                  padding: 16,
+                  borderWidth: 1,
+                  borderColor: '#e2e8f0',
+                  gap: 10
+                }}>
+                  <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#1e3a8a', marginBottom: 2 }}>
+                    Tournament Coordinators & Officials
+                  </Text>
+                  {(committeeConfig.roles || []).map((r: any, idx: number) => (
+                    <View
+                      key={`home-role-${idx}`}
+                      style={{
+                        paddingVertical: 8,
+                        borderBottomWidth: idx < (committeeConfig.roles?.length || 0) - 1 ? 1 : 0,
+                        borderBottomColor: '#f1f5f9'
+                      }}
+                    >
+                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>
+                        {r.roleTitle}
+                      </Text>
+                      <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0f172a', marginTop: 2 }}>
+                        {r.members}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+
+                {/* Ground In-Charges + Notice Card */}
+                <View style={{
+                  flex: 1,
+                  backgroundColor: '#ffffff',
+                  borderRadius: 14,
+                  padding: 16,
+                  borderWidth: 1,
+                  borderColor: '#e2e8f0',
+                  justifyContent: 'space-between',
+                  gap: 14
+                }}>
+                  <View>
+                    <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#065f46', marginBottom: 10 }}>
+                      🏟️ Ground In-Charges
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                      {(committeeConfig.groundInCharges || []).map((g: any, idx: number) => (
+                        <View
+                          key={`home-ground-${idx}`}
+                          style={{
+                            paddingHorizontal: 10,
+                            paddingVertical: 7,
+                            borderRadius: 10,
+                            backgroundColor: '#f0fdf4',
+                            borderWidth: 1,
+                            borderColor: '#bbf7d0'
+                          }}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#166534' }}>{g.groundName}</Text>
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: '#0f172a' }}>{g.inCharge}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+
+                  {(committeeConfig.teamNotice || committeeConfig.signatoryName) && (
+                    <View style={{
+                      padding: 12,
+                      borderRadius: 10,
+                      backgroundColor: '#fffbeb',
+                      borderWidth: 1,
+                      borderColor: '#fde68a',
+                      gap: 8
+                    }}>
+                      {committeeConfig.teamNotice ? (
+                        <Text style={{ fontSize: 12.5, color: '#78350f', lineHeight: 18 }}>
+                          <Text style={{ fontWeight: '800' }}>Request to Teams: </Text>
+                          {committeeConfig.teamNotice}
+                        </Text>
+                      ) : null}
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#64748b' }}>
+                          {committeeConfig.noticeDate ? `Date: ${committeeConfig.noticeDate}` : ''}
+                        </Text>
+                        {committeeConfig.signatoryName ? (
+                          <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#0f172a' }}>
+                            {committeeConfig.signatoryTitle || 'Secretary'}: {committeeConfig.signatoryName}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* ─── 15. MAIN FOOTER ───────────────────────────────────────────── */}
         <View style={styles.footer}>

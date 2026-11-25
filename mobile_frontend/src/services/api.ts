@@ -1257,6 +1257,10 @@ export const ScorerApi = {
     return request(`/scorer/matches/${matchId}/setup`);
   },
 
+  getRule15Config: async () => {
+    return request('/portal/rule-15');
+  },
+
   startMatch: async (matchId: string, setup: any) => {
     return request(`/scorer/matches/${matchId}/start`, {
       method: 'POST',

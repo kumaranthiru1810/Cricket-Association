@@ -963,6 +963,175 @@ router.put('/emblem-sequence', async (req, res) => {
   }
 });
 
+// ASSOCIATION RULE 15 (Dynamic Minimum Players Per Team for Match Attendance)
+router.get('/rule-15', async (req, res) => {
+  try {
+    const db = require('../config/db');
+    await db.initDb();
+    const record = await db.models.MasterSetting.findOne({ id: 'ADMIN_RULE_15' }).lean();
+    let config = {
+      enabled: true,
+      minPlayers: 9,
+      ruleText: ''
+    };
+    if (record?.description) {
+      try {
+        const parsed = JSON.parse(record.description);
+        const parsedMin = parseInt(parsed.minPlayers, 10);
+        config = {
+          enabled: record.is_active !== false,
+          minPlayers: (!isNaN(parsedMin) && parsedMin >= 1 && parsedMin <= 11) ? parsedMin : 9,
+          ruleText: typeof parsed.ruleText === 'string' ? parsed.ruleText : ''
+        };
+      } catch (_e) {}
+    }
+    res.json({ success: true, config });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.put('/rule-15', async (req, res) => {
+  try {
+    const db = require('../config/db');
+    await db.initDb();
+    const enabled = req.body.enabled !== false;
+    const minPlayers = parseInt(req.body.minPlayers, 10);
+    const ruleText = typeof req.body.ruleText === 'string' ? req.body.ruleText.trim() : '';
+
+    if (isNaN(minPlayers) || minPlayers < 1 || minPlayers > 11) {
+      return res.status(400).json({
+        success: false,
+        error: 'Minimum players must be a whole number between 1 and 11.'
+      });
+    }
+
+    const payload = { enabled, minPlayers, ruleText };
+    await db.models.MasterSetting.findOneAndUpdate(
+      { id: 'ADMIN_RULE_15' },
+      {
+        $set: {
+          id: 'ADMIN_RULE_15',
+          category: 'association_rules',
+          name: 'Association Rule 15 - Match Attendance Requirement',
+          code: 'ADMIN_RULE_15',
+          description: JSON.stringify(payload),
+          is_active: enabled,
+          updated_at: new Date()
+        }
+      },
+      { upsert: true, new: true }
+    );
+
+    res.json({ success: true, config: payload, message: `Rule 15 updated (Min ${minPlayers} players per team).` });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+const DEFAULT_COMMITTEE_CONFIG = {
+  enabled: true,
+  sectionTitle: 'Tournament Committee & Office Bearers',
+  roles: [
+    { roleTitle: 'Tournament Coordinator', members: 'D. Saravanamuthu (Assistant Secretary)' },
+    { roleTitle: 'Assistants', members: 'Thangamarimuthu (JC), B. Sri Vallaba Ganesh (Redrose)' },
+    { roleTitle: 'Registration Coordinators', members: 'M. Suresh (Yazhini), Christopher (Yazhini)' },
+    { roleTitle: 'Umpire & Scorer Coordinator', members: 'S. Kabirthasan • Assistants: G. Sankar (Nature), Guhan (Sasinagar)' },
+    { roleTitle: 'Media Coordinators', members: 'R. Sankar (Joint Secretary), M. Manikannan (Miraculous)' }
+  ],
+  groundInCharges: [
+    { groundName: 'Ramco Cements Turf', inCharge: 'Ramco' },
+    { groundName: 'CFVD Ground', inCharge: 'Shooters' },
+    { groundName: 'Mepco', inCharge: 'Physical Education Director' },
+    { groundName: 'PACR', inCharge: 'Ramco' },
+    { groundName: 'AAA', inCharge: 'War Horses & Leo Sports' },
+    { groundName: 'MCC', inCharge: 'Mathai' }
+  ],
+  teamNotice: 'On every match day, each team must nominate 3 members from their squad for match official duties. We kindly request everyone to keep the ground clean.',
+  signatoryTitle: 'Secretary',
+  signatoryName: 'P. Mohanraj',
+  noticeDate: '21.11.2026'
+};
+
+// ASSOCIATION OFFICE BEARERS & GROUND IN-CHARGES (Displayed on Public Website)
+router.get('/committee-members', async (req, res) => {
+  try {
+    const db = require('../config/db');
+    await db.initDb();
+    const record = await db.models.MasterSetting.findOne({ id: 'ADMIN_COMMITTEE_MEMBERS' }).lean();
+    let config = { ...DEFAULT_COMMITTEE_CONFIG };
+    if (record?.description) {
+      try {
+        const parsed = JSON.parse(record.description);
+        config = {
+          ...DEFAULT_COMMITTEE_CONFIG,
+          ...parsed,
+          enabled: record.is_active !== false
+        };
+      } catch (_e) {}
+    }
+    res.json({ success: true, config });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.put('/committee-members', async (req, res) => {
+  try {
+    const db = require('../config/db');
+    await db.initDb();
+    const enabled = req.body.enabled !== false;
+    const sectionTitle = String(req.body.sectionTitle || DEFAULT_COMMITTEE_CONFIG.sectionTitle).trim();
+    const roles = Array.isArray(req.body.roles)
+      ? req.body.roles
+          .map(r => ({
+            roleTitle: String(r?.roleTitle || '').trim(),
+            members: String(r?.members || '').trim()
+          }))
+          .filter(r => r.roleTitle && r.members)
+      : [];
+    const groundInCharges = Array.isArray(req.body.groundInCharges)
+      ? req.body.groundInCharges
+          .map(g => ({
+            groundName: String(g?.groundName || '').trim(),
+            inCharge: String(g?.inCharge || '').trim()
+          }))
+          .filter(g => g.groundName && g.inCharge)
+      : [];
+
+    const payload = {
+      enabled,
+      sectionTitle,
+      roles,
+      groundInCharges,
+      teamNotice: String(req.body.teamNotice || '').trim(),
+      signatoryTitle: String(req.body.signatoryTitle || 'Secretary').trim(),
+      signatoryName: String(req.body.signatoryName || '').trim(),
+      noticeDate: String(req.body.noticeDate || '').trim()
+    };
+
+    await db.models.MasterSetting.findOneAndUpdate(
+      { id: 'ADMIN_COMMITTEE_MEMBERS' },
+      {
+        $set: {
+          id: 'ADMIN_COMMITTEE_MEMBERS',
+          category: 'association_committee',
+          name: 'Tournament Committee & Office Bearers',
+          code: 'ADMIN_COMMITTEE_MEMBERS',
+          description: JSON.stringify(payload),
+          is_active: enabled,
+          updated_at: new Date()
+        }
+      },
+      { upsert: true, new: true }
+    );
+
+    res.json({ success: true, config: payload, message: 'Office Bearers & Ground In-Charges updated.' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ACCESS CONTROL & DUAL-ADMIN APPROVAL SYSTEM
 // ─────────────────────────────────────────────────────────────────────────────
