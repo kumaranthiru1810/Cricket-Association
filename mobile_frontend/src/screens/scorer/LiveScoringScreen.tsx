@@ -658,6 +658,7 @@ export default function LiveScoringScreen() {
   const [customFielderModalName, setCustomFielderModalName] = useState<string>('');
   const [isFieldingActionDropdownOpen, setIsFieldingActionDropdownOpen] = useState<boolean>(false);
   const [customFieldingActionText, setCustomFieldingActionText] = useState<string>('');
+  const [fieldingTargetBatter, setFieldingTargetBatter] = useState<'STRIKER' | 'NON_STRIKER'>('STRIKER');
   const [showWagonWheelModal, setShowWagonWheelModal] = useState<boolean>(false);
   const [selectedWagonSector, setSelectedWagonSector] = useState<string>('Cover');
   const [pendingBoundaryRun, setPendingBoundaryRun] = useState<number | null>(null);
@@ -2178,11 +2179,17 @@ export default function LiveScoringScreen() {
       impactScore = -2;
     }
 
+    const targetBatterName = fieldingTargetBatter === 'NON_STRIKER'
+      ? (nonStriker?.name || 'Non-Striker')
+      : (striker?.name || 'Striker');
+    const currentBowlerName = bowler?.name || 'Current Bowler';
+    const overBallLabel = `Over ${Math.floor(balls / 6)}.${balls % 6}`;
+
     setActiveFieldingEvent({
       type: fType,
       fielderName: fielderName,
       teamName: currentBowlingTeam || matchInfo?.bowlingTeam || 'Fielding Side',
-      details: `${fielderName} (${currentBowlingTeam}) executed ${finalAction} • Counted for Best Fielder rating`,
+      details: `${fielderName} (${currentBowlingTeam}) • ${finalAction} • ${overBallLabel} • Batter: ${targetBatterName} (b. ${currentBowlerName})`,
       badge: impactBadge,
       impactScore: impactScore
     });
@@ -7347,6 +7354,65 @@ export default function LiveScoringScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+              {/* 0. LIVE OVER, BATTER & BOWLER CONTEXT */}
+              <View style={{
+                marginTop: 8,
+                backgroundColor: '#fffbeb',
+                borderWidth: 1,
+                borderColor: '#fde68a',
+                borderRadius: 10,
+                padding: 10,
+                gap: 6
+              }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '900', color: '#92400e' }}>
+                    📍 OVER {Math.floor(balls / 6)}.{balls % 6} • INNINGS {currentInningsNum}
+                  </Text>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#0369a1' }}>
+                    ⚾ Bowler: {bowler?.name || 'Current Bowler'}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#78350f' }}>
+                  BATTER / WICKET TARGET:
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => setFieldingTargetBatter('STRIKER')}
+                    activeOpacity={0.8}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 6,
+                      paddingHorizontal: 8,
+                      borderRadius: 7,
+                      borderWidth: 1.5,
+                      borderColor: fieldingTargetBatter === 'STRIKER' ? '#d97706' : '#e2e8f0',
+                      backgroundColor: fieldingTargetBatter === 'STRIKER' ? '#fef3c7' : '#ffffff'
+                    }}
+                  >
+                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0f172a' }} numberOfLines={1}>
+                      🏏 {striker?.name || 'Striker'} (Striker)
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setFieldingTargetBatter('NON_STRIKER')}
+                    activeOpacity={0.8}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 6,
+                      paddingHorizontal: 8,
+                      borderRadius: 7,
+                      borderWidth: 1.5,
+                      borderColor: fieldingTargetBatter === 'NON_STRIKER' ? '#d97706' : '#e2e8f0',
+                      backgroundColor: fieldingTargetBatter === 'NON_STRIKER' ? '#fef3c7' : '#ffffff'
+                    }}
+                  >
+                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0f172a' }} numberOfLines={1}>
+                      🏃 {nonStriker?.name || 'Non-Striker'} (Non-Striker)
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
               {/* 1. SELECT ACTIVE FIELDER (DROPDOWN & QUICK SELECT) */}
               <View style={{ marginTop: 8 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -7599,7 +7665,7 @@ export default function LiveScoringScreen() {
                   Preview:
                 </Text>
                 <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#14532d', marginTop: 2 }}>
-                  🧤 {activeFieldingSquad.find(p => p.id === selectedFielderId)?.name || customFielderModalName || activeFieldingSquad[0]?.name || 'Active Fielder'} ({currentBowlingTeam}) • {customFieldingActionText.trim() || selectedFieldingAction}
+                  🧤 {activeFieldingSquad.find(p => p.id === selectedFielderId)?.name || customFielderModalName || activeFieldingSquad[0]?.name || 'Active Fielder'} ({currentBowlingTeam}) • {customFieldingActionText.trim() || selectedFieldingAction} • Over {Math.floor(balls / 6)}.{balls % 6} • vs {fieldingTargetBatter === 'NON_STRIKER' ? (nonStriker?.name || 'Non-Striker') : (striker?.name || 'Striker')} (b. {bowler?.name || 'Bowler'})
                 </Text>
               </View>
             </ScrollView>
