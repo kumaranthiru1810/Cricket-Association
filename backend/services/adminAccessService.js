@@ -464,10 +464,10 @@ class AdminAccessService {
     await reqDoc.save();
 
     console.log(`\n======================================================`);
-    console.log(`[DUAL-ADMIN SECURITY] Revocation OTPs generated for Request ID: ${requestId}`);
-    console.log(`Target to Remove: ${target.email}`);
-    console.log(`Approver 1 (${approver1.email}): ${otp1}`);
-    console.log(`Approver 2 (${approver2.email}): ${otp2}`);
+    console.log(`[DUAL-ADMIN SECURITY] Security OTPs re-generated for Request ID: ${requestId}`);
+    console.log(`Target: ${reqDoc.target_email}`);
+    console.log(`Approver 1 (${reqDoc.approver1_email}): ${otp1}`);
+    console.log(`Approver 2 (${reqDoc.approver2_email}): ${otp2}`);
     if (process.env.NODE_ENV !== 'production') {
       console.log(`[DEV BYPASS]: You may also enter 123456 for both approvers in development.`);
     }
