@@ -152,19 +152,36 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
   const IMG_BG_DESKTOP = require('../../../assets/admin_login_bg_desktop.jpg');
   const IMG_BG_MOBILE = require('../../../assets/admin_login_bg_mobile.jpg');
 
+  const handleExitToMain = () => {
+    if (handleBack) {
+      handleBack();
+    } else if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.location.href = '/';
+    }
+  };
+
   return (
     <View style={styles.rootContainer}>
       {/* Background Accent Line */}
       <View style={styles.topAccentBar} />
 
-      {/* Full-Screen Responsive Cricket Background Image (Desktop vs Mobile) */}
+      {/* Top-Left Responsive Exit to Main Button */}
+      <TouchableOpacity
+        style={styles.exitBtn}
+        onPress={handleExitToMain}
+        activeOpacity={0.85}
+      >
+        <Ionicons name="arrow-back" size={isDesktop ? 15 : 14} color="#fbbf24" />
+        <Text style={styles.exitBtnText}>Exit to Main</Text>
+      </TouchableOpacity>
+
+      {/* Full-Screen Responsive Cricket Background Image (No Blur / No Overlay) */}
       <View style={styles.bgContainer} pointerEvents="none">
         <Image
           source={useLandscapeBg ? IMG_BG_DESKTOP : IMG_BG_MOBILE}
           style={styles.bgImage}
           resizeMode="cover"
         />
-        <View style={styles.bgOverlay} />
       </View>
 
       <View style={styles.scrollContent}>
@@ -185,29 +202,10 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
             </View>
             <Text style={styles.brandTitle}>CRICKET FEDERATION</Text>
             <Text style={styles.brandSub}>OF VIRUDHUNAGAR DISTRICT</Text>
-            <Text style={styles.brandEst}>Est. 1987 • CFVD • Official Administrative Portal</Text>
-            <View style={styles.affiliationBadge}>
-              <Ionicons name="shield-checkmark" size={13} color="#10b981" />
-              <Text style={styles.affiliationText}>Official Governing Body • TNCA Affiliated</Text>
-            </View>
           </View>
 
-          {/* Login Card (Official Association Midnight Navy Box with Gold Border) */}
+          {/* Login Card */}
           <View style={styles.loginCard}>
-            {/* Association Card Header with Icon */}
-            <View style={styles.cardHeaderBox}>
-              <View style={styles.cardEmblemSmall}>
-                <Image
-                  source={IMG_LOGO}
-                  style={styles.cardLogoMini}
-                  resizeMode="contain"
-                />
-              </View>
-              <View style={styles.cardHeaderTextCol}>
-                <Text style={styles.cardHeaderTitle}>ASSOCIATION ADMIN ACCESS</Text>
-                <Text style={styles.cardHeaderSub}>Authorized CFVD Officials Only</Text>
-              </View>
-            </View>
 
             {/* Error Banner */}
             {errorMsg && (
@@ -292,14 +290,6 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
             )}
           </View>
 
-          {/* Security Notice */}
-          <View style={styles.securityFooter}>
-            <Ionicons name="shield-checkmark" size={14} color="#059669" />
-            <Text style={styles.securityText}>
-              Protected by Association Two-Factor Cryptographic Session Guard. All access attempts are audited.
-            </Text>
-          </View>
-
           {/* Reusable Forgot Password Modal */}
           <ForgotPasswordModal
             visible={showForgotPassword}
@@ -331,11 +321,38 @@ const getStyles = (isDesktop: boolean): any => StyleSheet.create({
     flex: 1,
     width: '100%',
     height: '100%',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingVertical: isDesktop ? 16 : 12,
+    paddingTop: isDesktop ? 22 : 52,
+    paddingBottom: isDesktop ? 130 : 120,
     paddingHorizontal: isDesktop ? 24 : 16,
     zIndex: 1
+  },
+  exitBtn: {
+    position: 'absolute',
+    top: isDesktop ? 18 : 14,
+    left: isDesktop ? 22 : 14,
+    zIndex: 30,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#0f2452',
+    borderWidth: 1.5,
+    borderColor: '#d4af37',
+    borderRadius: 999,
+    paddingVertical: isDesktop ? 8 : 6,
+    paddingHorizontal: isDesktop ? 16 : 12,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5
+  },
+  exitBtnText: {
+    color: '#ffffff',
+    fontSize: isDesktop ? 13 : 12,
+    fontWeight: '700',
+    letterSpacing: 0.3
   },
   bgContainer: {
     position: (Platform.OS === 'web' ? 'fixed' : 'absolute') as any,
@@ -351,18 +368,7 @@ const getStyles = (isDesktop: boolean): any => StyleSheet.create({
   bgImage: {
     width: '100%',
     height: '100%',
-    ...(Platform.OS === 'web' ? { objectFit: 'cover', objectPosition: 'center center' } : {})
-  },
-  bgOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: isDesktop ? 'rgba(255, 255, 255, 0.22)' : 'rgba(255, 255, 255, 0.26)',
-    backgroundImage: (Platform.OS === 'web'
-      ? 'linear-gradient(180deg, rgba(255, 255, 255, 0.42) 0%, rgba(255, 255, 255, 0.16) 50%, rgba(255, 255, 255, 0.35) 100%)'
-      : undefined) as any
+    ...(Platform.OS === 'web' ? { objectFit: 'cover', objectPosition: 'center bottom' } : {})
   },
   topAccentBar: {
     position: 'absolute',
@@ -375,24 +381,24 @@ const getStyles = (isDesktop: boolean): any => StyleSheet.create({
   },
   cardWrapper: {
     width: '100%',
-    maxWidth: isDesktop ? 500 : 460,
+    maxWidth: isDesktop ? 440 : 400,
     alignItems: 'center',
     zIndex: 1
   },
   brandBox: {
     alignItems: 'center',
-    marginBottom: isDesktop ? 14 : 12
+    marginBottom: isDesktop ? 12 : 10
   },
   emblemOuterRing: {
-    width: isDesktop ? 82 : 72,
-    height: isDesktop ? 82 : 72,
-    borderRadius: isDesktop ? 41 : 36,
-    backgroundColor: 'rgba(212, 175, 55, 0.18)',
+    width: isDesktop ? 76 : 66,
+    height: isDesktop ? 76 : 66,
+    borderRadius: isDesktop ? 38 : 33,
+    backgroundColor: 'rgba(212, 175, 55, 0.22)',
     borderWidth: 2,
     borderColor: '#d4af37',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
     shadowColor: '#d4af37',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.28,
@@ -400,9 +406,9 @@ const getStyles = (isDesktop: boolean): any => StyleSheet.create({
     elevation: 6
   },
   emblemInnerRing: {
-    width: isDesktop ? 68 : 60,
-    height: isDesktop ? 68 : 60,
-    borderRadius: isDesktop ? 34 : 30,
+    width: isDesktop ? 62 : 54,
+    height: isDesktop ? 62 : 54,
+    borderRadius: isDesktop ? 31 : 27,
     backgroundColor: 'rgba(15, 36, 82, 0.08)',
     borderWidth: 1.5,
     borderColor: 'rgba(212, 175, 55, 0.45)',
@@ -410,9 +416,9 @@ const getStyles = (isDesktop: boolean): any => StyleSheet.create({
     alignItems: 'center'
   },
   emblemWrapper: {
-    width: isDesktop ? 58 : 50,
-    height: isDesktop ? 58 : 50,
-    borderRadius: isDesktop ? 29 : 25,
+    width: isDesktop ? 52 : 46,
+    height: isDesktop ? 52 : 46,
+    borderRadius: isDesktop ? 26 : 23,
     backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
@@ -424,29 +430,29 @@ const getStyles = (isDesktop: boolean): any => StyleSheet.create({
     overflow: 'hidden'
   },
   logoMiniature: {
-    width: isDesktop ? 52 : 44,
-    height: isDesktop ? 52 : 44
+    width: isDesktop ? 46 : 40,
+    height: isDesktop ? 46 : 40
   },
   brandTitle: {
     fontSize: isDesktop ? 19 : 16,
     fontWeight: '900',
-    color: '#0f2452',
-    letterSpacing: isDesktop ? 2.5 : 2,
+    color: '#ffffff',
+    letterSpacing: isDesktop ? 2.5 : 1.8,
     textAlign: 'center',
-    textShadowColor: 'rgba(255, 255, 255, 0.9)',
-    textShadowOffset: { width: 0, height: 1 },
+    textShadowColor: 'rgba(7, 17, 38, 0.78)',
+    textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 6
   },
   brandSub: {
-    fontSize: isDesktop ? 14.5 : 12,
+    fontSize: isDesktop ? 13.5 : 11.5,
     fontWeight: '800',
-    color: '#b8860b',
+    color: '#fde047',
     letterSpacing: 1.2,
     marginTop: 2,
     textAlign: 'center',
-    textShadowColor: 'rgba(255, 255, 255, 0.9)',
+    textShadowColor: 'rgba(7, 17, 38, 0.82)',
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4
+    textShadowRadius: 5
   },
   brandEst: {
     fontSize: isDesktop ? 12 : 10.5,
@@ -478,23 +484,22 @@ const getStyles = (isDesktop: boolean): any => StyleSheet.create({
     color: '#059669'
   },
 
-  // Box Color: Pure White with Association Gold Accent Border & Soft Shadow
+  // Box Color: Crisp White with Association Gold Accent Border & Soft Shadow (no blur)
   loginCard: {
     width: '100%',
-    backgroundColor: Platform.OS === 'web' ? 'rgba(255, 255, 255, 0.96)' : '#ffffff',
-    backdropFilter: (Platform.OS === 'web' ? 'blur(16px)' : undefined) as any,
+    backgroundColor: Platform.OS === 'web' ? 'rgba(255, 255, 255, 0.95)' : '#ffffff',
     borderRadius: isDesktop ? 18 : 16,
     borderWidth: 1.5,
-    borderColor: 'rgba(212, 175, 55, 0.45)',
-    paddingHorizontal: isDesktop ? 28 : 20,
+    borderColor: 'rgba(212, 175, 55, 0.55)',
+    paddingHorizontal: isDesktop ? 26 : 20,
     paddingTop: isDesktop ? 20 : 16,
     paddingBottom: isDesktop ? 18 : 16,
     shadowColor: '#0f2452',
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.12,
-    shadowRadius: 25,
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
     elevation: 6,
-    boxShadow: (Platform.OS === 'web' ? '0 20px 50px -10px rgba(15, 36, 82, 0.14), 0 0 25px -5px rgba(212, 175, 55, 0.15)' : undefined) as any
+    boxShadow: (Platform.OS === 'web' ? '0 18px 42px -10px rgba(15, 36, 82, 0.22), 0 0 20px -5px rgba(212, 175, 55, 0.2)' : undefined) as any
   },
 
   // In-Card Association Icon Header
