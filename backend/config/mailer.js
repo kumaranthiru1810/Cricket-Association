@@ -24,19 +24,20 @@ function getSmtpConfig() {
     secure = (port === 465);
   }
 
+  const env = require('./env');
   const from = process.env.SMTP_FROM
     ? process.env.SMTP_FROM.replace(/^"|"$/g, '').trim()
-    : `"Cricket Federation" <${user || 'notifications@cfvd.org'}>`;
-  const superAdmin = (process.env.SUPER_ADMIN_EMAIL || 'admin@cfvd.org').toLowerCase().trim();
+    : `"Cricket Federation" <${user || 'noreply@localhost.invalid'}>`;
+  const superAdmin = env.SUPER_ADMIN_EMAIL;
   const provider = (process.env.EMAIL_PROVIDER || 'auto').toLowerCase().trim();
 
   return { host, port, user, pass, secure, from, superAdmin, provider };
 }
 
-const SUPER_ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || 'admin@cfvd.org').toLowerCase().trim();
+const SUPER_ADMIN_EMAIL = require('./env').SUPER_ADMIN_EMAIL;
 
 function attachDevOtp(otp) {
-  return (process.env.NODE_ENV !== 'production' && otp) ? { otp } : {};
+  return (require('./env').isDevelopment && otp) ? { otp } : {};
 }
 
 let activeTransporter = null;

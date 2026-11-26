@@ -5,13 +5,7 @@
  * Fully powered by pure MongoDB database with full Multi-Role & Portal APIs.
  */
 
-require('dotenv').config();
-
-// Critical Startup Check: Enforce strong JWT_SECRET in production
-if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'cricket_super_secret_jwt_2026' || process.env.JWT_SECRET.length < 16)) {
-  console.error('FATAL ERROR: A strong JWT_SECRET environment variable is required in production!');
-  process.exit(1);
-}
+const env = require('./config/env');
 
 const http = require('http');
 const express = require('express');

@@ -10,7 +10,9 @@
  */
 
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = rateLimit;
 const crypto = require('crypto');
+const env = require('../config/env');
 
 /**
  * 1. NoSQL Injection & Prototype Pollution Sanitizer
@@ -68,13 +70,43 @@ const generalRateLimiter = rateLimit({
 // Strict Auth / Sensitive Endpoint Rate Limiter (Brute-force protection)
 const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 100 : 500, // Allow sufficient verification & submission attempts
+  max: !env.isDevelopment ? 25 : 500,
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => req.method === 'OPTIONS',
   message: {
     success: false,
     message: 'Too many authentication attempts. Please try again after 15 minutes.'
+  }
+});
+
+// Strict OTP Request & Verification Rate Limiter (max 5 per 15 min per IP+account)
+const otpRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: !env.isDevelopment ? 5 : 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.method === 'OPTIONS',
+  keyGenerator: (req) => {
+    const email = String(req.body?.email || req.body?.coachEmail || '').trim().toLowerCase();
+    return `${ipKeyGenerator(req.ip)}:${email}`;
+  },
+  message: {
+    success: false,
+    message: 'Too many OTP attempts. Please try again after 15 minutes.'
+  }
+});
+
+// Registration Rate Limiter (max 10 per 15 min per IP)
+const registerRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: !env.isDevelopment ? 10 : 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.method === 'OPTIONS',
+  message: {
+    success: false,
+    message: 'Too many registration attempts. Please try again after 15 minutes.'
   }
 });
 
@@ -138,7 +170,7 @@ function getCorsOptions() {
       'X-Webhook-Signature',
       'Accept',
       'Origin',
-      ...(process.env.NODE_ENV !== 'production' ? ['x-user-role', 'x-user-email', 'x-user-id', 'scorer-id', 'role'] : [])
+      ...(require('../config/env').isDevelopment ? ['x-user-role', 'x-user-email', 'x-user-id', 'scorer-id', 'role'] : [])
     ]
   };
 }
@@ -204,7 +236,14 @@ function validateFileUpload({ maxSizeBytes = 5 * 1024 * 1024 } = {}) {
 function verifyWebhookSignature(secretEnvVar = 'WEBHOOK_SECRET') {
   return (req, res, next) => {
     const signature = req.headers['x-webhook-signature'] || req.headers['x-signature'];
-    const secret = process.env[secretEnvVar] || 'cricket_webhook_secret_key_2026';
+    const secret = process.env[secretEnvVar] || env.WEBHOOK_SECRET;
+
+    if (!secret) {
+      return res.status(503).json({
+        success: false,
+        message: 'Webhook signature verification is not configured.'
+      });
+    }
 
     if (!signature) {
       return res.status(401).json({
@@ -253,6 +292,8 @@ module.exports = {
   sanitizeInput,
   generalRateLimiter,
   authRateLimiter,
+  otpRateLimiter,
+  registerRateLimiter,
   getCorsOptions,
   validateFileUpload,
   verifyWebhookSignature,

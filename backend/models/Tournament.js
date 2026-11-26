@@ -23,9 +23,10 @@ const TournamentSchema = new mongoose.Schema({
       'LEAGUE',
       'KNOCKOUT',
       'LEAGUE_KNOCKOUT',
-      'GROUP_SUPER_LEAGUE'
-    ], 
-    default: 'SINGLE_ROUND_ROBIN' 
+      'GROUP_SUPER_LEAGUE',
+      'CUSTOM'
+    ],
+    default: 'SINGLE_ROUND_ROBIN'
   },
   category: { type: String, default: 'Senior District Trophy' },
   gender: { type: String, default: 'Men' },
@@ -93,6 +94,7 @@ const TournamentSchema = new mongoose.Schema({
     include_final: { type: Boolean, default: true },
     group_distribution: { type: String, enum: ['BALANCED', 'RANDOM', 'SEEDED', 'MANUAL'], default: 'BALANCED' },
     best_runners_up_count: { type: Number, default: 0 },
+    best_third_place_count: { type: Number, default: 0 },
     group_names: [{ type: String }],
     manual_groups: { type: mongoose.Schema.Types.Mixed, default: null },
     tie_breaker_order: { type: [String], default: ['POINTS', 'WINS', 'NRR', 'HEAD_TO_HEAD'] },

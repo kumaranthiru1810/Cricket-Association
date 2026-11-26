@@ -28,7 +28,9 @@ const { uploadSingle, processImageUpload } = require('../middleware/uploadMiddle
  * POST /api/player/register
  * Individual player registration -> Status = PENDING -> Awaiting Admin Approval
  */
-router.post('/register', async (req, res) => {
+const { registerRateLimiter, otpRateLimiter } = require('../middleware/securityMiddleware');
+
+router.post('/register', registerRateLimiter, async (req, res) => {
   try {
     const result = await authService.registerPlayer(req.body);
     res.status(201).json(result);
@@ -46,7 +48,7 @@ router.post('/register', async (req, res) => {
  * Step 1: Request OTP for registered player name / email
  * Strictly verifies player exists & admin approval status before generating & dispatching OTP
  */
-router.post('/login', async (req, res) => {
+router.post('/login', otpRateLimiter, async (req, res) => {
   try {
     const { name, email, playerName, nameOrEmail, emailOrPhone, input } = req.body;
     const identifier = playerName || nameOrEmail || emailOrPhone || input || email || name;
@@ -293,6 +295,30 @@ router.get('/form', requirePlayerAuth, async (req, res) => {
     res.status(200).json({ success: true, form });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+const historyService = require('../services/historyService');
+
+router.get('/compare', async (req, res) => {
+  try {
+    const { player1, player2 } = req.query;
+    if (!player1 || !player2) {
+      return res.status(400).json({ success: false, message: 'Both player1 and player2 query params are required.' });
+    }
+    const result = await historyService.comparePlayers(String(player1), String(player2));
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 400).json({ success: false, message: err.message || 'Player comparison failed.' });
+  }
+});
+
+router.get('/:id/history', async (req, res) => {
+  try {
+    const result = await historyService.getPlayerHistory(req.params.id);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, message: err.message || 'Failed to load player history.' });
   }
 });
 

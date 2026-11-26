@@ -121,13 +121,13 @@ class TournamentRegistrationModel {
     };
 
     if (status === 'APPROVED') {
-      update.approved_by = adminEmail || 'admin@cfvd.org';
+      update.approved_by = adminEmail || 'SYSTEM';
       update.approved_at = new Date();
       update.rejected_by = null;
       update.rejected_at = null;
       update.rejection_reason = null;
     } else if (status === 'REJECTED') {
-      update.rejected_by = adminEmail || 'admin@cfvd.org';
+      update.rejected_by = adminEmail || 'SYSTEM';
       update.rejected_at = new Date();
       update.rejection_reason = rejectionReason || 'Registration application declined by tournament committee.';
     }

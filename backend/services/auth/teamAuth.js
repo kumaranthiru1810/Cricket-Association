@@ -10,7 +10,7 @@ const otpService = require('../otpService');
 const { sendOtpEmail } = require('../../config/mailer');
 const db = require('../../config/db');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'cricket_super_secret_jwt_2026';
+const { JWT_SECRET } = require('../../config/env');
 
 class TeamAuth {
   /**
@@ -114,9 +114,9 @@ class TeamAuth {
     const teamName = reg?.team_name || teamDoc?.name || 'Virudhunagar Team';
 
     const token = jwt.sign(
-      { id: authResult.user.id, name: authResult.user.name, email: authResult.user.email, role: 'COACH', teamId, teamName },
+      { id: authResult.user.id, name: authResult.user.name, email: authResult.user.email, role: 'COACH', teamId, teamName, tv: authResult.user.token_version ?? 0 },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '12h' }
     );
 
     return {
@@ -202,7 +202,6 @@ class TeamAuth {
         aadhaar: cleanCoachAadhaar || null,
         role: 'COACH',
         password_hash: passwordHash,
-        current_password: password ? String(password).trim() : null,
         status: 'PENDING'
       });
     } else {
@@ -213,10 +212,11 @@ class TeamAuth {
             name: coachName.trim(),
             ...(cleanCoachPhone && { mobile: cleanCoachPhone }),
             ...(cleanCoachAadhaar && { aadhaar: cleanCoachAadhaar }),
-            ...(passwordHash ? { password_hash: passwordHash, current_password: password ? String(password).trim() : null } : {}),
+            ...(passwordHash ? { password_hash: passwordHash } : {}),
             role: 'COACH',
             status: 'PENDING'
-          }
+          },
+          $unset: { current_password: '' }
         }
       );
     }

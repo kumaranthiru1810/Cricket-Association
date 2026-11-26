@@ -33,7 +33,9 @@ router.get('/districts', async (req, res) => {
  * Register a new team account
  * Body: { teamName, districtId, captainName, phone, email, password }
  */
-router.post('/register', async (req, res) => {
+const { registerRateLimiter, authRateLimiter } = require('../middleware/securityMiddleware');
+
+router.post('/register', registerRateLimiter, async (req, res) => {
   try {
     const { teamName, districtId, captainName, phone, email, password, players } = req.body;
     const result = await teamService.registerTeam({ teamName, districtId, captainName, phone, email, password, players });
@@ -65,7 +67,7 @@ const authController = require('../controllers/authController');
  * Team login endpoint
  * Body: { email, password }
  */
-router.post('/login', async (req, res) => {
+router.post('/login', authRateLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     const result = await teamService.loginTeam({ email, password });
@@ -1484,6 +1486,17 @@ router.delete('/players/:playerId', requireTeamAuth, async (req, res) => {
   } catch (err) {
     console.error('DELETE /team/players/:id error:', err);
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+const historyService = require('../services/historyService');
+
+router.get('/:id/history', async (req, res) => {
+  try {
+    const result = await historyService.getTeamHistory(req.params.id);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, message: err.message || 'Failed to load team history.' });
   }
 });
 

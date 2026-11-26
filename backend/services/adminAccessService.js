@@ -18,7 +18,8 @@ const {
   sendCandidateVerificationEmail
 } = require('../config/mailer');
 
-const OTP_SECRET = process.env.OTP_HMAC_SECRET || process.env.JWT_SECRET || 'cricket_dual_admin_hmac_secret_2026';
+const env = require('../config/env');
+const OTP_SECRET = env.OTP_HMAC_SECRET;
 
 function generate6DigitOtp() {
   return crypto.randomInt(100000, 1000000).toString();
@@ -31,8 +32,7 @@ function hashOtp(code) {
 function verifyConstantTime(rawCode, storedHash) {
   if (!rawCode || !storedHash) return false;
   const clean = String(rawCode).trim();
-  const isDev = process.env.NODE_ENV !== 'production';
-  if (isDev && (clean === '123456' || clean === '000000' || clean === '1234')) {
+  if (env.isDevelopment && env.DEV_ADMIN_BYPASS && env.DEV_ADMIN_OTP && clean === env.DEV_ADMIN_OTP) {
     return true;
   }
   const candidateHash = hashOtp(clean);
@@ -247,15 +247,9 @@ class AdminAccessService {
       ip_address: ip || '127.0.0.1'
     });
 
-    console.log(`\n======================================================`);
-    console.log(`[DUAL-ADMIN SECURITY] Promotion OTPs generated for Request ID: ${requestId}`);
-    console.log(`Candidate: ${cleanEmail}`);
-    console.log(`Approver 1 (${approver1.email}): ${otp1}`);
-    console.log(`Approver 2 (${approver2.email}): ${otp2}`);
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[DEV BYPASS]: You may also enter 123456 for both approvers in development.`);
+    if (env.isDevelopment) {
+      console.log(`[DUAL-ADMIN SECURITY] Promotion OTPs generated for Request ID: ${requestId} (Candidate: ${cleanEmail})`);
     }
-    console.log(`======================================================\n`);
 
     // Send emails in background without blocking response
     Promise.all([
@@ -386,7 +380,7 @@ class AdminAccessService {
 
       console.log(`\n======================================================`);
       console.log(`[DUAL-ADMIN SECURITY] Candidate Verification Code for ${reqDoc.target_email}: ${candidateCode}`);
-      if (process.env.NODE_ENV !== 'production') {
+      if (env.isDevelopment) {
         console.log(`[DEV BYPASS]: You may also enter 123456 as candidate verification code in development.`);
       }
       console.log(`======================================================\n`);
@@ -463,15 +457,9 @@ class AdminAccessService {
     reqDoc.expires_at = new Date(Date.now() + 10 * 60 * 1000); // Reset 10 minutes
     await reqDoc.save();
 
-    console.log(`\n======================================================`);
-    console.log(`[DUAL-ADMIN SECURITY] Revocation OTPs generated for Request ID: ${requestId}`);
-    console.log(`Target to Remove: ${target.email}`);
-    console.log(`Approver 1 (${approver1.email}): ${otp1}`);
-    console.log(`Approver 2 (${approver2.email}): ${otp2}`);
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[DEV BYPASS]: You may also enter 123456 for both approvers in development.`);
+    if (env.isDevelopment) {
+      console.log(`[DUAL-ADMIN SECURITY] Security OTPs re-generated for Request ID: ${requestId}`);
     }
-    console.log(`======================================================\n`);
 
     await Promise.all([
       sendDualAdminApprovalEmail({
@@ -707,15 +695,9 @@ class AdminAccessService {
       ip_address: ip || '127.0.0.1'
     });
 
-    console.log(`\n======================================================`);
-    console.log(`[DUAL-ADMIN SECURITY] Revocation OTPs generated for Request ID: ${requestId}`);
-    console.log(`Target to Remove: ${target.email}`);
-    console.log(`Approver 1 (${approver1.email}): ${otp1}`);
-    console.log(`Approver 2 (${approver2.email}): ${otp2}`);
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[DEV BYPASS]: You may also enter 123456 for both approvers in development.`);
+    if (env.isDevelopment) {
+      console.log(`[DUAL-ADMIN SECURITY] Revocation OTPs generated for Request ID: ${requestId}`);
     }
-    console.log(`======================================================\n`);
 
     await Promise.all([
       sendDualAdminApprovalEmail({

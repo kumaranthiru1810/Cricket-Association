@@ -27,6 +27,7 @@ import { adminApi } from '../services/adminApi';
 import { showSuccess, showError, showWarning, showConfirm } from '../../utils/sweetalert';
 import { useDebounce } from '../../utils/debounce';
 import { Ionicons } from '@expo/vector-icons';
+import TournamentAdvancedTabs from './TournamentAdvancedTabs';
 
 export interface TournamentManagementProps {
   onOpenScheduler?: (tournament: any, match?: any) => void;
@@ -4847,6 +4848,15 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                         </Text>
                       </View>
                     </View>
+                  )}
+
+                  {/* ADVANCED TABS: GROUPS / BRACKET / SIMULATOR */}
+                  {(detailsTab === 'groups' || detailsTab === 'bracket' || detailsTab === 'simulator') && (
+                    <TournamentAdvancedTabs
+                      tournament={selectedTournament}
+                      activeTab={detailsTab}
+                      onRefresh={() => handleOpenDetails(selectedTournament)}
+                    />
                   )}
                 </ScrollView>
               </>

@@ -119,8 +119,6 @@ class TeamRegistrationModel {
       coach_phone: cleanCoachPhone || null,
       coach_aadhaar: cleanCoachAadhaar || null,
       password_hash: computedPasswordHash,
-      current_password: password ? String(password).trim() : (secretPasskey || null),
-      passkey: secretPasskey,
       city: city || taluk || 'Virudhunagar',
       taluk: taluk || 'Virudhunagar',
       status: 'PENDING',
@@ -139,8 +137,7 @@ class TeamRegistrationModel {
         aadhaar: cleanCoachAadhaar || null,
         role: 'COACH',
         status: 'PENDING',
-        password_hash: computedPasswordHash,
-        current_password: password ? String(password).trim() : (secretPasskey || null)
+        password_hash: computedPasswordHash
       });
     } else {
       await db.models.User.updateOne(
@@ -152,9 +149,10 @@ class TeamRegistrationModel {
             ...(cleanCoachAadhaar && { aadhaar: cleanCoachAadhaar }),
             role: 'COACH',
             status: 'PENDING',
-            ...(computedPasswordHash && { password_hash: computedPasswordHash, current_password: password ? String(password).trim() : (secretPasskey || null) }),
+            ...(computedPasswordHash && { password_hash: computedPasswordHash }),
             updated_at: new Date()
-          }
+          },
+          $unset: { current_password: '' }
         }
       );
     }
@@ -551,6 +549,61 @@ class TeamRegistrationModel {
       status: 'UNREAD'
     });
 
+    return reg.toObject();
+  }
+
+  /**
+   * Delete team registration with undo/restore support
+   */
+  async deleteRegistration(id, deletedBy = 'ADMIN') {
+    await db.initDb();
+    const query = { $or: [{ id }, { teamId: id }, { team_name: id }] };
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      query.$or.push({ _id: id });
+    }
+    const reg = await this.Model.findOne(query);
+    if (!reg) throw new Error('Team registration not found');
+
+    reg.previous_status = reg.status || 'PENDING';
+    reg.status = 'DELETED';
+    reg.deleted_at = new Date();
+    reg.deleted_by = deletedBy;
+    await reg.save();
+
+    if (reg.coach_email) {
+      await db.models.User.updateOne(
+        { email: reg.coach_email },
+        { $set: { status: 'DELETED', updated_at: new Date() } }
+      );
+    }
+    return reg.toObject();
+  }
+
+  /**
+   * Restore a previously deleted team registration
+   */
+  async restoreRegistration(id) {
+    await db.initDb();
+    const query = { $or: [{ id }, { teamId: id }, { team_name: id }] };
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      query.$or.push({ _id: id });
+    }
+    const reg = await this.Model.findOne(query);
+    if (!reg) throw new Error('Team registration not found');
+
+    const restoredStatus = reg.previous_status || 'PENDING';
+    reg.status = restoredStatus;
+    reg.deleted_at = null;
+    reg.deleted_by = null;
+    await reg.save();
+
+    if (reg.coach_email) {
+      const userStatus = restoredStatus === 'APPROVED' ? 'ACTIVE' : 'PENDING';
+      await db.models.User.updateOne(
+        { email: reg.coach_email },
+        { $set: { status: userStatus, updated_at: new Date() } }
+      );
+    }
     return reg.toObject();
   }
 }

@@ -198,7 +198,7 @@ async function requestSuperAdminOtp({
     mailDispatched: mailResult.success,
     previewUrl: mailResult.previewUrl || null,
     // Provide demoOtp in development for seamless UI testing
-    demoOtp: process.env.NODE_ENV !== 'production' ? otp : undefined
+    ...(require('../config/env').isDevelopment ? { demoOtp: otp } : {})
   };
 }
 
@@ -257,7 +257,7 @@ async function resendSuperAdminOtp({ sessionId, requesterEmail = SUPER_ADMIN_EMA
     sessionId,
     cooldownSeconds: 60,
     expiresAt: session.expires_at,
-    demoOtp: process.env.NODE_ENV !== 'production' ? otp : undefined
+    ...(require('../config/env').isDevelopment ? { demoOtp: otp } : {})
   };
 }
 
@@ -370,7 +370,7 @@ async function verifyAndExecuteSuperAdminAction({
           admin_level: data.roleLevel || 'Standard Administrator',
           approval_status: 'APPROVED',
           password_hash: passwordHash,
-          current_password: tempPassword,
+          must_change_password: true,
           activation_token: activationToken,
           activation_token_expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000)
         });

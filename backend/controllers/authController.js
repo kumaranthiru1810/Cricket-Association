@@ -180,12 +180,25 @@ class AuthController {
   async logout(req, res) {
     try {
       clearAuthCookies(res);
-      if (req.user && (req.user.id || req.user.email)) {
+      let userInfo = req.user;
+      if (!userInfo) {
+        const authHeader = req.headers['authorization'];
+        const rawTok = (authHeader && authHeader.startsWith('Bearer '))
+          ? authHeader.substring(7).trim()
+          : (req.cookies?.auth_token || req.cookies?.token || null);
+        if (rawTok) {
+          try {
+            const jwt = require('jsonwebtoken');
+            userInfo = jwt.verify(rawTok, require('../config/env').JWT_SECRET);
+          } catch (_e) {}
+        }
+      }
+      if (userInfo && (userInfo.id || userInfo.email)) {
         try {
           const db = require('../config/db');
           await db.initDb();
           await db.models.User.updateOne(
-            { $or: [{ id: req.user.id }, { email: req.user.email }] },
+            { $or: [{ id: userInfo.id }, { email: userInfo.email }] },
             { $inc: { token_version: 1 } }
           );
         } catch (_e) { }
@@ -493,6 +506,30 @@ class AuthController {
       const targetId = id || req.params.id;
       const adminId = req.user?.email || 'ADMIN';
       const result = await authService.rejectRegistration(targetId, type || 'UMPIRE', reason || 'Criteria not met', adminId);
+      res.status(200).json(result);
+    } catch (err) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  }
+
+  async deleteRegistration(req, res) {
+    try {
+      const { id, type } = req.body;
+      const targetId = id || req.params.id;
+      const adminId = req.user?.email || 'ADMIN';
+      const result = await authService.deleteRegistration(targetId, type || 'TEAM', adminId);
+      res.status(200).json(result);
+    } catch (err) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  }
+
+  async restoreRegistration(req, res) {
+    try {
+      const { id, type } = req.body;
+      const targetId = id || req.params.id;
+      const adminId = req.user?.email || 'ADMIN';
+      const result = await authService.restoreRegistration(targetId, type || 'TEAM', adminId);
       res.status(200).json(result);
     } catch (err) {
       res.status(400).json({ success: false, message: err.message });

@@ -7,7 +7,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const teamModel = require('../models/teamModel');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'cricket_super_secret_jwt_2026';
+const { JWT_SECRET } = require('../config/env');
 
 class TeamController {
   /**
@@ -161,16 +161,16 @@ class TeamController {
       }
 
       const token = jwt.sign(
-        { id: team.id, teamId: team.team_id, coachEmail: team.coach_email, role: 'TEAM' },
+        { id: team.id, teamId: team.team_id, coachEmail: team.coach_email, role: 'TEAM', tv: 0 },
         JWT_SECRET,
-        { expiresIn: '7d' }
+        { expiresIn: '12h' }
       );
 
       res.cookie('team_token', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: !require('../config/env').isDevelopment,
         sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000
+        maxAge: 12 * 60 * 60 * 1000
       });
 
       return res.status(200).json({

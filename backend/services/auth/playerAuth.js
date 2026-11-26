@@ -11,7 +11,7 @@ const otpService = require('../otpService');
 const { sendOtpEmail, sendPlayerTeamEmail } = require('../../config/mailer');
 const db = require('../../config/db');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'cricket_super_secret_jwt_2026';
+const { JWT_SECRET } = require('../../config/env');
 
 class PlayerAuth {
   /**
@@ -71,10 +71,11 @@ class PlayerAuth {
             email: cleanEmail,
             role: 'PLAYER',
             teamName: resolvedTeamName,
-            teamId: existingUser.team_id || null
+            teamId: existingUser.team_id || null,
+            tv: existingUser.token_version ?? 0
           },
           JWT_SECRET,
-          { expiresIn: '24h' }
+          { expiresIn: '12h' }
         );
 
         return {
@@ -122,10 +123,11 @@ class PlayerAuth {
         email: cleanEmail,
         role: 'PLAYER',
         teamName: teamReg.team_name,
-        teamId: teamReg.id
+        teamId: teamReg.id,
+        tv: 0
       },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '12h' }
     );
 
     return {
@@ -284,7 +286,6 @@ class PlayerAuth {
       aadhaar: cleanAadhaar,
       aadhaar_number: cleanAadhaar,
       password_hash: passwordHash,
-      current_password: password ? String(password).trim() : null,
       role: 'PLAYER',
       status: 'ACTIVE',
       player_details: {

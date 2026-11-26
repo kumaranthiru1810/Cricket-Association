@@ -14,7 +14,6 @@ import {
   ActivityIndicator,
   Platform,
   Image,
-  ScrollView,
   useWindowDimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,8 +31,9 @@ export interface Props {
 
 export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, onCancel }) => {
   const handleBack = onCancel || onBackToHome;
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isDesktop = windowWidth >= 640;
+  const useLandscapeBg = windowWidth >= 640 && windowWidth >= windowHeight * 0.9;
   const styles = useMemo(() => getStyles(isDesktop), [isDesktop]);
   const { login } = useAdminAuth();
   const [email, setEmail] = useState('');
@@ -149,28 +149,42 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
   };
 
   const IMG_LOGO = require('../../../assets/logo_transparent.png');
+  const IMG_BG_DESKTOP = require('../../../assets/admin_login_bg_desktop.jpg');
+  const IMG_BG_MOBILE = require('../../../assets/admin_login_bg_mobile.jpg');
+
+  const handleExitToMain = () => {
+    if (handleBack) {
+      handleBack();
+    } else if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.location.href = '/';
+    }
+  };
 
   return (
     <View style={styles.rootContainer}>
       {/* Background Accent Line */}
       <View style={styles.topAccentBar} />
 
-      {/* Atmospheric Association Background Logo */}
+      {/* Top-Left Responsive Exit to Main Button */}
+      <TouchableOpacity
+        style={styles.exitBtn}
+        onPress={handleExitToMain}
+        activeOpacity={0.85}
+      >
+        <Ionicons name="arrow-back" size={isDesktop ? 15 : 14} color="#fbbf24" />
+        <Text style={styles.exitBtnText}>Exit to Main</Text>
+      </TouchableOpacity>
+
+      {/* Full-Screen Responsive Cricket Background Image (No Blur / No Overlay) */}
       <View style={styles.bgContainer} pointerEvents="none">
-        <View style={styles.bgAura} />
         <Image
-          source={IMG_LOGO}
-          style={styles.bgWatermark}
-          resizeMode="contain"
+          source={useLandscapeBg ? IMG_BG_DESKTOP : IMG_BG_MOBILE}
+          style={styles.bgImage}
+          resizeMode="cover"
         />
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
+      <View style={styles.scrollContent}>
         <View style={styles.cardWrapper}>
           {/* Brand & Federation Header */}
           <View style={styles.brandBox}>
@@ -188,29 +202,10 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
             </View>
             <Text style={styles.brandTitle}>CRICKET FEDERATION</Text>
             <Text style={styles.brandSub}>OF VIRUDHUNAGAR DISTRICT</Text>
-            <Text style={styles.brandEst}>Est. 1987 • CFVD • Official Administrative Portal</Text>
-            <View style={styles.affiliationBadge}>
-              <Ionicons name="shield-checkmark" size={13} color="#10b981" />
-              <Text style={styles.affiliationText}>Official Governing Body • TNCA Affiliated</Text>
-            </View>
           </View>
 
-          {/* Login Card (Official Association Midnight Navy Box with Gold Border) */}
+          {/* Login Card */}
           <View style={styles.loginCard}>
-            {/* Association Card Header with Icon */}
-            <View style={styles.cardHeaderBox}>
-              <View style={styles.cardEmblemSmall}>
-                <Image
-                  source={IMG_LOGO}
-                  style={styles.cardLogoMini}
-                  resizeMode="contain"
-                />
-              </View>
-              <View style={styles.cardHeaderTextCol}>
-                <Text style={styles.cardHeaderTitle}>ASSOCIATION ADMIN ACCESS</Text>
-                <Text style={styles.cardHeaderSub}>Authorized CFVD Officials Only</Text>
-              </View>
-            </View>
 
             {/* Error Banner */}
             {errorMsg && (
@@ -295,14 +290,6 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
             )}
           </View>
 
-          {/* Security Notice */}
-          <View style={styles.securityFooter}>
-            <Ionicons name="shield-checkmark" size={14} color="#64748b" />
-            <Text style={styles.securityText}>
-              Protected by Association Two-Factor Cryptographic Session Guard. All access attempts are audited.
-            </Text>
-          </View>
-
           {/* Reusable Forgot Password Modal */}
           <ForgotPasswordModal
             visible={showForgotPassword}
@@ -315,7 +302,7 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
             }}
           />
         </View>
-      </ScrollView>
+      </View>
     </View>
   );
 };
@@ -324,51 +311,64 @@ const getStyles = (isDesktop: boolean): any => StyleSheet.create({
   rootContainer: {
     flex: 1,
     width: '100%',
-    minHeight: Platform.OS === 'web' ? ('100vh' as any) : '100%',
-    backgroundColor: '#ffffff',
-    backgroundImage: (Platform.OS === 'web'
-      ? 'radial-gradient(ellipse 95% 80% at 50% 30%, #ffffff 0%, #f8fafc 55%, #eef2f6 100%)'
-      : undefined) as any,
-    overflow: 'visible',
+    height: Platform.OS === 'web' ? ('100vh' as any) : '100%',
+    maxHeight: Platform.OS === 'web' ? ('100vh' as any) : '100%',
+    backgroundColor: '#eef4fb',
+    overflow: 'hidden',
     position: 'relative'
   },
-  scrollView: {
-    flex: 1,
-    width: '100%'
-  },
   scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingVertical: isDesktop ? 44 : 36,
-    paddingHorizontal: isDesktop ? 24 : 16
+    paddingTop: isDesktop ? 22 : 52,
+    paddingBottom: isDesktop ? 130 : 120,
+    paddingHorizontal: isDesktop ? 24 : 16,
+    zIndex: 1
+  },
+  exitBtn: {
+    position: 'absolute',
+    top: isDesktop ? 18 : 14,
+    left: isDesktop ? 22 : 14,
+    zIndex: 30,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#0f2452',
+    borderWidth: 1.5,
+    borderColor: '#d4af37',
+    borderRadius: 999,
+    paddingVertical: isDesktop ? 8 : 6,
+    paddingHorizontal: isDesktop ? 16 : 12,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5
+  },
+  exitBtnText: {
+    color: '#ffffff',
+    fontSize: isDesktop ? 13 : 12,
+    fontWeight: '700',
+    letterSpacing: 0.3
   },
   bgContainer: {
-    position: 'absolute',
+    position: (Platform.OS === 'web' ? 'fixed' : 'absolute') as any,
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: '100%',
+    height: '100%',
     pointerEvents: 'none',
     zIndex: 0
   },
-  bgAura: {
-    position: 'absolute',
-    width: 650,
-    height: 650,
-    borderRadius: 325,
-    backgroundColor: 'rgba(212, 175, 55, 0.08)',
-    filter: (Platform.OS === 'web' ? 'blur(80px)' : undefined) as any
-  },
-  bgWatermark: {
-    width: 600,
-    height: 600,
-    maxWidth: '92%',
-    maxHeight: '92%',
-    opacity: 0.12,
-    filter: (Platform.OS === 'web' ? 'drop-shadow(0 0 45px rgba(15, 36, 82, 0.18))' : undefined) as any
+  bgImage: {
+    width: '100%',
+    height: '100%',
+    ...(Platform.OS === 'web' ? { objectFit: 'cover', objectPosition: 'center bottom' } : {})
   },
   topAccentBar: {
     position: 'absolute',
@@ -381,24 +381,24 @@ const getStyles = (isDesktop: boolean): any => StyleSheet.create({
   },
   cardWrapper: {
     width: '100%',
-    maxWidth: isDesktop ? 500 : 460,
+    maxWidth: isDesktop ? 440 : 400,
     alignItems: 'center',
     zIndex: 1
   },
   brandBox: {
     alignItems: 'center',
-    marginBottom: isDesktop ? 24 : 20
+    marginBottom: isDesktop ? 12 : 10
   },
   emblemOuterRing: {
-    width: isDesktop ? 104 : 96,
-    height: isDesktop ? 104 : 96,
-    borderRadius: isDesktop ? 52 : 48,
-    backgroundColor: 'rgba(212, 175, 55, 0.18)',
+    width: isDesktop ? 76 : 66,
+    height: isDesktop ? 76 : 66,
+    borderRadius: isDesktop ? 38 : 33,
+    backgroundColor: 'rgba(212, 175, 55, 0.22)',
     borderWidth: 2,
     borderColor: '#d4af37',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 6,
     shadowColor: '#d4af37',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.28,
@@ -406,9 +406,9 @@ const getStyles = (isDesktop: boolean): any => StyleSheet.create({
     elevation: 6
   },
   emblemInnerRing: {
-    width: isDesktop ? 86 : 80,
-    height: isDesktop ? 86 : 80,
-    borderRadius: isDesktop ? 43 : 40,
+    width: isDesktop ? 62 : 54,
+    height: isDesktop ? 62 : 54,
+    borderRadius: isDesktop ? 31 : 27,
     backgroundColor: 'rgba(15, 36, 82, 0.08)',
     borderWidth: 1.5,
     borderColor: 'rgba(212, 175, 55, 0.45)',
@@ -416,9 +416,9 @@ const getStyles = (isDesktop: boolean): any => StyleSheet.create({
     alignItems: 'center'
   },
   emblemWrapper: {
-    width: isDesktop ? 74 : 68,
-    height: isDesktop ? 74 : 68,
-    borderRadius: isDesktop ? 37 : 34,
+    width: isDesktop ? 52 : 46,
+    height: isDesktop ? 52 : 46,
+    borderRadius: isDesktop ? 26 : 23,
     backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
@@ -430,38 +430,47 @@ const getStyles = (isDesktop: boolean): any => StyleSheet.create({
     overflow: 'hidden'
   },
   logoMiniature: {
-    width: isDesktop ? 66 : 60,
-    height: isDesktop ? 66 : 60
+    width: isDesktop ? 46 : 40,
+    height: isDesktop ? 46 : 40
   },
   brandTitle: {
-    fontSize: isDesktop ? 18 : 15,
+    fontSize: isDesktop ? 19 : 16,
     fontWeight: '900',
-    color: '#0f2452',
-    letterSpacing: isDesktop ? 2.5 : 2,
-    textAlign: 'center'
+    color: '#ffffff',
+    letterSpacing: isDesktop ? 2.5 : 1.8,
+    textAlign: 'center',
+    textShadowColor: 'rgba(7, 17, 38, 0.78)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6
   },
   brandSub: {
-    fontSize: isDesktop ? 14.5 : 12,
+    fontSize: isDesktop ? 13.5 : 11.5,
     fontWeight: '800',
-    color: '#b8860b',
+    color: '#fde047',
     letterSpacing: 1.2,
     marginTop: 2,
-    textAlign: 'center'
+    textAlign: 'center',
+    textShadowColor: 'rgba(7, 17, 38, 0.82)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 5
   },
   brandEst: {
-    fontSize: isDesktop ? 12 : 10,
-    color: '#64748b',
-    fontWeight: '600',
+    fontSize: isDesktop ? 12 : 10.5,
+    color: '#334155',
+    fontWeight: '700',
     letterSpacing: 0.6,
     marginTop: 4,
     marginBottom: 6,
-    textAlign: 'center'
+    textAlign: 'center',
+    textShadowColor: 'rgba(255, 255, 255, 0.9)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4
   },
   affiliationBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#ecfdf5',
+    backgroundColor: 'rgba(236, 253, 245, 0.94)',
     borderWidth: 1,
     borderColor: '#a7f3d0',
     borderRadius: 20,
@@ -475,23 +484,22 @@ const getStyles = (isDesktop: boolean): any => StyleSheet.create({
     color: '#059669'
   },
 
-  // Box Color: Pure White with Association Gold Accent Border & Soft Shadow
+  // Box Color: Crisp White with Association Gold Accent Border & Soft Shadow (no blur)
   loginCard: {
     width: '100%',
-    backgroundColor: Platform.OS === 'web' ? 'rgba(255, 255, 255, 0.98)' : '#ffffff',
-    backdropFilter: (Platform.OS === 'web' ? 'blur(16px)' : undefined) as any,
-    borderRadius: isDesktop ? 20 : 18,
+    backgroundColor: Platform.OS === 'web' ? 'rgba(255, 255, 255, 0.95)' : '#ffffff',
+    borderRadius: isDesktop ? 18 : 16,
     borderWidth: 1.5,
-    borderColor: 'rgba(212, 175, 55, 0.4)',
-    paddingHorizontal: isDesktop ? 32 : 26,
-    paddingTop: isDesktop ? 26 : 22,
-    paddingBottom: isDesktop ? 26 : 22,
+    borderColor: 'rgba(212, 175, 55, 0.55)',
+    paddingHorizontal: isDesktop ? 26 : 20,
+    paddingTop: isDesktop ? 20 : 16,
+    paddingBottom: isDesktop ? 18 : 16,
     shadowColor: '#0f2452',
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.12,
-    shadowRadius: 25,
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
     elevation: 6,
-    boxShadow: (Platform.OS === 'web' ? '0 20px 50px -10px rgba(15, 36, 82, 0.14), 0 0 25px -5px rgba(212, 175, 55, 0.15)' : undefined) as any
+    boxShadow: (Platform.OS === 'web' ? '0 18px 42px -10px rgba(15, 36, 82, 0.22), 0 0 20px -5px rgba(212, 175, 55, 0.2)' : undefined) as any
   },
 
   // In-Card Association Icon Header
@@ -499,8 +507,8 @@ const getStyles = (isDesktop: boolean): any => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingBottom: isDesktop ? 16 : 14,
-    marginBottom: isDesktop ? 20 : 18,
+    paddingBottom: isDesktop ? 12 : 10,
+    marginBottom: isDesktop ? 14 : 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9'
   },
@@ -565,19 +573,19 @@ const getStyles = (isDesktop: boolean): any => StyleSheet.create({
     flex: 1
   },
   formGroup: {
-    marginBottom: isDesktop ? 18 : 16
+    marginBottom: isDesktop ? 14 : 12
   },
   labelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6
+    marginBottom: 4
   },
   label: {
-    fontSize: isDesktop ? 14.5 : 12.5,
+    fontSize: isDesktop ? 13.5 : 12.5,
     fontWeight: '700',
     color: '#334155',
-    marginBottom: isDesktop ? 8 : 6
+    marginBottom: isDesktop ? 6 : 5
   },
   showPassText: {
     fontSize: isDesktop ? 13 : 11.5,
@@ -585,12 +593,12 @@ const getStyles = (isDesktop: boolean): any => StyleSheet.create({
     fontWeight: '700'
   },
   input: {
-    height: isDesktop ? 48 : 44,
+    height: isDesktop ? 44 : 42,
     borderWidth: 1.5,
     borderColor: '#cbd5e1',
     borderRadius: 10,
     paddingHorizontal: 14,
-    fontSize: isDesktop ? 15.5 : 13.5,
+    fontSize: isDesktop ? 15 : 13.5,
     color: '#0f172a',
     backgroundColor: '#f8fafc'
   },
@@ -598,7 +606,7 @@ const getStyles = (isDesktop: boolean): any => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: isDesktop ? 24 : 20
+    marginBottom: isDesktop ? 16 : 14
   },
   checkboxRow: {
     flexDirection: 'row',
@@ -637,7 +645,7 @@ const getStyles = (isDesktop: boolean): any => StyleSheet.create({
 
   // Submit Button (Official Association Navy Action)
   submitBtn: {
-    height: isDesktop ? 50 : 46,
+    height: isDesktop ? 46 : 44,
     backgroundColor: '#0f2452',
     borderRadius: 10,
     justifyContent: 'center',
@@ -696,12 +704,12 @@ const getStyles = (isDesktop: boolean): any => StyleSheet.create({
     fontWeight: '700'
   },
   backLink: {
-    marginTop: isDesktop ? 20 : 18,
+    marginTop: isDesktop ? 12 : 10,
     alignItems: 'center',
-    paddingVertical: 6
+    paddingVertical: 4
   },
   backLinkText: {
-    fontSize: isDesktop ? 14 : 12.5,
+    fontSize: isDesktop ? 13.5 : 12.5,
     color: '#64748b',
     fontWeight: '600'
   },
@@ -709,14 +717,26 @@ const getStyles = (isDesktop: boolean): any => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: isDesktop ? 22 : 20,
-    paddingHorizontal: 12
+    marginTop: isDesktop ? 14 : 12,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.88)',
+    borderWidth: 1,
+    borderColor: 'rgba(15, 36, 82, 0.14)',
+    shadowColor: '#0f2452',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2
   },
   securityText: {
     fontSize: isDesktop ? 12.5 : 11,
-    color: '#64748b',
+    color: '#334155',
+    fontWeight: '600',
     textAlign: 'center',
-    lineHeight: isDesktop ? 18 : 16
+    lineHeight: isDesktop ? 18 : 16,
+    flexShrink: 1
   }
 } as any);
 

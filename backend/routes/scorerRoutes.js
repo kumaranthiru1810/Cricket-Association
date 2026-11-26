@@ -30,8 +30,10 @@ const {
 // 1. PUBLIC AUTH ROUTES
 // ==========================================
 
+const { registerRateLimiter, otpRateLimiter } = require('../middleware/securityMiddleware');
+
 // Scorer Registration (Requirement 1 & 12)
-router.post('/register', async (req, res) => {
+router.post('/register', registerRateLimiter, async (req, res) => {
   try {
     const result = await authService.registerScorer(req.body);
     res.status(201).json({ success: true, ...result });
@@ -41,7 +43,7 @@ router.post('/register', async (req, res) => {
 });
 
 // Scorer Login - Step 1: Request OTP or Direct Verify (Requirement 2 & 12)
-router.post('/login', async (req, res) => {
+router.post('/login', otpRateLimiter, async (req, res) => {
   try {
     const { email, otp, password } = req.body;
     if (!email) {

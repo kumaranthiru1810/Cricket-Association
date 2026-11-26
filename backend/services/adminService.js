@@ -1399,7 +1399,7 @@ async function verifyAddCurrentAdminOtp({ requestId, otp, currentAdminEmail }) {
   const reqObj = pendingAdminRequests.find(r => r.requestId === requestId);
   if (!reqObj) throw new Error('Request not found or expired.');
 
-  if (!otpService.verifyOtpCode(otp, reqObj.currentAdminOtpHash) && otp !== '1234') {
+  if (!otpService.verifyOtpCode(otp, reqObj.currentAdminOtpHash)) {
     throw new Error('Invalid OTP for current admin.');
   }
 
@@ -1418,7 +1418,7 @@ async function verifyAddCurrentAdminOtp({ requestId, otp, currentAdminEmail }) {
   return {
     success: true,
     message: `Current admin verified. Verification OTP dispatched to candidate ${reqObj.email}`,
-    devOtp: targetOtp
+    ...(require('../config/env').isDevelopment ? { devOtp: targetOtp } : {})
   };
 }
 
@@ -1430,7 +1430,7 @@ async function verifyAddTargetAdminOtp({ requestId, otp, newAdminEmail }) {
     throw new Error('Current admin must verify first.');
   }
 
-  if (!otpService.verifyOtpCode(otp, reqObj.targetAdminOtpHash) && otp !== '1234') {
+  if (!otpService.verifyOtpCode(otp, reqObj.targetAdminOtpHash)) {
     throw new Error('Invalid OTP for new admin.');
   }
 
@@ -1826,16 +1826,14 @@ async function verifyAndExecuteDualAdmin({ authSessionId, admin1Otp, admin2Otp, 
   const cleanOtp1 = String(admin1Otp || '').trim();
   const cleanOtp2 = String(admin2Otp || '').trim();
 
-  const isMatch1 = otpService.verifyOtpCode(cleanOtp1, session.admin1.otpHash) ||
-    cleanOtp1 === session.admin1.plainOtp || cleanOtp1 === '123456';
+  const isMatch1 = otpService.verifyOtpCode(cleanOtp1, session.admin1.otpHash);
   if (!isMatch1) {
-    throw new Error(`Invalid or incorrect OTP for Super Admin 1 (${session.admin1.email}).`);
+    throw new Error(`Invalid or incorrect OTP for Super Admin 1.`);
   }
 
-  const isMatch2 = otpService.verifyOtpCode(cleanOtp2, session.admin2.otpHash) ||
-    cleanOtp2 === session.admin2.plainOtp || cleanOtp2 === '123456';
+  const isMatch2 = otpService.verifyOtpCode(cleanOtp2, session.admin2.otpHash);
   if (!isMatch2) {
-    throw new Error(`Invalid or incorrect OTP for Super Admin 2 (${session.admin2.email}).`);
+    throw new Error(`Invalid or incorrect OTP for Super Admin 2.`);
   }
 
   // Dual OTPs successfully verified!
@@ -1848,12 +1846,10 @@ async function verifyAndExecuteDualAdmin({ authSessionId, admin1Otp, admin2Otp, 
       throw new Error('Administrator Name and Email are required.');
     }
 
-    let passwordHash = null;
-    const rawPass = target.password || 'admin123';
-    try {
-      const bcrypt = require('bcryptjs');
-      passwordHash = await bcrypt.hash(rawPass, 10);
-    } catch (_e) { }
+    const crypto = require('crypto');
+    const bcrypt = require('bcryptjs');
+    const rawPass = target.password || crypto.randomBytes(12).toString('hex');
+    const passwordHash = await bcrypt.hash(rawPass, 12);
 
     const adminId = `ADM-${Math.floor(1000 + Math.random() * 9000)}`;
 

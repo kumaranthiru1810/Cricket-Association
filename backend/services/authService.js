@@ -196,6 +196,14 @@ class AuthService {
   async rejectRegistration(id, type = 'TEAM', reason = 'Criteria not met', adminId = 'ADMIN') {
     return adminAuth.rejectRegistration(id, type, reason, adminId);
   }
+
+  async deleteRegistration(id, type = 'TEAM', adminId = 'ADMIN') {
+    return adminAuth.deleteRegistration(id, type, adminId);
+  }
+
+  async restoreRegistration(id, type = 'TEAM', adminId = 'ADMIN') {
+    return adminAuth.restoreRegistration(id, type, adminId);
+  }
 }
 
 module.exports = new AuthService();

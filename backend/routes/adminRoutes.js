@@ -238,6 +238,19 @@ router.post('/tournaments/registrations/:regId/reject', (req, res) => tournament
 router.get('/tournaments/:id/registrations', (req, res) => tournamentController.getAllRegistrations(req, res));
 router.get('/tournaments/:id/approved-teams', (req, res) => tournamentController.getApprovedTeams(req, res));
 router.patch('/tournaments/:id/status', (req, res) => tournamentController.updateStatus(req, res));
+router.post('/tournaments/:id/groups/allocate', (req, res) => tournamentController.allocateGroups(req, res));
+router.post('/tournaments/:id/groups/move-team', (req, res) => tournamentController.moveTeamBetweenGroups(req, res));
+router.post('/tournaments/:id/groups/confirm', (req, res) => tournamentController.confirmGroups(req, res));
+router.put('/tournaments/:id/qualification-config', (req, res) => tournamentController.updateQualificationConfig(req, res));
+router.post('/tournaments/:id/preview-schedule', (req, res) => tournamentController.previewSchedule(req, res));
+router.get('/tournaments/:id/standings', (req, res) => tournamentController.getStandings(req, res));
+router.post('/tournaments/:id/resolve-tie', (req, res) => tournamentController.resolveManualTie(req, res));
+router.post('/tournaments/:id/generate-next-stage', (req, res) => tournamentController.generateNextStage(req, res));
+router.get('/tournaments/:id/bracket', (req, res) => tournamentController.getBracket(req, res));
+router.post('/tournaments/:id/withdraw', (req, res) => tournamentController.withdrawTeam(req, res));
+router.post('/tournaments/:id/eligibility-check', (req, res) => tournamentController.checkEligibility(req, res));
+router.post('/tournaments/:id/simulate', (req, res) => tournamentController.simulateWhatIf(req, res));
+router.post('/matches/:id/reverse-result', (req, res) => tournamentController.reverseMatchResult(req, res));
 
 /**
  * Match Schedule Management APIs

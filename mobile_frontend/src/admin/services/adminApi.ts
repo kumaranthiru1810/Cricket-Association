@@ -361,6 +361,89 @@ export const adminApi = {
     return adminRequest(`/admin/tournaments/${tournamentId}/approved-teams`);
   },
 
+  allocateTournamentGroups: async (id: string, config: any) => {
+    return adminRequest(`/admin/tournaments/${id}/groups/allocate`, {
+      method: 'POST',
+      body: JSON.stringify(config)
+    });
+  },
+
+  moveTeamBetweenGroups: async (id: string, payload: { teamId: string; fromGroupId?: string; toGroupId: string }) => {
+    return adminRequest(`/admin/tournaments/${id}/groups/move-team`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  confirmTournamentGroups: async (id: string) => {
+    return adminRequest(`/admin/tournaments/${id}/groups/confirm`, {
+      method: 'POST'
+    });
+  },
+
+  updateQualificationConfig: async (id: string, config: any) => {
+    return adminRequest(`/admin/tournaments/${id}/qualification-config`, {
+      method: 'PUT',
+      body: JSON.stringify(config)
+    });
+  },
+
+  previewTournamentSchedule: async (id: string, options?: any) => {
+    return adminRequest(`/admin/tournaments/${id}/preview-schedule`, {
+      method: 'POST',
+      body: JSON.stringify(options || {})
+    });
+  },
+
+  getTournamentStandings: async (id: string) => {
+    return adminRequest(`/admin/tournaments/${id}/standings`);
+  },
+
+  resolveTournamentTie: async (id: string, payload: { groupId?: string; resolvedOrder: string[]; reason?: string }) => {
+    return adminRequest(`/admin/tournaments/${id}/resolve-tie`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  generateNextStage: async (id: string) => {
+    return adminRequest(`/admin/tournaments/${id}/generate-next-stage`, {
+      method: 'POST'
+    });
+  },
+
+  getTournamentBracket: async (id: string) => {
+    return adminRequest(`/admin/tournaments/${id}/bracket`);
+  },
+
+  withdrawTournamentTeam: async (id: string, payload: { teamId: string; reason?: string; rule?: string }) => {
+    return adminRequest(`/admin/tournaments/${id}/withdraw`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  checkPlayerEligibility: async (id: string, payload: { teamId: string; playerIds?: string[] }) => {
+    return adminRequest(`/admin/tournaments/${id}/eligibility-check`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  simulateTournamentWhatIf: async (id: string, simulatedResults: any[]) => {
+    return adminRequest(`/admin/tournaments/${id}/simulate`, {
+      method: 'POST',
+      body: JSON.stringify({ simulatedResults })
+    });
+  },
+
+  reverseMatchResult: async (matchId: string, options?: { reopenMatch?: boolean; force?: boolean }) => {
+    return adminRequest(`/admin/matches/${matchId}/reverse-result`, {
+      method: 'POST',
+      body: JSON.stringify(options || {})
+    });
+  },
+
   // 6b. Venues & Grounds Management
   getVenues: async () => {
     return adminRequest('/admin/venues');
@@ -440,7 +523,7 @@ export const adminApi = {
     return adminRequest('/admin/approvals');
   },
 
-  handleApproval: async (type: string, id: string, action: 'approve' | 'reject', reason?: string) => {
+  handleApproval: async (type: string, id: string, action: 'approve' | 'reject' | 'delete' | 'restore', reason?: string) => {
     return adminRequest(`/admin/approvals/${type}/${id}`, {
       method: 'POST',
       body: JSON.stringify({ action, reason })

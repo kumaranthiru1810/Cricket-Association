@@ -862,6 +862,20 @@ export const ScorerApi = {
     });
   },
 
+  deleteRegistration: async (id: string, type: string = 'TEAM') => {
+    return request('/auth/admin/delete-registration', {
+      method: 'POST',
+      body: JSON.stringify({ id, type })
+    });
+  },
+
+  restoreRegistration: async (id: string, type: string = 'TEAM') => {
+    return request('/auth/admin/restore-registration', {
+      method: 'POST',
+      body: JSON.stringify({ id, type })
+    });
+  },
+
   updateScorerStatus: async (idOrEmail: string, status: string, reason?: string) => {
     return request('/auth/admin/scorer-status', {
       method: 'POST',
@@ -925,6 +939,26 @@ export const ScorerApi = {
 
   getPortalPlayerDetails: async (playerId: string) => {
     return request(`/portal/players/${encodeURIComponent(playerId)}`);
+  },
+
+  getTeamHistory: async (teamId: string) => {
+    return request(`/team/${encodeURIComponent(teamId)}/history`);
+  },
+
+  getPlayerHistory: async (playerId: string) => {
+    return request(`/player/${encodeURIComponent(playerId)}/history`);
+  },
+
+  comparePlayers: async (player1: string, player2: string) => {
+    return request(`/player/compare?player1=${encodeURIComponent(player1)}&player2=${encodeURIComponent(player2)}`);
+  },
+
+  getTournamentBracket: async (tournamentId: string) => {
+    return request(`/tournaments/${encodeURIComponent(tournamentId)}/bracket`);
+  },
+
+  getTournamentStandings: async (tournamentId: string) => {
+    return request(`/tournaments/${encodeURIComponent(tournamentId)}/standings`);
   },
 
   submitContact: async (data: { name: string; email: string; subject?: string; message: string }) => {

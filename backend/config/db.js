@@ -72,121 +72,84 @@ const memoryDb = {
 // Seed default users and records if empty
 async function seedDefaultData() {
   try {
-    const isProd = process.env.NODE_ENV === 'production';
-    const isDevOrTest = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
+    const env = require('./env');
 
-    if (isProd) {
-      const adminEmail = (process.env.ADMIN_INITIAL_EMAIL || '').trim().toLowerCase();
-      const adminPass = process.env.ADMIN_INITIAL_PASSWORD;
+    if (env.isProduction) {
+      // Run idempotent plaintext password cleanup once at startup in production
+      try {
+        const { unsetPlaintextPasswords } = require('../scripts/migrations/unset-plaintext-passwords');
+        await unsetPlaintextPasswords(mongoose.connection);
+      } catch (_migErr) {}
+
+      const adminEmail = env.ADMIN_INITIAL_EMAIL;
+      const adminPass = env.ADMIN_INITIAL_PASSWORD;
       if (!adminEmail || !adminPass) {
         console.warn('Production Notice: ADMIN_INITIAL_EMAIL and/or ADMIN_INITIAL_PASSWORD not configured. Skipping initial admin seeding.');
         return;
       }
-      const existingAdmin = await User.findOne({ role: 'ADMIN' });
+      const existingAdmin = await User.findOne({ role: { $in: ['ADMIN', 'SUPER_ADMIN'] } });
       if (!existingAdmin) {
-        const passwordHash = await bcrypt.hash(adminPass, 12);
-        await User.create({
-          id: 'ADM-PROD-001',
-          name: 'Super Administrator',
-          email: adminEmail,
-          mobile: '9876543210',
-          role: 'ADMIN',
-          status: 'ACTIVE',
-          is_super_admin: true,
-          admin_level: 'Permanent Super Administrator',
-          password_hash: passwordHash
-        });
-        console.log(`Initial production super admin provisioned for: ${adminEmail}`);
+        // Never elevate a pre-existing non-admin user that merely registered with that email
+        const emailConflict = await User.findOne({ email: adminEmail }).lean();
+        if (!emailConflict) {
+          const passwordHash = await bcrypt.hash(adminPass, 12);
+          await User.create({
+            id: 'ADM-PROD-001',
+            name: 'Super Administrator',
+            email: adminEmail,
+            mobile: '9876543210',
+            role: 'ADMIN',
+            status: 'ACTIVE',
+            is_super_admin: true,
+            admin_level: 'Permanent Super Administrator',
+            password_hash: passwordHash
+          });
+          console.log('Initial production super admin provisioned.');
+        }
       }
       return;
     }
 
-    if (!isDevOrTest) {
+    if (!env.isDevelopment && !env.isTest) {
       return;
     }
 
-    const defaultPasswordHash = await bcrypt.hash('1234', 10);
-    const adminPasswordHash = await bcrypt.hash('admin123', 10);
-    const athiPasswordHash = await bcrypt.hash('athi1833@@', 10);
+    const crypto = require('crypto');
+    const devPass = env.ADMIN_INITIAL_PASSWORD || crypto.randomBytes(12).toString('hex');
+    const devPasswordHash = await bcrypt.hash(devPass, 12);
+    const adminEmail = env.ADMIN_INITIAL_EMAIL || 'dev-admin@localhost.test';
 
     const userCount = await User.countDocuments();
     if (userCount === 0) {
       await User.insertMany([
         {
           id: 'ADM-1001',
-          name: 'System User (Former Admin)',
-          email: 'admin@example.com',
+          name: 'Development Super Admin',
+          email: adminEmail,
           mobile: '9876543210',
-          role: 'USER',
-          status: 'INACTIVE',
-          password_hash: defaultPasswordHash
-        },
-        {
-          id: 'ADM-1002',
-          name: 'CFVD User (Former Admin)',
-          email: 'admin@cfvd.org',
-          mobile: '9876543210',
-          role: 'USER',
-          status: 'INACTIVE',
-          is_super_admin: false,
-          admin_level: 'Standard User',
-          password_hash: adminPasswordHash
-        },
-        {
-          id: 'ADM-1003',
-          name: 'Association Admin',
-          email: 'cricketfederation21@gmail.com',
-          mobile: '9876543211',
-          role: 'ADMIN',
-          status: 'ACTIVE',
-          password_hash: adminPasswordHash
-        },
-        {
-          id: 'ADM-1004',
-          name: 'Athilingam (Super Admin)',
-          email: 'athilingam3336@gmail.com',
-          mobile: '9876543212',
           role: 'ADMIN',
           status: 'ACTIVE',
           is_super_admin: true,
           admin_level: 'Permanent Super Administrator',
-          password_hash: athiPasswordHash
-        },
-        {
-          id: 'ADM-1005',
-          name: 'Ponramanan (Admin & Scorer)',
-          email: 'ponramanan21@gmail.com',
-          mobile: '9876543221',
-          role: 'ADMIN',
-          status: 'ACTIVE',
-          password_hash: adminPasswordHash
+          password_hash: devPasswordHash
         },
         {
           id: 'SCR-101',
           name: 'S. Ramesh',
-          email: 'ramesh@gmail.com',
+          email: 'scorer-dev@localhost.test',
           mobile: '9876543213',
           role: 'SCORER',
           status: 'ACTIVE',
-          password_hash: defaultPasswordHash
+          password_hash: devPasswordHash
         },
         {
           id: 'SCR-102',
-          name: 'S. Ramesh',
-          email: 'scorer@cfvd.org',
-          mobile: '9876543213',
-          role: 'SCORER',
-          status: 'ACTIVE',
-          password_hash: defaultPasswordHash
-        },
-        {
-          id: 'SCR-103',
           name: 'K. Murugan',
-          email: 'murugan@cfvd.org',
+          email: 'scorer2-dev@localhost.test',
           mobile: '9876543214',
           role: 'SCORER',
           status: 'ACTIVE',
-          password_hash: defaultPasswordHash
+          password_hash: devPasswordHash
         },
         {
           id: 'COACH-101',
@@ -195,7 +158,7 @@ async function seedDefaultData() {
           mobile: '9876543215',
           role: 'COACH',
           status: 'ACTIVE',
-          password_hash: defaultPasswordHash
+          password_hash: devPasswordHash
         },
         {
           id: 'PLY-101',
@@ -204,7 +167,7 @@ async function seedDefaultData() {
           mobile: '9876543216',
           role: 'PLAYER',
           status: 'ACTIVE',
-          password_hash: defaultPasswordHash,
+          password_hash: devPasswordHash,
           player_details: {
             batting_style: 'Right Hand Bat',
             bowling_style: 'Right Arm Fast/Medium',
@@ -218,7 +181,7 @@ async function seedDefaultData() {
           name: 'Arun Pandian',
           email: 'player@example.com',
           mobile: '9876543214',
-          password_hash: defaultPasswordHash,
+          password_hash: devPasswordHash,
           role: 'PLAYER',
           status: 'ACTIVE'
         },
@@ -227,7 +190,7 @@ async function seedDefaultData() {
           name: 'General User',
           email: 'user@example.com',
           mobile: '9876543215',
-          password_hash: defaultPasswordHash,
+          password_hash: devPasswordHash,
           role: 'USER',
           status: 'ACTIVE'
         },
@@ -236,7 +199,7 @@ async function seedDefaultData() {
           name: 'Thiru. K. Sundaram',
           email: 'sundaram.umpire@cfvd.org',
           mobile: '9443112345',
-          password_hash: defaultPasswordHash,
+          password_hash: devPasswordHash,
           role: 'UMPIRE',
           status: 'ACTIVE',
           umpire_details: {
@@ -249,7 +212,7 @@ async function seedDefaultData() {
           name: 'Thiru. M. Ramanathan',
           email: 'ramanathan.umpire@cfvd.org',
           mobile: '9842267890',
-          password_hash: defaultPasswordHash,
+          password_hash: devPasswordHash,
           role: 'UMPIRE',
           status: 'ACTIVE',
           umpire_details: {
@@ -270,7 +233,7 @@ async function seedDefaultData() {
           name: 'Thiru. K. Sundaram',
           email: 'sundaram.umpire@cfvd.org',
           mobile: '9443112345',
-          password_hash: defaultPasswordHash,
+          password_hash: devPasswordHash,
           role: 'UMPIRE',
           status: 'ACTIVE',
           umpire_details: {
@@ -290,7 +253,7 @@ async function seedDefaultData() {
           name: 'Thiru. M. Ramanathan',
           email: 'ramanathan.umpire@cfvd.org',
           mobile: '9842267890',
-          password_hash: defaultPasswordHash,
+          password_hash: devPasswordHash,
           role: 'UMPIRE',
           status: 'ACTIVE',
           umpire_details: {
@@ -313,7 +276,7 @@ async function seedDefaultData() {
           mobile: '9876543216',
           role: 'PLAYER',
           status: 'ACTIVE',
-          password_hash: defaultPasswordHash,
+          password_hash: devPasswordHash,
           player_details: {
             batting_style: 'Right Hand Bat',
             bowling_style: 'Right Arm Fast/Medium',
@@ -336,40 +299,19 @@ async function seedDefaultData() {
           mobile: '9876543215',
           role: 'COACH',
           status: 'ACTIVE',
-          password_hash: defaultPasswordHash
+          password_hash: devPasswordHash
         }
       },
       { upsert: true }
     );
 
-    // Guarantee athilingam3336@gmail.com is the permanent Super Admin across the system
-    await User.updateOne(
-      { email: 'athilingam3336@gmail.com' },
-      {
-        $set: {
-          is_super_admin: true,
-          admin_level: 'Permanent Super Administrator',
-          role: 'ADMIN',
-          status: 'ACTIVE'
-        }
-      }
-    );
-    await User.updateMany(
-      { email: { $ne: 'athilingam3336@gmail.com' }, role: 'ADMIN' },
-      { $set: { is_super_admin: false } }
-    );
-    // Explicitly strip ADMIN role from admin@example.com and admin@cfvd.org
-    await User.updateMany(
-      { email: { $in: ['admin@example.com', 'admin@cfvd.org'] } },
-      {
-        $set: {
-          role: 'USER',
-          is_super_admin: false,
-          admin_level: 'Standard User',
-          status: 'INACTIVE'
-        }
-      }
-    );
+    // Guarantee initial super admin flag only when ADMIN_INITIAL_EMAIL is explicitly configured
+    if (env.ADMIN_INITIAL_EMAIL) {
+      await User.updateOne(
+        { email: env.ADMIN_INITIAL_EMAIL, role: 'ADMIN' },
+        { $set: { is_super_admin: true, admin_level: 'Permanent Super Administrator' } }
+      );
+    }
 
     // Seed Scorers
     const scorerCount = await Scorer.countDocuments();

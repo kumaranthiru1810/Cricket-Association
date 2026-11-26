@@ -787,9 +787,18 @@ class TournamentService {
 
   /**
    * Generate Tournament Matches Fixtures
-   * Supports Single Round-Robin, Double Round-Robin, Knockout Brackets, and League + Knockout
+   * Delegates to unified tournamentEngine supporting Single/Double Round Robin,
+   * Single Elimination, Double Elimination, Group+Knockout, and League+IPL Playoffs.
    */
   async generateMatches(tournamentId, options = {}, adminEmail) {
+    const tournamentEngine = require('./tournamentEngine');
+    return tournamentEngine.generateAndSaveMatches(tournamentId, options, adminEmail);
+  }
+
+  /**
+   * Legacy placeholder kept for reference — replaced by tournamentEngine.generateAndSaveMatches
+   */
+  async _legacyGenerateMatchesUnused(tournamentId, options = {}, adminEmail) {
     await db.initDb();
     const tournament = await tournamentModel.findById(tournamentId);
     if (!tournament) {
@@ -1849,9 +1858,18 @@ class TournamentService {
       const tour = await db.models.Tournament.findOne({ id: match.tournament_id });
       if (!tour) return { processed: Boolean(claimedMatch), progression };
 
+      // Run idempotent bracket/knockout progression & team stats sync FIRST
+      // so next-round fixtures are created before checking if tournament is finished
+      const tournamentEngine = require('./tournamentEngine');
+      await tournamentEngine.processMatchProgression(matchId);
+
+      // Re-fetch tournament after progression
+      const refreshedTour = await db.models.Tournament.findOne({ id: match.tournament_id });
+      if (!refreshedTour) return;
+
       let changed = false;
-      if (tour.status === 'UPCOMING') {
-        tour.status = 'ONGOING';
+      if (refreshedTour.status === 'UPCOMING') {
+        refreshedTour.status = 'ONGOING';
         changed = true;
       }
 
@@ -1867,15 +1885,15 @@ class TournamentService {
           tournament_id: match.tournament_id,
           status: 'COMPLETED'
         });
-        if (completedCount > 0 && tour.status !== 'COMPLETED') {
-          tour.status = 'COMPLETED';
+        if (completedCount > 0 && refreshedTour.status !== 'COMPLETED') {
+          refreshedTour.status = 'COMPLETED';
           changed = true;
         }
       }
 
       if (changed) {
-        tour.updatedAt = new Date();
-        await tour.save();
+        refreshedTour.updatedAt = new Date();
+        await refreshedTour.save();
       }
       return { processed: Boolean(claimedMatch), progression };
     } catch (err) {
