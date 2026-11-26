@@ -43,6 +43,9 @@ router.get('/:id/schedule', (req, res) => tournamentController.getSchedule(req, 
 // GET /api/tournaments/:id/points-table - Live calculated points table
 router.get('/:id/points-table', cacheResponse(30, 'points-table'), (req, res) => tournamentController.getPointsTable(req, res));
 
+// GET /api/tournaments/:id/group-points-table - Group-wise points tables + qualifier preview
+router.get('/:id/group-points-table', (req, res) => tournamentController.getGroupPointsTable(req, res));
+
 // GET /api/tournaments/:id/statistics - Top batters, bowlers, totals
 router.get('/:id/statistics', (req, res) => tournamentController.getStatistics(req, res));
 
@@ -77,6 +80,15 @@ router.delete('/:id/teams/:teamId', requireAdminAuth, (req, res) => tournamentCo
 
 // POST /api/tournaments/:id/generate-matches - Automatically generate fixtures
 router.post('/:id/generate-matches', requireAdminAuth, (req, res) => tournamentController.generateMatches(req, res));
+
+// POST /api/tournaments/:id/preview-matches - Preview fixture distribution & counts
+router.post('/:id/preview-matches', requireAdminAuth, (req, res) => tournamentController.previewMatches(req, res));
+
+// PUT /api/tournaments/:id/groups - Update group allocation & qualification before matches start
+router.put('/:id/groups', requireAdminAuth, (req, res) => tournamentController.updateGroups(req, res));
+
+// POST /api/tournaments/:id/resolve-tie - Admin manual tie resolution
+router.post('/:id/resolve-tie', requireAdminAuth, (req, res) => tournamentController.resolveTie(req, res));
 
 // PATCH /api/tournaments/:id/status - Update tournament status
 router.patch('/:id/status', requireAdminAuth, (req, res) => tournamentController.updateStatus(req, res));

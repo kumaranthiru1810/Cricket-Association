@@ -75,6 +75,10 @@ class ScoringEngine {
     return inningsService.endMatch(matchId, payload);
   }
 
+  async correctMatchResult(matchId, payload) {
+    return inningsService.correctMatchResult(matchId, payload);
+  }
+
   async setRevisedOvers(matchId, payload) {
     return inningsService.setRevisedOvers(matchId, payload);
   }

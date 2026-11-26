@@ -35,7 +35,7 @@ export default function ScorerDashboardScreen() {
           if (lower === 'completed') return 'Completed';
           if (lower === 'live') return 'Live';
         }
-      } catch (_e) {}
+      } catch (_e) { }
     }
     return null;
   });
@@ -52,25 +52,27 @@ export default function ScorerDashboardScreen() {
           });
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const loadDashboardData = async () => {
     setIsLoading(true);
     let loadedMatches: any[] = [];
+    let dashboardApiSucceeded = false;
 
     // 1. Try authenticated Scorer Dashboard API
     try {
       const res = await ScorerApi.getDashboard();
       if (res && res.data && Array.isArray(res.data.matches)) {
         loadedMatches = res.data.matches;
+        dashboardApiSucceeded = true;
       }
     } catch (_e) {
       // Auth or network error
     }
 
-    // 2. If no matches returned or unauthenticated, fetch public matches from MongoDB
-    if (loadedMatches.length === 0) {
+    // 2. Only fall back to public matches if the authenticated dashboard API failed
+    if (!dashboardApiSucceeded) {
       try {
         const pubRes = await ScorerApi.getPublicMatches();
         const pubData = pubRes?.data || pubRes?.matches || (Array.isArray(pubRes) ? pubRes : []);
@@ -82,44 +84,30 @@ export default function ScorerDashboardScreen() {
       }
     }
 
-    // Filter: Scorer sees ONLY matches assigned to them (by scorer_id / assigned_scorer)
-    // If no assignment data exists on any match (old/legacy data), show all as fallback
+    // Strictly filter: Scorer sees ONLY matches assigned to them by Admin
     const currentUser = getCurrentUser();
-    const myId = (params?.user?.id || currentUser?.id || currentUser?.scorerId || '').toString().toLowerCase();
-    const myEmail = (params?.user?.email || currentUser?.email || '').toString().toLowerCase();
+    const myId = (params?.user?.id || currentUser?.id || currentUser?.scorerId || '').toString().trim().toLowerCase();
+    const myEmail = (params?.user?.email || currentUser?.email || '').toString().trim().toLowerCase();
+    const myName = (params?.user?.name || currentUser?.name || '').toString().trim().toLowerCase();
 
-    let assignedMatches = loadedMatches;
-    if (loadedMatches.length > 0) {
-      const hasAssignmentData = loadedMatches.some((m: any) => m.assigned_scorer_id || m.scorer_id || m.scorerId || m.assigned_scorer || m.assignedScorerId);
-      if (hasAssignmentData && myId) {
-        const filtered = loadedMatches.filter((m: any) => {
-          const mScorerId = (m.assigned_scorer_id || m.scorer_id || m.scorerId || m.assignedScorerId || '').toString().toLowerCase();
-          const mScorerEmail = (m.scorer_email || m.scorerEmail || m.assigned_scorer_email || '').toString().toLowerCase();
-          const mScorerName = (m.assigned_scorer || m.scorerName || '').toString().toLowerCase();
-          const myName = (params?.user?.name || currentUser?.name || '').toString().toLowerCase();
-          return (
-            (myId && (mScorerId === myId || mScorerId.includes(myId))) ||
-            (myEmail && mScorerEmail === myEmail) ||
-            (myName && mScorerName.includes(myName.split(' ')[0]))
-          );
-        });
-        if (filtered.length > 0) {
-          assignedMatches = filtered;
-        }
-      }
-    }
+    const isMatchAssignedToMe = (m: any) => {
+      const mScorerId = (m.assigned_scorer_id || m.scorer_id || m.scorerId || m.assignedScorerId || '').toString().trim().toLowerCase();
+      const mScorerEmail = (m.scorer_email || m.scorerEmail || m.assigned_scorer_email || '').toString().trim().toLowerCase();
+      const mScorerName = (m.assigned_scorer_name || m.assigned_scorer || m.scorer_name || m.scorerName || '').toString().trim().toLowerCase();
+      if (!myId && !myEmail && !myName) return false;
+      return Boolean(
+        (myId && mScorerId && mScorerId === myId) ||
+        (myEmail && mScorerEmail && mScorerEmail === myEmail) ||
+        (myName && mScorerName && mScorerName === myName) ||
+        (myName && mScorerId && mScorerId === myName)
+      );
+    };
 
-    // Ensure only matches confirmed by Admin in match schedules are visible to scorers
-    const allUpcoming = loadedMatches.filter((m: any) => {
-      const s = (m.status || '').toUpperCase();
-      const conf = m.schedule_confirmation_status || m.scheduleConfirmationStatus;
-      return (s === 'UPCOMING' || s === 'SCHEDULED') && conf === 'CONFIRMED';
-    });
-    for (const upMatch of allUpcoming) {
-      if (!assignedMatches.some((m: any) => m.id === upMatch.id)) {
-        assignedMatches.push(upMatch);
-      }
-    }
+    // If authenticated API succeeded, backend already filtered by scorerId/linkedOfficialIds/name;
+    // when falling back to public matches (or for extra client safety), filter strictly
+    let assignedMatches = dashboardApiSucceeded
+      ? loadedMatches
+      : loadedMatches.filter(isMatchAssignedToMe);
 
     // Filter out any scheduled matches that are not yet confirmed by Admin
     assignedMatches = assignedMatches.filter((m: any) => {
@@ -134,16 +122,19 @@ export default function ScorerDashboardScreen() {
     setMatches(assignedMatches);
     setIsLoading(false);
 
-    // Mandatory Match Timings Protocol Check (Popup on Scorer Login)
+    // Mandatory Match Timings Protocol Check (ONLY on Match Day & ONLY for matches assigned to this scorer)
     try {
       const todayStr = getTodayKolkata();
       const matchToAcknowledge = assignedMatches.find((m: any) => {
-        const mDate = (m.match_date || m.date || '').split('T')[0].trim();
-        const status = (m.status || '').toUpperCase();
-        return mDate === todayStr && status !== 'COMPLETED' && status !== 'CANCELLED' && status !== 'ABANDONED';
-      }) || assignedMatches.find((m: any) => {
-        const status = (m.status || '').toUpperCase();
-        return (status === 'SCHEDULED' || status === 'UPCOMING' || status === 'TOSS');
+        const mDate = (m.match_date || (typeof m.date === 'string' ? m.date.split(' ')[0] : '') || '').split('T')[0].trim();
+        const status = (m.status || m.rawStatus || '').toUpperCase();
+        return (
+          mDate === todayStr &&
+          status !== 'COMPLETED' &&
+          status !== 'CANCELLED' &&
+          status !== 'ABANDONED' &&
+          status !== 'POSTPONED'
+        );
       });
 
       if (matchToAcknowledge) {
@@ -155,7 +146,7 @@ export default function ScorerDashboardScreen() {
           setShowTimingAckModal(true);
         }
       }
-    } catch (_ackErr) {}
+    } catch (_ackErr) { }
 
     // Load profile
     try {
@@ -168,7 +159,7 @@ export default function ScorerDashboardScreen() {
           setProfile(profRes.data);
         }
       }
-    } catch (_e) {}
+    } catch (_e) { }
   };
 
   const handleAcknowledgeTimings = async () => {
@@ -394,234 +385,234 @@ export default function ScorerDashboardScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.contentWrapper}>
 
-        {/* QUICK LIVE / UPCOMING MATCH ACTION BANNER */}
-        {liveMatches.length > 0 ? (
-          <TouchableOpacity 
-            style={styles.liveBanner}
-            onPress={() => navigate('LiveScoring', { matchId: liveMatches[0].id })}
-            activeOpacity={0.85}
-          >
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                <View style={styles.livePulseDot} />
-                <Text style={styles.liveBannerOverline}>MATCH CURRENTLY IN PROGRESS</Text>
+          {/* QUICK LIVE / UPCOMING MATCH ACTION BANNER */}
+          {liveMatches.length > 0 ? (
+            <TouchableOpacity
+              style={styles.liveBanner}
+              onPress={() => navigate('LiveScoring', { matchId: liveMatches[0].id })}
+              activeOpacity={0.85}
+            >
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                  <View style={styles.livePulseDot} />
+                  <Text style={styles.liveBannerOverline}>MATCH CURRENTLY IN PROGRESS</Text>
+                </View>
+                <Text style={styles.liveBannerTitle} numberOfLines={1}>
+                  {liveMatches[0].teamA?.name || liveMatches[0].teamA || 'Team A'} vs {liveMatches[0].teamB?.name || liveMatches[0].teamB || 'Team B'}
+                </Text>
+                <Text style={styles.liveBannerSub}>
+                  📍 {liveMatches[0].venue || 'District Stadium'} • Tap to resume live scoring console
+                </Text>
               </View>
-              <Text style={styles.liveBannerTitle} numberOfLines={1}>
-                {liveMatches[0].teamA?.name || liveMatches[0].teamA || 'Team A'} vs {liveMatches[0].teamB?.name || liveMatches[0].teamB || 'Team B'}
-              </Text>
-              <Text style={styles.liveBannerSub}>
-                📍 {liveMatches[0].venue || 'District Stadium'} • Tap to resume live scoring console
-              </Text>
-            </View>
-            <View style={styles.liveBannerBtn}>
-              <Text style={styles.liveBannerBtnText}>CONTINUE SCORING ▶</Text>
-            </View>
-          </TouchableOpacity>
-        ) : upcomingMatches.length > 0 ? (
-          <TouchableOpacity 
-            style={styles.upcomingBanner}
-            onPress={() => navigate('MatchSetup', { matchId: upcomingMatches[0].id })}
-            activeOpacity={0.85}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.upcomingBannerOverline}>⚡ NEXT SCHEDULED FIXTURE</Text>
-              <Text style={styles.upcomingBannerTitle} numberOfLines={1}>
-                {upcomingMatches[0].teamA?.name || upcomingMatches[0].teamA || 'Team A'} vs {upcomingMatches[0].teamB?.name || upcomingMatches[0].teamB || 'Team B'}
-              </Text>
-              <Text style={styles.upcomingBannerSub}>
-                📅 {upcomingMatches[0].match_date || upcomingMatches[0].date} • ⏰ {upcomingMatches[0].match_time || upcomingMatches[0].time || '09:30 AM'}
-              </Text>
-            </View>
-            <View style={styles.upcomingBannerBtn}>
-              <Text style={styles.upcomingBannerBtnText}>START MATCH SETUP ▶</Text>
-            </View>
-          </TouchableOpacity>
-        ) : null}
-
-        {/* TABS ROW FOR MATCH FILTERING */}
-        <View style={styles.tabsRow}>
-          {liveMatches.length > 0 && (
-            <TouchableOpacity 
-              style={[styles.tabButton, effectiveFilter === 'Live' && styles.tabButtonLiveActive]}
-              onPress={() => setSelectedFilter('Live')}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.tabButtonText, effectiveFilter === 'Live' && styles.tabButtonTextActive]}>
-                🔴 LIVE ({liveMatches.length})
-              </Text>
+              <View style={styles.liveBannerBtn}>
+                <Text style={styles.liveBannerBtnText}>CONTINUE SCORING ▶</Text>
+              </View>
             </TouchableOpacity>
-          )}
-
-          <TouchableOpacity 
-            style={[styles.tabButton, effectiveFilter === 'Upcoming' && styles.tabButtonActive]}
-            onPress={() => setSelectedFilter('Upcoming')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.tabButtonText, effectiveFilter === 'Upcoming' && styles.tabButtonTextActive]}>
-              📅 UPCOMING ({upcomingMatches.length})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.tabButton, effectiveFilter === 'Completed' && styles.tabButtonActive]}
-            onPress={() => setSelectedFilter('Completed')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.tabButtonText, effectiveFilter === 'Completed' && styles.tabButtonTextActive]}>
-              📊 RECENT MATCHES ({completedMatches.length})
-            </Text>
-          </TouchableOpacity>
-
-          {postponedMatches.length > 0 && (
-            <TouchableOpacity 
-              style={[styles.tabButton, effectiveFilter === 'Postponed' && styles.tabButtonActive]}
-              onPress={() => setSelectedFilter('Postponed')}
-              activeOpacity={0.7}
+          ) : upcomingMatches.length > 0 ? (
+            <TouchableOpacity
+              style={styles.upcomingBanner}
+              onPress={() => navigate('MatchSetup', { matchId: upcomingMatches[0].id })}
+              activeOpacity={0.85}
             >
-              <Text style={[styles.tabButtonText, effectiveFilter === 'Postponed' && styles.tabButtonTextActive]}>
-                ⏸️ POSTPONED ({postponedMatches.length})
-              </Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.upcomingBannerOverline}>⚡ NEXT SCHEDULED FIXTURE</Text>
+                <Text style={styles.upcomingBannerTitle} numberOfLines={1}>
+                  {upcomingMatches[0].teamA?.name || upcomingMatches[0].teamA || 'Team A'} vs {upcomingMatches[0].teamB?.name || upcomingMatches[0].teamB || 'Team B'}
+                </Text>
+                <Text style={styles.upcomingBannerSub}>
+                  📅 {upcomingMatches[0].match_date || upcomingMatches[0].date} • ⏰ {upcomingMatches[0].match_time || upcomingMatches[0].time || '09:30 AM'}
+                </Text>
+              </View>
+              <View style={styles.upcomingBannerBtn}>
+                <Text style={styles.upcomingBannerBtnText}>START MATCH SETUP ▶</Text>
+              </View>
             </TouchableOpacity>
-          )}
+          ) : null}
 
-          {totalAssigned > 0 && (
-            <TouchableOpacity 
-              style={[styles.tabButton, effectiveFilter === 'Assigned' && styles.tabButtonActive]}
-              onPress={() => setSelectedFilter(selectedFilter === 'Assigned' ? null : 'Assigned')}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.tabButtonText, effectiveFilter === 'Assigned' && styles.tabButtonTextActive]}>
-                📋 ALL ({totalAssigned})
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {isLoading ? (
-          <View style={{ paddingVertical: 40, alignItems: 'center' }}>
-            <ActivityIndicator size="large" color="#b45309" />
-            <Text style={{ marginTop: 12, color: '#64748b', fontSize: 14, fontWeight: '600' }}>
-              Loading Assigned Matches from Association Server...
-            </Text>
-          </View>
-        ) : effectiveFilter === 'Assigned' ? (
-          /* ALL ASSIGNED MATCHES */
-          <View style={{ width: '100%' }}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHeaderTitle}>📋 ALL ASSIGNED MATCHES ({totalAssigned})</Text>
-            </View>
-
+          {/* TABS ROW FOR MATCH FILTERING */}
+          <View style={styles.tabsRow}>
             {liveMatches.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.subSectionHeader}>🔴 LIVE MATCHES ({liveMatches.length})</Text>
-                {liveMatches.map(match => (
-                  <MatchCard key={match.id} match={match} variant="live" />
-                ))}
-              </View>
+              <TouchableOpacity
+                style={[styles.tabButton, effectiveFilter === 'Live' && styles.tabButtonLiveActive]}
+                onPress={() => setSelectedFilter('Live')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.tabButtonText, effectiveFilter === 'Live' && styles.tabButtonTextActive]}>
+                  🔴 LIVE ({liveMatches.length})
+                </Text>
+              </TouchableOpacity>
             )}
 
-            {upcomingMatches.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.subSectionHeader}>🔵 UPCOMING MATCHES ({upcomingMatches.length})</Text>
-                {upcomingMatches.map(match => (
-                  <MatchCard key={match.id} match={match} variant="upcoming" />
-                ))}
-              </View>
-            )}
+            <TouchableOpacity
+              style={[styles.tabButton, effectiveFilter === 'Upcoming' && styles.tabButtonActive]}
+              onPress={() => setSelectedFilter('Upcoming')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.tabButtonText, effectiveFilter === 'Upcoming' && styles.tabButtonTextActive]}>
+                📅 UPCOMING ({upcomingMatches.length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tabButton, effectiveFilter === 'Completed' && styles.tabButtonActive]}
+              onPress={() => setSelectedFilter('Completed')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.tabButtonText, effectiveFilter === 'Completed' && styles.tabButtonTextActive]}>
+                📊 RECENT MATCHES ({completedMatches.length})
+              </Text>
+            </TouchableOpacity>
 
             {postponedMatches.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.subSectionHeader}>⏸️ POSTPONED MATCHES ({postponedMatches.length})</Text>
-                {postponedMatches.map(match => renderPostponedMatchCard(match))}
-              </View>
+              <TouchableOpacity
+                style={[styles.tabButton, effectiveFilter === 'Postponed' && styles.tabButtonActive]}
+                onPress={() => setSelectedFilter('Postponed')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.tabButtonText, effectiveFilter === 'Postponed' && styles.tabButtonTextActive]}>
+                  ⏸️ POSTPONED ({postponedMatches.length})
+                </Text>
+              </TouchableOpacity>
             )}
 
-            {completedMatches.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.subSectionHeader}>🟢 COMPLETED MATCHES ({completedMatches.length})</Text>
-                {completedMatches.map(match => (
-                  <MatchCard key={match.id} match={match} variant="completed" />
-                ))}
-              </View>
-            )}
-
-            {totalAssigned === 0 && (
-              <Text style={styles.emptyText}>No matches assigned yet.</Text>
-            )}
-          </View>
-        ) : effectiveFilter === 'Live' ? (
-          /* LIVE MATCHES */
-          <View style={{ width: '100%' }}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHeaderTitle}>🔴 LIVE MATCHES IN PROGRESS ({liveMatches.length})</Text>
-            </View>
-
-            {liveMatches.length > 0 ? (
-              liveMatches.map(match => (
-                <MatchCard key={match.id} match={match} variant="live" />
-              ))
-            ) : (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyCardText}>No live matches currently in progress.</Text>
-              </View>
+            {totalAssigned > 0 && (
+              <TouchableOpacity
+                style={[styles.tabButton, effectiveFilter === 'Assigned' && styles.tabButtonActive]}
+                onPress={() => setSelectedFilter(selectedFilter === 'Assigned' ? null : 'Assigned')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.tabButtonText, effectiveFilter === 'Assigned' && styles.tabButtonTextActive]}>
+                  📋 ALL ({totalAssigned})
+                </Text>
+              </TouchableOpacity>
             )}
           </View>
-        ) : effectiveFilter === 'Upcoming' ? (
-          /* UPCOMING MATCHES ONLY - IF NONE, SHOW EMPTY NOTICE ONLY */
-          <View style={{ width: '100%' }}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHeaderTitle}>UPCOMING MATCHES ({upcomingMatches.length})</Text>
-            </View>
 
-            {upcomingMatches.length > 0 ? (
-              upcomingMatches.map(match => (
-                <MatchCard key={match.id} match={match} variant="upcoming" />
-              ))
-            ) : (
-              <View style={styles.emptyNoticeCard}>
-                <Text style={styles.emptyNoticeIcon}>📅</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.emptyNoticeTitle}>No Upcoming Matches Scheduled</Text>
-                  <Text style={styles.emptyNoticeSub}>
-                    There are currently no upcoming fixtures assigned.
-                  </Text>
+          {isLoading ? (
+            <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+              <ActivityIndicator size="large" color="#b45309" />
+              <Text style={{ marginTop: 12, color: '#64748b', fontSize: 14, fontWeight: '600' }}>
+                Loading Assigned Matches from Association Server...
+              </Text>
+            </View>
+          ) : effectiveFilter === 'Assigned' ? (
+            /* ALL ASSIGNED MATCHES */
+            <View style={{ width: '100%' }}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionHeaderTitle}>📋 ALL ASSIGNED MATCHES ({totalAssigned})</Text>
+              </View>
+
+              {liveMatches.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={styles.subSectionHeader}>🔴 LIVE MATCHES ({liveMatches.length})</Text>
+                  {liveMatches.map(match => (
+                    <MatchCard key={match.id} match={match} variant="live" />
+                  ))}
                 </View>
-              </View>
-            )}
-          </View>
-        ) : effectiveFilter === 'Completed' ? (
-          /* RECENT MATCHES & SCORECARDS */
-          <View style={{ width: '100%' }}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHeaderTitle}>RECENT MATCHES ({completedMatches.length})</Text>
-            </View>
+              )}
 
-            {completedMatches.length > 0 ? (
-              completedMatches.map(match => (
-                <MatchCard key={match.id} match={match} variant="completed" />
-              ))
-            ) : (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyCardText}>No recently completed matches found.</Text>
-              </View>
-            )}
-          </View>
-        ) : effectiveFilter === 'Postponed' ? (
-          /* POSTPONED MATCHES */
-          <View style={{ width: '100%' }}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHeaderTitle}>⏸️ POSTPONED MATCHES ({postponedMatches.length})</Text>
-            </View>
+              {upcomingMatches.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={styles.subSectionHeader}>🔵 UPCOMING MATCHES ({upcomingMatches.length})</Text>
+                  {upcomingMatches.map(match => (
+                    <MatchCard key={match.id} match={match} variant="upcoming" />
+                  ))}
+                </View>
+              )}
 
-            {postponedMatches.length > 0 ? (
-              postponedMatches.map(match => renderPostponedMatchCard(match))
-            ) : (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyCardText}>No postponed matches.</Text>
+              {postponedMatches.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={styles.subSectionHeader}>⏸️ POSTPONED MATCHES ({postponedMatches.length})</Text>
+                  {postponedMatches.map(match => renderPostponedMatchCard(match))}
+                </View>
+              )}
+
+              {completedMatches.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={styles.subSectionHeader}>🟢 COMPLETED MATCHES ({completedMatches.length})</Text>
+                  {completedMatches.map(match => (
+                    <MatchCard key={match.id} match={match} variant="completed" />
+                  ))}
+                </View>
+              )}
+
+              {totalAssigned === 0 && (
+                <Text style={styles.emptyText}>No matches assigned yet.</Text>
+              )}
+            </View>
+          ) : effectiveFilter === 'Live' ? (
+            /* LIVE MATCHES */
+            <View style={{ width: '100%' }}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionHeaderTitle}>🔴 LIVE MATCHES IN PROGRESS ({liveMatches.length})</Text>
               </View>
-            )}
-          </View>
-        ) : null}
+
+              {liveMatches.length > 0 ? (
+                liveMatches.map(match => (
+                  <MatchCard key={match.id} match={match} variant="live" />
+                ))
+              ) : (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyCardText}>No live matches currently in progress.</Text>
+                </View>
+              )}
+            </View>
+          ) : effectiveFilter === 'Upcoming' ? (
+            /* UPCOMING MATCHES ONLY - IF NONE, SHOW EMPTY NOTICE ONLY */
+            <View style={{ width: '100%' }}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionHeaderTitle}>UPCOMING MATCHES ({upcomingMatches.length})</Text>
+              </View>
+
+              {upcomingMatches.length > 0 ? (
+                upcomingMatches.map(match => (
+                  <MatchCard key={match.id} match={match} variant="upcoming" />
+                ))
+              ) : (
+                <View style={styles.emptyNoticeCard}>
+                  <Text style={styles.emptyNoticeIcon}>📅</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.emptyNoticeTitle}>No Upcoming Matches Scheduled</Text>
+                    <Text style={styles.emptyNoticeSub}>
+                      There are currently no upcoming fixtures assigned.
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          ) : effectiveFilter === 'Completed' ? (
+            /* RECENT MATCHES & SCORECARDS */
+            <View style={{ width: '100%' }}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionHeaderTitle}>RECENT MATCHES ({completedMatches.length})</Text>
+              </View>
+
+              {completedMatches.length > 0 ? (
+                completedMatches.map(match => (
+                  <MatchCard key={match.id} match={match} variant="completed" />
+                ))
+              ) : (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyCardText}>No recently completed matches found.</Text>
+                </View>
+              )}
+            </View>
+          ) : effectiveFilter === 'Postponed' ? (
+            /* POSTPONED MATCHES */
+            <View style={{ width: '100%' }}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionHeaderTitle}>⏸️ POSTPONED MATCHES ({postponedMatches.length})</Text>
+              </View>
+
+              {postponedMatches.length > 0 ? (
+                postponedMatches.map(match => renderPostponedMatchCard(match))
+              ) : (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyCardText}>No postponed matches.</Text>
+                </View>
+              )}
+            </View>
+          ) : null}
         </View>
 
         <SharedFooter />
@@ -632,7 +623,7 @@ export default function ScorerDashboardScreen() {
         visible={showTimingAckModal && Boolean(timingAckMatch)}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => {}}
+        onRequestClose={() => { }}
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.ackModalContainer}>
@@ -662,13 +653,13 @@ export default function ScorerDashboardScreen() {
                   </Text>
                   <View style={styles.ackTeamsRow}>
                     <Text style={styles.ackTeamName}>
-                      {timingAckMatch.teamA?.name || timingAckMatch.team_a_name || 'Team A'}
+                      {typeof timingAckMatch.teamA === 'string' ? timingAckMatch.teamA : (timingAckMatch.teamA?.name || timingAckMatch.team_a_name || 'Team A')}
                     </Text>
                     <View style={styles.ackVsBadge}>
                       <Text style={styles.ackVsBadgeText}>VS</Text>
                     </View>
                     <Text style={styles.ackTeamName}>
-                      {timingAckMatch.teamB?.name || timingAckMatch.team_b_name || 'Team B'}
+                      {typeof timingAckMatch.teamB === 'string' ? timingAckMatch.teamB : (timingAckMatch.teamB?.name || timingAckMatch.team_b_name || 'Team B')}
                     </Text>
                   </View>
                   <View style={styles.ackMetaRow}>
@@ -765,7 +756,7 @@ export default function ScorerDashboardScreen() {
 
 const getStyles = (isDesktop: boolean) => StyleSheet.create({
   container: { flex: 1, backgroundColor: 'transparent', width: '100%', maxWidth: '100%', overflow: 'hidden' },
-  
+
   // HEADER
   header: {
     padding: 12,
@@ -786,19 +777,19 @@ const getStyles = (isDesktop: boolean) => StyleSheet.create({
   logo: { width: 32, height: 32, marginRight: 8, flexShrink: 0 },
   title: { color: '#1e293b', fontSize: isDesktop ? 16 : 14, fontWeight: 'bold', letterSpacing: 0.5 },
   subtitle: { color: '#b45309', fontSize: isDesktop ? 11 : 10, marginTop: 1, fontWeight: '600' },
-  
+
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: isDesktop ? 12 : 8, flexShrink: 0 },
   scorerInfo: { alignItems: 'flex-end' },
   scorerName: { color: '#1e293b', fontSize: isDesktop ? 13 : 11.5, fontWeight: '700' },
   scorerId: { color: '#64748b', fontSize: isDesktop ? 11 : 9.5 },
-  
+
   logoutBtn: { backgroundColor: '#fef2f2', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#fca5a5' },
   logoutText: { color: '#dc2626', fontWeight: 'bold', fontSize: 11 },
-  
+
   // LAYOUT
   scroll: { flexGrow: 1, width: '100%', maxWidth: '100%' },
-  contentWrapper: { 
-    padding: isDesktop ? 24 : 12, 
+  contentWrapper: {
+    padding: isDesktop ? 24 : 12,
     paddingBottom: 32,
     width: '100%',
     maxWidth: 900,

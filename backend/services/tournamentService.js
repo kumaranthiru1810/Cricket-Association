@@ -8,8 +8,51 @@
 const db = require('../config/db');
 const tournamentModel = require('../models/tournamentModel');
 const tournamentRegistrationModel = require('../models/tournamentRegistrationModel');
+const tournamentEngine = require('./tournamentEngine');
+
+const _tournamentLocks = new Map();
 
 class TournamentService {
+  async _withTournamentLock(tournamentId, fn) {
+    const prev = _tournamentLocks.get(tournamentId) || Promise.resolve();
+    const runWithDbLease = async () => {
+      await db.initDb();
+      let acquired = false;
+      const leaseMs = 15000;
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const now = new Date();
+        const lockUntil = new Date(now.getTime() + leaseMs);
+        const leased = await db.models.Tournament.findOneAndUpdate(
+          {
+            id: tournamentId,
+            $or: [{ progression_lock_until: null }, { progression_lock_until: { $lte: now } }]
+          },
+          { $set: { progression_lock_until: lockUntil } },
+          { new: true }
+        ).lean();
+        if (leased) {
+          acquired = true;
+          break;
+        }
+        const exists = await db.models.Tournament.exists({ id: tournamentId });
+        if (!exists) break;
+        await new Promise(r => setTimeout(r, 75));
+      }
+      try {
+        return await fn();
+      } finally {
+        if (acquired) {
+          await db.models.Tournament.updateOne(
+            { id: tournamentId },
+            { $set: { progression_lock_until: null } }
+          ).catch(() => {});
+        }
+      }
+    };
+    const next = prev.then(runWithDbLease, runWithDbLease);
+    _tournamentLocks.set(tournamentId, next.catch(() => {}));
+    return next;
+  }
   /**
    * Helper: Add administrative audit log
    */
@@ -320,11 +363,19 @@ class TournamentService {
       }
     }
 
-    let tourType = 'LEAGUE';
-    const rawType = String(payload.tournament_type || payload.type || '').toUpperCase();
-    if (rawType.includes('KNOCKOUT') && rawType.includes('LEAGUE')) tourType = 'LEAGUE_KNOCKOUT';
-    else if (rawType.includes('KNOCKOUT')) tourType = 'KNOCKOUT';
-    else tourType = 'LEAGUE';
+    const VALID_TYPES = [
+      'SINGLE_ROUND_ROBIN', 'DOUBLE_ROUND_ROBIN',
+      'SINGLE_ELIMINATION', 'DOUBLE_ELIMINATION',
+      'GROUP_KNOCKOUT', 'GROUP_SUPER_LEAGUE',
+      'LEAGUE_PLAYOFFS', 'LEAGUE_KNOCKOUT',
+      'KNOCKOUT', 'LEAGUE'
+    ];
+    const rawType = String(payload.tournament_type || payload.type || '').toUpperCase().trim();
+    let tourType = VALID_TYPES.includes(rawType) ? rawType : 'LEAGUE';
+    if (!VALID_TYPES.includes(rawType)) {
+      if (rawType.includes('KNOCKOUT') && rawType.includes('LEAGUE')) tourType = 'LEAGUE_KNOCKOUT';
+      else if (rawType.includes('KNOCKOUT')) tourType = 'KNOCKOUT';
+    }
 
     const tourId = payload.id || `T-${Date.now()}`;
     const newTournamentData = {
@@ -392,7 +443,13 @@ class TournamentService {
         super_league_groups: Number(payload.format_config?.super_league_groups ?? 4),
         super_league_qualifiers_per_group: Number(payload.format_config?.super_league_qualifiers_per_group ?? 1),
         include_semifinals: payload.format_config?.include_semifinals !== false,
-        include_final: payload.format_config?.include_final !== false
+        include_final: payload.format_config?.include_final !== false,
+        group_distribution: payload.format_config?.group_distribution || 'BALANCED',
+        manual_groups: payload.format_config?.manual_groups || null,
+        best_runners_up_count: Number(payload.format_config?.best_runners_up_count ?? payload.format_config?.best_third_place_count ?? 0),
+        tie_breaker_order: Array.isArray(payload.format_config?.tie_breaker_order) && payload.format_config.tie_breaker_order.length > 0
+          ? payload.format_config.tie_breaker_order
+          : ['POINTS', 'WINS', 'NRR', 'HEAD_TO_HEAD']
       },
       teams,
       winner_team_id: payload.winner_team_id || null,
@@ -407,6 +464,10 @@ class TournamentService {
       status: initialStatus,
       created_by: adminEmail || 'admin@cfvd.org'
     };
+
+    if (teams.length >= 2) {
+      tournamentEngine.validateGroupAndQualificationConfig(teams, tourType, newTournamentData.format_config);
+    }
 
     const tournament = await tournamentModel.create(newTournamentData);
 
@@ -505,6 +566,83 @@ class TournamentService {
     );
 
     return updated;
+  }
+
+  /**
+   * Update group allocation & qualification settings before matches start
+   */
+  async updateTournamentGroups(tournamentId, payload = {}, adminEmail = 'admin@cfvd.org') {
+    await db.initDb();
+    const existing = await tournamentModel.findById(tournamentId);
+    if (!existing) {
+      throw { status: 404, message: `Tournament with ID '${tournamentId}' not found.` };
+    }
+
+    const startedCount = await db.models.Match.countDocuments({
+      tournament_id: existing.id,
+      status: { $in: ['LIVE', 'INNINGS_BREAK', 'TOSS', 'PAUSED', 'COMPLETED'] }
+    });
+    if (startedCount > 0) {
+      throw {
+        status: 409,
+        code: 'GROUPS_LOCKED_MATCHES_STARTED',
+        message: 'Cannot modify groups or qualification rules because matches have already started or completed.'
+      };
+    }
+
+    const scheduledCount = await db.models.Match.countDocuments({ tournament_id: existing.id });
+    if (scheduledCount > 0) {
+      throw {
+        status: 409,
+        code: 'GROUPS_LOCKED_FIXTURES_EXIST',
+        message: 'Fixtures have already been generated for this tournament. Group modifications are locked.'
+      };
+    }
+
+    const teams = Array.isArray(payload.teams) ? payload.teams : (existing.teams || []);
+    const mergedFormatConfig = {
+      ...(existing.format_config || {}),
+      ...(payload.format_config || {}),
+      ...(payload.group_count !== undefined && { group_count: Number(payload.group_count) }),
+      ...(payload.teams_per_group !== undefined && { teams_per_group: Number(payload.teams_per_group) }),
+      ...(payload.allow_extra_group !== undefined && { allow_extra_group: Boolean(payload.allow_extra_group) }),
+      ...(payload.group_distribution !== undefined && { group_distribution: String(payload.group_distribution).toUpperCase() }),
+      ...(payload.manual_groups !== undefined && { manual_groups: payload.manual_groups }),
+      ...(payload.qualifiers_per_group !== undefined && { qualifiers_per_group: Number(payload.qualifiers_per_group) }),
+      ...(payload.best_runners_up_count !== undefined && { best_runners_up_count: Number(payload.best_runners_up_count) }),
+      ...(payload.best_third_place_count !== undefined && { best_runners_up_count: Number(payload.best_third_place_count) })
+    };
+
+    const validation = tournamentEngine.validateGroupAndQualificationConfig(
+      teams,
+      existing.tournament_type,
+      mergedFormatConfig,
+      { requireManualGroups: mergedFormatConfig.group_distribution === 'MANUAL' }
+    );
+
+    const alloc = tournamentEngine.allocateGroups(teams, mergedFormatConfig);
+    mergedFormatConfig.groups_snapshot = alloc.groups.map(g => ({ key: g.key, label: g.label, teams: g.teams }));
+
+    const updated = await tournamentModel.update(existing.id, {
+      teams,
+      format_config: mergedFormatConfig,
+      updatedAt: new Date()
+    });
+
+    await this._logAudit(
+      'UPDATE_TOURNAMENT_GROUPS',
+      adminEmail,
+      existing.name,
+      `Updated groups (${mergedFormatConfig.group_distribution}, ${alloc.groups.length} groups, ${validation.totalQualifiers || 0} qualifiers)`,
+      `Teams: ${teams.length}`
+    );
+
+    return {
+      success: true,
+      tournament: updated,
+      groups: alloc.groups,
+      validation
+    };
   }
 
   /**
@@ -679,11 +817,38 @@ class TournamentService {
       };
     }
 
-    // Clean up existing scheduled matches if regenerating
-    await db.models.Match.deleteMany({
+    // Clean up existing scheduled matches if regenerating (unless preserveExisting/preventDuplicate is requested)
+    const existingScheduled = await db.models.Match.find({
       tournament_id: tournament.id,
       status: 'SCHEDULED'
-    });
+    }).lean();
+
+    if (existingScheduled.length > 0 && options.preventDuplicateIfExists) {
+      return {
+        success: true,
+        already_generated: true,
+        tournament_id: tournament.id,
+        tournament_name: tournament.name,
+        total_matches_generated: existingScheduled.length,
+        generated_count: existingScheduled.length,
+        fixtures: existingScheduled
+      };
+    }
+
+    const effType = options.tournament_type || tournament.tournament_type || 'SINGLE_ROUND_ROBIN';
+    if (effType === 'GROUP_SUPER_LEAGUE' || effType === 'GROUP_KNOCKOUT') {
+      const mergedFmt = { ...(tournament.format_config || {}), ...(options.format_config || {}) };
+      tournamentEngine.validateGroupAndQualificationConfig(teams, effType, mergedFmt, {
+        requireManualGroups: mergedFmt.group_distribution === 'MANUAL'
+      });
+    }
+
+    if (existingScheduled.length > 0) {
+      await db.models.Match.deleteMany({
+        tournament_id: tournament.id,
+        status: 'SCHEDULED'
+      });
+    }
 
     // Fetch team names for readable fixture creation
     const validTeamsObjIds = teams.filter(id => typeof id === 'string' && id.match(/^[0-9a-fA-F]{24}$/));
@@ -729,6 +894,31 @@ class TournamentService {
     const venue = options.venue || tournament.venue || 'Kamarajar District Stadium';
     const matchType = options.match_format || tournament.match_format || 'T20';
     const oversPerSide = Number(options.overs_per_match || tournament.overs_per_match || 20);
+    const pr = tournament.playing_rules || {};
+    const rulesSnapshot = {
+      ...pr,
+      tournament_type: tournamentType,
+      overs_per_match: oversPerSide,
+      playing_xi_size: tournament.playing_xi_size ?? 11,
+      allow_super_over: tournament.allow_super_over !== false,
+      allow_dls: Boolean(tournament.allow_dls),
+      allow_chain_over: Boolean(pr.allow_chain_over),
+      max_overs_per_bowler: pr.max_overs_per_bowler ?? 4,
+      free_hit_on_all_noballs: pr.free_hit_on_all_noballs !== false,
+      powerplay_overs: pr.powerplay_overs ?? 5,
+      max_outside_powerplay: pr.max_outside_powerplay ?? 2,
+      max_outside_post_powerplay: pr.max_outside_post_powerplay ?? 5,
+      max_on_side_fielders: pr.max_on_side_fielders ?? 5,
+      max_on_side_behind_crease: pr.max_on_side_behind_crease ?? 2,
+      tie_handling: pr.tie_handling || 'SHARE_POINTS',
+      snapshot_at: new Date()
+    };
+    const defaultScorerId = options.assigned_scorer_id || 'SCR-101';
+    const defaultScorerName = options.assigned_scorer_name || 'Official Scorer';
+    const defaultUmpire1Id = options.umpire1_id || 'UMP-101';
+    const defaultUmpire1Name = options.umpire1_name || 'Thiru. K. Sundaram';
+    const defaultUmpire2Id = options.umpire2_id || 'UMP-102';
+    const defaultUmpire2Name = options.umpire2_name || 'Thiru. M. Ramanathan';
 
     // Calculate dates spread across tournament window
     const startDate = new Date(tournament.start_date || new Date().toISOString().split('T')[0]);
@@ -746,27 +936,35 @@ class TournamentService {
     };
 
     if (tournamentType === 'GROUP_SUPER_LEAGUE' || tournamentType === 'GROUP_KNOCKOUT') {
-      const baseGroupCount = Math.max(2, Number(tournament.format_config?.group_count || 5));
-      const teamsPerGroup = Math.max(2, Number(tournament.format_config?.teams_per_group || 8));
-      const allowExtra = tournament.format_config?.allow_extra_group !== false;
-      const effectiveGroupCount = (allowExtra && teams.length > baseGroupCount * teamsPerGroup)
-        ? baseGroupCount + 1
-        : baseGroupCount;
-
-      const groups = Array.from({ length: effectiveGroupCount }, () => []);
-      teams.forEach((teamId, idx) => {
-        groups[idx % effectiveGroupCount].push(teamId);
-      });
+      const mergedFormatCfg = {
+        ...(tournament.format_config || {}),
+        ...(options.format_config || {})
+      };
+      const alloc = tournamentEngine.allocateGroups(teams, mergedFormatCfg);
+      const groups = alloc.groups;
+      const effectiveGroupCount = alloc.groupCount;
 
       const pairs = [];
-      groups.forEach((grpTeams, gIdx) => {
-        const groupLabel = `GROUP_${String.fromCharCode(65 + gIdx)}`;
-        for (let i = 0; i < grpTeams.length; i++) {
-          for (let j = i + 1; j < grpTeams.length; j++) {
-            pairs.push({ teamA: grpTeams[i], teamB: grpTeams[j], stage: groupLabel });
-          }
-        }
+      const groupByes = [];
+      groups.forEach((grp) => {
+        const rr = tournamentEngine.generateRoundRobinRounds(grp.teams, {
+          doubleLeg: roundRobinType === 'DOUBLE',
+          stagePrefix: grp.key
+        });
+        rr.pairings.forEach(p => {
+          pairs.push({
+            teamA: p.home,
+            teamB: p.away,
+            stage: grp.key,
+            group_key: grp.key,
+            round_number: p.round
+          });
+        });
+        rr.byes.forEach(b => groupByes.push({ ...b, group_key: grp.key }));
       });
+
+      // Interleave rounds across groups for balanced scheduling
+      pairs.sort((a, b) => (a.round_number - b.round_number) || a.group_key.localeCompare(b.group_key));
 
       for (let i = 0; i < pairs.length; i++) {
         const p = pairs[i];
@@ -785,13 +983,40 @@ class TournamentService {
           match_type: matchType,
           overs_per_side: oversPerSide,
           stage: p.stage,
+          group_key: p.group_key,
+          round_number: p.round_number,
+          fixture_seq: matchCounter,
           status: 'SCHEDULED',
-          assigned_scorer_id: 'SCR-101',
-          umpire1_id: 'UMP-101',
-          umpire2_id: 'UMP-102'
+          schedule_confirmation_status: 'CONFIRMED',
+          schedule_confirmed_at: new Date(),
+          schedule_confirmed_by: adminEmail || 'admin@cfvd.org',
+          rules_snapshot: rulesSnapshot,
+          assigned_scorer_id: defaultScorerId,
+          assigned_scorer_name: defaultScorerName,
+          scorer_name: defaultScorerName,
+          umpire1_id: defaultUmpire1Id,
+          umpire2_id: defaultUmpire2Id,
+          umpire1_name: defaultUmpire1Name,
+          umpire2_name: defaultUmpire2Name
         });
         matchCounter++;
       }
+
+      // Persist group allocation snapshot & byes onto Tournament
+      await db.models.Tournament.updateOne(
+        { id: tournament.id },
+        {
+          $set: {
+            'format_config.groups_snapshot': groups.map(g => ({
+              key: g.key,
+              label: g.label,
+              teams: g.teams
+            })),
+            'format_config.byes': groupByes,
+            'format_config.unresolved_ties': []
+          }
+        }
+      );
 
       if (generatedFixtures.length > 0) {
         await db.models.Match.insertMany(generatedFixtures);
@@ -833,19 +1058,23 @@ class TournamentService {
         adminEmail,
         tournament.name,
         `Generated ${generatedFixtures.length} Group Stage fixtures across ${effectiveGroupCount} groups`,
-        `Type: GROUP_SUPER_LEAGUE, Teams: ${teams.length}`
+        `Type: ${tournamentType}, Distribution: ${alloc.distribution}, Teams: ${teams.length}`
       );
 
       return {
+        success: true,
         tournament_id: tournament.id,
         tournament_name: tournament.name,
         generated_count: generatedFixtures.length,
+        total_matches_generated: generatedFixtures.length,
         groups: effectiveGroupCount,
+        groups_allocation: groups,
+        byes: groupByes,
         fixtures: generatedFixtures
       };
     }
 
-    // 1. LEAGUE / ROUND-ROBIN GENERATION
+    // 1. LEAGUE / ROUND-ROBIN GENERATION (Circle Method / Berger Table)
     if (
       tournamentType === 'LEAGUE' ||
       tournamentType === 'SINGLE_ROUND_ROBIN' ||
@@ -853,30 +1082,27 @@ class TournamentService {
       tournamentType === 'LEAGUE_KNOCKOUT' ||
       tournamentType === 'LEAGUE_PLAYOFFS'
     ) {
-      const pairings = [];
-      const n = teams.length;
+      const rr = tournamentEngine.generateRoundRobinRounds(teams, {
+        doubleLeg: roundRobinType === 'DOUBLE',
+        stagePrefix: 'LEAGUE_STAGE'
+      });
 
-      // Single Round-Robin: Every pair plays once
-      for (let i = 0; i < n; i++) {
-        for (let j = i + 1; j < n; j++) {
-          pairings.push({ home: teams[i], away: teams[j], stage: 'LEAGUE_STAGE' });
-        }
-      }
-
-      // Double Round-Robin: Reverse pairings for home & away
-      if (roundRobinType === 'DOUBLE') {
-        for (let i = 0; i < n; i++) {
-          for (let j = i + 1; j < n; j++) {
-            pairings.push({ home: teams[j], away: teams[i], stage: 'LEAGUE_STAGE_RETURN' });
+      await db.models.Tournament.updateOne(
+        { id: tournament.id },
+        {
+          $set: {
+            'format_config.byes': rr.byes,
+            'format_config.unresolved_ties': []
           }
         }
-      }
+      );
 
-      // Create fixtures
-      pairings.forEach((p, idx) => {
+      // Create fixtures ordered round-by-round
+      rr.pairings.forEach((p, idx) => {
         const matchId = `M-${tournament.id.replace(/[^a-zA-Z0-9]/g, '')}-${String(matchCounter).padStart(3, '0')}`;
+        const seq = matchCounter;
         matchCounter++;
-        const matchDate = getMatchDate(idx, pairings.length);
+        const matchDate = getMatchDate(idx, rr.pairings.length);
         const matchTime = idx % 2 === 0 ? '09:30 AM' : '02:30 PM';
 
         generatedFixtures.push({
@@ -893,57 +1119,79 @@ class TournamentService {
           match_type: matchType,
           overs_per_side: oversPerSide,
           stage: p.stage,
+          round_number: p.round,
+          fixture_seq: seq,
           status: 'SCHEDULED',
-          assigned_scorer_id: 'SCR-101',
-          umpire1_id: 'UMP-1894',
-          umpire2_id: 'UMP-102',
-          umpire1_name: 'Thiru. K. Sundaram',
-          umpire2_name: 'Thiru. M. Ramanathan'
+          schedule_confirmation_status: 'CONFIRMED',
+          schedule_confirmed_at: new Date(),
+          schedule_confirmed_by: adminEmail || 'admin@cfvd.org',
+          rules_snapshot: rulesSnapshot,
+          assigned_scorer_id: defaultScorerId,
+          assigned_scorer_name: defaultScorerName,
+          scorer_name: defaultScorerName,
+          umpire1_id: defaultUmpire1Id,
+          umpire2_id: defaultUmpire2Id,
+          umpire1_name: defaultUmpire1Name,
+          umpire2_name: defaultUmpire2Name
         });
       });
     }
 
-    // 2. KNOCKOUT / ELIMINATION TOURNAMENT GENERATION
+    // 2. KNOCKOUT / ELIMINATION TOURNAMENT GENERATION (Power-of-2 with Byes)
     if (tournamentType === 'KNOCKOUT' || tournamentType === 'SINGLE_ELIMINATION' || tournamentType === 'DOUBLE_ELIMINATION') {
-      const n = teams.length;
-      let stageName = tournamentType === 'DOUBLE_ELIMINATION' ? 'WINNERS_BRACKET_R1' : 'FINAL';
-      if (tournamentType !== 'DOUBLE_ELIMINATION') {
-        if (n > 8) stageName = 'ROUND_OF_16';
-        else if (n > 4) stageName = 'QUARTER_FINAL';
-        else if (n > 2) stageName = 'SEMI_FINAL';
-      }
+      const ko = tournamentEngine.generateSingleEliminationRound1(teams, {
+        seeding: options.seeding || 'AS_IS',
+        doubleElimination: tournamentType === 'DOUBLE_ELIMINATION'
+      });
 
-      // Seed initial round matches
-      for (let i = 0; i < Math.floor(n / 2); i++) {
-        const home = teams[i];
-        const away = teams[n - 1 - i];
-        const matchId = `M-${tournament.id.replace(/[^a-zA-Z0-9]/g, '')}-KO-${String(matchCounter).padStart(2, '0')}`;
+      await db.models.Tournament.updateOne(
+        { id: tournament.id },
+        {
+          $set: {
+            'format_config.byes': ko.byes,
+            'format_config.unresolved_ties': []
+          }
+        }
+      );
+
+      ko.pairings.forEach((p, idx) => {
+        const matchId = `M-${tournament.id.replace(/[^a-zA-Z0-9]/g, '')}-KO-R1-${String(matchCounter).padStart(2, '0')}`;
+        const seq = matchCounter;
         matchCounter++;
-        const matchDate = getMatchDate(i, Math.floor(n / 2));
-        const matchTime = i % 2 === 0 ? '09:30 AM' : '02:30 PM';
+        const matchDate = getMatchDate(idx, ko.pairings.length);
+        const matchTime = idx % 2 === 0 ? '09:30 AM' : '02:30 PM';
 
         generatedFixtures.push({
           id: matchId,
           tournament_id: tournament.id,
           tournament_name: tournament.name,
-          team_a_id: home,
-          team_b_id: away,
-          team_a_name: teamNameMap[home] || home,
-          team_b_name: teamNameMap[away] || away,
+          team_a_id: p.home,
+          team_b_id: p.away,
+          team_a_name: teamNameMap[p.home] || p.home,
+          team_b_name: teamNameMap[p.away] || p.away,
           venue,
           match_date: matchDate,
           match_time: matchTime,
           match_type: matchType,
           overs_per_side: oversPerSide,
-          stage: stageName,
+          stage: p.stage,
+          round_number: p.round,
+          fixture_seq: seq,
+          bracket: p.bracket,
           status: 'SCHEDULED',
-          assigned_scorer_id: 'SCR-101',
-          umpire1_id: 'UMP-1894',
-          umpire2_id: 'UMP-102',
-          umpire1_name: 'Thiru. K. Sundaram',
-          umpire2_name: 'Thiru. M. Ramanathan'
+          schedule_confirmation_status: 'CONFIRMED',
+          schedule_confirmed_at: new Date(),
+          schedule_confirmed_by: adminEmail || 'admin@cfvd.org',
+          rules_snapshot: rulesSnapshot,
+          assigned_scorer_id: defaultScorerId,
+          assigned_scorer_name: defaultScorerName,
+          scorer_name: defaultScorerName,
+          umpire1_id: defaultUmpire1Id,
+          umpire2_id: defaultUmpire2Id,
+          umpire1_name: defaultUmpire1Name,
+          umpire2_name: defaultUmpire2Name
         });
-      }
+      });
     }
 
     // Insert all generated fixtures atomically into MongoDB Match collection
@@ -1426,11 +1674,180 @@ class TournamentService {
   async onMatchCompleted(matchId) {
     try {
       await db.initDb();
-      const match = await db.models.Match.findOne({ id: matchId }).lean();
-      if (!match || !match.tournament_id) return;
+      // Atomic idempotency guard: claim processing once per completed match
+      const claimedMatch = await db.models.Match.findOneAndUpdate(
+        {
+          id: matchId,
+          status: 'COMPLETED',
+          stats_processed: { $ne: true },
+          stats_processing_status: { $ne: 'PROCESSING' }
+        },
+        { $set: { stats_processing_status: 'PROCESSING', stats_processing_error: null } },
+        { new: true }
+      ).lean();
+
+      const match = claimedMatch || await db.models.Match.findOne({ id: matchId }).lean();
+      if (!match) return { processed: false, progression: { advanced: false } };
+
+      if (claimedMatch) {
+        const statsSnapshot = { teams: [], players: [], potm: null };
+        try {
+          // 1. Trigger PlayerMatchRating calculation idempotently
+          try {
+            const playerRatingService = require('./playerRatingService');
+            await playerRatingService.recalculateMatchRatings(matchId);
+          } catch (_ratingErr) {}
+
+          // 2. Roll up permanent Team.stats (with exact snapshot for safe reversal)
+          const isTie = match.winner_id === 'TIE' || match.winner_id === 'MATCH_TIED';
+          const isNR = match.winner_id === 'NO_RESULT' || match.winner_id === 'ABANDONED';
+          const teamIds = [match.team_a_id, match.team_b_id].filter(Boolean);
+          for (const tId of teamIds) {
+            const inc = { 'stats.matches': 1 };
+            if (isTie) inc['stats.tied'] = 1;
+            else if (isNR) inc['stats.no_result'] = 1;
+            else if (match.winner_id === tId) inc['stats.won'] = 1;
+            else if (match.winner_id) inc['stats.lost'] = 1;
+
+            const updatedTeam = await db.models.Team.findOneAndUpdate(
+              { $or: [{ id: tId }, { team_id: tId }] },
+              { $inc: inc },
+              { new: true }
+            );
+            if (updatedTeam) {
+              statsSnapshot.teams.push({ team_id: tId, inc });
+              if (updatedTeam.stats && updatedTeam.stats.matches > 0) {
+                updatedTeam.stats.win_percentage = parseFloat(
+                  (((updatedTeam.stats.won || 0) / updatedTeam.stats.matches) * 100).toFixed(1)
+                );
+                await updatedTeam.save();
+              }
+            }
+          }
+
+          // 3. Roll up permanent Player.stats from InningsBatter / InningsBowler
+          const matchInns = await db.models.Innings.find({ match_id: matchId }).lean();
+          const innIds = matchInns.map(i => i.id);
+          const [batters, bowlers] = await Promise.all([
+            db.models.InningsBatter.find({ innings_id: { $in: innIds } }).lean(),
+            db.models.InningsBowler.find({ innings_id: { $in: innIds } }).lean()
+          ]);
+          const playerDeltaMap = {};
+          const addDelta = (pId, fields) => {
+            if (!playerDeltaMap[pId]) playerDeltaMap[pId] = {};
+            Object.entries(fields).forEach(([k, v]) => {
+              playerDeltaMap[pId][k] = (playerDeltaMap[pId][k] || 0) + v;
+            });
+          };
+
+          for (const b of batters) {
+            if (!b.player_id) continue;
+            const inc = {
+              'stats.innings': 1,
+              'stats.runs': b.runs || 0,
+              'stats.balls': b.balls || 0,
+              'stats.fours': b.fours || 0,
+              'stats.sixes': b.sixes || 0
+            };
+            if (!b.is_out) inc['stats.not_outs'] = 1;
+            if ((b.runs || 0) >= 100) inc['stats.hundreds'] = 1;
+            else if ((b.runs || 0) >= 50) inc['stats.fifties'] = 1;
+
+            addDelta(b.player_id, inc);
+            await db.models.Player.updateOne(
+              { id: b.player_id },
+              { $inc: inc, $max: { 'stats.highest_score': b.runs || 0 } }
+            );
+          }
+
+          for (const bw of bowlers) {
+            if (!bw.player_id) continue;
+            const inc = {
+              'stats.wickets': bw.wickets || 0,
+              'stats.overs': bw.overs || 0,
+              'stats.maidens': bw.maidens || 0,
+              'stats.runs_conceded': bw.runs_conceded || 0
+            };
+            addDelta(bw.player_id, inc);
+            await db.models.Player.updateOne({ id: bw.player_id }, { $inc: inc });
+          }
+
+          for (const pId of Object.keys(playerDeltaMap)) {
+            addDelta(pId, { 'stats.matches': 1 });
+            await db.models.Player.updateOne({ id: pId }, { $inc: { 'stats.matches': 1 } });
+            statsSnapshot.players.push({ player_id: pId, inc: playerDeltaMap[pId] });
+          }
+
+          if (match.player_of_match) {
+            statsSnapshot.potm = match.player_of_match;
+            await db.models.Player.updateOne(
+              { $or: [{ id: match.player_of_match }, { name: match.player_of_match }] },
+              { $inc: { 'stats.potm_awards': 1 } }
+            );
+          }
+
+          await db.models.Match.updateOne(
+            { id: matchId },
+            {
+              $set: {
+                stats_processed: true,
+                stats_processing_status: 'COMPLETED',
+                stats_processed_at: new Date(),
+                stats_snapshot: statsSnapshot,
+                stats_processing_error: null
+              }
+            }
+          );
+        } catch (rollupErr) {
+          // Roll back any partial Team/Player increments applied before failure so retries never duplicate stats
+          try {
+            for (const tEntry of (statsSnapshot.teams || [])) {
+              const dec = {};
+              Object.entries(tEntry.inc || {}).forEach(([k, v]) => { dec[k] = -Math.abs(v); });
+              const revTeam = await db.models.Team.findOneAndUpdate(
+                { $or: [{ id: tEntry.team_id }, { team_id: tEntry.team_id }] },
+                { $inc: dec },
+                { new: true }
+              );
+              if (revTeam && revTeam.stats) {
+                revTeam.stats.matches = Math.max(0, revTeam.stats.matches || 0);
+                revTeam.stats.won = Math.max(0, revTeam.stats.won || 0);
+                revTeam.stats.lost = Math.max(0, revTeam.stats.lost || 0);
+                revTeam.stats.tied = Math.max(0, revTeam.stats.tied || 0);
+                revTeam.stats.no_result = Math.max(0, revTeam.stats.no_result || 0);
+                revTeam.stats.win_percentage = revTeam.stats.matches > 0
+                  ? parseFloat(((revTeam.stats.won / revTeam.stats.matches) * 100).toFixed(1))
+                  : 0;
+                await revTeam.save();
+              }
+            }
+            for (const pEntry of (statsSnapshot.players || [])) {
+              const dec = {};
+              Object.entries(pEntry.inc || {}).forEach(([k, v]) => { dec[k] = -Math.abs(v); });
+              await db.models.Player.updateOne({ id: pEntry.player_id }, { $inc: dec });
+            }
+          } catch (_rbErr) {}
+
+          await db.models.Match.updateOne(
+            { id: matchId },
+            {
+              $set: {
+                stats_processing_status: 'FAILED',
+                stats_processing_error: rollupErr?.message || 'Stats rollup failed'
+              }
+            }
+          );
+          throw rollupErr;
+        }
+      }
+
+      if (!match.tournament_id) return { processed: Boolean(claimedMatch), progression: { advanced: false } };
+
+      // Advance knockout / playoff stages if current stage is complete
+      const progression = await this.advanceTournamentStage(match.tournament_id);
 
       const tour = await db.models.Tournament.findOne({ id: match.tournament_id });
-      if (!tour) return;
+      if (!tour) return { processed: Boolean(claimedMatch), progression };
 
       let changed = false;
       if (tour.status === 'UPCOMING') {
@@ -1438,18 +1855,19 @@ class TournamentService {
         changed = true;
       }
 
-      // Check remaining matches
+      // Check remaining matches (only mark COMPLETED if no pending matches and no unresolved ties)
       const activePendingCount = await db.models.Match.countDocuments({
         tournament_id: match.tournament_id,
         status: { $in: ['SCHEDULED', 'LIVE', 'INNINGS_BREAK', 'TOSS', 'PAUSED'] }
       });
+      const hasUnresolvedTies = Array.isArray(progression?.unresolved_ties) && progression.unresolved_ties.length > 0;
 
-      if (activePendingCount === 0) {
+      if (activePendingCount === 0 && !hasUnresolvedTies) {
         const completedCount = await db.models.Match.countDocuments({
           tournament_id: match.tournament_id,
           status: 'COMPLETED'
         });
-        if (completedCount > 0) {
+        if (completedCount > 0 && tour.status !== 'COMPLETED') {
           tour.status = 'COMPLETED';
           changed = true;
         }
@@ -1459,9 +1877,547 @@ class TournamentService {
         tour.updatedAt = new Date();
         await tour.save();
       }
-    } catch (_err) {
-      // Non-blocking
+      return { processed: Boolean(claimedMatch), progression };
+    } catch (err) {
+      return { processed: false, progression: { advanced: false, error: err?.message || 'Processing failed' } };
     }
+  }
+
+  /**
+   * Safely revert a completed match's stats contribution and unstarted downstream fixtures.
+   * Blocks with 409 if downstream knockout/playoff matches have already started or completed.
+   */
+  async revertMatchCompletion(matchId, reason = 'RESULT_CORRECTION') {
+    await db.initDb();
+    const match = await db.models.Match.findOne({ id: matchId }).lean();
+    if (!match) throw { status: 404, message: 'Match not found.' };
+
+    const runRevert = async () => {
+      const freshMatch = await db.models.Match.findOne({ id: matchId }).lean();
+      if (!freshMatch || !freshMatch.stats_processed) {
+        return { reverted: false };
+      }
+
+      // Check downstream progression safety if part of a tournament
+      let downstreamToRemove = [];
+      if (freshMatch.tournament_id) {
+        const allMatches = await db.models.Match.find({ tournament_id: freshMatch.tournament_id }).lean();
+        const st = String(freshMatch.stage || '');
+        const isGroupMatch = st.startsWith('GROUP_');
+        const isLeagueMatch = st.startsWith('LEAGUE_STAGE');
+
+        const downstream = allMatches.filter(m => {
+          if (m.id === freshMatch.id) return false;
+          const mst = String(m.stage || '');
+          if (isGroupMatch) return !mst.startsWith('GROUP_');
+          if (isLeagueMatch) return ['QUALIFIER_1', 'ELIMINATOR', 'QUALIFIER_2', 'FINAL'].includes(mst);
+          if (st === 'QUALIFIER_1' || st === 'ELIMINATOR') return ['QUALIFIER_2', 'FINAL'].includes(mst);
+          if (st === 'QUALIFIER_2') return mst === 'FINAL';
+          return Number(m.round_number || 1) > Number(freshMatch.round_number || 1);
+        });
+
+        const activeDownstream = downstream.filter(m =>
+          ['LIVE', 'INNINGS_BREAK', 'TOSS', 'PAUSED', 'COMPLETED'].includes(m.status)
+        );
+        if (activeDownstream.length > 0) {
+          throw {
+            status: 409,
+            code: 'DOWNSTREAM_STAGE_ACTIVE',
+            message: `Cannot reverse match '${matchId}' because downstream stage matches (${activeDownstream.map(m => m.id).join(', ')}) have already started or completed. Admin intervention is required.`
+          };
+        }
+        downstreamToRemove = downstream.filter(m => m.status === 'SCHEDULED' && m.schedule_confirmed_by === 'SYSTEM_QUALIFICATION');
+      }
+
+      // Atomically claim reversal
+      const claimed = await db.models.Match.findOneAndUpdate(
+        { id: matchId, stats_processed: true },
+        { $set: { stats_processed: false, stats_processing_status: 'IDLE', stats_processed_at: null } },
+        { new: false }
+      ).lean();
+      if (!claimed) return { reverted: false };
+
+      // Reverse Team & Player stats from exact snapshot
+      const snap = claimed.stats_snapshot;
+      if (snap) {
+        for (const tEntry of (snap.teams || [])) {
+          const dec = {};
+          Object.entries(tEntry.inc || {}).forEach(([k, v]) => { dec[k] = -Math.abs(v); });
+          const updatedTeam = await db.models.Team.findOneAndUpdate(
+            { $or: [{ id: tEntry.team_id }, { team_id: tEntry.team_id }] },
+            { $inc: dec },
+            { new: true }
+          );
+          if (updatedTeam && updatedTeam.stats) {
+            updatedTeam.stats.matches = Math.max(0, updatedTeam.stats.matches || 0);
+            updatedTeam.stats.won = Math.max(0, updatedTeam.stats.won || 0);
+            updatedTeam.stats.lost = Math.max(0, updatedTeam.stats.lost || 0);
+            updatedTeam.stats.tied = Math.max(0, updatedTeam.stats.tied || 0);
+            updatedTeam.stats.no_result = Math.max(0, updatedTeam.stats.no_result || 0);
+            updatedTeam.stats.win_percentage = updatedTeam.stats.matches > 0
+              ? parseFloat(((updatedTeam.stats.won / updatedTeam.stats.matches) * 100).toFixed(1))
+              : 0;
+            await updatedTeam.save();
+          }
+        }
+
+        for (const pEntry of (snap.players || [])) {
+          const dec = {};
+          Object.entries(pEntry.inc || {}).forEach(([k, v]) => { dec[k] = -Math.abs(v); });
+          await db.models.Player.updateOne({ id: pEntry.player_id }, { $inc: dec });
+        }
+
+        if (snap.potm) {
+          await db.models.Player.updateOne(
+            { $or: [{ id: snap.potm }, { name: snap.potm }] },
+            { $inc: { 'stats.potm_awards': -1 } }
+          );
+        }
+
+        await db.models.Match.updateOne({ id: matchId }, { $set: { stats_snapshot: null } });
+      }
+
+      if (downstreamToRemove.length > 0) {
+        await db.models.Match.deleteMany({ id: { $in: downstreamToRemove.map(m => m.id) } });
+      }
+
+      if (freshMatch.tournament_id) {
+        await db.models.Tournament.updateOne(
+          { id: freshMatch.tournament_id, status: 'COMPLETED' },
+          {
+            $set: {
+              status: 'ONGOING',
+              winner_team_id: null,
+              winner_team_name: '',
+              runner_up_team_id: null,
+              runner_up_team_name: '',
+              'format_config.unresolved_ties': []
+            }
+          }
+        );
+      }
+
+      await this._logAudit(
+        'MATCH_COMPLETION_REVERTED',
+        'SYSTEM',
+        matchId,
+        'SUCCESS',
+        `Reverted completion for ${matchId} (Reason: ${reason}). Removed ${downstreamToRemove.length} unstarted downstream fixtures.`
+      );
+
+      return { reverted: true, removed_downstream_count: downstreamToRemove.length };
+    };
+
+    if (match.tournament_id) {
+      return this._withTournamentLock(match.tournament_id, runRevert);
+    }
+    return runRevert();
+  }
+
+  /**
+   * Preview fixture distribution, rounds, byes, groups & expected total matches without writing to DB
+   */
+  async previewFixtures(tournamentId, options = {}) {
+    await db.initDb();
+    const tournament = await tournamentModel.findById(tournamentId);
+    if (!tournament) {
+      throw { status: 404, message: `Tournament with ID '${tournamentId}' not found.` };
+    }
+    const teams = options.teams || tournament.teams || [];
+    const tournamentType = options.tournament_type || tournament.tournament_type || 'SINGLE_ROUND_ROBIN';
+    const roundRobinType = tournamentType === 'DOUBLE_ROUND_ROBIN'
+      ? 'DOUBLE'
+      : tournamentType === 'SINGLE_ROUND_ROBIN'
+        ? 'SINGLE'
+        : (options.round_robin_type || tournament.format_config?.round_robin_type || 'SINGLE');
+    const mergedFormatCfg = { ...(tournament.format_config || {}), ...(options.format_config || {}) };
+
+    // Resolve team names
+    const teamDocs = await db.models.Team.find({ $or: [{ id: { $in: teams } }, { team_id: { $in: teams } }] }).lean();
+    const regDocs = await db.models.TeamRegistration.find({ id: { $in: teams } }).lean();
+    const nameMap = {};
+    teamDocs.forEach(t => { if (t.id) nameMap[t.id] = t.name || t.team_name; });
+    regDocs.forEach(r => { if (r.id && !nameMap[r.id]) nameMap[r.id] = r.team_name; });
+
+    if (tournamentType === 'GROUP_KNOCKOUT' || tournamentType === 'GROUP_SUPER_LEAGUE') {
+      const alloc = tournamentEngine.allocateGroups(teams, mergedFormatCfg);
+      let totalGroupMatches = 0;
+      const groupSummaries = alloc.groups.map(g => {
+        const rr = tournamentEngine.generateRoundRobinRounds(g.teams, { doubleLeg: roundRobinType === 'DOUBLE', stagePrefix: g.key });
+        totalGroupMatches += rr.totalMatches;
+        return {
+          key: g.key,
+          label: g.label,
+          teamCount: g.teams.length,
+          teams: g.teams.map(id => ({ id, name: nameMap[id] || id })),
+          matchesPerGroup: rr.totalMatches,
+          rounds: rr.totalRounds,
+          byesCount: rr.byes.length
+        };
+      });
+      const qPerGroup = Math.max(1, Number(mergedFormatCfg.qualifiers_per_group || 1));
+      const bestRU = Math.max(0, Number(mergedFormatCfg.best_runners_up_count || 0));
+      const qualifyingTeamsCount = Math.min(teams.length, alloc.groups.length * qPerGroup + bestRU);
+      const knockoutMatchesCount = qualifyingTeamsCount >= 2 ? qualifyingTeamsCount - 1 : 0;
+
+      return {
+        success: true,
+        tournament_id: tournament.id,
+        tournament_type: tournamentType,
+        team_count: teams.length,
+        groups: groupSummaries,
+        total_group_matches: totalGroupMatches,
+        qualifying_teams_count: qualifyingTeamsCount,
+        knockout_matches_count: knockoutMatchesCount,
+        total_expected_matches: totalGroupMatches + knockoutMatchesCount,
+        byes_count: groupSummaries.reduce((s, g) => s + g.byesCount, 0)
+      };
+    }
+
+    if (tournamentType === 'SINGLE_ELIMINATION' || tournamentType === 'KNOCKOUT' || tournamentType === 'DOUBLE_ELIMINATION') {
+      const ko = tournamentEngine.generateSingleEliminationRound1(teams, {
+        seeding: options.seeding || 'AS_IS',
+        doubleElimination: tournamentType === 'DOUBLE_ELIMINATION'
+      });
+      return {
+        success: true,
+        tournament_id: tournament.id,
+        tournament_type: tournamentType,
+        team_count: teams.length,
+        bracket_size: ko.bracketSize,
+        byes_count: ko.byesCount,
+        byes: ko.byes.map(b => ({ ...b, team_name: nameMap[b.team_id] || b.team_id })),
+        round1_matches_count: ko.pairings.length,
+        total_expected_matches: ko.totalExpectedMatches
+      };
+    }
+
+    const rr = tournamentEngine.generateRoundRobinRounds(teams, { doubleLeg: roundRobinType === 'DOUBLE' });
+    const playoffMatches = (tournamentType === 'LEAGUE_PLAYOFFS' || tournamentType === 'LEAGUE_KNOCKOUT') && teams.length >= 4 ? 4 : 0;
+    return {
+      success: true,
+      tournament_id: tournament.id,
+      tournament_type: tournamentType,
+      team_count: teams.length,
+      total_rounds: rr.totalRounds,
+      league_matches_count: rr.totalMatches,
+      byes_count: rr.byes.length,
+      byes: rr.byes.map(b => ({ ...b, team_name: nameMap[b.team_id] || b.team_id })),
+      playoff_matches_count: playoffMatches,
+      total_expected_matches: rr.totalMatches + playoffMatches
+    };
+  }
+
+  /**
+   * Compute group-wise points tables + qualifier preview + unresolved tie warnings
+   */
+  async getGroupPointsTables(tournamentId) {
+    await db.initDb();
+    const tournament = await tournamentModel.findById(tournamentId);
+    if (!tournament) {
+      throw { status: 404, message: `Tournament with ID '${tournamentId}' not found.` };
+    }
+    const allMatches = await db.models.Match.find({
+      $or: [{ tournament_id: tournament.id }, { tournament_name: tournament.name }]
+    }).lean();
+    const completedMatches = allMatches.filter(m => m.status === 'COMPLETED');
+    const matchIds = completedMatches.map(m => m.id);
+    const inningsList = await db.models.Innings.find({
+      match_id: { $in: matchIds },
+      $or: [{ is_completed: true }, { status: 'COMPLETED' }]
+    }).lean();
+    const inningsByMatch = {};
+    inningsList.forEach(inn => {
+      if (!inningsByMatch[inn.match_id]) inningsByMatch[inn.match_id] = [];
+      inningsByMatch[inn.match_id].push(inn);
+    });
+
+    const teamDocs = await db.models.Team.find({ $or: [{ id: { $in: tournament.teams || [] } }, { team_id: { $in: tournament.teams || [] } }] }).lean();
+    const regDocs = await db.models.TeamRegistration.find({ id: { $in: tournament.teams || [] } }).lean();
+    const nameMap = {};
+    teamDocs.forEach(t => { if (t.id) nameMap[t.id] = t.name || t.team_name; });
+    regDocs.forEach(r => { if (r.id && !nameMap[r.id]) nameMap[r.id] = r.team_name; });
+
+    let groupsSnapshot = tournament.format_config?.groups_snapshot || [];
+    if (groupsSnapshot.length === 0) {
+      const alloc = tournamentEngine.allocateGroups(tournament.teams || [], tournament.format_config || {});
+      groupsSnapshot = alloc.groups;
+    }
+
+    const groupsTable = {};
+    groupsSnapshot.forEach(grp => {
+      const grpTeams = (grp.teams || []).map(id => ({ id, name: nameMap[id] || id }));
+      const grpMatches = completedMatches.filter(m => m.group_key === grp.key || m.stage === grp.key);
+      groupsTable[grp.key] = tournamentEngine.computeStandings(grpTeams, grpMatches, inningsByMatch, tournament, {
+        manualTieResolution: tournament.format_config?.manual_groups_tie_resolution || {}
+      });
+    });
+
+    const qualRes = tournamentEngine.computeGroupQualifiers(groupsTable, tournament.format_config || {});
+    return {
+      success: true,
+      tournament_id: tournament.id,
+      groups: groupsTable,
+      qualifiers: qualRes.qualifiers,
+      unresolved_ties: qualRes.unresolvedTies
+    };
+  }
+
+  /**
+   * Automatic Stage Progression Engine (serialized per tournament to avoid duplicate fixtures)
+   */
+  async advanceTournamentStage(tournamentId) {
+    return this._withTournamentLock(tournamentId, async () => {
+      await db.initDb();
+      const tour = await db.models.Tournament.findOne({ id: tournamentId });
+      if (!tour) return { advanced: false };
+
+      const tType = tour.tournament_type || 'SINGLE_ROUND_ROBIN';
+      const allMatches = await db.models.Match.find({ tournament_id: tour.id }).sort({ fixture_seq: 1, round_number: 1 }).lean();
+      if (allMatches.length === 0) return { advanced: false };
+
+      const teamDocs = await db.models.Team.find({ $or: [{ id: { $in: tour.teams || [] } }, { team_id: { $in: tour.teams || [] } }] }).lean();
+      const regDocs = await db.models.TeamRegistration.find({ id: { $in: tour.teams || [] } }).lean();
+      const nameMap = {};
+      teamDocs.forEach(t => { if (t.id) nameMap[t.id] = t.name || t.team_name; });
+      regDocs.forEach(r => { if (r.id && !nameMap[r.id]) nameMap[r.id] = r.team_name; });
+
+      const pr = tour.playing_rules || {};
+      const rulesSnapshot = {
+        ...pr,
+        tournament_type: tType,
+        overs_per_match: tour.overs_per_match || 20,
+        playing_xi_size: tour.playing_xi_size ?? 11,
+        allow_super_over: tour.allow_super_over !== false,
+        allow_dls: Boolean(tour.allow_dls),
+        allow_chain_over: Boolean(pr.allow_chain_over),
+        max_overs_per_bowler: pr.max_overs_per_bowler ?? 4,
+        free_hit_on_all_noballs: pr.free_hit_on_all_noballs !== false,
+        powerplay_overs: pr.powerplay_overs ?? 5,
+        tie_handling: pr.tie_handling || 'SHARE_POINTS',
+        snapshot_at: new Date()
+      };
+
+      const maxSeq = allMatches.reduce((mx, m) => Math.max(mx, Number(m.fixture_seq || 0)), 0);
+      const createStageMatches = async (pairingsList, stagePrefix) => {
+        if (!pairingsList || pairingsList.length === 0) return [];
+        const docs = pairingsList.map((p, idx) => {
+          const seq = maxSeq + idx + 1;
+          return {
+            id: `M-${tour.id.replace(/[^a-zA-Z0-9]/g, '')}-${stagePrefix}-${seq}`,
+            tournament_id: tour.id,
+            tournament_name: tour.name,
+            team_a_id: p.home,
+            team_b_id: p.away,
+            team_a_name: nameMap[p.home] || p.home,
+            team_b_name: nameMap[p.away] || p.away,
+            venue: tour.venue || 'Kamarajar District Stadium',
+            match_date: tour.end_date || new Date().toISOString().split('T')[0],
+            match_time: idx % 2 === 0 ? '09:30 AM' : '02:00 PM',
+            match_type: tour.match_format || 'T20',
+            overs_per_side: tour.overs_per_match || 20,
+            stage: p.stage,
+            round_number: p.round || 1,
+            fixture_seq: seq,
+            bracket: p.bracket || 'MAIN',
+            qualification_source: p.qualification_source || null,
+            status: 'SCHEDULED',
+            schedule_confirmation_status: 'CONFIRMED',
+            schedule_confirmed_at: new Date(),
+            schedule_confirmed_by: 'SYSTEM_QUALIFICATION',
+            rules_snapshot: rulesSnapshot,
+            assigned_scorer_id: 'SCR-101',
+            assigned_scorer_name: 'Official Scorer',
+            scorer_name: 'Official Scorer',
+            umpire1_id: 'UMP-101',
+            umpire2_id: 'UMP-102'
+          };
+        });
+        await db.models.Match.insertMany(docs);
+        return docs;
+      };
+
+      const crownChampion = async (finalMatch) => {
+        if (!finalMatch || finalMatch.status !== 'COMPLETED' || !finalMatch.winner_id) return;
+        const winId = finalMatch.winner_id;
+        const runId = winId === finalMatch.team_a_id ? finalMatch.team_b_id : finalMatch.team_a_id;
+        tour.winner_team_id = winId;
+        tour.winner_team_name = nameMap[winId] || winId;
+        tour.runner_up_team_id = runId;
+        tour.runner_up_team_name = nameMap[runId] || runId;
+        tour.status = 'COMPLETED';
+        await tour.save();
+
+        await db.models.Team.updateOne(
+          { $or: [{ id: winId }, { team_id: winId }], 'championship_titles.tournament_id': { $ne: tour.id } },
+          { $push: { championship_titles: { tournament_id: tour.id, tournament_name: tour.name, season: tour.season || '2026' } } }
+        );
+        await db.models.Team.updateOne(
+          { $or: [{ id: runId }, { team_id: runId }], 'runner_up_titles.tournament_id': { $ne: tour.id } },
+          { $push: { runner_up_titles: { tournament_id: tour.id, tournament_name: tour.name, season: tour.season || '2026' } } }
+        );
+      };
+
+      // A. SINGLE ELIMINATION / KNOCKOUT PROGRESSION
+      if (tType === 'SINGLE_ELIMINATION' || tType === 'KNOCKOUT') {
+        const maxRound = allMatches.reduce((mx, m) => Math.max(mx, Number(m.round_number || 1)), 1);
+        const curRoundMatches = allMatches.filter(m => Number(m.round_number || 1) === maxRound);
+        if (curRoundMatches.some(m => m.status !== 'COMPLETED' || !m.winner_id)) return { advanced: false };
+
+        const roundWinners = curRoundMatches.map(m => m.winner_id);
+        const r1Byes = maxRound === 1 ? (tour.format_config?.byes || []).map(b => b.team_id) : [];
+        const advancing = [...r1Byes, ...roundWinners].filter(Boolean);
+
+        if (advancing.length === 1 && curRoundMatches.length === 1) {
+          await crownChampion(curRoundMatches[0]);
+          return { advanced: true, completed: true };
+        }
+
+        if (advancing.length >= 2) {
+          const nextRound = maxRound + 1;
+          const alreadyExists = allMatches.some(m => Number(m.round_number) === nextRound);
+          if (alreadyExists) return { advanced: false };
+
+          const nextStage = tournamentEngine.getKnockoutStageName(advancing.length);
+          const nextPairings = [];
+          for (let i = 0; i < Math.floor(advancing.length / 2); i++) {
+            nextPairings.push({
+              home: advancing[i],
+              away: advancing[advancing.length - 1 - i],
+              stage: nextStage,
+              round: nextRound,
+              qualification_source: { round: maxRound }
+            });
+          }
+          const created = await createStageMatches(nextPairings, `R${nextRound}`);
+          return { advanced: true, created_count: created.length, stage: nextStage };
+        }
+      }
+
+      // B. GROUP STAGE + KNOCKOUT PROGRESSION
+      if (tType === 'GROUP_KNOCKOUT' || tType === 'GROUP_SUPER_LEAGUE') {
+        const groupMatches = allMatches.filter(m => String(m.stage || '').startsWith('GROUP_'));
+        const koMatches = allMatches.filter(m => !String(m.stage || '').startsWith('GROUP_'));
+
+        if (koMatches.length === 0) {
+          if (groupMatches.length === 0 || groupMatches.some(m => m.status !== 'COMPLETED')) return { advanced: false };
+
+          const grpTables = await this.getGroupPointsTables(tour.id);
+          if (grpTables.unresolved_ties && grpTables.unresolved_ties.length > 0) {
+            await db.models.Tournament.updateOne(
+              { id: tour.id },
+              { $set: { 'format_config.unresolved_ties': grpTables.unresolved_ties } }
+            );
+            return { advanced: false, unresolved_ties: grpTables.unresolved_ties };
+          }
+
+          await db.models.Tournament.updateOne(
+            { id: tour.id },
+            { $set: { 'format_config.unresolved_ties': [] } }
+          );
+
+          const seededIds = grpTables.qualifiers.map(q => q.team_id);
+          if (seededIds.length < 2) return { advanced: false };
+
+          const ko = tournamentEngine.generateSingleEliminationRound1(seededIds);
+          await db.models.Tournament.updateOne(
+            { id: tour.id },
+            { $set: { 'format_config.byes': ko.byes } }
+          );
+          const qualSourceMap = {};
+          grpTables.qualifiers.forEach(q => { qualSourceMap[q.team_id] = q.qualification_source; });
+
+          const koPairings = ko.pairings.map(p => ({
+            ...p,
+            round: 1,
+            qualification_source: { home: qualSourceMap[p.home], away: qualSourceMap[p.away] }
+          }));
+          const created = await createStageMatches(koPairings, 'KO-R1');
+          return { advanced: true, created_count: created.length, stage: ko.stageName };
+        } else {
+          // Advance Knockout rounds once started
+          const maxKoRound = koMatches.reduce((mx, m) => Math.max(mx, Number(m.round_number || 1)), 1);
+          const curKoMatches = koMatches.filter(m => Number(m.round_number || 1) === maxKoRound);
+          if (curKoMatches.some(m => m.status !== 'COMPLETED' || !m.winner_id)) return { advanced: false };
+
+          const roundWinners = curKoMatches.map(m => m.winner_id);
+          const r1Byes = maxKoRound === 1 ? (tour.format_config?.byes || []).map(b => b.team_id) : [];
+          const advancing = [...r1Byes, ...roundWinners].filter(Boolean);
+
+          if (advancing.length === 1 && curKoMatches.length === 1) {
+            await crownChampion(curKoMatches[0]);
+            return { advanced: true, completed: true };
+          }
+
+          if (advancing.length >= 2) {
+            const nextRound = maxKoRound + 1;
+            if (koMatches.some(m => Number(m.round_number) === nextRound)) return { advanced: false };
+            const nextStage = tournamentEngine.getKnockoutStageName(advancing.length);
+            const nextPairings = [];
+            for (let i = 0; i < Math.floor(advancing.length / 2); i++) {
+              nextPairings.push({
+                home: advancing[i],
+                away: advancing[advancing.length - 1 - i],
+                stage: nextStage,
+                round: nextRound
+              });
+            }
+            const created = await createStageMatches(nextPairings, `KO-R${nextRound}`);
+            return { advanced: true, created_count: created.length, stage: nextStage };
+          }
+        }
+      }
+
+      // C. LEAGUE + PLAYOFFS (IPL-STYLE) PROGRESSION
+      if (tType === 'LEAGUE_PLAYOFFS' || tType === 'LEAGUE_KNOCKOUT') {
+        const leagueMatches = allMatches.filter(m => String(m.stage || '').startsWith('LEAGUE_STAGE'));
+        const playoffMatches = allMatches.filter(m => ['QUALIFIER_1', 'ELIMINATOR', 'QUALIFIER_2', 'FINAL'].includes(m.stage));
+
+        if (leagueMatches.length === 0 || leagueMatches.some(m => m.status !== 'COMPLETED')) return { advanced: false };
+
+        const finalMatch = playoffMatches.find(m => m.stage === 'FINAL');
+        if (finalMatch && finalMatch.status === 'COMPLETED' && finalMatch.winner_id) {
+          await crownChampion(finalMatch);
+          return { advanced: true, completed: true };
+        }
+
+        const standings = await this.getPointsTable(tour.id, tour, null, leagueMatches);
+        const nextPlayoffs = tournamentEngine.getNextIplPlayoffMatches(standings, playoffMatches);
+        if (nextPlayoffs.length > 0) {
+          const created = await createStageMatches(nextPlayoffs, 'PO');
+          return { advanced: true, created_count: created.length };
+        }
+      }
+
+      return { advanced: false };
+    });
+  }
+
+  /**
+   * Admin manual tie-breaker resolution + stage progression retry
+   */
+  async resolveTie(tournamentId, orderedTeamIds = [], adminEmail = 'admin@cfvd.org') {
+    await db.initDb();
+    const tour = await db.models.Tournament.findOne({ id: tournamentId });
+    if (!tour) throw { status: 404, message: 'Tournament not found.' };
+
+    const overrides = { ...(tour.format_config?.manual_groups_tie_resolution || {}) };
+    orderedTeamIds.forEach((tId, idx) => {
+      overrides[tId] = idx + 1;
+    });
+
+    await db.models.Tournament.updateOne(
+      { id: tour.id },
+      {
+        $set: {
+          'format_config.manual_groups_tie_resolution': overrides,
+          'format_config.unresolved_ties': []
+        }
+      }
+    );
+
+    await this._logAudit('RESOLVE_TOURNAMENT_TIE', adminEmail, tour.name, `Resolved tie order: ${orderedTeamIds.join(', ')}`, '');
+    return this.advanceTournamentStage(tour.id);
   }
 
   /**

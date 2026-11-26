@@ -192,6 +192,69 @@ class TournamentController {
   }
 
   /**
+   * POST /api/tournaments/:id/preview-matches
+   */
+  async previewMatches(req, res) {
+    try {
+      const result = await tournamentService.previewFixtures(req.params.id, req.body || {});
+      res.json(result);
+    } catch (err) {
+      res.status(err.status || 400).json({
+        success: false,
+        message: err.message || 'Failed to preview matches.'
+      });
+    }
+  }
+
+  /**
+   * GET /api/tournaments/:id/group-points-table
+   */
+  async getGroupPointsTable(req, res) {
+    try {
+      const result = await tournamentService.getGroupPointsTables(req.params.id);
+      res.json(result);
+    } catch (err) {
+      res.status(err.status || 500).json({
+        success: false,
+        message: err.message || 'Failed to compute group points tables.'
+      });
+    }
+  }
+
+  /**
+   * PUT /api/tournaments/:id/groups
+   */
+  async updateGroups(req, res) {
+    try {
+      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const result = await tournamentService.updateTournamentGroups(req.params.id, req.body || {}, adminEmail);
+      res.json(result);
+    } catch (err) {
+      res.status(err.status || 400).json({
+        success: false,
+        code: err.code,
+        message: err.message || 'Failed to update tournament groups.'
+      });
+    }
+  }
+
+  /**
+   * POST /api/tournaments/:id/resolve-tie
+   */
+  async resolveTie(req, res) {
+    try {
+      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const result = await tournamentService.resolveTie(req.params.id, req.body?.orderedTeamIds || [], adminEmail);
+      res.json({ success: true, ...result });
+    } catch (err) {
+      res.status(err.status || 400).json({
+        success: false,
+        message: err.message || 'Failed to resolve tie.'
+      });
+    }
+  }
+
+  /**
    * GET /api/tournaments/:id/schedule
    * Get all scheduled matches for tournament
    */

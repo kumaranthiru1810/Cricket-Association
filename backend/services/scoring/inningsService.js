@@ -26,8 +26,30 @@ class InningsService {
       throw { status: 400, message: 'Next bowler ID is required.' };
     }
 
-    if (innings.previous_bowler_id && nextBowlerId === innings.previous_bowler_id) {
+    const tournamentDoc = await db.models.Tournament.findOne({
+      $or: [
+        ...(match.tournament_id ? [{ id: match.tournament_id }] : []),
+        ...(match.tournament_name ? [{ name: match.tournament_name }] : [])
+      ]
+    }).lean();
+
+    const snap = match.rules_snapshot || null;
+    const allowChainOver = snap?.allow_chain_over !== undefined
+      ? Boolean(snap.allow_chain_over)
+      : Boolean(tournamentDoc?.playing_rules?.allow_chain_over);
+    if (!allowChainOver && innings.previous_bowler_id && nextBowlerId === innings.previous_bowler_id) {
       throw { status: 400, message: 'Bowler cannot bowl consecutive overs. Please select a different bowler.' };
+    }
+
+    const matchOvers = innings.revised_overs || match.revised_overs || match.overs_per_side || 20;
+    const customBowlerMax = Number(
+      (snap?.max_overs_per_bowler !== undefined ? snap.max_overs_per_bowler : tournamentDoc?.playing_rules?.max_overs_per_bowler) || 0
+    );
+    const maxQuota = customBowlerMax > 0 ? customBowlerMax : (Math.ceil(matchOvers / 5) || 4);
+
+    let bowlerStats = await db.models.InningsBowler.findOne({ innings_id: innings.id, player_id: nextBowlerId });
+    if (bowlerStats && bowlerStats.overs >= maxQuota) {
+      throw { status: 400, message: `Bowler has already completed their maximum quota of ${maxQuota} overs.` };
     }
 
     const playerMap = await getFullPlayerMap();
@@ -41,7 +63,6 @@ class InningsService {
     innings.is_over_complete = false;
     await innings.save();
 
-    let bowlerStats = await db.models.InningsBowler.findOne({ innings_id: innings.id, player_id: nextBowlerId });
     if (!bowlerStats) {
       bowlerStats = await db.models.InningsBowler.create({
         id: `BWL-${innings.id}-${nextBowlerId}`,
@@ -106,25 +127,29 @@ class InningsService {
     if (currentInnings.innings_number === 1) {
       const target = currentInnings.total_runs + 1;
       const inn2Id = `INN-${matchId}-2`;
+      const inn2BattingTeamId = currentInnings.bowling_team_id;
+      const inn2RevisedOvers = (inn2BattingTeamId === match.team_a_id ? match.team_a_overs : match.team_b_overs) || match.revised_overs || match.overs_per_side || null;
       let inn2 = await db.models.Innings.findOne({ id: inn2Id });
       if (!inn2) {
         inn2 = await db.models.Innings.create({
           id: inn2Id,
           match_id: matchId,
           innings_number: 2,
-          batting_team_id: currentInnings.bowling_team_id,
+          batting_team_id: inn2BattingTeamId,
           bowling_team_id: currentInnings.batting_team_id,
           total_runs: 0,
           wickets: 0,
           overs: 0,
           balls: 0,
           target,
+          revised_overs: inn2RevisedOvers,
           is_completed: false,
           is_over_complete: false,
           extras: { wides: 0, no_balls: 0, byes: 0, leg_byes: 0, total: 0 }
         });
       } else {
         inn2.target = target;
+        inn2.revised_overs = inn2RevisedOvers;
         inn2.is_completed = false;
         inn2.is_over_complete = false;
         await inn2.save();
@@ -303,20 +328,110 @@ class InningsService {
     const match = await db.models.Match.findOne({ id: matchId });
     if (!match) throw { status: 404, message: 'Match not found.' };
 
+    const tournamentService = require('../tournamentService');
+
+    // Resolve requested winner / result type
+    let requestedWinnerId = payload.winnerId !== undefined ? payload.winnerId : undefined;
+    const reqType = String(payload.resultType || '').toUpperCase();
+    if (reqType === 'NO_RESULT' || reqType === 'ABANDONED' || reqType === 'TIE') {
+      requestedWinnerId = reqType;
+    }
+
+    // Duplicate / already-completed guard
+    if (match.status === 'COMPLETED' && match.stats_processed) {
+      if (requestedWinnerId !== undefined && match.winner_id && requestedWinnerId !== match.winner_id) {
+        throw {
+          status: 409,
+          code: 'MATCH_ALREADY_COMPLETED',
+          message: 'Match is already officially completed with a different result. Use result correction or undo to modify it.'
+        };
+      }
+      const progRes = await tournamentService.onMatchCompleted(matchId);
+      return {
+        success: true,
+        alreadyCompleted: true,
+        message: 'Match result already recorded.',
+        matchId,
+        status: 'COMPLETED',
+        winnerId: match.winner_id,
+        result: match.result_summary,
+        tournamentProgression: progRes?.progression || null,
+        data: {
+          status: 'COMPLETED',
+          matchId,
+          winnerId: match.winner_id,
+          result: match.result_summary
+        }
+      };
+    }
+
+    // Validate or derive winnerId
+    const validSentinels = ['TIE', 'MATCH_TIED', 'NO_RESULT', 'ABANDONED'];
+    const validTeams = [match.team_a_id, match.team_b_id].filter(Boolean);
+
+    if (requestedWinnerId !== undefined && requestedWinnerId !== null && requestedWinnerId !== '') {
+      if (!validTeams.includes(requestedWinnerId) && !validSentinels.includes(requestedWinnerId)) {
+        throw { status: 400, message: `Invalid winnerId '${requestedWinnerId}' for this match.` };
+      }
+    } else {
+      // Derive from innings totals if omitted
+      const inns = await db.models.Innings.find({ match_id: matchId }).sort({ innings_number: 1 }).lean();
+      if (inns.length >= 2) {
+        const i1 = inns[0];
+        const i2 = inns[1];
+        if ((i2.total_runs || 0) > (i1.total_runs || 0)) {
+          requestedWinnerId = i2.batting_team_id;
+          if (!payload.resultText && !payload.result && !payload.resultSummary) {
+            const wTeam = await db.models.Team.findOne({ id: i2.batting_team_id }).lean();
+            const wktsLeft = Math.max(1, 10 - (i2.wickets || 0));
+            payload.resultText = `${wTeam?.name || 'Chasing Team'} won by ${wktsLeft} wickets`;
+          }
+        } else if ((i1.total_runs || 0) > (i2.total_runs || 0)) {
+          requestedWinnerId = i1.batting_team_id;
+          if (!payload.resultText && !payload.result && !payload.resultSummary) {
+            const wTeam = await db.models.Team.findOne({ id: i1.batting_team_id }).lean();
+            payload.resultText = `${wTeam?.name || 'Defending Team'} won by ${(i1.total_runs || 0) - (i2.total_runs || 0)} runs`;
+          }
+        } else {
+          requestedWinnerId = 'TIE';
+          if (!payload.resultText && !payload.result && !payload.resultSummary) {
+            payload.resultText = 'Match Tied';
+          }
+        }
+      } else if (payload.winnerTeamId || payload.resultText || payload.result || payload.resultSummary) {
+        // Legacy caller compatibility when only winnerTeamId/resultText is provided
+        requestedWinnerId = payload.winnerTeamId || 'NO_RESULT';
+      } else {
+        throw { status: 400, message: 'Cannot complete match without a valid result (winnerId, TIE, NO_RESULT, ABANDONED, or 2 completed innings).' };
+      }
+    }
+
+    if (payload.isWalkover) {
+      if (!validTeams.includes(requestedWinnerId)) {
+        throw { status: 400, message: 'Walkover requires a valid winning team ID.' };
+      }
+      match.is_walkover = true;
+      match.walkover_forfeited_team_id = payload.walkoverForfeitedTeamId ||
+        (requestedWinnerId === match.team_a_id ? match.team_b_id : match.team_a_id);
+    } else if (payload.isWalkover !== undefined) {
+      match.is_walkover = Boolean(payload.isWalkover);
+    }
+
     match.status = 'COMPLETED';
+    match.winner_id = requestedWinnerId;
     if (payload.resultText || payload.result || payload.resultSummary) {
       match.result_summary = payload.resultText || payload.result || payload.resultSummary;
+    } else if (requestedWinnerId === 'NO_RESULT') {
+      match.result_summary = 'No Result';
+    } else if (requestedWinnerId === 'ABANDONED') {
+      match.result_summary = 'Match Abandoned';
+    } else if (requestedWinnerId === 'TIE' || requestedWinnerId === 'MATCH_TIED') {
+      match.result_summary = 'Match Tied';
     }
     if (payload.playerOfMatch) {
       match.player_of_match = payload.playerOfMatch;
     }
-    if (payload.winnerId !== undefined) {
-      match.winner_id = payload.winnerId;
-    }
-    if (payload.isWalkover !== undefined) {
-      match.is_walkover = Boolean(payload.isWalkover);
-    }
-    if (payload.walkoverForfeitedTeamId !== undefined) {
+    if (payload.walkoverForfeitedTeamId !== undefined && !payload.isWalkover) {
       match.walkover_forfeited_team_id = payload.walkoverForfeitedTeamId;
     }
     if (payload.bonusPointWinner !== undefined) {
@@ -327,9 +442,15 @@ class InningsService {
     }
     await match.save();
 
+    // Ensure innings are marked completed consistently
+    await db.models.Innings.updateMany(
+      { match_id: matchId, is_completed: { $ne: true } },
+      { $set: { is_completed: true, status: 'COMPLETED' } }
+    );
+
+    let progRes = null;
     try {
-      const tournamentService = require('../tournamentService');
-      tournamentService.onMatchCompleted(matchId);
+      progRes = await tournamentService.onMatchCompleted(matchId);
     } catch (_err) {}
 
     return {
@@ -337,13 +458,35 @@ class InningsService {
       message: 'Match officially ended.',
       matchId,
       status: 'COMPLETED',
+      winnerId: match.winner_id,
       result: match.result_summary,
+      tournamentProgression: progRes?.progression || null,
       data: {
         status: 'COMPLETED',
         matchId,
-        result: match.result_summary
+        winnerId: match.winner_id,
+        result: match.result_summary,
+        tournamentProgression: progRes?.progression || null
       }
     };
+  }
+
+  async correctMatchResult(matchId, payload = {}) {
+    await db.initDb();
+    const match = await db.models.Match.findOne({ id: matchId });
+    if (!match) throw { status: 404, message: 'Match not found.' };
+
+    const tournamentService = require('../tournamentService');
+    if (match.stats_processed) {
+      await tournamentService.revertMatchCompletion(matchId, 'RESULT_CORRECTION');
+    }
+
+    // Reset transient completion state so endMatch validates and re-processes cleanly
+    await db.models.Match.updateOne(
+      { id: matchId },
+      { $set: { status: 'LIVE', stats_processed: false, stats_processing_status: 'IDLE' } }
+    );
+    return this.endMatch(matchId, payload);
   }
 
   async setRevisedOvers(matchId, payload = {}) {

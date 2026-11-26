@@ -189,9 +189,27 @@ async function verifyMatchPermission(req, res, next) {
 
     // Scorer must be assigned to this match, or match must be unassigned, or admin
     const isDev = process.env.NODE_ENV === 'development';
-    const isAssigned = (match.assigned_scorer_id === req.user.id) || 
-                       (!match.assigned_scorer_id) ||
-                       (isDev && (match.assigned_scorer_id === 'SCR-101' || (req.user.email && ['ramesh@gmail.com', 'scorer@cfvd.org'].includes(req.user.email))));
+    let isAssigned = (match.assigned_scorer_id === req.user.id) ||
+                     (!match.assigned_scorer_id) ||
+                     (isDev && (match.assigned_scorer_id === 'SCR-101' || (req.user.email && ['ramesh@gmail.com', 'scorer@cfvd.org'].includes(req.user.email))));
+
+    if (!isAssigned && req.user) {
+      const uEmail = (req.user.email || '').toLowerCase();
+      const uName = (req.user.name || '').trim().toLowerCase();
+      if (uName && ((match.assigned_scorer_name || '').trim().toLowerCase() === uName || (match.scorer_name || '').trim().toLowerCase() === uName || (match.assigned_scorer_id || '').trim().toLowerCase() === uName)) {
+        isAssigned = true;
+      } else if (uEmail || req.user.id) {
+        const off = await db.models.Official.findOne({
+          $or: [
+            ...(uEmail ? [{ email: uEmail }] : []),
+            ...(req.user.id ? [{ id: req.user.id }] : [])
+          ]
+        }).lean();
+        if (off && match.assigned_scorer_id === off.id) {
+          isAssigned = true;
+        }
+      }
+    }
 
     if (!isAssigned) {
       return res.status(403).json({

@@ -37,6 +37,7 @@ export interface MatchData {
   umpire1?: string;
   umpire2?: string;
   assigned_scorer_id?: string;
+  assigned_scorer_name?: string;
   assigned_scorer?: string;
   scorer_name?: string;
   scorer?: string;
@@ -221,10 +222,10 @@ export default function MatchCard({ match, variant = 'upcoming' }: Props) {
   const umpire1Id = match.umpire1_id || 'UMP-101';
   const umpire2Id = match.umpire2_id || 'UMP-102';
 
-  const scorerName = match.assigned_scorer || match.scorer_name || (
+  const scorerName = match.assigned_scorer_name || match.assigned_scorer || match.scorer_name || (
     match.assigned_scorer_id === 'OFF-02' ? 'K. Murugan' :
     match.assigned_scorer_id === 'OFF-01' ? 'S. Ramesh' :
-    match.assigned_scorer_id === 'SCR-104' ? 'Athi Lingam' : 'Athi Lingam'
+    match.assigned_scorer_id === 'SCR-104' ? 'Athi Lingam' : (match.assigned_scorer_id || 'Official Scorer')
   );
   const scorerId = match.assigned_scorer_id || 'SCR-101';
 

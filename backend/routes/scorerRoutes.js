@@ -162,6 +162,16 @@ router.get('/matches/:matchId/setup', verifyMatchPermission, async (req, res) =>
   }
 });
 
+// Persist Rule 5 Delay Timer & Penalty state across logout/refresh
+router.post('/matches/:matchId/delay-timer', verifyMatchPermission, async (req, res) => {
+  try {
+    const result = await matchService.saveDelayTimer(req.params.matchId, req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
 // Start Match (Toss, Playing XI)
 router.post('/matches/:matchId/start', verifyMatchPermission, async (req, res) => {
   try {
@@ -321,7 +331,17 @@ router.post('/matches/:matchId/end', verifyMatchPermission, async (req, res) => 
     const result = await scoringEngine.endMatch(req.params.matchId, req.body);
     res.json(result);
   } catch (err) {
-    res.status(err.status || 500).json({ success: false, error: err.message });
+    res.status(err.status || 500).json({ success: false, error: err.message, code: err.code });
+  }
+});
+
+// Correct / Reverse Completed Match Result
+router.post('/matches/:matchId/correct-result', verifyMatchPermission, async (req, res) => {
+  try {
+    const result = await scoringEngine.correctMatchResult(req.params.matchId, req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message, code: err.code });
   }
 });
 

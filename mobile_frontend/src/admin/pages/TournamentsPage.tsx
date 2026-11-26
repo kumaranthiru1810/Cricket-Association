@@ -43,6 +43,8 @@ export const TournamentsPage: React.FC = () => {
   const [formMaxOnSide, setFormMaxOnSide] = useState('5');
   const [formMaxBehindCrease, setFormMaxBehindCrease] = useState('2');
   const [formFreeHitAllNoBalls, setFormFreeHitAllNoBalls] = useState(true);
+  const [formAllowChainOver, setFormAllowChainOver] = useState(false);
+  const [formMaxOversPerBowler, setFormMaxOversPerBowler] = useState('4');
   const [formDelayPenaltyEnabled, setFormDelayPenaltyEnabled] = useState(true);
   const [formDelayIntervalValue, setFormDelayIntervalValue] = useState('4');
   const [formDelayIntervalUnit, setFormDelayIntervalUnit] = useState<'MINUTES' | 'SECONDS'>('MINUTES');
@@ -150,6 +152,8 @@ export const TournamentsPage: React.FC = () => {
     setFormMaxOnSide(String(pr.max_on_side_fielders ?? 5));
     setFormMaxBehindCrease(String(pr.max_on_side_behind_crease ?? 2));
     setFormFreeHitAllNoBalls(pr.free_hit_on_all_noballs !== false);
+    setFormAllowChainOver(Boolean(pr.allow_chain_over));
+    setFormMaxOversPerBowler(String(pr.max_overs_per_bowler ?? Math.max(1, Math.ceil((t.overs_per_match || t.overs || 20) / 5))));
     setFormDelayPenaltyEnabled(pr.delay_penalty_enabled !== false);
     setFormDelayIntervalValue(String(pr.delay_interval_value ?? 4));
     setFormDelayIntervalUnit(pr.delay_interval_unit === 'SECONDS' ? 'SECONDS' : 'MINUTES');
@@ -228,6 +232,8 @@ export const TournamentsPage: React.FC = () => {
         max_on_side_fielders: Math.max(0, parseInt(formMaxOnSide, 10) || 5),
         max_on_side_behind_crease: Math.max(0, parseInt(formMaxBehindCrease, 10) || 2),
         free_hit_on_all_noballs: formFreeHitAllNoBalls,
+        allow_chain_over: formAllowChainOver,
+        max_overs_per_bowler: Math.max(1, parseInt(formMaxOversPerBowler, 10) || 4),
         delay_penalty_enabled: formDelayPenaltyEnabled,
         delay_interval_value: Math.max(1, parseInt(formDelayIntervalValue, 10) || 4),
         delay_interval_unit: formDelayIntervalUnit,
@@ -787,6 +793,37 @@ export const TournamentsPage: React.FC = () => {
                       </View>
                     </View>
                   )}
+
+                  {/* Bowler Quota & Chain Over */}
+                  <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 4 }}>
+                    <View style={{ flex: 1, minWidth: 130 }}>
+                      <Text style={styles.fieldLabel}>Max Overs / Bowler</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={formMaxOversPerBowler}
+                        onChangeText={(v) => setFormMaxOversPerBowler(v.replace(/[^0-9]/g, ''))}
+                        keyboardType="numeric"
+                        placeholder="e.g. 4"
+                      />
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setFormAllowChainOver(p => !p)}
+                      style={{
+                        flex: 1,
+                        minWidth: 160,
+                        paddingHorizontal: 10,
+                        paddingVertical: 9,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: formAllowChainOver ? '#059669' : '#CBD5E1',
+                        backgroundColor: formAllowChainOver ? '#ECFDF5' : '#FFFFFF'
+                      }}
+                    >
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: formAllowChainOver ? '#065F46' : '#475569' }}>
+                        {formAllowChainOver ? '✅ Chain Over Allowed' : '⬜ No Chain Over (Standard)'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
 
                   {/* Rule 18: Free Hit + Rule 14: Tie Handling */}
                   <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 4 }}>

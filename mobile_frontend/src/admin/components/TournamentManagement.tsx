@@ -34,7 +34,7 @@ export interface TournamentManagementProps {
 }
 
 type TournamentFilterStatus = 'ALL' | 'UPCOMING' | 'ONGOING' | 'COMPLETED' | 'CANCELLED';
-type TournamentTab = 'overview' | 'teams' | 'schedule' | 'points' | 'stats' | 'rules';
+type TournamentTab = 'overview' | 'teams' | 'groups' | 'schedule' | 'points' | 'bracket' | 'stats' | 'rules';
 type TournamentType =
   | 'SINGLE_ROUND_ROBIN'
   | 'DOUBLE_ROUND_ROBIN'
@@ -43,7 +43,7 @@ type TournamentType =
   | 'GROUP_KNOCKOUT'
   | 'LEAGUE_PLAYOFFS';
 
-const TOURNAMENT_FORMAT_META: Record<TournamentType, { label: string; easyExplain: string }> = {
+const TOURNAMENT_FORMAT_META: Record<TournamentType, { label: string; easyExplain: string; unavailable?: boolean }> = {
   SINGLE_ROUND_ROBIN: {
     label: 'Single Round Robin',
     easyExplain: 'Every team plays every other team once. Each win earns points, and the top team on the points table wins.'
@@ -58,7 +58,8 @@ const TOURNAMENT_FORMAT_META: Record<TournamentType, { label: string; easyExplai
   },
   DOUBLE_ELIMINATION: {
     label: 'Double Elimination',
-    easyExplain: 'Teams get a second chance in the Losers Bracket after one loss. A team is out only after two losses.'
+    easyExplain: 'Coming Soon — Full Losers Bracket & Grand Final Reset is reserved for a future update.',
+    unavailable: true
   },
   GROUP_KNOCKOUT: {
     label: 'Group + Knockout',
@@ -255,6 +256,8 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
   const [formMaxOnSide, setFormMaxOnSide] = useState<string>('5');
   const [formMaxBehindCrease, setFormMaxBehindCrease] = useState<string>('2');
   const [formFreeHitAllNoBalls, setFormFreeHitAllNoBalls] = useState<boolean>(true);
+  const [formAllowChainOver, setFormAllowChainOver] = useState<boolean>(false);
+  const [formMaxOversPerBowler, setFormMaxOversPerBowler] = useState<string>('4');
   const [formDelayPenaltyEnabled, setFormDelayPenaltyEnabled] = useState<boolean>(true);
   const [formDelayIntervalValue, setFormDelayIntervalValue] = useState<string>('4');
   const [formDelayIntervalUnit, setFormDelayIntervalUnit] = useState<'HOURS' | 'MINUTES' | 'SECONDS'>('MINUTES');
@@ -286,6 +289,10 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
   const [formSuperLeagueQualifiers, setFormSuperLeagueQualifiers] = useState<string>('1');
   const [formIncludeSemis, setFormIncludeSemis] = useState<boolean>(true);
   const [formIncludeFinal, setFormIncludeFinal] = useState<boolean>(true);
+  const [formGroupDistribution, setFormGroupDistribution] = useState<'BALANCED' | 'RANDOM' | 'SEEDED' | 'MANUAL'>('BALANCED');
+  const [formManualGroups, setFormManualGroups] = useState<Record<string, string[]>>({});
+  const [formBestRunnersUp, setFormBestRunnersUp] = useState<string>('0');
+  const [formTieBreakerOrder, setFormTieBreakerOrder] = useState<string>('POINTS,WINS,NRR,HEAD_TO_HEAD');
 
   // ── Details Dashboard Modal State ──────────────────────────────────────
   const [detailsModalOpen, setDetailsModalOpen] = useState<boolean>(false);
@@ -293,7 +300,13 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
   const [detailsLoading, setDetailsLoading] = useState<boolean>(false);
   const [detailsTab, setDetailsTab] = useState<TournamentTab>('overview');
   const [matchStatusFilter, setMatchStatusFilter] = useState<'ALL' | 'SCHEDULED' | 'LIVE' | 'COMPLETED'>('ALL');
+  const [matchGroupFilter, setMatchGroupFilter] = useState<string>('ALL');
   const [generatingMatches, setGeneratingMatches] = useState<boolean>(false);
+  const [backendPreviewData, setBackendPreviewData] = useState<any | null>(null);
+  const [backendPreviewLoading, setBackendPreviewLoading] = useState<boolean>(false);
+  const [groupPointsData, setGroupPointsData] = useState<any | null>(null);
+  const [groupPointsLoading, setGroupPointsLoading] = useState<boolean>(false);
+  const [groupPointsError, setGroupPointsError] = useState<string | null>(null);
 
   // ── Load Data on Mount ─────────────────────────────────────────────────
   useEffect(() => {
@@ -707,6 +720,10 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
     setFormSuperLeagueQualifiers('1');
     setFormIncludeSemis(true);
     setFormIncludeFinal(true);
+    setFormGroupDistribution('BALANCED');
+    setFormManualGroups({});
+    setFormBestRunnersUp('0');
+    setFormTieBreakerOrder('POINTS,WINS,NRR,HEAD_TO_HEAD');
 
     setWizardOpen(true);
   };
@@ -769,6 +786,8 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
     setFormMaxOnSide(String(pr.max_on_side_fielders ?? 5));
     setFormMaxBehindCrease(String(pr.max_on_side_behind_crease ?? 2));
     setFormFreeHitAllNoBalls(pr.free_hit_on_all_noballs !== false);
+    setFormAllowChainOver(Boolean(pr.allow_chain_over));
+    setFormMaxOversPerBowler(String(pr.max_overs_per_bowler ?? Math.max(1, Math.ceil((tour.overs_per_match || 20) / 5))));
     setFormDelayPenaltyEnabled(pr.delay_penalty_enabled !== false);
     setFormDelayIntervalValue(String(pr.delay_interval_value ?? 4));
     setFormDelayIntervalUnit(
@@ -797,6 +816,14 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
     setFormSuperLeagueQualifiers(String(fc.super_league_qualifiers_per_group ?? 1));
     setFormIncludeSemis(fc.include_semifinals !== false);
     setFormIncludeFinal(fc.include_final !== false);
+    setFormGroupDistribution(
+      ['BALANCED', 'RANDOM', 'SEEDED', 'MANUAL'].includes(fc.group_distribution) ? fc.group_distribution : 'BALANCED'
+    );
+    setFormManualGroups(fc.manual_groups && typeof fc.manual_groups === 'object' ? fc.manual_groups : {});
+    setFormBestRunnersUp(String(fc.best_runners_up_count ?? 0));
+    if (Array.isArray(fc.tie_breaker_order) && fc.tie_breaker_order.length > 0) {
+      setFormTieBreakerOrder(fc.tie_breaker_order.join(','));
+    }
     setFormQualifyingTeamsCount(String(tour.format_config?.qualifying_teams_count || 4));
     setFormQualificationRules(tour.format_config?.qualification_rules || 'Top 4 teams advance to semi-finals');
 
@@ -924,6 +951,13 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
       errs.maxBehindCrease = `Cannot exceed ${maxFielders} fielders.`;
     }
 
+    const maxBowlerOv = parseInt(formMaxOversPerBowler, 10);
+    if (isNaN(maxBowlerOv) || maxBowlerOv < 1) {
+      errs.maxOversPerBowler = 'Must be at least 1 over.';
+    } else if (!isNaN(oversNum) && oversNum >= 1 && maxBowlerOv > oversNum) {
+      errs.maxOversPerBowler = `Cannot exceed Overs / Match (${oversNum}).`;
+    }
+
     if (formDelayPenaltyEnabled) {
       const iv = parseInt(formDelayIntervalValue, 10);
       if (isNaN(iv) || iv < 1) {
@@ -951,6 +985,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
     formMaxOutsidePostPP,
     formMaxOnSide,
     formMaxBehindCrease,
+    formMaxOversPerBowler,
     formDelayPenaltyEnabled,
     formDelayIntervalValue,
     formDelayOversReduced,
@@ -1082,6 +1117,8 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
         max_on_side_fielders: Math.max(0, parseInt(formMaxOnSide, 10) || 5),
         max_on_side_behind_crease: Math.max(0, parseInt(formMaxBehindCrease, 10) || 2),
         free_hit_on_all_noballs: formFreeHitAllNoBalls,
+        allow_chain_over: formAllowChainOver,
+        max_overs_per_bowler: Math.max(1, parseInt(formMaxOversPerBowler, 10) || 4),
         delay_penalty_enabled: formDelayPenaltyEnabled,
         delay_interval_value: Math.max(1, parseInt(formDelayIntervalValue, 10) || 4),
         delay_interval_unit: formDelayIntervalUnit,
@@ -1107,7 +1144,11 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
         super_league_groups: Math.max(1, parseInt(formSuperLeagueGroups, 10) || 4),
         super_league_qualifiers_per_group: Math.max(1, parseInt(formSuperLeagueQualifiers, 10) || 1),
         include_semifinals: formIncludeSemis,
-        include_final: formIncludeFinal
+        include_final: formIncludeFinal,
+        group_distribution: formGroupDistribution,
+        manual_groups: formGroupDistribution === 'MANUAL' ? formManualGroups : null,
+        best_runners_up_count: Math.max(0, parseInt(formBestRunnersUp, 10) || 0),
+        tie_breaker_order: formTieBreakerOrder.split(',').map(s => s.trim()).filter(Boolean)
       },
       teams: selectedTeamIds,
       winner_team_name: formWinnerTeamName.trim(),
@@ -1144,15 +1185,43 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
     }
   };
 
+  const loadGroupPointsForTournament = async (tId: string, tType?: string) => {
+    const norm = normalizeTournamentType(tType);
+    if (norm !== 'GROUP_KNOCKOUT') {
+      setGroupPointsData(null);
+      setGroupPointsError(null);
+      return;
+    }
+    setGroupPointsLoading(true);
+    setGroupPointsError(null);
+    try {
+      const gpRes = await ScorerApi.getGroupPointsTable(tId);
+      if (gpRes && gpRes.success) {
+        setGroupPointsData(gpRes);
+      } else {
+        setGroupPointsData(null);
+      }
+    } catch (e: any) {
+      setGroupPointsError(e?.message || 'Unable to load group standings.');
+    } finally {
+      setGroupPointsLoading(false);
+    }
+  };
+
   // ── Open Tournament Details Dashboard ──────────────────────────────────
   const handleOpenDetails = async (tournamentId: string) => {
     setDetailsModalOpen(true);
     setDetailsLoading(true);
     setDetailsTab('overview');
+    setMatchGroupFilter('ALL');
+    setGroupPointsData(null);
+    setGroupPointsError(null);
+    setBackendPreviewData(null);
     try {
       const res = await ScorerApi.getTournamentById(tournamentId);
       const data = res.tournament || res.data;
       setSelectedTournament(data);
+      loadGroupPointsForTournament(tournamentId, data?.tournament_type);
     } catch (err: any) {
       await showError('Error', `Failed to load tournament details: ${err.message}`);
       setDetailsModalOpen(false);
@@ -1168,10 +1237,29 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
       const res = await ScorerApi.getTournamentById(selectedTournament.id);
       const data = res.tournament || res.data;
       setSelectedTournament(data);
+      await loadGroupPointsForTournament(selectedTournament.id, data?.tournament_type);
     } catch (err) {
       console.warn('Failed to refresh details:', err);
     } finally {
       setDetailsLoading(false);
+    }
+  };
+
+  // ── Preview Championship Fixtures (Backend) ───────────────────────────
+  const handlePreviewMatches = async () => {
+    if (!selectedTournament) return;
+    setBackendPreviewLoading(true);
+    try {
+      const res = await ScorerApi.previewTournamentMatches(selectedTournament.id, {
+        tournament_type: selectedTournament.tournament_type,
+        round_robin_type: selectedTournament.format_config?.round_robin_type || 'SINGLE',
+        format_config: selectedTournament.format_config || {}
+      });
+      setBackendPreviewData(res);
+    } catch (err: any) {
+      await showError('Preview Failed', err?.message || 'Unable to preview fixtures.');
+    } finally {
+      setBackendPreviewLoading(false);
     }
   };
 
@@ -3044,6 +3132,33 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                     )}
 
                     <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 10, marginTop: 10, alignItems: isMobile ? 'stretch' : 'center' }}>
+                      <View style={{ flex: 1, minWidth: isMobile ? '100%' : 140 }}>
+                        <Text style={styles.inputLabel}>Max Overs / Bowler</Text>
+                        <TextInput
+                          style={[styles.textInput, step2RuleErrors.maxOversPerBowler && { borderColor: '#DC2626', backgroundColor: '#FEF2F2' }]}
+                          keyboardType="numeric"
+                          value={formMaxOversPerBowler}
+                          onChangeText={(v) => setFormMaxOversPerBowler(sanitizeUnsignedInt(v))}
+                          placeholder="e.g. 4"
+                        />
+                        {step2RuleErrors.maxOversPerBowler ? (
+                          <Text style={{ color: '#DC2626', fontSize: 10.5, fontWeight: '700', marginTop: 3 }}>⚠️ {step2RuleErrors.maxOversPerBowler}</Text>
+                        ) : null}
+                      </View>
+                      <View style={{ flex: 1, minWidth: isMobile ? '100%' : 190 }}>
+                        <Text style={styles.inputLabel}>Chain Over (Consecutive Overs)</Text>
+                        <TouchableOpacity
+                          style={[styles.toggleBtn, formAllowChainOver && styles.toggleBtnActive, { width: '100%' }]}
+                          onPress={() => setFormAllowChainOver(v => !v)}
+                        >
+                          <Text style={[styles.toggleBtnText, formAllowChainOver && styles.toggleBtnTextActive]}>
+                            {formAllowChainOver ? '✓ Chain Over ALLOWED (Same Bowler)' : '✕ No Chain Over (Standard)'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 10, marginTop: 10, alignItems: isMobile ? 'stretch' : 'center' }}>
                       <TouchableOpacity
                         style={[styles.toggleBtn, formFreeHitAllNoBalls && styles.toggleBtnActive, { width: isMobile ? '100%' : undefined }]}
                         onPress={() => setFormFreeHitAllNoBalls(v => !v)}
@@ -3252,26 +3367,37 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                     <Text style={styles.configBoxTitle}>Format</Text>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 }}>
                       {(Object.keys(TOURNAMENT_FORMAT_META) as TournamentType[]).map((fmtKey) => {
+                        const meta = TOURNAMENT_FORMAT_META[fmtKey];
                         const isActive = formTournamentType === fmtKey;
+                        const isDisabled = Boolean(meta.unavailable);
                         return (
                           <TouchableOpacity
                             key={fmtKey}
+                            disabled={isDisabled}
                             style={[
                               styles.formatOptionBtn,
-                              { minWidth: 165, flex: 1 },
+                              { minWidth: 165, flex: 1, opacity: isDisabled ? 0.55 : 1 },
                               isActive && styles.formatOptionBtnActive
                             ]}
                             onPress={() => {
+                              if (isDisabled) return;
                               setFormTournamentType(fmtKey);
                               if (fmtKey === 'DOUBLE_ROUND_ROBIN') setFormRoundRobinType('DOUBLE');
                               else if (fmtKey === 'SINGLE_ROUND_ROBIN') setFormRoundRobinType('SINGLE');
                             }}
                           >
-                            <Text style={[styles.formatOptionTitle, isActive && styles.formatOptionTitleActive]}>
-                              {TOURNAMENT_FORMAT_META[fmtKey].label}
-                            </Text>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                              <Text style={[styles.formatOptionTitle, isActive && styles.formatOptionTitleActive]}>
+                                {meta.label}
+                              </Text>
+                              {isDisabled ? (
+                                <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#F59E0B' }}>
+                                  <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#92400E' }}>UNAVAILABLE</Text>
+                                </View>
+                              ) : null}
+                            </View>
                             <Text style={styles.formatOptionSub}>
-                              {TOURNAMENT_FORMAT_META[fmtKey].easyExplain}
+                              {meta.easyExplain}
                             </Text>
                           </TouchableOpacity>
                         );
@@ -3389,8 +3515,33 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                           </Text>
                         </TouchableOpacity>
                       </View>
+                      <View style={{ flexDirection: 'row', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+                        <View style={{ flex: 1, minWidth: 130 }}>
+                          <Text style={styles.inputLabel}>Group Distribution</Text>
+                          <select
+                            value={formGroupDistribution}
+                            onChange={(e) => setFormGroupDistribution(e.target.value as any)}
+                            style={{ ...webSelectStyle, paddingRight: 24 }}
+                          >
+                            <option value="BALANCED">Balanced (Round-Robin)</option>
+                            <option value="SEEDED">Seeded (Snake Draft)</option>
+                            <option value="RANDOM">Random Draw</option>
+                            <option value="MANUAL">Manual Allocation</option>
+                          </select>
+                        </View>
+                        <View style={{ flex: 1, minWidth: 130 }}>
+                          <Text style={styles.inputLabel}>Best Runners-Up (Wildcard)</Text>
+                          <TextInput
+                            style={styles.textInput}
+                            keyboardType="numeric"
+                            value={formBestRunnersUp}
+                            onChangeText={(v) => setFormBestRunnersUp(sanitizeUnsignedInt(v))}
+                            placeholder="0"
+                          />
+                        </View>
+                      </View>
                       <Text style={{ fontSize: 11.5, color: '#1E40AF', fontWeight: '700', marginTop: 10 }}>
-                        Flow: {formGroupCount} Groups × {formTeamsPerGroup} Teams → Top {formQualifiersPerGroup}/Group → {formSuperLeagueEnabled ? `${formSuperLeagueGroups} Super League Groups → Top ${formSuperLeagueQualifiers}/Group → ` : ''}{formIncludeSemis ? 'Semi-Finals → ' : ''}{formIncludeFinal ? 'Final' : ''}
+                        Flow: {formGroupCount} Groups × {formTeamsPerGroup} Teams → Top {formQualifiersPerGroup}/Group{Number(formBestRunnersUp) > 0 ? ` + ${formBestRunnersUp} Best Runners-Up` : ''} → {formSuperLeagueEnabled ? `${formSuperLeagueGroups} Super League Groups → Top ${formSuperLeagueQualifiers}/Group → ` : ''}{formIncludeSemis ? 'Semi-Finals → ' : ''}{formIncludeFinal ? 'Final' : ''}
                       </Text>
                     </View>
                   )}
@@ -3419,6 +3570,252 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                       </View>
                     </View>
                   )}
+
+                  {/* Live Fixture Preview Summary (Yellow-Themed Review Box) */}
+                  {(() => {
+                    const n = selectedTeamIds.length;
+                    if (n < 2) return null;
+                    let rounds = 0;
+                    let byes = 0;
+                    let groupInfo = '';
+                    let groupMatches = 0;
+                    let koMatches = 0;
+                    let totalMatches = 0;
+                    let qualifiers = 0;
+
+                    if (formTournamentType === 'SINGLE_ROUND_ROBIN' || formTournamentType === 'DOUBLE_ROUND_ROBIN') {
+                      const isDouble = formTournamentType === 'DOUBLE_ROUND_ROBIN';
+                      const rPerLeg = n % 2 === 0 ? n - 1 : n;
+                      rounds = isDouble ? rPerLeg * 2 : rPerLeg;
+                      byes = n % 2 === 1 ? rounds : 0;
+                      totalMatches = isDouble ? n * (n - 1) : Math.floor((n * (n - 1)) / 2);
+                    } else if (formTournamentType === 'SINGLE_ELIMINATION' || formTournamentType === 'DOUBLE_ELIMINATION') {
+                      let bSize = 1;
+                      while (bSize < n) bSize *= 2;
+                      byes = bSize - n;
+                      rounds = Math.log2(bSize);
+                      koMatches = formTournamentType === 'DOUBLE_ELIMINATION' ? (n * 2 - 2) : (n - 1);
+                      totalMatches = koMatches;
+                    } else if (formTournamentType === 'GROUP_KNOCKOUT') {
+                      const baseG = Math.max(1, parseInt(formGroupCount, 10) || 2);
+                      const maxPerG = Math.max(2, parseInt(formTeamsPerGroup, 10) || 8);
+                      const effG = Math.max(1, Math.min((formAllowExtraGroup && n > baseG * maxPerG) ? baseG + 1 : baseG, Math.floor(n / 2) || 1));
+                      const baseSize = Math.floor(n / effG);
+                      const rem = n % effG;
+                      groupMatches = rem * Math.floor(((baseSize + 1) * baseSize) / 2) + (effG - rem) * Math.floor((baseSize * (baseSize - 1)) / 2);
+                      const qPerG = Math.max(1, parseInt(formQualifiersPerGroup, 10) || 1);
+                      const bestRU = Math.max(0, parseInt(formBestRunnersUp, 10) || 0);
+                      qualifiers = Math.min(n, effG * qPerG + bestRU);
+                      koMatches = qualifiers >= 2 ? qualifiers - 1 : 0;
+                      totalMatches = groupMatches + koMatches;
+                      groupInfo = `${effG} Groups (${rem > 0 ? `${baseSize}–${baseSize + 1}` : baseSize} teams/grp)`;
+                    } else if (formTournamentType === 'LEAGUE_PLAYOFFS') {
+                      const rPerLeg = n % 2 === 0 ? n - 1 : n;
+                      rounds = rPerLeg;
+                      byes = n % 2 === 1 ? rounds : 0;
+                      groupMatches = Math.floor((n * (n - 1)) / 2);
+                      qualifiers = n >= 4 ? 4 : 0;
+                      koMatches = n >= 4 ? 4 : 0;
+                      totalMatches = groupMatches + koMatches;
+                    }
+
+                    return (
+                      <View style={{
+                        marginTop: 12,
+                        padding: 14,
+                        borderRadius: 12,
+                        backgroundColor: '#FFFBEB',
+                        borderWidth: 1.5,
+                        borderColor: '#F59E0B'
+                      }}>
+                        <Text style={{ fontSize: 13, fontWeight: '900', color: '#92400E', marginBottom: 8 }}>
+                          📋 Fixture Preview Before Creation
+                        </Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                          <Text style={{ fontSize: 12, color: '#334155', fontWeight: '700' }}>• Selected Teams: {n}</Text>
+                          {groupInfo ? <Text style={{ fontSize: 12, color: '#334155', fontWeight: '700' }}>• Groups: {groupInfo}</Text> : null}
+                          {rounds > 0 ? <Text style={{ fontSize: 12, color: '#334155', fontWeight: '700' }}>• Rounds: {rounds}</Text> : null}
+                          {byes > 0 ? <Text style={{ fontSize: 12, color: '#B45309', fontWeight: '800' }}>• Byes: {byes}</Text> : null}
+                          {groupMatches > 0 ? <Text style={{ fontSize: 12, color: '#334155', fontWeight: '700' }}>• Stage 1 Matches: {groupMatches}</Text> : null}
+                          {qualifiers > 0 ? <Text style={{ fontSize: 12, color: '#334155', fontWeight: '700' }}>• Qualifiers: {qualifiers}</Text> : null}
+                          {koMatches > 0 ? <Text style={{ fontSize: 12, color: '#334155', fontWeight: '700' }}>• Knockout/Playoff Matches: {koMatches}</Text> : null}
+                          <Text style={{ fontSize: 12.5, color: '#92400E', fontWeight: '900' }}>• Total Expected Fixtures: {totalMatches}</Text>
+                        </View>
+                        <Text style={{ fontSize: 11, color: '#64748B', marginTop: 6 }}>
+                          Tie-Breaker Order: {formTieBreakerOrder.split(',').join(' → ')}
+                        </Text>
+
+                        {/* Group Allocation Preview for GROUP_KNOCKOUT */}
+                        {formTournamentType === 'GROUP_KNOCKOUT' && n >= 2 && (() => {
+                          const baseG = Math.max(1, parseInt(formGroupCount, 10) || 2);
+                          const maxPerG = Math.max(2, parseInt(formTeamsPerGroup, 10) || 8);
+                          const effG = Math.max(1, Math.min((formAllowExtraGroup && n > baseG * maxPerG) ? baseG + 1 : baseG, Math.floor(n / 2) || 1));
+                          const groupKeys = Array.from({ length: effG }, (_, i) => `GROUP_${String.fromCharCode(65 + i)}`);
+                          const grpBuckets: string[][] = Array.from({ length: effG }, () => []);
+                          const ordered = [...selectedTeamIds];
+                          let unassignedIds: string[] = [];
+
+                          if (formGroupDistribution === 'MANUAL') {
+                            const hasManual = Object.keys(formManualGroups).length > 0;
+                            if (!hasManual) {
+                              ordered.forEach((tId, idx) => { grpBuckets[idx % effG].push(tId); });
+                            } else {
+                              const placed = new Set<string>();
+                              groupKeys.forEach((gk, gIdx) => {
+                                const savedList = Array.isArray(formManualGroups[gk]) ? formManualGroups[gk] : [];
+                                savedList.forEach(tId => {
+                                  if (ordered.includes(tId) && !placed.has(tId)) {
+                                    grpBuckets[gIdx].push(tId);
+                                    placed.add(tId);
+                                  }
+                                });
+                              });
+                              unassignedIds = ordered.filter(tId => !placed.has(tId));
+                            }
+                          } else if (formGroupDistribution === 'SEEDED') {
+                            ordered.forEach((tId, idx) => {
+                              const cyc = Math.floor(idx / effG);
+                              const pos = idx % effG;
+                              const gIdx = cyc % 2 === 0 ? pos : (effG - 1 - pos);
+                              grpBuckets[gIdx].push(tId);
+                            });
+                          } else {
+                            ordered.forEach((tId, idx) => { grpBuckets[idx % effG].push(tId); });
+                          }
+
+                          const assignTeamToGroup = (teamId: string, targetKey: string | null) => {
+                            const next: Record<string, string[]> = {};
+                            groupKeys.forEach((gk, gIdx) => {
+                              next[gk] = grpBuckets[gIdx].filter(id => id !== teamId);
+                            });
+                            if (targetKey && next[targetKey]) {
+                              next[targetKey].push(teamId);
+                            }
+                            setFormManualGroups(next);
+                          };
+
+                          const minSize = Math.min(...grpBuckets.map(b => b.length));
+                          const qPerG = Math.max(1, parseInt(formQualifiersPerGroup, 10) || 1);
+                          const bestRU = Math.max(0, parseInt(formBestRunnersUp, 10) || 0);
+                          const totalQuals = effG * qPerG + bestRU;
+                          const validationIssues: string[] = [];
+                          if (unassignedIds.length > 0) validationIssues.push(`${unassignedIds.length} unassigned team(s)`);
+                          if (minSize < 2) validationIssues.push('Each group needs ≥ 2 teams');
+                          if (qPerG > minSize && minSize > 0) validationIssues.push(`Top ${qPerG}/group exceeds smallest group (${minSize})`);
+                          if (totalQuals < 2) validationIssues.push('At least 2 total qualifiers needed for knockout');
+                          if (totalQuals > n) validationIssues.push(`Total qualifiers (${totalQuals}) exceeds ${n} teams`);
+
+                          const teamMapById: Record<string, string> = {};
+                          [...dbTeams, ...approvedTeamsList].forEach((t: any) => { if (t?.id) teamMapById[t.id] = t.name; });
+                          return (
+                            <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#FDE68A' }}>
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+                                <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#92400E' }}>
+                                  Group Allocation Preview ({formGroupDistribution}):
+                                </Text>
+                                <View style={{
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 3,
+                                  borderRadius: 999,
+                                  backgroundColor: validationIssues.length === 0 ? '#DCFCE7' : '#FEE2E2'
+                                }}>
+                                  <Text style={{ fontSize: 10.5, fontWeight: '800', color: validationIssues.length === 0 ? '#166534' : '#991B1B' }}>
+                                    {validationIssues.length === 0
+                                      ? `✓ Valid (${effG} Groups · ${totalQuals} Qualifiers)`
+                                      : `⚠️ ${validationIssues.join(' · ')}`}
+                                  </Text>
+                                </View>
+                              </View>
+                              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                                {grpBuckets.map((bucket, gIdx) => {
+                                  const mCount = Math.floor((bucket.length * (bucket.length - 1)) / 2);
+                                  return (
+                                    <View key={gIdx} style={{ flex: 1, minWidth: 150, backgroundColor: '#FFFFFF', borderRadius: 8, padding: 8, borderWidth: 1, borderColor: bucket.length < 2 ? '#FCA5A5' : '#FDE68A' }}>
+                                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0F172A' }}>
+                                        Group {String.fromCharCode(65 + gIdx)} ({bucket.length} Teams · {mCount} Matches)
+                                      </Text>
+                                      <Text style={{ fontSize: 10.5, color: '#475569', marginTop: 3 }} numberOfLines={3}>
+                                        {bucket.length > 0 ? bucket.map(id => teamMapById[id] || id).join(', ') : 'No teams assigned'}
+                                      </Text>
+                                    </View>
+                                  );
+                                })}
+                              </View>
+                              {formGroupDistribution === 'MANUAL' && (
+                                <View style={{ marginTop: 10, backgroundColor: '#FFFFFF', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#FDE68A', gap: 6 }}>
+                                  <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#92400E' }}>
+                                    Manual Team-to-Group Assignment (Move, Add, or Unassign):
+                                  </Text>
+                                  {unassignedIds.length > 0 && (
+                                    <View style={{ backgroundColor: '#FEF2F2', borderRadius: 6, padding: 8, borderWidth: 1, borderColor: '#FECACA', gap: 4 }}>
+                                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#991B1B' }}>
+                                        Unassigned Teams ({unassignedIds.length}):
+                                      </Text>
+                                      {unassignedIds.map(uId => (
+                                        <View key={uId} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#7F1D1D' }}>{teamMapById[uId] || uId}</Text>
+                                          <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}>
+                                            {groupKeys.map((gk, gIdx) => (
+                                              <TouchableOpacity
+                                                key={gk}
+                                                onPress={() => assignTeamToGroup(uId, gk)}
+                                                style={{ paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6, backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#F59E0B' }}
+                                              >
+                                                <Text style={{ fontSize: 10, fontWeight: '800', color: '#92400E' }}>+ Grp {String.fromCharCode(65 + gIdx)}</Text>
+                                              </TouchableOpacity>
+                                            ))}
+                                          </View>
+                                        </View>
+                                      ))}
+                                    </View>
+                                  )}
+                                  {ordered.filter(id => !unassignedIds.includes(id)).map(tId => {
+                                    const currentIdx = grpBuckets.findIndex(b => b.includes(tId));
+                                    return (
+                                      <View key={tId} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#FEF3C7' }}>
+                                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0F172A', flex: 1, minWidth: 120 }}>
+                                          {teamMapById[tId] || tId}
+                                        </Text>
+                                        <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}>
+                                          {groupKeys.map((gk, gIdx) => {
+                                            const active = currentIdx === gIdx;
+                                            return (
+                                              <TouchableOpacity
+                                                key={gk}
+                                                onPress={() => assignTeamToGroup(tId, gk)}
+                                                style={{
+                                                  paddingHorizontal: 8,
+                                                  paddingVertical: 4,
+                                                  borderRadius: 6,
+                                                  backgroundColor: active ? '#F59E0B' : '#FFFBEB',
+                                                  borderWidth: 1,
+                                                  borderColor: active ? '#D97706' : '#FDE68A'
+                                                }}
+                                              >
+                                                <Text style={{ fontSize: 10.5, fontWeight: '800', color: active ? '#FFFFFF' : '#92400E' }}>
+                                                  Grp {String.fromCharCode(65 + gIdx)}
+                                                </Text>
+                                              </TouchableOpacity>
+                                            );
+                                          })}
+                                          <TouchableOpacity
+                                            onPress={() => assignTeamToGroup(tId, null)}
+                                            style={{ paddingHorizontal: 7, paddingVertical: 4, borderRadius: 6, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA' }}
+                                          >
+                                            <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#991B1B' }}>✕</Text>
+                                          </TouchableOpacity>
+                                        </View>
+                                      </View>
+                                    );
+                                  })}
+                                </View>
+                              )}
+                            </View>
+                          );
+                        })()}
+                      </View>
+                    );
+                  })()}
                 </View>
               )}
             </ScrollView>
@@ -3520,6 +3917,18 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
 
                   <View style={[styles.detailsBannerActions, isMobile && { flexWrap: 'wrap', justifyContent: 'flex-start' }]}>
                     <TouchableOpacity
+                      style={[styles.btnActionGold, { backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#F59E0B' }]}
+                      onPress={handlePreviewMatches}
+                      disabled={backendPreviewLoading}
+                    >
+                      {backendPreviewLoading ? (
+                        <ActivityIndicator size="small" color="#92400E" />
+                      ) : (
+                        <Text style={[styles.btnActionGoldText, { color: '#92400E' }]}>📋 Preview Fixtures</Text>
+                      )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
                       style={styles.btnActionGold}
                       onPress={handleGenerateMatches}
                       disabled={generatingMatches}
@@ -3552,6 +3961,22 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                   </View>
                 </View>
 
+                {backendPreviewData && (
+                  <View style={{ backgroundColor: '#FFFBEB', borderBottomWidth: 1.5, borderBottomColor: '#F59E0B', paddingHorizontal: 20, paddingVertical: 10 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                      <Text style={{ fontSize: 12.5, fontWeight: '900', color: '#92400E' }}>
+                        📋 Backend Fixture Preview: {backendPreviewData.total_expected_matches ?? backendPreviewData.total_matches ?? 0} Expected Matches
+                        {backendPreviewData.rounds ? ` · ${backendPreviewData.rounds} Rounds` : ''}
+                        {backendPreviewData.byes_count ? ` · ${backendPreviewData.byes_count} Byes` : ''}
+                        {backendPreviewData.qualifying_teams_count ? ` · ${backendPreviewData.qualifying_teams_count} Qualifiers` : ''}
+                      </Text>
+                      <TouchableOpacity onPress={() => setBackendPreviewData(null)}>
+                        <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#92400E' }}>✕ Dismiss</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
                 {/* ── DETAILS TABS BAR ────────────────────────────────────── */}
                 <ScrollView
                   horizontal
@@ -3559,14 +3984,21 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                   style={{ flexGrow: 0, backgroundColor: '#0a2540' }}
                   contentContainerStyle={styles.detailsTabsBar}
                 >
-                  {[
-                    { key: 'overview', label: '📊 Overview' },
-                    { key: 'teams', label: `🛡️ Participating Teams (${(selectedTournament.participating_teams || []).length})` },
-                    { key: 'schedule', label: `📅 Matches (${(selectedTournament.matches || []).length})` },
-                    { key: 'points', label: '🏆 Points Table' },
-                    { key: 'stats', label: '📈 Statistics' },
-                    { key: 'rules', label: '📜 Rules & Playing Conditions' }
-                  ].map(tab => {
+                  {(() => {
+                    const normType = normalizeTournamentType(selectedTournament.tournament_type, selectedTournament.format_config?.round_robin_type);
+                    const hasGroups = normType === 'GROUP_KNOCKOUT';
+                    const hasBracket = normType === 'SINGLE_ELIMINATION' || normType === 'GROUP_KNOCKOUT' || normType === 'LEAGUE_PLAYOFFS';
+                    return [
+                      { key: 'overview', label: '📊 Overview' },
+                      { key: 'teams', label: `🛡️ Teams (${(selectedTournament.participating_teams || []).length})` },
+                      ...(hasGroups ? [{ key: 'groups', label: '👥 Groups' }] : []),
+                      { key: 'schedule', label: `📅 Fixtures (${(selectedTournament.matches || []).length})` },
+                      { key: 'points', label: '🏆 Points Table' },
+                      ...(hasBracket ? [{ key: 'bracket', label: normType === 'LEAGUE_PLAYOFFS' ? '🔥 Playoffs' : '🥊 Bracket' }] : []),
+                      { key: 'stats', label: '📈 Statistics' },
+                      { key: 'rules', label: '📜 Rules' }
+                    ];
+                  })().map(tab => {
                     const active = detailsTab === tab.key;
                     return (
                       <TouchableOpacity
@@ -3678,12 +4110,124 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                     </View>
                   )}
 
+                  {/* TAB 2B: GROUPS (GROUP_KNOCKOUT) */}
+                  {detailsTab === 'groups' && (
+                    <View style={{ gap: 14 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                        <View>
+                          <Text style={styles.cardSectionTitle}>Group Allocation &amp; Qualification Rules</Text>
+                          <Text style={styles.sectionSub}>
+                            Distribution: {selectedTournament.format_config?.group_distribution || 'BALANCED'} • Top {selectedTournament.format_config?.qualifiers_per_group || 1}/Group
+                            {Number(selectedTournament.format_config?.best_runners_up_count || 0) > 0
+                              ? ` + ${selectedTournament.format_config.best_runners_up_count} Best Runners-Up`
+                              : ''}
+                          </Text>
+                        </View>
+                        <TouchableOpacity style={styles.btnSmallRefresh} onPress={refreshTournamentDetails}>
+                          <Text style={styles.btnSmallRefreshText}>🔄 Refresh</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {groupPointsLoading ? (
+                        <ActivityIndicator size="large" color="#f59e0b" />
+                      ) : groupPointsError ? (
+                        <View style={styles.emptyStateCard}>
+                          <Text style={styles.emptyStateTitle}>Unable to Load Groups</Text>
+                          <Text style={styles.emptyStateSub}>{groupPointsError}</Text>
+                        </View>
+                      ) : (selectedTournament.format_config?.groups_snapshot || []).length === 0 ? (
+                        <View style={{ gap: 12 }}>
+                          {(selectedTournament.matches || []).length === 0 && (
+                            <View style={{ backgroundColor: '#FFFBEB', borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: '#F59E0B', gap: 10 }}>
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={{ fontSize: 13.5, fontWeight: '900', color: '#92400E' }}>
+                                    Pre-Generation Group Controls
+                                  </Text>
+                                  <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
+                                    Review backend fixture preview or edit team-to-group assignments before generating fixtures.
+                                  </Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                                  <TouchableOpacity
+                                    style={[styles.btnSmallRefresh, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}
+                                    onPress={handlePreviewMatches}
+                                  >
+                                    <Text style={[styles.btnSmallRefreshText, { color: '#92400E' }]}>📋 Preview Groups</Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={[styles.btnSmallRefresh, { backgroundColor: '#0A2540', borderColor: '#0A2540' }]}
+                                    onPress={() => {
+                                      setDetailsModalOpen(false);
+                                      handleOpenEditWizard(selectedTournament);
+                                      setWizardStep(4);
+                                    }}
+                                  >
+                                    <Text style={[styles.btnSmallRefreshText, { color: '#FFFFFF' }]}>✏️ Edit Group Assignments</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              </View>
+                              {backendPreviewData && Array.isArray(backendPreviewData.groups) && (
+                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 }}>
+                                  {backendPreviewData.groups.map((grp: any) => (
+                                    <View key={grp.key} style={{ flex: 1, minWidth: 180, backgroundColor: '#FFFFFF', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: '#FDE68A' }}>
+                                      <Text style={{ fontSize: 13, fontWeight: '900', color: '#92400E' }}>
+                                        {grp.label || grp.key} ({grp.teamCount} Teams · {grp.matchesPerGroup} Matches)
+                                      </Text>
+                                      {(grp.teams || []).map((tm: any, idx: number) => (
+                                        <Text key={tm.id || idx} style={{ fontSize: 11.5, color: '#0F172A', marginTop: 3 }}>
+                                          {idx + 1}. {tm.name || tm.id}
+                                        </Text>
+                                      ))}
+                                    </View>
+                                  ))}
+                                </View>
+                              )}
+                            </View>
+                          )}
+                          <View style={styles.emptyStateCard}>
+                            <Text style={{ fontSize: 32, marginBottom: 8 }}>👥</Text>
+                            <Text style={styles.emptyStateTitle}>No Group Allocation Generated Yet</Text>
+                            <Text style={styles.emptyStateSub}>Click '⚡ Generate Fixtures' above to allocate teams into groups.</Text>
+                          </View>
+                        </View>
+                      ) : (
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                          {(selectedTournament.format_config?.groups_snapshot || []).map((grp: any) => {
+                            const teamNameMap: Record<string, string> = {};
+                            (selectedTournament.participating_teams || []).forEach((pt: any) => {
+                              teamNameMap[pt.id] = pt.name;
+                            });
+                            const grpMatchCount = (selectedTournament.matches || []).filter((m: any) => m.group_key === grp.key || m.stage === grp.key).length;
+                            return (
+                              <View key={grp.key} style={{ flex: 1, minWidth: 220, backgroundColor: '#FFFBEB', borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: '#FDE68A' }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                  <Text style={{ fontSize: 15, fontWeight: '900', color: '#92400E' }}>{grp.label || grp.key}</Text>
+                                  <View style={{ backgroundColor: '#F59E0B', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 }}>
+                                    <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#FFFFFF' }}>
+                                      {(grp.teams || []).length} Teams · {grpMatchCount} Matches
+                                    </Text>
+                                  </View>
+                                </View>
+                                {(grp.teams || []).map((tId: string, idx: number) => (
+                                  <Text key={tId} style={{ fontSize: 12.5, fontWeight: '700', color: '#0F172A', paddingVertical: 3 }}>
+                                    {idx + 1}. {teamNameMap[tId] || tId}
+                                  </Text>
+                                ))}
+                              </View>
+                            );
+                          })}
+                        </View>
+                      )}
+                    </View>
+                  )}
+
                   {/* TAB 3: SCHEDULE & MATCHES */}
                   {detailsTab === 'schedule' && (
                     <View>
                       {/* Filter Bar */}
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                           {(['ALL', 'SCHEDULED', 'LIVE', 'COMPLETED'] as any[]).map(st => (
                             <TouchableOpacity
                               key={st}
@@ -3708,6 +4252,37 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                         </TouchableOpacity>
                       </View>
 
+                      {/* Group-wise Fixture Filter */}
+                      {(() => {
+                        const groupKeys = Array.from(new Set(
+                          (selectedTournament.matches || [])
+                            .map((m: any) => m.group_key || (String(m.stage || '').startsWith('GROUP_') ? m.stage : null))
+                            .filter(Boolean)
+                        )) as string[];
+                        if (groupKeys.length === 0) return null;
+                        return (
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                            {['ALL', ...groupKeys.sort(), 'KNOCKOUT'].map(gk => (
+                              <TouchableOpacity
+                                key={gk}
+                                style={[
+                                  styles.smallFilterPill,
+                                  matchGroupFilter === gk && { backgroundColor: '#FFFBEB', borderColor: '#F59E0B' }
+                                ]}
+                                onPress={() => setMatchGroupFilter(gk)}
+                              >
+                                <Text style={[
+                                  styles.smallFilterPillText,
+                                  matchGroupFilter === gk && { color: '#92400E', fontWeight: '800' }
+                                ]}>
+                                  {gk === 'ALL' ? 'All Groups' : gk.replace('_', ' ')}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        );
+                      })()}
+
                       {/* Matches Cards */}
                       {(selectedTournament.matches || []).length === 0 ? (
                         <View style={styles.emptyStateCard}>
@@ -3721,6 +4296,12 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                         <View style={{ gap: 12 }}>
                           {(selectedTournament.matches || [])
                             .filter((m: any) => matchStatusFilter === 'ALL' || (m.status || '').toUpperCase() === matchStatusFilter)
+                            .filter((m: any) => {
+                              if (matchGroupFilter === 'ALL') return true;
+                              const gKey = m.group_key || (String(m.stage || '').startsWith('GROUP_') ? m.stage : null);
+                              if (matchGroupFilter === 'KNOCKOUT') return !gKey;
+                              return gKey === matchGroupFilter;
+                            })
                             .map((m: any) => (
                               <View key={m.id} style={styles.matchDetailCard}>
                                 <View style={styles.matchDetailHeader}>
@@ -3799,7 +4380,113 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                         </TouchableOpacity>
                       </View>
 
-                      {(selectedTournament.points_table || []).length === 0 ? (
+                      {groupPointsLoading ? (
+                        <ActivityIndicator size="large" color="#f59e0b" />
+                      ) : (normalizeTournamentType(selectedTournament.tournament_type) === 'GROUP_KNOCKOUT' && groupPointsData?.groups && Object.keys(groupPointsData.groups).length > 0) ? (
+                        <View style={{ gap: 16 }}>
+                          {/* Unresolved Tie Banner */}
+                          {(groupPointsData.unresolved_ties || []).length > 0 && (
+                            <View style={{ padding: 14, borderRadius: 12, backgroundColor: '#FEF2F2', borderWidth: 1.5, borderColor: '#EF4444' }}>
+                              <Text style={{ fontSize: 13.5, fontWeight: '900', color: '#991B1B' }}>
+                                ⚠️ Unresolved Qualification Tie Detected
+                              </Text>
+                              {(groupPointsData.unresolved_ties || []).map((tie: any, tIdx: number) => (
+                                <View key={tIdx} style={{ marginTop: 6 }}>
+                                  <Text style={{ fontSize: 12, color: '#7F1D1D', fontWeight: '700' }}>• {tie.reason}</Text>
+                                  {Array.isArray(tie.teams) && tie.teams.length >= 2 && (
+                                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                                      <TouchableOpacity
+                                        style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, backgroundColor: '#F59E0B' }}
+                                        onPress={async () => {
+                                          try {
+                                            await ScorerApi.resolveTournamentTie(selectedTournament.id, tie.teams);
+                                            await refreshTournamentDetails();
+                                          } catch (e: any) {
+                                            await showError('Tie Resolution Error', e?.message || 'Failed to resolve tie.');
+                                          }
+                                        }}
+                                      >
+                                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>
+                                          Advance {tie.teams[0]} Over {tie.teams[1]}
+                                        </Text>
+                                      </TouchableOpacity>
+                                      <TouchableOpacity
+                                        style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, backgroundColor: '#0A2540' }}
+                                        onPress={async () => {
+                                          try {
+                                            await ScorerApi.resolveTournamentTie(selectedTournament.id, [...tie.teams].reverse());
+                                            await refreshTournamentDetails();
+                                          } catch (e: any) {
+                                            await showError('Tie Resolution Error', e?.message || 'Failed to resolve tie.');
+                                          }
+                                        }}
+                                      >
+                                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>
+                                          Advance {tie.teams[1]} Over {tie.teams[0]}
+                                        </Text>
+                                      </TouchableOpacity>
+                                    </View>
+                                  )}
+                                </View>
+                              ))}
+                            </View>
+                          )}
+
+                          {/* Separate Points Table Per Group */}
+                          {Object.entries(groupPointsData.groups).map(([grpKey, grpRows]: [string, any]) => {
+                            const qualifiedIds = new Set((groupPointsData.qualifiers || []).map((q: any) => q.team_id));
+                            return (
+                              <View key={grpKey} style={styles.tableCard}>
+                                <View style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: '#FFFBEB', borderBottomWidth: 1, borderBottomColor: '#FDE68A' }}>
+                                  <Text style={{ fontSize: 14, fontWeight: '900', color: '#92400E' }}>
+                                    {grpKey.replace(/_/g, ' ')} Standings
+                                  </Text>
+                                </View>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+                                  <View style={{ minWidth: 620, width: '100%' }}>
+                                    <View style={styles.tableHeaderRow}>
+                                      <Text style={[styles.thCell, { width: 44, textAlign: 'center' }]}>POS</Text>
+                                      <Text style={[styles.thCell, { flex: 2, minWidth: 140 }]}>TEAM</Text>
+                                      <Text style={[styles.thCell, { width: 38, textAlign: 'center' }]}>P</Text>
+                                      <Text style={[styles.thCell, { width: 38, textAlign: 'center' }]}>W</Text>
+                                      <Text style={[styles.thCell, { width: 38, textAlign: 'center' }]}>L</Text>
+                                      <Text style={[styles.thCell, { width: 38, textAlign: 'center' }]}>T</Text>
+                                      <Text style={[styles.thCell, { width: 38, textAlign: 'center' }]}>NR</Text>
+                                      <Text style={[styles.thCell, { width: 48, textAlign: 'center', color: '#020612', fontWeight: '800' }]}>PTS</Text>
+                                      <Text style={[styles.thCell, { width: 72, textAlign: 'center' }]}>NRR</Text>
+                                    </View>
+                                    {(grpRows || []).map((row: any, idx: number) => {
+                                      const isQual = qualifiedIds.has(row.team_id);
+                                      return (
+                                        <View key={row.team_id || idx} style={[styles.tableDataRow, isQual && styles.tableRowTopZone, idx % 2 === 1 && styles.tableRowAlt]}>
+                                          <View style={[styles.posBadge, isQual && styles.posBadgeTop]}>
+                                            <Text style={[styles.posBadgeText, isQual && styles.posBadgeTextTop]}>{row.position}</Text>
+                                          </View>
+                                          <View style={{ flex: 2, minWidth: 140, paddingLeft: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <Text style={styles.tableTeamName} numberOfLines={1}>{row.team_name}</Text>
+                                            {isQual && (
+                                              <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                                                <Text style={{ fontSize: 9.5, fontWeight: '900', color: '#166534' }}>Q</Text>
+                                              </View>
+                                            )}
+                                          </View>
+                                          <Text style={[styles.tdCell, { width: 38, textAlign: 'center' }]}>{row.played}</Text>
+                                          <Text style={[styles.tdCell, { width: 38, textAlign: 'center', color: '#16a34a', fontWeight: '700' }]}>{row.won}</Text>
+                                          <Text style={[styles.tdCell, { width: 38, textAlign: 'center', color: '#dc2626' }]}>{row.lost}</Text>
+                                          <Text style={[styles.tdCell, { width: 38, textAlign: 'center' }]}>{row.tied}</Text>
+                                          <Text style={[styles.tdCell, { width: 38, textAlign: 'center' }]}>{row.no_result}</Text>
+                                          <Text style={[styles.tdCell, { width: 48, textAlign: 'center', fontWeight: '800', color: '#020612' }]}>{row.points}</Text>
+                                          <Text style={[styles.tdCell, { width: 72, textAlign: 'center', fontWeight: '600' }]}>{row.nrr_formatted || row.nrr}</Text>
+                                        </View>
+                                      );
+                                    })}
+                                  </View>
+                                </ScrollView>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      ) : (selectedTournament.points_table || []).length === 0 ? (
                         <View style={styles.emptyStateCard}>
                           <Text style={{ fontSize: 32, marginBottom: 8 }}>📊</Text>
                           <Text style={styles.emptyStateTitle}>Points Table Empty</Text>
@@ -3880,6 +4567,179 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                     </View>
                   )}
 
+                  {/* TAB 4B: BRACKET / IPL PLAYOFFS */}
+                  {detailsTab === 'bracket' && (() => {
+                    const normType = normalizeTournamentType(selectedTournament.tournament_type, selectedTournament.format_config?.round_robin_type);
+                    const matchesList = selectedTournament.matches || [];
+                    const byesList = selectedTournament.format_config?.byes || [];
+
+                    const renderBracketMatchCard = (m: any, placeholderLabel?: string) => (
+                      <View
+                        key={m?.id || placeholderLabel}
+                        style={{
+                          backgroundColor: '#FFFFFF',
+                          borderRadius: 10,
+                          padding: 12,
+                          borderWidth: 1.5,
+                          borderColor: m?.status === 'COMPLETED' ? '#10B981' : (m?.status === 'LIVE' ? '#F59E0B' : '#E2E8F0'),
+                          minWidth: 210
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#92400E' }}>
+                            {m ? (m.stage || 'KNOCKOUT').replace(/_/g, ' ') : placeholderLabel}
+                          </Text>
+                          <Text style={{ fontSize: 10, fontWeight: '800', color: m?.status === 'COMPLETED' ? '#16A34A' : '#64748B' }}>
+                            {m ? m.status : 'AWAITING'}
+                          </Text>
+                        </View>
+                        {m ? (
+                          <>
+                            <Text style={{ fontSize: 13, fontWeight: m.winner_id === m.team_a_id ? '900' : '700', color: '#0F172A' }}>
+                              {m.winner_id === m.team_a_id ? '🏆 ' : ''}{m.team_a_name || m.team_a_id}
+                            </Text>
+                            <Text style={{ fontSize: 10.5, color: '#94A3B8', fontWeight: '700', marginVertical: 2 }}>VS</Text>
+                            <Text style={{ fontSize: 13, fontWeight: m.winner_id === m.team_b_id ? '900' : '700', color: '#0F172A' }}>
+                              {m.winner_id === m.team_b_id ? '🏆 ' : ''}{m.team_b_name || m.team_b_id}
+                            </Text>
+                            {m.result_summary ? (
+                              <Text style={{ fontSize: 11, color: '#065F46', fontWeight: '700', marginTop: 6 }}>
+                                {m.result_summary}
+                              </Text>
+                            ) : null}
+                          </>
+                        ) : (
+                          <Text style={{ fontSize: 12, color: '#94A3B8', fontStyle: 'italic' }}>
+                            Participants will populate automatically once previous stage completes.
+                          </Text>
+                        )}
+                      </View>
+                    );
+
+                    if (normType === 'LEAGUE_PLAYOFFS') {
+                      const q1 = matchesList.find((m: any) => m.stage === 'QUALIFIER_1');
+                      const elim = matchesList.find((m: any) => m.stage === 'ELIMINATOR');
+                      const q2 = matchesList.find((m: any) => m.stage === 'QUALIFIER_2');
+                      const fin = matchesList.find((m: any) => m.stage === 'FINAL');
+                      return (
+                        <View style={{ gap: 16 }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                            <Text style={styles.cardSectionTitle}>🔥 IPL-Style Playoff Progression</Text>
+                            <TouchableOpacity style={styles.btnSmallRefresh} onPress={refreshTournamentDetails}>
+                              <Text style={styles.btnSmallRefreshText}>🔄 Refresh</Text>
+                            </TouchableOpacity>
+                          </View>
+
+                          {selectedTournament.winner_team_name ? (
+                            <View style={{ padding: 14, borderRadius: 12, backgroundColor: '#FFFBEB', borderWidth: 1.5, borderColor: '#F59E0B' }}>
+                              <Text style={{ fontSize: 15, fontWeight: '900', color: '#92400E' }}>
+                                🏆 Champion: {selectedTournament.winner_team_name}
+                              </Text>
+                              {selectedTournament.runner_up_team_name ? (
+                                <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#475569', marginTop: 2 }}>
+                                  🥈 Runner-Up: {selectedTournament.runner_up_team_name}
+                                </Text>
+                              ) : null}
+                            </View>
+                          ) : null}
+
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14, alignItems: 'center', paddingVertical: 6 }}>
+                              <View style={{ gap: 12 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B' }}>PLAYOFF ROUND 1</Text>
+                                {renderBracketMatchCard(q1, 'QUALIFIER 1 (Rank 1 vs Rank 2)')}
+                                {renderBracketMatchCard(elim, 'ELIMINATOR (Rank 3 vs Rank 4)')}
+                              </View>
+                              <Text style={{ fontSize: 20, color: '#F59E0B', fontWeight: '900' }}>→</Text>
+                              <View style={{ gap: 12 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B' }}>PLAYOFF ROUND 2</Text>
+                                {renderBracketMatchCard(q2, 'QUALIFIER 2 (Loser Q1 vs Winner Elim)')}
+                              </View>
+                              <Text style={{ fontSize: 20, color: '#F59E0B', fontWeight: '900' }}>→</Text>
+                              <View style={{ gap: 12 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#92400E' }}>🏆 GRAND FINAL</Text>
+                                {renderBracketMatchCard(fin, 'FINAL (Winner Q1 vs Winner Q2)')}
+                              </View>
+                          </View>
+                        </View>
+                      );
+                    }
+
+                    // Knockout Bracket (SINGLE_ELIMINATION / GROUP_KNOCKOUT)
+                    const koMatches = matchesList.filter((m: any) => !String(m.stage || '').startsWith('GROUP_') && !String(m.stage || '').startsWith('LEAGUE_'));
+                    const roundsMap: Record<number, any[]> = {};
+                    koMatches.forEach((m: any) => {
+                      const r = Number(m.round_number || 1);
+                      if (!roundsMap[r]) roundsMap[r] = [];
+                      roundsMap[r].push(m);
+                    });
+                    const roundNums = Object.keys(roundsMap).map(Number).sort((a, b) => a - b);
+
+                    return (
+                      <View style={{ gap: 16 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                          <Text style={styles.cardSectionTitle}>🥊 Knockout Bracket &amp; Progression</Text>
+                          <TouchableOpacity style={styles.btnSmallRefresh} onPress={refreshTournamentDetails}>
+                            <Text style={styles.btnSmallRefreshText}>🔄 Refresh</Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        {selectedTournament.winner_team_name ? (
+                          <View style={{ padding: 14, borderRadius: 12, backgroundColor: '#FFFBEB', borderWidth: 1.5, borderColor: '#F59E0B' }}>
+                            <Text style={{ fontSize: 15, fontWeight: '900', color: '#92400E' }}>
+                              🏆 Champion: {selectedTournament.winner_team_name}
+                            </Text>
+                            {selectedTournament.runner_up_team_name ? (
+                              <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#475569', marginTop: 2 }}>
+                                🥈 Runner-Up: {selectedTournament.runner_up_team_name}
+                              </Text>
+                            ) : null}
+                          </View>
+                        ) : null}
+
+                        {byesList.length > 0 && (
+                          <View style={{ padding: 10, borderRadius: 10, backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A' }}>
+                            <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#92400E' }}>
+                              ⚡ Round-1 Byes ({byesList.length}): {byesList.map((b: any) => {
+                                const pt = (selectedTournament.participating_teams || []).find((t: any) => t.id === b.team_id);
+                                return pt?.name || b.team_id;
+                              }).join(', ')}
+                            </Text>
+                          </View>
+                        )}
+
+                        {roundNums.length === 0 ? (
+                          <View style={styles.emptyStateCard}>
+                            <Text style={{ fontSize: 32, marginBottom: 8 }}>🥊</Text>
+                            <Text style={styles.emptyStateTitle}>Knockout Bracket Pending</Text>
+                            <Text style={styles.emptyStateSub}>
+                              {normType === 'GROUP_KNOCKOUT'
+                                ? 'Knockout matches will be generated automatically once all Group Stage matches are completed.'
+                                : "Click '⚡ Generate Fixtures' above to initialize the Knockout bracket."}
+                            </Text>
+                          </View>
+                        ) : (
+                          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+                            <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', paddingVertical: 6 }}>
+                              {roundNums.map((rNum, idx) => (
+                                <React.Fragment key={rNum}>
+                                  <View style={{ gap: 10 }}>
+                                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B' }}>
+                                      {(roundsMap[rNum][0]?.stage || `ROUND ${rNum}`).replace(/_/g, ' ')}
+                                    </Text>
+                                    {roundsMap[rNum].map((m: any) => renderBracketMatchCard(m))}
+                                  </View>
+                                  {idx < roundNums.length - 1 && (
+                                    <Text style={{ fontSize: 20, color: '#F59E0B', fontWeight: '900', alignSelf: 'center' }}>→</Text>
+                                  )}
+                                </React.Fragment>
+                              ))}
+                            </View>
+                          </ScrollView>
+                        )}
+                      </View>
+                    );
+                  })()}
+
                   {/* TAB 5: STATISTICS */}
                   {detailsTab === 'stats' && (
                     <View style={{ gap: 20 }}>
@@ -3946,7 +4806,41 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                   {/* TAB 6: RULES */}
                   {detailsTab === 'rules' && (
                     <View style={{ gap: 14 }}>
-                      <Text style={styles.cardSectionTitle}>Official Playing Conditions & Championship Constitution</Text>
+                      <Text style={styles.cardSectionTitle}>Official Playing Conditions &amp; Bowling Rules</Text>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                        <View style={{ flex: 1, minWidth: 160, padding: 12, borderRadius: 10, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>MAX OVERS / BOWLER</Text>
+                          <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginTop: 4 }}>
+                            {selectedTournament.playing_rules?.max_overs_per_bowler ?? Math.max(1, Math.ceil((selectedTournament.overs_per_match || 20) / 5))} Overs
+                          </Text>
+                        </View>
+                        <View style={{
+                          flex: 1,
+                          minWidth: 160,
+                          padding: 12,
+                          borderRadius: 10,
+                          backgroundColor: selectedTournament.playing_rules?.allow_chain_over ? '#ECFDF5' : '#F8FAFC',
+                          borderWidth: 1,
+                          borderColor: selectedTournament.playing_rules?.allow_chain_over ? '#A7F3D0' : '#E2E8F0'
+                        }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>CHAIN OVER (CONSECUTIVE)</Text>
+                          <Text style={{ fontSize: 15, fontWeight: '900', color: selectedTournament.playing_rules?.allow_chain_over ? '#065F46' : '#334155', marginTop: 4 }}>
+                            {selectedTournament.playing_rules?.allow_chain_over ? '✓ Allowed (Same Bowler)' : '✕ Not Allowed (Standard)'}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1, minWidth: 160, padding: 12, borderRadius: 10, backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A' }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#92400E' }}>POWERPLAY OVERS</Text>
+                          <Text style={{ fontSize: 16, fontWeight: '900', color: '#78350F', marginTop: 4 }}>
+                            {selectedTournament.playing_rules?.powerplay_overs ?? 5} Overs
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1, minWidth: 160, padding: 12, borderRadius: 10, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>FREE HIT &amp; TIE RULE</Text>
+                          <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A', marginTop: 4 }}>
+                            {selectedTournament.playing_rules?.free_hit_on_all_noballs !== false ? 'All No-Balls' : 'Overstep Only'} • {selectedTournament.playing_rules?.tie_handling === 'SUPER_OVER' ? 'Super Over' : 'Share Points'}
+                          </Text>
+                        </View>
+                      </View>
                       <View style={styles.rulesTextBox}>
                         <Text style={styles.rulesContentText}>
                           {selectedTournament.rules || 'Standard ICC / TNCA Playing Conditions apply to all district matches.'}
