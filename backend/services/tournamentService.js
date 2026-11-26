@@ -45,12 +45,12 @@ class TournamentService {
           await db.models.Tournament.updateOne(
             { id: tournamentId },
             { $set: { progression_lock_until: null } }
-          ).catch(() => {});
+          ).catch(() => { });
         }
       }
     };
     const next = prev.then(runWithDbLease, runWithDbLease);
-    _tournamentLocks.set(tournamentId, next.catch(() => {}));
+    _tournamentLocks.set(tournamentId, next.catch(() => { }));
     return next;
   }
   /**
@@ -121,10 +121,10 @@ class TournamentService {
     const enriched = rawTournaments.map(t => {
       const matchStats = matchesByTour[t.id] || { total: 0, scheduled: 0, live: 0, completed: 0, cancelled: 0 };
       const regStat = regStatsByTour[t.id] || { total: 0, pending: 0, approved: 0, rejected: 0 };
-      
+
       let currentStatus = (t.status || 'UPCOMING').toUpperCase();
       if (currentStatus === 'ACTIVE') currentStatus = 'REGISTRATION_OPEN';
-      
+
       // Auto-compute status if still UPCOMING but start_date has arrived
       if (currentStatus === 'UPCOMING' && t.start_date && t.start_date <= todayStr) {
         currentStatus = 'ONGOING';
@@ -1049,7 +1049,7 @@ class TournamentService {
           });
         });
         if (notifBatch.length > 0) {
-          await db.models.Notification.insertMany(notifBatch).catch(() => {});
+          await db.models.Notification.insertMany(notifBatch).catch(() => { });
         }
       }
 
@@ -1630,7 +1630,7 @@ class TournamentService {
       bowlerMap[pid].overs += decOvers;
 
       if ((b.wickets || 0) > bowlerMap[pid].best_bowling_wickets ||
-          ((b.wickets || 0) === bowlerMap[pid].best_bowling_wickets && (b.runs_conceded || 0) < bowlerMap[pid].best_bowling_runs)) {
+        ((b.wickets || 0) === bowlerMap[pid].best_bowling_wickets && (b.runs_conceded || 0) < bowlerMap[pid].best_bowling_runs)) {
         bowlerMap[pid].best_bowling_wickets = b.wickets || 0;
         bowlerMap[pid].best_bowling_runs = b.runs_conceded || 0;
       }
@@ -1696,7 +1696,7 @@ class TournamentService {
           try {
             const playerRatingService = require('./playerRatingService');
             await playerRatingService.recalculateMatchRatings(matchId);
-          } catch (_ratingErr) {}
+          } catch (_ratingErr) { }
 
           // 2. Roll up permanent Team.stats (with exact snapshot for safe reversal)
           const isTie = match.winner_id === 'TIE' || match.winner_id === 'MATCH_TIED';
@@ -1826,7 +1826,7 @@ class TournamentService {
               Object.entries(pEntry.inc || {}).forEach(([k, v]) => { dec[k] = -Math.abs(v); });
               await db.models.Player.updateOne({ id: pEntry.player_id }, { $inc: dec });
             }
-          } catch (_rbErr) {}
+          } catch (_rbErr) { }
 
           await db.models.Match.updateOne(
             { id: matchId },
@@ -2579,7 +2579,7 @@ class TournamentService {
         reference_id: regId,
         status: 'UNREAD'
       });
-    } catch (_e) {}
+    } catch (_e) { }
 
     // 9. Audit Log
     await this._logAudit(
@@ -2608,7 +2608,7 @@ class TournamentService {
     if (query.$or.length === 0) return [];
 
     const registrations = await db.models.TournamentRegistration.find(query).sort({ registration_date: -1 }).lean();
-    
+
     // Populate live tournament details on each registration
     const tourIds = [...new Set(registrations.map(r => r.tournament_id))];
     const tournaments = await db.models.Tournament.find({ id: { $in: tourIds } }).lean();
@@ -2748,7 +2748,7 @@ class TournamentService {
   async getTournamentRegistrations({ tournamentId, status, search } = {}) {
     await db.initDb();
     const registrations = await tournamentRegistrationModel.getAll({ tournamentId, status, search });
-    
+
     // Attach tournament metadata + real team roster metadata
     const tourIds = [...new Set(registrations.map(r => r.tournament_id))];
     const [tournaments, rosterCtx] = await Promise.all([
@@ -2828,7 +2828,7 @@ class TournamentService {
         reference_id: registration.id,
         status: 'UNREAD'
       });
-    } catch (_e) {}
+    } catch (_e) { }
 
     // Audit log
     await this._logAudit(
@@ -2879,7 +2879,7 @@ class TournamentService {
         reference_id: registration.id,
         status: 'UNREAD'
       });
-    } catch (_e) {}
+    } catch (_e) { }
 
     // Audit log
     await this._logAudit(

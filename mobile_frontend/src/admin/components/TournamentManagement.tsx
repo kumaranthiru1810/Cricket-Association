@@ -1131,9 +1131,9 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
         knockout_stages: (formTournamentType === 'SINGLE_ELIMINATION' || formTournamentType === 'DOUBLE_ELIMINATION')
           ? ['Semi Final', 'Final']
           : [
-              ...(formIncludeSemis ? ['Semi Final'] : []),
-              ...(formIncludeFinal ? ['Final'] : [])
-            ],
+            ...(formIncludeSemis ? ['Semi Final'] : []),
+            ...(formIncludeFinal ? ['Final'] : [])
+          ],
         qualifying_teams_count: parseInt(formQualifyingTeamsCount, 10) || 4,
         qualification_rules: formQualificationRules,
         group_count: Math.max(1, parseInt(formGroupCount, 10) || 5),
@@ -2993,11 +2993,11 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                           setFormDelayReduceUnit('OVERS');
                           setFormDelayOversReduced('1');
                           setFormTieHandling('SHARE_POINTS');
-    setFormWinnerTeamName('');
-    setFormRunnerUpTeamName('');
-    setFormWinnerTrophyTitle('Championship Winner Trophy');
-    setFormRunnerUpTrophyTitle('Runner-Up Trophy');
-    setFormPotmEveryMatch(true);
+                          setFormWinnerTeamName('');
+                          setFormRunnerUpTeamName('');
+                          setFormWinnerTrophyTitle('Championship Winner Trophy');
+                          setFormRunnerUpTrophyTitle('Runner-Up Trophy');
+                          setFormPotmEveryMatch(true);
                         }}
                         style={{
                           paddingHorizontal: 10,
@@ -4644,21 +4644,21 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                           ) : null}
 
                           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14, alignItems: 'center', paddingVertical: 6 }}>
-                              <View style={{ gap: 12 }}>
-                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B' }}>PLAYOFF ROUND 1</Text>
-                                {renderBracketMatchCard(q1, 'QUALIFIER 1 (Rank 1 vs Rank 2)')}
-                                {renderBracketMatchCard(elim, 'ELIMINATOR (Rank 3 vs Rank 4)')}
-                              </View>
-                              <Text style={{ fontSize: 20, color: '#F59E0B', fontWeight: '900' }}>→</Text>
-                              <View style={{ gap: 12 }}>
-                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B' }}>PLAYOFF ROUND 2</Text>
-                                {renderBracketMatchCard(q2, 'QUALIFIER 2 (Loser Q1 vs Winner Elim)')}
-                              </View>
-                              <Text style={{ fontSize: 20, color: '#F59E0B', fontWeight: '900' }}>→</Text>
-                              <View style={{ gap: 12 }}>
-                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#92400E' }}>🏆 GRAND FINAL</Text>
-                                {renderBracketMatchCard(fin, 'FINAL (Winner Q1 vs Winner Q2)')}
-                              </View>
+                            <View style={{ gap: 12 }}>
+                              <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B' }}>PLAYOFF ROUND 1</Text>
+                              {renderBracketMatchCard(q1, 'QUALIFIER 1 (Rank 1 vs Rank 2)')}
+                              {renderBracketMatchCard(elim, 'ELIMINATOR (Rank 3 vs Rank 4)')}
+                            </View>
+                            <Text style={{ fontSize: 20, color: '#F59E0B', fontWeight: '900' }}>→</Text>
+                            <View style={{ gap: 12 }}>
+                              <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B' }}>PLAYOFF ROUND 2</Text>
+                              {renderBracketMatchCard(q2, 'QUALIFIER 2 (Loser Q1 vs Winner Elim)')}
+                            </View>
+                            <Text style={{ fontSize: 20, color: '#F59E0B', fontWeight: '900' }}>→</Text>
+                            <View style={{ gap: 12 }}>
+                              <Text style={{ fontSize: 11, fontWeight: '800', color: '#92400E' }}>🏆 GRAND FINAL</Text>
+                              {renderBracketMatchCard(fin, 'FINAL (Winner Q1 vs Winner Q2)')}
+                            </View>
                           </View>
                         </View>
                       );
