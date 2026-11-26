@@ -49,7 +49,8 @@ router.get('/home', cacheResponse(30, 'portal-home'), async (req, res) => {
         .limit(6)
         .lean(),
       Tournament.find({})
-        .select('id name short_name status season format overs_per_match')
+        .select('id name short_name description tournament_type category gender ball_type match_format format overs_per_match season venue start_date end_date max_teams teams status')
+        .sort({ createdAt: -1 })
         .lean(),
       InningsBatter ? InningsBatter.find({}).select('player_id runs balls fours sixes innings_id').limit(100).lean() : Promise.resolve([]),
       InningsBowler ? InningsBowler.find({}).select('player_id wickets runs_conceded runs overs').limit(100).lean() : Promise.resolve([]),

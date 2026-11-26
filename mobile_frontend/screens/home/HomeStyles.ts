@@ -1767,8 +1767,7 @@ export const styles = StyleSheet.create({
 
   // Match Cards (Bootstrap 5 Card Architecture)
   matchCard: {
-    flex: 1,
-    minWidth: 290,
+    minWidth: 340,
     maxWidth: 620,
     backgroundColor: '#ffffff',
     borderColor: '#dee2e6',
@@ -1918,12 +1917,14 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    flex: 1
+    flex: 1,
+    minWidth: 0
   },
   cardHeaderRightGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6
+    gap: 6,
+    flexShrink: 0
   },
   topRightRainPill: {
     backgroundColor: '#e0f2fe',
@@ -1978,13 +1979,15 @@ export const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'flex-start',
     justifyContent: 'center',
-    minWidth: 110
+    minWidth: 0,
+    overflow: 'hidden'
   },
   teamColRight: {
     flex: 1,
     alignItems: 'flex-end',
     justifyContent: 'center',
-    minWidth: 110
+    minWidth: 0,
+    overflow: 'hidden'
   },
   teamCrestNameRow: {
     flexDirection: 'row',
@@ -2000,10 +2003,10 @@ export const styles = StyleSheet.create({
     flexShrink: 1
   },
   teamScoreSingleRow: {
-    fontSize: 16.5,
+    fontSize: 14,
     fontWeight: '900',
     color: '#0f172a',
-    letterSpacing: 0.3
+    letterSpacing: 0.2
   },
   teamYetToBatSingleRow: {
     fontSize: 12,
@@ -2680,7 +2683,6 @@ export const styles = StyleSheet.create({
 
   // Tournaments Section (Bootstrap 5 Cards & Badges)
   tournamentCard: {
-    flex: 1,
     minWidth: 280,
     backgroundColor: '#ffffff',
     borderColor: '#dee2e6', // Bootstrap 5 border
@@ -2831,43 +2833,52 @@ export const styles = StyleSheet.create({
   },
   tableBox: {
     backgroundColor: '#ffffff',
-    borderColor: '#dee2e6',     // Bootstrap 5 table border
+    borderColor: '#e2e8f0',
     borderWidth: 1,
-    borderRadius: 6,
+    borderRadius: 10,
     padding: 0,
     overflow: 'hidden',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1
+    width: '100%',
+    minWidth: 780,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3
   },
   tableHeaderRow: {
     flexDirection: 'row',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
     borderBottomWidth: 2,
-    borderBottomColor: '#dee2e6',
-    backgroundColor: '#f8f9fa'   // Bootstrap 5 table header background
+    borderBottomColor: '#cbd5e1',
+    backgroundColor: '#f1f5f9'
   },
   tableTh: {
-    color: '#495057',            // Bootstrap 5 gray-700
+    color: '#334155',
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
     textTransform: 'uppercase',
     paddingHorizontal: 4
   },
   tableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#dee2e6',
+    borderBottomColor: '#e2e8f0',
+    borderLeftWidth: 3,
+    borderLeftColor: '#e2e8f0',
     backgroundColor: '#ffffff'
   },
+  tableRowAlt: {
+    backgroundColor: '#f8fafc',
+    borderLeftColor: '#94a3b8'
+  },
   tableRowQualified: {
-    backgroundColor: '#f8f9fa'   // Bootstrap 5 table hover
+    backgroundColor: '#fffbeb',
+    borderLeftColor: '#d97706'
   },
   tableTd: {
     color: '#212529',            // Bootstrap 5 bodyColor
@@ -3691,7 +3702,6 @@ export const styles = StyleSheet.create({
 
   // Contact (Bootstrap 5 Cards)
   contactInfoCard: {
-    flex: 1,
     minWidth: 280,
     backgroundColor: '#ffffff',
     borderColor: '#dee2e6', // Bootstrap 5 border
@@ -3705,7 +3715,6 @@ export const styles = StyleSheet.create({
     elevation: 2
   },
   contactFormCard: {
-    flex: 1,
     minWidth: 280,
     backgroundColor: '#ffffff',
     borderColor: '#dee2e6', // Bootstrap 5 border
@@ -4097,6 +4106,7 @@ export const styles = StyleSheet.create({
   // Mobile Standings & Leaderboard Cards (Zero Horizontal Scroll on Mobile)
   mobileStandingsBox: {
     width: '100%',
+    alignSelf: 'center',
     gap: 8,
     marginBottom: 12
   },
@@ -4213,6 +4223,7 @@ export const styles = StyleSheet.create({
   },
   mobilePerfContainer: {
     width: '100%',
+    alignSelf: 'center',
     gap: 8,
     marginBottom: 12
   },
