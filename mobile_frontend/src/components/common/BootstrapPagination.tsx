@@ -35,6 +35,8 @@ export interface BootstrapPaginationProps {
   itemLabel?: string;
   /** Optional container style override */
   style?: any;
+  /** Always render pagination bar even when totalPages <= 1 (as long as totalItems > 0) */
+  alwaysShow?: boolean;
 }
 
 export const BootstrapPagination: React.FC<BootstrapPaginationProps> = ({
@@ -45,11 +47,15 @@ export const BootstrapPagination: React.FC<BootstrapPaginationProps> = ({
   pageSize = 8,
   itemLabel = 'matches',
   style,
+  alwaysShow = false,
 }) => {
   const { width: windowWidth } = useWindowDimensions();
   const isMobile = windowWidth < 640;
 
-  if (totalPages <= 1 && (totalItems === undefined || totalItems <= pageSize)) {
+  if (!alwaysShow && totalPages <= 1 && (totalItems === undefined || totalItems <= pageSize)) {
+    return null;
+  }
+  if (totalItems !== undefined && totalItems <= 0) {
     return null;
   }
 
