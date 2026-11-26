@@ -729,27 +729,169 @@ class PlayerRatingService {
       leaders = await db.models.PlayerMatchRating.aggregate(pipeline);
     }
 
-    // If database has very few records, fall back to calculating from InningsBatter / InningsBowler
+    // If database has very few records, fall back to calculating from InningsBatter / InningsBowler / Player stats
     if (leaders.length === 0) {
-      return this._fallbackLeaderboard(category, limit);
+      return this._fallbackLeaderboard(category, format, limit);
     }
 
     return leaders;
   }
 
-  async _fallbackLeaderboard(category, limit) {
-    const players = await db.models.Player.find({}).limit(limit).lean();
-    return players.map((p, idx) => ({
-      playerId: p.id,
-      playerName: p.name,
-      role: p.role || 'Player',
-      matchesCount: 5,
-      overallRating: Number((8.8 - (idx * 0.3)).toFixed(1)),
-      battingRating: Number((8.9 - (idx * 0.3)).toFixed(1)),
-      bowlingRating: Number((8.5 - (idx * 0.3)).toFixed(1)),
-      fieldingRating: 8.0,
-      confidence: 'Established'
-    }));
+  async _fallbackLeaderboard(category = 'overall', format = 'ALL', limit = 10) {
+    const maxLimit = Math.min(50, Math.max(1, Number(limit || 10)));
+    const normFormat = format && format !== 'ALL' ? format.toUpperCase().replace(/[\s-]/g, '_') : 'ALL';
+
+    const [players, teams, matches, inningsBatters, inningsBowlers] = await Promise.all([
+      db.models.Player.find({}).lean(),
+      db.models.Team ? db.models.Team.find({}).select('id name stats').lean() : Promise.resolve([]),
+      db.models.Match ? db.models.Match.find({ status: { $in: ['COMPLETED', 'LIVE'] } }).select('id match_type winner_id player_of_the_match').lean() : Promise.resolve([]),
+      db.models.InningsBatter ? db.models.InningsBatter.find({}).lean() : Promise.resolve([]),
+      db.models.InningsBowler ? db.models.InningsBowler.find({}).lean() : Promise.resolve([])
+    ]);
+
+    const teamMap = {};
+    (teams || []).forEach(t => { teamMap[t.id] = t; });
+
+    const matchMap = {};
+    (matches || []).forEach(m => { matchMap[m.id] = m; });
+
+    // Group innings batting & bowling records by player_id (filtered by format if specified)
+    const batByPlayer = {};
+    (inningsBatters || []).forEach(ib => {
+      if (!ib.player_id) return;
+      const m = ib.match_id ? matchMap[ib.match_id] : null;
+      const mFmt = (m?.match_type || 'T20').toUpperCase().replace(/[\s-]/g, '_');
+      if (normFormat !== 'ALL' && mFmt !== normFormat) return;
+      if (!batByPlayer[ib.player_id]) batByPlayer[ib.player_id] = [];
+      batByPlayer[ib.player_id].push({ ...ib, _format: mFmt, _match: m });
+    });
+
+    const bowlByPlayer = {};
+    (inningsBowlers || []).forEach(ibw => {
+      if (!ibw.player_id) return;
+      const m = ibw.match_id ? matchMap[ibw.match_id] : null;
+      const mFmt = (m?.match_type || 'T20').toUpperCase().replace(/[\s-]/g, '_');
+      if (normFormat !== 'ALL' && mFmt !== normFormat) return;
+      if (!bowlByPlayer[ibw.player_id]) bowlByPlayer[ibw.player_id] = [];
+      bowlByPlayer[ibw.player_id].push({ ...ibw, _format: mFmt, _match: m });
+    });
+
+    const computed = [];
+
+    for (const p of players) {
+      const pBats = batByPlayer[p.id] || [];
+      const pBowls = bowlByPlayer[p.id] || [];
+      const stats = p.stats || {};
+
+      const hasInningsData = pBats.length > 0 || pBowls.length > 0;
+      const hasCareerStats = (stats.runs || 0) > 0 || (stats.balls || 0) > 0 || (stats.wickets || 0) > 0 || (stats.overs || 0) > 0 || (stats.catches || 0) > 0 || (stats.stumpings || 0) > 0;
+
+      if (!hasInningsData && !hasCareerStats) {
+        continue;
+      }
+
+      if (hasInningsData) {
+        // Compute per-innings/match ratings using the real engine
+        const matchBuckets = {};
+        pBats.forEach(b => {
+          const key = b.match_id || b.innings_id || 'm0';
+          if (!matchBuckets[key]) matchBuckets[key] = { bat: null, bowl: null, format: b._format, match: b._match };
+          matchBuckets[key].bat = b;
+        });
+        pBowls.forEach(bw => {
+          const key = bw.match_id || bw.innings_id || 'm0';
+          if (!matchBuckets[key]) matchBuckets[key] = { bat: null, bowl: null, format: bw._format, match: bw._match };
+          matchBuckets[key].bowl = bw;
+        });
+
+        const bucketList = Object.values(matchBuckets);
+        let overallSum = 0; let overallCnt = 0;
+        let batSum = 0; let batCnt = 0;
+        let bowlSum = 0; let bowlCnt = 0;
+        let fieldSum = 0; let fieldCnt = 0;
+
+        for (const bk of bucketList) {
+          const isWinner = bk.match?.winner_id && p.team_id === bk.match.winner_id;
+          const isPOTM = bk.match?.player_of_the_match === p.id || bk.match?.player_of_the_match === p.name;
+          const res = this.calculateMatchRating({
+            battingStats: bk.bat,
+            bowlingStats: bk.bowl,
+            fieldingStats: null,
+            matchContext: { team_total_runs: 160, team_won: Boolean(isWinner), player_of_the_match: Boolean(isPOTM) },
+            role: p.role || 'BATTER',
+            format: bk.format || 'T20'
+          });
+          if (res.overall_rating !== null) { overallSum += res.overall_rating; overallCnt++; }
+          if (res.batting_rating !== null) { batSum += res.batting_rating; batCnt++; }
+          if (res.bowling_rating !== null) { bowlSum += res.bowling_rating; bowlCnt++; }
+          if (res.fielding_rating !== null) { fieldSum += res.fielding_rating; fieldCnt++; }
+        }
+
+        const matchesCount = Math.max(bucketList.length, Number(stats.matches || 0) || bucketList.length);
+        const confidence = matchesCount >= 5 ? 'Established' : (matchesCount >= 3 ? 'Developing' : 'Provisional');
+
+        computed.push({
+          playerId: p.id,
+          playerName: p.name,
+          role: p.role || 'Player',
+          matchesCount,
+          overallRating: overallCnt > 0 ? Number((overallSum / overallCnt).toFixed(1)) : null,
+          battingRating: batCnt > 0 ? Number((batSum / batCnt).toFixed(1)) : null,
+          bowlingRating: bowlCnt > 0 ? Number((bowlSum / bowlCnt).toFixed(1)) : null,
+          fieldingRating: fieldCnt > 0 ? Number((fieldSum / fieldCnt).toFixed(1)) : null,
+          confidence
+        });
+      } else if (normFormat === 'ALL') {
+        // Derive per-match average from aggregated Player.stats
+        const teamMatches = teamMap[p.team_id]?.stats?.matches || 0;
+        const matchesCount = Math.max(1, Number(stats.matches || teamMatches || 1));
+        const res = this.calculateMatchRating({
+          battingStats: (stats.runs > 0 || stats.balls > 0) ? {
+            runs: stats.runs / matchesCount,
+            balls: (stats.balls || Math.round(stats.runs * 0.8)) / matchesCount,
+            fours: (stats.fours || 0) / matchesCount,
+            sixes: (stats.sixes || 0) / matchesCount,
+            is_out: true
+          } : null,
+          bowlingStats: (stats.wickets > 0 || stats.overs > 0) ? {
+            overs: (stats.overs || (matchesCount * 2)) / matchesCount,
+            wickets: (stats.wickets || 0) / matchesCount,
+            runs_conceded: (stats.runs_conceded || 0) / matchesCount,
+            maidens: (stats.maidens || 0) / matchesCount
+          } : null,
+          fieldingStats: ((stats.catches || 0) + (stats.stumpings || 0)) > 0 ? {
+            catches: (stats.catches || 0) / matchesCount,
+            stumpings: (stats.stumpings || 0) / matchesCount
+          } : null,
+          matchContext: { team_total_runs: 160, team_won: false, player_of_the_match: false },
+          role: p.role || 'BATTER',
+          format: 'T20'
+        });
+
+        const confidence = matchesCount >= 5 ? 'Established' : (matchesCount >= 3 ? 'Developing' : 'Provisional');
+        computed.push({
+          playerId: p.id,
+          playerName: p.name,
+          role: p.role || 'Player',
+          matchesCount,
+          overallRating: res.overall_rating,
+          battingRating: res.batting_rating,
+          bowlingRating: res.bowling_rating,
+          fieldingRating: res.fielding_rating,
+          confidence
+        });
+      }
+    }
+
+    const sortKey = category === 'batting' ? 'battingRating' : (category === 'bowling' ? 'bowlingRating' : 'overallRating');
+    computed.sort((a, b) => {
+      const va = a[sortKey] ?? -1;
+      const vb = b[sortKey] ?? -1;
+      if (vb !== va) return vb - va;
+      return (b.matchesCount || 0) - (a.matchesCount || 0);
+    });
+
+    return computed.slice(0, maxLimit);
   }
 }
 

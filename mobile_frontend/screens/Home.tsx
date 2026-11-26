@@ -404,16 +404,69 @@ export default function HomeScreen() {
   const [matchPage, setMatchPage] = useState<number>(1);
   const MATCHES_PER_PAGE = 8;
 
-  // State: Standings Points Table Pagination (Reusable 8 items per page)
+  // State: Standings Points Table Pagination & Search (Reusable 8 items per page)
   const [standingsPage, setStandingsPage] = useState<number>(1);
+  const [standingsSearchQuery, setStandingsSearchQuery] = useState<string>('');
   const STANDINGS_PER_PAGE = 8;
 
-  // State: Performance Records Pagination (Reusable 8 items per page)
+  // State: Performance Records Pagination & Search (Reusable 8 items per page)
   const [perfRatingsPage, setPerfRatingsPage] = useState<number>(1);
   const [perfBattingPage, setPerfBattingPage] = useState<number>(1);
   const [perfBowlingPage, setPerfBowlingPage] = useState<number>(1);
   const [perfFieldingPage, setPerfFieldingPage] = useState<number>(1);
+  const [perfSearchQuery, setPerfSearchQuery] = useState<string>('');
+  const [activeDropdown, setActiveDropdown] = useState<{
+    title: string;
+    options: { id: string; label: string }[];
+    selectedId: string;
+    onSelect: (id: string) => void;
+  } | null>(null);
   const PERF_PER_PAGE = 8;
+
+  const renderSelectBox = (
+    prefix: string,
+    selectedId: string,
+    options: { id: string; label: string }[],
+    onSelect: (id: string) => void,
+    minW = 160
+  ) => {
+    const activeOpt = options.find(o => o.id === selectedId) || options[0];
+    return (
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={() => setActiveDropdown({ title: prefix, options, selectedId, onSelect })}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          backgroundColor: '#ffffff',
+          borderColor: '#cbd5e1',
+          borderWidth: 1,
+          borderRadius: 8,
+          height: 38,
+          paddingHorizontal: 12,
+          minWidth: isMobile ? '48%' : minW,
+          flex: isMobile ? 1 : undefined,
+          gap: 8,
+          shadowColor: '#0f172a',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.04,
+          shadowRadius: 2,
+          elevation: 1
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}>
+          <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748b', marginRight: 5 }}>
+            {prefix}:
+          </Text>
+          <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0e184e', flexShrink: 1 }} numberOfLines={1}>
+            {activeOpt?.label || 'Select'}
+          </Text>
+        </View>
+        <Ionicons name="chevron-down" size={14} color="#475569" />
+      </TouchableOpacity>
+    );
+  };
 
   // State: Player Milestone Hall of Fame Pagination (Reusable 8 items per page)
   const [milestonePage, setMilestonePage] = useState<number>(1);
@@ -428,17 +481,55 @@ export default function HomeScreen() {
   const [realScorecardData, setRealScorecardData] = useState<any>(null);
   const [isLoadingScorecard, setIsLoadingScorecard] = useState<boolean>(false);
 
-  // Dynamic MongoDB Portal Data (Standings, Performance, Directory)
+  // Dynamic MongoDB Portal Data (Standings, Performance, Directory, Tournaments)
+  const [portalTournaments, setPortalTournaments] = useState<any[]>([]);
   const [portalPointsTable, setPortalPointsTable] = useState<any[]>([]);
+  const [tournamentPointsTable, setTournamentPointsTable] = useState<any[]>([]);
+  const [isLoadingPointsTable, setIsLoadingPointsTable] = useState<boolean>(false);
   const [portalTopBatsmen, setPortalTopBatsmen] = useState<any[]>([]);
   const [portalTopBowlers, setPortalTopBowlers] = useState<any[]>([]);
   const [portalTopFielders, setPortalTopFielders] = useState<any[]>([]);
   const [portalAllPlayers, setPortalAllPlayers] = useState<any[]>([]);
 
+  const loadTournamentStandings = async (tournamentId: string) => {
+    if (!tournamentId) return;
+    try {
+      setIsLoadingPointsTable(true);
+      const res = await ScorerApi.getTournamentPointsTable(tournamentId);
+      const rows = res?.points_table || res?.data || [];
+      if (Array.isArray(rows)) {
+        setTournamentPointsTable(rows);
+      } else {
+        setTournamentPointsTable([]);
+      }
+    } catch (err: any) {
+      console.warn('Failed to load tournament points table:', err.message);
+      setTournamentPointsTable([]);
+    } finally {
+      setIsLoadingPointsTable(false);
+    }
+  };
+
   const loadPortalData = async () => {
     try {
       const res = await ScorerApi.getPortalHome();
       if (res && res.success && res.data) {
+        let fetchedTournaments = Array.isArray(res.data.tournaments) ? res.data.tournaments : [];
+        if (fetchedTournaments.length === 0) {
+          try {
+            const tRes = await ScorerApi.getTournaments();
+            fetchedTournaments = tRes?.tournaments || tRes?.data || [];
+          } catch (_e) {}
+        }
+        if (Array.isArray(fetchedTournaments) && fetchedTournaments.length > 0) {
+          setPortalTournaments(fetchedTournaments);
+          setPointsTableKey(prev => {
+            const exists = fetchedTournaments.some((t: any) => t.id === prev);
+            const targetId = exists ? prev : fetchedTournaments[0].id;
+            loadTournamentStandings(targetId);
+            return targetId;
+          });
+        }
         if (Array.isArray(res.data.pointsTable) && res.data.pointsTable.length > 0) {
           setPortalPointsTable(res.data.pointsTable);
         }
@@ -899,16 +990,29 @@ export default function HomeScreen() {
               <View style={[styles.oasoHeroContentCol, isMobile && styles.oasoHeroContentColMobile]}>
                 
                 {/* Overline Badge */}
-                <View style={[styles.oasoOverlineBadge, isMobile && { alignSelf: 'center' }]}>
+                <View style={[
+                  styles.oasoOverlineBadge,
+                  isMobile && { alignSelf: 'center', flexWrap: 'wrap', justifyContent: 'center', maxWidth: '100%', paddingHorizontal: 10, paddingVertical: 6, gap: 6 }
+                ]}>
                   <View style={styles.oasoPulseGoldDot} />
-                  <Text style={styles.oasoOverlineText}>CRICKET FEDERATION OF VIRUDHUNAGAR DISTRICT</Text>
+                  <Text style={[
+                    styles.oasoOverlineText,
+                    isMobile && { textAlign: 'center', flexShrink: 1 },
+                    isSmallMobile && { fontSize: 9.5 }
+                  ]}>
+                    CRICKET FEDERATION OF VIRUDHUNAGAR DISTRICT
+                  </Text>
                   <View style={styles.oasoAffiliatedBadge}>
-                    <Text style={styles.oasoAffiliatedBadgeText}>OFFICIAL UNIT</Text>
+                    <Text style={[styles.oasoAffiliatedBadgeText, isSmallMobile && { fontSize: 8.5 }]}>OFFICIAL UNIT</Text>
                   </View>
                 </View>
 
                 {/* Big, Condensed Bold Headline matching OASO Typography */}
-                <Text style={[styles.oasoHeroTitle, isMobile && styles.oasoHeroTitleMobile]}>
+                <Text style={[
+                  styles.oasoHeroTitle,
+                  isMobile && styles.oasoHeroTitleMobile,
+                  isSmallMobile && { fontSize: 32, lineHeight: 36 }
+                ]}>
                   CHASING{'\n'}
                   <Text style={{ color: '#b45309' }}>CRICKET{'\n'}EXCELLENCE</Text>{'\n'}
                   TOGETHER
@@ -922,102 +1026,98 @@ export default function HomeScreen() {
                   </Text>
                 </View>
 
-                {/* Subtitle in soft slate */}
-                <Text style={[styles.oasoHeroSubtitle, isMobile && styles.oasoHeroSubtitleMobile]}>
-                  Governing, developing, and fostering grassroots, collegiate, and competitive cricket across Srivilliputhur, Sivakasi, Rajapalayam, Sattur, Aruppukottai, and Virudhunagar under the official authority of CFVD.
-                </Text>
+               <Text
+              style={[
+                styles.heroDescription,
+                isMobile && {
+                  textAlign: 'center',
+                  alignSelf: 'center',
+                  fontSize: 13,
+                  lineHeight: 20,
+                  color: '#1e293b',
+                  marginBottom: 22,
+                  paddingHorizontal: 4,
+                }
+              ]}
+            >
+              Governing, developing, and fostering grassroots, collegiate, and competitive cricket across
+              Srivilliputhur, Sivakasi, Rajapalayam, Sattur, Aruppukottai, and Virudhunagar under the official
+              authority of Cricket Federation of Virudhunagar District.
+            </Text>
 
-                {/* Highlight Chips Row */}
-                <View style={[styles.oasoHighlightsRow, isMobile && { justifyContent: 'center' }]}>
-                  <View style={styles.oasoHighlightChip}>
-                    <Text style={styles.oasoHighlightEmoji}>🏆</Text>
-                    <Text style={styles.oasoHighlightText}>District League 2026-27</Text>
-                  </View>
-                  <View style={styles.oasoHighlightChip}>
-                    <Text style={styles.oasoHighlightEmoji}>⚡</Text>
-                    <Text style={styles.oasoHighlightText}>Live Digital Scoring</Text>
-                  </View>
-                  <View style={styles.oasoHighlightChip}>
-                    <Text style={styles.oasoHighlightEmoji}>🏏</Text>
-                    <Text style={styles.oasoHighlightText}>12+ Sanctioned Clubs</Text>
-                  </View>
-                </View>
+            {/* 3 Hero Action Buttons */}
+            <View
+              style={[
+                styles.heroButtonsRow,
+                isMobile && {
+                  flexDirection: isSmallMobile ? 'column' : 'row',
+                  justifyContent: 'center',
+                  alignSelf: 'center',
+                  gap: 10,
+                  marginBottom: 24,
+                  width: '100%',
+                }
+              ]}
+            >
+              {/* 1. Match Centre Live (Solid Navy with Gold Border) */}
+              <TouchableOpacity
+                style={[
+                  styles.heroBtnNavy,
+                  isMobile && {
+                    flex: isSmallMobile ? undefined : 1,
+                    width: isSmallMobile ? '100%' : undefined,
+                    minWidth: isSmallMobile ? '100%' : 140,
+                    maxWidth: isSmallMobile ? '100%' : 200,
+                    justifyContent: 'center',
+                  }
+                ]}
+                onPress={() => scrollToSection('matchCentre')}
+                activeOpacity={0.85}
+              >
+                <Animated.View style={[styles.heroRedDot, { opacity: pulseAnim }]} />
+                <Text style={styles.heroBtnNavyText} numberOfLines={1}>Match Centre Live</Text>
+              </TouchableOpacity>
 
-                {/* Action Buttons */}
-                <View
-                  style={[
-                    styles.heroButtonsRow,
-                    isMobile && {
-                      flexDirection: 'row',
-                      flexWrap: 'wrap',
-                      justifyContent: 'center',
-                      alignSelf: 'center',
-                      gap: 8,
-                      marginBottom: 20,
-                      width: '100%',
-                    }
-                  ]}
-                >
-                  {/* 1. Match Centre Live */}
-                  <TouchableOpacity
-                    style={[
-                      styles.oasoBtnPrimary,
-                      isMobile && {
-                        flex: isSmallMobile ? 0 : 1,
-                        width: isSmallMobile ? '100%' : undefined,
-                        minWidth: isSmallMobile ? '100%' : 130,
-                        maxWidth: isSmallMobile ? '100%' : 200,
-                        justifyContent: 'center',
-                      }
-                    ]}
-                    onPress={() => scrollToSection('matchCentre')}
-                    activeOpacity={0.85}
-                  >
-                    <Animated.View style={[styles.heroRedDot, { opacity: pulseAnim }]} />
-                    <Text style={styles.oasoBtnPrimaryText}>Match Centre Live</Text>
-                  </TouchableOpacity>
+              {/* 3. Live Scorecard (Solid Crisp White) */}
+              <TouchableOpacity
+                style={[
+                  styles.heroBtnWhite,
+                  isMobile && {
+                    flex: isSmallMobile ? undefined : 1,
+                    width: isSmallMobile ? '100%' : undefined,
+                    minWidth: isSmallMobile ? '100%' : 140,
+                    maxWidth: isSmallMobile ? '100%' : 200,
+                    justifyContent: 'center',
+                  }
+                ]}
+                onPress={() => {
+                  const targetMatch = publicMatches.find(m => (m.status || '').toLowerCase() === 'live') || publicMatches[0] || { id: 'M001' };
+                  handleOpenScorecard(targetMatch);
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.heroBtnWhiteText} numberOfLines={1}>📡 Live Scorecard</Text>
+              </TouchableOpacity>
 
-                  {/* 2. Live Scorecard */}
-                  <TouchableOpacity
-                    style={[
-                      styles.oasoBtnSecondary,
-                      isMobile && {
-                        flex: isSmallMobile ? 0 : 1,
-                        width: isSmallMobile ? '100%' : undefined,
-                        minWidth: isSmallMobile ? '100%' : 130,
-                        maxWidth: isSmallMobile ? '100%' : 200,
-                        justifyContent: 'center',
-                      }
-                    ]}
-                    onPress={() => {
-                      const targetMatch = publicMatches.find(m => (m.status || '').toLowerCase() === 'live') || publicMatches[0] || { id: 'M001' };
-                      handleOpenScorecard(targetMatch);
-                    }}
-                    activeOpacity={0.85}
-                  >
-                    <Ionicons name="radio" size={15} color="#0a2540" style={{ marginRight: 6 }} />
-                    <Text style={styles.oasoBtnSecondaryText}>Live Scorecard</Text>
-                  </TouchableOpacity>
-
-                  {/* 3. Standings & Points Table */}
-                  <TouchableOpacity
-                    style={[
-                      styles.oasoBtnTertiary,
-                      isMobile && {
-                        flex: isSmallMobile ? 0 : 1,
-                        width: isSmallMobile ? '100%' : undefined,
-                        minWidth: isSmallMobile ? '100%' : 130,
-                        maxWidth: isSmallMobile ? '100%' : 200,
-                        justifyContent: 'center',
-                      }
-                    ]}
-                    onPress={() => scrollToSection('pointsTable')}
-                    activeOpacity={0.85}
-                  >
-                    <Ionicons name="trophy-outline" size={15} color="#b45309" style={{ marginRight: 6 }} />
-                    <Text style={styles.oasoBtnTertiaryText}>Points Table</Text>
-                  </TouchableOpacity>
-                </View>
+              {/* 4. Watch Intro Video (Professional Preloader Replay) */}
+              <TouchableOpacity
+                style={[
+                  styles.heroBtnWhite,
+                  { backgroundColor: 'rgba(15, 23, 42, 0.9)', borderColor: 'rgba(245, 158, 11, 0.7)' },
+                  isMobile && {
+                    flex: isSmallMobile ? undefined : 1,
+                    width: isSmallMobile ? '100%' : undefined,
+                    minWidth: isSmallMobile ? '100%' : 140,
+                    maxWidth: isSmallMobile ? '100%' : 200,
+                    justifyContent: 'center',
+                  }
+                ]}
+                onPress={() => setShowIntroVideo(true)}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.heroBtnWhiteText, { color: '#fbbf24', fontWeight: '800' }]} numberOfLines={1}>🎬 Watch Intro</Text>
+              </TouchableOpacity>
+            </View>
 
               </View>
 
@@ -1114,94 +1214,6 @@ export default function HomeScreen() {
 
             </View>
             {/* Description */}
-            <Text
-              style={[
-                styles.heroDescription,
-                isMobile && {
-                  textAlign: 'center',
-                  alignSelf: 'center',
-                  fontSize: 13,
-                  lineHeight: 20,
-                  color: '#1e293b',
-                  marginBottom: 22,
-                  paddingHorizontal: 4,
-                }
-              ]}
-            >
-              Governing, developing, and fostering grassroots, collegiate, and competitive cricket across
-              Srivilliputhur, Sivakasi, Rajapalayam, Sattur, Aruppukottai, and Virudhunagar under the official
-              authority of Cricket Federation of Virudhunagar District.
-            </Text>
-
-            {/* 3 Hero Action Buttons */}
-            <View
-              style={[
-                styles.heroButtonsRow,
-                isMobile && {
-                  justifyContent: 'center',
-                  alignSelf: 'center',
-                  gap: 10,
-                  marginBottom: 24,
-                  width: '100%',
-                }
-              ]}
-            >
-              {/* 1. Match Centre Live (Solid Navy with Gold Border) */}
-              <TouchableOpacity
-                style={[
-                  styles.heroBtnNavy,
-                  isMobile && {
-                    flex: 1,
-                    minWidth: 140,
-                    maxWidth: 200,
-                    justifyContent: 'center',
-                  }
-                ]}
-                onPress={() => scrollToSection('matchCentre')}
-                activeOpacity={0.85}
-              >
-                <Animated.View style={[styles.heroRedDot, { opacity: pulseAnim }]} />
-                <Text style={styles.heroBtnNavyText}>Match Centre Live</Text>
-              </TouchableOpacity>
-
-              {/* 3. Live Scorecard (Solid Crisp White) */}
-              <TouchableOpacity
-                style={[
-                  styles.heroBtnWhite,
-                  isMobile && {
-                    flex: 1,
-                    minWidth: 140,
-                    maxWidth: 200,
-                    justifyContent: 'center',
-                  }
-                ]}
-                onPress={() => {
-                  const targetMatch = publicMatches.find(m => (m.status || '').toLowerCase() === 'live') || publicMatches[0] || { id: 'M001' };
-                  handleOpenScorecard(targetMatch);
-                }}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.heroBtnWhiteText}>📡 Live Scorecard</Text>
-              </TouchableOpacity>
-
-              {/* 4. Watch Intro Video (Professional Preloader Replay) */}
-              <TouchableOpacity
-                style={[
-                  styles.heroBtnWhite,
-                  { backgroundColor: 'rgba(15, 23, 42, 0.9)', borderColor: 'rgba(245, 158, 11, 0.7)' },
-                  isMobile && {
-                    flex: 1,
-                    minWidth: 140,
-                    maxWidth: 200,
-                    justifyContent: 'center',
-                  }
-                ]}
-                onPress={() => setShowIntroVideo(true)}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.heroBtnWhiteText, { color: '#fbbf24', fontWeight: '800' }]}>🎬 Watch Intro</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </View>
 
@@ -1387,7 +1399,7 @@ export default function HomeScreen() {
 
               return (
                 <View>
-                  <View style={[styles.grid2Col, isMobile && { flexDirection: 'column' }]}>
+                  <View style={[styles.grid2Col, isMobile && { flexDirection: 'column', flexWrap: 'nowrap' }]}>
                     {paginatedMatches.map(m => {
                     const s = (m.status || '').toLowerCase();
                     const raw = (m.rawStatus || '').toUpperCase();
@@ -1419,6 +1431,7 @@ export default function HomeScreen() {
                           isUpcoming && styles.matchCardUpcoming,
                           isCompleted && styles.matchCardResult,
                           isPostponed && { borderColor: '#f59e0b', backgroundColor: '#fffdf5' },
+                          !isMobile && { flex: 1 },
                           isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' },
                           isSmallMobile && { padding: 12, borderRadius: 14 }
                         ]}
@@ -1534,7 +1547,13 @@ export default function HomeScreen() {
                               </Text>
                               {isLive && <MaterialCommunityIcons name="cricket" size={12} color="#f5c43d" style={{ marginLeft: 4 }} />}
                             </View>
-                            <Text style={[m.scoreA ? styles.teamScoreSingleRow : styles.teamYetToBatSingleRow, isSmallMobile && { fontSize: isTinyMobile ? 13 : 14.5 }]}>
+                            <Text
+                              style={[
+                                m.scoreA && m.scoreA !== 'Yet to bat' ? styles.teamScoreSingleRow : styles.teamYetToBatSingleRow,
+                                isSmallMobile && { fontSize: isTinyMobile ? 12.5 : 13.5 }
+                              ]}
+                              numberOfLines={1}
+                            >
                               {m.scoreA || (isUpcoming ? 'Upcoming' : 'Yet to bat')}
                             </Text>
                           </View>
@@ -1573,7 +1592,14 @@ export default function HomeScreen() {
                                 </View>
                               )}
                             </View>
-                            <Text style={[m.scoreB ? styles.teamScoreSingleRow : styles.teamYetToBatSingleRow, { textAlign: 'right' }, isSmallMobile && { fontSize: isTinyMobile ? 13 : 14.5 }]}>
+                            <Text
+                              style={[
+                                m.scoreB && m.scoreB !== 'Yet to bat' ? styles.teamScoreSingleRow : styles.teamYetToBatSingleRow,
+                                { textAlign: 'right' },
+                                isSmallMobile && { fontSize: isTinyMobile ? 12.5 : 13.5 }
+                              ]}
+                              numberOfLines={1}
+                            >
                               {m.scoreB || (isUpcoming ? 'Upcoming' : 'Yet to bat')}
                             </Text>
                           </View>
@@ -1779,193 +1805,95 @@ export default function HomeScreen() {
               </Text>
             </View>
 
-            <View style={[styles.grid2Col, isMobile && { flexDirection: 'column' }]}>
-              {/* Tourney 1 */}
-              <View style={[styles.tournamentCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }, isSmallMobile && { padding: 12 }]}>
-                <View style={styles.tBadgeWrap}>
-                  <Text style={styles.badgeGoldPill}>Premier Division</Text>
-                  <Text style={styles.badgeBluePill}>Multi-Day</Text>
+            <View style={[styles.grid2Col, isMobile && { flexDirection: 'column', flexWrap: 'nowrap' }]}>
+              {portalTournaments.length === 0 ? (
+                <View style={{ width: '100%', padding: 28, alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                  <Ionicons name="trophy-outline" size={30} color="#94a3b8" style={{ marginBottom: 8 }} />
+                  <Text style={{ color: '#0f172a', fontWeight: '800', fontSize: 15 }}>No Official Tournaments Published Yet</Text>
+                  <Text style={{ color: '#64748b', fontSize: 12.5, textAlign: 'center', marginTop: 4 }}>
+                    Tournaments created by the association admin will appear here automatically.
+                  </Text>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 8 }}>
-                  <Ionicons name="shield-checkmark-outline" size={24} color="#0e184e" style={{ marginRight: 8 }} />
-                  <Text style={[styles.tourneyTitle, { flex: 1, marginBottom: 0 }]}>Virudhunagar First Division League</Text>
-                </View>
-                <Text style={styles.tourneySub}>The G. Parthasarathy Rolling Trophy</Text>
-                <Text style={styles.tourneyDesc}>
-                  The flagship red-ball 3-day competition with 12 affiliated first-tier clubs competing for district
-                  supremacy and state trials.
-                </Text>
-                <View style={styles.tourneySpecs}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                    <Ionicons name="people-outline" size={13} color="#475569" style={{ marginRight: 6 }} />
-                    <Text style={styles.tourneySpecItem}>12 Affiliated Clubs</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                    <Ionicons name="calendar-outline" size={13} color="#475569" style={{ marginRight: 6 }} />
-                    <Text style={styles.tourneySpecItem}>Oct 2026 - Jan 2027</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Ionicons name="ribbon-outline" size={13} color="#b45309" style={{ marginRight: 6 }} />
-                    <Text style={styles.tourneySpecItem}>₹2,50,000 Prize Purse</Text>
-                  </View>
-                </View>
-                <View style={styles.tourneyFooter}>
-                  <TouchableOpacity
-                    style={styles.btnOutlineGoldSm}
-                    onPress={() => {
-                      setPointsTableKey('div1');
-                      scrollToSection('pointsTable');
-                    }}
-                  >
-                    <Text style={styles.btnOutlineGoldSmText}>View Table</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.btnPrimarySm}
-                    onPress={() => alert('Official 2026-27 Division 1 Fixtures downloaded!')}
-                  >
-                    <Text style={styles.btnPrimarySmText}>Fixtures PDF</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+              ) : (
+                portalTournaments.map((t: any, idx: number) => {
+                  const teamsCount = Array.isArray(t.teams) && t.teams.length > 0 ? t.teams.length : (t.max_teams || 16);
+                  const formatLabel = t.match_format || t.format || 'T20';
+                  const dateRange = t.start_date && t.end_date
+                    ? `${t.start_date} – ${t.end_date}`
+                    : (t.start_date || `Season ${t.season || '2026-27'}`);
+                  const statusLabel = (t.status || 'UPCOMING').replace(/_/g, ' ');
+                  const isOpenForReg = t.status === 'REGISTRATION_OPEN';
 
-              {/* Tourney 2 */}
-              <View style={[styles.tournamentCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }, isSmallMobile && { padding: 12 }]}>
-                <View style={styles.tBadgeWrap}>
-                  <Text style={styles.badgeRedPill}>White Ball</Text>
-                  <Text style={styles.badgeGoldPill}>T20 Trophy</Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 8 }}>
-                  <Ionicons name="flash-outline" size={24} color="#0e184e" style={{ marginRight: 8 }} />
-                  <Text style={[styles.tourneyTitle, { flex: 1, marginBottom: 0 }]}>Kamarajar Memorial T20 Trophy</Text>
-                </View>
-                <Text style={styles.tourneySub}>Virudhunagar District Premier T20 Cup</Text>
-                <Text style={styles.tourneyDesc}>
-                  Fast-paced night and day T20 cricket featuring taluk teams with colored clothing and white cricket balls.
-                </Text>
-                <View style={styles.tourneySpecs}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                    <Ionicons name="people-outline" size={13} color="#475569" style={{ marginRight: 6 }} />
-                    <Text style={styles.tourneySpecItem}>16 Taluk & Club Teams</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                    <Ionicons name="calendar-outline" size={13} color="#475569" style={{ marginRight: 6 }} />
-                    <Text style={styles.tourneySpecItem}>Feb 2027</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Ionicons name="logo-youtube" size={13} color="#dc2626" style={{ marginRight: 6 }} />
-                    <Text style={styles.tourneySpecItem}>Live Streamed on YouTube</Text>
-                  </View>
-                </View>
-                <View style={styles.tourneyFooter}>
-                  <TouchableOpacity
-                    style={styles.btnOutlineGoldSm}
-                    onPress={() => {
-                      setPointsTableKey('t20');
-                      scrollToSection('pointsTable');
-                    }}
-                  >
-                    <Text style={styles.btnOutlineGoldSmText}>Standings</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.btnPrimarySm}
-                    onPress={() => {
-                      const targetMatch = publicMatches.find(m => (m.status || '').toLowerCase() === 'completed') || publicMatches[0] || { id: 'M001' };
-                      handleOpenScorecard(targetMatch);
-                    }}
-                  >
-                    <Text style={styles.btnPrimarySmText}>Latest Final</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Tourney 3 */}
-              <View style={[styles.tournamentCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }, isSmallMobile && { padding: 12 }]}>
-                <View style={styles.tBadgeWrap}>
-                  <Text style={styles.badgeBluePill}>Collegiate</Text>
-                  <Text style={styles.badgeGoldPill}>Inter-College Cup</Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 8 }}>
-                  <Ionicons name="school-outline" size={24} color="#0e184e" style={{ marginRight: 8 }} />
-                  <Text style={[styles.tourneyTitle, { flex: 1, marginBottom: 0 }]}>District Inter-College Championship</Text>
-                </View>
-                <Text style={styles.tourneySub}>Autonomous & Engineering Colleges Shield</Text>
-                <Text style={styles.tourneyDesc}>
-                  The premier collegiate tournament featuring VHNSN, PSR, ANJAC, Rajus, Kalasalingam University, and
-                  SFR College.
-                </Text>
-                <View style={styles.tourneySpecs}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                    <Ionicons name="people-outline" size={13} color="#475569" style={{ marginRight: 6 }} />
-                    <Text style={styles.tourneySpecItem}>10 District Colleges</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                    <Ionicons name="calendar-outline" size={13} color="#475569" style={{ marginRight: 6 }} />
-                    <Text style={styles.tourneySpecItem}>Nov 2026</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Ionicons name="ribbon-outline" size={13} color="#b45309" style={{ marginRight: 6 }} />
-                    <Text style={styles.tourneySpecItem}>District Selection Gateway</Text>
-                  </View>
-                </View>
-                <View style={styles.tourneyFooter}>
-                  <TouchableOpacity
-                    style={styles.btnOutlineGoldSm}
-                    onPress={() => {
-                      setPointsTableKey('college');
-                      scrollToSection('pointsTable');
-                    }}
-                  >
-                    <Text style={styles.btnOutlineGoldSmText}>College Points</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.btnPrimarySm} onPress={() => navigate('Registration')}>
-                    <Text style={styles.btnPrimarySmText}>College Entry</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Tourney 4 */}
-              <View style={[styles.tournamentCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }, isSmallMobile && { padding: 12 }]}>
-                <View style={styles.tBadgeWrap}>
-                  <Text style={styles.badgeGreenPill}>Under-16 / U-19</Text>
-                  <Text style={styles.badgeBluePill}>Junior Talent</Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 8 }}>
-                  <MaterialCommunityIcons name="town-hall" size={24} color="#0e184e" style={{ marginRight: 8 }} />
-                  <Text style={[styles.tourneyTitle, { flex: 1, marginBottom: 0 }]}>Andal Temple Inter-School Cup</Text>
-                </View>
-                <Text style={styles.tourneySub}>Srivilliputhur & District Schools Shield</Text>
-                <Text style={styles.tourneyDesc}>
-                  The premier grassroots nursery identifying teenage talent for the district and state age-group trials.
-                </Text>
-                <View style={styles.tourneySpecs}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                    <Ionicons name="business-outline" size={13} color="#475569" style={{ marginRight: 6 }} />
-                    <Text style={styles.tourneySpecItem}>24 District Schools</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                    <Ionicons name="calendar-outline" size={13} color="#475569" style={{ marginRight: 6 }} />
-                    <Text style={styles.tourneySpecItem}>Annual Summer Edition</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Ionicons name="ribbon-outline" size={13} color="#b45309" style={{ marginRight: 6 }} />
-                    <Text style={styles.tourneySpecItem}>District Academy Scholarships</Text>
-                  </View>
-                </View>
-                <View style={styles.tourneyFooter}>
-                  <TouchableOpacity
-                    style={styles.btnOutlineGoldSm}
-                    onPress={() => {
-                      setPointsTableKey('school');
-                      scrollToSection('pointsTable');
-                    }}
-                  >
-                    <Text style={styles.btnOutlineGoldSmText}>School Points</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.btnPrimarySm} onPress={() => navigate('Registration')}>
-                    <Text style={styles.btnPrimarySmText}>School Entry</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+                  return (
+                    <View
+                      key={t.id || idx}
+                      style={[
+                        styles.tournamentCard,
+                        !isMobile && { flex: 1 },
+                        isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' },
+                        isSmallMobile && { padding: 12 }
+                      ]}
+                    >
+                      <View style={[styles.tBadgeWrap, { flexWrap: 'wrap' }]}>
+                        <Text style={styles.badgeGoldPill}>{t.category || 'District League'}</Text>
+                        <Text style={styles.badgeBluePill}>{formatLabel}{t.overs_per_match ? ` • ${t.overs_per_match} Ov` : ''}</Text>
+                        <Text style={t.status === 'ONGOING' || t.status === 'ACTIVE' ? styles.badgeGreenPill : styles.badgeRedPill}>
+                          {statusLabel}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 8 }}>
+                        <Ionicons name="trophy-outline" size={24} color="#0e184e" style={{ marginRight: 8 }} />
+                        <Text style={[styles.tourneyTitle, { flex: 1, marginBottom: 0 }]}>{t.name}</Text>
+                      </View>
+                      <Text style={styles.tourneySub}>
+                        {t.short_name ? `${t.short_name} • ` : ''}{t.ball_type || 'Leather Ball'} ({t.gender || 'Men'})
+                      </Text>
+                      <Text style={styles.tourneyDesc} numberOfLines={3}>
+                        {t.description || `Official ${formatLabel} competition sanctioned by the Cricket Association of Virudhunagar District.`}
+                      </Text>
+                      <View style={styles.tourneySpecs}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                          <Ionicons name="people-outline" size={13} color="#475569" style={{ marginRight: 6 }} />
+                          <Text style={styles.tourneySpecItem}>{teamsCount} Participating Teams</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                          <Ionicons name="calendar-outline" size={13} color="#475569" style={{ marginRight: 6 }} />
+                          <Text style={styles.tourneySpecItem}>{dateRange}</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Ionicons name="location-outline" size={13} color="#b45309" style={{ marginRight: 6 }} />
+                          <Text style={styles.tourneySpecItem}>{t.venue || 'Kamarajar District Stadium'}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.tourneyFooter}>
+                        <TouchableOpacity
+                          style={styles.btnOutlineGoldSm}
+                          onPress={() => {
+                            setPointsTableKey(t.id);
+                            setStandingsPage(1);
+                            loadTournamentStandings(t.id);
+                            scrollToSection('pointsTable');
+                          }}
+                        >
+                          <Text style={styles.btnOutlineGoldSmText}>View Table</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.btnPrimarySm}
+                          onPress={() => {
+                            if (isOpenForReg) {
+                              navigate('Registration');
+                            } else {
+                              scrollToSection('matchCentre');
+                            }
+                          }}
+                        >
+                          <Text style={styles.btnPrimarySmText}>{isOpenForReg ? 'Register Team' : 'View Matches'}</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
             </View>
           </View>
         </View>
@@ -1993,60 +1921,75 @@ export default function HomeScreen() {
               </Text>
             </View>
 
-            {/* Table Selection Tabs */}
-            {isMobile ? (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-                {[
-                  { id: 'div1', label: 'First Division (3-Day)' },
-                  { id: 'college', label: 'Inter-College Trophy' },
-                  { id: 't20', label: 'Kamarajar T20 Cup' },
-                  { id: 'school', label: 'Inter-School Shield' }
-                ].map(t => (
-                  <TouchableOpacity
-                    key={t.id}
-                    style={[
-                      styles.switchTabBtn,
-                      pointsTableKey === t.id && styles.switchTabBtnActive,
-                      { marginRight: 0, paddingHorizontal: 10, paddingVertical: 6 }
-                    ]}
-                    onPress={() => {
-                      setPointsTableKey(t.id);
-                      setStandingsPage(1);
-                    }}
-                  >
-                    <Text style={[styles.switchTabBtnText, pointsTableKey === t.id && styles.switchTabBtnTextActive, { fontSize: 11 }]}>
-                      {t.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ) : (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subTabsScroll}>
-                {[
-                  { id: 'div1', label: 'First Division (3-Day)' },
-                  { id: 'college', label: 'Inter-College Trophy' },
-                  { id: 't20', label: 'Kamarajar T20 Cup' },
-                  { id: 'school', label: 'Inter-School Shield' }
-                ].map(t => (
-                  <TouchableOpacity
-                    key={t.id}
-                    style={[styles.switchTabBtn, pointsTableKey === t.id && styles.switchTabBtnActive]}
-                    onPress={() => {
-                      setPointsTableKey(t.id);
-                      setStandingsPage(1);
-                    }}
-                  >
-                    <Text style={[styles.switchTabBtnText, pointsTableKey === t.id && styles.switchTabBtnTextActive]}>
-                      {t.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
+            {/* Dynamic Tournament Select Dropdown + Right-Side Search Bar */}
+            {(() => {
+              const dynamicTabs = portalTournaments.length > 0
+                ? portalTournaments.map((t: any) => ({ id: t.id, label: t.short_name || t.name }))
+                : [{ id: 'overall', label: 'Overall District Standings' }];
+
+              return (
+                <View style={{
+                  flexDirection: isMobile ? 'column' : 'row',
+                  justifyContent: 'space-between',
+                  alignItems: isMobile ? 'stretch' : 'center',
+                  gap: 12,
+                  marginBottom: 16,
+                  width: '100%'
+                }}>
+                  <View style={[
+                    styles.playerSearchBar,
+                    { marginBottom: 0, flex: isMobile ? undefined : 1, width: isMobile ? '100%' : undefined, minWidth: isMobile ? '100%' : 220, height: 38, paddingHorizontal: 10 }
+                  ]}>
+                    <Ionicons name="search" size={15} color="#64748b" style={{ marginRight: 6 }} />
+                    <TextInput
+                      style={[styles.playerSearchInput, { fontSize: 12.5, paddingVertical: 4 }]}
+                      placeholder="Search team or club..."
+                      placeholderTextColor="#62799c"
+                      value={standingsSearchQuery}
+                      onChangeText={(txt) => {
+                        setStandingsSearchQuery(txt);
+                        setStandingsPage(1);
+                      }}
+                    />
+                    {standingsSearchQuery.length > 0 && (
+                      <TouchableOpacity onPress={() => { setStandingsSearchQuery(''); setStandingsPage(1); }}>
+                        <Ionicons name="close-circle" size={16} color="#94a3b8" style={{ paddingLeft: 4 }} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: isMobile ? 'flex-start' : 'flex-end' }}>
+                    {renderSelectBox(
+                      'Tournament',
+                      pointsTableKey,
+                      dynamicTabs,
+                      (id) => {
+                        setPointsTableKey(id);
+                        setStandingsPage(1);
+                        if (id !== 'overall') {
+                          loadTournamentStandings(id);
+                        }
+                      },
+                      240
+                    )}
+                  </View>
+                </View>
+              );
+            })()}
 
             {/* Standings Table with Reusable Pagination (8 teams per page) */}
             {(() => {
-              const fullStandingsList = portalPointsTable.length > 0 ? portalPointsTable : (TABLE_DATA[pointsTableKey] || []);
+              const rawStandingsList = portalTournaments.length > 0
+                ? (tournamentPointsTable.length > 0 ? tournamentPointsTable : portalPointsTable)
+                : portalPointsTable;
+              const sQuery = standingsSearchQuery.trim().toLowerCase();
+              const fullStandingsList = sQuery
+                ? rawStandingsList.filter((r: any) =>
+                    (r.team_name || r.teamName || r.name || '').toLowerCase().includes(sQuery) ||
+                    (r.shortName || r.short_name || '').toLowerCase().includes(sQuery) ||
+                    (r.sub || '').toLowerCase().includes(sQuery)
+                  )
+                : rawStandingsList;
               const totalStandingsPages = Math.ceil(fullStandingsList.length / STANDINGS_PER_PAGE) || 1;
               const safeStandingsPage = Math.min(standingsPage, totalStandingsPages);
               const paginatedStandings = fullStandingsList.slice(
@@ -2056,27 +1999,40 @@ export default function HomeScreen() {
 
               return (
                 <View style={{ width: '100%' }}>
-                  {isMobile ? (
+                  {isLoadingPointsTable ? (
+                    <View style={{ padding: 28, alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0', maxWidth: 820, width: '100%', alignSelf: 'center' }}>
+                      <ActivityIndicator size="small" color="#d97706" />
+                      <Text style={{ color: '#64748b', fontSize: 12, marginTop: 8 }}>Loading Tournament Standings...</Text>
+                    </View>
+                  ) : fullStandingsList.length === 0 ? (
+                    <View style={{ padding: 28, alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0', maxWidth: 820, width: '100%', alignSelf: 'center' }}>
+                      <Ionicons name="podium-outline" size={28} color="#94a3b8" style={{ marginBottom: 8 }} />
+                      <Text style={{ color: '#0f172a', fontWeight: '800', fontSize: 14 }}>No Standings Available Yet</Text>
+                      <Text style={{ color: '#64748b', fontSize: 12, textAlign: 'center', marginTop: 4 }}>
+                        Points table will update automatically once teams and matches are recorded in this tournament.
+                      </Text>
+                    </View>
+                  ) : isMobile ? (
                     /* Mobile Responsive Standings View - 100% Screen Width, Zero Horizontal Scroll */
                     <View style={styles.mobileStandingsBox}>
                       {paginatedStandings.map((row: any, idx: number) => {
                         const globalIdx = (safeStandingsPage - 1) * STANDINGS_PER_PAGE + idx;
-                        const standNum = row.pos || row.stand || (globalIdx + 1);
+                        const standNum = row.position || row.pos || row.stand || (globalIdx + 1);
                         const isGold = standNum === 1;
                         const isSilver = standNum === 2;
                         const isBronze = standNum === 3;
-                        const teamTitle = row.teamName || row.name || 'District Club';
+                        const teamTitle = row.team_name || row.teamName || row.name || 'District Club';
                         const teamSubtitle = row.sub || (standNum <= 2 ? 'Qualified for Knockouts' : 'In Contention');
-                        const pPlayed = row.played ?? row.p ?? 5;
+                        const pPlayed = row.played ?? row.p ?? 0;
                         const pWon = row.won ?? row.w ?? 0;
                         const pLost = row.lost ?? row.l ?? 0;
-                        const pNr = row.nr ?? row.tied ?? 0;
-                        const pNrr = row.nrr ?? '+0.000';
+                        const pNr = row.no_result ?? row.nr ?? row.tied ?? 0;
+                        const pNrr = row.nrr_formatted || (typeof row.nrr === 'number' ? (row.nrr > 0 ? `+${row.nrr.toFixed(3)}` : row.nrr.toFixed(3)) : (row.nrr ?? '+0.000'));
                         const pPts = row.points ?? row.pts ?? 0;
-                        const pForm = Array.isArray(row.form) ? row.form : ['W', 'L', 'W', 'W'];
+                        const pForm = Array.isArray(row.recent_form) ? row.recent_form : (Array.isArray(row.form) ? row.form : []);
 
                         return (
-                          <View key={row.teamId || idx} style={[styles.mobileStandingsCard, standNum <= 2 && styles.mobileStandingsCardQualified]}>
+                          <View key={row.team_id || row.teamId || idx} style={[styles.mobileStandingsCard, standNum <= 3 && styles.mobileStandingsCardQualified]}>
                             <View style={styles.mobileStandingsCardTop}>
                               <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}>
                                 <View
@@ -2161,41 +2117,48 @@ export default function HomeScreen() {
                     </View>
                   ) : (
                     /* Desktop Wide Tabular View */
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ width: '100%' }}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ width: '100%' }} contentContainerStyle={{ flexGrow: 1, width: '100%' }}>
                       <View style={styles.tableBox}>
                         <View style={styles.tableHeaderRow}>
-                        <Text style={[styles.tableTh, { width: 50, textAlign: 'center' }]}>Stand</Text>
-                        <Text style={[styles.tableTh, { width: 230 }]}>Team / Club / College</Text>
-                        <Text style={[styles.tableTh, { width: 45, textAlign: 'center' }]}>P</Text>
-                        <Text style={[styles.tableTh, { width: 45, textAlign: 'center' }]}>W</Text>
-                        <Text style={[styles.tableTh, { width: 45, textAlign: 'center' }]}>L</Text>
-                        <Text style={[styles.tableTh, { width: 45, textAlign: 'center' }]}>NR</Text>
-                        <Text style={[styles.tableTh, { width: 60, textAlign: 'center' }]}>Bonus</Text>
-                        <Text style={[styles.tableTh, { width: 75, textAlign: 'center' }]}>NRR</Text>
-                        <Text style={[styles.tableTh, { width: 55, textAlign: 'center', color: '#0e184e', fontWeight: '800' }]}>PTS</Text>
-                        <Text style={[styles.tableTh, { width: 130, textAlign: 'center' }]}>Recent Form</Text>
+                        <Text style={[styles.tableTh, { width: 60, textAlign: 'center' }]}>Stand</Text>
+                        <Text style={[styles.tableTh, { flex: 2.4, minWidth: 220 }]}>Team / Club / College</Text>
+                        <Text style={[styles.tableTh, { flex: 0.5, minWidth: 45, textAlign: 'center' }]}>P</Text>
+                        <Text style={[styles.tableTh, { flex: 0.5, minWidth: 45, textAlign: 'center' }]}>W</Text>
+                        <Text style={[styles.tableTh, { flex: 0.5, minWidth: 45, textAlign: 'center' }]}>L</Text>
+                        <Text style={[styles.tableTh, { flex: 0.5, minWidth: 45, textAlign: 'center' }]}>NR</Text>
+                        <Text style={[styles.tableTh, { flex: 0.6, minWidth: 60, textAlign: 'center' }]}>Bonus</Text>
+                        <Text style={[styles.tableTh, { flex: 0.8, minWidth: 75, textAlign: 'center' }]}>NRR</Text>
+                        <Text style={[styles.tableTh, { flex: 0.6, minWidth: 55, textAlign: 'center', color: '#0e184e', fontWeight: '800' }]}>PTS</Text>
+                        <Text style={[styles.tableTh, { flex: 1.2, minWidth: 130, textAlign: 'center' }]}>Recent Form</Text>
                       </View>
 
                       {paginatedStandings.map((row: any, idx: number) => {
                         const globalIdx = (safeStandingsPage - 1) * STANDINGS_PER_PAGE + idx;
-                        const standNum = row.pos || row.stand || (globalIdx + 1);
+                        const standNum = row.position || row.pos || row.stand || (globalIdx + 1);
                         const isGold = standNum === 1;
                         const isSilver = standNum === 2;
                         const isBronze = standNum === 3;
-                        const teamTitle = row.teamName || row.name || 'District Club';
+                        const teamTitle = row.team_name || row.teamName || row.name || 'District Club';
                         const teamSubtitle = row.sub || (standNum <= 2 ? 'Qualified for Knockouts' : 'In Contention');
-                        const pPlayed = row.played ?? row.p ?? 5;
+                        const pPlayed = row.played ?? row.p ?? 0;
                         const pWon = row.won ?? row.w ?? 0;
                         const pLost = row.lost ?? row.l ?? 0;
-                        const pNr = row.nr ?? row.tied ?? 0;
-                        const pBonus = row.bonus ?? 1;
-                        const pNrr = row.nrr ?? '+0.000';
+                        const pNr = row.no_result ?? row.nr ?? row.tied ?? 0;
+                        const pBonus = row.bonus ?? 0;
+                        const pNrr = row.nrr_formatted || (typeof row.nrr === 'number' ? (row.nrr > 0 ? `+${row.nrr.toFixed(3)}` : row.nrr.toFixed(3)) : (row.nrr ?? '+0.000'));
                         const pPts = row.points ?? row.pts ?? 0;
-                        const pForm = Array.isArray(row.form) ? row.form : ['W', 'L', 'W', 'W'];
+                        const pForm = Array.isArray(row.recent_form) ? row.recent_form : (Array.isArray(row.form) ? row.form : []);
 
                         return (
-                          <View key={row.teamId || idx} style={[styles.tableRow, standNum <= 3 && styles.tableRowQualified]}>
-                            <View style={{ width: 50, alignItems: 'center' }}>
+                          <View
+                            key={row.team_id || row.teamId || idx}
+                            style={[
+                              styles.tableRow,
+                              idx % 2 === 1 && styles.tableRowAlt,
+                              standNum <= 3 && styles.tableRowQualified
+                            ]}
+                          >
+                            <View style={{ width: 60, alignItems: 'center' }}>
                               <View
                                 style={[
                                   styles.rankBadge,
@@ -2211,7 +2174,7 @@ export default function HomeScreen() {
                                 <Text style={styles.rankBadgeText}>{standNum}</Text>
                               </View>
                             </View>
-                            <View style={{ width: 230, flexDirection: 'row', alignItems: 'center' }}>
+                            <View style={{ flex: 2.4, minWidth: 220, flexDirection: 'row', alignItems: 'center' }}>
                               {resolveImageUrl(row.logo || row.photo || row.image_path) ? (
                                 <Image
                                   source={{ uri: resolveImageUrl(row.logo || row.photo || row.image_path)! }}
@@ -2223,18 +2186,18 @@ export default function HomeScreen() {
                                 <Text style={styles.pointsTeamSub}>{teamSubtitle}</Text>
                               </View>
                             </View>
-                            <Text style={[styles.tableTd, { width: 45, textAlign: 'center' }]}>{pPlayed}</Text>
-                            <Text style={[styles.tableTd, { width: 45, textAlign: 'center', fontWeight: '700' }]}>{pWon}</Text>
-                            <Text style={[styles.tableTd, { width: 45, textAlign: 'center' }]}>{pLost}</Text>
-                            <Text style={[styles.tableTd, { width: 45, textAlign: 'center', color: '#1e293b' }]}>
+                            <Text style={[styles.tableTd, { flex: 0.5, minWidth: 45, textAlign: 'center' }]}>{pPlayed}</Text>
+                            <Text style={[styles.tableTd, { flex: 0.5, minWidth: 45, textAlign: 'center', fontWeight: '700' }]}>{pWon}</Text>
+                            <Text style={[styles.tableTd, { flex: 0.5, minWidth: 45, textAlign: 'center' }]}>{pLost}</Text>
+                            <Text style={[styles.tableTd, { flex: 0.5, minWidth: 45, textAlign: 'center', color: '#1e293b' }]}>
                               {pNr}
                             </Text>
-                            <Text style={[styles.tableTd, { width: 60, textAlign: 'center' }]}>{pBonus}</Text>
-                            <Text style={[styles.tableTd, { width: 75, textAlign: 'center' }]}>{pNrr}</Text>
-                            <Text style={[styles.tableTd, { width: 55, textAlign: 'center', color: '#0e184e', fontWeight: '800' }]}>
+                            <Text style={[styles.tableTd, { flex: 0.6, minWidth: 60, textAlign: 'center' }]}>{pBonus}</Text>
+                            <Text style={[styles.tableTd, { flex: 0.8, minWidth: 75, textAlign: 'center' }]}>{pNrr}</Text>
+                            <Text style={[styles.tableTd, { flex: 0.6, minWidth: 55, textAlign: 'center', color: '#0e184e', fontWeight: '800' }]}>
                               {pPts}
                             </Text>
-                            <View style={{ width: 130, flexDirection: 'row', justifyContent: 'center', gap: 4 }}>
+                            <View style={{ flex: 1.2, minWidth: 130, flexDirection: 'row', justifyContent: 'center', gap: 4 }}>
                               {pForm.map((f: string, fi: number) => (
                                 <View
                                   key={fi}
@@ -2295,143 +2258,110 @@ export default function HomeScreen() {
               </Text>
             </View>
 
-            {/* Performance Tabs */}
-            <View style={[styles.perfTabsRow, isSmallMobile && { gap: 6, marginBottom: 14 }]}>
-              {[
-                { id: 'ratings', short: 'Player Ratings', label: 'Performance Ratings (0–10)', icon: 'star', iconType: 'ionicons' },
-                { id: 'batting', short: 'Batting', label: 'Batting Stats (Runs, 50/100s)', icon: 'cricket', iconType: 'mci' },
-                { id: 'bowling', short: 'Bowling', label: 'Bowling Stats (Runs, 3w/5w)', icon: 'disc-outline', iconType: 'ionicons' },
-                { id: 'fielding', short: 'Fielding', label: 'Fielding Stats (Catches, Stumpings)', icon: 'hand-back-right-outline', iconType: 'mci' }
-              ].map(t => (
-                <TouchableOpacity
-                  key={t.id}
-                  style={[
-                    styles.perfTabBtn,
-                    perfTab === t.id && styles.perfTabBtnActive,
-                    isSmallMobile && { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 18 }
-                  ]}
-                  onPress={() => {
-                    setPerfTab(t.id as any);
+            {/* Left Search Bar + Right Performance Select Dropdowns */}
+            <View style={{
+              flexDirection: isMobile ? 'column' : 'row',
+              justifyContent: 'space-between',
+              alignItems: isMobile ? 'stretch' : 'center',
+              gap: 12,
+              marginBottom: 14,
+              width: '100%'
+            }}>
+              <View style={[
+                styles.playerSearchBar,
+                { marginBottom: 0, flex: isMobile ? undefined : 1, width: isMobile ? '100%' : undefined, minWidth: isMobile ? '100%' : 220, height: 38, paddingHorizontal: 10 }
+              ]}>
+                <Ionicons name="search" size={15} color="#64748b" style={{ marginRight: 6 }} />
+                <TextInput
+                  style={[styles.playerSearchInput, { fontSize: 12.5, paddingVertical: 4 }]}
+                  placeholder="Search player, role, or team..."
+                  placeholderTextColor="#62799c"
+                  value={perfSearchQuery}
+                  onChangeText={(txt) => {
+                    setPerfSearchQuery(txt);
                     setPerfRatingsPage(1);
                     setPerfBattingPage(1);
                     setPerfBowlingPage(1);
                     setPerfFieldingPage(1);
                   }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    {t.iconType === 'ionicons' ? (
-                      <Ionicons
-                        name={t.icon as any}
-                        size={12}
-                        color={perfTab === t.id ? '#ffffff' : '#64748b'}
-                        style={{ marginRight: 5 }}
-                      />
-                    ) : (
-                      <MaterialCommunityIcons
-                        name={t.icon as any}
-                        size={13}
-                        color={perfTab === t.id ? '#ffffff' : '#64748b'}
-                        style={{ marginRight: 5 }}
-                      />
-                    )}
-                    <Text style={[
-                      styles.perfTabBtnText,
-                      perfTab === t.id && styles.perfTabBtnTextActive,
-                      isSmallMobile && { fontSize: 11 }
-                    ]}>
-                      {isSmallMobile ? t.short : t.label}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
+                />
+                {perfSearchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => {
+                    setPerfSearchQuery('');
+                    setPerfRatingsPage(1);
+                    setPerfBattingPage(1);
+                    setPerfBowlingPage(1);
+                    setPerfFieldingPage(1);
+                  }}>
+                    <Ionicons name="close-circle" size={16} color="#94a3b8" style={{ paddingLeft: 4 }} />
+                  </TouchableOpacity>
+                )}
+              </View>
 
-            {/* If Ratings Tab selected, show Category and Format Filters */}
-            {perfTab === 'ratings' && (
-              <View style={{ marginBottom: 14, gap: 8 }}>
-                {/* Category Selector */}
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-                  <Text style={{ color: '#d4af37', fontSize: 11, fontWeight: '800', marginRight: 4 }}>CATEGORY:</Text>
-                  {[
-                    { id: 'overall', label: 'Overall', icon: 'star', iconType: 'ionicons' },
-                    { id: 'batting', label: 'Batting', icon: 'cricket', iconType: 'mci' },
-                    { id: 'bowling', label: 'Bowling', icon: 'disc-outline', iconType: 'ionicons' }
-                  ].map(c => (
-                    <TouchableOpacity
-                      key={c.id}
-                      style={[
-                        styles.ratingSubFilterBtn,
-                        ratingCategory === c.id && styles.ratingSubFilterBtnActive
-                      ]}
-                      onPress={() => {
-                        setRatingCategory(c.id as any);
-                        setPerfRatingsPage(1);
-                        loadRatingsLeaderboard(c.id as any, ratingFormat);
-                      }}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        {c.iconType === 'ionicons' ? (
-                          <Ionicons
-                            name={c.icon as any}
-                            size={11}
-                            color={ratingCategory === c.id ? '#ffffff' : '#94a3b8'}
-                            style={{ marginRight: 4 }}
-                          />
-                        ) : (
-                          <MaterialCommunityIcons
-                            name={c.icon as any}
-                            size={12}
-                            color={ratingCategory === c.id ? '#ffffff' : '#94a3b8'}
-                            style={{ marginRight: 4 }}
-                          />
-                        )}
-                        <Text style={[
-                          styles.ratingSubFilterText,
-                          ratingCategory === c.id && styles.ratingSubFilterTextActive
-                        ]}>
-                          {c.label}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: isMobile ? 'flex-start' : 'flex-end' }}>
+                {renderSelectBox(
+                  'Stats',
+                  perfTab,
+                  [
+                    { id: 'ratings', label: 'Performance Ratings (0–10)' },
+                    { id: 'batting', label: 'Batting Stats (Runs, 50/100s)' },
+                    { id: 'bowling', label: 'Bowling Stats (Runs, 3w/5w)' },
+                    { id: 'fielding', label: 'Fielding Stats (Catches, Stumpings)' }
+                  ],
+                  (id) => {
+                    setPerfTab(id as any);
+                    setPerfRatingsPage(1);
+                    setPerfBattingPage(1);
+                    setPerfBowlingPage(1);
+                    setPerfFieldingPage(1);
+                  },
+                  230
+                )}
 
-                {/* Format Selector */}
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-                  <Text style={{ color: '#94a3b8', fontSize: 11, fontWeight: '800', marginRight: 4 }}>FORMAT:</Text>
-                  {[
+                {perfTab === 'ratings' && renderSelectBox(
+                  'Category',
+                  ratingCategory,
+                  [
+                    { id: 'overall', label: 'Overall' },
+                    { id: 'batting', label: 'Batting' },
+                    { id: 'bowling', label: 'Bowling' }
+                  ],
+                  (id) => {
+                    setRatingCategory(id as any);
+                    setPerfRatingsPage(1);
+                    loadRatingsLeaderboard(id as any, ratingFormat);
+                  },
+                  150
+                )}
+
+                {perfTab === 'ratings' && renderSelectBox(
+                  'Format',
+                  ratingFormat,
+                  [
                     { id: 'ALL', label: 'All Formats' },
                     { id: 'T20', label: 'T20' },
                     { id: 'ONE_DAY', label: 'One-Day' }
-                  ].map(f => (
-                    <TouchableOpacity
-                      key={f.id}
-                      style={[
-                        styles.ratingFormatBtn,
-                        ratingFormat === f.id && styles.ratingFormatBtnActive
-                      ]}
-                      onPress={() => {
-                        setRatingFormat(f.id as any);
-                        setPerfRatingsPage(1);
-                        loadRatingsLeaderboard(ratingCategory, f.id as any);
-                      }}
-                    >
-                      <Text style={[
-                        styles.ratingFormatText,
-                        ratingFormat === f.id && styles.ratingFormatTextActive
-                      ]}>
-                        {f.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+                  ],
+                  (id) => {
+                    setRatingFormat(id as any);
+                    setPerfRatingsPage(1);
+                    loadRatingsLeaderboard(ratingCategory, id as any);
+                  },
+                  155
+                )}
               </View>
-            )}
+            </View>
 
             {/* Dynamic Performance Table with Reusable Pagination (8 items per page) */}
             {(() => {
+              const pQuery = perfSearchQuery.trim().toLowerCase();
+              const matchesPerfQuery = (item: any) => !pQuery ||
+                (item.playerName || item.name || '').toLowerCase().includes(pQuery) ||
+                (item.role || '').toLowerCase().includes(pQuery) ||
+                (item.team || item.teamShort || '').toLowerCase().includes(pQuery);
+
               // 1. Ratings Pagination Data
-              const fullRatingsList = ratingLeaders.length > 0 ? ratingLeaders : [];
+              const fullRatingsList = (ratingLeaders.length > 0 ? ratingLeaders : []).filter(matchesPerfQuery);
               const totalRatingsPages = Math.ceil(fullRatingsList.length / PERF_PER_PAGE) || 1;
               const safeRatingsPage = Math.min(perfRatingsPage, totalRatingsPages);
               const paginatedRatings = fullRatingsList.slice(
@@ -2440,7 +2370,7 @@ export default function HomeScreen() {
               );
 
               // 2. Batting Pagination Data
-              const fullBattingList = portalTopBatsmen.length > 0 ? portalTopBatsmen : PERF_DATA.batting;
+              const fullBattingList = (portalTopBatsmen.length > 0 ? portalTopBatsmen : PERF_DATA.batting).filter(matchesPerfQuery);
               const totalBattingPages = Math.ceil(fullBattingList.length / PERF_PER_PAGE) || 1;
               const safeBattingPage = Math.min(perfBattingPage, totalBattingPages);
               const paginatedBatting = fullBattingList.slice(
@@ -2449,7 +2379,7 @@ export default function HomeScreen() {
               );
 
               // 3. Bowling Pagination Data
-              const fullBowlingList = portalTopBowlers.length > 0 ? portalTopBowlers : PERF_DATA.bowling;
+              const fullBowlingList = (portalTopBowlers.length > 0 ? portalTopBowlers : PERF_DATA.bowling).filter(matchesPerfQuery);
               const totalBowlingPages = Math.ceil(fullBowlingList.length / PERF_PER_PAGE) || 1;
               const safeBowlingPage = Math.min(perfBowlingPage, totalBowlingPages);
               const paginatedBowling = fullBowlingList.slice(
@@ -2458,7 +2388,7 @@ export default function HomeScreen() {
               );
 
               // 4. Fielding Pagination Data
-              const fullFieldingList = portalTopFielders.length > 0 ? portalTopFielders : PERF_DATA.fielding;
+              const fullFieldingList = (portalTopFielders.length > 0 ? portalTopFielders : PERF_DATA.fielding).filter(matchesPerfQuery);
               const totalFieldingPages = Math.ceil(fullFieldingList.length / PERF_PER_PAGE) || 1;
               const safeFieldingPage = Math.min(perfFieldingPage, totalFieldingPages);
               const paginatedFielding = fullFieldingList.slice(
@@ -2476,12 +2406,20 @@ export default function HomeScreen() {
                             <ActivityIndicator size="small" color="#f59e0b" />
                             <Text style={{ color: '#94a3b8', fontSize: 11, marginTop: 8 }}>Computing Player Ratings...</Text>
                           </View>
+                        ) : paginatedRatings.length === 0 ? (
+                          <View style={{ padding: 24, alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                            <Ionicons name="star-outline" size={24} color="#94a3b8" style={{ marginBottom: 6 }} />
+                            <Text style={{ color: '#0f172a', fontWeight: '700', fontSize: 13 }}>No Player Ratings Recorded Yet</Text>
+                            <Text style={{ color: '#64748b', fontSize: 11, textAlign: 'center', marginTop: 3 }}>
+                              Ratings will appear automatically once matches and innings are scored.
+                            </Text>
+                          </View>
                         ) : paginatedRatings.map((p: any, idx: number) => {
                           const globalIdx = (safeRatingsPage - 1) * PERF_PER_PAGE + idx;
                           const rank = globalIdx + 1;
                           const score = ratingCategory === 'batting' ? p.battingRating : (ratingCategory === 'bowling' ? p.bowlingRating : p.overallRating);
                           return (
-                            <View key={p.playerId || idx} style={styles.mobilePerfCard}>
+                            <View key={p.playerId || idx} style={[styles.mobilePerfCard, rank <= 3 && styles.mobileStandingsCardQualified]}>
                               <View style={styles.mobilePerfCardTop}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}>
                                   <View style={[styles.rankBadge, rank === 1 ? styles.rankBadgeGold : rank === 2 ? styles.rankBadgeSilver : rank === 3 ? styles.rankBadgeBronze : null, { marginRight: 8, width: 24, height: 24, borderRadius: 12 }]}>
@@ -2691,32 +2629,47 @@ export default function HomeScreen() {
                       )}
                     </View>
                   ) : (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ width: '100%' }}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ width: '100%' }} contentContainerStyle={{ flexGrow: 1, width: '100%' }}>
                     <View style={styles.tableBox}>
                       {perfTab === 'ratings' && (
-                        <View>
+                        <View style={{ width: '100%' }}>
                           <View style={styles.tableHeaderRow}>
-                            <Text style={[styles.tableTh, { width: 50, textAlign: 'center' }]}>Rank</Text>
-                            <Text style={[styles.tableTh, { width: 180 }]}>Player / Role</Text>
-                            <Text style={[styles.tableTh, { width: 65, textAlign: 'center' }]}>Matches</Text>
-                            <Text style={[styles.tableTh, { width: 140, textAlign: 'center' }]}>Rating (0-10)</Text>
-                            <Text style={[styles.tableTh, { width: 100, textAlign: 'center' }]}>Confidence</Text>
-                            <Text style={[styles.tableTh, { width: 75, textAlign: 'center' }]}>Batting</Text>
-                            <Text style={[styles.tableTh, { width: 75, textAlign: 'center' }]}>Bowling</Text>
-                            <Text style={[styles.tableTh, { width: 75, textAlign: 'center' }]}>Fielding</Text>
+                            <Text style={[styles.tableTh, { width: 60, textAlign: 'center' }]}>Rank</Text>
+                            <Text style={[styles.tableTh, { flex: 2.2, minWidth: 180 }]}>Player / Role</Text>
+                            <Text style={[styles.tableTh, { flex: 0.7, minWidth: 65, textAlign: 'center' }]}>Matches</Text>
+                            <Text style={[styles.tableTh, { flex: 1.3, minWidth: 130, textAlign: 'center' }]}>Rating (0-10)</Text>
+                            <Text style={[styles.tableTh, { flex: 1.1, minWidth: 100, textAlign: 'center' }]}>Confidence</Text>
+                            <Text style={[styles.tableTh, { flex: 0.8, minWidth: 75, textAlign: 'center' }]}>Batting</Text>
+                            <Text style={[styles.tableTh, { flex: 0.8, minWidth: 75, textAlign: 'center' }]}>Bowling</Text>
+                            <Text style={[styles.tableTh, { flex: 0.8, minWidth: 75, textAlign: 'center' }]}>Fielding</Text>
                           </View>
                           {isLoadingLeaders ? (
                             <View style={{ padding: 24, alignItems: 'center' }}>
                               <ActivityIndicator size="small" color="#f59e0b" />
                               <Text style={{ color: '#94a3b8', fontSize: 11, marginTop: 8 }}>Computing Player Ratings...</Text>
                             </View>
+                          ) : paginatedRatings.length === 0 ? (
+                            <View style={{ padding: 28, alignItems: 'center' }}>
+                              <Ionicons name="star-outline" size={26} color="#94a3b8" style={{ marginBottom: 6 }} />
+                              <Text style={{ color: '#0f172a', fontWeight: '700', fontSize: 13 }}>No Player Ratings Recorded Yet</Text>
+                              <Text style={{ color: '#64748b', fontSize: 11.5, marginTop: 3 }}>
+                                Ratings will appear automatically once matches and player innings are scored in the database.
+                              </Text>
+                            </View>
                           ) : paginatedRatings.map((p: any, idx: number) => {
                             const globalIdx = (safeRatingsPage - 1) * PERF_PER_PAGE + idx;
                             const rank = globalIdx + 1;
                             const score = ratingCategory === 'batting' ? p.battingRating : (ratingCategory === 'bowling' ? p.bowlingRating : p.overallRating);
                             return (
-                              <View key={p.playerId || idx} style={styles.tableRow}>
-                                <View style={{ width: 50, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' }}>
+                              <View
+                                key={p.playerId || idx}
+                                style={[
+                                  styles.tableRow,
+                                  idx % 2 === 1 && styles.tableRowAlt,
+                                  rank <= 3 && styles.tableRowQualified
+                                ]}
+                              >
+                                <View style={{ width: 60, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' }}>
                                   {rank === 1 ? (
                                     <FontAwesome5 name="medal" size={11} color="#eab308" style={{ marginRight: 3 }} />
                                   ) : rank === 2 ? (
@@ -2728,12 +2681,12 @@ export default function HomeScreen() {
                                     {rank <= 3 ? `${rank}` : `#${rank}`}
                                   </Text>
                                 </View>
-                                <View style={{ width: 180 }}>
+                                <View style={{ flex: 2.2, minWidth: 180 }}>
                                   <Text style={styles.pointsTeamName}>{p.playerName}</Text>
                                   <Text style={styles.playerSubRole}>{p.role || 'Player'}</Text>
                                 </View>
-                                <Text style={[styles.tableTd, { width: 65, textAlign: 'center', color: '#1e293b' }]}>{p.matchesCount || 1}</Text>
-                                <View style={{ width: 140, alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={[styles.tableTd, { flex: 0.7, minWidth: 65, textAlign: 'center', color: '#1e293b' }]}>{p.matchesCount || 1}</Text>
+                                <View style={{ flex: 1.3, minWidth: 130, alignItems: 'center', justifyContent: 'center' }}>
                                   <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fef3c7', paddingHorizontal: 9, paddingVertical: 3.5, borderRadius: 6, borderWidth: 1, borderColor: '#fde68a' }}>
                                     <Text style={{ color: '#0e184e', fontWeight: '900', fontSize: 13 }}>
                                       {score !== null && score !== undefined ? `${Number(score).toFixed(1)}` : '—'}
@@ -2743,7 +2696,7 @@ export default function HomeScreen() {
                                     )}
                                   </View>
                                 </View>
-                                <View style={{ width: 100, alignItems: 'center', justifyContent: 'center' }}>
+                                <View style={{ flex: 1.1, minWidth: 100, alignItems: 'center', justifyContent: 'center' }}>
                                   <Text style={{
                                     fontSize: 10,
                                     fontWeight: '700',
@@ -2758,13 +2711,13 @@ export default function HomeScreen() {
                                     {p.confidence || 'Provisional'}
                                   </Text>
                                 </View>
-                                <Text style={[styles.tableTd, { width: 75, textAlign: 'center', fontWeight: '700', color: '#1e293b' }]}>
+                                <Text style={[styles.tableTd, { flex: 0.8, minWidth: 75, textAlign: 'center', fontWeight: '700', color: '#1e293b' }]}>
                                   {p.battingRating !== null && p.battingRating !== undefined ? `${Number(p.battingRating).toFixed(1)}` : '—'}
                                 </Text>
-                                <Text style={[styles.tableTd, { width: 75, textAlign: 'center', fontWeight: '700', color: '#1e293b' }]}>
+                                <Text style={[styles.tableTd, { flex: 0.8, minWidth: 75, textAlign: 'center', fontWeight: '700', color: '#1e293b' }]}>
                                   {p.bowlingRating !== null && p.bowlingRating !== undefined ? `${Number(p.bowlingRating).toFixed(1)}` : '—'}
                                 </Text>
-                                <Text style={[styles.tableTd, { width: 75, textAlign: 'center', fontWeight: '700', color: '#1e293b' }]}>
+                                <Text style={[styles.tableTd, { flex: 0.8, minWidth: 75, textAlign: 'center', fontWeight: '700', color: '#1e293b' }]}>
                                   {p.fieldingRating !== null && p.fieldingRating !== undefined ? `${Number(p.fieldingRating).toFixed(1)}` : '—'}
                                 </Text>
                               </View>
@@ -2774,28 +2727,35 @@ export default function HomeScreen() {
                       )}
 
                       {perfTab === 'batting' && (
-                        <View>
+                        <View style={{ width: '100%' }}>
                           <View style={styles.tableHeaderRow}>
-                            <Text style={[styles.tableTh, { width: 50, textAlign: 'center' }]}>Stand</Text>
-                            <Text style={[styles.tableTh, { width: 170 }]}>Player / Role</Text>
-                            <Text style={[styles.tableTh, { width: 170 }]}>Team</Text>
-                            <Text style={[styles.tableTh, { width: 45, textAlign: 'center' }]}>Mat</Text>
-                            <Text style={[styles.tableTh, { width: 45, textAlign: 'center' }]}>Inns</Text>
-                            <Text style={[styles.tableTh, { width: 55, textAlign: 'center' }]}>HS</Text>
-                            <Text style={[styles.tableTh, { width: 55, textAlign: 'center' }]}>Avg</Text>
-                            <Text style={[styles.tableTh, { width: 55, textAlign: 'center' }]}>SR</Text>
-                            <Text style={[styles.tableTh, { width: 45, textAlign: 'center' }]}>50s</Text>
-                            <Text style={[styles.tableTh, { width: 45, textAlign: 'center' }]}>100s</Text>
-                            <Text style={[styles.tableTh, { width: 65, textAlign: 'right', color: '#0e184e', fontWeight: '800' }]}>Runs</Text>
+                            <Text style={[styles.tableTh, { width: 55, textAlign: 'center' }]}>Stand</Text>
+                            <Text style={[styles.tableTh, { flex: 1.8, minWidth: 170 }]}>Player / Role</Text>
+                            <Text style={[styles.tableTh, { flex: 1.6, minWidth: 150 }]}>Team</Text>
+                            <Text style={[styles.tableTh, { flex: 0.5, minWidth: 45, textAlign: 'center' }]}>Mat</Text>
+                            <Text style={[styles.tableTh, { flex: 0.5, minWidth: 45, textAlign: 'center' }]}>Inns</Text>
+                            <Text style={[styles.tableTh, { flex: 0.6, minWidth: 55, textAlign: 'center' }]}>HS</Text>
+                            <Text style={[styles.tableTh, { flex: 0.6, minWidth: 55, textAlign: 'center' }]}>Avg</Text>
+                            <Text style={[styles.tableTh, { flex: 0.6, minWidth: 55, textAlign: 'center' }]}>SR</Text>
+                            <Text style={[styles.tableTh, { flex: 0.5, minWidth: 45, textAlign: 'center' }]}>50s</Text>
+                            <Text style={[styles.tableTh, { flex: 0.5, minWidth: 45, textAlign: 'center' }]}>100s</Text>
+                            <Text style={[styles.tableTh, { flex: 0.7, minWidth: 65, textAlign: 'right', color: '#0e184e', fontWeight: '800' }]}>Runs</Text>
                           </View>
                           {paginatedBatting.map((p: any, idx: number) => {
                             const globalIdx = (safeBattingPage - 1) * PERF_PER_PAGE + idx;
                             return (
-                              <View key={p.id || idx} style={styles.tableRow}>
-                                <Text style={[styles.tableTd, { width: 50, textAlign: 'center', fontWeight: '700' }]}>
+                              <View
+                                key={p.id || idx}
+                                style={[
+                                  styles.tableRow,
+                                  idx % 2 === 1 && styles.tableRowAlt,
+                                  globalIdx < 3 && styles.tableRowQualified
+                                ]}
+                              >
+                                <Text style={[styles.tableTd, { width: 55, textAlign: 'center', fontWeight: '700' }]}>
                                   {p.stand || (globalIdx + 1)}
                                 </Text>
-                                <View style={{ width: 170, flexDirection: 'row', alignItems: 'center' }}>
+                                <View style={{ flex: 1.8, minWidth: 170, flexDirection: 'row', alignItems: 'center' }}>
                                   {resolveImageUrl(p.photo || p.image || p.image_path) ? (
                                     <Image
                                       source={{ uri: resolveImageUrl(p.photo || p.image || p.image_path)! }}
@@ -2807,19 +2767,19 @@ export default function HomeScreen() {
                                     <Text style={styles.playerSubRole}>{p.role || 'Batter'}</Text>
                                   </View>
                                 </View>
-                                <Text style={[styles.tableTd, { width: 170 }]}>{p.team || 'District Club'}</Text>
-                                <Text style={[styles.tableTd, { width: 45, textAlign: 'center' }]}>{p.mat || 5}</Text>
-                                <Text style={[styles.tableTd, { width: 45, textAlign: 'center' }]}>{p.inns || 5}</Text>
-                                <Text style={[styles.tableTd, { width: 55, textAlign: 'center', fontWeight: '600' }]}>{p.hs || (p.runs ? p.runs + '*' : '50*')}</Text>
-                                <Text style={[styles.tableTd, { width: 55, textAlign: 'center' }]}>{p.average || p.avg || '35.0'}</Text>
-                                <Text style={[styles.tableTd, { width: 55, textAlign: 'center' }]}>{p.strikeRate || p.sr || '135.0'}</Text>
-                                <Text style={[styles.tableTd, { width: 45, textAlign: 'center', fontWeight: '600', color: '#1e293b' }]}>
+                                <Text style={[styles.tableTd, { flex: 1.6, minWidth: 150 }]}>{p.team || 'District Club'}</Text>
+                                <Text style={[styles.tableTd, { flex: 0.5, minWidth: 45, textAlign: 'center' }]}>{p.mat || 5}</Text>
+                                <Text style={[styles.tableTd, { flex: 0.5, minWidth: 45, textAlign: 'center' }]}>{p.inns || 5}</Text>
+                                <Text style={[styles.tableTd, { flex: 0.6, minWidth: 55, textAlign: 'center', fontWeight: '600' }]}>{p.hs || (p.runs ? p.runs + '*' : '50*')}</Text>
+                                <Text style={[styles.tableTd, { flex: 0.6, minWidth: 55, textAlign: 'center' }]}>{p.average || p.avg || '35.0'}</Text>
+                                <Text style={[styles.tableTd, { flex: 0.6, minWidth: 55, textAlign: 'center' }]}>{p.strikeRate || p.sr || '135.0'}</Text>
+                                <Text style={[styles.tableTd, { flex: 0.5, minWidth: 45, textAlign: 'center', fontWeight: '600', color: '#1e293b' }]}>
                                   {p.fifties ?? (p.runs >= 100 ? 1 : 0)}
                                 </Text>
-                                <Text style={[styles.tableTd, { width: 45, textAlign: 'center', fontWeight: '600', color: '#1e293b' }]}>
+                                <Text style={[styles.tableTd, { flex: 0.5, minWidth: 45, textAlign: 'center', fontWeight: '600', color: '#1e293b' }]}>
                                   {p.hundreds ?? 0}
                                 </Text>
-                                <Text style={[styles.tableTd, { width: 65, textAlign: 'right', color: '#0e184e', fontWeight: '800' }]}>
+                                <Text style={[styles.tableTd, { flex: 0.7, minWidth: 65, textAlign: 'right', color: '#0e184e', fontWeight: '800' }]}>
                                   {p.runs || 0}
                                 </Text>
                               </View>
@@ -2829,28 +2789,35 @@ export default function HomeScreen() {
                       )}
 
                       {perfTab === 'bowling' && (
-                        <View>
+                        <View style={{ width: '100%' }}>
                           <View style={styles.tableHeaderRow}>
-                            <Text style={[styles.tableTh, { width: 50, textAlign: 'center' }]}>Stand</Text>
-                            <Text style={[styles.tableTh, { width: 170 }]}>Bowler / Style</Text>
-                            <Text style={[styles.tableTh, { width: 170 }]}>Team</Text>
-                            <Text style={[styles.tableTh, { width: 45, textAlign: 'center' }]}>Mat</Text>
-                            <Text style={[styles.tableTh, { width: 45, textAlign: 'center' }]}>Inns</Text>
-                            <Text style={[styles.tableTh, { width: 55, textAlign: 'center' }]}>Overs</Text>
-                            <Text style={[styles.tableTh, { width: 55, textAlign: 'center' }]}>Runs</Text>
-                            <Text style={[styles.tableTh, { width: 55, textAlign: 'center' }]}>Econ</Text>
-                            <Text style={[styles.tableTh, { width: 50, textAlign: 'center' }]}>3w</Text>
-                            <Text style={[styles.tableTh, { width: 50, textAlign: 'center' }]}>5w</Text>
-                            <Text style={[styles.tableTh, { width: 65, textAlign: 'right', color: '#0e184e', fontWeight: '800' }]}>Wkts</Text>
+                            <Text style={[styles.tableTh, { width: 55, textAlign: 'center' }]}>Stand</Text>
+                            <Text style={[styles.tableTh, { flex: 1.8, minWidth: 170 }]}>Bowler / Style</Text>
+                            <Text style={[styles.tableTh, { flex: 1.6, minWidth: 150 }]}>Team</Text>
+                            <Text style={[styles.tableTh, { flex: 0.5, minWidth: 45, textAlign: 'center' }]}>Mat</Text>
+                            <Text style={[styles.tableTh, { flex: 0.5, minWidth: 45, textAlign: 'center' }]}>Inns</Text>
+                            <Text style={[styles.tableTh, { flex: 0.6, minWidth: 55, textAlign: 'center' }]}>Overs</Text>
+                            <Text style={[styles.tableTh, { flex: 0.6, minWidth: 55, textAlign: 'center' }]}>Runs</Text>
+                            <Text style={[styles.tableTh, { flex: 0.6, minWidth: 55, textAlign: 'center' }]}>Econ</Text>
+                            <Text style={[styles.tableTh, { flex: 0.5, minWidth: 50, textAlign: 'center' }]}>3w</Text>
+                            <Text style={[styles.tableTh, { flex: 0.5, minWidth: 50, textAlign: 'center' }]}>5w</Text>
+                            <Text style={[styles.tableTh, { flex: 0.7, minWidth: 65, textAlign: 'right', color: '#0e184e', fontWeight: '800' }]}>Wkts</Text>
                           </View>
                           {paginatedBowling.map((p: any, idx: number) => {
                             const globalIdx = (safeBowlingPage - 1) * PERF_PER_PAGE + idx;
                             return (
-                              <View key={p.id || idx} style={styles.tableRow}>
-                                <Text style={[styles.tableTd, { width: 50, textAlign: 'center', fontWeight: '700' }]}>
+                              <View
+                                key={p.id || idx}
+                                style={[
+                                  styles.tableRow,
+                                  idx % 2 === 1 && styles.tableRowAlt,
+                                  globalIdx < 3 && styles.tableRowQualified
+                                ]}
+                              >
+                                <Text style={[styles.tableTd, { width: 55, textAlign: 'center', fontWeight: '700' }]}>
                                   {p.stand || (globalIdx + 1)}
                                 </Text>
-                                <View style={{ width: 170, flexDirection: 'row', alignItems: 'center' }}>
+                                <View style={{ flex: 1.8, minWidth: 170, flexDirection: 'row', alignItems: 'center' }}>
                                   {resolveImageUrl(p.photo || p.image || p.image_path) ? (
                                     <Image
                                       source={{ uri: resolveImageUrl(p.photo || p.image || p.image_path)! }}
@@ -2862,19 +2829,19 @@ export default function HomeScreen() {
                                     <Text style={styles.playerSubRole}>{p.role || 'Bowler'}</Text>
                                   </View>
                                 </View>
-                                <Text style={[styles.tableTd, { width: 170 }]}>{p.team || 'District Club'}</Text>
-                                <Text style={[styles.tableTd, { width: 45, textAlign: 'center' }]}>{p.mat || 5}</Text>
-                                <Text style={[styles.tableTd, { width: 45, textAlign: 'center' }]}>{p.inns || 5}</Text>
-                                <Text style={[styles.tableTd, { width: 55, textAlign: 'center' }]}>{p.overs || '20.0'}</Text>
-                                <Text style={[styles.tableTd, { width: 55, textAlign: 'center' }]}>{p.runs_conceded || p.runs || 120}</Text>
-                                <Text style={[styles.tableTd, { width: 55, textAlign: 'center' }]}>{p.economy || p.econ || '6.50'}</Text>
-                                <Text style={[styles.tableTd, { width: 50, textAlign: 'center', fontWeight: '600', color: '#1e293b' }]}>
+                                <Text style={[styles.tableTd, { flex: 1.6, minWidth: 150 }]}>{p.team || 'District Club'}</Text>
+                                <Text style={[styles.tableTd, { flex: 0.5, minWidth: 45, textAlign: 'center' }]}>{p.mat || 5}</Text>
+                                <Text style={[styles.tableTd, { flex: 0.5, minWidth: 45, textAlign: 'center' }]}>{p.inns || 5}</Text>
+                                <Text style={[styles.tableTd, { flex: 0.6, minWidth: 55, textAlign: 'center' }]}>{p.overs || '20.0'}</Text>
+                                <Text style={[styles.tableTd, { flex: 0.6, minWidth: 55, textAlign: 'center' }]}>{p.runs_conceded || p.runs || 120}</Text>
+                                <Text style={[styles.tableTd, { flex: 0.6, minWidth: 55, textAlign: 'center' }]}>{p.economy || p.econ || '6.50'}</Text>
+                                <Text style={[styles.tableTd, { flex: 0.5, minWidth: 50, textAlign: 'center', fontWeight: '600', color: '#1e293b' }]}>
                                   {p.threeWkts ?? (p.wickets >= 3 ? 1 : 0)}
                                 </Text>
-                                <Text style={[styles.tableTd, { width: 50, textAlign: 'center', fontWeight: '600', color: '#1e293b' }]}>
+                                <Text style={[styles.tableTd, { flex: 0.5, minWidth: 50, textAlign: 'center', fontWeight: '600', color: '#1e293b' }]}>
                                   {p.fiveWkts ?? (p.wickets >= 5 ? 1 : 0)}
                                 </Text>
-                                <Text style={[styles.tableTd, { width: 65, textAlign: 'right', color: '#0e184e', fontWeight: '800' }]}>
+                                <Text style={[styles.tableTd, { flex: 0.7, minWidth: 65, textAlign: 'right', color: '#0e184e', fontWeight: '800' }]}>
                                   {p.wickets || 0}
                                 </Text>
                               </View>
@@ -2884,26 +2851,33 @@ export default function HomeScreen() {
                       )}
 
                       {perfTab === 'fielding' && (
-                        <View>
+                        <View style={{ width: '100%' }}>
                           <View style={styles.tableHeaderRow}>
-                            <Text style={[styles.tableTh, { width: 50, textAlign: 'center' }]}>Stand</Text>
-                            <Text style={[styles.tableTh, { width: 180 }]}>Player / Role</Text>
-                            <Text style={[styles.tableTh, { width: 180 }]}>Team</Text>
-                            <Text style={[styles.tableTh, { width: 50, textAlign: 'center' }]}>Mat</Text>
-                            <Text style={[styles.tableTh, { width: 50, textAlign: 'center' }]}>Inns</Text>
-                            <Text style={[styles.tableTh, { width: 60, textAlign: 'center' }]}>Catches</Text>
-                            <Text style={[styles.tableTh, { width: 70, textAlign: 'center' }]}>Stumpings</Text>
-                            <Text style={[styles.tableTh, { width: 70, textAlign: 'center' }]}>Run Outs</Text>
-                            <Text style={[styles.tableTh, { width: 70, textAlign: 'right', color: '#0e184e', fontWeight: '800' }]}>Total</Text>
+                            <Text style={[styles.tableTh, { width: 55, textAlign: 'center' }]}>Stand</Text>
+                            <Text style={[styles.tableTh, { flex: 1.8, minWidth: 180 }]}>Player / Role</Text>
+                            <Text style={[styles.tableTh, { flex: 1.6, minWidth: 160 }]}>Team</Text>
+                            <Text style={[styles.tableTh, { flex: 0.5, minWidth: 50, textAlign: 'center' }]}>Mat</Text>
+                            <Text style={[styles.tableTh, { flex: 0.5, minWidth: 50, textAlign: 'center' }]}>Inns</Text>
+                            <Text style={[styles.tableTh, { flex: 0.7, minWidth: 60, textAlign: 'center' }]}>Catches</Text>
+                            <Text style={[styles.tableTh, { flex: 0.8, minWidth: 70, textAlign: 'center' }]}>Stumpings</Text>
+                            <Text style={[styles.tableTh, { flex: 0.8, minWidth: 70, textAlign: 'center' }]}>Run Outs</Text>
+                            <Text style={[styles.tableTh, { flex: 0.8, minWidth: 70, textAlign: 'right', color: '#0e184e', fontWeight: '800' }]}>Total</Text>
                           </View>
                           {paginatedFielding.map((p: any, idx: number) => {
                             const globalIdx = (safeFieldingPage - 1) * PERF_PER_PAGE + idx;
                             return (
-                              <View key={p.id || idx} style={styles.tableRow}>
-                                <Text style={[styles.tableTd, { width: 50, textAlign: 'center', fontWeight: '700' }]}>
+                              <View
+                                key={p.id || idx}
+                                style={[
+                                  styles.tableRow,
+                                  idx % 2 === 1 && styles.tableRowAlt,
+                                  globalIdx < 3 && styles.tableRowQualified
+                                ]}
+                              >
+                                <Text style={[styles.tableTd, { width: 55, textAlign: 'center', fontWeight: '700' }]}>
                                   {p.stand || (globalIdx + 1)}
                                 </Text>
-                                <View style={{ width: 180, flexDirection: 'row', alignItems: 'center' }}>
+                                <View style={{ flex: 1.8, minWidth: 180, flexDirection: 'row', alignItems: 'center' }}>
                                   {resolveImageUrl(p.photo || p.image || p.image_path) ? (
                                     <Image
                                       source={{ uri: resolveImageUrl(p.photo || p.image || p.image_path)! }}
@@ -2915,19 +2889,19 @@ export default function HomeScreen() {
                                     <Text style={styles.playerSubRole}>{p.role || 'Fielder'}</Text>
                                   </View>
                                 </View>
-                                <Text style={[styles.tableTd, { width: 180 }]}>{p.team || 'District Club'}</Text>
-                                <Text style={[styles.tableTd, { width: 50, textAlign: 'center' }]}>{p.mat || 5}</Text>
-                                <Text style={[styles.tableTd, { width: 50, textAlign: 'center' }]}>{p.inns || 5}</Text>
-                                <Text style={[styles.tableTd, { width: 60, textAlign: 'center', fontWeight: '600', color: '#1e293b' }]}>
+                                <Text style={[styles.tableTd, { flex: 1.6, minWidth: 160 }]}>{p.team || 'District Club'}</Text>
+                                <Text style={[styles.tableTd, { flex: 0.5, minWidth: 50, textAlign: 'center' }]}>{p.mat || 5}</Text>
+                                <Text style={[styles.tableTd, { flex: 0.5, minWidth: 50, textAlign: 'center' }]}>{p.inns || 5}</Text>
+                                <Text style={[styles.tableTd, { flex: 0.7, minWidth: 60, textAlign: 'center', fontWeight: '600', color: '#1e293b' }]}>
                                   {p.catches || 0}
                                 </Text>
-                                <Text style={[styles.tableTd, { width: 70, textAlign: 'center', fontWeight: '600', color: '#1e293b' }]}>
+                                <Text style={[styles.tableTd, { flex: 0.8, minWidth: 70, textAlign: 'center', fontWeight: '600', color: '#1e293b' }]}>
                                   {p.stumpings || 0}
                                 </Text>
-                                <Text style={[styles.tableTd, { width: 70, textAlign: 'center', fontWeight: '600', color: '#1e293b' }]}>
+                                <Text style={[styles.tableTd, { flex: 0.8, minWidth: 70, textAlign: 'center', fontWeight: '600', color: '#1e293b' }]}>
                                   {p.runOuts || 0}
                                 </Text>
-                                <Text style={[styles.tableTd, { width: 70, textAlign: 'right', color: '#0e184e', fontWeight: '800' }]}>
+                                <Text style={[styles.tableTd, { flex: 0.8, minWidth: 70, textAlign: 'right', color: '#0e184e', fontWeight: '800' }]}>
                                   {p.dismissals || (p.catches || 0) + (p.stumpings || 0)}
                                 </Text>
                               </View>
@@ -3008,95 +2982,59 @@ export default function HomeScreen() {
               </Text>
             </View>
 
-            {/* Search Bar */}
-            <View style={styles.playerSearchBar}>
-              <Ionicons name="search" size={16} color="#64748b" style={{ marginRight: 6 }} />
-              <TextInput
-                style={styles.playerSearchInput}
-                placeholder="Search milestone player by name, record (100, 50, 5W), team, or taluk..."
-                placeholderTextColor="#62799c"
-                value={playerSearchQuery}
-                onChangeText={(t) => {
-                  setPlayerSearchQuery(t);
-                  setMilestonePage(1);
-                }}
-              />
-              {playerSearchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => {
-                  setPlayerSearchQuery('');
-                  setMilestonePage(1);
-                }}>
-                  <Ionicons name="close-circle" size={18} color="#94a3b8" style={{ paddingHorizontal: 4 }} />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Category Filter Pills */}
-            {isMobile ? (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-                {[
-                  { id: 'all', label: `All Records (${filteredPlayers.length})`, icon: 'trophy-outline', iconColor: '#b45309' },
-                  { id: 'century', label: 'Centuries (100+)', icon: 'ribbon-outline', iconColor: '#b45309' },
-                  { id: 'fifty', label: 'Half-Centuries (50+)', icon: 'medal-outline', iconColor: '#c2410c' },
-                  { id: 'bowler', label: 'Bowling Hauls (3W+ / 5W)', icon: 'disc-outline', iconColor: '#7e22ce' },
-                  { id: 'womens', label: "Women's Milestones", icon: 'female-outline', iconColor: '#db2777' }
-                ].map(f => (
-                  <TouchableOpacity
-                    key={f.id}
-                    style={[
-                      styles.playerPillBtn,
-                      playerFilter === f.id && styles.playerPillBtnActive,
-                      { marginRight: 0, paddingHorizontal: 10, paddingVertical: 6 }
-                    ]}
-                    onPress={() => {
-                      setPlayerFilter(f.id);
-                      setMilestonePage(1);
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons
-                      name={f.icon as any}
-                      size={12}
-                      color={playerFilter === f.id ? '#ffffff' : f.iconColor}
-                      style={{ marginRight: 4 }}
-                    />
-                    <Text style={[styles.playerPillBtnText, playerFilter === f.id && styles.playerPillBtnTextActive, { fontSize: 11 }]}>
-                      {f.label}
-                    </Text>
+            {/* Left Search Bar + Right Milestone Select Dropdown */}
+            <View style={{
+              flexDirection: isMobile ? 'column' : 'row',
+              justifyContent: 'space-between',
+              alignItems: isMobile ? 'stretch' : 'center',
+              gap: 12,
+              marginBottom: 16,
+              width: '100%'
+            }}>
+              <View style={[
+                styles.playerSearchBar,
+                { marginBottom: 0, flex: isMobile ? undefined : 1, width: isMobile ? '100%' : undefined, minWidth: isMobile ? '100%' : 220, height: 38, paddingHorizontal: 10 }
+              ]}>
+                <Ionicons name="search" size={15} color="#64748b" style={{ marginRight: 6 }} />
+                <TextInput
+                  style={[styles.playerSearchInput, { fontSize: 12.5, paddingVertical: 4 }]}
+                  placeholder="Search player, record (100, 50, 5W), team..."
+                  placeholderTextColor="#62799c"
+                  value={playerSearchQuery}
+                  onChangeText={(t) => {
+                    setPlayerSearchQuery(t);
+                    setMilestonePage(1);
+                  }}
+                />
+                {playerSearchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => {
+                    setPlayerSearchQuery('');
+                    setMilestonePage(1);
+                  }}>
+                    <Ionicons name="close-circle" size={16} color="#94a3b8" style={{ paddingLeft: 4 }} />
                   </TouchableOpacity>
-                ))}
+                )}
               </View>
-            ) : (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subTabsScroll}>
-                {[
-                  { id: 'all', label: `All Records (${filteredPlayers.length})`, icon: 'trophy-outline', iconColor: '#b45309' },
-                  { id: 'century', label: 'Centuries (100+)', icon: 'ribbon-outline', iconColor: '#b45309' },
-                  { id: 'fifty', label: 'Half-Centuries (50+)', icon: 'medal-outline', iconColor: '#c2410c' },
-                  { id: 'bowler', label: 'Bowling Hauls (3W+ / 5W)', icon: 'disc-outline', iconColor: '#7e22ce' },
-                  { id: 'womens', label: "Women's Milestones", icon: 'female-outline', iconColor: '#db2777' }
-                ].map(f => (
-                  <TouchableOpacity
-                    key={f.id}
-                    style={[styles.playerPillBtn, playerFilter === f.id && styles.playerPillBtnActive]}
-                    onPress={() => {
-                      setPlayerFilter(f.id);
-                      setMilestonePage(1);
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons
-                      name={f.icon as any}
-                      size={13}
-                      color={playerFilter === f.id ? '#ffffff' : f.iconColor}
-                      style={{ marginRight: 6 }}
-                    />
-                    <Text style={[styles.playerPillBtnText, playerFilter === f.id && styles.playerPillBtnTextActive]}>
-                      {f.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
+
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: isMobile ? 'flex-start' : 'flex-end' }}>
+                {renderSelectBox(
+                  'Records',
+                  playerFilter,
+                  [
+                    { id: 'all', label: `All Records (${filteredPlayers.length})` },
+                    { id: 'century', label: 'Centuries (100+)' },
+                    { id: 'fifty', label: 'Half-Centuries (50+)' },
+                    { id: 'bowler', label: 'Bowling Hauls (3W+ / 5W)' },
+                    { id: 'womens', label: "Women's Milestones" }
+                  ],
+                  (id) => {
+                    setPlayerFilter(id);
+                    setMilestonePage(1);
+                  },
+                  220
+                )}
+              </View>
+            </View>
 
             {/* Empty State */}
             {filteredPlayers.length === 0 && (
@@ -3120,7 +3058,7 @@ export default function HomeScreen() {
 
               return (
                 <View>
-                  <View style={[styles.grid2Col, isMobile && { flexDirection: 'column' }]}>
+                  <View style={[styles.grid2Col, isMobile && { flexDirection: 'column', flexWrap: 'nowrap' }]}>
                     {paginatedMilestones.map(p => {
                       const isCentury = p.milestoneType === 'century' || (p.stats?.hundreds && p.stats.hundreds > 0) || parseInt(p.stats?.hs || '0', 10) >= 100;
                       const isFifty = !isCentury && (p.milestoneType === 'fifty' || (p.stats?.fifties && p.stats.fifties > 0) || parseInt(p.stats?.hs || '0', 10) >= 50);
@@ -3160,7 +3098,8 @@ export default function HomeScreen() {
                           onPress={() => setSelectedPlayerModal(p)}
                           style={[
                             styles.specialRecordCard,
-                            isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' },
+                            !isMobile && { flex: 1 },
+                          isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' },
                             isSmallMobile && { padding: 12 },
                             { borderTopColor: themeColor }
                           ]}
@@ -3763,8 +3702,8 @@ export default function HomeScreen() {
               <Text style={[styles.sectionTitle, isSmallMobile && { fontSize: 20 }]}>Get in Touch with CFVD</Text>
             </View>
 
-            <View style={[styles.grid2Col, isMobile && { flexDirection: 'column' }]}>
-              <View style={[styles.contactInfoCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }, isSmallMobile && { padding: 12 }]}>
+            <View style={[styles.grid2Col, isMobile && { flexDirection: 'column', flexWrap: 'nowrap' }]}>
+              <View style={[styles.contactInfoCard, !isMobile && { flex: 1 }, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }, isSmallMobile && { padding: 12 }]}>
                 <Text style={styles.contactCardTitle}>Administrative Office</Text>
 
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 }}>
@@ -3779,11 +3718,11 @@ export default function HomeScreen() {
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Ionicons name="mail-outline" size={14} color="#64748b" style={{ marginRight: 6 }} />
-                  <Text style={[styles.contactLine, { marginBottom: 0 }]}>info@cfvd-cricket.org / secretary@cfvd-cricket.org</Text>
+                  <Text style={[styles.contactLine, { flex: 1, marginBottom: 0 }]}>info@cfvd-cricket.org / secretary@cfvd-cricket.org</Text>
                 </View>
               </View>
 
-              <View style={[styles.contactFormCard, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }, isSmallMobile && { padding: 12 }]}>
+              <View style={[styles.contactFormCard, !isMobile && { flex: 1 }, isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' }, isSmallMobile && { padding: 12 }]}>
                 <Text style={styles.contactCardTitle}>Send Communication</Text>
                 <View style={styles.formField}>
                   <Text style={styles.formLabel}>Full Name *</Text>
@@ -4899,6 +4838,95 @@ export default function HomeScreen() {
           </View>
         </Modal>
       )}
+      {/* Reusable Select Options Dropdown Modal */}
+      <Modal
+        visible={!!activeDropdown}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActiveDropdown(null)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setActiveDropdown(null)}
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(15, 23, 42, 0.45)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20
+          }}
+        >
+          <View
+            style={{
+              width: '100%',
+              maxWidth: 360,
+              backgroundColor: '#ffffff',
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: '#e2e8f0',
+              overflow: 'hidden',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.2,
+              shadowRadius: 20,
+              elevation: 12
+            }}
+          >
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              backgroundColor: '#f8fafc',
+              borderBottomWidth: 1,
+              borderBottomColor: '#e2e8f0'
+            }}>
+              <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0e184e' }}>
+                Select {activeDropdown?.title}
+              </Text>
+              <TouchableOpacity onPress={() => setActiveDropdown(null)}>
+                <Ionicons name="close" size={18} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 320 }}>
+              {(activeDropdown?.options || []).map((opt) => {
+                const isSelected = opt.id === activeDropdown?.selectedId;
+                return (
+                  <TouchableOpacity
+                    key={opt.id}
+                    onPress={() => {
+                      const cb = activeDropdown?.onSelect;
+                      setActiveDropdown(null);
+                      if (cb) cb(opt.id);
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                      borderBottomWidth: 1,
+                      borderBottomColor: '#f1f5f9',
+                      backgroundColor: isSelected ? '#fffbeb' : '#ffffff'
+                    }}
+                  >
+                    <Text style={{
+                      fontSize: 13,
+                      fontWeight: isSelected ? '800' : '600',
+                      color: isSelected ? '#b45309' : '#1e293b',
+                      flex: 1
+                    }}>
+                      {opt.label}
+                    </Text>
+                    {isSelected && <Ionicons name="checkmark-circle" size={17} color="#d97706" />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
