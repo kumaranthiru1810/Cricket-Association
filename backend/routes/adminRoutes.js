@@ -74,7 +74,7 @@ router.get('/users', async (req, res) => {
 router.patch('/users/:id/status', async (req, res) => {
   try {
     const { status } = req.body;
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const adminEmail = req.adminUser?.email || 'system-admin';
     const user = await adminService.updateUserStatus(req.params.id, status, adminEmail);
     res.json({ success: true, message: `User status set to ${status}`, user });
   } catch (err) {
@@ -88,7 +88,7 @@ router.patch('/users/:id/status', async (req, res) => {
  */
 router.post('/officials', async (req, res) => {
   try {
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const adminEmail = req.adminUser?.email || 'system-admin';
     const official = await adminService.saveOfficial(req.body, adminEmail);
     res.json({ success: true, message: 'Official saved successfully', official });
   } catch (err) {
@@ -98,7 +98,7 @@ router.post('/officials', async (req, res) => {
 
 router.delete('/officials/:id', async (req, res) => {
   try {
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const adminEmail = req.adminUser?.email || 'system-admin';
     const result = await adminService.deleteOfficial(req.params.id, adminEmail);
     res.json(result);
   } catch (err) {
@@ -112,7 +112,7 @@ router.delete('/officials/:id', async (req, res) => {
  */
 router.post('/venues', async (req, res) => {
   try {
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const adminEmail = req.adminUser?.email || 'system-admin';
     const venue = await adminService.saveVenue(req.body, adminEmail);
     res.json({ success: true, message: 'Venue saved successfully', venue });
   } catch (err) {
@@ -122,7 +122,7 @@ router.post('/venues', async (req, res) => {
 
 router.delete('/venues/:id', async (req, res) => {
   try {
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const adminEmail = req.adminUser?.email || 'system-admin';
     const result = await adminService.deleteVenue(req.params.id, adminEmail);
     res.json(result);
   } catch (err) {
@@ -208,7 +208,7 @@ router.post('/teams/:id/reject', handleRejectTeam);
 
 router.post('/teams', async (req, res) => {
   try {
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const adminEmail = req.adminUser?.email || 'system-admin';
     const team = await adminService.saveTeam(req.body, adminEmail);
     res.json({ success: true, message: 'Team saved successfully', team });
   } catch (err) {
@@ -271,7 +271,7 @@ router.get('/matches', async (req, res) => {
 
 const handleScheduleMatch = async (req, res) => {
   try {
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const adminEmail = req.adminUser?.email || 'system-admin';
     const match = await adminService.scheduleMatch(req.body, adminEmail);
     res.json({ success: true, message: 'Match scheduled successfully', match });
   } catch (err) {
@@ -283,7 +283,7 @@ router.post('/matches', handleScheduleMatch);
 
 const handleUpdateMatch = async (req, res) => {
   try {
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const adminEmail = req.adminUser?.email || 'system-admin';
     const match = await adminService.updateMatch(req.params.id, req.body, adminEmail);
     res.json({ success: true, message: 'Match updated successfully', match });
   } catch (err) {
@@ -295,7 +295,7 @@ router.patch('/matches/:id', handleUpdateMatch);
 
 const handleCancelMatch = async (req, res) => {
   try {
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const adminEmail = req.adminUser?.email || 'system-admin';
     const reason = req.body?.reason || req.query?.reason;
     const match = await adminService.cancelMatch(req.params.id, reason, adminEmail);
     res.json({ success: true, message: 'Match cancelled successfully', match });
@@ -308,7 +308,7 @@ router.post('/matches/:id/cancel', handleCancelMatch);
 
 const handlePostponeMatch = async (req, res) => {
   try {
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const adminEmail = req.adminUser?.email || 'system-admin';
     const reason = req.body?.reason || req.query?.reason;
     const match = await adminService.postponeMatch(req.params.id, { reason }, adminEmail);
     res.json({ success: true, message: 'Match postponed successfully', match });
@@ -321,7 +321,7 @@ router.patch('/matches/:id/postpone', handlePostponeMatch);
 
 const handleConfirmSchedule = async (req, res) => {
   try {
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const adminEmail = req.adminUser?.email || 'system-admin';
     const match = await adminService.confirmMatchSchedule(req.params.id, adminEmail);
     res.json({ success: true, message: 'Match schedule confirmed successfully', match });
   } catch (err) {
@@ -333,7 +333,7 @@ router.patch('/matches/:id/confirm-schedule', handleConfirmSchedule);
 
 const handleRescheduleMatch = async (req, res) => {
   try {
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const adminEmail = req.adminUser?.email || 'system-admin';
     const { newDate, newTime, reason } = req.body;
     const match = await adminService.rescheduleMatch(req.params.id, { newDate, newTime, reason }, adminEmail);
     res.json({ success: true, message: 'Match rescheduled successfully', match });
@@ -356,7 +356,7 @@ router.get('/matches/postponement-requests', handleGetPostponementRequests);
 
 const handleReviewPostponementRequest = async (req, res) => {
   try {
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const adminEmail = req.adminUser?.email || 'system-admin';
     const { decision, reviewNotes } = req.body;
     const match = await adminService.reviewUmpirePostponement(req.params.id, { decision, reviewNotes }, adminEmail);
     res.json({ success: true, message: `Postponement request ${decision}D successfully`, match });
@@ -368,7 +368,7 @@ router.post('/matches/:id/postponement-requests/review', handleReviewPostponemen
 
 router.delete('/matches/:id', async (req, res) => {
   try {
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const adminEmail = req.adminUser?.email || 'system-admin';
     const result = await adminService.deleteMatch(req.params.id, adminEmail);
     res.json(result);
   } catch (err) {
@@ -450,7 +450,7 @@ router.post('/admins/add/verify-target', async (req, res) => {
 
 /**
  * Super Admin Nodemailer Email OTP Verification & Dynamic Admin Management Endpoints
- * Invariant: Permanent Super Admin is admin@cfvd.org. All other admins are dynamic.
+ * Invariant: Permanent Super Admin is system-admin. All other admins are dynamic.
  */
 const superAdminOtpService = require('../services/superAdminOtpService');
 const { verifySmtpConnection } = require('../config/mailer');
@@ -469,7 +469,7 @@ router.get('/smtp/status', async (req, res) => {
 router.post('/smtp/test-send', async (req, res) => {
   try {
     const { to } = req.body;
-    const target = to || 'cricketfederation21@gmail.com';
+    const target = to || 'noreply@yourdomain.test';
     const { sendOtpEmail } = require('../config/mailer');
     const testOtp = Math.floor(100000 + Math.random() * 900000).toString();
     const result = await sendOtpEmail({
@@ -487,7 +487,7 @@ router.post('/smtp/test-send', async (req, res) => {
 router.get('/administrators', async (req, res) => {
   try {
     const list = await superAdminOtpService.getAdministratorsList();
-    res.json({ success: true, administrators: list, permanentSuperAdmin: 'admin@cfvd.org' });
+    res.json({ success: true, administrators: list, permanentSuperAdmin: 'system-admin' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -497,7 +497,7 @@ router.get('/administrators', async (req, res) => {
 router.post('/otp/send', async (req, res) => {
   try {
     const { action, targetId, targetEmail, targetData } = req.body;
-    const requesterEmail = req.user?.email || 'admin@cfvd.org';
+    const requesterEmail = req.user?.email || 'system-admin';
     const result = await superAdminOtpService.requestSuperAdminOtp({
       requesterEmail,
       action: action || 'ADMIN_OPERATION',
@@ -515,7 +515,7 @@ router.post('/otp/send', async (req, res) => {
 router.post('/otp/resend', async (req, res) => {
   try {
     const { sessionId } = req.body;
-    const requesterEmail = req.user?.email || 'admin@cfvd.org';
+    const requesterEmail = req.user?.email || 'system-admin';
     const result = await superAdminOtpService.resendSuperAdminOtp({
       sessionId,
       requesterEmail
@@ -530,7 +530,7 @@ router.post('/otp/resend', async (req, res) => {
 router.post('/otp/verify', async (req, res) => {
   try {
     const { sessionId, otp } = req.body;
-    const requesterEmail = req.user?.email || 'admin@cfvd.org';
+    const requesterEmail = req.user?.email || 'system-admin';
     const result = await superAdminOtpService.verifyAndExecuteSuperAdminAction({
       sessionId,
       otp,
@@ -546,7 +546,7 @@ router.post('/otp/verify', async (req, res) => {
 router.post('/create', async (req, res) => {
   try {
     const { sessionId, otp, name, email, mobile, password, roleLevel } = req.body;
-    const requesterEmail = req.user?.email || 'admin@cfvd.org';
+    const requesterEmail = req.user?.email || 'system-admin';
 
     if (sessionId && otp) {
       const result = await superAdminOtpService.verifyAndExecuteSuperAdminAction({
@@ -574,7 +574,7 @@ router.post('/create', async (req, res) => {
 router.post('/approve', async (req, res) => {
   try {
     const { targetId, targetEmail, targetName, sessionId, otp } = req.body;
-    const requesterEmail = req.user?.email || 'admin@cfvd.org';
+    const requesterEmail = req.user?.email || 'system-admin';
 
     if (sessionId && otp) {
       const result = await superAdminOtpService.verifyAndExecuteSuperAdminAction({
@@ -602,7 +602,7 @@ router.post('/approve', async (req, res) => {
 router.post('/reject', async (req, res) => {
   try {
     const { targetId, targetEmail, targetName, sessionId, otp } = req.body;
-    const requesterEmail = req.user?.email || 'admin@cfvd.org';
+    const requesterEmail = req.user?.email || 'system-admin';
 
     if (sessionId && otp) {
       const result = await superAdminOtpService.verifyAndExecuteSuperAdminAction({
@@ -630,7 +630,7 @@ router.post('/reject', async (req, res) => {
 router.post('/dual-auth/request', async (req, res) => {
   try {
     const { action, targetData } = req.body;
-    const requesterEmail = req.user?.email || 'admin@cfvd.org';
+    const requesterEmail = req.user?.email || 'system-admin';
     const result = await superAdminOtpService.requestSuperAdminOtp({
       requesterEmail,
       action: action || 'CREATE_ADMIN',
@@ -641,7 +641,7 @@ router.post('/dual-auth/request', async (req, res) => {
       success: true,
       authSessionId: result.sessionId,
       admin1Email: result.superAdminEmail,
-      demoOtps: result.demoOtp ? { admin1: result.demoOtp } : null,
+      ...(require("../config/env").isDevelopment && result.demoOtp ? { demoOtps: { admin1: result.demoOtp } } : {}),
       ...result
     });
   } catch (err) {
@@ -652,7 +652,7 @@ router.post('/dual-auth/request', async (req, res) => {
 router.post('/dual-auth/verify', async (req, res) => {
   try {
     const { authSessionId, sessionId, admin1Otp, otp } = req.body;
-    const requesterEmail = req.user?.email || 'admin@cfvd.org';
+    const requesterEmail = req.user?.email || 'system-admin';
     const activeOtp = otp || admin1Otp;
     const result = await superAdminOtpService.verifyAndExecuteSuperAdminAction({
       sessionId: sessionId || authSessionId,
@@ -695,7 +695,7 @@ router.get('/content/stats', async (req, res) => {
 // POST /api/admin/content - Create news/notice
 router.post('/content', async (req, res) => {
   try {
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const adminEmail = req.adminUser?.email || 'system-admin';
     const article = await adminService.createContent(req.body, adminEmail);
     res.status(201).json({ success: true, message: 'Article published successfully', data: article });
   } catch (err) {
@@ -706,7 +706,7 @@ router.post('/content', async (req, res) => {
 // PUT /api/admin/content/:id - Edit news/notice
 router.put('/content/:id', async (req, res) => {
   try {
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const adminEmail = req.adminUser?.email || 'system-admin';
     const updated = await adminService.updateContent(req.params.id, req.body, adminEmail);
     res.json({ success: true, message: 'Article updated successfully', data: updated });
   } catch (err) {
@@ -717,7 +717,7 @@ router.put('/content/:id', async (req, res) => {
 // DELETE /api/admin/content/:id - Delete news/notice
 router.delete('/content/:id', async (req, res) => {
   try {
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const adminEmail = req.adminUser?.email || 'system-admin';
     const result = await adminService.deleteContent(req.params.id, adminEmail);
     res.json({ success: true, ...result });
   } catch (err) {

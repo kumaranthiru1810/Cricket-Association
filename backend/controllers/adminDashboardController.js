@@ -827,7 +827,7 @@ class AdminDashboardController {
     try {
       const { id } = req.params;
       const { reason } = req.body;
-      const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+      const adminEmail = req.adminUser?.email || 'system-admin';
       const match = await adminService.postponeMatch(id, { reason }, adminEmail);
       return res.status(200).json({ success: true, message: 'Match postponed successfully.', match });
     } catch (err) {
@@ -839,7 +839,7 @@ class AdminDashboardController {
     try {
       const { id } = req.params;
       const { newDate, newTime, reason } = req.body;
-      const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+      const adminEmail = req.adminUser?.email || 'system-admin';
       const match = await adminService.rescheduleMatch(id, { newDate, newTime, reason }, adminEmail);
       return res.status(200).json({ success: true, message: 'Match rescheduled successfully.', match });
     } catch (err) {
@@ -860,7 +860,7 @@ class AdminDashboardController {
     try {
       const { id } = req.params;
       const { decision, reviewNotes } = req.body;
-      const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+      const adminEmail = req.adminUser?.email || 'system-admin';
       const match = await adminService.reviewUmpirePostponement(id, { decision, reviewNotes }, adminEmail);
       return res.status(200).json({ success: true, message: `Postponement request ${decision}D.`, match });
     } catch (err) {
@@ -1093,7 +1093,7 @@ class AdminDashboardController {
 
       if (cleanType === 'POSTPONEMENT' || cleanType === 'MATCH_POSTPONE') {
         const decision = isApprove ? 'APPROVE' : 'REJECT';
-        const match = await adminService.reviewUmpirePostponement(id, { decision, reviewNotes: reason }, req.adminUser ? req.adminUser.email : 'admin@cfvd.org');
+        const match = await adminService.reviewUmpirePostponement(id, { decision, reviewNotes: reason }, req.adminUser ? req.adminUser.email : 'system-admin');
         return res.status(200).json({
           success: true,
           message: `Match postponement request ${decision}D.`,
@@ -1181,7 +1181,7 @@ class AdminDashboardController {
         await db.models.AuditLog.create({
           id: 'LOG-' + Date.now(),
           action: `${cleanType}_${isApprove ? 'APPROVED' : 'REJECTED'}`,
-          initiated_by: req.adminUser ? req.adminUser.email : 'admin@cfvd.org',
+          initiated_by: req.adminUser ? req.adminUser.email : 'system-admin',
           details: `${cleanType} ${id} ${isApprove ? 'approved' : 'rejected'}: ${reason || 'Processed by administrator'}`,
           ip_address: req.ip || '127.0.0.1'
         });
@@ -1472,7 +1472,7 @@ class AdminDashboardController {
       const settings = (rows && rows[0]) || {
         association_name: 'Cricket Federation of Virudhunagar District',
         affiliation: 'Affiliated to Tamil Nadu Cricket Association (TNCA)',
-        email: 'admin@cfvd.org',
+        email: 'contact@yourdomain.test',
         phone: '+91 98765 43210',
         address: 'Kamarajar Stadium Complex, Virudhunagar - 626001, Tamil Nadu'
       };

@@ -62,7 +62,7 @@ class TournamentService {
       await db.models.AuditLog.create({
         id: `AUDIT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         action,
-        initiated_by: adminEmail || 'admin@cfvd.org',
+        initiated_by: adminEmail || 'system-admin',
         target_user: target || 'Tournament',
         result,
         details,
@@ -462,7 +462,7 @@ class TournamentService {
         potm_every_match: payload.awards_config?.potm_every_match !== false
       },
       status: initialStatus,
-      created_by: adminEmail || 'admin@cfvd.org'
+      created_by: adminEmail || 'system-admin'
     };
 
     if (teams.length >= 2) {
@@ -571,7 +571,7 @@ class TournamentService {
   /**
    * Update group allocation & qualification settings before matches start
    */
-  async updateTournamentGroups(tournamentId, payload = {}, adminEmail = 'admin@cfvd.org') {
+  async updateTournamentGroups(tournamentId, payload = {}, adminEmail = 'system-admin') {
     await db.initDb();
     const existing = await tournamentModel.findById(tournamentId);
     if (!existing) {
@@ -998,7 +998,7 @@ class TournamentService {
           status: 'SCHEDULED',
           schedule_confirmation_status: 'CONFIRMED',
           schedule_confirmed_at: new Date(),
-          schedule_confirmed_by: adminEmail || 'admin@cfvd.org',
+          schedule_confirmed_by: adminEmail || 'system-admin',
           rules_snapshot: rulesSnapshot,
           assigned_scorer_id: defaultScorerId,
           assigned_scorer_name: defaultScorerName,
@@ -1133,7 +1133,7 @@ class TournamentService {
           status: 'SCHEDULED',
           schedule_confirmation_status: 'CONFIRMED',
           schedule_confirmed_at: new Date(),
-          schedule_confirmed_by: adminEmail || 'admin@cfvd.org',
+          schedule_confirmed_by: adminEmail || 'system-admin',
           rules_snapshot: rulesSnapshot,
           assigned_scorer_id: defaultScorerId,
           assigned_scorer_name: defaultScorerName,
@@ -1190,7 +1190,7 @@ class TournamentService {
           status: 'SCHEDULED',
           schedule_confirmation_status: 'CONFIRMED',
           schedule_confirmed_at: new Date(),
-          schedule_confirmed_by: adminEmail || 'admin@cfvd.org',
+          schedule_confirmed_by: adminEmail || 'system-admin',
           rules_snapshot: rulesSnapshot,
           assigned_scorer_id: defaultScorerId,
           assigned_scorer_name: defaultScorerName,
@@ -2414,7 +2414,7 @@ class TournamentService {
   /**
    * Admin manual tie-breaker resolution + stage progression retry
    */
-  async resolveTie(tournamentId, orderedTeamIds = [], adminEmail = 'admin@cfvd.org') {
+  async resolveTie(tournamentId, orderedTeamIds = [], adminEmail = 'system-admin') {
     await db.initDb();
     const tour = await db.models.Tournament.findOne({ id: tournamentId });
     if (!tour) throw { status: 404, message: 'Tournament not found.' };
@@ -2802,7 +2802,7 @@ class TournamentService {
   /**
    * Admin approves team tournament registration
    */
-  async approveRegistration(registrationId, adminEmail = 'admin@cfvd.org') {
+  async approveRegistration(registrationId, adminEmail = 'system-admin') {
     await db.initDb();
     const registration = await tournamentRegistrationModel.findById(registrationId);
     if (!registration) {
@@ -2863,7 +2863,7 @@ class TournamentService {
   /**
    * Admin rejects team tournament registration
    */
-  async rejectRegistration(registrationId, reason, adminEmail = 'admin@cfvd.org') {
+  async rejectRegistration(registrationId, reason, adminEmail = 'system-admin') {
     await db.initDb();
     const registration = await tournamentRegistrationModel.findById(registrationId);
     if (!registration) {

@@ -632,14 +632,12 @@ export const adminApi = {
     } catch (adminErr: any) {
       // Fallback to public endpoint if admin endpoint was blocked
       try {
-        const token = getStoredAdminToken() || 'dev_admin_cfvd_token_2026';
+        const token = getStoredAdminToken();
         const pubRes = await fetch(`${API_URL}/master-settings`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-user-role': 'ADMIN',
-            'x-user-email': 'admin@cfvd.org',
-            Authorization: `Bearer ${token}`
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
           },
           body: JSON.stringify(data)
         });
@@ -663,14 +661,12 @@ export const adminApi = {
       });
     } catch (adminErr: any) {
       try {
-        const token = getStoredAdminToken() || 'dev_admin_cfvd_token_2026';
+        const token = getStoredAdminToken();
         const pubRes = await fetch(`${API_URL}/master-settings/${encodeURIComponent(id)}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
-            'x-user-role': 'ADMIN',
-            'x-user-email': 'admin@cfvd.org',
-            Authorization: `Bearer ${token}`
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
           },
           body: JSON.stringify(data)
         });
@@ -693,14 +689,12 @@ export const adminApi = {
       });
     } catch (adminErr: any) {
       try {
-        const token = getStoredAdminToken() || 'dev_admin_cfvd_token_2026';
+        const token = getStoredAdminToken();
         const pubRes = await fetch(`${API_URL}/master-settings/${encodeURIComponent(id)}`, {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
-            'x-user-role': 'ADMIN',
-            'x-user-email': 'admin@cfvd.org',
-            Authorization: `Bearer ${token}`
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
           }
         });
         const pubJson = await pubRes.json();

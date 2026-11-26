@@ -50,9 +50,21 @@ app.set('trust proxy', 1);
 // Security 1: Hide express fingerprinting
 app.disable('x-powered-by');
 
-// Security 2: Security Headers (HSTS, X-Content-Type-Options, Frameguard)
+// Security 2: Security Headers (CSP, HSTS, X-Content-Type-Options, Frameguard, Referrer-Policy)
 app.use(helmet({
-  contentSecurityPolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+      imgSrc: ["'self'", 'data:', 'blob:'],
+      connectSrc: ["'self'", 'ws:', 'wss:', ...(env.ALLOWED_ORIGINS || [])],
+      frameAncestors: ["'none'"]
+    }
+  },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  hsts: env.isProduction ? { maxAge: 31536000, includeSubDomains: true } : false,
   crossOriginEmbedderPolicy: false
 }));
 
@@ -95,6 +107,8 @@ app.use('/uploads', express.static(UPLOAD_DIR, {
   etag: true,
   setHeaders: (res) => {
     res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Disposition', 'inline');
   }
 }));
 
@@ -147,6 +161,31 @@ app.get('/api/health', async (req, res) => {
   } catch (err) {
     return res.status(503).json({
       status: 'ERROR',
+      message: err.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+app.get('/api/ready', async (req, res) => {
+  try {
+    const isDbAlive = await db.ping();
+    if (!isDbAlive) {
+      return res.status(503).json({
+        ready: false,
+        database: 'DISCONNECTED',
+        timestamp: new Date().toISOString()
+      });
+    }
+    return res.status(200).json({
+      ready: true,
+      database: 'CONNECTED',
+      uptime: Math.round(process.uptime()),
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    return res.status(503).json({
+      ready: false,
       message: err.message,
       timestamp: new Date().toISOString()
     });

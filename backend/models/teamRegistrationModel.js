@@ -378,7 +378,7 @@ class TeamRegistrationModel {
         team_id: null,
         team_name: 'District Association Squad',
         coach_name: 'District Association',
-        coach_email: 'cricketfederation21@gmail.com',
+        coach_email: 'noreply@yourdomain.test',
         team_status: userDoc.status === 'ACTIVE' ? 'APPROVED' : userDoc.status
       };
     }

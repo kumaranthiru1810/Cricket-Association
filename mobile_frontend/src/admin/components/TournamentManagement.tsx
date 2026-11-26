@@ -35,7 +35,7 @@ export interface TournamentManagementProps {
 }
 
 type TournamentFilterStatus = 'ALL' | 'UPCOMING' | 'ONGOING' | 'COMPLETED' | 'CANCELLED';
-type TournamentTab = 'overview' | 'teams' | 'groups' | 'schedule' | 'points' | 'bracket' | 'stats' | 'rules';
+type TournamentTab = 'overview' | 'teams' | 'groups' | 'schedule' | 'points' | 'bracket' | 'simulator' | 'stats' | 'rules';
 type TournamentType =
   | 'SINGLE_ROUND_ROBIN'
   | 'DOUBLE_ROUND_ROBIN'

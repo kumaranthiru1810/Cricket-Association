@@ -43,7 +43,7 @@ function verifyConstantTime(rawCode, storedHash) {
 }
 
 function maskEmail(email) {
-  if (!email || !email.includes('@')) return 'admin@cfvd.org';
+  if (!email || !email.includes('@')) return 'admin@localhost.test';
   const [local, domain] = email.split('@');
   if (local.length <= 2) return `${local[0]}*@${domain}`;
   return `${local.slice(0, 2)}${'*'.repeat(Math.max(local.length - 2, 2))}@${domain}`;
@@ -78,7 +78,6 @@ class AdminAccessService {
         { role: { $in: ['ADMIN', 'SUPER_ADMIN'] } },
         { is_super_admin: true }
       ],
-      email: { $nin: ['admin@example.com', 'admin@cfvd.org'] },
       status: 'ACTIVE'
     }).sort({ is_super_admin: -1, created_at: 1 }).lean();
 
@@ -193,12 +192,12 @@ class AdminAccessService {
     const requesterId = String(requestedBy?.id || '').toLowerCase();
     const requesterEmail = String(requestedBy?.email || '').toLowerCase();
 
+    const primaryAdminEmail = env.ADMIN_INITIAL_EMAIL || requestedBy?.email;
     const potentialApprovers = await db.models.User.find({
       $or: [
         { role: { $in: ['ADMIN', 'SUPER_ADMIN'] } },
         { is_super_admin: true }
       ],
-      email: { $nin: ['admin@example.com', 'admin@cfvd.org'] },
       status: 'ACTIVE',
       id: { $ne: requestedBy?.id },
       email: { $ne: requesterEmail }
@@ -210,11 +209,9 @@ class AdminAccessService {
       approver2 = potentialApprovers[1];
     } else if (potentialApprovers.length === 1) {
       approver1 = potentialApprovers[0];
-      approver2 = { id: requestedBy?.id || 'admin-super', name: requestedBy?.name || 'Super Administrator', email: requestedBy?.email || 'athilingam3336@gmail.com' };
+      approver2 = { id: requestedBy?.id || 'admin-super', name: requestedBy?.name || 'Super Administrator', email: requestedBy?.email || primaryAdminEmail };
     } else {
-      // Bootstrapping: If only 1 administrator exists in system, issue dual-auth codes to the super admin and secondary admin
-      approver1 = { id: requestedBy?.id || 'admin-1', name: requestedBy?.name || 'Super Administrator', email: requestedBy?.email || 'athilingam3336@gmail.com' };
-      approver2 = { id: (requestedBy?.id || 'admin') + '-auth2', name: 'Association Admin', email: 'cricketfederation21@gmail.com' };
+      throw { status: 400, message: 'At least two active administrators are required to initiate dual-admin approval.' };
     }
 
     const requestId = `REQ-PROMOTE-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
@@ -230,7 +227,7 @@ class AdminAccessService {
       target_email: cleanEmail,
       target_name: name ? name.trim() : candidate.name,
       requested_by_id: requestedBy?.id || 'admin-super',
-      requested_by_email: requestedBy?.email || 'athilingam3336@gmail.com',
+      requested_by_email: requestedBy?.email || primaryAdminEmail,
       approver1_id: approver1.id,
       approver1_email: approver1.email,
       approver2_id: approver2.id,
@@ -259,7 +256,7 @@ class AdminAccessService {
         actionType: 'PROMOTE',
         candidateEmail: cleanEmail,
         targetName: adminRequest.target_name,
-        requestedByEmail: requestedBy?.email || 'athilingam3336@gmail.com',
+        requestedByEmail: requestedBy?.email || primaryAdminEmail,
         otp: otp1
       }),
       sendDualAdminApprovalEmail({
@@ -268,7 +265,7 @@ class AdminAccessService {
         actionType: 'PROMOTE',
         candidateEmail: cleanEmail,
         targetName: adminRequest.target_name,
-        requestedByEmail: requestedBy?.email || 'athilingam3336@gmail.com',
+        requestedByEmail: requestedBy?.email || primaryAdminEmail,
         otp: otp2
       })
     ]).catch(err => {
@@ -378,12 +375,11 @@ class AdminAccessService {
       reqDoc.attempts = 0; // Reset attempts for candidate step
       await reqDoc.save();
 
-      console.log(`\n======================================================`);
-      console.log(`[DUAL-ADMIN SECURITY] Candidate Verification Code for ${reqDoc.target_email}: ${candidateCode}`);
       if (env.isDevelopment) {
-        console.log(`[DEV BYPASS]: You may also enter 123456 as candidate verification code in development.`);
+        console.log(`\n======================================================`);
+        console.log(`[DUAL-ADMIN SECURITY] Candidate Verification Code for ${reqDoc.target_email}: ${candidateCode}`);
+        console.log(`======================================================\n`);
       }
-      console.log(`======================================================\n`);
 
       // Dispatch code to candidate
       await sendCandidateVerificationEmail({
@@ -615,7 +611,6 @@ class AdminAccessService {
     // 1. Minimum 3 Active Administrators Rule
     const activeAdmins = await db.models.User.find({
       role: { $in: ['ADMIN', 'SUPER_ADMIN'] },
-      email: { $nin: ['admin@example.com', 'admin@cfvd.org'] },
       status: 'ACTIVE'
     }).lean();
 
@@ -636,7 +631,7 @@ class AdminAccessService {
     }
 
     // 3. SUPER_ADMIN cannot be removed or demoted
-    if (target.role === 'SUPER_ADMIN' || target.is_super_admin || target.email.toLowerCase() === 'athilingam3336@gmail.com') {
+    if (target.role === 'SUPER_ADMIN' || target.is_super_admin) {
       throw {
         status: 403,
         message: 'Security Violation: The permanent Super Administrator account cannot be removed, demoted, or deactivated.'
@@ -761,7 +756,6 @@ class AdminAccessService {
     // Minimum 3 rule re-check at execution time
     const activeAdmins = await db.models.User.countDocuments({
       role: { $in: ['ADMIN', 'SUPER_ADMIN'] },
-      email: { $nin: ['admin@example.com', 'admin@cfvd.org'] },
       status: 'ACTIVE'
     });
     if (activeAdmins < 3) {

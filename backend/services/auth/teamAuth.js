@@ -30,7 +30,10 @@ class TeamAuth {
     if (!reg) {
       team = await db.models.Team.findOne({ coach_email: cleanEmail }).lean();
       if (!team) {
-        throw { status: 404, message: `No team registration found for coach email "${cleanEmail}". Please register your team first.` };
+        return {
+          success: true,
+          message: 'If an eligible team account exists for this email, an OTP has been dispatched.'
+        };
       }
     }
 
@@ -257,7 +260,7 @@ class TeamAuth {
 
   async checkTeamExists(teamName, coachEmail) {
     await db.initDb();
-    const cleanTeam = (teamName || '').trim().toLowerCase();
+    const cleanTeam = (teamName || '').trim().toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const cleanEmail = (coachEmail || '').trim().toLowerCase();
     return db.models.TeamRegistration.findOne({
       $or: [

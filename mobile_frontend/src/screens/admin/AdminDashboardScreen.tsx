@@ -94,7 +94,7 @@ const INITIAL_SCORERS_DATA = [
     experienceYears: 8,
     status: 'Approved',
     registrationDate: '2026-09-15T10:00:00.000Z',
-    approvedBy: 'admin@cfvd.org',
+    approvedBy: 'system-admin',
     approvedAt: '2026-09-16T11:00:00.000Z',
     rejectionReason: null
   },
@@ -108,7 +108,7 @@ const INITIAL_SCORERS_DATA = [
     experienceYears: 5,
     status: 'Approved',
     registrationDate: '2026-09-16T11:00:00.000Z',
-    approvedBy: 'admin@cfvd.org',
+    approvedBy: 'system-admin',
     approvedAt: '2026-09-17T09:30:00.000Z',
     rejectionReason: null
   },
@@ -150,10 +150,10 @@ const INITIAL_SCORERS_DATA = [
     experienceYears: 1,
     status: 'Rejected',
     registrationDate: '2026-09-19T09:00:00.000Z',
-    approvedBy: 'admin@cfvd.org',
+    approvedBy: 'system-admin',
     approvedAt: null,
     rejectedAt: '2026-09-20T12:00:00.000Z',
-    rejectedBy: 'admin@cfvd.org',
+    rejectedBy: 'system-admin',
     rejectionReason: 'Required scorer certification credentials expired. Renewal required.'
   }
 ];
@@ -168,7 +168,7 @@ const INITIAL_TEAMS_DATA = [
     status: 'Approved',
     adminApprovalStatus: 'Approved',
     registrationDate: '2026-09-15T09:30:00.000Z',
-    approvedBy: 'admin@cfvd.org',
+    approvedBy: 'system-admin',
     approvedAt: '2026-09-16T11:00:00.000Z',
     rejectionReason: null,
     members: [
@@ -298,7 +298,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   const [notification, setNotification] = useState<string | null>(null);
   const [pendingTournamentsCount, setPendingTournamentsCount] = useState<number>(0);
 
-  const adminEmail = initialParams?.adminEmail || currentUser?.email || 'athilingam3336@gmail.com';
+  const adminEmail = initialParams?.adminEmail || currentUser?.email || 'admin@yourdomain.com';
 
   // Dual-Admin Security Modal State (Promote / Add Admin, Remove / Demote Admin, Audit Log)
   const [securityModalVisible, setSecurityModalVisible] = useState<boolean>(false);
@@ -309,7 +309,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     {
       scorerId: 'SCR-101',
       scorerName: 'Rajesh Kumar M',
-      email: 'rajesh.scorer@cfvd.org',
+      email: 'rajesh.scorer@yourdomain.com',
       phone: '+91 94431 82741',
       grade: 'Grade A - Elite Panel',
       taluk: 'Virudhunagar Central',
@@ -836,7 +836,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               adminApprovalStatus: normStatus,
               registrationDate: r.created_at || new Date().toISOString(),
               approvedAt: r.details?.approvedAt || null,
-              approvedBy: r.details?.approvedBy || (normStatus === 'Approved' ? 'admin@cfvd.org' : null),
+              approvedBy: r.details?.approvedBy || (normStatus === 'Approved' ? 'system-admin' : null),
               rejectedAt: r.details?.rejectedAt || null,
               rejectionReason: r.details?.rejectionReason || null,
               members: (Array.isArray(r.members) && r.members.length > 0 ? r.members : (r.details?.players || [])).map((p: any) => ({
@@ -861,7 +861,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               status: normStatus,
               registrationDate: r.created_at || new Date().toISOString(),
               approvedAt: r.details?.approvedAt || null,
-              approvedBy: r.details?.approvedBy || (normStatus === 'Approved' ? 'admin@cfvd.org' : null),
+              approvedBy: r.details?.approvedBy || (normStatus === 'Approved' ? 'system-admin' : null),
               rejectionReason: r.details?.rejectionReason || null
             });
           } else if (r.type === 'UMPIRE') {
@@ -882,7 +882,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               status: normStatus,
               registrationDate: r.created_at || new Date().toISOString(),
               approvedAt: r.details?.approvedAt || null,
-              approvedBy: r.details?.approvedBy || (normStatus === 'Approved' ? 'admin@cfvd.org' : null),
+              approvedBy: r.details?.approvedBy || (normStatus === 'Approved' ? 'system-admin' : null),
               rejectionReason: r.details?.rejectionReason || null
             });
           }
@@ -909,7 +909,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               adminApprovalStatus: normStatus,
               registrationDate: t.created_at || new Date().toISOString(),
               approvedAt: t.approved_at || null,
-              approvedBy: t.approved_by || (normStatus === 'Approved' ? 'admin@cfvd.org' : null),
+              approvedBy: t.approved_by || (normStatus === 'Approved' ? 'system-admin' : null),
               rejectedAt: t.rejected_at || null,
               rejectionReason: t.rejection_reason || null,
               members: (Array.isArray(t.players) ? t.players : []).map((p: any) => ({
@@ -2006,7 +2006,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         `Taluk: ${target.taluk || 'Virudhunagar'}\n` +
         `Experience: ${target.experienceYears} Year(s)\n\n` +
         `You will be notified before assigned matches (2 hours prior unlock window).\n\n` +
-        `CFVD Administration\nadmin@cfvd.org`
+        `CFVD Administration\nsystem-admin`
       );
       try {
         await Linking.openURL(`mailto:${target.email}?subject=${subject}&body=${body}`);

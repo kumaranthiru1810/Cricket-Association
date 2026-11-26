@@ -59,16 +59,16 @@ Cricket-Association/
 | `NODE_ENV` | Yes | `production` | Environment mode (`development`, `test`, or `production`). |
 | `MONGODB_URI` | Yes | `mongodb://127.0.0.1:27017/cricket_db` | MongoDB connection URI with database name. |
 | `JWT_SECRET` | Yes | `super_secret_jwt_key_here` | Secret string for signing and verifying JWT tokens. |
-| `ADMIN_INITIAL_EMAIL` | Production | `superadmin@cfvd.org` | Initial Super Admin email seeded on first startup. |
+| `ADMIN_INITIAL_EMAIL` | Production | `superadmin@yourdomain.com` | Initial Super Admin email seeded on first startup. |
 | `ADMIN_INITIAL_PASSWORD`| Production | `SecurePassphrase123!` | Initial Super Admin password seeded on first startup. |
 | `ALLOWED_ORIGINS` | Optional | `https://cricket.yourdomain.com` | Comma-separated list of additional allowed CORS origins. |
 | `BREVO_API_KEY` | Optional | `xkeysib-...` | Brevo HTTPS API key for reliable transactional email delivery. |
 | `RESEND_API_KEY` | Optional | `re_...` | Resend HTTPS API key for transactional email fallback. |
 | `SMTP_HOST` | Optional | `smtp.gmail.com` | SMTP host address for email delivery. |
 | `SMTP_PORT` | Optional | `465` | SMTP port (465 for SSL/TLS, 587 for STARTTLS). |
-| `SMTP_USER` | Optional | `cricketfederation21@gmail.com` | SMTP username or Gmail address. |
+| `SMTP_USER` | Optional | `notifications@yourdomain.com` | SMTP username or email address. |
 | `SMTP_PASS` | Optional | `app_password_here` | SMTP password or Google App Password. |
-| `SMTP_FROM` | Optional | `"Cricket Federation" <admin@cfvd.org>` | Outgoing sender display name and email address. |
+| `SMTP_FROM` | Optional | `"Cricket Federation" <notifications@yourdomain.com>` | Outgoing sender display name and email address. |
 
 ### Frontend Configuration (`mobile_frontend/.env`)
 

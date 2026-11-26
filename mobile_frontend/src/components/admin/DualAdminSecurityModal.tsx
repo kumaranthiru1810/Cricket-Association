@@ -44,7 +44,7 @@ export default function DualAdminSecurityModal({
 
   // Current logged in user
   const currentUser = getCurrentUser();
-  const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.is_super_admin || currentUser?.email === 'athilingam3336@gmail.com';
+  const isSuperAdmin = Boolean(currentUser?.role === 'SUPER_ADMIN' || currentUser?.is_super_admin);
 
   // Active admins state
   const [activeAdmins, setActiveAdmins] = useState<AdminItem[]>([]);

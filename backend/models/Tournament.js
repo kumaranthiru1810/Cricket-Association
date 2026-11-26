@@ -120,7 +120,7 @@ const TournamentSchema = new mongoose.Schema({
     default: 'UPCOMING',
     index: true 
   },
-  created_by: { type: String, default: 'admin@cfvd.org' }
+  created_by: { type: String, default: 'system-admin' }
 }, { timestamps: true });
 
 const TournamentRegistrationSchema = new mongoose.Schema({
@@ -164,7 +164,7 @@ const TournamentCalculationSchema = new mongoose.Schema({
     default: 'DLS',
     required: true
   },
-  updated_by: { type: String, default: 'admin@cfvd.org' },
+  updated_by: { type: String, default: 'system-admin' },
   updated_by_name: { type: String, default: 'Administrator' },
   updated_at: { type: Date, default: Date.now }
 }, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });

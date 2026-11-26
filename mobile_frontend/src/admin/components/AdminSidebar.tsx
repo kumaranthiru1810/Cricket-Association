@@ -321,7 +321,7 @@ export const AdminSidebar: React.FC<Props> = ({
                 {adminUser?.name || 'Administrator'}
               </Text>
               <Text style={styles.userEmail} numberOfLines={1}>
-                {adminUser?.email || 'admin@cfvd.org'}
+                {adminUser?.email || 'Administrator'}
               </Text>
             </View>
           )}

@@ -1,5 +1,5 @@
 # Production Backend Dockerfile
-FROM node:20-alpine AS builder
+FROM node:20.18-alpine3.20 AS builder
 WORKDIR /app
 
 # Copy dependency specifications
@@ -12,7 +12,7 @@ RUN npm ci --omit=dev
 COPY . .
 
 # Runner stage: small, non-root user execution
-FROM node:20-alpine AS runner
+FROM node:20.18-alpine3.20 AS runner
 WORKDIR /app
 
 # Set production environment

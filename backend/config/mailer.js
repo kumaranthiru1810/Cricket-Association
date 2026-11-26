@@ -462,7 +462,7 @@ async function sendSuperAdminVerificationEmail({
   const trans = await getTransporter();
   if (trans) {
     try {
-      // If superAdminEmail is internal (e.g. admin@cfvd.org) and SMTP_USER is a real Gmail,
+      // If superAdminEmail is internal and SMTP_USER is a real Gmail,
       // include SMTP_USER so the administrator receives the real OTP in their Gmail inbox.
       const recipients = [superAdminEmail];
       if (cfg.user && cfg.user.includes('@gmail.com') && cfg.user.toLowerCase() !== superAdminEmail.toLowerCase()) {
@@ -513,7 +513,7 @@ async function sendAdminApprovalEmail({
   const cfg = getSmtpConfig();
   const userName = adminName;
   const subject = 'Cricket Association – Administrator Account Approved';
-  const textContent = `Hello ${adminName},\n\nYour appointment as an administrator for the Cricket Federation of Virudhunagar District has been approved by the Super Administrator (admin@cfvd.org).\n\nAccount Email: ${toEmail}\nClearance Level: ${adminLevel}\n\nPlease click the link below to set your password and activate your account:\n${setupUrl}\n\nCricket Federation of Virudhunagar District`;
+  const textContent = `Hello ${adminName},\n\nYour appointment as an administrator for the Cricket Federation of Virudhunagar District has been approved by the Super Administrator (Super Administrator).\n\nAccount Email: ${toEmail}\nClearance Level: ${adminLevel}\n\nPlease click the link below to set your password and activate your account:\n${setupUrl}\n\nCricket Federation of Virudhunagar District`;
 
   const htmlContent = `
 <!DOCTYPE html>
@@ -546,7 +546,7 @@ async function sendAdminApprovalEmail({
                 Dear <strong>${adminName}</strong>,
               </p>
               <p style="font-size: 14px; line-height: 1.6; color: #334155; margin: 0 0 16px 0;">
-                Your appointment as an official administrator for the <strong>Cricket Federation of Virudhunagar District</strong> has been formally reviewed and approved by the Super Administrator (<strong>admin@cfvd.org</strong>).
+                Your appointment as an official administrator for the <strong>Cricket Federation of Virudhunagar District</strong> has been formally reviewed and approved by the Super Administrator (<strong>Super Administrator</strong>).
               </p>
               <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin: 20px 0; padding: 16px;">
                 <tr>
@@ -913,7 +913,7 @@ async function sendDualAdminApprovalEmail({
   actionType = 'PROMOTE',
   candidateEmail,
   targetName = '',
-  requestedByEmail = 'admin@cfvd.org',
+  requestedByEmail = 'system-admin',
   otp,
   dateIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })
 }) {

@@ -113,22 +113,20 @@ const registerRateLimiter = rateLimit({
 /**
  * 3. CORS Whitelist Policy
  */
-const DEFAULT_ALLOWED_ORIGINS = [
+const DEV_ALLOWED_ORIGINS = [
   'http://localhost:8081',
   'http://localhost:3000',
-  'http://localhost:5000',
   'http://127.0.0.1:8081',
-  'http://127.0.0.1:3000',
-  'http://127.0.0.1:5000',
-  'https://cricketassociation.onrender.com',
-  'https://cricket-backend-dqdm.onrender.com'
+  'http://127.0.0.1:3000'
 ];
 
 function getCorsOptions() {
-  const allowed = [...DEFAULT_ALLOWED_ORIGINS];
-  if (process.env.ALLOWED_ORIGINS) {
-    allowed.push(...process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean));
-  }
+  const configured = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+    : [];
+  const allowed = env.isDevelopment
+    ? [...DEV_ALLOWED_ORIGINS, ...configured]
+    : configured;
 
   return {
     origin: (origin, callback) => {
@@ -137,26 +135,23 @@ function getCorsOptions() {
       if (allowed.includes(origin)) {
         return callback(null, true);
       }
-      
-      try {
-        const parsed = new URL(origin);
-        const hostname = parsed.hostname;
-        if (
-          hostname === 'localhost' ||
-          hostname === '127.0.0.1' ||
-          /^192\.168\.\d+\.\d+$/.test(hostname) ||
-          /^10\.\d+\.\d+\.\d+$/.test(hostname) ||
-          /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(hostname) ||
-          hostname === 'cricketassociation.onrender.com' ||
-          hostname === 'cricket-backend-dqdm.onrender.com' ||
-          hostname.endsWith('.onrender.com') ||
-          hostname.endsWith('.vercel.app') ||
-          hostname.endsWith('.netlify.app')
-        ) {
-          return callback(null, true);
+
+      if (env.isDevelopment) {
+        try {
+          const parsed = new URL(origin);
+          const hostname = parsed.hostname;
+          if (
+            hostname === 'localhost' ||
+            hostname === '127.0.0.1' ||
+            /^192\.168\.\d+\.\d+$/.test(hostname) ||
+            /^10\.\d+\.\d+\.\d+$/.test(hostname) ||
+            /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(hostname)
+          ) {
+            return callback(null, true);
+          }
+        } catch (_e) {
+          return callback(null, false);
         }
-      } catch (_e) {
-        return callback(null, false);
       }
 
       return callback(null, false);

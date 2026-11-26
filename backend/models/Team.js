@@ -71,7 +71,6 @@ const TeamRegistrationSchema = new mongoose.Schema({
   coach_phone: { type: String, default: null },
   coach_aadhaar: { type: String, default: null },
   password_hash: { type: String, default: null },
-  current_password: { type: String, default: null },
   passkey: { type: String, default: '' },
   city: { type: String, default: 'Virudhunagar' },
   taluk: { type: String, default: 'Virudhunagar' },

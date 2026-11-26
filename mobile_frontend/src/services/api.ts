@@ -32,7 +32,7 @@ export const getBackendHost = () => {
   return '10.34.20.112';
 };
 
-const PROD_BACKEND_URL = 'https://cricket-backend-dqdm.onrender.com';
+// Base API URL resolved dynamically from EXPO_PUBLIC_API_URL or current origin
 
 const getBaseUrl = () => {
   if (process.env.EXPO_PUBLIC_API_URL) {

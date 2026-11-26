@@ -61,7 +61,7 @@ sudo ufw status
 
 ```bash
 cd /opt
-sudo git clone https://github.com/athilingam3336-dotcom/cricketworld7.git cricket-platform
+sudo git clone <your-git-repo-url> cricket-platform
 cd cricket-platform
 sudo chown -R $USER:$USER .
 ```

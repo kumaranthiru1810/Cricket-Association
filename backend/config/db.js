@@ -416,7 +416,7 @@ async function seedDefaultData() {
           squad_count: 15,
           status: 'APPROVED',
           registration_date: new Date('2026-09-05'),
-          approved_by: 'admin@cfvd.org',
+          approved_by: 'system-admin',
           approved_at: new Date('2026-09-06'),
           notes: 'Official club registration'
         },
@@ -434,7 +434,7 @@ async function seedDefaultData() {
           squad_count: 15,
           status: 'APPROVED',
           registration_date: new Date('2026-09-10'),
-          approved_by: 'admin@cfvd.org',
+          approved_by: 'system-admin',
           approved_at: new Date('2026-09-11'),
           notes: 'All squad players verified'
         },

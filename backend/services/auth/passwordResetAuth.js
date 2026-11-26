@@ -56,7 +56,6 @@ class PasswordResetAuth {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
     registrationOtpMap.set(cleanEmail, {
-      otp: rawOtp,
       hash: otpHash,
       expiresAt,
       name: name || 'Applicant',
@@ -70,12 +69,12 @@ class PasswordResetAuth {
       otp: rawOtp
     }).catch(err => console.warn('Background OTP email dispatch notice:', err.message));
 
-    const isProd = process.env.NODE_ENV === 'production';
+    const env = require('../../config/env');
     return {
       success: true,
       message: `Verification code sent to ${cleanEmail}. Please enter the 6-digit OTP code sent to your email.`,
       email: cleanEmail,
-      ...(!isProd ? { otp: rawOtp } : {})
+      ...(env.isDevelopment ? { otp: rawOtp } : {})
     };
   }
 
@@ -173,39 +172,11 @@ class PasswordResetAuth {
       }
     }
 
-    // Auto-recognize demo accounts (Admin, Coach, Player)
-    const recognizedAdmins = ['admin@example.com', 'admin@cfvd.org', 'cricketfederation21@gmail.com'];
-    if (!user && (recognizedAdmins.includes(cleanEmail) || (cleanEmail.includes('admin') && role === 'ADMIN'))) {
-      user = {
-        id: 'ADM-1001',
-        name: 'District Administrator',
-        email: cleanEmail,
-        role: 'ADMIN',
-        status: 'ACTIVE'
-      };
-    } else if (!user && cleanEmail === 'saravanan.r@strikerscc.org') {
-      user = {
-        id: 'PLY-DEMO-01',
-        name: 'R. Saravanan (Striker)',
-        email: cleanEmail,
-        role: 'PLAYER',
-        status: 'ACTIVE'
-      };
-    } else if (!user && cleanEmail === 'kannan.coach@strikerscc.org') {
-      user = {
-        id: 'COACH-DEMO-01',
-        name: 'Coach Kannan',
-        email: cleanEmail,
-        role: 'COACH',
-        status: 'ACTIVE'
-      };
-    }
-
     if (!user) {
-      throw {
-        status: 404,
-        notRegistered: true,
-        message: "You can't join this association! Please register first."
+      return {
+        success: true,
+        message: 'If an eligible account exists for this email, a verification code has been dispatched.',
+        email: cleanEmail
       };
     }
 
@@ -222,7 +193,6 @@ class PasswordResetAuth {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     forgotPasswordOtpMap.set(cleanEmail, {
-      otp: rawOtp,
       hash: otpHash,
       expiresAt,
       name: user.name || 'Member',
@@ -244,12 +214,12 @@ class PasswordResetAuth {
       otp: rawOtp
     });
 
-    const isProd = process.env.NODE_ENV === 'production';
+    const env = require('../../config/env');
     return {
       success: true,
       message: `A 4-digit verification code has been sent to ${cleanEmail}.`,
       email: cleanEmail,
-      ...(!isProd ? { otp: rawOtp } : {})
+      ...(env.isDevelopment ? { otp: rawOtp } : {})
     };
   }
 

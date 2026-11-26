@@ -178,7 +178,7 @@ export const AdminTopbar: React.FC<Props> = ({
             <View style={styles.profileDropdown}>
               <View style={styles.dropdownUserBanner}>
                 <Text style={styles.dropdownUserName}>{adminUser?.name || 'System Administrator'}</Text>
-                <Text style={styles.dropdownUserEmail}>{adminUser?.email || 'admin@cfvd.org'}</Text>
+                <Text style={styles.dropdownUserEmail}>{adminUser?.email || 'Administrator'}</Text>
               </View>
 
               <TouchableOpacity

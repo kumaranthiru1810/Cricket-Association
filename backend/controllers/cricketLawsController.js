@@ -68,7 +68,7 @@ exports.getLawStats = async (req, res) => {
 
 exports.createLaw = async (req, res) => {
   try {
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const adminEmail = req.adminUser?.email || 'system-admin';
     const adminName = req.adminUser?.name || 'Administrator';
     const law = await cricketLawsService.createLaw(req.body, adminEmail, adminName);
     res.status(201).json({ success: true, message: 'Law created successfully', law });
@@ -79,7 +79,7 @@ exports.createLaw = async (req, res) => {
 
 exports.updateLaw = async (req, res) => {
   try {
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const adminEmail = req.adminUser?.email || 'system-admin';
     const adminName = req.adminUser?.name || 'Administrator';
     const law = await cricketLawsService.updateLaw(req.params.id, req.body, adminEmail, adminName);
     res.json({ success: true, message: 'Law updated successfully', law });
@@ -90,7 +90,7 @@ exports.updateLaw = async (req, res) => {
 
 exports.addSection = async (req, res) => {
   try {
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const adminEmail = req.adminUser?.email || 'system-admin';
     const adminName = req.adminUser?.name || 'Administrator';
     const section = await cricketLawsService.addSection(req.params.id, req.body, adminEmail, adminName);
     res.status(201).json({ success: true, message: 'Section added successfully', section });
@@ -101,7 +101,7 @@ exports.addSection = async (req, res) => {
 
 exports.publishLaw = async (req, res) => {
   try {
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const adminEmail = req.adminUser?.email || 'system-admin';
     const adminName = req.adminUser?.name || 'Administrator';
     const law = await cricketLawsService.publishLaw(req.params.id, adminEmail, adminName);
     res.json({ success: true, message: `Law ${law.law_number} published successfully`, law });
@@ -138,7 +138,7 @@ exports.updateCalculationSettings = async (req, res) => {
   try {
     const { tournamentId } = req.params;
     const { calculation_method } = req.body;
-    const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
+    const adminEmail = req.adminUser?.email || 'system-admin';
     const adminName = req.adminUser?.name || 'Administrator';
 
     if (!calculation_method) {

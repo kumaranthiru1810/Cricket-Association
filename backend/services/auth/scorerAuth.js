@@ -55,7 +55,10 @@ class ScorerAuth {
     }
 
     if (!user) {
-      throw { status: 404, notFound: true, message: 'Scorer account not found. Please register as a scorer first.' };
+      return {
+        success: true,
+        message: 'If an eligible scorer account exists for this email, an OTP has been dispatched.'
+      };
     }
 
     if (user.role !== 'SCORER' && user.role !== 'ADMIN') {
@@ -131,28 +134,37 @@ class ScorerAuth {
     }
 
     if (!user) {
-      throw { status: 404, message: 'Scorer not found.' };
+      throw { status: 401, message: 'Invalid or expired OTP code.' };
+    }
+
+    const attempts = Number(user.otp_attempts || 0);
+    if (attempts >= 5) {
+      await userModel.clearOtp(user.id || cleanEmail);
+      try { await scorerModel.clearOtp(user.id || cleanEmail); } catch (e) { }
+      throw { status: 429, message: 'Too many invalid OTP attempts. Please request a new OTP.' };
     }
 
     if (!user.otp_hash) {
-      throw { status: 400, message: 'No active OTP found. Please request an OTP first.' };
+      throw { status: 401, message: 'Invalid or expired OTP code.' };
     }
 
     const isExpired = user.otp_expires_at && new Date() > new Date(user.otp_expires_at);
     if (isExpired) {
       await userModel.clearOtp(user.id || cleanEmail);
       try { await scorerModel.clearOtp(user.id || cleanEmail); } catch (e) { }
-      throw { status: 400, message: 'OTP has expired. Please request a new OTP.' };
+      throw { status: 401, message: 'Invalid or expired OTP code.' };
     }
 
     const isOtpValid = otpService.verifyOtpCode(cleanOtp, user.otp_hash);
     if (!isOtpValid) {
+      const nextAttempts = attempts + 1;
       try {
         const User = db.models.User;
-        await User.updateOne({ email: cleanEmail }, { $inc: { otp_attempts: 1 } });
+        await User.updateOne({ email: cleanEmail }, { $set: nextAttempts >= 5 ? { otp_attempts: nextAttempts, otp_hash: null, otp_expires_at: null } : { otp_attempts: nextAttempts } });
         await scorerModel.incrementOtpAttempts(user.id || cleanEmail);
+        if (nextAttempts >= 5) await scorerModel.clearOtp(user.id || cleanEmail);
       } catch (e) { }
-      throw { status: 400, message: 'Invalid OTP code. Please enter the correct code.' };
+      throw { status: 401, message: 'Invalid or expired OTP code.' };
     }
 
     await userModel.clearOtp(user.id || cleanEmail);

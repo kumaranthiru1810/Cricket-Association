@@ -118,14 +118,14 @@ async function registerTeam({ teamName, districtId, captainName, phone, email, p
 
     if (players && Array.isArray(players) && players.length > 0) {
       if (players.length !== 15) throw new Error('Exactly 15 players are required.');
-      
+
       const emailSet = new Set();
       for (const p of players) {
         if (!p.name || !p.email || !p.role) throw new Error('All players must have a name, email, and role.');
         if (emailSet.has(p.email.toLowerCase())) throw new Error(`Duplicate player email found in team: ${p.email}`);
         emailSet.add(p.email.toLowerCase());
       }
-      
+
       for (const p of players) {
         await conn.query(
           'INSERT INTO team_players (team_id, player_name, player_email, player_role, status) VALUES (?, ?, ?, ?, ?)',

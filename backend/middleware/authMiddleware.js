@@ -490,8 +490,8 @@ async function requireUmpireAuth(req, res, next) {
         });
       }
 
-      // Role check: Umpire, Admin, or Scorer
-      const isAllowedRole = user.role === 'UMPIRE' || user.role === 'ADMIN' || user.role === 'SCORER';
+      // Role check: Umpire or Admin only
+      const isAllowedRole = user.role === 'UMPIRE' || user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' || user.is_super_admin;
       if (!isAllowedRole) {
         return res.status(403).json({
           success: false,
