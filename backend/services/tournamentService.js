@@ -320,11 +320,22 @@ class TournamentService {
       }
     }
 
+    const allowedTypes = ['LEAGUE', 'KNOCKOUT', 'LEAGUE_KNOCKOUT', 'DOUBLE_ELIMINATION', 'GROUP_KNOCKOUT', 'LEAGUE_PLAYOFFS', 'CUSTOM'];
+    const rawType = String(payload.tournament_type || payload.type || '').toUpperCase().trim();
     let tourType = 'LEAGUE';
-    const rawType = String(payload.tournament_type || payload.type || '').toUpperCase();
-    if (rawType.includes('KNOCKOUT') && rawType.includes('LEAGUE')) tourType = 'LEAGUE_KNOCKOUT';
-    else if (rawType.includes('KNOCKOUT')) tourType = 'KNOCKOUT';
-    else tourType = 'LEAGUE';
+    if (allowedTypes.includes(rawType)) {
+      tourType = rawType;
+    } else if (rawType.includes('DOUBLE') && rawType.includes('ELIM')) {
+      tourType = 'DOUBLE_ELIMINATION';
+    } else if (rawType.includes('GROUP') && rawType.includes('KNOCKOUT')) {
+      tourType = 'GROUP_KNOCKOUT';
+    } else if (rawType.includes('PLAYOFF') || rawType.includes('IPL')) {
+      tourType = 'LEAGUE_PLAYOFFS';
+    } else if (rawType.includes('KNOCKOUT') && rawType.includes('LEAGUE')) {
+      tourType = 'LEAGUE_KNOCKOUT';
+    } else if (rawType.includes('KNOCKOUT')) {
+      tourType = 'KNOCKOUT';
+    }
 
     const tourId = payload.id || `T-${Date.now()}`;
     const newTournamentData = {
@@ -360,7 +371,16 @@ class TournamentService {
         round_robin_type: payload.format_config?.round_robin_type || 'SINGLE',
         knockout_stages: payload.format_config?.knockout_stages || ['Semi Final', 'Final'],
         qualifying_teams_count: Number(payload.format_config?.qualifying_teams_count || 4),
-        qualification_rules: payload.format_config?.qualification_rules || 'Top qualifying teams advance to knockout stage'
+        qualification_rules: payload.format_config?.qualification_rules || 'Top qualifying teams advance to knockout stage',
+        top_n_per_group: Number(payload.format_config?.top_n_per_group || 2),
+        best_third_place_count: Number(payload.format_config?.best_third_place_count || 0),
+        tie_breaker_order: Array.isArray(payload.format_config?.tie_breaker_order) ? payload.format_config.tie_breaker_order : ['POINTS', 'NRR', 'HEAD_TO_HEAD', 'WINS'],
+        allow_grand_final_reset: payload.format_config?.allow_grand_final_reset !== false,
+        playoffs_format: payload.format_config?.playoffs_format || (tourType === 'LEAGUE_PLAYOFFS' ? 'IPL' : 'STANDARD'),
+        min_rest_hours: Number(payload.format_config?.min_rest_hours ?? 4),
+        max_squad_size: Number(payload.format_config?.max_squad_size || 18),
+        min_squad_size: Number(payload.format_config?.min_squad_size || 11),
+        age_limit: payload.format_config?.age_limit || null
       },
       teams,
       status: initialStatus,
@@ -597,9 +617,18 @@ class TournamentService {
 
   /**
    * Generate Tournament Matches Fixtures
-   * Supports Single Round-Robin, Double Round-Robin, Knockout Brackets, and League + Knockout
+   * Delegates to unified tournamentEngine supporting Single/Double Round Robin,
+   * Single Elimination, Double Elimination, Group+Knockout, and League+IPL Playoffs.
    */
   async generateMatches(tournamentId, options = {}, adminEmail) {
+    const tournamentEngine = require('./tournamentEngine');
+    return tournamentEngine.generateAndSaveMatches(tournamentId, options, adminEmail);
+  }
+
+  /**
+   * Legacy placeholder kept for reference — replaced by tournamentEngine.generateAndSaveMatches
+   */
+  async _legacyGenerateMatchesUnused(tournamentId, options = {}, adminEmail) {
     await db.initDb();
     const tournament = await tournamentModel.findById(tournamentId);
     if (!tournament) {
@@ -1262,32 +1291,41 @@ class TournamentService {
       const tour = await db.models.Tournament.findOne({ id: match.tournament_id });
       if (!tour) return;
 
+      // Run idempotent bracket/knockout progression & team stats sync FIRST
+      // so next-round fixtures are created before checking if tournament is finished
+      const tournamentEngine = require('./tournamentEngine');
+      await tournamentEngine.processMatchProgression(matchId);
+
+      // Re-fetch tournament after progression
+      const refreshedTour = await db.models.Tournament.findOne({ id: match.tournament_id });
+      if (!refreshedTour) return;
+
       let changed = false;
-      if (tour.status === 'UPCOMING') {
-        tour.status = 'ONGOING';
+      if (refreshedTour.status === 'UPCOMING') {
+        refreshedTour.status = 'ONGOING';
         changed = true;
       }
 
-      // Check remaining matches
+      // Only auto-complete here if no bracket/playoff is pending and all matches are done
       const activePendingCount = await db.models.Match.countDocuments({
         tournament_id: match.tournament_id,
         status: { $in: ['SCHEDULED', 'LIVE', 'INNINGS_BREAK', 'TOSS', 'PAUSED'] }
       });
 
-      if (activePendingCount === 0) {
+      if (activePendingCount === 0 && !refreshedTour.bracket) {
         const completedCount = await db.models.Match.countDocuments({
           tournament_id: match.tournament_id,
           status: 'COMPLETED'
         });
-        if (completedCount > 0) {
-          tour.status = 'COMPLETED';
+        if (completedCount > 0 && refreshedTour.status !== 'COMPLETED') {
+          refreshedTour.status = 'COMPLETED';
           changed = true;
         }
       }
 
       if (changed) {
-        tour.updatedAt = new Date();
-        await tour.save();
+        refreshedTour.updatedAt = new Date();
+        await refreshedTour.save();
       }
     } catch (_err) {
       // Non-blocking

@@ -31,9 +31,18 @@ const TeamSchema = new mongoose.Schema({
     won: { type: Number, default: 0 },
     lost: { type: Number, default: 0 },
     tied: { type: Number, default: 0 },
+    no_result: { type: Number, default: 0 },
     points: { type: Number, default: 0 },
     nrr: { type: Number, default: 0.0 }
-  }
+  },
+  championships: [{
+    tournament_id: { type: String, required: true },
+    tournament_name: { type: String, default: '' },
+    season: { type: String, default: '' },
+    position: { type: String, enum: ['CHAMPION', 'RUNNER_UP'], default: 'CHAMPION' },
+    awarded_at: { type: Date, default: Date.now }
+  }],
+  trophies_count: { type: Number, default: 0 }
 }, { timestamps: true });
 
 const TeamRegistrationSchema = new mongoose.Schema({

@@ -88,6 +88,7 @@ export default function PlayerPublicProfileScreen({
   });
 
   const [matchLog, setMatchLog] = useState<any[]>([]);
+  const [playerHistory, setPlayerHistory] = useState<any | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -100,11 +101,17 @@ export default function PlayerPublicProfileScreen({
 
       try {
         setLoading(true);
-        const res = await ScorerApi.getPortalPlayerDetails(target);
+        const [res, histRes] = await Promise.all([
+          ScorerApi.getPortalPlayerDetails(target),
+          ScorerApi.getPlayerHistory(target).catch(() => null)
+        ]);
         if (isMounted && res && res.success) {
           if (res.player) setPlayer(res.player);
           if (res.stats) setStats(res.stats);
           if (Array.isArray(res.matchLog)) setMatchLog(res.matchLog);
+        }
+        if (isMounted && histRes && histRes.success) {
+          setPlayerHistory(histRes);
         }
       } catch (err: any) {
         console.warn('Unable to load player from API:', err.message);
@@ -430,6 +437,21 @@ export default function PlayerPublicProfileScreen({
                 </View>
               </View>
             </View>
+
+            {/* Tournament-Wise & Season-Wise Breakdown */}
+            {playerHistory && (
+              <View style={{ marginBottom: 14, gap: 8 }}>
+                <Text style={styles.sectionTitle}>Tournament & Season Career Breakdown (POTM Awards: {playerHistory.career?.potm_awards || 0})</Text>
+                {(playerHistory.tournament_wise || []).map((tw: any, i: number) => (
+                  <View key={tw.tournament_id || i} style={styles.matchCard}>
+                    <Text style={{ fontWeight: '800', fontSize: 13, color: '#0f172a' }}>{tw.tournament_name} ({tw.season})</Text>
+                    <Text style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>
+                      Matches: {tw.matches} • Runs: {tw.runs} (HS: {tw.highest_score}) • Wickets: {tw.wickets}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
 
             {/* View Team Button */}
             <TouchableOpacity style={styles.fullTeamBtn} onPress={handleOpenTeam} activeOpacity={0.85}>

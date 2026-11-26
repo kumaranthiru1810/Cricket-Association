@@ -296,6 +296,30 @@ router.get('/form', requirePlayerAuth, async (req, res) => {
   }
 });
 
+const historyService = require('../services/historyService');
+
+router.get('/compare', async (req, res) => {
+  try {
+    const { player1, player2 } = req.query;
+    if (!player1 || !player2) {
+      return res.status(400).json({ success: false, message: 'Both player1 and player2 query params are required.' });
+    }
+    const result = await historyService.comparePlayers(String(player1), String(player2));
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 400).json({ success: false, message: err.message || 'Player comparison failed.' });
+  }
+});
+
+router.get('/:id/history', async (req, res) => {
+  try {
+    const result = await historyService.getPlayerHistory(req.params.id);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, message: err.message || 'Failed to load player history.' });
+  }
+});
+
 /**
  * Public / Generic Player Rating Endpoints by Player ID
  */

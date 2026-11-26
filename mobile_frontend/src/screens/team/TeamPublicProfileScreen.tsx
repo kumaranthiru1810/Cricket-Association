@@ -43,7 +43,8 @@ export default function TeamPublicProfileScreen({
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'matches' | 'squad'>('matches');
+  const [activeTab, setActiveTab] = useState<'matches' | 'squad' | 'history'>('matches');
+  const [teamHistory, setTeamHistory] = useState<any | null>(null);
   const [crestImgError, setCrestImgError] = useState(false);
 
   const [team, setTeam] = useState<any>({
@@ -83,12 +84,18 @@ export default function TeamPublicProfileScreen({
 
       try {
         setLoading(true);
-        const res = await ScorerApi.getPortalTeamDetails(searchTarget);
+        const [res, histRes] = await Promise.all([
+          ScorerApi.getPortalTeamDetails(searchTarget),
+          ScorerApi.getTeamHistory(searchTarget).catch(() => null)
+        ]);
         if (isMounted && res && res.success) {
           if (res.team) setTeam(res.team);
           if (res.stats) setStats(res.stats);
           if (Array.isArray(res.squad)) setSquad(res.squad);
           if (Array.isArray(res.matches)) setMatches(res.matches);
+        }
+        if (isMounted && histRes && histRes.success) {
+          setTeamHistory(histRes);
         }
       } catch (err: any) {
         console.warn('Unable to load team profile from backend API:', err.message);
@@ -256,12 +263,57 @@ export default function TeamPublicProfileScreen({
               Team Members & Squad ({squad.length})
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'history' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('history')}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="trophy-outline"
+              size={18}
+              color={activeTab === 'history' ? '#b45309' : '#64748b'}
+              style={{ marginRight: 8 }}
+            />
+            <Text style={[styles.tabButtonText, activeTab === 'history' && styles.tabButtonTextActive]}>
+              Trophies & History ({(teamHistory?.championships || []).length})
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#d97706" />
             <Text style={styles.loadingText}>Loading team performance data & scorecards...</Text>
+          </View>
+        ) : activeTab === 'history' ? (
+          <View style={styles.sectionBody}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>Championships, Trophies & Tournament History</Text>
+              <Text style={styles.sectionSubtitle}>
+                Titles: {teamHistory?.summary?.titles_won || 0} • Runner-Ups: {teamHistory?.summary?.runner_ups || 0} • Rank: #{teamHistory?.summary?.ranking || '—'}
+              </Text>
+            </View>
+            {(teamHistory?.championships || []).map((c: any, idx: number) => (
+              <View key={c.tournament_id || idx} style={[styles.emptyCard, { alignItems: 'flex-start', padding: 14, marginBottom: 8 }]}>
+                <Text style={{ fontWeight: '800', fontSize: 14, color: '#0f172a' }}>
+                  {c.position === 'CHAMPION' ? '🏆 CHAMPION' : '🥈 RUNNER-UP'} — {c.tournament_name} ({c.season})
+                </Text>
+              </View>
+            ))}
+            {(teamHistory?.tournament_history || []).length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyTitle}>No Tournament History Recorded Yet</Text>
+              </View>
+            ) : (
+              (teamHistory?.tournament_history || []).map((th: any, idx: number) => (
+                <View key={th.tournament_id || idx} style={[styles.emptyCard, { alignItems: 'flex-start', padding: 14, marginBottom: 8 }]}>
+                  <Text style={{ fontWeight: '800', fontSize: 14, color: '#0f172a' }}>{th.tournament_name} ({th.season})</Text>
+                  <Text style={{ fontSize: 12, color: '#475569', marginTop: 4 }}>
+                    Played: {th.played} • Won: {th.won} • Lost: {th.lost} • Tied: {th.tied} • Outcome: {th.outcome}
+                  </Text>
+                </View>
+              ))
+            )}
           </View>
         ) : activeTab === 'matches' ? (
           /* ─── TAB 1: MATCH SCORECARDS ─── */

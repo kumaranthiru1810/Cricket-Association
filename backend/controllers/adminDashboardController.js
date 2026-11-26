@@ -11,7 +11,7 @@ const db = require('../config/db');
 const adminService = require('../services/adminService');
 const { validateScheduleDateTime } = require('../utils/dateTimeValidation');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'cricket_super_secret_jwt_2026';
+const { JWT_SECRET } = require('../config/env');
 
 class AdminDashboardController {
   /**
@@ -61,7 +61,7 @@ class AdminDashboardController {
         }
       }
 
-      if (!isAuthenticated || !adminUser || adminUser.role !== 'ADMIN') {
+      if (!isAuthenticated || !adminUser || (adminUser.role !== 'ADMIN' && adminUser.role !== 'SUPER_ADMIN')) {
         return res.status(401).json({
           success: false,
           message: 'Invalid administrative credentials or unauthorized account.'

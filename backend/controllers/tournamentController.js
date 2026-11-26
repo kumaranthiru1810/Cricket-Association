@@ -436,6 +436,158 @@ class TournamentController {
       });
     }
   }
+
+  async allocateGroups(req, res) {
+    try {
+      const tournamentEngine = require('../services/tournamentEngine');
+      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const result = await tournamentEngine.allocateGroups(req.params.id, req.body, adminEmail);
+      res.json(result);
+    } catch (err) {
+      res.status(err.status || 400).json({ success: false, message: err.message || 'Group allocation failed.' });
+    }
+  }
+
+  async moveTeamBetweenGroups(req, res) {
+    try {
+      const tournamentEngine = require('../services/tournamentEngine');
+      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const { teamId, fromGroupId, toGroupId } = req.body;
+      const result = await tournamentEngine.moveTeamBetweenGroups(req.params.id, teamId, fromGroupId, toGroupId, adminEmail);
+      res.json(result);
+    } catch (err) {
+      res.status(err.status || 400).json({ success: false, message: err.message || 'Failed to move team.' });
+    }
+  }
+
+  async confirmGroups(req, res) {
+    try {
+      const tournamentEngine = require('../services/tournamentEngine');
+      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const result = await tournamentEngine.confirmGroups(req.params.id, adminEmail);
+      res.json(result);
+    } catch (err) {
+      res.status(err.status || 400).json({ success: false, message: err.message || 'Failed to confirm groups.' });
+    }
+  }
+
+  async updateQualificationConfig(req, res) {
+    try {
+      const tournamentEngine = require('../services/tournamentEngine');
+      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const result = await tournamentEngine.updateQualificationConfig(req.params.id, req.body, adminEmail);
+      res.json(result);
+    } catch (err) {
+      res.status(err.status || 400).json({ success: false, message: err.message || 'Failed to update qualification rules.' });
+    }
+  }
+
+  async previewSchedule(req, res) {
+    try {
+      const tournamentEngine = require('../services/tournamentEngine');
+      const result = await tournamentEngine.previewSchedule(req.params.id, req.body || {});
+      res.json(result);
+    } catch (err) {
+      res.status(err.status || 400).json({ success: false, message: err.message || 'Failed to preview schedule.' });
+    }
+  }
+
+  async getStandings(req, res) {
+    try {
+      const tournamentEngine = require('../services/tournamentEngine');
+      const result = await tournamentEngine.getStandingsWithGroups(req.params.id);
+      res.json({ success: true, ...result });
+    } catch (err) {
+      res.status(err.status || 500).json({ success: false, message: err.message || 'Failed to retrieve standings.' });
+    }
+  }
+
+  async resolveManualTie(req, res) {
+    try {
+      const tournamentEngine = require('../services/tournamentEngine');
+      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const result = await tournamentEngine.resolveManualTie(req.params.id, req.body, adminEmail);
+      res.json({ success: true, ...result });
+    } catch (err) {
+      res.status(err.status || 400).json({ success: false, message: err.message || 'Failed to resolve tie.' });
+    }
+  }
+
+  async generateNextStage(req, res) {
+    try {
+      const tournamentEngine = require('../services/tournamentEngine');
+      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const result = await tournamentEngine.generateNextStageFromStandings(req.params.id, adminEmail);
+      res.json(result);
+    } catch (err) {
+      res.status(err.status || 400).json({ success: false, message: err.message || 'Failed to generate next stage.' });
+    }
+  }
+
+  async getBracket(req, res) {
+    try {
+      const db = require('../config/db');
+      await db.initDb();
+      const tournament = await tournamentService.getTournamentById(req.params.id);
+      res.json({
+        success: true,
+        tournament_id: tournament.id,
+        tournament_type: tournament.tournament_type,
+        bracket: tournament.bracket || null,
+        champion_team_id: tournament.champion_team_id || null,
+        champion_team_name: tournament.champion_team_name || '',
+        runner_up_team_id: tournament.runner_up_team_id || null,
+        runner_up_team_name: tournament.runner_up_team_name || '',
+        matches: tournament.matches || []
+      });
+    } catch (err) {
+      res.status(err.status || 500).json({ success: false, message: err.message || 'Failed to retrieve bracket.' });
+    }
+  }
+
+  async withdrawTeam(req, res) {
+    try {
+      const tournamentEngine = require('../services/tournamentEngine');
+      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const { teamId, reason, rule } = req.body;
+      const result = await tournamentEngine.withdrawTeam(req.params.id, teamId, { reason, rule }, adminEmail);
+      res.json(result);
+    } catch (err) {
+      res.status(err.status || 400).json({ success: false, message: err.message || 'Team withdrawal failed.' });
+    }
+  }
+
+  async checkEligibility(req, res) {
+    try {
+      const tournamentEngine = require('../services/tournamentEngine');
+      const { teamId, playerIds } = req.body;
+      const result = await tournamentEngine.validatePlayerEligibility(req.params.id, teamId, playerIds);
+      res.json(result);
+    } catch (err) {
+      res.status(err.status || 400).json({ success: false, message: err.message || 'Eligibility check failed.' });
+    }
+  }
+
+  async simulateWhatIf(req, res) {
+    try {
+      const tournamentEngine = require('../services/tournamentEngine');
+      const result = await tournamentEngine.simulateWhatIf(req.params.id, req.body?.simulatedResults || []);
+      res.json(result);
+    } catch (err) {
+      res.status(err.status || 400).json({ success: false, message: err.message || 'Simulation failed.' });
+    }
+  }
+
+  async reverseMatchResult(req, res) {
+    try {
+      const tournamentEngine = require('../services/tournamentEngine');
+      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const result = await tournamentEngine.reverseMatchProgression(req.params.id, adminEmail, req.body || {});
+      res.json(result);
+    } catch (err) {
+      res.status(err.status || 400).json({ success: false, message: err.message || 'Failed to reverse match result.' });
+    }
+  }
 }
 
 module.exports = new TournamentController();

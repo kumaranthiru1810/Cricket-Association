@@ -10,7 +10,7 @@ const otpService = require('../otpService');
 const { sendOtpEmail } = require('../../config/mailer');
 const db = require('../../config/db');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'cricket_super_secret_jwt_2026';
+const { JWT_SECRET } = require('../../config/env');
 
 class TeamAuth {
   /**

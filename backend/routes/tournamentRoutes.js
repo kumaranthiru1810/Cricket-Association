@@ -81,6 +81,20 @@ router.post('/:id/generate-matches', requireAdminAuth, (req, res) => tournamentC
 // PATCH /api/tournaments/:id/status - Update tournament status
 router.patch('/:id/status', requireAdminAuth, (req, res) => tournamentController.updateStatus(req, res));
 
+// ── Advanced Group, Bracket, Progression, Withdrawal, Eligibility & Simulation ──
+router.post('/:id/groups/allocate', requireAdminAuth, (req, res) => tournamentController.allocateGroups(req, res));
+router.post('/:id/groups/move-team', requireAdminAuth, (req, res) => tournamentController.moveTeamBetweenGroups(req, res));
+router.post('/:id/groups/confirm', requireAdminAuth, (req, res) => tournamentController.confirmGroups(req, res));
+router.put('/:id/qualification-config', requireAdminAuth, (req, res) => tournamentController.updateQualificationConfig(req, res));
+router.post('/:id/preview-schedule', requireAdminAuth, (req, res) => tournamentController.previewSchedule(req, res));
+router.get('/:id/standings', (req, res) => tournamentController.getStandings(req, res));
+router.post('/:id/resolve-tie', requireAdminAuth, (req, res) => tournamentController.resolveManualTie(req, res));
+router.post('/:id/generate-next-stage', requireAdminAuth, (req, res) => tournamentController.generateNextStage(req, res));
+router.get('/:id/bracket', (req, res) => tournamentController.getBracket(req, res));
+router.post('/:id/withdraw', requireAdminAuth, (req, res) => tournamentController.withdrawTeam(req, res));
+router.post('/:id/eligibility-check', requireAdminAuth, (req, res) => tournamentController.checkEligibility(req, res));
+router.post('/:id/simulate', requireAdminAuth, (req, res) => tournamentController.simulateWhatIf(req, res));
+
 // ── Calculation Settings (DLS/VJD) – Read for Scorer, Write for Admin ──────
 
 const cricketLawsCtrl = require('../controllers/cricketLawsController');
