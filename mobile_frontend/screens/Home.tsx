@@ -399,12 +399,16 @@ export default function HomeScreen() {
   // State: Mobile Nav Menu
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  // State: Match Centre Filter & Pagination (Reusable 8 items per page)
+  // State: Match Centre Filter & Pagination
   const [matchFilter, setMatchFilter] = useState<'all' | 'live' | 'upcoming' | 'postponed' | 'results'>('all');
   const [matchPage, setMatchPage] = useState<number>(1);
-  const MATCHES_PER_PAGE = 8;
+  const MATCHES_PER_PAGE = 6;
 
-  // State: Standings Points Table Pagination & Search (Reusable 8 items per page)
+  // State: Tournaments Pagination
+  const [tournamentPage, setTournamentPage] = useState<number>(1);
+  const TOURNAMENTS_PER_PAGE = 4;
+
+  // State: Standings Points Table Pagination & Search
   const [standingsPage, setStandingsPage] = useState<number>(1);
   const [standingsSearchQuery, setStandingsSearchQuery] = useState<string>('');
   const STANDINGS_PER_PAGE = 8;
@@ -471,6 +475,10 @@ export default function HomeScreen() {
   // State: Player Milestone Hall of Fame Pagination (Reusable 8 items per page)
   const [milestonePage, setMilestonePage] = useState<number>(1);
   const MILESTONE_PER_PAGE = 8;
+
+  // State: Committee Roles Pagination
+  const [committeeRolePage, setCommitteeRolePage] = useState<number>(1);
+  const COMMITTEE_ROLES_PER_PAGE = 6;
 
   // Dynamic Real Match State from MongoDB
   const [publicMatches, setPublicMatches] = useState<any[]>([]);
@@ -1805,96 +1813,118 @@ export default function HomeScreen() {
               </Text>
             </View>
 
-            <View style={[styles.grid2Col, isMobile && { flexDirection: 'column', flexWrap: 'nowrap' }]}>
-              {portalTournaments.length === 0 ? (
-                <View style={{ width: '100%', padding: 28, alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0' }}>
-                  <Ionicons name="trophy-outline" size={30} color="#94a3b8" style={{ marginBottom: 8 }} />
-                  <Text style={{ color: '#0f172a', fontWeight: '800', fontSize: 15 }}>No Official Tournaments Published Yet</Text>
-                  <Text style={{ color: '#64748b', fontSize: 12.5, textAlign: 'center', marginTop: 4 }}>
-                    Tournaments created by the association admin will appear here automatically.
-                  </Text>
-                </View>
-              ) : (
-                portalTournaments.map((t: any, idx: number) => {
-                  const teamsCount = Array.isArray(t.teams) && t.teams.length > 0 ? t.teams.length : (t.max_teams || 16);
-                  const formatLabel = t.match_format || t.format || 'T20';
-                  const dateRange = t.start_date && t.end_date
-                    ? `${t.start_date} – ${t.end_date}`
-                    : (t.start_date || `Season ${t.season || '2026-27'}`);
-                  const statusLabel = (t.status || 'UPCOMING').replace(/_/g, ' ');
-                  const isOpenForReg = t.status === 'REGISTRATION_OPEN';
+            {(() => {
+              const totalTournamentPages = Math.ceil(portalTournaments.length / TOURNAMENTS_PER_PAGE) || 1;
+              const safeTournamentPage = Math.min(tournamentPage, totalTournamentPages);
+              const paginatedTournaments = portalTournaments.slice(
+                (safeTournamentPage - 1) * TOURNAMENTS_PER_PAGE,
+                safeTournamentPage * TOURNAMENTS_PER_PAGE
+              );
 
-                  return (
-                    <View
-                      key={t.id || idx}
-                      style={[
-                        styles.tournamentCard,
-                        !isMobile && { flex: 1 },
-                        isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' },
-                        isSmallMobile && { padding: 12 }
-                      ]}
-                    >
-                      <View style={[styles.tBadgeWrap, { flexWrap: 'wrap' }]}>
-                        <Text style={styles.badgeGoldPill}>{t.category || 'District League'}</Text>
-                        <Text style={styles.badgeBluePill}>{formatLabel}{t.overs_per_match ? ` • ${t.overs_per_match} Ov` : ''}</Text>
-                        <Text style={t.status === 'ONGOING' || t.status === 'ACTIVE' ? styles.badgeGreenPill : styles.badgeRedPill}>
-                          {statusLabel}
+              return (
+                <>
+                  <View style={[styles.grid2Col, isMobile && { flexDirection: 'column', flexWrap: 'nowrap' }]}>
+                    {portalTournaments.length === 0 ? (
+                      <View style={{ width: '100%', padding: 28, alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                        <Ionicons name="trophy-outline" size={30} color="#94a3b8" style={{ marginBottom: 8 }} />
+                        <Text style={{ color: '#0f172a', fontWeight: '800', fontSize: 15 }}>No Official Tournaments Published Yet</Text>
+                        <Text style={{ color: '#64748b', fontSize: 12.5, textAlign: 'center', marginTop: 4 }}>
+                          Tournaments created by the association admin will appear here automatically.
                         </Text>
                       </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 8 }}>
-                        <Ionicons name="trophy-outline" size={24} color="#0e184e" style={{ marginRight: 8 }} />
-                        <Text style={[styles.tourneyTitle, { flex: 1, marginBottom: 0 }]}>{t.name}</Text>
-                      </View>
-                      <Text style={styles.tourneySub}>
-                        {t.short_name ? `${t.short_name} • ` : ''}{t.ball_type || 'Leather Ball'} ({t.gender || 'Men'})
-                      </Text>
-                      <Text style={styles.tourneyDesc} numberOfLines={3}>
-                        {t.description || `Official ${formatLabel} competition sanctioned by the Cricket Association of Virudhunagar District.`}
-                      </Text>
-                      <View style={styles.tourneySpecs}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                          <Ionicons name="people-outline" size={13} color="#475569" style={{ marginRight: 6 }} />
-                          <Text style={styles.tourneySpecItem}>{teamsCount} Participating Teams</Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                          <Ionicons name="calendar-outline" size={13} color="#475569" style={{ marginRight: 6 }} />
-                          <Text style={styles.tourneySpecItem}>{dateRange}</Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Ionicons name="location-outline" size={13} color="#b45309" style={{ marginRight: 6 }} />
-                          <Text style={styles.tourneySpecItem}>{t.venue || 'Kamarajar District Stadium'}</Text>
-                        </View>
-                      </View>
-                      <View style={styles.tourneyFooter}>
-                        <TouchableOpacity
-                          style={styles.btnOutlineGoldSm}
-                          onPress={() => {
-                            setPointsTableKey(t.id);
-                            setStandingsPage(1);
-                            loadTournamentStandings(t.id);
-                            scrollToSection('pointsTable');
-                          }}
-                        >
-                          <Text style={styles.btnOutlineGoldSmText}>View Table</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.btnPrimarySm}
-                          onPress={() => {
-                            if (isOpenForReg) {
-                              navigate('Registration');
-                            } else {
-                              scrollToSection('matchCentre');
-                            }
-                          }}
-                        >
-                          <Text style={styles.btnPrimarySmText}>{isOpenForReg ? 'Register Team' : 'View Matches'}</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  );
-                })
-              )}
-            </View>
+                    ) : (
+                      paginatedTournaments.map((t: any, idx: number) => {
+                        const teamsCount = Array.isArray(t.teams) && t.teams.length > 0 ? t.teams.length : (t.max_teams || 16);
+                        const formatLabel = t.match_format || t.format || 'T20';
+                        const dateRange = t.start_date && t.end_date
+                          ? `${t.start_date} – ${t.end_date}`
+                          : (t.start_date || `Season ${t.season || '2026-27'}`);
+                        const statusLabel = (t.status || 'UPCOMING').replace(/_/g, ' ');
+                        const isOpenForReg = t.status === 'REGISTRATION_OPEN';
+
+                        return (
+                          <View
+                            key={t.id || idx}
+                            style={[
+                              styles.tournamentCard,
+                              !isMobile && { flex: 1 },
+                              isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' },
+                              isSmallMobile && { padding: 12 }
+                            ]}
+                          >
+                            <View style={[styles.tBadgeWrap, { flexWrap: 'wrap' }]}>
+                              <Text style={styles.badgeGoldPill}>{t.category || 'District League'}</Text>
+                              <Text style={styles.badgeBluePill}>{formatLabel}{t.overs_per_match ? ` • ${t.overs_per_match} Ov` : ''}</Text>
+                              <Text style={t.status === 'ONGOING' || t.status === 'ACTIVE' ? styles.badgeGreenPill : styles.badgeRedPill}>
+                                {statusLabel}
+                              </Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 8 }}>
+                              <Ionicons name="trophy-outline" size={24} color="#0e184e" style={{ marginRight: 8 }} />
+                              <Text style={[styles.tourneyTitle, { flex: 1, marginBottom: 0 }]}>{t.name}</Text>
+                            </View>
+                            <Text style={styles.tourneySub}>
+                              {t.short_name ? `${t.short_name} • ` : ''}{t.ball_type || 'Leather Ball'} ({t.gender || 'Men'})
+                            </Text>
+                            <Text style={styles.tourneyDesc} numberOfLines={3}>
+                              {t.description || `Official ${formatLabel} competition sanctioned by the Cricket Association of Virudhunagar District.`}
+                            </Text>
+                            <View style={styles.tourneySpecs}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                                <Ionicons name="people-outline" size={13} color="#475569" style={{ marginRight: 6 }} />
+                                <Text style={styles.tourneySpecItem}>{teamsCount} Participating Teams</Text>
+                              </View>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                                <Ionicons name="calendar-outline" size={13} color="#475569" style={{ marginRight: 6 }} />
+                                <Text style={styles.tourneySpecItem}>{dateRange}</Text>
+                              </View>
+                              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <Ionicons name="location-outline" size={13} color="#b45309" style={{ marginRight: 6 }} />
+                                <Text style={styles.tourneySpecItem}>{t.venue || 'Kamarajar District Stadium'}</Text>
+                              </View>
+                            </View>
+                            <View style={styles.tourneyFooter}>
+                              <TouchableOpacity
+                                style={styles.btnOutlineGoldSm}
+                                onPress={() => {
+                                  setPointsTableKey(t.id);
+                                  setStandingsPage(1);
+                                  loadTournamentStandings(t.id);
+                                  scrollToSection('pointsTable');
+                                }}
+                              >
+                                <Text style={styles.btnOutlineGoldSmText}>View Table</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={styles.btnPrimarySm}
+                                onPress={() => {
+                                  if (isOpenForReg) {
+                                    navigate('Registration');
+                                  } else {
+                                    scrollToSection('matchCentre');
+                                  }
+                                }}
+                              >
+                                <Text style={styles.btnPrimarySmText}>{isOpenForReg ? 'Register Team' : 'View Matches'}</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        );
+                      })
+                    )}
+                  </View>
+
+                  <BootstrapPagination
+                    currentPage={safeTournamentPage}
+                    totalPages={totalTournamentPages}
+                    onPageChange={(p) => setTournamentPage(p)}
+                    totalItems={portalTournaments.length}
+                    pageSize={TOURNAMENTS_PER_PAGE}
+                    itemLabel="tournaments"
+                  />
+                </>
+              );
+            })()}
           </View>
         </View>
 
@@ -3783,23 +3813,44 @@ export default function HomeScreen() {
                   <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#1e3a8a', marginBottom: 2 }}>
                     Tournament Coordinators & Officials
                   </Text>
-                  {(committeeConfig.roles || []).map((r: any, idx: number) => (
-                    <View
-                      key={`home-role-${idx}`}
-                      style={{
-                        paddingVertical: 8,
-                        borderBottomWidth: idx < (committeeConfig.roles?.length || 0) - 1 ? 1 : 0,
-                        borderBottomColor: '#f1f5f9'
-                      }}
-                    >
-                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>
-                        {r.roleTitle}
-                      </Text>
-                      <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0f172a', marginTop: 2 }}>
-                        {r.members}
-                      </Text>
-                    </View>
-                  ))}
+                  {(() => {
+                    const allRoles = committeeConfig.roles || [];
+                    const totalRolePages = Math.ceil(allRoles.length / COMMITTEE_ROLES_PER_PAGE) || 1;
+                    const safeRolePage = Math.min(committeeRolePage, totalRolePages);
+                    const paginatedRoles = allRoles.slice(
+                      (safeRolePage - 1) * COMMITTEE_ROLES_PER_PAGE,
+                      safeRolePage * COMMITTEE_ROLES_PER_PAGE
+                    );
+                    return (
+                      <>
+                        {paginatedRoles.map((r: any, idx: number) => (
+                          <View
+                            key={`home-role-${idx}`}
+                            style={{
+                              paddingVertical: 8,
+                              borderBottomWidth: idx < paginatedRoles.length - 1 ? 1 : 0,
+                              borderBottomColor: '#f1f5f9'
+                            }}
+                          >
+                            <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>
+                              {r.roleTitle}
+                            </Text>
+                            <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0f172a', marginTop: 2 }}>
+                              {r.members}
+                            </Text>
+                          </View>
+                        ))}
+                        <BootstrapPagination
+                          currentPage={safeRolePage}
+                          totalPages={totalRolePages}
+                          onPageChange={(p) => setCommitteeRolePage(p)}
+                          totalItems={allRoles.length}
+                          pageSize={COMMITTEE_ROLES_PER_PAGE}
+                          itemLabel="officials"
+                        />
+                      </>
+                    );
+                  })()}
                 </View>
 
                 {/* Ground In-Charges + Notice Card */}
