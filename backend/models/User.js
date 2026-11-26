@@ -21,10 +21,13 @@ const UserSchema = new mongoose.Schema({
   },
   status: { 
     type: String, 
-    enum: ['ACTIVE', 'PENDING', 'SUSPENDED', 'REJECTED', 'APPROVED'], 
+    enum: ['ACTIVE', 'INACTIVE', 'PENDING', 'SUSPENDED', 'REJECTED', 'APPROVED', 'DELETED'], 
     default: 'ACTIVE',
     index: true 
   },
+  previous_status: { type: String, default: null },
+  deleted_at: { type: Date, default: null },
+  deleted_by: { type: String, default: null },
   token_version: { type: Number, default: 0 },
   role_changed_at: { type: Date, default: null },
   role_changed_by: { type: String, default: null },

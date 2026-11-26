@@ -785,6 +785,7 @@ class AdminAuth {
       const teams = await teamRegistrationModel.getAll();
       teams.forEach(t => {
         const status = (t.status || 'PENDING').toUpperCase();
+        if (status === 'DELETED') return;
         if (filterStatus && filterStatus !== 'ALL' && status !== filterStatus.toUpperCase()) {
           return;
         }
@@ -842,6 +843,7 @@ class AdminAuth {
       const users = await db.models.User.find(roleQuery).sort({ created_at: -1 }).lean();
       users.forEach(u => {
         const rawStatus = (u.status || 'PENDING').toUpperCase();
+        if (rawStatus === 'DELETED') return;
         const status = (rawStatus === 'ACTIVE') ? 'APPROVED' : rawStatus;
         if (filterStatus && filterStatus !== 'ALL' && status !== filterStatus.toUpperCase()) {
           return;
@@ -899,6 +901,7 @@ class AdminAuth {
         for (const sc of dbScorers) {
           if (!sc.email || existingScorerEmails.has(sc.email.toLowerCase())) continue;
           const rawStatus = (sc.status || 'PENDING').toUpperCase();
+          if (rawStatus === 'DELETED') continue;
           const status = (rawStatus === 'ACTIVE') ? 'APPROVED' : rawStatus;
           if (filterStatus && filterStatus !== 'ALL' && status !== filterStatus.toUpperCase()) continue;
           existingScorerEmails.add(sc.email.toLowerCase());
@@ -1039,6 +1042,131 @@ class AdminAuth {
     return {
       success: true,
       message: `${user.role} "${user.name}" registration has been marked REJECTED.`,
+      data: user.toObject()
+    };
+  }
+
+  /**
+   * Unified Admin Deletion for any registration type (with undo capability)
+   */
+  async deleteRegistration(id, type = 'TEAM', adminId = 'ADMIN') {
+    await db.initDb();
+    const mongoose = require('mongoose');
+    const upperType = (type || '').toUpperCase();
+
+    if (upperType === 'TEAM') {
+      const team = await teamRegistrationModel.deleteRegistration(id, adminId);
+      return {
+        success: true,
+        message: `Team "${team.team_name}" has been deleted.`,
+        data: team
+      };
+    }
+
+    // Individual User deletion (PLAYER, SCORER, UMPIRE, CONTENT_CREATOR)
+    const cleanId = String(id || '').trim();
+    const cleanEmail = cleanId.toLowerCase();
+    const query = {
+      $or: [
+        { id: cleanId },
+        { email: cleanEmail },
+        { email: cleanId }
+      ]
+    };
+    if (mongoose.Types.ObjectId.isValid(cleanId)) {
+      query.$or.push({ _id: cleanId });
+    }
+
+    const user = await db.models.User.findOne(query);
+    if (!user) throw { status: 404, message: `Registration '${id}' not found.` };
+
+    user.previous_status = user.status || 'PENDING';
+    user.status = 'DELETED';
+    user.deleted_at = new Date();
+    user.deleted_by = adminId;
+    await user.save();
+
+    if (user.role === 'SCORER') {
+      await db.models.Scorer.updateOne(
+        { $or: [{ id: cleanId }, { email: cleanEmail }, { scorerId: cleanId }] },
+        { $set: { status: 'DELETED', previous_status: 'APPROVED', deleted_at: new Date() } }
+      );
+    } else if (user.role === 'PLAYER') {
+      await db.models.Player.updateMany(
+        { email: user.email },
+        { $set: { status: 'DELETED' } }
+      );
+    }
+
+    await notificationModel.create({
+      type: 'USER_DELETED',
+      title: `${user.role} Deleted: ${user.name}`,
+      message: `User ${user.name} (${user.email}) was deleted by ${adminId}.`,
+      reference_id: user.id,
+      status: 'UNREAD'
+    });
+
+    return {
+      success: true,
+      message: `✓ ${user.role} "${user.name}" has been deleted.`,
+      data: user.toObject()
+    };
+  }
+
+  /**
+   * Restore previously deleted registration (Undo)
+   */
+  async restoreRegistration(id, type = 'TEAM', adminId = 'ADMIN') {
+    await db.initDb();
+    const mongoose = require('mongoose');
+    const upperType = (type || '').toUpperCase();
+
+    if (upperType === 'TEAM') {
+      const team = await teamRegistrationModel.restoreRegistration(id);
+      return {
+        success: true,
+        message: `Team "${team.team_name}" has been restored.`,
+        data: team
+      };
+    }
+
+    const cleanId = String(id || '').trim();
+    const cleanEmail = cleanId.toLowerCase();
+    const query = {
+      $or: [
+        { id: cleanId },
+        { email: cleanEmail },
+        { email: cleanId }
+      ]
+    };
+    if (mongoose.Types.ObjectId.isValid(cleanId)) {
+      query.$or.push({ _id: cleanId });
+    }
+
+    const user = await db.models.User.findOne(query);
+    if (!user) throw { status: 404, message: `Registration '${id}' not found.` };
+
+    const restoredStatus = user.previous_status || 'ACTIVE';
+    user.status = restoredStatus;
+    user.deleted_at = null;
+    user.deleted_by = null;
+    await user.save();
+
+    if (user.role === 'SCORER') {
+      await db.models.Scorer.updateOne(
+        { $or: [{ id: cleanId }, { email: cleanEmail }, { scorerId: cleanId }] },
+        { $set: { status: restoredStatus === 'ACTIVE' ? 'APPROVED' : restoredStatus, deleted_at: null } }
+      );
+    } else if (user.role === 'PLAYER') {
+      await db.models.Player.updateMany(
+        { email: user.email },
+        { $set: { status: restoredStatus } }
+      );
+    }
+
+    return {
+      success: true,
+      message: `✓ ${user.role} "${user.name}" restored successfully!`,
       data: user.toObject()
     };
   }

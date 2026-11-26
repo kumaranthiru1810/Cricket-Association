@@ -718,6 +718,26 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   const [rejectionReasonInput, setRejectionReasonInput] = useState<string>('Documents incomplete or credentials not fulfilled');
   const [logoutModalOpen, setLogoutModalOpen] = useState<boolean>(false);
 
+  // Delete Confirmation & Floating Undo Toast State
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState<{
+    isOpen: boolean;
+    type: 'SCORER' | 'TEAM' | 'UMPIRE';
+    id: string;
+    name: string;
+    item: any;
+  } | null>(null);
+
+  const [undoToast, setUndoToast] = useState<{
+    visible: boolean;
+    type: 'SCORER' | 'TEAM' | 'UMPIRE';
+    id: string;
+    name: string;
+    item: any;
+    index: number;
+  } | null>(null);
+
+  const undoTimerRef = useRef<any>(null);
+
   // News Publish form
   const [newNewsTitle, setNewNewsTitle] = useState<string>('');
   const [showHomePopupModal, setShowHomePopupModal] = useState<boolean>(false);
@@ -2051,6 +2071,95 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     setRejectionModal(null);
   };
 
+  // Delete & Undo Handlers
+  const handleOpenDeleteModal = (id: string, type: 'SCORER' | 'TEAM' | 'UMPIRE', name: string, item: any) => {
+    setDeleteConfirmModal({ isOpen: true, type, id, name, item });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmModal) return;
+    const { id, type, name, item } = deleteConfirmModal;
+    setDeleteConfirmModal(null);
+
+    let originalIndex = 0;
+    if (type === 'SCORER') {
+      originalIndex = scorers.findIndex(s => s.scorerId === id);
+      setScorers(prev => prev.filter(s => s.scorerId !== id));
+    } else if (type === 'TEAM') {
+      originalIndex = teams.findIndex(t => t.teamId === id);
+      setTeams(prev => prev.filter(t => t.teamId !== id));
+    } else if (type === 'UMPIRE') {
+      originalIndex = umpires.findIndex(u => u.umpireId === id);
+      setUmpires(prev => prev.filter(u => u.umpireId !== id));
+    }
+
+    try {
+      await ScorerApi.deleteRegistration(id, type);
+    } catch (e) {
+      console.warn('Backend delete registration note:', e);
+    }
+
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current);
+    }
+
+    setUndoToast({
+      visible: true,
+      type,
+      id,
+      name,
+      item,
+      index: originalIndex >= 0 ? originalIndex : 0
+    });
+
+    undoTimerRef.current = setTimeout(() => {
+      setUndoToast(null);
+    }, 9000);
+
+    showNotification(`🗑️ ${type === 'TEAM' ? 'Team' : type === 'SCORER' ? 'Scorer' : 'Umpire'} "${name}" deleted.`);
+  };
+
+  const handleUndoDelete = async () => {
+    if (!undoToast) return;
+    const { id, type, name, item, index } = undoToast;
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current);
+    }
+    setUndoToast(null);
+
+    if (type === 'SCORER') {
+      setScorers(prev => {
+        const next = [...prev];
+        next.splice(Math.min(index, next.length), 0, item);
+        return next;
+      });
+    } else if (type === 'TEAM') {
+      setTeams(prev => {
+        const next = [...prev];
+        next.splice(Math.min(index, next.length), 0, item);
+        return next;
+      });
+    } else if (type === 'UMPIRE') {
+      setUmpires(prev => {
+        const next = [...prev];
+        next.splice(Math.min(index, next.length), 0, item);
+        return next;
+      });
+    }
+
+    try {
+      await ScorerApi.restoreRegistration(id, type);
+    } catch (e) {
+      console.warn('Backend restore registration note:', e);
+    }
+
+    showNotification(`✓ Restored: "${name}" has been restored successfully!`);
+    await showSuccess(
+      'Restored Successfully',
+      `"${name}" has been restored to active association records.`
+    );
+  };
+
   // Umpire Actions
   const handleApproveUmpire = async (umpireId: string) => {
     const target = umpires.find(u => u.umpireId === umpireId);
@@ -3128,6 +3237,15 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                   <Text style={styles.btnSuccessSmText}>✔ Approve</Text>
                                 </TouchableOpacity>
                               )}
+
+                              <TouchableOpacity
+                                style={styles.btnActionDelete}
+                                onPress={() => handleOpenDeleteModal(s.scorerId, 'SCORER', s.scorerName, s)}
+                                activeOpacity={0.8}
+                                accessibilityLabel="Delete Scorer"
+                              >
+                                <Text style={styles.btnActionDeleteText}>🗑️ Delete</Text>
+                              </TouchableOpacity>
                             </View>
                           </View>
 
@@ -3570,6 +3688,15 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                   <Text style={styles.btnSuccessSmText}>✔ Approve</Text>
                                 </TouchableOpacity>
                               )}
+
+                              <TouchableOpacity
+                                style={styles.btnActionDelete}
+                                onPress={() => handleOpenDeleteModal(u.umpireId, 'UMPIRE', u.umpireName, u)}
+                                activeOpacity={0.8}
+                                accessibilityLabel="Delete Umpire"
+                              >
+                                <Text style={styles.btnActionDeleteText}>🗑️ Delete</Text>
+                              </TouchableOpacity>
                             </View>
                           </View>
 
@@ -4013,6 +4140,15 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                   <Text style={styles.btnSuccessSmText}>✔ Approve</Text>
                                 </TouchableOpacity>
                               )}
+
+                              <TouchableOpacity
+                                style={styles.btnActionDelete}
+                                onPress={() => handleOpenDeleteModal(t.teamId, 'TEAM', t.teamName, t)}
+                                activeOpacity={0.8}
+                                accessibilityLabel="Delete Team"
+                              >
+                                <Text style={styles.btnActionDeleteText}>🗑️ Delete</Text>
+                              </TouchableOpacity>
                             </View>
                           </View>
 
@@ -5778,6 +5914,72 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               </TouchableOpacity>
               <TouchableOpacity style={styles.btnDangerConfirm} onPress={handleConfirmReject}>
                 <Text style={styles.btnDangerConfirmText}>Confirm Rejection</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ─────────────────────────────────────────────────────────────
+          10B. DELETE CONFIRMATION MODAL
+          ───────────────────────────────────────────────────────────── */}
+      <Modal visible={!!deleteConfirmModal} transparent animationType="fade" onRequestClose={() => setDeleteConfirmModal(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.deleteModalDialog}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#fee2e2', justifyContent: 'center', alignItems: 'center' }}>
+                <Text style={{ fontSize: 20 }}>🗑️</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.deleteModalHeading}>
+                  Delete {deleteConfirmModal?.type === 'TEAM' ? 'Team Registration' : deleteConfirmModal?.type === 'SCORER' ? 'Official Scorer' : 'Official Umpire'}
+                </Text>
+                <Text style={{ fontSize: 12, color: '#64748b', fontWeight: '600' }}>Official Association District Registry</Text>
+              </View>
+            </View>
+
+            <Text style={{ fontSize: 14, color: '#334155', marginTop: 4, lineHeight: 20 }}>
+              Are you sure you want to delete <Text style={{ fontWeight: '800', color: '#0f172a' }}>{deleteConfirmModal?.name}</Text> from the active registry?
+            </Text>
+
+            {deleteConfirmModal?.item && (
+              <View style={styles.deleteModalDetailsBox}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <Text style={{ fontSize: 11, color: '#64748b', fontWeight: '700' }}>REGISTRATION ID</Text>
+                  <Text style={{ fontSize: 12, color: '#1e293b', fontWeight: '700' }}>{deleteConfirmModal.id}</Text>
+                </View>
+                {Boolean(deleteConfirmModal.item.taluk) && (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={{ fontSize: 11, color: '#64748b', fontWeight: '700' }}>TALUK / JURISDICTION</Text>
+                    <Text style={{ fontSize: 12, color: '#1e293b', fontWeight: '700' }}>{deleteConfirmModal.item.taluk}</Text>
+                  </View>
+                )}
+                {Boolean(deleteConfirmModal.item.email || deleteConfirmModal.item.coach?.email) && (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 11, color: '#64748b', fontWeight: '700' }}>CONTACT EMAIL</Text>
+                    <Text style={{ fontSize: 12, color: '#0369a1', fontWeight: '600' }}>
+                      {deleteConfirmModal.item.email || deleteConfirmModal.item.coach?.email}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            <View style={styles.deleteModalWarningBox}>
+              <Text style={{ fontSize: 12, color: '#991b1b', fontWeight: '600', lineHeight: 18 }}>
+                ⚠️ This will remove this record from active match assignments and tournament fixtures. An immediate Undo option will appear on screen.
+              </Text>
+            </View>
+
+            <View style={styles.rejectModalActions}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setDeleteConfirmModal(null)}>
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btnDangerConfirm, { backgroundColor: '#dc2626', borderColor: '#b91c1c' }]}
+                onPress={handleConfirmDelete}
+              >
+                <Text style={styles.btnDangerConfirmText}>🗑️ Yes, Delete</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -8202,6 +8404,40 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           showSuccess('Security Action Authorized', 'Dual-admin cryptographic verification was successful.');
         }}
       />
+
+      {/* ─────────────────────────────────────────────────────────────
+          13. RESPONSIVE FLOATING UNDO TOAST
+          ───────────────────────────────────────────────────────────── */}
+      {undoToast && undoToast.visible && (
+        <View style={styles.floatingUndoToast}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 200 }}>
+            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#334155', justifyContent: 'center', alignItems: 'center' }}>
+              <Text style={{ fontSize: 13 }}>🗑️</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.floatingUndoText} numberOfLines={1}>
+                {undoToast.type === 'TEAM' ? 'Team' : undoToast.type === 'SCORER' ? 'Scorer' : 'Umpire'} "{undoToast.name}" deleted.
+              </Text>
+              <Text style={{ fontSize: 10, color: '#94a3b8' }}>Tap undo to restore immediately</Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.floatingUndoBtn}
+            onPress={handleUndoDelete}
+            activeOpacity={0.8}
+            accessibilityLabel="Undo Delete"
+          >
+            <Text style={styles.floatingUndoBtnText}>↩️ Undo</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.floatingUndoCloseBtn}
+            onPress={() => setUndoToast(null)}
+            accessibilityLabel="Dismiss Undo Toast"
+          >
+            <Text style={styles.floatingUndoCloseText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -9362,6 +9598,101 @@ const styles: any = StyleSheet.create({
     color: '#dc2626',
     fontSize: 12,
     fontWeight: '700'
+  },
+  btnActionDelete: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    backgroundColor: '#fff1f2',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4
+  },
+  btnActionDeleteText: {
+    color: '#b91c1c',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  deleteModalDialog: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    width: '92%',
+    maxWidth: 500,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10
+  },
+  deleteModalHeading: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#991b1b'
+  },
+  deleteModalDetailsBox: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    padding: 12,
+    marginVertical: 12
+  },
+  deleteModalWarningBox: {
+    backgroundColor: '#fef2f2',
+    borderLeftWidth: 4,
+    borderLeftColor: '#ef4444',
+    padding: 10,
+    borderRadius: 4,
+    marginBottom: 16
+  },
+  floatingUndoToast: {
+    position: 'fixed' as any,
+    bottom: 24,
+    right: 24,
+    zIndex: 9999,
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#d4af37',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    maxWidth: 460,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 12
+  },
+  floatingUndoText: {
+    color: '#f8fafc',
+    fontSize: 13,
+    fontWeight: '700'
+  },
+  floatingUndoBtn: {
+    backgroundColor: '#f59e0b',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 6,
+    boxShadow: '0 2px 8px rgba(245, 158, 11, 0.4)'
+  },
+  floatingUndoBtnText: {
+    color: '#000000',
+    fontSize: 12,
+    fontWeight: '800'
+  },
+  floatingUndoCloseBtn: {
+    padding: 6
+  },
+  floatingUndoCloseText: {
+    color: '#94a3b8',
+    fontSize: 14,
+    fontWeight: '800'
   },
   itemMetaGrid: {
     flexDirection: 'row',
