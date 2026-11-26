@@ -32,7 +32,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import { TeamApi, getCurrentUser, ScorerApi, SOCKET_URL } from '../../services/api';
+import { TeamApi, getCurrentUser, ScorerApi, SOCKET_URL, resolveImageUrl } from '../../services/api';
 import { showError, showSuccess } from '../../utils/sweetalert';
 import {
   RefreshIcon,
@@ -185,6 +185,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
   // Filter States
   const [matchFilter, setMatchFilter] = useState<'ALL' | 'LIVE' | 'SCHEDULED' | 'POSTPONED' | 'COMPLETED'>('ALL');
   const [squadSearchQuery, setSquadSearchQuery] = useState<string>('');
+  const [squadRoleFilter, setSquadRoleFilter] = useState<'ALL' | 'BATTER' | 'BOWLER' | 'ALL_ROUNDER' | 'KEEPER'>('ALL');
 
   // Read-Only Scorecard Modal State
   const [selectedScorecardMatchId, setSelectedScorecardMatchId] = useState<string | null>(null);
@@ -196,9 +197,13 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
   const [isEditProfileVisible, setIsEditProfileVisible] = useState<boolean>(false);
   const [editCoachPhone, setEditCoachPhone] = useState<string>('');
   const [editCertification, setEditCertification] = useState<string>('');
+  const [certDropdownOpen, setCertDropdownOpen] = useState<boolean>(false);
+  const [isCustomCert, setIsCustomCert] = useState<boolean>(false);
   const [editHomeGround, setEditHomeGround] = useState<string>('');
   const [editCaptain, setEditCaptain] = useState<string>('');
   const [editViceCaptain, setEditViceCaptain] = useState<string>('');
+  const [captainDropdownOpen, setCaptainDropdownOpen] = useState<boolean>(false);
+  const [viceCaptainDropdownOpen, setViceCaptainDropdownOpen] = useState<boolean>(false);
   const [editPhoto, setEditPhoto] = useState<string | null>(null);
   const [isSavingProfile, setIsSavingProfile] = useState<boolean>(false);
   const [profileFeedback, setProfileFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -211,10 +216,12 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
   const [cropRotation, setCropRotation] = useState<number>(0);
   const [imageNaturalDimensions, setImageNaturalDimensions] = useState<{ width: number; height: number }>({ width: 300, height: 300 });
   const [isCropping, setIsCropping] = useState<boolean>(false);
+  const [isCropDragging, setIsCropDragging] = useState<boolean>(false);
 
   const cropPanRef = React.useRef(cropPan);
   cropPanRef.current = cropPan;
   const startPanRef = React.useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const webDragStartRef = React.useRef<{ clientX: number; clientY: number; panX: number; panY: number } | null>(null);
 
   const panResponder = React.useMemo(
     () =>
@@ -463,15 +470,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
 
   // Resolve full URI for team photo / logo (handles base64 data URLs, absolute URLs, relative upload paths)
   const resolvePhotoUrl = (photoUri?: string | null): string | null => {
-    if (!photoUri || typeof photoUri !== 'string') return null;
-    const trimmed = photoUri.trim();
-    if (!trimmed || trimmed === 'null' || trimmed === 'undefined') return null;
-    if (trimmed.startsWith('data:image/') || trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('blob:')) {
-      return trimmed;
-    }
-    const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-    const base = SOCKET_URL || 'http://localhost:5000';
-    return `${base}${cleanPath}`;
+    return resolveImageUrl(photoUri);
   };
 
   // Open Interactive Photo Crop Modal
@@ -590,15 +589,31 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
     }
   };
 
+  const CERTIFICATION_PRESETS = [
+    'BCCI / TNCA Level 1 Certified',
+    'BCCI / TNCA Level 2 Certified',
+    'BCCI / TNCA Level 3 Certified',
+    'District / Club Certified Coach'
+  ];
+
   const handleOpenEditProfile = () => {
     if (profile) {
-      setEditCoachPhone(profile.coachPhone || profile.coach_phone || '');
-      setEditCertification(profile.certification || profile.coach_certification || 'BCCI / TNCA Level 2 Certified');
+      const rawPhone = String(profile.coachPhone || profile.coach_phone || '');
+      const digitsOnly = rawPhone.replace(/\D/g, '');
+      setEditCoachPhone(digitsOnly.length > 10 ? digitsOnly.slice(-10) : digitsOnly);
+
+      const currentCert = (profile.certification || profile.coach_certification || 'BCCI / TNCA Level 2 Certified').trim();
+      setEditCertification(currentCert);
+      setIsCustomCert(Boolean(currentCert) && !CERTIFICATION_PRESETS.includes(currentCert));
+
       setEditHomeGround(profile.homeGround || profile.home_ground || 'Kamarajar Stadium Sports Complex, Virudhunagar');
       setEditCaptain(profile.captain || '');
       setEditViceCaptain(profile.viceCaptain || profile.vice_captain || '');
       setEditPhoto(profile.photo || profile.logo || profile.image_path || null);
     }
+    setCertDropdownOpen(false);
+    setCaptainDropdownOpen(false);
+    setViceCaptainDropdownOpen(false);
     setProfileFeedback(null);
     setIsEditProfileVisible(true);
   };
@@ -678,11 +693,18 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
   // Save Profile Updates (Safe fields + Direct DB Logo/Photo storage)
   const handleSaveProfile = async () => {
     setProfileFeedback(null);
+
+    const cleanPhone = editCoachPhone.replace(/\D/g, '');
+    if (!/^\d{10}$/.test(cleanPhone)) {
+      setProfileFeedback({ message: 'Please enter a valid 10-digit mobile number (numbers only).', type: 'error' });
+      return;
+    }
+
     setIsSavingProfile(true);
 
     try {
       const updates = {
-        coachPhone: editCoachPhone.trim(),
+        coachPhone: cleanPhone,
         certification: editCertification.trim(),
         homeGround: editHomeGround.trim(),
         captain: editCaptain.trim(),
@@ -714,11 +736,13 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
   };
 
   // Open Scorecard Modal
-  const handleOpenScorecard = async (matchId: string) => {
+  const handleOpenScorecard = async (matchId: string, silent = false) => {
     setSelectedScorecardMatchId(matchId);
-    setIsLoadingScorecard(true);
-    setScorecardData(null);
-    setActiveInningsTab(0);
+    if (!silent) {
+      setIsLoadingScorecard(true);
+      setScorecardData(null);
+      setActiveInningsTab(0);
+    }
 
     try {
       const res = await TeamApi.getScorecard(matchId);
@@ -727,11 +751,25 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
         setScorecardData(raw);
       }
     } catch (err: any) {
-      showError('Scorecard Error', err?.message || 'Could not retrieve match scorecard.');
+      if (!silent) {
+        showError('Scorecard Error', err?.message || 'Could not retrieve match scorecard.');
+      }
     } finally {
-      setIsLoadingScorecard(false);
+      if (!silent) {
+        setIsLoadingScorecard(false);
+      }
     }
   };
+
+  // Auto-refresh Live Match Scorecard every 4 seconds while modal is open
+  useEffect(() => {
+    const matchStatus = (scorecardData?.status || scorecardData?.match?.status || '').toUpperCase();
+    if (!selectedScorecardMatchId || matchStatus !== 'LIVE') return;
+    const interval = setInterval(() => {
+      handleOpenScorecard(selectedScorecardMatchId, true);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [selectedScorecardMatchId, scorecardData?.status, scorecardData?.match?.status]);
 
   // Mark notification read
   const handleMarkNotifRead = async (id: string) => {
@@ -784,11 +822,11 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
     'Virudhunagar 1st Division League 2026';
   const captain =
     profile?.captain ||
-    'R. Saravanan';
+    '';
   const viceCaptain =
     profile?.viceCaptain ||
     profile?.vice_captain ||
-    'M. Karthi';
+    '';
   const homeGround =
     profile?.homeGround ||
     profile?.home_ground ||
@@ -838,6 +876,13 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
   // Filtered squad
   const filteredSquad = useMemo(() => {
     return squad.filter(p => {
+      if (squadRoleFilter !== 'ALL') {
+        const r = (p.role || '').toUpperCase();
+        if (squadRoleFilter === 'BATTER' && !r.includes('BAT')) return false;
+        if (squadRoleFilter === 'BOWLER' && !r.includes('BOWL')) return false;
+        if (squadRoleFilter === 'ALL_ROUNDER' && !r.includes('ALL') && !r.includes('ROUND')) return false;
+        if (squadRoleFilter === 'KEEPER' && !r.includes('KEEP') && !r.includes('WK')) return false;
+      }
       if (!squadSearchQuery.trim()) return true;
       const q = squadSearchQuery.toLowerCase();
       return (
@@ -847,7 +892,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
         String(p.jersey || p.jerseyNumber || '').includes(q)
       );
     });
-  }, [squad, squadSearchQuery]);
+  }, [squad, squadSearchQuery, squadRoleFilter]);
 
   // Squad role counts
   const batterCount = squad.filter(p => (p.role || '').toUpperCase().includes('BAT')).length;
@@ -988,13 +1033,35 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
     setEditPlayerModalVisible(true);
   };
 
-  const handleSaveNewPlayer = async () => {
-    if (!playerForm.name.trim()) {
-      setPlayerFormFeedback({ message: 'Player name is required.', type: 'error' });
-      return;
+  const validatePlayerForm = (): string | null => {
+    const cleanName = playerForm.name.trim();
+    if (!cleanName || cleanName.length < 2) {
+      return 'Full Name must be at least 2 characters.';
     }
-    if (!playerForm.email.trim()) {
-      setPlayerFormFeedback({ message: 'Player email is required.', type: 'error' });
+    if (!/^[A-Za-z][A-Za-z\s.'-]{1,}$/.test(cleanName)) {
+      return 'Full Name should contain only letters, spaces, and dots.';
+    }
+    const cleanEmail = playerForm.email.trim().toLowerCase();
+    if (!cleanEmail || !/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(cleanEmail)) {
+      return 'Please enter a valid email address (e.g. ravi@gmail.com).';
+    }
+    const cleanMobile = playerForm.mobile.replace(/\D/g, '');
+    if (!/^\d{10}$/.test(cleanMobile)) {
+      return 'Please enter a valid 10-digit mobile number (numbers only).';
+    }
+    if (playerForm.jerseyNumber.trim()) {
+      const jNum = Number(playerForm.jerseyNumber.trim());
+      if (!Number.isInteger(jNum) || jNum < 1 || jNum > 999) {
+        return 'Jersey Number must be between 1 and 999.';
+      }
+    }
+    return null;
+  };
+
+  const handleSaveNewPlayer = async () => {
+    const validationError = validatePlayerForm();
+    if (validationError) {
+      setPlayerFormFeedback({ message: validationError, type: 'error' });
       return;
     }
     setIsSavingPlayer(true);
@@ -1006,12 +1073,12 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
 
       await TeamApi.addPlayer({
         name: playerForm.name.trim(),
-        email: playerForm.email.trim(),
+        email: playerForm.email.trim().toLowerCase(),
         role: playerForm.role,
         jerseyNumber: playerForm.jerseyNumber ? Number(playerForm.jerseyNumber) : undefined,
         battingStyle: playerForm.battingStyle,
         bowlingStyle: finalBowling,
-        mobile: playerForm.mobile
+        mobile: playerForm.mobile.replace(/\D/g, '')
       });
       setPlayerFormFeedback({ message: 'Player added successfully!', type: 'success' });
       const squadRes = await TeamApi.getSquad();
@@ -1027,8 +1094,9 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
 
   const handleUpdatePlayer = async () => {
     if (!editingPlayer) return;
-    if (!playerForm.name.trim()) {
-      setPlayerFormFeedback({ message: 'Player name is required.', type: 'error' });
+    const validationError = validatePlayerForm();
+    if (validationError) {
+      setPlayerFormFeedback({ message: validationError, type: 'error' });
       return;
     }
     setIsSavingPlayer(true);
@@ -1041,12 +1109,12 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
 
       await TeamApi.updatePlayer(playerId, {
         name: playerForm.name.trim(),
-        email: playerForm.email.trim(),
+        email: playerForm.email.trim().toLowerCase(),
         role: playerForm.role,
         jerseyNumber: playerForm.jerseyNumber ? Number(playerForm.jerseyNumber) : undefined,
         battingStyle: playerForm.battingStyle,
         bowlingStyle: finalBowling,
-        mobile: playerForm.mobile
+        mobile: playerForm.mobile.replace(/\D/g, '')
       });
       setPlayerFormFeedback({ message: 'Player updated successfully!', type: 'success' });
       const squadRes = await TeamApi.getSquad();
@@ -1220,9 +1288,10 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
           style={styles.playerFormInput}
           placeholder="e.g. 7"
           placeholderTextColor="#94a3b8"
-          keyboardType="numeric"
+          keyboardType="number-pad"
+          maxLength={3}
           value={playerForm.jerseyNumber}
-          onChangeText={v => setPlayerForm(f => ({ ...f, jerseyNumber: v }))}
+          onChangeText={v => setPlayerForm(f => ({ ...f, jerseyNumber: v.replace(/\D/g, '').slice(0, 3) }))}
         />
 
         {/* Batting Style Select */}
@@ -1273,14 +1342,15 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
         )}
 
         {/* Mobile Number */}
-        <Text style={styles.playerFormLabel}>Mobile Number</Text>
+        <Text style={styles.playerFormLabel}>Mobile Number <Text style={{ color: '#ef4444' }}>*</Text> (10 Digits)</Text>
         <TextInput
           style={styles.playerFormInput}
-          placeholder="e.g. 9876543210"
+          placeholder="Enter 10-digit mobile number"
           placeholderTextColor="#94a3b8"
-          keyboardType="phone-pad"
+          keyboardType="number-pad"
+          maxLength={10}
           value={playerForm.mobile}
-          onChangeText={v => setPlayerForm(f => ({ ...f, mobile: v }))}
+          onChangeText={v => setPlayerForm(f => ({ ...f, mobile: v.replace(/\D/g, '').slice(0, 10) }))}
         />
       </View>
     );
@@ -1996,20 +2066,36 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                         </View>
                       </View>
 
-                      {/* Role breakdown chips */}
+                      {/* Interactive Role Filter Chips */}
                       <View style={styles.roleChipsRow}>
-                        <View style={styles.roleChip}>
-                          <Text style={styles.roleChipText}>🏏 Batters: {batterCount}</Text>
-                        </View>
-                        <View style={styles.roleChip}>
-                          <Text style={styles.roleChipText}>⚡ Bowlers: {bowlerCount}</Text>
-                        </View>
-                        <View style={styles.roleChip}>
-                          <Text style={styles.roleChipText}>🌟 All-Rounders: {allRounderCount}</Text>
-                        </View>
-                        <View style={styles.roleChip}>
-                          <Text style={styles.roleChipText}>🧤 Keepers: {keeperCount}</Text>
-                        </View>
+                        {[
+                          { key: 'ALL' as const, label: `All (${squad.length})` },
+                          { key: 'BATTER' as const, label: `🏏 Batters: ${batterCount}` },
+                          { key: 'BOWLER' as const, label: `⚡ Bowlers: ${bowlerCount}` },
+                          { key: 'ALL_ROUNDER' as const, label: `🌟 All-Rounders: ${allRounderCount}` },
+                          { key: 'KEEPER' as const, label: `🧤 Keepers: ${keeperCount}` }
+                        ].map(chip => {
+                          const isActive = squadRoleFilter === chip.key;
+                          return (
+                            <TouchableOpacity
+                              key={chip.key}
+                              activeOpacity={0.75}
+                              onPress={() => setSquadRoleFilter(prev => (prev === chip.key && chip.key !== 'ALL') ? 'ALL' : chip.key)}
+                              style={[
+                                styles.roleChip,
+                                isActive && { backgroundColor: '#fef3c7', borderColor: '#f59e0b' },
+                                Platform.OS === 'web' && ({ cursor: 'pointer' } as any)
+                              ]}
+                            >
+                              <Text style={[
+                                styles.roleChipText,
+                                isActive && { color: '#92400e', fontWeight: '800' }
+                              ]}>
+                                {chip.label}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
                       </View>
 
                       {/* Squad Search Bar */}
@@ -3151,6 +3237,20 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                               </Text>
                             </View>
 
+                            {/* Match Situation at Postponement */}
+                            {Boolean(m.postponement?.postponed_score_display || m.postponedScoreDisplay || m.scoreA) && (
+                              <View style={{ backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa', borderRadius: 8, padding: 10, marginTop: 8 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: '#c2410c', textTransform: 'uppercase' }}>
+                                  📊 Match Situation at Postponement
+                                </Text>
+                                <Text style={{ fontSize: 13, color: '#9a3412', fontWeight: '700', marginTop: 3 }}>
+                                  {m.postponement?.postponed_score_display || m.postponedScoreDisplay || (
+                                    m.scoreA ? `${m.teamA}: ${m.scoreA}${m.scoreB && m.scoreB !== 'Yet to bat' ? ` • ${m.teamB}: ${m.scoreB}` : ''}` : 'Postponed before match start (0 overs bowled)'
+                                  )}
+                                </Text>
+                              </View>
+                            )}
+
                             {/* Rescheduled Date Status */}
                             <View style={{ backgroundColor: reschedDate ? '#ecfdf5' : '#f8fafc', borderWidth: 1, borderColor: reschedDate ? '#a7f3d0' : '#e2e8f0', borderRadius: 8, padding: 10, marginTop: 8 }}>
                               <Text style={{ fontSize: 11, fontWeight: '700', color: reschedDate ? '#065f46' : '#64748b', textTransform: 'uppercase' }}>
@@ -3409,8 +3509,8 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                           </TouchableOpacity>
                         </View>
 
-                        <View style={{ flex: 1, marginLeft: 16 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={{ flex: 1, marginLeft: 16, minWidth: 0 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                             <Text style={styles.teamProfileHeroTitle}>{teamName}</Text>
                             <View style={styles.verifiedMiniBadge}>
                               <Ionicons name="checkmark-circle" size={13} color="#15803d" />
@@ -3458,16 +3558,39 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                       </View>
                       <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Appointed Captain:</Text>
-                        <Text style={[styles.detailValueBold, { color: '#f59e0b' }]}>{captain}</Text>
+                        <Text style={[styles.detailValueBold, { color: captain ? '#d97706' : '#94a3b8' }]}>
+                          {captain || 'Not Assigned'}
+                        </Text>
                       </View>
                       <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Appointed Vice-Captain:</Text>
-                        <Text style={styles.detailValueBold}>{viceCaptain}</Text>
+                        <Text style={[styles.detailValueBold, { color: viceCaptain ? '#0f172a' : '#94a3b8' }]}>
+                          {viceCaptain || 'Not Assigned'}
+                        </Text>
                       </View>
+
+                      {(!captain || !viceCaptain) && (
+                        <View style={{
+                          backgroundColor: '#fffbeb',
+                          borderWidth: 1,
+                          borderColor: '#fde68a',
+                          borderRadius: 10,
+                          padding: 12,
+                          marginTop: 12,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 10
+                        }}>
+                          <Ionicons name="alert-circle-outline" size={18} color="#d97706" />
+                          <Text style={{ flex: 1, fontSize: 12, color: '#92400e', fontWeight: '600', lineHeight: 17 }}>
+                            Reminder: Please choose your Team Captain and Vice-Captain from your squad in Team Login (tap "Update Contact & Captaincy Info" below).
+                          </Text>
+                        </View>
+                      )}
 
                       <TouchableOpacity
                         style={styles.actionBtnFull}
-                        onPress={() => setIsEditProfileVisible(true)}
+                        onPress={handleOpenEditProfile}
                       >
                         <Text style={styles.actionBtnFullText}>Update Contact & Captaincy Info</Text>
                       </TouchableOpacity>
@@ -3490,14 +3613,14 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
         onRequestClose={() => setAddPlayerModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { maxHeight: '92%', width: '95%', maxWidth: 500 }]}>
+          <View style={[styles.modalContainer, { maxHeight: '92%', width: '95%', maxWidth: 500 }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalHeaderTitle}>➕ Add New Player</Text>
-              <TouchableOpacity onPress={() => setAddPlayerModalVisible(false)}>
-                <Text style={styles.modalCloseBtn}>✕</Text>
+              <TouchableOpacity onPress={() => setAddPlayerModalVisible(false)} style={styles.modalCloseBtn}>
+                <Text style={styles.modalCloseBtnText}>✕</Text>
               </TouchableOpacity>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={{ padding: 16 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ padding: 18, backgroundColor: '#ffffff' }}>
               {renderPlayerFormFields()}
 
               {/* Feedback */}
@@ -3529,14 +3652,14 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
         onRequestClose={() => setEditPlayerModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { maxHeight: '92%', width: '95%', maxWidth: 500 }]}>
+          <View style={[styles.modalContainer, { maxHeight: '92%', width: '95%', maxWidth: 500 }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalHeaderTitle}>✏️ Edit Player</Text>
-              <TouchableOpacity onPress={() => setEditPlayerModalVisible(false)}>
-                <Text style={styles.modalCloseBtn}>✕</Text>
+              <TouchableOpacity onPress={() => setEditPlayerModalVisible(false)} style={styles.modalCloseBtn}>
+                <Text style={styles.modalCloseBtnText}>✕</Text>
               </TouchableOpacity>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false} style={{ padding: 16 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ padding: 18, backgroundColor: '#ffffff' }}>
               {renderPlayerFormFields()}
 
               {/* Feedback */}
@@ -3672,10 +3795,6 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                         <Ionicons name="images-outline" size={14} color="#1e40af" style={{ marginRight: 5 }} />
                         <Text style={styles.btnPickLogoText}>Choose Image</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={styles.btnCameraLogo} onPress={handleTakePhoto} activeOpacity={0.8}>
-                        <Ionicons name="camera-outline" size={14} color="#065f46" style={{ marginRight: 5 }} />
-                        <Text style={styles.btnCameraLogoText}>Camera</Text>
-                      </TouchableOpacity>
                     </View>
 
                     {editPhoto ? (
@@ -3707,48 +3826,119 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
               </View>
 
               {/* Locked Field: Team Name */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Registered Team Name (Locked by Association)</Text>
+              <View style={styles.inputGroup} pointerEvents="none">
+                <Text style={styles.inputLabel}>🔒 Registered Team Name (Fixed by Association)</Text>
                 <TextInput
                   style={[styles.inputField, styles.inputFieldDisabled]}
                   value={teamName}
                   editable={false}
+                  selectTextOnFocus={false}
                 />
               </View>
 
               {/* Locked Field: Team ID */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Official Team ID (Locked)</Text>
+              <View style={styles.inputGroup} pointerEvents="none">
+                <Text style={styles.inputLabel}>🔒 Official Team ID (Fixed)</Text>
                 <TextInput
                   style={[styles.inputField, styles.inputFieldDisabled]}
                   value={teamId}
                   editable={false}
+                  selectTextOnFocus={false}
                 />
               </View>
 
-              {/* Editable Field: Coach Mobile */}
+              {/* Editable Field: Coach Mobile (10-digit numbers only) */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Coach Mobile / Contact Phone *</Text>
+                <Text style={styles.inputLabel}>Coach Mobile / Contact Phone * (10 Digits)</Text>
                 <TextInput
                   style={styles.inputField}
                   value={editCoachPhone}
-                  onChangeText={setEditCoachPhone}
-                  placeholder="+91 94431 XXXXX"
+                  onChangeText={(text) => setEditCoachPhone(text.replace(/\D/g, '').slice(0, 10))}
+                  placeholder="Enter 10-digit mobile number"
                   placeholderTextColor="#64748b"
-                  keyboardType="phone-pad"
+                  keyboardType="number-pad"
+                  maxLength={10}
                 />
               </View>
 
-              {/* Editable Field: Certification */}
-              <View style={styles.inputGroup}>
+              {/* Editable Field: Certification Dropdown + Custom */}
+              <View style={[styles.inputGroup, { zIndex: 300 }]}>
                 <Text style={styles.inputLabel}>Coaching Certification / License</Text>
-                <TextInput
-                  style={styles.inputField}
-                  value={editCertification}
-                  onChangeText={setEditCertification}
-                  placeholder="e.g. BCCI / TNCA Level 2"
-                  placeholderTextColor="#64748b"
-                />
+                <TouchableOpacity
+                  onPress={() => {
+                    setCertDropdownOpen(prev => !prev);
+                    setCaptainDropdownOpen(false);
+                    setViceCaptainDropdownOpen(false);
+                  }}
+                  activeOpacity={0.8}
+                  style={[styles.inputField, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                >
+                  <Text style={{ fontSize: 13.5, color: '#0f172a', fontWeight: '600', flex: 1 }} numberOfLines={1}>
+                    {isCustomCert ? 'Custom (Enter Manually)' : (editCertification || 'Select Certification')}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#64748b', marginLeft: 8 }}>
+                    {certDropdownOpen ? '▲' : '▼'}
+                  </Text>
+                </TouchableOpacity>
+                {certDropdownOpen && (
+                  <View style={{
+                    backgroundColor: '#ffffff',
+                    borderWidth: 1,
+                    borderColor: '#cbd5e1',
+                    borderRadius: 10,
+                    marginTop: 4,
+                    paddingVertical: 4,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.12,
+                    shadowRadius: 8,
+                    elevation: 6
+                  }}>
+                    {[...CERTIFICATION_PRESETS, 'Custom (Enter Manually)'].map(opt => {
+                      const isCustomOption = opt === 'Custom (Enter Manually)';
+                      const isSelected = isCustomOption ? isCustomCert : (!isCustomCert && editCertification === opt);
+                      return (
+                        <TouchableOpacity
+                          key={opt}
+                          onPress={() => {
+                            if (isCustomOption) {
+                              setIsCustomCert(true);
+                              if (CERTIFICATION_PRESETS.includes(editCertification)) {
+                                setEditCertification('');
+                              }
+                            } else {
+                              setIsCustomCert(false);
+                              setEditCertification(opt);
+                            }
+                            setCertDropdownOpen(false);
+                          }}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            paddingHorizontal: 12,
+                            paddingVertical: 10,
+                            backgroundColor: isSelected ? '#fef3c7' : 'transparent'
+                          }}
+                        >
+                          <Text style={{ fontSize: 13, fontWeight: isSelected ? '700' : '500', color: isSelected ? '#92400e' : '#334155' }}>
+                            {opt}
+                          </Text>
+                          {isSelected && <Text style={{ color: '#d97706', fontWeight: '800' }}>✓</Text>}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+                {isCustomCert && (
+                  <TextInput
+                    style={[styles.inputField, { marginTop: 8 }]}
+                    value={editCertification}
+                    onChangeText={setEditCertification}
+                    placeholder="Enter your custom coaching certification"
+                    placeholderTextColor="#64748b"
+                  />
+                )}
               </View>
 
               {/* Editable Field: Home Ground */}
@@ -3763,28 +3953,140 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                 />
               </View>
 
-              {/* Editable Field: Appointed Captain */}
-              <View style={styles.inputGroup}>
+              {/* Editable Field: Appointed Captain (Squad Picker + Reminder) */}
+              <View style={[styles.inputGroup, { zIndex: 200 }]}>
                 <Text style={styles.inputLabel}>Appointed Team Captain</Text>
-                <TextInput
-                  style={styles.inputField}
-                  value={editCaptain}
-                  onChangeText={setEditCaptain}
-                  placeholder="e.g. Suresh Kumar"
-                  placeholderTextColor="#64748b"
-                />
+                <TouchableOpacity
+                  onPress={() => {
+                    setCaptainDropdownOpen(prev => !prev);
+                    setViceCaptainDropdownOpen(false);
+                    setCertDropdownOpen(false);
+                  }}
+                  activeOpacity={0.8}
+                  style={[styles.inputField, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                >
+                  <Text style={{ fontSize: 13.5, color: editCaptain ? '#0f172a' : '#94a3b8', fontWeight: '600', flex: 1 }} numberOfLines={1}>
+                    {editCaptain || 'Choose Captain from Squad'}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#64748b', marginLeft: 8 }}>
+                    {captainDropdownOpen ? '▲' : '▼'}
+                  </Text>
+                </TouchableOpacity>
+                {captainDropdownOpen && (
+                  <View style={{
+                    backgroundColor: '#ffffff',
+                    borderWidth: 1,
+                    borderColor: '#cbd5e1',
+                    borderRadius: 10,
+                    marginTop: 4,
+                    maxHeight: 180,
+                    paddingVertical: 4
+                  }}>
+                    <ScrollView nestedScrollEnabled>
+                      <TouchableOpacity
+                        onPress={() => { setEditCaptain(''); setCaptainDropdownOpen(false); }}
+                        style={{ paddingHorizontal: 12, paddingVertical: 9 }}
+                      >
+                        <Text style={{ fontSize: 12.5, color: '#64748b', fontStyle: 'italic' }}>— Not Assigned —</Text>
+                      </TouchableOpacity>
+                      {squad.length > 0 ? squad.map((p: any, idx: number) => {
+                        const pName = p.name || p.playerName || '';
+                        const isSelected = editCaptain === pName;
+                        return (
+                          <TouchableOpacity
+                            key={p.id || p.playerId || idx}
+                            onPress={() => { setEditCaptain(pName); setCaptainDropdownOpen(false); }}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              paddingHorizontal: 12,
+                              paddingVertical: 9,
+                              backgroundColor: isSelected ? '#fef3c7' : 'transparent'
+                            }}
+                          >
+                            <Text style={{ fontSize: 13, fontWeight: isSelected ? '700' : '500', color: '#0f172a' }}>
+                              {pName} {p.role ? `(${p.role})` : ''}
+                            </Text>
+                            {isSelected && <Text style={{ color: '#d97706', fontWeight: '800' }}>✓</Text>}
+                          </TouchableOpacity>
+                        );
+                      }) : (
+                        <Text style={{ padding: 12, fontSize: 12, color: '#64748b' }}>
+                          No players in squad yet. Add players first to choose Captain.
+                        </Text>
+                      )}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
 
-              {/* Editable Field: Appointed Vice-Captain */}
-              <View style={styles.inputGroup}>
+              {/* Editable Field: Appointed Vice-Captain (Squad Picker) */}
+              <View style={[styles.inputGroup, { zIndex: 100 }]}>
                 <Text style={styles.inputLabel}>Appointed Vice-Captain</Text>
-                <TextInput
-                  style={styles.inputField}
-                  value={editViceCaptain}
-                  onChangeText={setEditViceCaptain}
-                  placeholder="e.g. Vijay Anand"
-                  placeholderTextColor="#64748b"
-                />
+                <TouchableOpacity
+                  onPress={() => {
+                    setViceCaptainDropdownOpen(prev => !prev);
+                    setCaptainDropdownOpen(false);
+                    setCertDropdownOpen(false);
+                  }}
+                  activeOpacity={0.8}
+                  style={[styles.inputField, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                >
+                  <Text style={{ fontSize: 13.5, color: editViceCaptain ? '#0f172a' : '#94a3b8', fontWeight: '600', flex: 1 }} numberOfLines={1}>
+                    {editViceCaptain || 'Choose Vice-Captain from Squad'}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#64748b', marginLeft: 8 }}>
+                    {viceCaptainDropdownOpen ? '▲' : '▼'}
+                  </Text>
+                </TouchableOpacity>
+                {viceCaptainDropdownOpen && (
+                  <View style={{
+                    backgroundColor: '#ffffff',
+                    borderWidth: 1,
+                    borderColor: '#cbd5e1',
+                    borderRadius: 10,
+                    marginTop: 4,
+                    maxHeight: 180,
+                    paddingVertical: 4
+                  }}>
+                    <ScrollView nestedScrollEnabled>
+                      <TouchableOpacity
+                        onPress={() => { setEditViceCaptain(''); setViceCaptainDropdownOpen(false); }}
+                        style={{ paddingHorizontal: 12, paddingVertical: 9 }}
+                      >
+                        <Text style={{ fontSize: 12.5, color: '#64748b', fontStyle: 'italic' }}>— Not Assigned —</Text>
+                      </TouchableOpacity>
+                      {squad.length > 0 ? squad.map((p: any, idx: number) => {
+                        const pName = p.name || p.playerName || '';
+                        const isSelected = editViceCaptain === pName;
+                        return (
+                          <TouchableOpacity
+                            key={p.id || p.playerId || idx}
+                            onPress={() => { setEditViceCaptain(pName); setViceCaptainDropdownOpen(false); }}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              paddingHorizontal: 12,
+                              paddingVertical: 9,
+                              backgroundColor: isSelected ? '#fef3c7' : 'transparent'
+                            }}
+                          >
+                            <Text style={{ fontSize: 13, fontWeight: isSelected ? '700' : '500', color: '#0f172a' }}>
+                              {pName} {p.role ? `(${p.role})` : ''}
+                            </Text>
+                            {isSelected && <Text style={{ color: '#d97706', fontWeight: '800' }}>✓</Text>}
+                          </TouchableOpacity>
+                        );
+                      }) : (
+                        <Text style={{ padding: 12, fontSize: 12, color: '#64748b' }}>
+                          No players in squad yet. Add players first to choose Vice-Captain.
+                        </Text>
+                      )}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
 
               {/* Save & Cancel Actions */}
@@ -3844,11 +4146,49 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
             {/* Viewport Frame */}
             <View style={styles.cropViewportWrapper}>
               <View
-                style={styles.cropContainer}
+                style={[
+                  styles.cropContainer,
+                  Platform.OS === 'web' && ({
+                    cursor: isCropDragging ? 'grabbing' : 'grab',
+                    userSelect: 'none'
+                  } as any)
+                ]}
                 {...panResponder.panHandlers}
+                {...(Platform.OS === 'web'
+                  ? {
+                      onMouseDown: (e: any) => {
+                        e.preventDefault();
+                        setIsCropDragging(true);
+                        webDragStartRef.current = {
+                          clientX: e.clientX,
+                          clientY: e.clientY,
+                          panX: cropPanRef.current.x,
+                          panY: cropPanRef.current.y
+                        };
+                      },
+                      onMouseMove: (e: any) => {
+                        if (!webDragStartRef.current) return;
+                        const dx = e.clientX - webDragStartRef.current.clientX;
+                        const dy = e.clientY - webDragStartRef.current.clientY;
+                        setCropPan({
+                          x: Math.round(webDragStartRef.current.panX + dx),
+                          y: Math.round(webDragStartRef.current.panY + dy)
+                        });
+                      },
+                      onMouseUp: () => {
+                        webDragStartRef.current = null;
+                        setIsCropDragging(false);
+                      },
+                      onMouseLeave: () => {
+                        webDragStartRef.current = null;
+                        setIsCropDragging(false);
+                      }
+                    }
+                  : {})}
               >
                 {rawImageToCrop ? (
                   <View
+                    pointerEvents="none"
                     style={{
                       position: 'absolute',
                       left: 130 + cropPan.x,
@@ -3868,6 +4208,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                         marginTop: -((imageNaturalDimensions.height || 300) * (240 / Math.max(1, Math.min(imageNaturalDimensions.width || 300, imageNaturalDimensions.height || 300)))) / 2
                       }}
                       resizeMode="cover"
+                      {...(Platform.OS === 'web' ? ({ draggable: false } as any) : {})}
                     />
                   </View>
                 ) : null}
@@ -3975,16 +4316,37 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContainer, { maxWidth: 700 }]}>
             <View style={styles.modalHeader}>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.modalHeaderTitle}>Official Match Scorecard</Text>
-                <Text style={styles.modalHeaderSub}>Match #{selectedScorecardMatchId}</Text>
+                <Text style={styles.modalHeaderSub}>
+                  {scorecardData?.teamA && scorecardData?.teamB
+                    ? `${scorecardData.teamA} vs ${scorecardData.teamB} • #${selectedScorecardMatchId}`
+                    : `Match #${selectedScorecardMatchId}`}
+                </Text>
               </View>
-              <TouchableOpacity
-                style={styles.modalCloseBtn}
-                onPress={() => setSelectedScorecardMatchId(null)}
-              >
-                <Text style={styles.modalCloseBtnText}>✕</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {selectedScorecardMatchId && (
+                  <TouchableOpacity
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
+                      borderRadius: 8,
+                      backgroundColor: '#fef3c7',
+                      borderWidth: 1,
+                      borderColor: '#fde68a'
+                    }}
+                    onPress={() => handleOpenScorecard(selectedScorecardMatchId, false)}
+                  >
+                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#92400e' }}>↻ Refresh</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.modalCloseBtn}
+                  onPress={() => setSelectedScorecardMatchId(null)}
+                >
+                  <Text style={styles.modalCloseBtnText}>✕</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {isLoadingScorecard ? (
@@ -3994,12 +4356,28 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
               </View>
             ) : scorecardData ? (
               <ScrollView style={styles.scorecardModalScroll}>
-                {/* Result Highlight */}
-                {scorecardData.result && (
-                  <View style={styles.scorecardResultCard}>
-                    <Text style={styles.scorecardResultText}>🏆 {scorecardData.result}</Text>
-                  </View>
-                )}
+                {/* Status & Result Highlight */}
+                {(() => {
+                  const st = (scorecardData.status || scorecardData.match?.status || 'Upcoming').toUpperCase();
+                  const isLive = st === 'LIVE';
+                  const isCompleted = st === 'COMPLETED';
+                  return (
+                    <View style={[
+                      styles.scorecardResultCard,
+                      isLive && { backgroundColor: '#fef2f2', borderColor: '#fecaca' },
+                      !isLive && !isCompleted && { backgroundColor: '#fffbeb', borderColor: '#fde68a' }
+                    ]}>
+                      <Text style={[
+                        styles.scorecardResultText,
+                        isLive && { color: '#dc2626' },
+                        !isLive && !isCompleted && { color: '#92400e' }
+                      ]}>
+                        {isLive ? '🔴 LIVE: ' : isCompleted ? '🏆 ' : '⏳ '}
+                        {scorecardData.result || (isLive ? 'Match in progress' : 'Match scheduled — not started yet')}
+                      </Text>
+                    </View>
+                  );
+                })()}
 
                 {/* Innings Tabs */}
                 {scorecardData.innings && scorecardData.innings.length > 1 && (
@@ -4017,20 +4395,25 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                           styles.inningsTabBtnText,
                           activeInningsTab === i && styles.inningsTabBtnTextActive
                         ]}>
-                          {inn.teamName || `Innings ${i + 1}`} ({inn.totalRuns || inn.runs || 0}/{inn.wickets || 0})
+                          {inn.battingTeam || inn.teamName || `Innings ${i + 1}`} ({inn.totalRuns ?? inn.runs ?? 0}/{inn.wickets ?? 0})
                         </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
                 )}
 
-                {/* Active Innings Batting Table */}
+                {/* Active Innings Batting & Bowling Cards */}
                 {(() => {
                   const currentInnings = scorecardData.innings?.[activeInningsTab] || scorecardData.innings?.[0];
                   if (!currentInnings) {
+                    const st = (scorecardData.status || scorecardData.match?.status || 'Upcoming').toUpperCase();
                     return (
                       <View style={styles.emptyCard}>
-                        <Text style={styles.emptyText}>Detailed innings data not available.</Text>
+                        <Text style={styles.emptyText}>
+                          {st === 'LIVE'
+                            ? '🏏 Match is live! Waiting for the opening delivery from the official scorer.'
+                            : '⏳ Toss & live scoring have not started yet. Live scores will appear here automatically once the match begins.'}
+                        </Text>
                       </View>
                     );
                   }
@@ -4040,6 +4423,43 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
 
                   return (
                     <View>
+                      {/* Live Innings Score Summary Banner */}
+                      <View style={{
+                        backgroundColor: '#0f172a',
+                        borderRadius: 12,
+                        padding: 14,
+                        marginBottom: 14,
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: 8
+                      }}>
+                        <View>
+                          <Text style={{ color: '#f8fafc', fontSize: 15, fontWeight: '900' }}>
+                            {currentInnings.battingTeam || currentInnings.teamName || 'Batting Team'}
+                          </Text>
+                          {currentInnings.extras?.breakdown ? (
+                            <Text style={{ color: '#94a3b8', fontSize: 11.5, marginTop: 2 }}>
+                              Extras: {currentInnings.extras.total || 0} ({currentInnings.extras.breakdown})
+                            </Text>
+                          ) : null}
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={{ color: '#fbbf24', fontSize: 20, fontWeight: '900' }}>
+                            {currentInnings.totalRuns ?? currentInnings.runs ?? 0}/{currentInnings.wickets ?? 0}
+                            <Text style={{ color: '#cbd5e1', fontSize: 13, fontWeight: '700' }}>
+                              {' '}({currentInnings.overs || '0.0'}/{currentInnings.totalOvers || 20} Ov)
+                            </Text>
+                          </Text>
+                          {currentInnings.currentBowler?.name ? (
+                            <Text style={{ color: '#38bdf8', fontSize: 11.5, fontWeight: '700', marginTop: 2 }}>
+                              Bowling: {currentInnings.currentBowler.name}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </View>
+
                       <View style={styles.inningsContentCard}>
                         <Text style={styles.sectionHeader}>Batting Card</Text>
                         <View style={styles.scorecardTable}>
@@ -4091,7 +4511,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                               <Text style={[styles.tableDataCell, { flex: 1, textAlign: 'center' }]}>{bw.runs ?? 0}</Text>
                               <Text style={[styles.tableDataCellBold, { flex: 1, textAlign: 'center', color: '#f59e0b' }]}>{bw.wickets ?? 0}</Text>
                               <Text style={[styles.tableDataCell, { flex: 1.5, textAlign: 'center' }]}>
-                                {bw.economy ? Number(bw.economy).toFixed(1) : bw.overs ? ((bw.runs / bw.overs)).toFixed(1) : '0.0'}
+                                {bw.economy !== undefined && bw.economy !== null ? Number(bw.economy).toFixed(2) : '0.00'}
                               </Text>
                             </View>
                           ))}
@@ -4560,15 +4980,15 @@ const styles: any = StyleSheet.create({
     marginTop: 1
   },
 
-  // Match Day Alert Banner
+  // Match Day Alert Banner (Yellow & White Theme)
   matchDayAlertBanner: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#fffbeb',
     borderRadius: 14,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1.5,
     borderColor: '#f59e0b',
-    shadowColor: '#000',
+    shadowColor: '#d97706',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     elevation: 3
@@ -4582,37 +5002,38 @@ const styles: any = StyleSheet.create({
   matchDayBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: '#fef2f2',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: '#ef4444'
+    borderColor: '#fca5a5'
   },
   matchDayBadgeDot: {
     fontSize: 8,
     marginRight: 4
   },
   matchDayBadgeText: {
-    color: '#f87171',
+    color: '#dc2626',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5
   },
   matchDayDateText: {
-    color: '#fbbf24',
+    color: '#b45309',
     fontSize: 12,
-    fontWeight: '700'
+    fontWeight: '800'
   },
   matchDayTitleText: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 18,
     fontWeight: '900',
     marginBottom: 4
   },
   matchDayMetaText: {
-    color: '#94a3b8',
+    color: '#475569',
     fontSize: 12,
+    fontWeight: '600',
     marginBottom: 12
   },
   matchDayActionsRow: {
@@ -4621,20 +5042,20 @@ const styles: any = StyleSheet.create({
     flexWrap: 'wrap'
   },
   matchDayMapBtn: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#ffffff',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155'
+    borderWidth: 1.5,
+    borderColor: '#f59e0b'
   },
   matchDayMapBtnText: {
-    color: '#cbd5e1',
+    color: '#b45309',
     fontSize: 11.5,
     fontWeight: '700'
   },
   matchDaySquadBtn: {
-    backgroundColor: '#d97706',
+    backgroundColor: '#f59e0b',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8
@@ -4855,7 +5276,7 @@ const styles: any = StyleSheet.create({
   },
   scorecardTriggerBtn: {
     alignSelf: 'flex-start',
-    backgroundColor: '#0a2540',
+    backgroundColor: '#d97706',
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 6
@@ -4992,7 +5413,7 @@ const styles: any = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#0a2540',
+    backgroundColor: '#d97706',
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -5042,12 +5463,14 @@ const styles: any = StyleSheet.create({
     fontWeight: '900'
   },
   verifiedMiniBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    flexDirection: 'row',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
     backgroundColor: '#dcfce7',
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    gap: 4
   },
   verifiedMiniBadgeText: {
     color: '#16a34a',
@@ -5072,8 +5495,8 @@ const styles: any = StyleSheet.create({
     alignItems: 'center'
   },
   tournamentSubTabBtnActive: {
-    backgroundColor: '#0a2540',
-    borderColor: '#0a2540'
+    backgroundColor: '#d97706',
+    borderColor: '#d97706'
   },
   tournamentSubTabBtnText: {
     fontSize: 12.5,
@@ -5320,8 +5743,8 @@ const styles: any = StyleSheet.create({
     borderColor: '#cbd5e1'
   },
   filterPillActive: {
-    backgroundColor: '#0a2540',
-    borderColor: '#0a2540'
+    backgroundColor: '#d97706',
+    borderColor: '#d97706'
   },
   filterPillText: {
     fontSize: 11.5,
@@ -5455,7 +5878,7 @@ const styles: any = StyleSheet.create({
     marginTop: 2
   },
   btnInspectScorecard: {
-    backgroundColor: '#0a2540',
+    backgroundColor: '#d97706',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6
@@ -5781,7 +6204,7 @@ const styles: any = StyleSheet.create({
     alignItems: 'center'
   },
   inningsTabBtnActive: {
-    backgroundColor: '#0a2540'
+    backgroundColor: '#d97706'
   },
   inningsTabBtnText: {
     fontSize: 11.5,
@@ -5913,7 +6336,7 @@ const styles: any = StyleSheet.create({
 
   // ── Squad Player Add & Edit Styles (Registration-aligned) ─────────────
   addPlayerBtn: {
-    backgroundColor: '#0a2540',
+    backgroundColor: '#d97706',
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 8,
@@ -5973,7 +6396,7 @@ const styles: any = StyleSheet.create({
     fontWeight: '800'
   },
   playerSaveBtn: {
-    backgroundColor: '#0a2540',
+    backgroundColor: '#d97706',
     padding: 14,
     borderRadius: 10,
     alignItems: 'center',

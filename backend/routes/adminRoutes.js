@@ -13,6 +13,30 @@ const { requireAdminAuth } = require('../middleware/authMiddleware');
 
 const masterSettingController = require('../controllers/masterSettingController');
 
+/**
+ * Public/Accredited Directory Reads:
+ * GET /api/admin/officials & GET /api/admin/venues
+ * Read access for certified scorers, umpires, and venues is accessible for match scheduling and official directories.
+ * Creation, modification, and deletion strictly require ADMIN authorization below.
+ */
+router.get('/officials', async (req, res) => {
+  try {
+    const officials = await adminService.getOfficials();
+    res.json({ success: true, officials });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get('/venues', async (req, res) => {
+  try {
+    const venues = await adminService.getVenues();
+    res.json({ success: true, venues });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Enforce ADMIN role across all administrative management routes
 router.use(requireAdminAuth);
 
@@ -35,8 +59,8 @@ router.get('/overview', async (req, res) => {
  */
 router.get('/users', async (req, res) => {
   try {
-    const { role } = req.query;
-    const users = await adminService.getUsers(role);
+    const { role, status } = req.query;
+    const users = await adminService.getUsers(role, status);
     res.json({ success: true, users });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -59,18 +83,9 @@ router.patch('/users/:id/status', async (req, res) => {
 });
 
 /**
- * GET /api/admin/officials & POST /api/admin/officials
- * Officials Management (scorers, umpires, match officials)
+ * POST /api/admin/officials & DELETE /api/admin/officials/:id
+ * Officials Management (scorers, umpires, match officials) - Admin Mutations
  */
-router.get('/officials', async (req, res) => {
-  try {
-    const officials = await adminService.getOfficials();
-    res.json({ success: true, officials });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 router.post('/officials', async (req, res) => {
   try {
     const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
@@ -92,18 +107,9 @@ router.delete('/officials/:id', async (req, res) => {
 });
 
 /**
- * GET /api/admin/venues & POST /api/admin/venues
- * Venue & Ground Management
+ * POST /api/admin/venues & DELETE /api/admin/venues/:id
+ * Venue & Ground Management - Admin Mutations
  */
-router.get('/venues', async (req, res) => {
-  try {
-    const venues = await adminService.getVenues();
-    res.json({ success: true, venues });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 router.post('/venues', async (req, res) => {
   try {
     const adminEmail = req.adminUser?.email || 'admin@cfvd.org';
@@ -817,6 +823,145 @@ router.get('/master-settings', (req, res) => masterSettingController.getSettings
 router.post('/master-settings', (req, res) => masterSettingController.createSetting(req, res));
 router.put('/master-settings/:id', (req, res) => masterSettingController.updateSetting(req, res));
 router.delete('/master-settings/:id', (req, res) => masterSettingController.deleteSetting(req, res));
+
+// HOME PORTAL POPUP ALERT (Admin Dynamic Config)
+router.get('/home-popup', async (req, res) => {
+  try {
+    const db = require('../config/db');
+    await db.initDb();
+    const record = await db.models.MasterSetting.findOne({ id: 'PORTAL_HOME_POPUP' }).lean();
+    let config = {
+      enabled: false,
+      presetKey: 'match_notice',
+      badgeText: 'OFFICIAL MATCH & RULES NOTICE',
+      imageKey: 'stadium',
+      customImageUrl: '',
+      title: 'Virudhunagar Premier League 2026 — Match & Rules Notice',
+      message: 'Check upcoming match schedules, venue allocations, and official CFVD tournament rules & regulations before match day.',
+      highlightText: 'All participating teams must report 45 minutes prior to toss with verified squad IDs.',
+      buttonText: 'View Match Schedules →',
+      buttonDestination: 'matches'
+    };
+    if (record?.description) {
+      try {
+        const parsed = JSON.parse(record.description);
+        config = { ...config, ...parsed, enabled: Boolean(record.is_active) };
+      } catch (_e) {}
+    }
+    res.json({ success: true, popup: config });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.put('/home-popup', async (req, res) => {
+  try {
+    const db = require('../config/db');
+    await db.initDb();
+    const payload = {
+      enabled: Boolean(req.body.enabled),
+      presetKey: String(req.body.presetKey || 'custom'),
+      badgeText: String(req.body.badgeText || 'OFFICIAL CFVD NOTICE').trim(),
+      imageKey: String(req.body.imageKey || 'stadium'),
+      customImageUrl: String(req.body.customImageUrl || '').trim(),
+      title: String(req.body.title || '').trim(),
+      message: String(req.body.message || '').trim(),
+      highlightText: String(req.body.highlightText || '').trim(),
+      buttonText: String(req.body.buttonText || 'View Details →').trim(),
+      buttonDestination: String(req.body.buttonDestination || 'matches')
+    };
+
+    if (!payload.title) {
+      return res.status(400).json({ success: false, error: 'Popup title is required.' });
+    }
+
+    await db.models.MasterSetting.findOneAndUpdate(
+      { id: 'PORTAL_HOME_POPUP' },
+      {
+        $set: {
+          id: 'PORTAL_HOME_POPUP',
+          category: 'portal_home_popup',
+          name: 'Home Portal Popup',
+          code: 'HOME_POPUP_CONFIG',
+          description: JSON.stringify(payload),
+          is_active: payload.enabled,
+          updated_at: new Date()
+        }
+      },
+      { upsert: true, new: true }
+    );
+
+    res.json({ success: true, popup: payload, message: 'Home Portal Popup settings saved.' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ADMIN EMBLEM STEALTH ACCESS SEQUENCE (Enable/Disable + Custom Ball Order)
+router.get('/emblem-sequence', async (req, res) => {
+  try {
+    const db = require('../config/db');
+    await db.initDb();
+    const record = await db.models.MasterSetting.findOne({ id: 'ADMIN_EMBLEM_SEQUENCE' }).lean();
+    let config = {
+      enabled: true,
+      sequence: ['LEFT', 'RIGHT', 'LEFT', 'RIGHT', 'CENTER']
+    };
+    if (record?.description) {
+      try {
+        const parsed = JSON.parse(record.description);
+        if (Array.isArray(parsed.sequence)) {
+          config = {
+            enabled: Boolean(record.is_active),
+            sequence: parsed.sequence
+          };
+        }
+      } catch (_e) {}
+    }
+    res.json({ success: true, config });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.put('/emblem-sequence', async (req, res) => {
+  try {
+    const db = require('../config/db');
+    await db.initDb();
+    const enabled = Boolean(req.body.enabled);
+    const rawSeq = Array.isArray(req.body.sequence) ? req.body.sequence : [];
+    const allowed = new Set(['LEFT', 'RIGHT', 'CENTER']);
+    const sequence = rawSeq.map(s => String(s).toUpperCase().trim()).filter(s => allowed.has(s));
+
+    if (enabled && (sequence.length < 1 || sequence.length > 12)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Sequence must contain between 1 and 12 ball taps when enabled.'
+      });
+    }
+
+    const payload = { enabled, sequence };
+    await db.models.MasterSetting.findOneAndUpdate(
+      { id: 'ADMIN_EMBLEM_SEQUENCE' },
+      {
+        $set: {
+          id: 'ADMIN_EMBLEM_SEQUENCE',
+          category: 'admin_security',
+          name: 'Admin Emblem Stealth Sequence',
+          code: 'ADMIN_EMBLEM_SEQUENCE',
+          description: JSON.stringify(payload),
+          is_active: enabled,
+          updated_at: new Date()
+        }
+      },
+      { upsert: true, new: true }
+    );
+
+    res.json({ success: true, config: payload, message: 'Admin Emblem access sequence updated.' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ACCESS CONTROL & DUAL-ADMIN APPROVAL SYSTEM

@@ -22,7 +22,10 @@ import {
   Image
 } from 'react-native';
 import { ScorerApi, API_URL, resolveImageUrl } from '../../services/api';
+import { adminApi } from '../services/adminApi';
 import { showSuccess, showError, showWarning, showConfirm } from '../../utils/sweetalert';
+import { useDebounce } from '../../utils/debounce';
+import { Ionicons } from '@expo/vector-icons';
 
 export interface TournamentManagementProps {
   onOpenScheduler?: (tournament: any, match?: any) => void;
@@ -34,6 +37,29 @@ type TournamentTab = 'overview' | 'teams' | 'schedule' | 'points' | 'stats' | 'r
 type TournamentType = 'LEAGUE' | 'KNOCKOUT' | 'LEAGUE_KNOCKOUT';
 type MatchFormat = 'T10' | 'T20' | 'ODI' | 'CUSTOM';
 
+// Web select inline style to ensure appearance: none and full width render across all browsers
+const webSelectStyle: any = {
+  width: '100%',
+  minHeight: 44,
+  boxSizing: 'border-box',
+  paddingLeft: 14,
+  paddingRight: 38,
+  paddingTop: 10,
+  paddingBottom: 10,
+  fontSize: 14,
+  fontWeight: '600',
+  borderRadius: 8,
+  border: '1.5px solid #cbd5e1',
+  backgroundColor: '#ffffff',
+  color: '#0f172a',
+  outline: 'none',
+  cursor: 'pointer',
+  WebkitAppearance: 'none',
+  MozAppearance: 'none',
+  appearance: 'none',
+  display: 'block'
+};
+
 export const TournamentManagement: React.FC<TournamentManagementProps> = ({
   onOpenScheduler,
   onExit
@@ -43,6 +69,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [statusFilter, setStatusFilter] = useState<TournamentFilterStatus>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   // ── Admin Sub-Sections (Directory / Registrations / Approved Teams) ──────
   const [adminSection, setAdminSection] = useState<'directory' | 'registrations' | 'approved'>('directory');
@@ -50,7 +77,10 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
   const [regLoading, setRegLoading] = useState<boolean>(false);
   const [regTournamentFilter, setRegTournamentFilter] = useState<string>('ALL');
   const [regStatusFilter, setRegStatusFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
+  const [regTourDropdownOpen, setRegTourDropdownOpen] = useState<boolean>(false);
+  const [regStatusDropdownOpen, setRegStatusDropdownOpen] = useState<boolean>(false);
   const [regSearchQuery, setRegSearchQuery] = useState<string>('');
+  const debouncedRegSearchQuery = useDebounce(regSearchQuery, 300);
 
   // Rejection Reason Prompt Modal
   const [rejectModalOpen, setRejectModalOpen] = useState<boolean>(false);
@@ -60,8 +90,12 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
 
   // Approved Teams Tab State
   const [approvedTabTournamentId, setApprovedTabTournamentId] = useState<string>('');
+  const [approvedTourDropdownOpen, setApprovedTourDropdownOpen] = useState<boolean>(false);
   const [approvedTeamsList, setApprovedTeamsList] = useState<any[]>([]);
   const [approvedTeamsLoading, setApprovedTeamsLoading] = useState<boolean>(false);
+
+  // View Team & Players Roster Modal State
+  const [viewTeamModal, setViewTeamModal] = useState<any | null>(null);
 
   // Database Teams & Umpires
   const [dbTeams, setDbTeams] = useState<any[]>([]);
@@ -77,7 +111,9 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
 
   // Form Fields
   const [formName, setFormName] = useState<string>('');
+  const [formNameError, setFormNameError] = useState<string | null>(null);
   const [formShortName, setFormShortName] = useState<string>('');
+  const [formShortNameError, setFormShortNameError] = useState<string | null>(null);
   const [formLogoUrl, setFormLogoUrl] = useState<string>('');
   const [formDescription, setFormDescription] = useState<string>('');
   const [formTournamentType, setFormTournamentType] = useState<TournamentType>('LEAGUE');
@@ -88,13 +124,44 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
   const [formOvers, setFormOvers] = useState<string>('20');
   const [formSeason, setFormSeason] = useState<string>('2026');
 
+  // Season Year Picker Modal State
+  const [showYearPicker, setShowYearPicker] = useState<boolean>(false);
+  const [pickerDecadeStart, setPickerDecadeStart] = useState<number>(() => {
+    const yr = parseInt(formSeason, 10) || new Date().getFullYear();
+    return Math.floor(yr / 10) * 10;
+  });
+
+  // Tournament Name live validation: letters, numbers, spaces, and underscore only
+  const handleTournamentNameChange = (val: string) => {
+    setFormName(val);
+    if (!val.trim()) {
+      setFormNameError('Tournament Name is required.');
+    } else if (!/^[a-zA-Z0-9_\s]+$/.test(val)) {
+      setFormNameError('Only letters, numbers, spaces, and underscores (_) are allowed.');
+    } else {
+      setFormNameError(null);
+    }
+  };
+
+  // Tournament Short Name live validation: letters, numbers, spaces, and underscore only
+  const handleTournamentShortNameChange = (val: string) => {
+    setFormShortName(val);
+    if (!val.trim()) {
+      setFormShortNameError('Short Name / Abbreviation is required.');
+    } else if (!/^[a-zA-Z0-9_\s]+$/.test(val)) {
+      setFormShortNameError('Only letters, numbers, spaces, and underscores (_) are allowed.');
+    } else {
+      setFormShortNameError(null);
+    }
+  };
+
   // Schedule & Rules Fields
   const [formStartDate, setFormStartDate] = useState<string>('');
   const [formEndDate, setFormEndDate] = useState<string>('');
   const [formRegStartDate, setFormRegStartDate] = useState<string>('');
   const [formRegEndDate, setFormRegEndDate] = useState<string>('');
   const [formVenue, setFormVenue] = useState<string>('Kamarajar District Stadium');
-  const [formMaxTeams, setFormMaxTeams] = useState<string>('16');
+  const [formMaxTeams, setFormMaxTeams] = useState<string>('8');
   const [formMinTeams, setFormMinTeams] = useState<string>('2');
   const [formPointsWin, setFormPointsWin] = useState<string>('2');
   const [formPointsTie, setFormPointsTie] = useState<string>('1');
@@ -258,36 +325,102 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
 
   const loadTeamsFromDb = async () => {
     try {
-      const res = await ScorerApi.getAllRegistrations();
-      const raw = res?.registrations || res?.data || [];
-      const approved: any[] = [];
-      raw.forEach((r: any) => {
-        const s = (r.status || '').toUpperCase();
-        if (r.type === 'TEAM' && (s === 'APPROVED' || s === 'ACTIVE')) {
-          approved.push({
-            id: r.id || r.mongoId,
-            team_id: r.id,
-            name: r.name,
-            team_name: r.name,
-            coach_name: r.contactName || r.name,
-            coach_email: r.email || r.contactEmail || '',
-            taluk: r.taluk || r.details?.taluk || 'Virudhunagar',
-            status: 'Approved'
+      const [regRes, teamsRes, adminTeamsRes] = await Promise.all([
+        ScorerApi.getAllRegistrations().catch(err => {
+          console.warn('[TournamentManagement] getAllRegistrations error:', err);
+          return { success: false, registrations: [] };
+        }),
+        ScorerApi.getTeams().catch(err => {
+          console.warn('[TournamentManagement] getTeams error:', err);
+          return { success: false, teams: [] };
+        }),
+        adminApi.getTeams().catch(err => {
+          console.warn('[TournamentManagement] adminApi.getTeams error:', err);
+          return { success: false, data: [] };
+        })
+      ]);
+
+      const raw = regRes?.registrations || regRes?.data || [];
+      const teamsList = teamsRes?.teams || teamsRes?.data || [];
+      const adminTeamsList = adminTeamsRes?.data || adminTeamsRes?.teams || (Array.isArray(adminTeamsRes) ? adminTeamsRes : []);
+      const allTeams: any[] = [];
+      const seenIds = new Set<string>();
+
+      const addTeam = (teamId: string, name: string, coachName: string, coachEmail: string, taluk: string, status: string) => {
+        const tName = (name || '').trim();
+        const tid = teamId || tName;
+        const key = (tid || tName).toLowerCase();
+        if (key && !seenIds.has(key)) {
+          seenIds.add(key);
+          const s = (status || 'PENDING').toUpperCase();
+          const isApproved = s === 'APPROVED' || s === 'ACTIVE';
+          allTeams.push({
+            id: tid || `TM-${allTeams.length + 1}`,
+            team_id: tid,
+            name: tName || 'Registered Team',
+            team_name: tName || 'Registered Team',
+            coach_name: coachName || 'Official',
+            coach_email: coachEmail || '',
+            taluk: taluk || 'Virudhunagar',
+            status: isApproved ? 'Approved' : 'Pending'
           });
         }
-      });
+      };
 
-      // Also fetch from /api/matches or fallback
-      if (approved.length === 0) {
-        // Fallback default clubs
-        setDbTeams([
-          { id: 'TM-01', name: 'Sattur Spartans', coach_name: 'K. Muthu', taluk: 'Virudhunagar' },
-          { id: 'TM-02', name: 'Virudhunagar Strikers', coach_name: 'S. Ganesan', taluk: 'Sivakasi' },
-          { id: 'TM-03', name: 'Rajapalayam Royals', coach_name: 'R. Subramanian', taluk: 'Rajapalayam' },
-          { id: 'TM-04', name: 'Aruppukottai Aces', coach_name: 'V. Raman', taluk: 'Aruppukottai' }
-        ]);
+      // 1. Process registrations from database
+      if (Array.isArray(raw)) {
+        raw.forEach((r: any) => {
+          if (r.type === 'TEAM') {
+            addTeam(
+              r.id || r.mongoId || r._id,
+              r.name || r.team_name,
+              r.contactName || r.coach_name || r.name,
+              r.email || r.contactEmail || r.coach_email,
+              r.taluk || r.details?.taluk || r.city,
+              r.status
+            );
+          }
+        });
+      }
+
+      // 2. Process teams from /auth/teams
+      if (Array.isArray(teamsList)) {
+        teamsList.forEach((t: any) => {
+          addTeam(
+            t.id || t.team_id || t._id,
+            t.team_name || t.name,
+            t.coach_name,
+            t.coach_email,
+            t.taluk || t.city,
+            t.status
+          );
+        });
+      }
+
+      // 3. Process teams from adminApi.getTeams() (/admin/teams-list)
+      if (Array.isArray(adminTeamsList)) {
+        adminTeamsList.forEach((t: any) => {
+          addTeam(
+            t.id || t.teamId || t.team_id || t._id,
+            t.name || t.teamName || t.team_name,
+            t.coachName || t.coach_name,
+            t.coachEmail || t.coach_email,
+            t.city || t.taluk,
+            t.status
+          );
+        });
+      }
+
+      if (allTeams.length > 0) {
+        setDbTeams(allTeams);
       } else {
-        setDbTeams(approved);
+        // Fallback default clubs only if database is completely empty
+        setDbTeams([
+          { id: 'TM-01', name: 'Sattur Spartans', coach_name: 'K. Muthu', taluk: 'Virudhunagar', status: 'Approved' },
+          { id: 'TM-02', name: 'Virudhunagar Strikers', coach_name: 'S. Ganesan', taluk: 'Sivakasi', status: 'Approved' },
+          { id: 'TM-03', name: 'Rajapalayam Royals', coach_name: 'R. Subramanian', taluk: 'Rajapalayam', status: 'Approved' },
+          { id: 'TM-04', name: 'Aruppukottai Aces', coach_name: 'V. Raman', taluk: 'Aruppukottai', status: 'Approved' }
+        ]);
       }
     } catch (err) {
       console.warn('Load teams error:', err);
@@ -325,33 +458,61 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
   const loadVenuesFromDb = async () => {
     try {
       const res = await ScorerApi.getVenues();
-      if (res && res.venues) {
-        setDbVenues(res.venues);
+      let loaded: any[] = [];
+      if (res && Array.isArray(res.venues) && res.venues.length > 0) {
+        loaded = res.venues;
+      } else if (res && Array.isArray(res.data) && res.data.length > 0) {
+        loaded = res.data;
+      } else if (res && Array.isArray(res) && res.length > 0) {
+        loaded = res;
+      }
+      if (loaded.length > 0) {
+        setDbVenues(loaded);
       } else {
         setDbVenues([
           { id: 'VEN-01', name: 'Kamarajar District Stadium', location: 'Virudhunagar' },
-          { id: 'VEN-02', name: 'Sivakasi Cricket Ground', location: 'Sivakasi' },
-          { id: 'VEN-03', name: 'PACR Sports Complex', location: 'Rajapalayam' },
+          { id: 'VEN-02', name: 'Municipal Cricket Complex', location: 'Sivakasi' },
+          { id: 'VEN-03', name: 'Rajapalayam RAC Ground', location: 'Rajapalayam' },
           { id: 'VEN-04', name: 'Aruppukottai Pavilion Turf Ground', location: 'Aruppukottai' }
         ]);
       }
     } catch (err) {
       setDbVenues([
         { id: 'VEN-01', name: 'Kamarajar District Stadium', location: 'Virudhunagar' },
-        { id: 'VEN-02', name: 'Sivakasi Cricket Ground', location: 'Sivakasi' }
+        { id: 'VEN-02', name: 'Municipal Cricket Complex', location: 'Sivakasi' },
+        { id: 'VEN-03', name: 'Rajapalayam RAC Ground', location: 'Rajapalayam' },
+        { id: 'VEN-04', name: 'Aruppukottai Pavilion Turf Ground', location: 'Aruppukottai' }
       ]);
     }
   };
 
+  // Listen for dynamic venue updates from Settings
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const handleVenueUpdate = () => {
+        loadVenuesFromDb();
+      };
+      window.addEventListener('venues_updated', handleVenueUpdate);
+      window.addEventListener('master_settings_updated', handleVenueUpdate);
+      return () => {
+        window.removeEventListener('venues_updated', handleVenueUpdate);
+        window.removeEventListener('master_settings_updated', handleVenueUpdate);
+      };
+    }
+  }, []);
+
   // ── Open Create Tournament Wizard ─────────────────────────────────────
   const handleOpenCreateWizard = () => {
+    loadTeamsFromDb();
     setIsEditMode(false);
     setEditingTournamentId(null);
     setWizardStep(1);
 
     // Default pre-fills
     setFormName('');
+    setFormNameError(null);
     setFormShortName('');
+    setFormShortNameError(null);
     setFormLogoUrl('');
     setFormDescription('Annual premier district championship organized by Cricket Federation of Virudhunagar District.');
     setFormTournamentType('LEAGUE');
@@ -360,7 +521,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
     setFormBallType('Red Leather');
     setFormMatchFormat('T20');
     setFormOvers('20');
-    setFormSeason('2026');
+    setFormSeason(String(new Date().getFullYear()));
 
     const today = new Date();
     const plus30 = new Date(today.getTime() + 30 * 86400000);
@@ -370,7 +531,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
     setFormRegEndDate(new Date(today.getTime() + 7 * 86400000).toISOString().split('T')[0]);
 
     setFormVenue('Kamarajar District Stadium');
-    setFormMaxTeams('16');
+    setFormMaxTeams('8');
     setFormMinTeams('2');
     setFormPointsWin('2');
     setFormPointsTie('1');
@@ -397,7 +558,9 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
     setWizardStep(1);
 
     setFormName(tour.name || '');
+    setFormNameError(null);
     setFormShortName(tour.short_name || '');
+    setFormShortNameError(null);
     setFormLogoUrl(tour.logo_url || '');
     setFormDescription(tour.description || '');
     setFormTournamentType(tour.tournament_type || 'LEAGUE');
@@ -414,7 +577,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
     setFormRegEndDate(tour.registration_end_date || '');
     setFormVenue(tour.venue || 'Kamarajar District Stadium');
 
-    setFormMaxTeams(String(tour.max_teams || 16));
+    setFormMaxTeams(String(tour.max_teams && tour.max_teams >= 8 ? tour.max_teams : 8));
     setFormMinTeams(String(tour.min_teams || 2));
     setFormPointsWin(String(tour.points_win !== undefined ? tour.points_win : 2));
     setFormPointsTie(String(tour.points_tie !== undefined ? tour.points_tie : 1));
@@ -436,29 +599,59 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
   // ── Step Navigation & Validations ─────────────────────────────────────
   const handleProceedToStep2 = async () => {
     if (!formName.trim()) {
+      setFormNameError('Tournament Name is required.');
       await showWarning('Required Field', 'Tournament Name is required.');
       return;
     }
+    if (!/^[a-zA-Z0-9_\s]+$/.test(formName.trim())) {
+      setFormNameError('Only letters, numbers, spaces, and underscores (_) are allowed. Special characters are not allowed.');
+      await showWarning(
+        'Invalid Tournament Name',
+        'Tournament Name can only contain letters, numbers, spaces, and underscores (_). Special characters are not allowed.'
+      );
+      return;
+    }
+    if (!formShortName.trim()) {
+      setFormShortNameError('Short Name / Abbreviation is required.');
+      await showWarning('Required Field', 'Short Name / Abbreviation is required.');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_\s]+$/.test(formShortName.trim())) {
+      setFormShortNameError('Only letters, numbers, spaces, and underscores (_) are allowed. Special characters are not allowed.');
+      await showWarning(
+        'Invalid Short Name',
+        'Short Name / Abbreviation can only contain letters, numbers, spaces, and underscores (_). Special characters are not allowed.'
+      );
+      return;
+    }
+    if (formMatchFormat === 'CUSTOM') {
+      const oversNum = parseInt(formOvers, 10);
+      if (!formOvers.trim() || isNaN(oversNum) || oversNum <= 0) {
+        await showWarning('Invalid Custom Overs', 'Please enter a valid number of overs per match (greater than 0).');
+        return;
+      }
+    }
+    setFormNameError(null);
+    setFormShortNameError(null);
     setWizardStep(2);
   };
 
   const handleProceedToStep3 = async () => {
-    if (!formStartDate || !formEndDate) {
-      await showWarning('Required Fields', 'Both Start Date and End Date are required.');
-      return;
+    if (formStartDate && formEndDate) {
+      const s = new Date(formStartDate);
+      const e = new Date(formEndDate);
+      if (e < s) {
+        await showWarning('Invalid Dates', 'Tournament End Date cannot be before Start Date.');
+        return;
+      }
     }
-    const s = new Date(formStartDate);
-    const e = new Date(formEndDate);
-    if (e < s) {
-      await showWarning('Invalid Dates', 'Tournament End Date cannot be before Start Date.');
-      return;
-    }
+    loadTeamsFromDb();
     setWizardStep(3);
   };
 
   const handleProceedToStep4 = async () => {
     const minT = parseInt(formMinTeams, 10) || 2;
-    const maxT = parseInt(formMaxTeams, 10) || 16;
+    const maxT = parseInt(formMaxTeams, 10) || 8;
     if (selectedTeamIds.length < minT) {
       await showWarning(
         'Team Selection Notice',
@@ -469,7 +662,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
     if (selectedTeamIds.length > maxT) {
       await showWarning(
         'Maximum Limit Exceeded',
-        `Selected team count (${selectedTeamIds.length}) exceeds maximum allowed teams (${maxT}).`
+        `A tournament can have at most ${maxT} participating teams. Currently selected: ${selectedTeamIds.length}.`
       );
       return;
     }
@@ -478,12 +671,12 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
 
   // ── Toggle Team Selection ─────────────────────────────────────────────
   const toggleTeamSelection = (teamId: string) => {
-    const maxT = parseInt(formMaxTeams, 10) || 16;
+    const maxT = parseInt(formMaxTeams, 10) || 8;
     if (selectedTeamIds.includes(teamId)) {
       setSelectedTeamIds(selectedTeamIds.filter(id => id !== teamId));
     } else {
       if (selectedTeamIds.length >= maxT) {
-        showWarning('Limit Reached', `Maximum team capacity is set to ${maxT} teams.`);
+        showWarning('Limit Reached', `Only ${maxT} teams can be selected for this tournament.`);
         return;
       }
       setSelectedTeamIds([...selectedTeamIds, teamId]);
@@ -491,7 +684,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
   };
 
   const selectAllTeams = () => {
-    const maxT = parseInt(formMaxTeams, 10) || 16;
+    const maxT = parseInt(formMaxTeams, 10) || 8;
     const allFiltered = filteredTeams.slice(0, maxT).map(t => t.id);
     setSelectedTeamIds(allFiltered);
   };
@@ -504,8 +697,41 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
   const handleSubmitTournament = async () => {
     if (!formName.trim()) {
       setWizardStep(1);
+      setFormNameError('Tournament Name is required.');
       await showWarning('Validation Error', 'Tournament Name is required.');
       return;
+    }
+    if (!/^[a-zA-Z0-9_\s]+$/.test(formName.trim())) {
+      setWizardStep(1);
+      setFormNameError('Only letters, numbers, spaces, and underscores (_) are allowed. Special characters are not allowed.');
+      await showWarning(
+        'Invalid Tournament Name',
+        'Tournament Name can only contain letters, numbers, spaces, and underscores (_). Special characters are not allowed.'
+      );
+      return;
+    }
+    if (!formShortName.trim()) {
+      setWizardStep(1);
+      setFormShortNameError('Short Name / Abbreviation is required.');
+      await showWarning('Validation Error', 'Short Name / Abbreviation is required.');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_\s]+$/.test(formShortName.trim())) {
+      setWizardStep(1);
+      setFormShortNameError('Only letters, numbers, spaces, and underscores (_) are allowed. Special characters are not allowed.');
+      await showWarning(
+        'Invalid Short Name',
+        'Short Name / Abbreviation can only contain letters, numbers, spaces, and underscores (_). Special characters are not allowed.'
+      );
+      return;
+    }
+    if (formMatchFormat === 'CUSTOM') {
+      const oversNum = parseInt(formOvers, 10);
+      if (!formOvers.trim() || isNaN(oversNum) || oversNum <= 0) {
+        setWizardStep(1);
+        await showWarning('Invalid Custom Overs', 'Please enter a valid number of overs per match (greater than 0).');
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -526,7 +752,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
       end_date: formEndDate,
       registration_start_date: formRegStartDate || null,
       registration_end_date: formRegEndDate || null,
-      max_teams: parseInt(formMaxTeams, 10) || 16,
+      max_teams: parseInt(formMaxTeams, 10) || 8,
       min_teams: parseInt(formMinTeams, 10) || 2,
       points_win: parseInt(formPointsWin, 10) || 2,
       points_tie: parseInt(formPointsTie, 10) || 1,
@@ -547,10 +773,18 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
 
     try {
       if (isEditMode && editingTournamentId) {
-        await ScorerApi.updateTournament(editingTournamentId, payload);
+        try {
+          await ScorerApi.updateTournament(editingTournamentId, payload);
+        } catch (_uErr) {
+          await adminApi.updateTournament(editingTournamentId, payload);
+        }
         await showSuccess('Tournament Updated', `Championship '${payload.name}' has been updated successfully.`);
       } else {
-        await ScorerApi.createTournament(payload);
+        try {
+          await ScorerApi.createTournament(payload);
+        } catch (_cErr) {
+          await adminApi.createTournament(payload);
+        }
         await showSuccess('Tournament Created', `Official Tournament '${payload.name}' has been created with ${selectedTeamIds.length} team(s).`);
       }
       setWizardOpen(false);
@@ -658,9 +892,27 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
     }
   };
 
-  // ── Filtered Tournaments List ──────────────────────────────────────────
-  const filteredTournaments = useMemo(() => {
+  // Unique tournaments deduplicated by normalized name
+  const uniqueTournaments = useMemo(() => {
+    const seen = new Set<string>();
     return tournaments.filter(t => {
+      const key = (t.name || '').trim().toLowerCase();
+      if (!key) return true;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [tournaments]);
+
+  // ── Filtered Tournaments List (strictly one tournament per name) ──────────
+  const filteredTournaments = useMemo(() => {
+    const seenNames = new Set<string>();
+    return tournaments.filter(t => {
+      const nameKey = (t.name || '').trim().toLowerCase();
+      if (nameKey) {
+        if (seenNames.has(nameKey)) return false;
+        seenNames.add(nameKey);
+      }
       // Status filter
       if (statusFilter !== 'ALL') {
         const s = (t.status || 'UPCOMING').toUpperCase();
@@ -668,8 +920,8 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
         if (statusFilter !== 'ONGOING' && s !== statusFilter) return false;
       }
       // Search filter
-      if (searchQuery.trim()) {
-        const term = searchQuery.toLowerCase();
+      if (debouncedSearchQuery.trim()) {
+        const term = debouncedSearchQuery.toLowerCase();
         const n = (t.name || '').toLowerCase();
         const sn = (t.short_name || '').toLowerCase();
         const c = (t.category || '').toLowerCase();
@@ -681,7 +933,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
       }
       return true;
     });
-  }, [tournaments, statusFilter, searchQuery]);
+  }, [tournaments, statusFilter, debouncedSearchQuery]);
 
   // Statistics Summary
   const summaryCounts = useMemo(() => {
@@ -735,8 +987,8 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
         return false;
       }
       // Search filter
-      if (regSearchQuery.trim()) {
-        const q = regSearchQuery.toLowerCase();
+      if (debouncedRegSearchQuery.trim()) {
+        const q = debouncedRegSearchQuery.toLowerCase();
         const tn = (r.team_name || r.teamName || '').toLowerCase();
         const tourName = (r.tournament_name || r.tournamentName || '').toLowerCase();
         const cn = (r.coach_name || r.coachName || '').toLowerCase();
@@ -748,7 +1000,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
       }
       return true;
     });
-  }, [registrations, regTournamentFilter, regStatusFilter, regSearchQuery]);
+  }, [registrations, regTournamentFilter, regStatusFilter, debouncedRegSearchQuery]);
 
   const pendingRegistrationsCount = useMemo(() => {
     return registrations.filter(r => (r.status || 'PENDING').toUpperCase() === 'PENDING').length;
@@ -772,7 +1024,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
           activeOpacity={0.8}
         >
           <Text style={[styles.adminSectionTabText, adminSection === 'directory' && styles.adminSectionTabTextActive]}>
-            🏆 Tournament Directory ({tournaments.length})
+            🏆 Tournament Directory ({uniqueTournaments.length})
           </Text>
         </TouchableOpacity>
 
@@ -1154,7 +1406,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
       {adminSection === 'registrations' && (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
           {/* Header & Controls Toolbar */}
-          <View style={styles.toolbarCard}>
+          <View style={[styles.toolbarCard, { zIndex: 50, position: 'relative' }]}>
             <View style={styles.searchBox}>
               <Text style={styles.searchIcon}>🔍</Text>
               <TextInput
@@ -1171,52 +1423,198 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
               )}
             </View>
 
-            {/* Tournament Selector Filter */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <Text style={styles.filterSectionLabel}>Championship:</Text>
-              <TouchableOpacity
-                style={[styles.filterPill, regTournamentFilter === 'ALL' && styles.filterPillActive]}
-                onPress={() => setRegTournamentFilter('ALL')}
-              >
-                <Text style={[styles.filterPillText, regTournamentFilter === 'ALL' && styles.filterPillTextActive]}>
-                  All Tournaments
-                </Text>
-              </TouchableOpacity>
-              {tournaments.map(t => {
-                const active = regTournamentFilter === t.id;
-                return (
+            {/* Championship & Approval Status Dropdowns Row */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginTop: 10, zIndex: 100 }}>
+              {/* Championship Dropdown */}
+              <View style={[{ flex: 1, minWidth: 210, flexDirection: 'row', alignItems: 'center', gap: 8, position: 'relative' }, regTourDropdownOpen && { zIndex: 200 }]}>
+                <Text style={styles.filterSectionLabel}>Championship:</Text>
+                <View style={{ flex: 1, position: 'relative' }}>
                   <TouchableOpacity
-                    key={t.id}
-                    style={[styles.filterPill, active && styles.filterPillActive]}
-                    onPress={() => setRegTournamentFilter(t.id)}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      backgroundColor: '#f8fafc',
+                      borderWidth: 1.5,
+                      borderColor: regTourDropdownOpen ? '#0f172a' : '#cbd5e1',
+                      borderRadius: 8,
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      gap: 8
+                    }}
+                    onPress={() => {
+                      setRegTourDropdownOpen(prev => !prev);
+                      setRegStatusDropdownOpen(false);
+                    }}
+                    activeOpacity={0.8}
                   >
-                    <Text style={[styles.filterPillText, active && styles.filterPillTextActive]}>
-                      {t.short_name || t.name}
+                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0f172a', flex: 1 }} numberOfLines={1}>
+                      {regTournamentFilter === 'ALL'
+                        ? 'All Tournaments'
+                        : (uniqueTournaments.find(t => t.id === regTournamentFilter)?.name || 'Selected Championship')}
                     </Text>
+                    <Text style={{ fontSize: 10, color: '#64748b', fontWeight: '800' }}>{regTourDropdownOpen ? '▲' : '▼'}</Text>
                   </TouchableOpacity>
-                );
-              })}
-            </View>
 
-            {/* Status Filter Pills */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-              <Text style={styles.filterSectionLabel}>Approval Status:</Text>
-              {(['ALL', 'PENDING', 'APPROVED', 'REJECTED'] as const).map(st => {
-                const active = regStatusFilter === st;
-                return (
+                  {regTourDropdownOpen && (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        top: 42,
+                        left: 0,
+                        right: 0,
+                        maxHeight: 240,
+                        backgroundColor: '#ffffff',
+                        borderWidth: 1,
+                        borderColor: '#cbd5e1',
+                        borderRadius: 8,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 6 },
+                        shadowOpacity: 0.14,
+                        shadowRadius: 12,
+                        elevation: 14,
+                        zIndex: 9999,
+                        overflow: 'hidden'
+                      }}
+                    >
+                      <ScrollView nestedScrollEnabled style={{ maxHeight: 240 }}>
+                        <TouchableOpacity
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            paddingHorizontal: 12,
+                            paddingVertical: 10,
+                            backgroundColor: regTournamentFilter === 'ALL' ? '#eff6ff' : '#ffffff',
+                            borderBottomWidth: 1,
+                            borderBottomColor: '#f1f5f9'
+                          }}
+                          onPress={() => {
+                            setRegTournamentFilter('ALL');
+                            setRegTourDropdownOpen(false);
+                          }}
+                        >
+                          <Text style={{ fontSize: 12.5, fontWeight: regTournamentFilter === 'ALL' ? '800' : '600', color: '#0f172a' }}>
+                            All Tournaments
+                          </Text>
+                          {regTournamentFilter === 'ALL' && <Text style={{ fontSize: 12, fontWeight: '800', color: '#1d4ed8' }}>✓</Text>}
+                        </TouchableOpacity>
+                        {uniqueTournaments.map(t => {
+                          const isSelected = regTournamentFilter === t.id;
+                          return (
+                            <TouchableOpacity
+                              key={t.id}
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                paddingHorizontal: 12,
+                                paddingVertical: 10,
+                                backgroundColor: isSelected ? '#eff6ff' : '#ffffff',
+                                borderBottomWidth: 1,
+                                borderBottomColor: '#f1f5f9'
+                              }}
+                              onPress={() => {
+                                setRegTournamentFilter(t.id);
+                                setRegTourDropdownOpen(false);
+                              }}
+                            >
+                              <Text style={{ fontSize: 12.5, fontWeight: isSelected ? '800' : '600', color: isSelected ? '#1d4ed8' : '#334155', flex: 1 }} numberOfLines={1}>
+                                🏆 {t.name || t.short_name}
+                              </Text>
+                              {isSelected && <Text style={{ fontSize: 12, fontWeight: '800', color: '#1d4ed8', marginLeft: 6 }}>✓</Text>}
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              {/* Approval Status Dropdown */}
+              <View style={[{ flex: 1, minWidth: 190, flexDirection: 'row', alignItems: 'center', gap: 8, position: 'relative' }, regStatusDropdownOpen && { zIndex: 200 }]}>
+                <Text style={styles.filterSectionLabel}>Approval Status:</Text>
+                <View style={{ flex: 1, position: 'relative' }}>
                   <TouchableOpacity
-                    key={st}
-                    style={[styles.filterPill, active && styles.filterPillActive]}
-                    onPress={() => setRegStatusFilter(st)}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      backgroundColor: '#f8fafc',
+                      borderWidth: 1.5,
+                      borderColor: regStatusDropdownOpen ? '#0f172a' : '#cbd5e1',
+                      borderRadius: 8,
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      gap: 8
+                    }}
+                    onPress={() => {
+                      setRegStatusDropdownOpen(prev => !prev);
+                      setRegTourDropdownOpen(false);
+                    }}
+                    activeOpacity={0.8}
                   >
-                    <Text style={[styles.filterPillText, active && styles.filterPillTextActive]}>
-                      {st === 'ALL' ? 'All Status' : st}
+                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0f172a' }} numberOfLines={1}>
+                      {regStatusFilter === 'ALL' ? 'All Status' : regStatusFilter}
                     </Text>
+                    <Text style={{ fontSize: 10, color: '#64748b', fontWeight: '800' }}>{regStatusDropdownOpen ? '▲' : '▼'}</Text>
                   </TouchableOpacity>
-                );
-              })}
+
+                  {regStatusDropdownOpen && (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        top: 42,
+                        left: 0,
+                        right: 0,
+                        backgroundColor: '#ffffff',
+                        borderWidth: 1,
+                        borderColor: '#cbd5e1',
+                        borderRadius: 8,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 6 },
+                        shadowOpacity: 0.14,
+                        shadowRadius: 12,
+                        elevation: 14,
+                        zIndex: 9999,
+                        overflow: 'hidden'
+                      }}
+                    >
+                      {(['ALL', 'PENDING', 'APPROVED', 'REJECTED'] as const).map(st => {
+                        const isSelected = regStatusFilter === st;
+                        return (
+                          <TouchableOpacity
+                            key={st}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              paddingHorizontal: 12,
+                              paddingVertical: 10,
+                              backgroundColor: isSelected ? '#eff6ff' : '#ffffff',
+                              borderBottomWidth: 1,
+                              borderBottomColor: '#f1f5f9'
+                            }}
+                            onPress={() => {
+                              setRegStatusFilter(st);
+                              setRegStatusDropdownOpen(false);
+                            }}
+                          >
+                            <Text style={{ fontSize: 12.5, fontWeight: isSelected ? '800' : '600', color: isSelected ? '#1d4ed8' : '#334155' }}>
+                              {st === 'ALL' ? 'All Status' : st}
+                            </Text>
+                            {isSelected && <Text style={{ fontSize: 12, fontWeight: '800', color: '#1d4ed8' }}>✓</Text>}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+              </View>
+
               <TouchableOpacity
-                style={[styles.filterPill, { backgroundColor: '#f1f5f9', marginLeft: 'auto' }]}
+                style={[styles.filterPill, { backgroundColor: '#f1f5f9' }]}
                 onPress={loadRegistrations}
               >
                 <Text style={{ fontSize: 12, color: '#0f172a', fontWeight: '700' }}>🔄 Refresh</Text>
@@ -1339,14 +1737,12 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                       </View>
                       <View style={styles.regInfoItem}>
                         <Text style={styles.regInfoLabel}>ROSTER SQUAD</Text>
-                        <Text style={styles.regInfoVal}>{r.squad_count || 15} Players Registered</Text>
+                        <Text style={styles.regInfoVal}>{r.squad_count ?? (r.players ? r.players.length : 0)} Players Registered</Text>
                       </View>
-                      {r.captain ? (
-                        <View style={styles.regInfoItem}>
-                          <Text style={styles.regInfoLabel}>TEAM CAPTAIN</Text>
-                          <Text style={styles.regInfoVal}>👑 {r.captain}</Text>
-                        </View>
-                      ) : null}
+                      <View style={styles.regInfoItem}>
+                        <Text style={styles.regInfoLabel}>TEAM CAPTAIN</Text>
+                        <Text style={styles.regInfoVal}>👑 {r.captain || '—'}</Text>
+                      </View>
                     </View>
 
                     {r.notes ? (
@@ -1372,26 +1768,58 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                       </View>
                     )}
 
-                    {/* Action Buttons for Pending Registrations */}
-                    {isPending && (
-                      <View style={styles.regActionsRow}>
-                        <TouchableOpacity
-                          style={styles.btnApproveReg}
-                          onPress={() => handleApproveRegistration(r)}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={styles.btnApproveRegText}>✅ Approve Registration</Text>
-                        </TouchableOpacity>
+                    {/* Action Buttons (View Team always available, plus Approve/Reject for Pending) */}
+                    <View style={styles.regActionsRow}>
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: '#eff6ff',
+                          borderWidth: 1,
+                          borderColor: '#bfdbfe',
+                          borderRadius: 8,
+                          paddingHorizontal: 14,
+                          paddingVertical: 9,
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                        onPress={() => setViewTeamModal({
+                          teamName: r.team_name,
+                          teamId: r.team_id,
+                          coachName: r.coach_name,
+                          coachEmail: r.coach_email,
+                          coachPhone: r.coach_phone,
+                          captain: r.captain,
+                          city: r.team_taluk || r.team_city || 'Virudhunagar',
+                          status: status,
+                          squadCount: r.squad_count ?? (r.players ? r.players.length : 0),
+                          players: r.players || []
+                        })}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={{ color: '#1d4ed8', fontSize: 12.5, fontWeight: '700' }}>
+                          👁 View Team ({r.squad_count ?? (r.players ? r.players.length : 0)})
+                        </Text>
+                      </TouchableOpacity>
 
-                        <TouchableOpacity
-                          style={styles.btnRejectReg}
-                          onPress={() => handleOpenRejectModal(r)}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={styles.btnRejectRegText}>❌ Reject Registration</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
+                      {isPending && (
+                        <>
+                          <TouchableOpacity
+                            style={styles.btnApproveReg}
+                            onPress={() => handleApproveRegistration(r)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.btnApproveRegText}>✅ Approve Registration</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.btnRejectReg}
+                            onPress={() => handleOpenRejectModal(r)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.btnRejectRegText}>❌ Reject Registration</Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
+                    </View>
                   </View>
                 );
               })}
@@ -1406,26 +1834,86 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
       {adminSection === 'approved' && (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
           {/* Tournament Selection Bar */}
-          <View style={styles.toolbarCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <View style={[styles.toolbarCard, { zIndex: 50, position: 'relative' }]}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10, zIndex: 100 }}>
               <Text style={styles.filterSectionLabel}>Select Championship:</Text>
-              {tournaments.map(t => {
-                const active = (approvedTabTournamentId || tournaments[0]?.id) === t.id;
-                return (
-                  <TouchableOpacity
-                    key={t.id}
-                    style={[styles.filterPill, active && styles.filterPillActive]}
-                    onPress={() => {
-                      setApprovedTabTournamentId(t.id);
-                      loadApprovedTeams(t.id);
+              <View style={{ flex: 1, minWidth: 210, position: 'relative' }}>
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    backgroundColor: '#f8fafc',
+                    borderWidth: 1.5,
+                    borderColor: approvedTourDropdownOpen ? '#0f172a' : '#cbd5e1',
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 9,
+                    gap: 8
+                  }}
+                  onPress={() => setApprovedTourDropdownOpen(prev => !prev)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a', flex: 1 }} numberOfLines={1}>
+                    🏆 {activeApprovedTournament?.name || uniqueTournaments[0]?.name || 'Select Championship'}
+                  </Text>
+                  <Text style={{ fontSize: 10, color: '#64748b', fontWeight: '800' }}>{approvedTourDropdownOpen ? '▲' : '▼'}</Text>
+                </TouchableOpacity>
+
+                {approvedTourDropdownOpen && (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: 44,
+                      left: 0,
+                      right: 0,
+                      maxHeight: 250,
+                      backgroundColor: '#ffffff',
+                      borderWidth: 1,
+                      borderColor: '#cbd5e1',
+                      borderRadius: 8,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 6 },
+                      shadowOpacity: 0.14,
+                      shadowRadius: 12,
+                      elevation: 14,
+                      zIndex: 9999,
+                      overflow: 'hidden'
                     }}
                   >
-                    <Text style={[styles.filterPillText, active && styles.filterPillTextActive]}>
-                      🏆 {t.short_name || t.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+                    <ScrollView nestedScrollEnabled style={{ maxHeight: 250 }}>
+                      {uniqueTournaments.map(t => {
+                        const isSelected = (approvedTabTournamentId || uniqueTournaments[0]?.id) === t.id;
+                        return (
+                          <TouchableOpacity
+                            key={t.id}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              paddingHorizontal: 12,
+                              paddingVertical: 10,
+                              backgroundColor: isSelected ? '#eff6ff' : '#ffffff',
+                              borderBottomWidth: 1,
+                              borderBottomColor: '#f1f5f9'
+                            }}
+                            onPress={() => {
+                              setApprovedTabTournamentId(t.id);
+                              setApprovedTourDropdownOpen(false);
+                              loadApprovedTeams(t.id);
+                            }}
+                          >
+                            <Text style={{ fontSize: 12.5, fontWeight: isSelected ? '800' : '600', color: isSelected ? '#1d4ed8' : '#334155', flex: 1 }} numberOfLines={1}>
+                              🏆 {t.name || t.short_name}
+                            </Text>
+                            {isSelected && <Text style={{ fontSize: 12, fontWeight: '800', color: '#1d4ed8', marginLeft: 6 }}>✓</Text>}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
             </View>
 
             {activeApprovedTournament && (
@@ -1504,27 +1992,52 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                     <View style={styles.approvedMetaRow}>
                       <View style={styles.approvedMetaCol}>
                         <Text style={styles.approvedMetaLabel}>COACH</Text>
-                        <Text style={styles.approvedMetaVal}>{t.coach_name || 'Coach'}</Text>
+                        <Text style={styles.approvedMetaVal}>{t.coach_name || '—'}</Text>
                       </View>
                       <View style={styles.approvedMetaCol}>
                         <Text style={styles.approvedMetaLabel}>ROSTER</Text>
-                        <Text style={styles.approvedMetaVal}>{t.squad_count || (t.squad || []).length || 15} Squad</Text>
+                        <Text style={styles.approvedMetaVal}>{t.squad_count ?? (t.players || []).length ?? 0} Players</Text>
                       </View>
-                      {t.captain ? (
-                        <View style={styles.approvedMetaCol}>
-                          <Text style={styles.approvedMetaLabel}>CAPTAIN</Text>
-                          <Text style={styles.approvedMetaVal}>👑 {t.captain}</Text>
-                        </View>
-                      ) : null}
+                      <View style={styles.approvedMetaCol}>
+                        <Text style={styles.approvedMetaLabel}>CAPTAIN</Text>
+                        <Text style={styles.approvedMetaVal}>👑 {t.captain || '—'}</Text>
+                      </View>
                     </View>
 
-                    {t.approved_at ? (
-                      <View style={styles.approvedTimestampRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                      {t.approved_at ? (
                         <Text style={styles.approvedTimestampText}>
                           Approved on {t.approved_at.split('T')[0]} by {t.approved_by || 'Apex Council'}
                         </Text>
-                      </View>
-                    ) : null}
+                      ) : <View />}
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: '#eff6ff',
+                          borderWidth: 1,
+                          borderColor: '#bfdbfe',
+                          borderRadius: 8,
+                          paddingHorizontal: 12,
+                          paddingVertical: 7
+                        }}
+                        onPress={() => setViewTeamModal({
+                          teamName: t.team_name || t.name,
+                          teamId: t.team_id || t.id,
+                          coachName: t.coach_name,
+                          coachEmail: t.coach_email,
+                          coachPhone: t.coach_phone,
+                          captain: t.captain,
+                          city: t.team_city || t.city || 'Virudhunagar',
+                          status: 'APPROVED',
+                          squadCount: t.squad_count ?? (t.players ? t.players.length : 0),
+                          players: t.players || []
+                        })}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={{ color: '#1d4ed8', fontSize: 12, fontWeight: '700' }}>
+                          👁 View Team ({t.squad_count ?? (t.players ? t.players.length : 0)})
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 );
               })}
@@ -1562,7 +2075,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
               {[
                 { step: 1, label: '1. Basic Information' },
                 { step: 2, label: '2. Schedule & Rules' },
-                { step: 3, label: `3. Team Selection (${selectedTeamIds.length})` },
+                { step: 3, label: `3. Team Selection (${selectedTeamIds.length}/${formMaxTeams || 8})` },
                 { step: 4, label: '4. Format Configuration' }
               ].map(item => {
                 const active = wizardStep === item.step;
@@ -1573,8 +2086,8 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                     style={[styles.stepperItem, active && styles.stepperItemActive]}
                     onPress={() => {
                       if (item.step === 1) setWizardStep(1);
-                      else if (item.step === 2 && formName.trim()) setWizardStep(2);
-                      else if (item.step === 3 && formStartDate && formEndDate) setWizardStep(3);
+                      else if (item.step === 2 && formName.trim() && formShortName.trim()) setWizardStep(2);
+                      else if (item.step === 3 && formName.trim() && formShortName.trim()) setWizardStep(3);
                       else if (item.step === 4 && selectedTeamIds.length >= 2) setWizardStep(4);
                     }}
                   >
@@ -1603,49 +2116,60 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                     <View style={styles.formColFull}>
                       <Text style={styles.inputLabel}>Tournament Name *</Text>
                       <TextInput
-                        style={styles.textInput}
+                        style={[styles.textInput, formNameError ? styles.textInputError : null]}
                         placeholder="e.g. Virudhunagar Premier League 2026"
                         placeholderTextColor="#94a3b8"
                         value={formName}
-                        onChangeText={setFormName}
+                        onChangeText={handleTournamentNameChange}
                       />
+                      {formNameError && (
+                        <Text style={styles.formFieldErrorText}>⚠️ {formNameError}</Text>
+                      )}
                     </View>
                   </View>
 
                   <View style={styles.formRow}>
                     <View style={styles.formColHalf}>
-                      <Text style={styles.inputLabel}>Short Name / Abbreviation</Text>
+                      <Text style={styles.inputLabel}>Short Name / Abbreviation *</Text>
                       <TextInput
-                        style={styles.textInput}
+                        style={[styles.textInput, formShortNameError ? styles.textInputError : null]}
                         placeholder="e.g. VPL 2026"
                         placeholderTextColor="#94a3b8"
                         value={formShortName}
-                        onChangeText={setFormShortName}
+                        onChangeText={handleTournamentShortNameChange}
                       />
+                      {formShortNameError && (
+                        <Text style={styles.formFieldErrorText}>⚠️ {formShortNameError}</Text>
+                      )}
                     </View>
 
                     <View style={styles.formColHalf}>
-                      <Text style={styles.inputLabel}>Season</Text>
-                      <TextInput
-                        style={styles.textInput}
-                        placeholder="2026"
-                        placeholderTextColor="#94a3b8"
-                        value={formSeason}
-                        onChangeText={setFormSeason}
-                      />
-                    </View>
-                  </View>
-
-                  <View style={styles.formRow}>
-                    <View style={styles.formColFull}>
-                      <Text style={styles.inputLabel}>Tournament Logo URL</Text>
-                      <TextInput
-                        style={styles.textInput}
-                        placeholder="https://example.com/logo.png or leave blank for default crest"
-                        placeholderTextColor="#94a3b8"
-                        value={formLogoUrl}
-                        onChangeText={setFormLogoUrl}
-                      />
+                      <Text style={styles.inputLabel}>Season (Year) *</Text>
+                      <View style={styles.seasonInputWrapper}>
+                        <TextInput
+                          style={styles.seasonTextInput}
+                          value={formSeason}
+                          onChangeText={(val) => {
+                            const clean = val.replace(/[^0-9]/g, '').slice(0, 4);
+                            setFormSeason(clean);
+                          }}
+                          placeholder="e.g. 2026"
+                          placeholderTextColor="#94a3b8"
+                          keyboardType="numeric"
+                          maxLength={4}
+                        />
+                        <TouchableOpacity
+                          style={styles.seasonCalendarBtn}
+                          onPress={() => {
+                            const yr = parseInt(formSeason, 10) || new Date().getFullYear();
+                            setPickerDecadeStart(Math.floor(yr / 10) * 10);
+                            setShowYearPicker(true);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="calendar-outline" size={20} color="#0a2540" />
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   </View>
 
@@ -1656,12 +2180,15 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                         <select
                           value={formTournamentType}
                           onChange={(e: any) => setFormTournamentType(e.target.value as TournamentType)}
-                          style={styles.nativeSelect as any}
+                          style={webSelectStyle}
                         >
                           <option value="LEAGUE">League (Round Robin)</option>
                           <option value="KNOCKOUT">Knockout (Bracket Elimination)</option>
                           <option value="LEAGUE_KNOCKOUT">League + Knockout (Group Stage + Playoffs)</option>
                         </select>
+                        <View style={styles.selectChevron}>
+                          <Text style={styles.selectChevronText}>▾</Text>
+                        </View>
                       </View>
                     </View>
 
@@ -1676,26 +2203,58 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                             if (val === 'T10') setFormOvers('10');
                             else if (val === 'T20') setFormOvers('20');
                             else if (val === 'ODI') setFormOvers('50');
+                            else if (val === 'CUSTOM') {
+                              if (['10', '20', '50'].includes(formOvers)) setFormOvers('');
+                            }
                           }}
-                          style={styles.nativeSelect as any}
+                          style={webSelectStyle}
                         >
                           <option value="T20">T20 (20 Overs per side)</option>
                           <option value="T10">T10 (10 Overs per side)</option>
                           <option value="ODI">One Day (50 Overs per side)</option>
                           <option value="CUSTOM">Custom Overs</option>
                         </select>
+                        <View style={styles.selectChevron}>
+                          <Text style={styles.selectChevronText}>▾</Text>
+                        </View>
                       </View>
                     </View>
                   </View>
 
+                  {/* Extra field when Custom Overs is selected - accepts only numbers and stores in DB */}
+                  {formMatchFormat === 'CUSTOM' && (
+                    <View style={styles.formRow}>
+                      <View style={styles.formColFull}>
+                        <Text style={styles.inputLabel}>Custom Overs Per Side / Match *</Text>
+                        <View style={{ position: 'relative', width: '100%', justifyContent: 'center' }}>
+                          <TextInput
+                            style={[styles.textInput, { paddingRight: 68 }]}
+                            placeholder="Enter overs per match (e.g. 15, 25, 30, 45)"
+                            placeholderTextColor="#94a3b8"
+                            keyboardType="number-pad"
+                            value={formOvers}
+                            onChangeText={(val) => {
+                              const clean = val.replace(/[^0-9]/g, '');
+                              setFormOvers(clean);
+                            }}
+                            maxLength={3}
+                          />
+                          <View style={styles.inputSuffixBadge}>
+                            <Text style={styles.inputSuffixBadgeText}>Overs</Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+
                   <View style={styles.formRow}>
-                    <View style={styles.formColThird}>
+                    <View style={styles.formColFull}>
                       <Text style={styles.inputLabel}>Category / Age Group</Text>
                       <View style={styles.selectWrap}>
                         <select
                           value={formCategory}
                           onChange={(e: any) => setFormCategory(e.target.value)}
-                          style={styles.nativeSelect as any}
+                          style={webSelectStyle}
                         >
                           <option value="Senior Men">Senior Men</option>
                           <option value="Under-19">Under-19 District</option>
@@ -1704,41 +2263,54 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                           <option value="Senior Women">Senior Women</option>
                           <option value="Open District">Open District Championship</option>
                         </select>
+                        <View style={styles.selectChevron}>
+                          <Text style={styles.selectChevronText}>▾</Text>
+                        </View>
                       </View>
                     </View>
+                  </View>
 
-                    <View style={styles.formColThird}>
+                  <View style={styles.formRow}>
+                    <View style={styles.formColHalf}>
                       <Text style={styles.inputLabel}>Gender</Text>
                       <View style={styles.selectWrap}>
                         <select
                           value={formGender}
                           onChange={(e: any) => setFormGender(e.target.value)}
-                          style={styles.nativeSelect as any}
+                          style={webSelectStyle}
                         >
                           <option value="Men">Men</option>
                           <option value="Women">Women</option>
                           <option value="Open">Open</option>
                         </select>
+                        <View style={styles.selectChevron}>
+                          <Text style={styles.selectChevronText}>▾</Text>
+                        </View>
                       </View>
                     </View>
 
-                    <View style={styles.formColThird}>
+                    <View style={styles.formColHalf}>
                       <Text style={styles.inputLabel}>Ball Type</Text>
                       <View style={styles.selectWrap}>
                         <select
                           value={formBallType}
                           onChange={(e: any) => setFormBallType(e.target.value)}
-                          style={styles.nativeSelect as any}
+                          style={webSelectStyle}
                         >
                           <option value="Red Leather">Red Leather</option>
                           <option value="White Leather">White Leather</option>
                           <option value="Pink Leather">Pink Leather</option>
                           <option value="Tennis">Heavy Tennis Ball</option>
                         </select>
+                        <View style={styles.selectChevron}>
+                          <Text style={styles.selectChevronText}>▾</Text>
+                        </View>
                       </View>
                     </View>
                   </View>
 
+                  {/* Tournament Description - commented out as requested */}
+                  {/*
                   <View style={styles.formRow}>
                     <View style={styles.formColFull}>
                       <Text style={styles.inputLabel}>Tournament Description</Text>
@@ -1752,6 +2324,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                       />
                     </View>
                   </View>
+                  */}
                 </View>
               )}
 
@@ -1760,9 +2333,11 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                 <View style={styles.formSection}>
                   <Text style={styles.sectionHeading}>Championship Schedule & Playing Rules</Text>
 
+                  {/* Championship Dates & Registration Window - commented out as requested */}
+                  {/*
                   <View style={styles.formRow}>
                     <View style={styles.formColHalf}>
-                      <Text style={styles.inputLabel}>Championship Start Date *</Text>
+                      <Text style={styles.inputLabel}>Championship Start Date</Text>
                       <input
                         type="date"
                         value={formStartDate}
@@ -1772,7 +2347,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                     </View>
 
                     <View style={styles.formColHalf}>
-                      <Text style={styles.inputLabel}>Championship End Date *</Text>
+                      <Text style={styles.inputLabel}>Championship End Date</Text>
                       <input
                         type="date"
                         value={formEndDate}
@@ -1803,6 +2378,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                       />
                     </View>
                   </View>
+                  */}
 
                   <View style={styles.formRow}>
                     <View style={styles.formColFull}>
@@ -1811,14 +2387,17 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                         <select
                           value={formVenue}
                           onChange={(e: any) => setFormVenue(e.target.value)}
-                          style={styles.nativeSelect as any}
+                          style={webSelectStyle}
                         >
                           {dbVenues.map(v => (
                             <option key={v.id || v.name} value={v.name}>
-                              {v.name} ({v.location || 'Virudhunagar'})
+                              {v.name} {v.location ? `(${v.location})` : ''}
                             </option>
                           ))}
                         </select>
+                        <View style={styles.selectChevron}>
+                          <Text style={styles.selectChevronText}>▾</Text>
+                        </View>
                       </View>
                     </View>
                   </View>
@@ -1959,6 +2538,9 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                       value={teamSearchQuery}
                       onChangeText={setTeamSearchQuery}
                     />
+                    <TouchableOpacity style={styles.btnSmallAction} onPress={loadTeamsFromDb}>
+                      <Text style={styles.btnSmallActionText}>🔄 Refresh</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity style={styles.btnSmallAction} onPress={selectAllTeams}>
                       <Text style={styles.btnSmallActionText}>Select All</Text>
                     </TouchableOpacity>
@@ -1998,9 +2580,27 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                             </View>
 
                             <View style={{ flex: 1, marginLeft: 10 }}>
-                              <Text style={styles.teamCardName} numberOfLines={1}>
-                                {t.name || t.team_name}
-                              </Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 4 }}>
+                                <Text style={[styles.teamCardName, { flex: 1, marginRight: 8 }]} numberOfLines={1}>
+                                  {t.name || t.team_name}
+                                </Text>
+                                <View style={{
+                                  paddingHorizontal: 7,
+                                  paddingVertical: 2,
+                                  borderRadius: 10,
+                                  backgroundColor: t.status === 'Approved' ? '#ecfdf5' : '#fffbeb',
+                                  borderWidth: 1,
+                                  borderColor: t.status === 'Approved' ? '#a7f3d0' : '#fde68a'
+                                }}>
+                                  <Text style={{
+                                    fontSize: 10,
+                                    fontWeight: '700',
+                                    color: t.status === 'Approved' ? '#047857' : '#b45309'
+                                  }}>
+                                    {t.status || 'Club'}
+                                  </Text>
+                                </View>
+                              </View>
                               <Text style={styles.teamCardCoach}>
                                 Coach: {t.coach_name || 'Official'} • {t.taluk || 'Virudhunagar'}
                               </Text>
@@ -2030,8 +2630,8 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                           {formTournamentType === 'LEAGUE'
                             ? 'League Stage (Round Robin)'
                             : formTournamentType === 'KNOCKOUT'
-                            ? 'Knockout Bracket System'
-                            : 'League + Knockout Hybrid System'}
+                              ? 'Knockout Bracket System'
+                              : 'League + Knockout Hybrid System'}
                         </Text>
                         <Text style={styles.formatSummarySub}>
                           {selectedTeamIds.length} Teams Selected • Estimated Matches: {estimatedMatchesCount}
@@ -2453,7 +3053,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                                     onPress={() => {
                                       const mapUrl = m.venue_maps_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((m.venue || 'Kamarajar District Stadium') + ', Virudhunagar')}`;
                                       if (Platform.OS === 'web' && typeof window !== 'undefined') window.open(mapUrl, '_blank');
-                                      else Linking.openURL(mapUrl).catch(() => {});
+                                      else Linking.openURL(mapUrl).catch(() => { });
                                     }}
                                   >
                                     <Text style={[styles.matchMetaText, { color: '#0284c7', textDecorationLine: 'underline' }]}>📍 {m.venue} ↗</Text>
@@ -2723,6 +3323,228 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
           </View>
         </View>
       </Modal>
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* MODAL 4: VIEW TEAM DETAILS & PLAYERS ROSTER                         */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      <Modal
+        visible={Boolean(viewTeamModal)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewTeamModal(null)}
+      >
+        <View style={styles.rejectModalOverlay}>
+          <View style={[styles.rejectModalCard, { maxWidth: 640, maxHeight: '88%' }]}>
+            <View style={styles.rejectModalHeader}>
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <Text style={styles.rejectModalTitle}>🛡️ {viewTeamModal?.teamName || 'Team Details'}</Text>
+                <Text style={styles.rejectModalSub}>
+                  ID: {viewTeamModal?.teamId || '—'} • 📍 {viewTeamModal?.city || 'Virudhunagar'} • 🏏 {viewTeamModal?.squadCount ?? 0} Players
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setViewTeamModal(null)} style={{ padding: 4 }}>
+                <Text style={{ fontSize: 18, color: '#64748b' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ padding: 16 }} showsVerticalScrollIndicator>
+              {/* Summary Grid */}
+              <View style={{
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                gap: 10,
+                backgroundColor: '#f8fafc',
+                borderWidth: 1,
+                borderColor: '#e2e8f0',
+                borderRadius: 10,
+                padding: 12,
+                marginBottom: 14
+              }}>
+                <View style={{ flex: 1, minWidth: 130 }}>
+                  <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Total Players</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#059669', marginTop: 2 }}>
+                    🏏 {viewTeamModal?.squadCount ?? 0} Players
+                  </Text>
+                </View>
+                <View style={{ flex: 1, minWidth: 140 }}>
+                  <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Head Coach</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a', marginTop: 2 }}>
+                    {viewTeamModal?.coachName || '—'}
+                  </Text>
+                  {Boolean(viewTeamModal?.coachEmail) && (
+                    <Text style={{ fontSize: 11, color: '#475569' }}>{viewTeamModal.coachEmail}</Text>
+                  )}
+                </View>
+                <View style={{ flex: 1, minWidth: 130 }}>
+                  <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Team Captain</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a', marginTop: 2 }}>
+                    👑 {viewTeamModal?.captain || '—'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Players List */}
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a', marginBottom: 8 }}>
+                Registered Squad Roster ({viewTeamModal?.players?.length || 0})
+              </Text>
+              {viewTeamModal?.players && viewTeamModal.players.length > 0 ? (
+                <View style={{ borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+                  {viewTeamModal.players.map((p: any, i: number) => (
+                    <View
+                      key={p.id || i}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: 8,
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        backgroundColor: i % 2 === 1 ? '#f8fafc' : '#ffffff',
+                        borderBottomWidth: i < viewTeamModal.players.length - 1 ? 1 : 0,
+                        borderBottomColor: '#f1f5f9'
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 180 }}>
+                        <View style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 14,
+                          backgroundColor: '#e0f2fe',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0369a1' }}>
+                            {p.jersey_number || i + 1}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>
+                            {p.name || 'Player'} {p.is_captain ? '👑' : ''}
+                          </Text>
+                          {Boolean(p.email || p.mobile) && (
+                            <Text style={{ fontSize: 11, color: '#64748b' }}>
+                              {[p.email, p.mobile].filter(Boolean).join(' • ')}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                      <View style={{ backgroundColor: '#fef3c7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#b45309' }}>
+                          {p.role || 'PLAYER'}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={{ padding: 20, alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 10 }}>
+                  <Text style={{ color: '#64748b', fontSize: 12.5 }}>No squad players registered for this team yet.</Text>
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={{ padding: 14, borderTopWidth: 1, borderTopColor: '#e2e8f0', alignItems: 'flex-end' }}>
+              <TouchableOpacity
+                style={styles.btnRejectCancel}
+                onPress={() => setViewTeamModal(null)}
+              >
+                <Text style={styles.btnRejectCancelText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Season Year Picker Modal (Like input type="year") ── */}
+      {showYearPicker && (
+        <Modal
+          transparent
+          animationType="fade"
+          visible={showYearPicker}
+          onRequestClose={() => setShowYearPicker(false)}
+        >
+          <TouchableOpacity
+            style={styles.yearPickerOverlay}
+            activeOpacity={1}
+            onPress={() => setShowYearPicker(false)}
+          >
+            <View
+              style={styles.yearPickerCard}
+              onStartShouldSetResponder={() => true}
+            >
+              <View style={styles.yearPickerHeader}>
+                <TouchableOpacity
+                  style={styles.yearPickerNavBtn}
+                  onPress={() => setPickerDecadeStart(pickerDecadeStart - 12)}
+                >
+                  <Ionicons name="chevron-back" size={16} color="#334155" />
+                </TouchableOpacity>
+                <Text style={styles.yearPickerTitle}>
+                  {pickerDecadeStart} – {pickerDecadeStart + 11}
+                </Text>
+                <TouchableOpacity
+                  style={styles.yearPickerNavBtn}
+                  onPress={() => setPickerDecadeStart(pickerDecadeStart + 12)}
+                >
+                  <Ionicons name="chevron-forward" size={16} color="#334155" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.yearPickerGrid}>
+                {Array.from({ length: 12 }, (_, i) => pickerDecadeStart + i).map((yr) => {
+                  const isSelected = String(yr) === String(formSeason);
+                  const isCurrentYear = yr === new Date().getFullYear();
+                  return (
+                    <TouchableOpacity
+                      key={yr}
+                      style={[
+                        styles.yearPickerCell,
+                        isSelected && styles.yearPickerCellSelected,
+                        isCurrentYear && !isSelected && styles.yearPickerCellCurrent
+                      ]}
+                      onPress={() => {
+                        setFormSeason(String(yr));
+                        setShowYearPicker(false);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.yearPickerCellText,
+                          isSelected && styles.yearPickerCellTextSelected,
+                          isCurrentYear && !isSelected && styles.yearPickerCellTextCurrent
+                        ]}
+                      >
+                        {yr}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <View style={styles.yearPickerFooter}>
+                <TouchableOpacity
+                  style={styles.yearPickerQuickBtn}
+                  onPress={() => {
+                    const thisYr = new Date().getFullYear();
+                    setFormSeason(String(thisYr));
+                    setPickerDecadeStart(Math.floor(thisYr / 10) * 10);
+                    setShowYearPicker(false);
+                  }}
+                >
+                  <Text style={styles.yearPickerQuickText}>Current Year ({new Date().getFullYear()})</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.yearPickerCloseBtn}
+                  onPress={() => setShowYearPicker(false)}
+                >
+                  <Text style={styles.yearPickerCloseText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      )}
     </View>
   );
 };
@@ -2885,7 +3707,8 @@ const styles: any = StyleSheet.create({
   },
   tourCard: {
     width: Platform.OS === 'web' ? 'calc(50% - 8px)' : '100%',
-    minWidth: 320,
+    minWidth: 240,
+    maxWidth: '100%',
     backgroundColor: '#ffffff',
     borderRadius: 14,
     borderWidth: 1,
@@ -3142,7 +3965,11 @@ const styles: any = StyleSheet.create({
 
   // Form
   wizardBody: {
-    flex: 1
+    flex: 1,
+    ...(Platform.OS === 'web' ? {
+      scrollbarWidth: 'thin' as any,
+      scrollbarColor: '#cbd5e1 transparent' as any
+    } : {})
   },
   formSection: {
     gap: 12
@@ -3175,41 +4002,253 @@ const styles: any = StyleSheet.create({
   },
   textInput: {
     backgroundColor: '#ffffff',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#cbd5e1',
-    borderRadius: 6,
+    borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 13,
+    paddingVertical: 9,
+    fontSize: 13.5,
     color: '#0f172a',
-    outlineStyle: 'none'
+    outlineStyle: 'none' as any
+  },
+  textInputError: {
+    borderColor: '#ef4444',
+    backgroundColor: '#fff5f5'
+  },
+  formFieldErrorText: {
+    fontSize: 11.5,
+    color: '#dc2626',
+    fontWeight: '600',
+    marginTop: 4
   },
   nativeSelect: {
     width: '100%',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    fontSize: 13,
-    borderRadius: 6,
-    borderWidth: 1,
+    height: 44,
+    boxSizing: 'border-box' as any,
+    paddingLeft: 14,
+    paddingRight: 38,
+    paddingVertical: 10,
+    fontSize: 14,
+    fontWeight: '600',
+    borderRadius: 8,
+    borderWidth: 1.5,
     borderColor: '#cbd5e1',
     backgroundColor: '#ffffff',
     color: '#0f172a',
-    outlineStyle: 'none'
+    outlineStyle: 'none' as any,
+    cursor: 'pointer' as any,
+    appearance: 'none' as any,
+    WebkitAppearance: 'none' as any,
+    MozAppearance: 'none' as any
   },
   selectWrap: {
-    width: '100%'
+    width: '100%',
+    position: 'relative',
+    justifyContent: 'center',
+    flex: 1
+  },
+  selectChevron: {
+    position: 'absolute',
+    right: 14,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    pointerEvents: 'none' as any,
+    zIndex: 2
+  },
+  selectChevronText: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: 'bold'
   },
   nativeDateInput: {
     width: '100%',
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    fontSize: 13,
-    borderRadius: 6,
-    borderWidth: 1,
+    height: 44,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    fontSize: 13.5,
+    borderRadius: 8,
+    borderWidth: 1.5,
     borderColor: '#cbd5e1',
     backgroundColor: '#ffffff',
     color: '#0f172a',
-    outlineStyle: 'none'
+    outlineStyle: 'none' as any
+  },
+
+  // Season Year Input & Calendar Button
+  seasonInputWrapper: {
+    position: 'relative',
+    width: '100%',
+    justifyContent: 'center'
+  },
+  seasonTextInput: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingLeft: 14,
+    paddingRight: 48,
+    height: 44,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+    outlineStyle: 'none' as any
+  },
+  inputSuffixBadge: {
+    position: 'absolute',
+    right: 8,
+    top: 6,
+    bottom: 6,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  inputSuffixBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b'
+  },
+  seasonCalendarBtn: {
+    position: 'absolute',
+    right: 6,
+    top: 5,
+    bottom: 5,
+    width: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 6,
+    backgroundColor: '#f1f5f9',
+    cursor: 'pointer' as any
+  },
+  calendarIconText: {
+    fontSize: 18
+  },
+
+  // Year Picker Modal
+  yearPickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20
+  },
+  yearPickerCard: {
+    width: 360,
+    maxWidth: '95%',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
+    shadowRadius: 28,
+    elevation: 20
+  },
+  yearPickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9'
+  },
+  yearPickerNavBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    cursor: 'pointer' as any
+  },
+  yearPickerNavText: {
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: 'bold'
+  },
+  yearPickerTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  yearPickerGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'space-between',
+    marginBottom: 16
+  },
+  yearPickerCell: {
+    width: '31%',
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    cursor: 'pointer' as any
+  },
+  yearPickerCellSelected: {
+    backgroundColor: '#d97706',
+    borderColor: '#b45309'
+  },
+  yearPickerCellCurrent: {
+    borderColor: '#d97706',
+    borderWidth: 1.5
+  },
+  yearPickerCellText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#334155'
+  },
+  yearPickerCellTextSelected: {
+    color: '#ffffff'
+  },
+  yearPickerCellTextCurrent: {
+    color: '#d97706'
+  },
+  yearPickerFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+    paddingTop: 12
+  },
+  yearPickerQuickBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#fde047',
+    cursor: 'pointer' as any
+  },
+  yearPickerQuickText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#854d0e'
+  },
+  yearPickerCloseBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    cursor: 'pointer' as any
+  },
+  yearPickerCloseText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569'
   },
 
   // Points Config Box
@@ -3605,7 +4644,11 @@ const styles: any = StyleSheet.create({
   },
   detailsContentScroll: {
     flex: 1,
-    backgroundColor: '#f8fafc'
+    backgroundColor: '#f8fafc',
+    ...(Platform.OS === 'web' ? {
+      scrollbarWidth: 'thin' as any,
+      scrollbarColor: '#cbd5e1 transparent' as any
+    } : {})
   },
 
   // Details Summary Grid
@@ -4178,8 +5221,8 @@ const styles: any = StyleSheet.create({
   },
   approvedTeamCard: {
     flex: 1,
-    minWidth: 280,
-    maxWidth: 380,
+    minWidth: 240,
+    maxWidth: '100%',
     backgroundColor: '#ffffff',
     borderRadius: 12,
     borderWidth: 1,

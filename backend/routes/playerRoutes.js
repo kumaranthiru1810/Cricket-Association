@@ -18,6 +18,7 @@ const authService = require('../services/authService');
 const playerService = require('../services/playerService');
 const playerRatingService = require('../services/playerRatingService');
 const { requirePlayerAuth, requireAdminAuth } = require('../middleware/authMiddleware');
+const { uploadSingle, processImageUpload } = require('../middleware/uploadMiddleware');
 
 // -------------------------------------------------------------
 // 1. PUBLIC AUTHENTICATION & REGISTRATION ENDPOINTS
@@ -112,9 +113,12 @@ router.get('/profile', requirePlayerAuth, async (req, res) => {
  * POST /api/player/upload-photo
  * Upload or update player profile photo and image path
  */
-router.post('/upload-photo', requirePlayerAuth, async (req, res) => {
+router.post('/upload-photo', requirePlayerAuth, uploadSingle, processImageUpload, async (req, res) => {
   try {
-    const photo = req.body.photo || req.body.image || req.body.image_path || req.body.imagePath;
+    const photo = req.fileUrl || req.body?.photo || req.body?.image || req.body?.image_path || req.body?.imagePath;
+    if (!photo) {
+      return res.status(400).json({ success: false, message: 'No photo uploaded.' });
+    }
     const updated = await playerService.updateProfile(req.user.id, req.user.email, { photo });
     res.status(200).json({
       success: true,

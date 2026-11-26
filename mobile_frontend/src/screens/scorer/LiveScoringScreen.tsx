@@ -21,7 +21,7 @@ const milestoneBatsmanImage = require('../../../assets/milestone_batsman.png');
 const centuryBatsmanImage = require('../../../assets/century_batsman.jpg');
 import SharedFooter from '../../components/scorer/SharedFooter';
 import { ScorerApi, getCurrentUser } from '../../services/api';
-import { ClockPickerModal, calculateDurationMinutes } from '../../components/common/ClockPickerModal';
+import { ClockPickerModal, calculateDurationMinutes, parseTimeString } from '../../components/common/ClockPickerModal';
 import CricketRulesModal, { CricketRuleType } from '../../components/scorer/CricketRulesModal';
 import CricketConfetti from '../../components/common/CricketConfetti';
 import CricketFigurine3D from '../../components/common/CricketFigurine3D';
@@ -166,6 +166,27 @@ const SHOT_TYPE_OPTIONS = [
   'No Shot'
 ];
 
+export const FIELDING_ACTIONS = [
+  { label: 'Clean Collect', icon: '⚡', desc: 'Clean ball gathering & pickup' },
+  { label: 'Pick and Throw', icon: '🎯', desc: 'Sharp pick up and return throw' },
+  { label: 'Relay Throw', icon: '🔄', desc: 'Outfield relay to keeper/bowler' },
+  { label: 'Direct Hit', icon: '💥', desc: 'Direct hit on the stumps' },
+  { label: 'Boundary Save (4 Runs Saved)', icon: '🛡️', desc: 'Spectacular sliding boundary stop' },
+  { label: 'Slide and Miss', icon: '🏃', desc: 'Attempted slide but missed ball' },
+  { label: 'Misfield', icon: '⚠️', desc: 'Fumble or misjudged collection' },
+  { label: 'Dropped Catch', icon: '❌', desc: 'Spilled catching opportunity' },
+  { label: 'Overthrow Conceded', icon: '🚨', desc: 'Errant throw allowing extra runs' }
+];
+
+export const DEFAULT_CFVD_UMPIRES_LIST = [
+  { id: 'UMP-101', name: 'K. Sundaram', qualification: 'TNCA State Panel Lead Umpire' },
+  { id: 'UMP-102', name: 'P. Velmurugan', qualification: 'TNCA Certified Senior Arbiter' },
+  { id: 'UMP-201', name: 'K. Marimuthu', qualification: 'BCCI Level 1 Certified Arbiter' },
+  { id: 'UMP-202', name: 'M. Ramanathan', qualification: 'CFVD Senior Match Arbiter' },
+  { id: 'UMP-203', name: 'S. Dhanushkodi', qualification: 'District Panel Lead Umpire' },
+  { id: 'UMP-204', name: 'R. Senthil Kumar', qualification: 'Certified Match Official' }
+];
+
 const LiveDrawerClock = React.memo(({ textStyle }: { textStyle: any }) => {
   const [timeStr, setTimeStr] = useState<string>('');
   useEffect(() => {
@@ -220,6 +241,30 @@ export default function LiveScoringScreen() {
         }
       })
       .catch(() => { });
+
+    let isMounted = true;
+    ScorerApi.getOfficials()
+      .then((res: any) => {
+        if (!isMounted || !res || !Array.isArray(res.officials)) return;
+        const umps = res.officials.filter((o: any) =>
+          o.role === 'UMPIRE' ||
+          (o.id && String(o.id).toUpperCase().startsWith('UMP')) ||
+          (o.specialization && String(o.specialization).toLowerCase().includes('umpire')) ||
+          (o.qualification && String(o.qualification).toLowerCase().includes('umpire'))
+        );
+        if (umps.length > 0) {
+          const combined = [...umps];
+          const seen = new Set(umps.map((u: any) => (u.name || u.umpireName || '').toLowerCase().trim()));
+          DEFAULT_CFVD_UMPIRES_LIST.forEach((def) => {
+            if (!seen.has(def.name.toLowerCase().trim())) {
+              combined.push(def);
+            }
+          });
+          setRegisteredUmpiresList(combined);
+        }
+      })
+      .catch(() => { });
+    return () => { isMounted = false; };
   }, []);
 
   const activeUser = profileUser || currentUser;
@@ -312,6 +357,7 @@ export default function LiveScoringScreen() {
   // Delivery Submission State
   const [isSubmittingDelivery, setIsSubmittingDelivery] = useState<boolean>(false);
   const [isUndoing, setIsUndoing] = useState<boolean>(false);
+  const [isUndoingDelivery, setIsUndoingDelivery] = useState<boolean>(false);
   const [isStartingNextInnings, setIsStartingNextInnings] = useState<boolean>(false);
 
   // Comprehensive Wicket & Dismissal State
@@ -385,7 +431,50 @@ export default function LiveScoringScreen() {
 
   // Clock Picker Modal State
   const [clockPickerVisible, setClockPickerVisible] = useState<boolean>(false);
-  const [clockPickerTarget, setClockPickerTarget] = useState<'BREAK_START' | 'BREAK_END'>('BREAK_START');
+  const [clockPickerTarget, setClockPickerTarget] = useState<'BREAK_START' | 'BREAK_END' | 'RESCHEDULE_TIME'>('BREAK_START');
+
+  const getCurrentTimeFormatted = () => {
+    const now = new Date();
+    let h = now.getHours();
+    const m = now.getMinutes();
+    const p = h >= 12 ? 'pm' : 'am';
+    h = h % 12 || 12;
+    return `${h}:${String(m).padStart(2, '0')} ${p}`;
+  };
+
+  const isTimeInPastToday = (timeStr: string): boolean => {
+    if (!timeStr) return false;
+    try {
+      const parsed = parseTimeString(timeStr);
+      const now = new Date();
+      let h24 = parsed.hour;
+      if (parsed.period === 'PM' && h24 < 12) h24 += 12;
+      if (parsed.period === 'AM' && h24 === 12) h24 = 0;
+      const selectedMinutes = h24 * 60 + parsed.minute;
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      return selectedMinutes < currentMinutes;
+    } catch (_e) {
+      return false;
+    }
+  };
+
+  const handleRescheduledDateChange = (val: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    if (val && val < today) {
+      const msg = 'Past dates cannot be selected. Please choose today or a future date.';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Invalid Date', msg);
+      setRescheduledDateInput(today);
+      return;
+    }
+    setRescheduledDateInput(val);
+    if (val === today && rescheduledTimeInput && isTimeInPastToday(rescheduledTimeInput)) {
+      setRescheduledTimeInput('');
+    }
+  };
+
+  const handleRescheduledTimeChange = (val: string) => {
+    setRescheduledTimeInput(val);
+  };
 
   // Open Breaks modal with current time and default duration
   const handleOpenBreaksModal = () => {
@@ -443,6 +532,15 @@ export default function LiveScoringScreen() {
         setBreakDuration(String(mins));
         setIsDurationAutoCalculated(true);
       }
+    } else if (clockPickerTarget === 'RESCHEDULE_TIME') {
+      const today = new Date().toISOString().split('T')[0];
+      const checkDate = rescheduledDateInput || today;
+      if (checkDate === today && isTimeInPastToday(formattedTime)) {
+        const msg = 'The selected time has already passed today. Please select a future time.';
+        Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Invalid Time', msg);
+        return;
+      }
+      setRescheduledTimeInput(formattedTime);
     }
     setClockPickerVisible(false);
   };
@@ -555,18 +653,33 @@ export default function LiveScoringScreen() {
   const [deadBallReason, setDeadBallReason] = useState<string>('Umpire intervention / Play stopped');
   const [showFieldingModal, setShowFieldingModal] = useState<boolean>(false);
   const [selectedFieldingAction, setSelectedFieldingAction] = useState<string>('Clean Collect');
+  const [isFielderModalDropdownOpen, setIsFielderModalDropdownOpen] = useState<boolean>(false);
+  const [fielderModalSearchQuery, setFielderModalSearchQuery] = useState<string>('');
+  const [customFielderModalName, setCustomFielderModalName] = useState<string>('');
+  const [isFieldingActionDropdownOpen, setIsFieldingActionDropdownOpen] = useState<boolean>(false);
+  const [customFieldingActionText, setCustomFieldingActionText] = useState<string>('');
+  const [fieldingTargetBatter, setFieldingTargetBatter] = useState<'STRIKER' | 'NON_STRIKER'>('STRIKER');
   const [showWagonWheelModal, setShowWagonWheelModal] = useState<boolean>(false);
   const [selectedWagonSector, setSelectedWagonSector] = useState<string>('Cover');
   const [pendingBoundaryRun, setPendingBoundaryRun] = useState<number | null>(null);
-  const [autoPromptWagonWheel, setAutoPromptWagonWheel] = useState<boolean>(false);
+  const [autoPromptWagonWheel, setAutoPromptWagonWheel] = useState<boolean>(true);
   const lastScoreTapTimeRef = useRef<number>(0);
 
-  // 7. Umpire Assessment Modal State
+  // 7. Umpire Assessment Modal State (Prepopulated from Match Schedule & Customizable by Scorer)
   const [showUmpireModal, setShowUmpireModal] = useState<boolean>(false);
-  const [umpire1Name, setUmpire1Name] = useState<string>('K. Sundar');
+  const [scheduledUmpire1, setScheduledUmpire1] = useState<string>('');
+  const [scheduledUmpire2, setScheduledUmpire2] = useState<string>('');
+  const [umpire1Name, setUmpire1Name] = useState<string>('');
   const [umpire1Rating, setUmpire1Rating] = useState<string>('8');
-  const [umpire2Name, setUmpire2Name] = useState<string>('M. Karthik');
+  const [umpire2Name, setUmpire2Name] = useState<string>('');
   const [umpire2Rating, setUmpire2Rating] = useState<string>('8');
+  const [isUmpire1DropdownOpen, setIsUmpire1DropdownOpen] = useState<boolean>(false);
+  const [isUmpire2DropdownOpen, setIsUmpire2DropdownOpen] = useState<boolean>(false);
+  const [isCustomUmpire1, setIsCustomUmpire1] = useState<boolean>(false);
+  const [isCustomUmpire2, setIsCustomUmpire2] = useState<boolean>(false);
+  const [umpire1Search, setUmpire1Search] = useState<string>('');
+  const [umpire2Search, setUmpire2Search] = useState<string>('');
+  const [registeredUmpiresList, setRegisteredUmpiresList] = useState<any[]>(DEFAULT_CFVD_UMPIRES_LIST);
   const [pitchReportInput, setPitchReportInput] = useState<string>('Good sporting track with true bounce');
   const [umpireCommentsInput, setUmpireCommentsInput] = useState<string>('Fair match without disputes');
   const [isSubmittingUmpire, setIsSubmittingUmpire] = useState<boolean>(false);
@@ -895,7 +1008,15 @@ export default function LiveScoringScreen() {
       }
     });
 
+    // Polling fallback every 12s ONLY when disconnected from Socket.IO room
+    const pollInterval = setInterval(() => {
+      if (!socket || !socket.connected) {
+        handleSyncOfflineQueue();
+      }
+    }, 12000);
+
     return () => {
+      clearInterval(pollInterval);
       ScorerApi.disconnectSocket();
     };
   }, [matchId]);
@@ -1332,11 +1453,27 @@ export default function LiveScoringScreen() {
         if (d.match.teamAId && !superOverBattingTeam) {
           setSuperOverBattingTeam(d.match.teamAId);
         }
-        if (d.match.umpire1_name || d.match.umpire1) {
-          setUmpire1Name(d.match.umpire1_name || d.match.umpire1);
-        }
-        if (d.match.umpire2_name || d.match.umpire2) {
-          setUmpire2Name(d.match.umpire2_name || d.match.umpire2);
+        // Sync Scheduled Umpires from Admin Match Schedule & Existing Assessment
+        const schUmp1 = d.match.umpire1_name || d.match.umpire1 || d.match.umpire1Name || '';
+        const schUmp2 = d.match.umpire2_name || d.match.umpire2 || d.match.umpire2Name || '';
+        if (schUmp1) setScheduledUmpire1(schUmp1);
+        if (schUmp2) setScheduledUmpire2(schUmp2);
+
+        if (d.match.umpire_assessment) {
+          const uAss1 = d.match.umpire_assessment.umpire1 || schUmp1;
+          const uAss2 = d.match.umpire_assessment.umpire2 || schUmp2;
+          if (uAss1) setUmpire1Name(uAss1);
+          if (d.match.umpire_assessment.rating1) setUmpire1Rating(String(d.match.umpire_assessment.rating1));
+          if (uAss2) setUmpire2Name(uAss2);
+          if (d.match.umpire_assessment.rating2) setUmpire2Rating(String(d.match.umpire_assessment.rating2));
+          if (d.match.umpire_assessment.pitchReport) setPitchReportInput(d.match.umpire_assessment.pitchReport);
+          if (d.match.umpire_assessment.comments) setUmpireCommentsInput(d.match.umpire_assessment.comments);
+        } else {
+          // By default, umpires assigned by Admin when scheduling the match appear here
+          if (schUmp1) setUmpire1Name(schUmp1);
+          else if (!umpire1Name) setUmpire1Name('Thiru. K. Sundaram');
+          if (schUmp2) setUmpire2Name(schUmp2);
+          else if (!umpire2Name) setUmpire2Name('Thiru. P. Velmurugan');
         }
       }
 
@@ -1996,26 +2133,80 @@ export default function LiveScoringScreen() {
   };
 
   const handleFieldingActionSelect = async (action: string) => {
-    setSelectedFieldingAction(action);
+    const finalAction = (customFieldingActionText && customFieldingActionText.trim()) ? customFieldingActionText.trim() : action;
+    setSelectedFieldingAction(finalAction);
     setShowFieldingModal(false);
-    const fielderObj = bowlingSquad.find(f => f.id === selectedFielderId);
-    const fielderName = fielderObj ? fielderObj.name : 'Active Fielder';
+    setIsFielderModalDropdownOpen(false);
+    setIsFieldingActionDropdownOpen(false);
+
+    const fieldersList = (activeFieldingSquad && activeFieldingSquad.length > 0) ? activeFieldingSquad : (bowlingSquad || []);
+    let fielderId = selectedFielderId;
+    if (!fielderId && fieldersList.length > 0) {
+      fielderId = fieldersList[0].id;
+      setSelectedFielderId(fielderId);
+    }
+    const fielderObj = fieldersList.find((f: any) => f.id === fielderId);
+    const fielderName = customFielderModalName.trim() || (fielderObj ? fielderObj.name : 'Active Fielder');
 
     // Map to FieldingEventType for instant broadcast animation
     let fType: FieldingEventType = 'CLEAN_COLLECT';
-    if (action.includes('Direct Hit')) fType = 'DIRECT_HIT';
-    else if (action.includes('Boundary Save') || action.includes('Slide')) fType = 'BOUNDARY_SAVE';
-    else if (action.includes('Pick and Throw')) fType = 'PICK_AND_THROW';
-    else if (action.includes('Relay Throw')) fType = 'RELAY_THROW';
-    else if (action.includes('Dropped Catch') || action.includes('Misfield')) fType = 'MISFIELD';
-    else if (action.includes('Overthrow')) fType = 'OVERTHROW';
+    let impactBadge = 'CLEAN COLLECT';
+    let impactScore = 1;
+    const lower = finalAction.toLowerCase();
+    if (lower.includes('direct hit')) {
+      fType = 'DIRECT_HIT';
+      impactBadge = 'DIRECT HIT';
+      impactScore = 3;
+    } else if (lower.includes('boundary save') || lower.includes('slide') || lower.includes('4 runs')) {
+      fType = 'BOUNDARY_SAVE';
+      impactBadge = '4 RUNS SAVED';
+      impactScore = 4;
+    } else if (lower.includes('pick and throw') || lower.includes('pick & throw')) {
+      fType = 'PICK_AND_THROW';
+      impactBadge = 'SHARP PICK & THROW';
+      impactScore = 2;
+    } else if (lower.includes('relay')) {
+      fType = 'RELAY_THROW';
+      impactBadge = 'RELAY THROW';
+      impactScore = 2;
+    } else if (lower.includes('dropped catch') || lower.includes('misfield') || lower.includes('fumble')) {
+      fType = 'MISFIELD';
+      impactBadge = 'MISFIELD';
+      impactScore = -1;
+    } else if (lower.includes('overthrow')) {
+      fType = 'OVERTHROW';
+      impactBadge = 'OVERTHROW CONCEDED';
+      impactScore = -2;
+    }
+
+    const targetBatterName = fieldingTargetBatter === 'NON_STRIKER'
+      ? (nonStriker?.name || 'Non-Striker')
+      : (striker?.name || 'Striker');
+    const currentBowlerName = bowler?.name || 'Current Bowler';
+    const overBallLabel = `Over ${Math.floor(balls / 6)}.${balls % 6}`;
 
     setActiveFieldingEvent({
       type: fType,
       fielderName: fielderName,
-      teamName: matchInfo?.bowlingTeam || 'Fielding Team',
-      details: `${fielderName} executed ${action} • Logged for match scorecard`
+      teamName: currentBowlingTeam || matchInfo?.bowlingTeam || 'Fielding Side',
+      details: `${fielderName} (${currentBowlingTeam}) • ${finalAction} • ${overBallLabel} • Batter: ${targetBatterName} (b. ${currentBowlerName})`,
+      badge: impactBadge,
+      impactScore: impactScore
     });
+
+    // Reset custom input
+    setCustomFieldingActionText('');
+
+    // Background sync: attach to commentary & match events
+    try {
+      await ScorerApi.getFieldingCommentary(matchId, {
+        fieldingPosition: selectedFieldPosition || 'Cover',
+        fielderId: fielderId || undefined,
+        fielderName: fielderName
+      });
+    } catch (err) {
+      // Non-blocking background sync
+    }
   };
 
   const handleWicketClick = () => {
@@ -2875,13 +3066,51 @@ export default function LiveScoringScreen() {
       return;
     }
 
+    const today = new Date().toISOString().split('T')[0];
+    if (rescheduledDateInput) {
+      if (rescheduledDateInput < today) {
+        const msg = 'Reschedule date cannot be in the past. Please select today or a future date.';
+        Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Invalid Date', msg);
+        return;
+      }
+      if (rescheduledDateInput === today && rescheduledTimeInput && isTimeInPastToday(rescheduledTimeInput)) {
+        const msg = 'Reschedule time has already passed for today. Please select a future time.';
+        Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Invalid Time', msg);
+        return;
+      }
+    }
+
+    // Determine current match situation at postponement
+    const oversCompleted = Math.floor(balls / 6);
+    const ballsInOver = balls % 6;
+    const oversStr = `${oversCompleted}.${ballsInOver}`;
+    const totalMatchOvers = matchInfo?.overs || 20;
+    const currentInnNum = matchInfo?.currentInningsNumber || 1;
+    const currentBattingTeam = (currentInnNum === 2)
+      ? (matchInfo?.teamB?.name || matchInfo?.teamBName || 'Team B')
+      : (matchInfo?.teamA?.name || matchInfo?.teamAName || 'Team A');
+
+    const hasPlayStarted = balls > 0 || runs > 0 || wickets > 0 || (allInningsList && allInningsList.length > 1);
+
+    const postponedStage = hasPlayStarted ? 'IN_PLAY' : 'BEFORE_START';
+    const scoreDisplay = hasPlayStarted
+      ? `${currentBattingTeam}: ${runs}/${wickets} (${oversStr}/${totalMatchOvers} Ov) - Innings ${currentInnNum}`
+      : 'Postponed before match start (0 overs bowled / Toss pending)';
+
     setIsSubmittingPostpone(true);
     try {
       await ScorerApi.postponeMatch(matchId, {
         reason: finalReason,
         notes: postponeNotes.trim(),
         rescheduledDate: rescheduledDateInput.trim(),
-        rescheduledTime: rescheduledTimeInput.trim()
+        rescheduledTime: rescheduledTimeInput.trim(),
+        postponedStage,
+        postponedScoreDisplay: scoreDisplay,
+        runsAtPostpone: runs,
+        wicketsAtPostpone: wickets,
+        oversAtPostpone: oversStr,
+        battingTeamAtPostpone: currentBattingTeam,
+        inningsAtPostpone: currentInnNum
       });
       setShowPostponeModal(false);
       setIsPostponeReasonDropdownOpen(false);
@@ -2890,7 +3119,7 @@ export default function LiveScoringScreen() {
       setRescheduledDateInput('');
       setRescheduledTimeInput('');
       await loadLiveState(false);
-      const msg = `Match has been successfully POSTPONED.\n\nReason: ${finalReason}\n\nScoring is now frozen. You or another official can resume the match at any time using "Resume Match".`;
+      const msg = `Match has been successfully POSTPONED.\n\nReason: ${finalReason}\nSituation: ${scoreDisplay}\n\nScoring is now frozen. You or another official can resume the match at any time using "Resume Match".`;
       Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Match Postponed', msg);
     } catch (err: any) {
       const msg = err.message || 'Failed to postpone match.';
@@ -2933,17 +3162,22 @@ export default function LiveScoringScreen() {
   const handleSaveUmpireAssessmentSubmit = async () => {
     setIsSubmittingUmpire(true);
     try {
+      const finalU1 = (umpire1Name && umpire1Name.trim()) ? umpire1Name.trim() : (scheduledUmpire1 || 'Official Umpire 1');
+      const finalU2 = (umpire2Name && umpire2Name.trim()) ? umpire2Name.trim() : (scheduledUmpire2 || 'Official Umpire 2');
+
       await ScorerApi.saveUmpireAssessment(matchId, {
-        umpire1: umpire1Name,
+        umpire1: finalU1,
         rating1: parseInt(umpire1Rating, 10) || 8,
-        umpire2: umpire2Name,
+        umpire2: finalU2,
         rating2: parseInt(umpire2Rating, 10) || 8,
         pitchReport: pitchReportInput,
         comments: umpireCommentsInput
       });
       setShowUmpireModal(false);
+      setIsUmpire1DropdownOpen(false);
+      setIsUmpire2DropdownOpen(false);
       await loadLiveState(false);
-      const msg = 'Umpire assessment saved successfully.';
+      const msg = `Umpire assessment recorded successfully for ${finalU1} and ${finalU2}.`;
       Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Success', msg);
     } catch (err: any) {
       const msg = err.message || 'Failed to save umpire assessment.';
@@ -2993,7 +3227,6 @@ export default function LiveScoringScreen() {
   };
 
   // --- 10. UNDO LAST DELIVERY HANDLER (Edit Mode) ---
-  const [isUndoingDelivery, setIsUndoingDelivery] = useState(false);
   const handleUndoLastDelivery = async () => {
     const lastDel = recentDeliveries && recentDeliveries.length > 0 ? recentDeliveries[0] : null;
     setIsUndoingDelivery(true);
@@ -3222,18 +3455,54 @@ export default function LiveScoringScreen() {
 
   const selectedChangeBowlerObj = (bowlingSquad || []).find((p) => p.id === selectedChangeBowlerId);
 
+  const currentInningsNum = matchInfo?.currentInningsNumber || 1;
+  const currentBattingTeam = (currentInningsNum === 2)
+    ? (matchInfo?.teamB || 'Team B')
+    : (matchInfo?.battingTeam || matchInfo?.teamA || 'Team A');
+
+  const currentBowlingTeam = (currentInningsNum === 2)
+    ? (matchInfo?.teamA || 'Team A')
+    : (matchInfo?.bowlingTeam || matchInfo?.teamB || 'Team B');
+
+  // Dynamically resolve active fielding squad based on current innings (Swaps automatically in 2nd innings)
+  const activeFieldingSquad = (() => {
+    const isSecondInn = currentInningsNum === 2;
+
+    // In 2nd innings, bowling team is Team A. In 1st innings, bowling team is Team B.
+    const fallbackList = isSecondInn
+      ? (matchInfo?.teamAPlayingXI?.length ? matchInfo.teamAPlayingXI : (matchInfo?.teamAPlayers || []))
+      : (matchInfo?.teamBPlayingXI?.length ? matchInfo.teamBPlayingXI : (matchInfo?.teamBPlayers || []));
+
+    let squad: any[] = (bowlingSquad && bowlingSquad.length > 0) ? [...bowlingSquad] : [];
+
+    if (squad.length === 0 && fallbackList.length > 0) {
+      squad = fallbackList.map((p: any, idx: number) => {
+        if (typeof p === 'string') return { id: p, name: p, role: 'FIELDER' };
+        return {
+          id: p.id || `fld-${idx}`,
+          name: p.name || p.player_name || `Player ${idx + 1}`,
+          role: p.role || 'FIELDER'
+        };
+      });
+    }
+
+    // Deduplicate
+    const seen = new Set<string>();
+    const result: any[] = [];
+    squad.forEach((p: any) => {
+      if (!p || !p.name) return;
+      const key = (p.name || '').trim().toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push(p);
+      }
+    });
+
+    return result;
+  })();
+
   // Unique, deduplicated fielding squad (for fielder dropdown)
-  const seenFielderNames = new Set<string>();
-  const seenFielderIds = new Set<string>();
-  const rawFielderList: any[] = [];
-  (bowlingSquad || []).forEach((f) => {
-    if (!f || !f.name) return;
-    const cleanName = f.name.trim().toLowerCase();
-    if (seenFielderNames.has(cleanName) || seenFielderIds.has(f.id)) return;
-    seenFielderNames.add(cleanName);
-    seenFielderIds.add(f.id);
-    rawFielderList.push(f);
-  });
+  const rawFielderList = activeFieldingSquad;
 
   const filteredFielders = fielderSearchQuery.trim()
     ? rawFielderList.filter((f) => {
@@ -3888,20 +4157,32 @@ export default function LiveScoringScreen() {
       </Modal>
 
 
-      {/* CLOCK PICKER MODAL (For Breaks & Sessions) */}
+      {/* CLOCK PICKER MODAL (For Breaks, Sessions & Rescheduling) */}
       <ClockPickerModal
         visible={clockPickerVisible}
         title={
-          clockPickerTarget === 'BREAK_START'
+          clockPickerTarget === 'RESCHEDULE_TIME'
+            ? 'Select Reschedule Time'
+            : clockPickerTarget === 'BREAK_START'
             ? 'Select Break Start Time'
             : 'Select Break End Time'
         }
         initialTime={
-          clockPickerTarget === 'BREAK_START'
+          clockPickerTarget === 'RESCHEDULE_TIME'
+            ? (rescheduledTimeInput || undefined)
+            : clockPickerTarget === 'BREAK_START'
             ? breakStartTime
             : breakEndTime
         }
-        referenceStartTime={clockPickerTarget === 'BREAK_END' ? breakStartTime : undefined}
+        referenceStartTime={
+          clockPickerTarget === 'BREAK_END'
+            ? breakStartTime
+            : (clockPickerTarget === 'RESCHEDULE_TIME' && (!rescheduledDateInput || rescheduledDateInput === new Date().toISOString().split('T')[0])
+                ? getCurrentTimeFormatted()
+                : undefined)
+        }
+        selectedDate={clockPickerTarget === 'RESCHEDULE_TIME' ? rescheduledDateInput : new Date().toISOString().split('T')[0]}
+        disablePast={true}
         onClose={() => setClockPickerVisible(false)}
         onSelectTime={handleClockPickerSelect}
       />
@@ -4686,81 +4967,598 @@ export default function LiveScoringScreen() {
         visible={showUmpireModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowUmpireModal(false)}
+        onRequestClose={() => {
+          setShowUmpireModal(false);
+          setIsUmpire1DropdownOpen(false);
+          setIsUmpire2DropdownOpen(false);
+        }}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxWidth: 460 }]}>
+          <View style={[styles.modalContent, { maxWidth: 480, maxHeight: '92%' }]}>
             <View style={styles.revisedModalHeader}>
-              <Text style={styles.revisedModalTitle}>UMPIRE ASSESSMENT</Text>
-              <TouchableOpacity style={styles.redCloseBtn} onPress={() => setShowUmpireModal(false)}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                <Text style={{ fontSize: 20 }}>⚖️</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.revisedModalTitle}>UMPIRE ASSESSMENT</Text>
+                  <Text style={{ fontSize: 11, color: '#f59e0b', fontWeight: '800' }}>
+                    Official Match Arbiter Rating & Pitch Assessment
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.redCloseBtn}
+                onPress={() => {
+                  setShowUmpireModal(false);
+                  setIsUmpire1DropdownOpen(false);
+                  setIsUmpire2DropdownOpen(false);
+                }}
+              >
                 <Text style={styles.redCloseBtnText}>✕</Text>
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.revisedModalInfo}>
-              Scorer match report: Rate officiating umpires and record pitch assessment.
-            </Text>
-
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-              <View style={{ flex: 2 }}>
-                <Text style={styles.fieldSubLabel}>UMPIRE 1 NAME:</Text>
-                <TextInput
-                  style={styles.customNameInput}
-                  value={umpire1Name}
-                  onChangeText={setUmpire1Name}
-                />
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 500 }}>
+              <View style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 8, padding: 8, marginTop: 6 }}>
+                <Text style={{ fontSize: 11, color: '#1e40af', lineHeight: 16 }}>
+                  💡 <Text style={{ fontWeight: '800' }}>Official Assignment:</Text> Umpires default to the official match schedule. If absent, the scorer can reassign another certified official or enter a custom umpire.
+                </Text>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.fieldSubLabel}>RATING (1-10):</Text>
-                <TextInput
-                  style={styles.customNameInput}
-                  keyboardType="numeric"
-                  value={umpire1Rating}
-                  onChangeText={setUmpire1Rating}
-                />
-              </View>
-            </View>
 
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
-              <View style={{ flex: 2 }}>
-                <Text style={styles.fieldSubLabel}>UMPIRE 2 NAME:</Text>
-                <TextInput
-                  style={styles.customNameInput}
-                  value={umpire2Name}
-                  onChangeText={setUmpire2Name}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.fieldSubLabel}>RATING (1-10):</Text>
-                <TextInput
-                  style={styles.customNameInput}
-                  keyboardType="numeric"
-                  value={umpire2Rating}
-                  onChangeText={setUmpire2Rating}
-                />
-              </View>
-            </View>
+              {/* 1. UMPIRE 1 (LEAD UMPIRE) */}
+              <View style={{ marginTop: 12 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.fieldSubLabel}>⚖️ UMPIRE 1 (LEAD UMPIRE):</Text>
+                  {Boolean(scheduledUmpire1) && (
+                    <View style={{ backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#fde68a' }}>
+                      <Text style={{ fontSize: 9.5, color: '#92400e', fontWeight: '800' }}>
+                        📋 SCHEDULED: {scheduledUmpire1}
+                      </Text>
+                    </View>
+                  )}
+                </View>
 
-            <View style={{ marginTop: 8 }}>
-              <Text style={styles.fieldSubLabel}>PITCH REPORT:</Text>
-              <TextInput
-                style={styles.customNameInput}
-                value={pitchReportInput}
-                onChangeText={setPitchReportInput}
-              />
-            </View>
+                {/* Dropdown Button */}
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: 10,
+                    backgroundColor: '#f8fafc',
+                    borderWidth: 1.5,
+                    borderColor: isUmpire1DropdownOpen ? '#3b82f6' : '#cbd5e1',
+                    borderRadius: 8,
+                    marginTop: 4
+                  }}
+                  onPress={() => {
+                    setIsUmpire1DropdownOpen(!isUmpire1DropdownOpen);
+                    setIsUmpire2DropdownOpen(false);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                    <Text style={{ fontSize: 14 }}>⚖️</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }} numberOfLines={1}>
+                      {umpire1Name || scheduledUmpire1 || 'Select Field Umpire 1...'}
+                    </Text>
+                    {Boolean(scheduledUmpire1 && umpire1Name === scheduledUmpire1) && (
+                      <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 }}>
+                        <Text style={{ fontSize: 9.5, color: '#059669', fontWeight: '800' }}>Default</Text>
+                      </View>
+                    )}
+                    {Boolean(isCustomUmpire1) && (
+                      <View style={{ backgroundColor: '#fffbeb', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 }}>
+                        <Text style={{ fontSize: 9.5, color: '#d97706', fontWeight: '800' }}>Custom</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={{ fontSize: 12, color: '#64748b' }}>{isUmpire1DropdownOpen ? '▲' : '▼'}</Text>
+                </TouchableOpacity>
 
-            <View style={{ marginTop: 8, marginBottom: 16 }}>
-              <Text style={styles.fieldSubLabel}>ADDITIONAL COMMENTS:</Text>
-              <TextInput
-                style={styles.customNameInput}
-                value={umpireCommentsInput}
-                onChangeText={setUmpireCommentsInput}
-              />
-            </View>
+                {/* Dropdown Popover */}
+                {isUmpire1DropdownOpen && (
+                  <View style={{
+                    backgroundColor: '#ffffff',
+                    borderWidth: 1.5,
+                    borderColor: '#3b82f6',
+                    borderRadius: 8,
+                    marginTop: 4,
+                    padding: 8,
+                    maxHeight: 220,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.12,
+                    shadowRadius: 6,
+                    elevation: 5
+                  }}>
+                    <TextInput
+                      style={{
+                        backgroundColor: '#f1f5f9',
+                        borderRadius: 6,
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        fontSize: 12,
+                        color: '#0f172a',
+                        marginBottom: 6
+                      }}
+                      placeholder="🔍 Search umpire name..."
+                      placeholderTextColor="#94a3b8"
+                      value={umpire1Search}
+                      onChangeText={setUmpire1Search}
+                    />
+
+                    <ScrollView nestedScrollEnabled style={{ maxHeight: 160 }}>
+                      {/* Option 1: Scheduled by Admin */}
+                      {Boolean(scheduledUmpire1) && (
+                        <TouchableOpacity
+                          style={{
+                            paddingVertical: 7,
+                            paddingHorizontal: 8,
+                            borderRadius: 6,
+                            backgroundColor: umpire1Name === scheduledUmpire1 ? '#eff6ff' : 'transparent',
+                            flexDirection: 'row',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: 2
+                          }}
+                          onPress={() => {
+                            setUmpire1Name(scheduledUmpire1);
+                            setIsCustomUmpire1(false);
+                            setIsUmpire1DropdownOpen(false);
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                            <Text style={{ fontSize: 12 }}>⭐</Text>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#1e3a8a' }}>
+                                {scheduledUmpire1}
+                              </Text>
+                              <Text style={{ fontSize: 10, color: '#b45309', fontWeight: '700' }}>Admin Scheduled Default</Text>
+                            </View>
+                          </View>
+                          {umpire1Name === scheduledUmpire1 && <Text style={{ color: '#2563eb', fontWeight: '900', fontSize: 12 }}>✓</Text>}
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Registered Officials */}
+                      {registeredUmpiresList
+                        .filter(u => {
+                          const name = u.name || u.umpireName || '';
+                          return !umpire1Search.trim() || name.toLowerCase().includes(umpire1Search.trim().toLowerCase());
+                        })
+                        .map(u => {
+                          const uName = u.name || u.umpireName || '';
+                          const isSel = umpire1Name === uName;
+                          return (
+                            <TouchableOpacity
+                              key={`u1-opt-${u.id || uName}`}
+                              style={{
+                                paddingVertical: 7,
+                                paddingHorizontal: 8,
+                                borderRadius: 6,
+                                backgroundColor: isSel ? '#eff6ff' : 'transparent',
+                                flexDirection: 'row',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                              }}
+                              onPress={() => {
+                                setUmpire1Name(uName);
+                                setIsCustomUmpire1(false);
+                                setIsUmpire1DropdownOpen(false);
+                              }}
+                            >
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                                <Text style={{ fontSize: 12 }}>⚖️</Text>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={{ fontSize: 12.5, fontWeight: isSel ? '800' : '600', color: isSel ? '#1d4ed8' : '#1e293b' }}>
+                                    {uName}
+                                  </Text>
+                                  {Boolean(u.qualification || u.specialization) && (
+                                    <Text style={{ fontSize: 10, color: '#64748b' }}>
+                                      {u.qualification || u.specialization}
+                                    </Text>
+                                  )}
+                                </View>
+                              </View>
+                              {isSel && <Text style={{ color: '#2563eb', fontWeight: '900', fontSize: 12 }}>✓</Text>}
+                            </TouchableOpacity>
+                          );
+                        })}
+
+                      {/* Option: Custom Umpire */}
+                      <TouchableOpacity
+                        style={{
+                          paddingVertical: 8,
+                          paddingHorizontal: 8,
+                          borderRadius: 6,
+                          backgroundColor: isCustomUmpire1 ? '#fef3c7' : '#f8fafc',
+                          borderTopWidth: 1,
+                          borderTopColor: '#e2e8f0',
+                          flexDirection: 'row',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginTop: 4
+                        }}
+                        onPress={() => {
+                          setIsCustomUmpire1(true);
+                          setIsUmpire1DropdownOpen(false);
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={{ fontSize: 12 }}>✏️</Text>
+                          <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#b45309' }}>
+                            Custom / Non-Panel Umpire
+                          </Text>
+                        </View>
+                        {isCustomUmpire1 && <Text style={{ color: '#d97706', fontWeight: '900', fontSize: 12 }}>✓</Text>}
+                      </TouchableOpacity>
+                    </ScrollView>
+                  </View>
+                )}
+
+                {/* Custom Umpire 1 Input Field */}
+                {isCustomUmpire1 && (
+                  <View style={{ marginTop: 6 }}>
+                    <Text style={{ fontSize: 10.5, color: '#b45309', fontWeight: '800', marginBottom: 2 }}>
+                      ✏️ TYPE CUSTOM UMPIRE 1 NAME:
+                    </Text>
+                    <TextInput
+                      style={[styles.customNameInput, { borderColor: '#f59e0b', backgroundColor: '#fffbeb', paddingVertical: 7 }]}
+                      placeholder="Enter custom umpire name..."
+                      placeholderTextColor="#94a3b8"
+                      value={umpire1Name}
+                      onChangeText={setUmpire1Name}
+                    />
+                  </View>
+                )}
+
+                {/* Rating 1 Row */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#475569' }}>
+                    RATING (1-10): <Text style={{ color: '#d97706', fontWeight: '900' }}>{umpire1Rating}/10</Text>
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 4 }}>
+                    {['10', '9', '8', '7', '6'].map((r) => (
+                      <TouchableOpacity
+                        key={`u1-r-${r}`}
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 4,
+                          backgroundColor: umpire1Rating === r ? '#d97706' : '#f1f5f9',
+                          borderWidth: 1,
+                          borderColor: umpire1Rating === r ? '#b45309' : '#cbd5e1'
+                        }}
+                        onPress={() => setUmpire1Rating(r)}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: umpire1Rating === r ? '#ffffff' : '#334155' }}>
+                          {r}★
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </View>
+
+              {/* 2. UMPIRE 2 (SQUARE LEG UMPIRE) */}
+              <View style={{ marginTop: 14 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.fieldSubLabel}>⚖️ UMPIRE 2 (SQUARE LEG):</Text>
+                  {Boolean(scheduledUmpire2) && (
+                    <View style={{ backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#fde68a' }}>
+                      <Text style={{ fontSize: 9.5, color: '#92400e', fontWeight: '800' }}>
+                        📋 SCHEDULED: {scheduledUmpire2}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Dropdown Button */}
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: 10,
+                    backgroundColor: '#f8fafc',
+                    borderWidth: 1.5,
+                    borderColor: isUmpire2DropdownOpen ? '#3b82f6' : '#cbd5e1',
+                    borderRadius: 8,
+                    marginTop: 4
+                  }}
+                  onPress={() => {
+                    setIsUmpire2DropdownOpen(!isUmpire2DropdownOpen);
+                    setIsUmpire1DropdownOpen(false);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                    <Text style={{ fontSize: 14 }}>⚖️</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }} numberOfLines={1}>
+                      {umpire2Name || scheduledUmpire2 || 'Select Field Umpire 2...'}
+                    </Text>
+                    {Boolean(scheduledUmpire2 && umpire2Name === scheduledUmpire2) && (
+                      <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 }}>
+                        <Text style={{ fontSize: 9.5, color: '#059669', fontWeight: '800' }}>Default</Text>
+                      </View>
+                    )}
+                    {Boolean(isCustomUmpire2) && (
+                      <View style={{ backgroundColor: '#fffbeb', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 }}>
+                        <Text style={{ fontSize: 9.5, color: '#d97706', fontWeight: '800' }}>Custom</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={{ fontSize: 12, color: '#64748b' }}>{isUmpire2DropdownOpen ? '▲' : '▼'}</Text>
+                </TouchableOpacity>
+
+                {/* Dropdown Popover */}
+                {isUmpire2DropdownOpen && (
+                  <View style={{
+                    backgroundColor: '#ffffff',
+                    borderWidth: 1.5,
+                    borderColor: '#3b82f6',
+                    borderRadius: 8,
+                    marginTop: 4,
+                    padding: 8,
+                    maxHeight: 220,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.12,
+                    shadowRadius: 6,
+                    elevation: 5
+                  }}>
+                    <TextInput
+                      style={{
+                        backgroundColor: '#f1f5f9',
+                        borderRadius: 6,
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        fontSize: 12,
+                        color: '#0f172a',
+                        marginBottom: 6
+                      }}
+                      placeholder="🔍 Search umpire name..."
+                      placeholderTextColor="#94a3b8"
+                      value={umpire2Search}
+                      onChangeText={setUmpire2Search}
+                    />
+
+                    <ScrollView nestedScrollEnabled style={{ maxHeight: 160 }}>
+                      {/* Option 1: Scheduled by Admin */}
+                      {Boolean(scheduledUmpire2) && (
+                        <TouchableOpacity
+                          style={{
+                            paddingVertical: 7,
+                            paddingHorizontal: 8,
+                            borderRadius: 6,
+                            backgroundColor: umpire2Name === scheduledUmpire2 ? '#eff6ff' : 'transparent',
+                            flexDirection: 'row',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: 2
+                          }}
+                          onPress={() => {
+                            setUmpire2Name(scheduledUmpire2);
+                            setIsCustomUmpire2(false);
+                            setIsUmpire2DropdownOpen(false);
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                            <Text style={{ fontSize: 12 }}>⭐</Text>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#1e3a8a' }}>
+                                {scheduledUmpire2}
+                              </Text>
+                              <Text style={{ fontSize: 10, color: '#b45309', fontWeight: '700' }}>Admin Scheduled Default</Text>
+                            </View>
+                          </View>
+                          {umpire2Name === scheduledUmpire2 && <Text style={{ color: '#2563eb', fontWeight: '900', fontSize: 12 }}>✓</Text>}
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Registered Officials */}
+                      {registeredUmpiresList
+                        .filter(u => {
+                          const name = u.name || u.umpireName || '';
+                          return !umpire2Search.trim() || name.toLowerCase().includes(umpire2Search.trim().toLowerCase());
+                        })
+                        .map(u => {
+                          const uName = u.name || u.umpireName || '';
+                          const isSel = umpire2Name === uName;
+                          return (
+                            <TouchableOpacity
+                              key={`u2-opt-${u.id || uName}`}
+                              style={{
+                                paddingVertical: 7,
+                                paddingHorizontal: 8,
+                                borderRadius: 6,
+                                backgroundColor: isSel ? '#eff6ff' : 'transparent',
+                                flexDirection: 'row',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                              }}
+                              onPress={() => {
+                                setUmpire2Name(uName);
+                                setIsCustomUmpire2(false);
+                                setIsUmpire2DropdownOpen(false);
+                              }}
+                            >
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                                <Text style={{ fontSize: 12 }}>⚖️</Text>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={{ fontSize: 12.5, fontWeight: isSel ? '800' : '600', color: isSel ? '#1d4ed8' : '#1e293b' }}>
+                                    {uName}
+                                  </Text>
+                                  {Boolean(u.qualification || u.specialization) && (
+                                    <Text style={{ fontSize: 10, color: '#64748b' }}>
+                                      {u.qualification || u.specialization}
+                                    </Text>
+                                  )}
+                                </View>
+                              </View>
+                              {isSel && <Text style={{ color: '#2563eb', fontWeight: '900', fontSize: 12 }}>✓</Text>}
+                            </TouchableOpacity>
+                          );
+                        })}
+
+                      {/* Option: Custom Umpire */}
+                      <TouchableOpacity
+                        style={{
+                          paddingVertical: 8,
+                          paddingHorizontal: 8,
+                          borderRadius: 6,
+                          backgroundColor: isCustomUmpire2 ? '#fef3c7' : '#f8fafc',
+                          borderTopWidth: 1,
+                          borderTopColor: '#e2e8f0',
+                          flexDirection: 'row',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginTop: 4
+                        }}
+                        onPress={() => {
+                          setIsCustomUmpire2(true);
+                          setIsUmpire2DropdownOpen(false);
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={{ fontSize: 12 }}>✏️</Text>
+                          <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#b45309' }}>
+                            Custom / Non-Panel Umpire
+                          </Text>
+                        </View>
+                        {isCustomUmpire2 && <Text style={{ color: '#d97706', fontWeight: '900', fontSize: 12 }}>✓</Text>}
+                      </TouchableOpacity>
+                    </ScrollView>
+                  </View>
+                )}
+
+                {/* Custom Umpire 2 Input Field */}
+                {isCustomUmpire2 && (
+                  <View style={{ marginTop: 6 }}>
+                    <Text style={{ fontSize: 10.5, color: '#b45309', fontWeight: '800', marginBottom: 2 }}>
+                      ✏️ TYPE CUSTOM UMPIRE 2 NAME:
+                    </Text>
+                    <TextInput
+                      style={[styles.customNameInput, { borderColor: '#f59e0b', backgroundColor: '#fffbeb', paddingVertical: 7 }]}
+                      placeholder="Enter custom umpire name..."
+                      placeholderTextColor="#94a3b8"
+                      value={umpire2Name}
+                      onChangeText={setUmpire2Name}
+                    />
+                  </View>
+                )}
+
+                {/* Rating 2 Row */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#475569' }}>
+                    RATING (1-10): <Text style={{ color: '#d97706', fontWeight: '900' }}>{umpire2Rating}/10</Text>
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 4 }}>
+                    {['10', '9', '8', '7', '6'].map((r) => (
+                      <TouchableOpacity
+                        key={`u2-r-${r}`}
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 4,
+                          backgroundColor: umpire2Rating === r ? '#d97706' : '#f1f5f9',
+                          borderWidth: 1,
+                          borderColor: umpire2Rating === r ? '#b45309' : '#cbd5e1'
+                        }}
+                        onPress={() => setUmpire2Rating(r)}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: umpire2Rating === r ? '#ffffff' : '#334155' }}>
+                          {r}★
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </View>
+
+              {/* 3. PITCH REPORT */}
+              <View style={{ marginTop: 14 }}>
+                <Text style={styles.fieldSubLabel}>🏏 PITCH ASSESSMENT REPORT:</Text>
+                <TextInput
+                  style={[styles.customNameInput, { marginTop: 4 }]}
+                  value={pitchReportInput}
+                  onChangeText={setPitchReportInput}
+                  placeholder="Pitch condition & behavior..."
+                />
+                {/* Pitch Quick Chips */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
+                  {[
+                    'Good sporting track with true bounce',
+                    'Batting paradise / Fast outfield',
+                    'Turning track / Assist for spinners',
+                    'Seam friendly / Uneven bounce'
+                  ].map((chip) => (
+                    <TouchableOpacity
+                      key={chip}
+                      style={{
+                        backgroundColor: pitchReportInput === chip ? '#e0f2fe' : '#f1f5f9',
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        borderRadius: 5,
+                        borderWidth: 1,
+                        borderColor: pitchReportInput === chip ? '#0284c7' : '#cbd5e1'
+                      }}
+                      onPress={() => setPitchReportInput(chip)}
+                    >
+                      <Text style={{ fontSize: 10.5, color: pitchReportInput === chip ? '#0369a1' : '#475569', fontWeight: '700' }}>
+                        {chip}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* 4. ADDITIONAL COMMENTS */}
+              <View style={{ marginTop: 12, marginBottom: 12 }}>
+                <Text style={styles.fieldSubLabel}>📝 MATCH NOTES & CONDUCT:</Text>
+                <TextInput
+                  style={[styles.customNameInput, { marginTop: 4 }]}
+                  value={umpireCommentsInput}
+                  onChangeText={setUmpireCommentsInput}
+                  placeholder="Official observations..."
+                />
+                {/* Notes Quick Chips */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
+                  {[
+                    'Fair match without disputes',
+                    'Disciplined and calm game',
+                    'Umpire decisions accepted respectfully'
+                  ].map((chip) => (
+                    <TouchableOpacity
+                      key={chip}
+                      style={{
+                        backgroundColor: umpireCommentsInput === chip ? '#e0f2fe' : '#f1f5f9',
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        borderRadius: 5,
+                        borderWidth: 1,
+                        borderColor: umpireCommentsInput === chip ? '#0284c7' : '#cbd5e1'
+                      }}
+                      onPress={() => setUmpireCommentsInput(chip)}
+                    >
+                      <Text style={{ fontSize: 10.5, color: umpireCommentsInput === chip ? '#0369a1' : '#475569', fontWeight: '700' }}>
+                        {chip}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </ScrollView>
 
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowUmpireModal(false)}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => {
+                  setShowUmpireModal(false);
+                  setIsUmpire1DropdownOpen(false);
+                  setIsUmpire2DropdownOpen(false);
+                }}
+              >
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -4768,7 +5566,11 @@ export default function LiveScoringScreen() {
                 disabled={isSubmittingUmpire}
                 onPress={handleSaveUmpireAssessmentSubmit}
               >
-                {isSubmittingUmpire ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.modalConfirmText}>SUBMIT</Text>}
+                {isSubmittingUmpire ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.modalConfirmText}>✓ SUBMIT UMPIRE ASSESSMENT</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -4892,7 +5694,7 @@ export default function LiveScoringScreen() {
 
       {/* 2b. POSTPONE MATCH MODAL */}
       <Modal
-        visible={showPostponeModal}
+        visible={showPostponeModal && !(clockPickerVisible && clockPickerTarget === 'RESCHEDULE_TIME')}
         transparent
         animationType="fade"
         onRequestClose={() => {
@@ -4985,27 +5787,79 @@ export default function LiveScoringScreen() {
                 onChangeText={setPostponeCustomReason}
               />
 
+              {/* Current Match Situation Summary */}
+              <View style={{ marginTop: 10, padding: 10, backgroundColor: '#fef3c7', borderRadius: 8, borderWidth: 1, borderColor: '#fde68a' }}>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#92400e', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  📊 Current Match Situation:
+                </Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#78350f', marginTop: 2 }}>
+                  {balls > 0 || runs > 0 || wickets > 0 || (allInningsList && allInningsList.length > 1)
+                    ? `In Play: ${runs}/${wickets} in ${Math.floor(balls / 6)}.${balls % 6} Overs (${matchInfo?.overs || 20} Ov match)`
+                    : 'Match Not Started (0 Overs Bowled / Toss Pending)'}
+                </Text>
+              </View>
+
               {/* Optional Reschedule Date & Time */}
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.fieldSubLabel}>RESCHEDULE DATE (OPTIONAL):</Text>
-                  <TextInput
-                    style={[styles.customNameInput, { height: 40 }]}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor="#9ca3af"
-                    value={rescheduledDateInput}
-                    onChangeText={setRescheduledDateInput}
-                  />
+                  {Platform.OS === 'web' ? (
+                    <input
+                      type="date"
+                      min={new Date().toISOString().split('T')[0]}
+                      value={rescheduledDateInput}
+                      onChange={(e: any) => handleRescheduledDateChange(e.target.value)}
+                      style={{
+                        width: '100%',
+                        height: 40,
+                        backgroundColor: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: 8,
+                        padding: '0 12px',
+                        fontSize: 13,
+                        color: '#0f172a',
+                        outline: 'none',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  ) : (
+                    <TextInput
+                      style={[styles.customNameInput, { height: 40 }]}
+                      placeholder="YYYY-MM-DD"
+                      placeholderTextColor="#9ca3af"
+                      value={rescheduledDateInput}
+                      onChangeText={handleRescheduledDateChange}
+                    />
+                  )}
+                  <Text style={{ fontSize: 10.5, color: '#64748b', marginTop: 3 }}>
+                    * Today or future date only
+                  </Text>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.fieldSubLabel}>RESCHEDULE TIME (OPTIONAL):</Text>
-                  <TextInput
-                    style={[styles.customNameInput, { height: 40 }]}
-                    placeholder="HH:MM AM/PM"
-                    placeholderTextColor="#9ca3af"
-                    value={rescheduledTimeInput}
-                    onChangeText={setRescheduledTimeInput}
-                  />
+                  <View style={styles.timeInputContainer}>
+                    <TextInput
+                      style={[styles.customNameInput, { height: 40, paddingRight: 74 }]}
+                      placeholder="e.g. 04:30 pm"
+                      placeholderTextColor="#9ca3af"
+                      value={rescheduledTimeInput}
+                      onChangeText={handleRescheduledTimeChange}
+                    />
+                    <TouchableOpacity
+                      style={styles.fieldClockBtn}
+                      onPress={() => {
+                        setClockPickerTarget('RESCHEDULE_TIME');
+                        setClockPickerVisible(true);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={{ fontSize: 13 }}>🕒</Text>
+                      <Text style={styles.fieldClockBtnText}>Clock</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={{ fontSize: 10.5, color: '#64748b', marginTop: 3 }}>
+                    * Future time only
+                  </Text>
                 </View>
               </View>
 
@@ -6469,65 +7323,378 @@ export default function LiveScoringScreen() {
         visible={showFieldingModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowFieldingModal(false)}
+        onRequestClose={() => {
+          setShowFieldingModal(false);
+          setIsFielderModalDropdownOpen(false);
+          setIsFieldingActionDropdownOpen(false);
+        }}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxWidth: 460 }]}>
+          <View style={[styles.modalContent, { maxWidth: 460, maxHeight: '92%' }]}>
             <View style={styles.revisedModalHeader}>
-              <Text style={styles.revisedModalTitle}>FIELDING TYPE</Text>
-              <TouchableOpacity style={styles.redCloseBtn} onPress={() => setShowFieldingModal(false)}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                <Text style={{ fontSize: 20 }}>🧤</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.revisedModalTitle}>FIELDING TYPE</Text>
+                  <Text style={{ fontSize: 11, color: '#f59e0b', fontWeight: '800' }}>
+                    🛡️ {currentBowlingTeam} ({activeFieldingSquad.length} Fielders • Innings {currentInningsNum})
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.redCloseBtn}
+                onPress={() => {
+                  setShowFieldingModal(false);
+                  setIsFielderModalDropdownOpen(false);
+                  setIsFieldingActionDropdownOpen(false);
+                }}
+              >
                 <Text style={styles.redCloseBtnText}>✕</Text>
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.fieldSubLabel}>SELECT ACTIVE FIELDER:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12, marginTop: 4 }}>
-              <View style={{ flexDirection: 'row', gap: 6 }}>
-                {bowlingSquad.map((f) => (
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+              {/* 0. LIVE OVER, BATTER & BOWLER CONTEXT */}
+              <View style={{
+                marginTop: 8,
+                backgroundColor: '#fffbeb',
+                borderWidth: 1,
+                borderColor: '#fde68a',
+                borderRadius: 10,
+                padding: 10,
+                gap: 6
+              }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '900', color: '#92400e' }}>
+                    📍 OVER {Math.floor(balls / 6)}.{balls % 6} • INNINGS {currentInningsNum}
+                  </Text>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#0369a1' }}>
+                    ⚾ Bowler: {bowler?.name || 'Current Bowler'}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#78350f' }}>
+                  BATTER / WICKET TARGET:
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TouchableOpacity
-                    key={`fld-${f.id}`}
-                    style={[styles.quickReasonChip, selectedFielderId === f.id && styles.quickReasonChipActive]}
-                    onPress={() => setSelectedFielderId(f.id)}
+                    onPress={() => setFieldingTargetBatter('STRIKER')}
+                    activeOpacity={0.8}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 6,
+                      paddingHorizontal: 8,
+                      borderRadius: 7,
+                      borderWidth: 1.5,
+                      borderColor: fieldingTargetBatter === 'STRIKER' ? '#d97706' : '#e2e8f0',
+                      backgroundColor: fieldingTargetBatter === 'STRIKER' ? '#fef3c7' : '#ffffff'
+                    }}
                   >
-                    <Text style={[styles.quickReasonChipText, selectedFielderId === f.id && styles.quickReasonChipTextActive]}>
-                      🧤 {f.name}
+                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0f172a' }} numberOfLines={1}>
+                      🏏 {striker?.name || 'Striker'} (Striker)
                     </Text>
                   </TouchableOpacity>
-                ))}
+                  <TouchableOpacity
+                    onPress={() => setFieldingTargetBatter('NON_STRIKER')}
+                    activeOpacity={0.8}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 6,
+                      paddingHorizontal: 8,
+                      borderRadius: 7,
+                      borderWidth: 1.5,
+                      borderColor: fieldingTargetBatter === 'NON_STRIKER' ? '#d97706' : '#e2e8f0',
+                      backgroundColor: fieldingTargetBatter === 'NON_STRIKER' ? '#fef3c7' : '#ffffff'
+                    }}
+                  >
+                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0f172a' }} numberOfLines={1}>
+                      🏃 {nonStriker?.name || 'Non-Striker'} (Non-Striker)
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* 1. SELECT ACTIVE FIELDER (DROPDOWN & QUICK SELECT) */}
+              <View style={{ marginTop: 8 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.fieldSubLabel}>SELECT ACTIVE FIELDER (DROPDOWN):</Text>
+                  <Text style={{ fontSize: 10, color: '#0284c7', fontWeight: '800' }}>
+                    {currentBowlingTeam}
+                  </Text>
+                </View>
+
+                {/* Dropdown Selector Button */}
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: 11,
+                    backgroundColor: '#f8fafc',
+                    borderWidth: 1.5,
+                    borderColor: isFielderModalDropdownOpen ? '#3b82f6' : '#cbd5e1',
+                    borderRadius: 8,
+                    marginTop: 4
+                  }}
+                  onPress={() => {
+                    setIsFielderModalDropdownOpen(!isFielderModalDropdownOpen);
+                    setIsFieldingActionDropdownOpen(false);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                    <Text style={{ fontSize: 15 }}>🧤</Text>
+                    <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0f172a' }} numberOfLines={1}>
+                      {activeFieldingSquad.find(p => p.id === selectedFielderId)?.name || customFielderModalName || (activeFieldingSquad[0]?.name ? `${activeFieldingSquad[0].name} (Default)` : `Choose ${currentBowlingTeam} Fielder...`)}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 13, color: '#64748b' }}>{isFielderModalDropdownOpen ? '▲' : '▼'}</Text>
+                </TouchableOpacity>
+
+                {/* Dropdown Popover List */}
+                {isFielderModalDropdownOpen && (
+                  <View style={{
+                    backgroundColor: '#ffffff',
+                    borderWidth: 1.5,
+                    borderColor: '#3b82f6',
+                    borderRadius: 8,
+                    marginTop: 4,
+                    padding: 8,
+                    maxHeight: 210,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.12,
+                    shadowRadius: 6,
+                    elevation: 5
+                  }}>
+                    {/* Search Field inside Dropdown */}
+                    <TextInput
+                      style={{
+                        backgroundColor: '#f1f5f9',
+                        borderRadius: 6,
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        fontSize: 12,
+                        color: '#0f172a',
+                        marginBottom: 6
+                      }}
+                      placeholder="🔍 Search fielder name..."
+                      placeholderTextColor="#94a3b8"
+                      value={fielderModalSearchQuery}
+                      onChangeText={setFielderModalSearchQuery}
+                    />
+
+                    <ScrollView nestedScrollEnabled style={{ maxHeight: 150 }}>
+                      {activeFieldingSquad
+                        .filter(f => !fielderModalSearchQuery.trim() || f.name.toLowerCase().includes(fielderModalSearchQuery.trim().toLowerCase()))
+                        .map(f => {
+                          const isSel = selectedFielderId === f.id;
+                          return (
+                            <TouchableOpacity
+                              key={`modal-fld-dd-${f.id}`}
+                              style={{
+                                paddingVertical: 8,
+                                paddingHorizontal: 10,
+                                borderRadius: 6,
+                                backgroundColor: isSel ? '#eff6ff' : 'transparent',
+                                flexDirection: 'row',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                              }}
+                              onPress={() => {
+                                setSelectedFielderId(f.id);
+                                setCustomFielderModalName('');
+                                setIsFielderModalDropdownOpen(false);
+                              }}
+                            >
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={{ fontSize: 12 }}>🧤</Text>
+                                <Text style={{ fontSize: 13, fontWeight: isSel ? '800' : '600', color: isSel ? '#1d4ed8' : '#1e293b' }}>
+                                  {f.name}
+                                </Text>
+                              </View>
+                              {isSel && <Text style={{ color: '#2563eb', fontWeight: '900', fontSize: 11.5 }}>✓ Selected</Text>}
+                            </TouchableOpacity>
+                          );
+                        })}
+                      {activeFieldingSquad.length === 0 && (
+                        <View style={{ padding: 10, alignItems: 'center' }}>
+                          <Text style={{ fontSize: 12, color: '#94a3b8' }}>No fielders found for {currentBowlingTeam}.</Text>
+                        </View>
+                      )}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {/* Quick Fielder Horizontal Chips below Dropdown */}
+                <Text style={{ fontSize: 10.5, color: '#64748b', fontWeight: '700', marginTop: 8, marginBottom: 4 }}>
+                  QUICK CHIPS ({currentBowlingTeam}):
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    {activeFieldingSquad.map((f: any) => {
+                      const isSelected = selectedFielderId ? selectedFielderId === f.id : (activeFieldingSquad[0]?.id === f.id);
+                      return (
+                        <TouchableOpacity
+                          key={`fld-quick-${f.id}`}
+                          style={[styles.quickReasonChip, isSelected && styles.quickReasonChipActive]}
+                          onPress={() => {
+                            setSelectedFielderId(f.id);
+                            setCustomFielderModalName('');
+                          }}
+                        >
+                          <Text style={[styles.quickReasonChipText, isSelected && styles.quickReasonChipTextActive]}>
+                            🧤 {f.name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              </View>
+
+              {/* 2. SELECT FIELDING ACTION (DROPDOWN) */}
+              <View style={{ marginTop: 6 }}>
+                <Text style={styles.fieldSubLabel}>FIELDING ACTION (DROPDOWN):</Text>
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: 11,
+                    backgroundColor: '#f8fafc',
+                    borderWidth: 1.5,
+                    borderColor: isFieldingActionDropdownOpen ? '#3b82f6' : '#cbd5e1',
+                    borderRadius: 8,
+                    marginTop: 4
+                  }}
+                  onPress={() => {
+                    setIsFieldingActionDropdownOpen(!isFieldingActionDropdownOpen);
+                    setIsFielderModalDropdownOpen(false);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontSize: 15 }}>
+                      {FIELDING_ACTIONS.find(a => a.label === selectedFieldingAction)?.icon || '⚡'}
+                    </Text>
+                    <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0f172a' }}>
+                      {selectedFieldingAction || 'Select Fielding Action'}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 13, color: '#64748b' }}>{isFieldingActionDropdownOpen ? '▲' : '▼'}</Text>
+                </TouchableOpacity>
+
+                {/* Action Dropdown List */}
+                {isFieldingActionDropdownOpen && (
+                  <View style={{
+                    backgroundColor: '#ffffff',
+                    borderWidth: 1.5,
+                    borderColor: '#3b82f6',
+                    borderRadius: 8,
+                    marginTop: 4,
+                    padding: 6,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.12,
+                    shadowRadius: 6,
+                    elevation: 5
+                  }}>
+                    <ScrollView nestedScrollEnabled style={{ maxHeight: 200 }}>
+                      {FIELDING_ACTIONS.map(action => {
+                        const isActionSel = selectedFieldingAction === action.label;
+                        return (
+                          <TouchableOpacity
+                            key={`action-dd-${action.label}`}
+                            style={{
+                              paddingVertical: 8,
+                              paddingHorizontal: 10,
+                              borderRadius: 6,
+                              backgroundColor: isActionSel ? '#eff6ff' : 'transparent',
+                              flexDirection: 'row',
+                              justifyContent: 'space-between',
+                              alignItems: 'center'
+                            }}
+                            onPress={() => {
+                              setSelectedFieldingAction(action.label);
+                              setIsFieldingActionDropdownOpen(false);
+                            }}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <Text style={{ fontSize: 14 }}>{action.icon}</Text>
+                              <View>
+                                <Text style={{ fontSize: 13, fontWeight: isActionSel ? '800' : '600', color: isActionSel ? '#1d4ed8' : '#1e293b' }}>
+                                  {action.label}
+                                </Text>
+                                <Text style={{ fontSize: 10, color: '#64748b' }}>{action.desc}</Text>
+                              </View>
+                            </View>
+                            {isActionSel && <Text style={{ color: '#2563eb', fontWeight: '900', fontSize: 12 }}>✓</Text>}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
+
+              {/* 3. CUSTOM TYPE / EDITABLE TEXT INPUT */}
+              <View style={{ marginTop: 12 }}>
+                <Text style={styles.fieldSubLabel}>✏️ CUSTOM ACTION / NOTES:</Text>
+                <TextInput
+                  style={{
+                    backgroundColor: '#f8fafc',
+                    borderWidth: 1.5,
+                    borderColor: '#cbd5e1',
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 9,
+                    fontSize: 12.5,
+                    color: '#0f172a',
+                    marginTop: 4
+                  }}
+                  placeholder="Type custom note (e.g. Diving stop at cover point, Bullet throw to keeper...)"
+                  placeholderTextColor="#94a3b8"
+                  value={customFieldingActionText}
+                  onChangeText={setCustomFieldingActionText}
+                />
+              </View>
+
+              {/* Action Summary Preview Box */}
+              <View style={{ marginTop: 12, backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#86efac', borderRadius: 8, padding: 9 }}>
+                <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#166534', textTransform: 'uppercase' }}>
+                  Preview:
+                </Text>
+                <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#14532d', marginTop: 2 }}>
+                  🧤 {activeFieldingSquad.find(p => p.id === selectedFielderId)?.name || customFielderModalName || activeFieldingSquad[0]?.name || 'Active Fielder'} ({currentBowlingTeam}) • {customFieldingActionText.trim() || selectedFieldingAction} • Over {Math.floor(balls / 6)}.{balls % 6} • vs {fieldingTargetBatter === 'NON_STRIKER' ? (nonStriker?.name || 'Non-Striker') : (striker?.name || 'Striker')} (b. {bowler?.name || 'Bowler'})
+                </Text>
               </View>
             </ScrollView>
 
-            <Text style={styles.fieldSubLabel}>FIELDING ACTION:</Text>
-            <View style={{ marginTop: 6, gap: 6 }}>
-              {[
-                'Clean Collect',
-                'Pick and Throw',
-                'Relay Throw',
-                'Direct Hit',
-                'Boundary Save (4 Runs Saved)',
-                'Slide and Miss',
-                'Misfield',
-                'Dropped Catch',
-                'Overthrow Conceded'
-              ].map((action) => (
-                <TouchableOpacity
-                  key={action}
-                  style={[
-                    styles.extraModalItem,
-                    selectedFieldingAction === action && { backgroundColor: '#1e3a8a', borderColor: '#3b82f6' }
-                  ]}
-                  onPress={() => handleFieldingActionSelect(action)}
-                >
-                  <Text style={[
-                    styles.extraModalItemTitle,
-                    selectedFieldingAction === action && { color: '#93c5fd', fontWeight: 'bold' }
-                  ]}>
-                    {action}
-                  </Text>
-                  <Text style={[styles.drawerMenuChevron, selectedFieldingAction === action && { color: '#93c5fd' }]}>✓</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            {/* CONFIRM & SUBMIT BUTTON */}
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#15803d',
+                borderRadius: 8,
+                paddingVertical: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: 12,
+                shadowColor: '#15803d',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.2,
+                shadowRadius: 4,
+                elevation: 3
+              }}
+              onPress={() => {
+                const actionToApply = customFieldingActionText.trim() || selectedFieldingAction;
+                handleFieldingActionSelect(actionToApply);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={{ color: '#ffffff', fontSize: 13.5, fontWeight: '900' }}>
+                ✓ RECORD FIELDING ACTION
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -7017,10 +8184,14 @@ export default function LiveScoringScreen() {
         {/* Main Content Area (Wide, Yellow/Gold Stadium Theme) */}
         <ScrollView
           style={styles.mainContentScroll}
-          contentContainerStyle={styles.scroll}
-          scrollEnabled={isDesktop}
-          showsVerticalScrollIndicator={false}
-          bounces={false}
+          contentContainerStyle={[
+            styles.scroll,
+            !isDesktop && { paddingBottom: 100 }
+          ]}
+          scrollEnabled={true}
+          showsVerticalScrollIndicator={true}
+          bounces={true}
+          nestedScrollEnabled={true}
         >
           <View style={styles.mainLayout}>
             {/* Active Match Postponed Banner */}
@@ -7040,6 +8211,15 @@ export default function LiveScoringScreen() {
                     <Text style={styles.postponedBannerReason}>
                       Reason: {(matchInfo as any)?.postponement?.reason || (matchInfo as any)?.postpone_reason || 'Adverse playing conditions / Official decision'}
                     </Text>
+                    {Boolean((matchInfo as any)?.postponement?.postponed_score_display) ? (
+                      <Text style={[styles.postponedRescheduleNotice, { color: '#b45309', fontWeight: '700', marginTop: 2 }]}>
+                        📊 Situation: {(matchInfo as any).postponement.postponed_score_display}
+                      </Text>
+                    ) : (
+                      <Text style={[styles.postponedRescheduleNotice, { color: '#64748b', marginTop: 2 }]}>
+                        📊 Situation: {balls > 0 || runs > 0 || wickets > 0 ? `Interrupted at ${runs}/${wickets} (${Math.floor(balls / 6)}.${balls % 6} Ov)` : 'Postponed before match start (0 overs bowled)'}
+                      </Text>
+                    )}
                     {Boolean((matchInfo as any)?.postponement?.rescheduled_date) && (
                       <Text style={styles.postponedRescheduleNotice}>
                         📅 Rescheduled: {(matchInfo as any).postponement.rescheduled_date} {(matchInfo as any).postponement.rescheduled_time ? `at ${(matchInfo as any).postponement.rescheduled_time}` : ''}
@@ -7755,15 +8935,15 @@ export default function LiveScoringScreen() {
                     style={[
                       styles.enginePrimaryBtn,
                       {
-                        backgroundColor: autoPromptWagonWheel ? '#0284c7' : '#047857',
-                        borderColor: autoPromptWagonWheel ? '#0369a1' : '#059669',
+                        backgroundColor: selectedFieldingAction ? '#0284c7' : '#047857',
+                        borderColor: selectedFieldingAction ? '#0369a1' : '#059669',
                       }
                     ]}
-                    onPress={() => setAutoPromptWagonWheel(!autoPromptWagonWheel)}
+                    onPress={() => setShowFieldingModal(true)}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.enginePrimaryBtnText}>
-                      {autoPromptWagonWheel ? '🎯 Wagon Wheel' : '⚡ Fast Mode'}
+                    <Text style={styles.enginePrimaryBtnText} numberOfLines={1}>
+                      {selectedFieldingAction ? `🧤 ${selectedFieldingAction}` : '🧤 Fielding Type'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -7797,32 +8977,38 @@ export default function LiveScoringScreen() {
                 )}
 
                 {/* Cricket Rules, Umpire Signals & DLS/VJD Quick Navigation Buttons */}
-                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10, flexWrap: isDesktop ? 'nowrap' : 'wrap' }}>
+                <View style={{ flexDirection: 'row', gap: isDesktop ? 8 : 4, marginBottom: isDesktop ? 10 : 6, flexWrap: 'nowrap' }}>
                   <TouchableOpacity
-                    style={[styles.smartRulesNavBtn, { flex: isDesktop ? 1 : undefined, minWidth: isDesktop ? 0 : '48%', marginBottom: 0 }]}
+                    style={[styles.smartRulesNavBtn, { flex: 1, paddingVertical: isDesktop ? 7 : 5, paddingHorizontal: 4, marginVertical: 0 }]}
                     onPress={() => {
                       setActiveCricketRule('FREE_HIT');
                       setShowCricketRulesModal(true);
                     }}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.smartRulesNavBtnText} numberOfLines={1}>⚖️ Smart Cricket Rules</Text>
+                    <Text style={[styles.smartRulesNavBtnText, { fontSize: isDesktop ? 12 : 10.5 }]} numberOfLines={1}>
+                      {isDesktop ? '⚖️ Smart Cricket Rules' : '⚖️ Rules'}
+                    </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.smartRulesNavBtn, { flex: isDesktop ? 1 : undefined, minWidth: isDesktop ? 0 : '48%', marginBottom: 0, backgroundColor: '#0284c7', borderColor: '#0ea5e9' }]}
+                    style={[styles.smartRulesNavBtn, { flex: 1, paddingVertical: isDesktop ? 7 : 5, paddingHorizontal: 4, marginVertical: 0, backgroundColor: '#0284c7', borderColor: '#0ea5e9' }]}
                     onPress={() => setShowUmpireGallery(true)}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.smartRulesNavBtnText, { color: '#ffffff' }]} numberOfLines={1}>🏁 Umpire Hand Signals</Text>
+                    <Text style={[styles.smartRulesNavBtnText, { color: '#ffffff', fontSize: isDesktop ? 12 : 10.5 }]} numberOfLines={1}>
+                      {isDesktop ? '🏁 Umpire Hand Signals' : '🏁 Signals'}
+                    </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.smartRulesNavBtn, { flex: isDesktop ? 1 : undefined, minWidth: isDesktop ? 0 : '100%', marginBottom: 0, backgroundColor: '#0e7490', borderColor: '#0891b2' }]}
+                    style={[styles.smartRulesNavBtn, { flex: 1, paddingVertical: isDesktop ? 7 : 5, paddingHorizontal: 4, marginVertical: 0, backgroundColor: '#0e7490', borderColor: '#0891b2' }]}
                     onPress={() => setShowDlsModal(true)}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.smartRulesNavBtnText, { color: '#ffffff' }]} numberOfLines={1}>🧮 DLS & VJD Methods</Text>
+                    <Text style={[styles.smartRulesNavBtnText, { color: '#ffffff', fontSize: isDesktop ? 12 : 10.5 }]} numberOfLines={1}>
+                      {isDesktop ? '🧮 DLS & VJD Methods' : '🧮 DLS / VJD'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
 
@@ -10472,12 +11658,15 @@ const getStyles = (isDesktop: boolean) =>
       width: '100%',
       backgroundColor: '#f8f6f0'
     },
-    scroll: { flexGrow: 1 },
+    scroll: {
+      flexGrow: 1,
+      paddingBottom: isDesktop ? 40 : 120
+    },
     mainLayout: {
       flex: 1,
       width: '100%',
-      padding: isDesktop ? 22 : 6,
-      justifyContent: 'space-between'
+      padding: isDesktop ? 22 : 8,
+      justifyContent: isDesktop ? 'space-between' : 'flex-start'
     },
 
     inningsBreakBanner: {
@@ -11122,7 +12311,8 @@ const getStyles = (isDesktop: boolean) =>
     extraBtn: {
       flex: 1,
       minWidth: 70,
-      height: 40,
+      minHeight: 44,
+      height: 44,
       borderRadius: 6,
       backgroundColor: '#f1f5f9',
       borderWidth: 1,
@@ -11157,7 +12347,8 @@ const getStyles = (isDesktop: boolean) =>
     actionBtn: {
       flex: 1,
       minWidth: isDesktop ? 120 : 0,
-      height: isDesktop ? 44 : 32,
+      minHeight: 44,
+      height: 44,
       borderRadius: 6,
       alignItems: 'center',
       justifyContent: 'center'
@@ -11719,28 +12910,8 @@ const getStyles = (isDesktop: boolean) =>
 
     // WICKET MODAL
     wicketModalHeader: { marginBottom: 12 },
-    wicketModalTitle: { fontSize: 18, fontWeight: 'bold', color: '#1e293b' },
-    wicketModalSub: { fontSize: 12, color: '#64748b', marginTop: 4 },
-    dismissedBanner: {
-      backgroundColor: '#fef2f2',
-      padding: 10,
-      borderRadius: 6,
-      borderWidth: 1,
-      borderColor: '#fca5a5',
-      marginBottom: 12
-    },
-    dismissedLabel: {
-      fontSize: 10,
-      fontWeight: '800',
-      color: '#991b1b',
-      letterSpacing: 0.5
-    },
-    dismissedValue: {
-      fontSize: 13,
-      fontWeight: 'bold',
-      color: '#7f1d1d',
-      marginTop: 2
-    },
+    wicketModalTitle: { fontSize: 18, fontWeight: 'bold', color: '#b45309' },
+    wicketModalSub: { fontSize: 12, color: '#64748b', marginTop: 2 },
     batterOption: {
       backgroundColor: '#f8fafc',
       borderWidth: 1,
@@ -13116,8 +14287,9 @@ const getStyles = (isDesktop: boolean) =>
     },
     engineKeypadBtn: {
       flex: 1,
-      height: isDesktop ? 54 : 36,
-      borderRadius: isDesktop ? 10 : 6,
+      minHeight: isDesktop ? 54 : 44,
+      height: isDesktop ? 54 : 44,
+      borderRadius: isDesktop ? 10 : 8,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: '#ffffff',
@@ -13137,7 +14309,8 @@ const getStyles = (isDesktop: boolean) =>
     engineAuxKeypadBtn: {
       backgroundColor: '#005960',
       borderColor: '#0d9488',
-      height: isDesktop ? 54 : 32
+      minHeight: 44,
+      height: isDesktop ? 54 : 44
     },
     engineAuxKeypadText: {
       fontSize: isDesktop ? 12 : 10,

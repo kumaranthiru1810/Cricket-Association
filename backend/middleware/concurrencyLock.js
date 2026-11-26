@@ -21,7 +21,6 @@ async function acquireMatchLock(req, res, next) {
 
   async function tryAcquireDbLock() {
     try {
-      await db.initDb();
       if (!db.models || !db.models.Match) return true;
       const expiry = new Date(Date.now() - lockTimeoutMs);
       const updated = await db.models.Match.findOneAndUpdate(

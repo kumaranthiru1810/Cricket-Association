@@ -6,6 +6,7 @@
 
 const express = require('express');
 const router = express.Router();
+const db = require('../config/db');
 
 const authService = require('../services/authService');
 const scorerService = require('../services/scorerService');
@@ -15,6 +16,15 @@ const adminService = require('../services/adminService');
 const { requireScorerAuth, verifyMatchPermission } = require('../middleware/authMiddleware');
 const { acquireMatchLock } = require('../middleware/concurrencyLock');
 const { broadcastScoreUpdate } = require('../services/socketService');
+const {
+  validateBody,
+  deliverySchema,
+  penaltySchema,
+  changeBatterSchema,
+  changeBowlerSchema,
+  superOverSchema,
+  revisedOversSchema
+} = require('../middleware/validationMiddleware');
 
 // ==========================================
 // 1. PUBLIC AUTH ROUTES
@@ -124,6 +134,24 @@ router.get('/matches/:matchId', async (req, res) => {
   }
 });
 
+// Scorer Match Timing & Protocol Acknowledgement
+router.post('/matches/:matchId/acknowledge-protocol', async (req, res) => {
+  try {
+    await db.initDb();
+    const match = await db.models.Match.findOne({ id: req.params.matchId });
+    if (!match) {
+      return res.status(404).json({ success: false, message: 'Match not found' });
+    }
+    match.scorer_acknowledged = true;
+    match.scorer_acknowledged_at = new Date();
+    match.scorer_acknowledged_by = req.user?.id || req.user?.email || req.body?.scorer_id || 'OFFICIAL_SCORER';
+    await match.save();
+    res.json({ success: true, message: 'Official match protocol and timings acknowledged successfully.', match: match.toObject() });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Match Setup before match starts
 router.get('/matches/:matchId/setup', verifyMatchPermission, async (req, res) => {
   try {
@@ -165,8 +193,8 @@ const handleRecordDelivery = async (req, res) => {
   }
 };
 
-router.post('/matches/:matchId/deliveries', acquireMatchLock, verifyMatchPermission, handleRecordDelivery);
-router.post('/matches/:matchId/ball', acquireMatchLock, verifyMatchPermission, handleRecordDelivery);
+router.post('/matches/:matchId/deliveries', acquireMatchLock, verifyMatchPermission, validateBody(deliverySchema), handleRecordDelivery);
+router.post('/matches/:matchId/ball', acquireMatchLock, verifyMatchPermission, validateBody(deliverySchema), handleRecordDelivery);
 
 // Full Scorecard (Requirement 6 & 12)
 router.get('/matches/:matchId/scorecard', async (req, res) => {
@@ -253,9 +281,9 @@ const handleEditDelivery = async (req, res) => {
   }
 };
 
-router.patch('/matches/:matchId/deliveries/:deliveryId', verifyMatchPermission, handleEditDelivery);
-router.put('/matches/:matchId/deliveries/:deliveryId', verifyMatchPermission, handleEditDelivery);
-router.post('/matches/:matchId/deliveries/:deliveryId/edit', verifyMatchPermission, handleEditDelivery);
+router.patch('/matches/:matchId/deliveries/:deliveryId', verifyMatchPermission, validateBody(deliverySchema), handleEditDelivery);
+router.put('/matches/:matchId/deliveries/:deliveryId', verifyMatchPermission, validateBody(deliverySchema), handleEditDelivery);
+router.post('/matches/:matchId/deliveries/:deliveryId/edit', verifyMatchPermission, validateBody(deliverySchema), handleEditDelivery);
 
 // Swap Strike
 router.post('/matches/:matchId/swap-strike', verifyMatchPermission, async (req, res) => {
@@ -268,7 +296,7 @@ router.post('/matches/:matchId/swap-strike', verifyMatchPermission, async (req, 
 });
 
 // Change / Substitute Active Batter
-router.post('/matches/:matchId/change-batter', verifyMatchPermission, async (req, res) => {
+router.post('/matches/:matchId/change-batter', verifyMatchPermission, validateBody(changeBatterSchema), async (req, res) => {
   try {
     const result = await scoringEngine.changeBatter(req.params.matchId, req.body);
     res.json(result);
@@ -278,7 +306,7 @@ router.post('/matches/:matchId/change-batter', verifyMatchPermission, async (req
 });
 
 // Change / Substitute Active Bowler
-router.post('/matches/:matchId/change-bowler', verifyMatchPermission, async (req, res) => {
+router.post('/matches/:matchId/change-bowler', verifyMatchPermission, validateBody(changeBowlerSchema), async (req, res) => {
   try {
     const result = await scoringEngine.changeBowler(req.params.matchId, req.body);
     res.json(result);
@@ -298,7 +326,7 @@ router.post('/matches/:matchId/end', verifyMatchPermission, async (req, res) => 
 });
 
 // Revised Overs & Revised Target
-router.post('/matches/:matchId/revised-overs', verifyMatchPermission, async (req, res) => {
+router.post('/matches/:matchId/revised-overs', verifyMatchPermission, validateBody(revisedOversSchema), async (req, res) => {
   try {
     const result = await scoringEngine.setRevisedOvers(req.params.matchId, req.body);
     res.json(result);
@@ -327,7 +355,14 @@ router.post('/matches/:matchId/postpone', verifyMatchPermission, async (req, res
         rescheduledDate: rescheduledDate || null,
         rescheduledTime: rescheduledTime || null,
         actorRole: 'SCORER',
-        actorName: scorerName
+        actorName: scorerName,
+        postponedStage: req.body.postponedStage,
+        postponedScoreDisplay: req.body.postponedScoreDisplay,
+        runsAtPostpone: req.body.runsAtPostpone,
+        wicketsAtPostpone: req.body.wicketsAtPostpone,
+        oversAtPostpone: req.body.oversAtPostpone,
+        battingTeamAtPostpone: req.body.battingTeamAtPostpone,
+        inningsAtPostpone: req.body.inningsAtPostpone
       },
       scorerEmail
     );
@@ -362,7 +397,7 @@ router.post('/matches/:matchId/playing-xi', verifyMatchPermission, async (req, r
 });
 
 // Start Super Over
-router.post('/matches/:matchId/super-over', verifyMatchPermission, async (req, res) => {
+router.post('/matches/:matchId/super-over', verifyMatchPermission, validateBody(superOverSchema), async (req, res) => {
   try {
     const result = await scoringEngine.startSuperOver(req.params.matchId, req.body);
     res.json(result);
@@ -432,7 +467,7 @@ router.post('/matches/:matchId/match-times', verifyMatchPermission, async (req, 
 });
 
 // Slide Menu: Penalty Points (Batting or Bowling 5 points)
-router.post('/matches/:matchId/penalty', verifyMatchPermission, async (req, res) => {
+router.post('/matches/:matchId/penalty', verifyMatchPermission, validateBody(penaltySchema), async (req, res) => {
   try {
     const result = await scoringEngine.addPenalty(req.params.matchId, req.body);
     res.json(result);
@@ -466,6 +501,17 @@ router.post('/matches/:matchId/umpire-assessment', verifyMatchPermission, async 
   try {
     const result = await scoringEngine.saveUmpireAssessment(req.params.matchId, req.body);
     res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
+// Officials List (Umpires & Scorers for Match & Assessment)
+router.get('/officials', async (req, res) => {
+  try {
+    const adminService = require('../services/adminService');
+    const officials = await adminService.getOfficials();
+    res.json({ success: true, officials });
   } catch (err) {
     res.status(err.status || 500).json({ success: false, error: err.message });
   }
@@ -560,6 +606,27 @@ router.post('/matches/:matchId/umpire-decisions', verifyMatchPermission, async (
     res.json({ success: true, decision: decisionRecord, message: 'Umpire decision recorded and applied.' });
   } catch (err) {
     res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
+// Accredited officials and venues directory for scorers and match operations
+router.get('/officials', async (req, res) => {
+  try {
+    const adminService = require('../services/adminService');
+    const officials = await adminService.getOfficials();
+    res.json({ success: true, officials });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.get('/venues', async (req, res) => {
+  try {
+    const adminService = require('../services/adminService');
+    const venues = await adminService.getVenues();
+    res.json({ success: true, venues });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

@@ -342,7 +342,7 @@ class ScorerService {
               timestamp: latestDel.created_at ? new Date(latestDel.created_at).getTime() : Date.now()
             };
           }
-        } catch (_delErr) {}
+        } catch (_delErr) { }
       }
 
       return {
@@ -367,6 +367,8 @@ class ScorerService {
         isPostponed,
         postponement: m.postponement || null,
         postponementReason: m.postponement?.reason || null,
+        postponedScoreDisplay: m.postponement?.postponed_score_display || null,
+        postponedStage: m.postponement?.postponed_stage || null,
         originalDate: m.postponement?.original_date || m.match_date,
         originalTime: m.postponement?.original_time || m.match_time,
         rescheduledDate: m.postponement?.rescheduled_date || null,
@@ -482,15 +484,21 @@ class ScorerService {
     const allInningsDocs = await db.models.Innings.find({ match_id: matchId }).sort({ innings_number: 1 }).lean();
 
     const battingTeam = teamMap[currentInnings.batting_team_id] || teamA;
-    const bowlingTeam = teamMap[currentInnings.bowling_team_id] || teamB;
+    let bowlingTeam = teamMap[currentInnings.bowling_team_id] || teamB;
+    if (bowlingTeam?.id && battingTeam?.id && bowlingTeam.id === battingTeam.id) {
+      bowlingTeam = (battingTeam.id === teamA?.id) ? teamB : teamA;
+    }
+
+    const resolvedBattingTeamId = battingTeam?.id || currentInnings.batting_team_id;
+    const resolvedBowlingTeamId = bowlingTeam?.id || currentInnings.bowling_team_id;
 
     // Batters in this innings
     const batters = await db.models.InningsBatter.find({ innings_id: currentInnings.id }).sort({ batting_position: 1 }).lean();
     const playerMap = await this.getPlayerMap();
-    
+
     // Resolve robust squads from official players & registered teams (Filtered to allocated Playing XI)
-    const battingSquad = await this.getSquadForTeam(currentInnings.batting_team_id, match);
-    const bowlingSquad = await this.getSquadForTeam(currentInnings.bowling_team_id, match);
+    const battingSquad = await this.getSquadForTeam(resolvedBattingTeamId, match);
+    const bowlingSquad = await this.getSquadForTeam(resolvedBowlingTeamId, match);
 
     // Active striker & non-striker
     const dismissedBatters = (batters || []).filter(b => b.is_out).map(b => b.player_id);
@@ -653,7 +661,15 @@ class ScorerService {
         teamBPlayingXI: match.team_b_playing_xi || [],
         currentBreak: match.current_break || null,
         statusComment: match.status_comment || '',
-        breaks: match.breaks || []
+        breaks: match.breaks || [],
+        umpire1_id: match.umpire1_id || null,
+        umpire2_id: match.umpire2_id || null,
+        umpire1_name: match.umpire1_name || null,
+        umpire2_name: match.umpire2_name || null,
+        umpire1Name: match.umpire1_name || null,
+        umpire2Name: match.umpire2_name || null,
+        assigned_scorer_name: match.assigned_scorer_name || match.scorer_name || null,
+        umpire_assessment: match.umpire_assessment || null
       },
       innings: {
         id: currentInnings.id,
@@ -1005,6 +1021,14 @@ class ScorerService {
     }));
 
     const statusUpper = (match.status || 'SCHEDULED').toUpperCase();
+    const statusLabel = statusUpper === 'LIVE' ? 'Live' : (statusUpper === 'COMPLETED' ? 'Completed' : (statusUpper === 'POSTPONED' ? 'Postponed' : 'Upcoming'));
+    const defaultResult = statusUpper === 'LIVE'
+      ? 'Match in progress'
+      : (statusUpper === 'COMPLETED'
+        ? 'Match completed'
+        : (statusUpper === 'POSTPONED'
+          ? 'Match postponed'
+          : 'Match scheduled — not started yet'));
 
     return {
       matchId: match.id,
@@ -1018,8 +1042,16 @@ class ScorerService {
         date: match.match_date || '2026-10-06',
         time: match.match_time || '09:30 AM',
         overs: match.overs_per_side || 20,
-        status: statusUpper === 'LIVE' ? 'Live' : (statusUpper === 'COMPLETED' ? 'Completed' : 'Upcoming'),
-        result: match.result_summary || 'Match in progress'
+        status: statusLabel,
+        result: match.result_summary || defaultResult,
+        umpire1_id: match.umpire1_id || null,
+        umpire2_id: match.umpire2_id || null,
+        umpire1_name: match.umpire1_name || null,
+        umpire2_name: match.umpire2_name || null,
+        umpire1Name: match.umpire1_name || null,
+        umpire2Name: match.umpire2_name || null,
+        assigned_scorer_name: match.assigned_scorer_name || match.scorer_name || null,
+        umpire_assessment: match.umpire_assessment || null
       },
       tournament: match.tournament_name || 'VPL 2026',
       teamA: (teamMap[match.team_a_id] && teamMap[match.team_a_id].name) || 'Team A',
@@ -1027,8 +1059,10 @@ class ScorerService {
       venue: match.venue || 'Kamarajar Stadium, Virudhunagar',
       venue_maps_url: match.venue_maps_url || (match.venue ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(match.venue + (match.venue.toLowerCase().includes('virudhunagar') ? '' : ', Virudhunagar'))}` : 'https://www.google.com/maps/search/?api=1&query=Kamarajar+District+Stadium+Virudhunagar'),
       date: match.match_date || '2026-10-06',
-      status: statusUpper === 'LIVE' ? 'Live' : (statusUpper === 'COMPLETED' ? 'Completed' : 'Upcoming'),
-      result: match.result_summary || 'Match in progress',
+      time: match.match_time || '09:30 AM',
+      overs: match.overs_per_side || 20,
+      status: statusLabel,
+      result: match.result_summary || defaultResult,
       innings: formattedInnings
     };
   }
@@ -1096,12 +1130,12 @@ class ScorerService {
     if (lastDelivery) {
       await db.models.Delivery.updateOne(
         { id: lastDelivery.id },
-        { 
-          $set: { 
+        {
+          $set: {
             fielding_position: pos,
             fielder_name: assignedFielder,
             commentary: commentary
-          } 
+          }
         }
       );
     }

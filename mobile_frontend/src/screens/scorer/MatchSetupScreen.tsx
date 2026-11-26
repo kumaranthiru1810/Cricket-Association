@@ -30,6 +30,10 @@ export default function MatchSetupScreen() {
   // Mobile squad tab (switch between Team A and Team B)
   const [mobileSquadTab, setMobileSquadTab] = useState<'TEAM_A' | 'TEAM_B'>('TEAM_A');
 
+  // Attendance state (Player ID -> boolean)
+  const [attendanceA, setAttendanceA] = useState<Record<string, boolean>>({});
+  const [attendanceB, setAttendanceB] = useState<Record<string, boolean>>({});
+
   // Toss state
   const [tossWinner, setTossWinner] = useState<string>('');
   const [tossDecision, setTossDecision] = useState<'BAT' | 'BOWL'>('BAT');
@@ -52,12 +56,71 @@ export default function MatchSetupScreen() {
         if (res.data.overs) {
           setMatchOvers(String(res.data.overs));
         }
+
+        // Initialize Attendance for Team A (Default: pre-selected 11 or pre-allocated Playing XI)
+        const attA: Record<string, boolean> = {};
+        const teamAPlayersList = res.data.teamAPlayers || [];
+        const hasAllocatedA = teamAPlayersList.some((p: any) => p.is_playing_xi);
+        teamAPlayersList.forEach((p: any, idx: number) => {
+          attA[p.id] = hasAllocatedA ? Boolean(p.is_playing_xi) : idx < 11;
+        });
+        setAttendanceA(attA);
+
+        // Initialize Attendance for Team B (Default: pre-selected 11 or pre-allocated Playing XI)
+        const attB: Record<string, boolean> = {};
+        const teamBPlayersList = res.data.teamBPlayers || [];
+        const hasAllocatedB = teamBPlayersList.some((p: any) => p.is_playing_xi);
+        teamBPlayersList.forEach((p: any, idx: number) => {
+          attB[p.id] = hasAllocatedB ? Boolean(p.is_playing_xi) : idx < 11;
+        });
+        setAttendanceB(attB);
       }
     } catch (err: any) {
       console.warn('Failed to load match setup:', err.message);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Quick Attendance Actions
+  const toggleAttendanceA = (pid: string) => {
+    setAttendanceA(prev => ({ ...prev, [pid]: !prev[pid] }));
+  };
+
+  const toggleAttendanceB = (pid: string) => {
+    setAttendanceB(prev => ({ ...prev, [pid]: !prev[pid] }));
+  };
+
+  const selectAllA = () => {
+    const next: Record<string, boolean> = {};
+    (setupData?.teamAPlayers || []).forEach((p: any) => { next[p.id] = true; });
+    setAttendanceA(next);
+  };
+
+  const select11A = () => {
+    const next: Record<string, boolean> = {};
+    (setupData?.teamAPlayers || []).forEach((p: any, idx: number) => { next[p.id] = idx < 11; });
+    setAttendanceA(next);
+  };
+
+  const clearA = () => {
+    setAttendanceA({});
+  };
+
+  const selectAllB = () => {
+    const next: Record<string, boolean> = {};
+    (setupData?.teamBPlayers || []).forEach((p: any) => { next[p.id] = true; });
+    setAttendanceB(next);
+  };
+
+  const select11B = () => {
+    const next: Record<string, boolean> = {};
+    (setupData?.teamBPlayers || []).forEach((p: any, idx: number) => { next[p.id] = idx < 11; });
+    setAttendanceB(next);
+  };
+
+  const clearB = () => {
+    setAttendanceB({});
   };
 
   const handleStartMatch = async () => {
@@ -72,6 +135,26 @@ export default function MatchSetupScreen() {
       return;
     }
 
+    // Association Rule 15: At least 9 players must be present at the start of the match
+    const presentA = (setupData?.teamAPlayers || []).filter((p: any) => attendanceA[p.id]);
+    const presentB = (setupData?.teamBPlayers || []).filter((p: any) => attendanceB[p.id]);
+
+    if (presentA.length < 9) {
+      showWarning(
+        'Rule 15: Minimum 9 Players Required',
+        `Rule 15: A minimum of 9 players must be present at the start of each innings.\n\n${teamA.name} has only ${presentA.length} players marked present. Please mark attendance for at least 9 players before starting.`
+      );
+      return;
+    }
+
+    if (presentB.length < 9) {
+      showWarning(
+        'Rule 15: Minimum 9 Players Required',
+        `Rule 15: A minimum of 9 players must be present at the start of each innings.\n\n${teamB.name} has only ${presentB.length} players marked present. Please mark attendance for at least 9 players before starting.`
+      );
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       const payload = {
@@ -79,8 +162,10 @@ export default function MatchSetupScreen() {
         tossDecision,
         overs: parsedOvers,
         totalOvers: parsedOvers,
-        teamAPlayingXI: (setupData?.teamAPlayers || []).slice(0, 11).map((p: any) => p.id),
-        teamBPlayingXI: (setupData?.teamBPlayers || []).slice(0, 11).map((p: any) => p.id)
+        teamAPlayingXI: presentA.map((p: any) => p.id),
+        teamBPlayingXI: presentB.map((p: any) => p.id),
+        teamAAttendance: presentA.map((p: any) => p.id),
+        teamBAttendance: presentB.map((p: any) => p.id)
       };
 
       const res = await ScorerApi.startMatch(matchId, payload);
@@ -112,22 +197,50 @@ export default function MatchSetupScreen() {
   const matchFormat = oversNum <= 20 ? 'T20' : oversNum <= 50 ? 'One Day' : 'Multi-Day';
   const tossWinnerName = tossWinner === teamA.id ? teamA.name : (tossWinner === teamB.id ? teamB.name : '');
 
-  // Render a player item row
-  const renderPlayerRow = (p: any, idx: number) => {
+  // Render a player item row with Attendance Checkbox
+  const renderPlayerRow = (p: any, idx: number, team: 'A' | 'B') => {
     const isWk = Boolean(p.is_wicket_keeper) || p.role === 'WICKET_KEEPER' || p.role === 'Wicket Keeper';
     const isCap = Boolean(p.is_captain) || (idx === 0 && p.is_captain === undefined);
+    const isPresent = team === 'A' ? Boolean(attendanceA[p.id]) : Boolean(attendanceB[p.id]);
+    const toggle = team === 'A' ? () => toggleAttendanceA(p.id) : () => toggleAttendanceB(p.id);
+
     return (
-      <View key={p.id || idx} style={styles.playerItem}>
-        <View style={styles.playerNumBadge}>
-          <Text style={styles.playerNumber}>#{p.jersey_number || idx + 1}</Text>
+      <TouchableOpacity
+        key={p.id || idx}
+        style={[styles.playerItem, isPresent ? styles.playerItemPresent : styles.playerItemAbsent]}
+        onPress={toggle}
+        activeOpacity={0.7}
+      >
+        {/* Attendance Checkbox */}
+        <View style={[styles.checkboxBox, isPresent && styles.checkboxBoxChecked]}>
+          <Text style={[styles.checkboxCheck, isPresent && styles.checkboxCheckChecked]}>
+            {isPresent ? '✓' : ''}
+          </Text>
         </View>
-        <Text style={styles.playerName} numberOfLines={1}>{p.name}</Text>
+
+        <View style={[styles.playerNumBadge, isPresent && styles.playerNumBadgePresent]}>
+          <Text style={[styles.playerNumber, isPresent && styles.playerNumberPresent]}>
+            #{p.jersey_number || idx + 1}
+          </Text>
+        </View>
+
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={[styles.playerName, !isPresent && styles.playerNameAbsent]} numberOfLines={1}>
+            {p.name}
+          </Text>
+          <Text style={styles.playerRoleSub}>{p.role || 'Batter'}</Text>
+        </View>
+
         <View style={styles.playerBadgesRow}>
           {isCap && <View style={styles.cBadge}><Text style={styles.cBadgeText}>C</Text></View>}
           {isWk && <View style={styles.wkBadge}><Text style={styles.wkBadgeText}>WK</Text></View>}
-          <Text style={styles.playerRole}>{p.role || 'Batter'}</Text>
+          <View style={[styles.statusPill, isPresent ? styles.statusPillPresent : styles.statusPillAbsent]}>
+            <Text style={[styles.statusPillText, isPresent ? styles.statusPillTextPresent : styles.statusPillTextAbsent]}>
+              {isPresent ? 'Present' : 'Absent'}
+            </Text>
+          </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -308,19 +421,25 @@ export default function MatchSetupScreen() {
                 <Text style={styles.cardHeader}>Match Officials</Text>
                 <View style={styles.officialsGrid}>
                   <View style={styles.officialPill}>
-                    <Text style={styles.officialRole}>Umpire 1</Text>
-                    <Text style={styles.officialName} numberOfLines={1}>K. Sundaram (TNCA)</Text>
+                    <Text style={styles.officialRole}>Umpire 1 (Lead)</Text>
+                    <Text style={styles.officialName} numberOfLines={1}>
+                      {setupData?.umpire1_name || setupData?.umpire1Name || 'K. Sundaram (TNCA)'}
+                    </Text>
                   </View>
                   <View style={styles.officialPill}>
-                    <Text style={styles.officialRole}>Umpire 2</Text>
-                    <Text style={styles.officialName} numberOfLines={1}>P. Velmurugan (TNCA)</Text>
+                    <Text style={styles.officialRole}>Umpire 2 (Square Leg)</Text>
+                    <Text style={styles.officialName} numberOfLines={1}>
+                      {setupData?.umpire2_name || setupData?.umpire2Name || 'P. Velmurugan (TNCA)'}
+                    </Text>
                   </View>
                   <View style={styles.officialPill}>
-                    <Text style={styles.officialRole}>Scorer</Text>
-                    <Text style={styles.officialName} numberOfLines={1}>S. Ramesh (SCR-101)</Text>
+                    <Text style={styles.officialRole}>Official Scorer</Text>
+                    <Text style={styles.officialName} numberOfLines={1}>
+                      {setupData?.assigned_scorer_name || setupData?.scorer_name || 'S. Ramesh (SCR-101)'}
+                    </Text>
                   </View>
                   <View style={styles.officialPill}>
-                    <Text style={styles.officialRole}>Referee</Text>
+                    <Text style={styles.officialRole}>Match Referee</Text>
                     <Text style={styles.officialName} numberOfLines={1}>R. Senthil Kumar</Text>
                   </View>
                 </View>
@@ -344,21 +463,37 @@ export default function MatchSetupScreen() {
 
             </View>
 
-            {/* RIGHT COLUMN: Squads & Registered Roster */}
+            {/* RIGHT COLUMN: Squads & Registered Roster with Interactive Attendance */}
             <View style={styles.rightCol}>
               <View style={[styles.card, styles.squadsCard]}>
                 
                 {/* Header */}
                 <View style={styles.cardHeaderRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.cardHeader}>Official Registered Squad Roster</Text>
+                    <Text style={styles.cardHeader}>Match Squad Attendance &amp; Playing Squad</Text>
                     <Text style={styles.sectionHelp}>
-                      Authentic players registered during team enrollment • Managed via Team Login
+                      Scorer Attendance Checklist • Tap players to mark Present (Min 9 players per team)
                     </Text>
                   </View>
                   <View style={styles.xiMainBadge}>
                     <Text style={styles.xiMainBadgeText}>
-                      {setupData?.teamAAllocationStatus === 'SUBMITTED' ? '✅ Allocated Playing XI (11)' : `${teamAPlayers.length} Players`} vs {setupData?.teamBAllocationStatus === 'SUBMITTED' ? '✅ Allocated Playing XI (11)' : `${teamBPlayers.length} Players`}
+                      {teamAPlayers.filter((p: any) => attendanceA[p.id]).length} Present vs {teamBPlayers.filter((p: any) => attendanceB[p.id]).length} Present
+                    </Text>
+                  </View>
+                </View>
+
+                {/* ASSOCIATION RULE 15 ATTENDANCE BANNER */}
+                <View style={styles.rule15Banner}>
+                  <Text style={styles.rule15Icon}>📜</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rule15Title}>
+                      Association Rule 15 • Match Attendance Requirement
+                    </Text>
+                    <Text style={styles.rule15Tamil}>
+                      "Rule 15: A minimum of 9 players must be present at the start of each innings."
+                    </Text>
+                    <Text style={styles.rule15Sub}>
+                      Official Scorer: Mark checkboxes for each attending player. At least 9 players must be marked Present per team before starting the match.
                     </Text>
                   </View>
                 </View>
@@ -371,7 +506,7 @@ export default function MatchSetupScreen() {
                       onPress={() => setMobileSquadTab('TEAM_A')}
                     >
                       <Text style={[styles.mobileTabText, mobileSquadTab === 'TEAM_A' && styles.mobileTabTextActive]} numberOfLines={1}>
-                        {teamA.name} ({teamAPlayers.length})
+                        {teamA.name} ({teamAPlayers.filter((p: any) => attendanceA[p.id]).length}/{teamAPlayers.length})
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -379,7 +514,7 @@ export default function MatchSetupScreen() {
                       onPress={() => setMobileSquadTab('TEAM_B')}
                     >
                       <Text style={[styles.mobileTabText, mobileSquadTab === 'TEAM_B' && styles.mobileTabTextActive]} numberOfLines={1}>
-                        {teamB.name} ({teamBPlayers.length})
+                        {teamB.name} ({teamBPlayers.filter((p: any) => attendanceB[p.id]).length}/{teamBPlayers.length})
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -391,16 +526,30 @@ export default function MatchSetupScreen() {
                   {(isDesktop || mobileSquadTab === 'TEAM_A') && (
                     <View style={styles.squadColumn}>
                       <View style={styles.teamColHeader}>
-                        <Text style={styles.teamColTitle} numberOfLines={1}>{teamA.name}</Text>
-                        <Text style={styles.teamColSub}>
-                          {setupData?.teamAAllocationStatus === 'SUBMITTED' || teamAPlayers.some((p: any) => p.is_playing_xi)
-                            ? '✅ Official Playing XI (11 Allocated)'
-                            : `${teamAPlayers.length} Registered Players`}
-                        </Text>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={styles.teamColTitle} numberOfLines={1}>{teamA.name}</Text>
+                          <Text style={styles.teamColSub}>
+                            {teamAPlayers.filter((p: any) => attendanceA[p.id]).length >= 9
+                              ? `✅ ${teamAPlayers.filter((p: any) => attendanceA[p.id]).length} Present (Min 9 Met)`
+                              : `⚠️ Only ${teamAPlayers.filter((p: any) => attendanceA[p.id]).length} Present (Rule 15: Need 9)`}
+                          </Text>
+                        </View>
+                        {/* Attendance Quick Action Buttons */}
+                        <View style={styles.attToolbar}>
+                          <TouchableOpacity onPress={select11A} style={styles.attToolbarBtn} activeOpacity={0.7}>
+                            <Text style={styles.attToolbarBtnText}>Top 11</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={selectAllA} style={styles.attToolbarBtn} activeOpacity={0.7}>
+                            <Text style={styles.attToolbarBtnText}>All ({teamAPlayers.length})</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={clearA} style={[styles.attToolbarBtn, styles.attToolbarBtnClear]} activeOpacity={0.7}>
+                            <Text style={[styles.attToolbarBtnText, { color: '#ef4444' }]}>Clear</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                       <View style={styles.playersScrollBox}>
                         {teamAPlayers.length > 0 ? (
-                          teamAPlayers.map((p: any, idx: number) => renderPlayerRow(p, idx))
+                          teamAPlayers.map((p: any, idx: number) => renderPlayerRow(p, idx, 'A'))
                         ) : (
                           <Text style={{ padding: 12, color: '#64748b', fontSize: 12 }}>
                             No registered players found for {teamA.name}.
@@ -414,16 +563,30 @@ export default function MatchSetupScreen() {
                   {(isDesktop || mobileSquadTab === 'TEAM_B') && (
                     <View style={styles.squadColumn}>
                       <View style={[styles.teamColHeader, styles.teamColHeaderB]}>
-                        <Text style={styles.teamColTitle} numberOfLines={1}>{teamB.name}</Text>
-                        <Text style={styles.teamColSub}>
-                          {setupData?.teamBAllocationStatus === 'SUBMITTED' || teamBPlayers.some((p: any) => p.is_playing_xi)
-                            ? '✅ Official Playing XI (11 Allocated)'
-                            : `${teamBPlayers.length} Registered Players`}
-                        </Text>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={styles.teamColTitle} numberOfLines={1}>{teamB.name}</Text>
+                          <Text style={styles.teamColSub}>
+                            {teamBPlayers.filter((p: any) => attendanceB[p.id]).length >= 9
+                              ? `✅ ${teamBPlayers.filter((p: any) => attendanceB[p.id]).length} Present (Min 9 Met)`
+                              : `⚠️ Only ${teamBPlayers.filter((p: any) => attendanceB[p.id]).length} Present (Rule 15: Need 9)`}
+                          </Text>
+                        </View>
+                        {/* Attendance Quick Action Buttons */}
+                        <View style={styles.attToolbar}>
+                          <TouchableOpacity onPress={select11B} style={styles.attToolbarBtn} activeOpacity={0.7}>
+                            <Text style={styles.attToolbarBtnText}>Top 11</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={selectAllB} style={styles.attToolbarBtn} activeOpacity={0.7}>
+                            <Text style={styles.attToolbarBtnText}>All ({teamBPlayers.length})</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={clearB} style={[styles.attToolbarBtn, styles.attToolbarBtnClear]} activeOpacity={0.7}>
+                            <Text style={[styles.attToolbarBtnText, { color: '#ef4444' }]}>Clear</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                       <View style={styles.playersScrollBox}>
                         {teamBPlayers.length > 0 ? (
-                          teamBPlayers.map((p: any, idx: number) => renderPlayerRow(p, idx))
+                          teamBPlayers.map((p: any, idx: number) => renderPlayerRow(p, idx, 'B'))
                         ) : (
                           <Text style={{ padding: 12, color: '#64748b', fontSize: 12 }}>
                             No registered players found for {teamB.name}.
@@ -900,6 +1063,129 @@ function getStyles(isDesktop: boolean) {
       fontSize: 9.5,
       color: '#64748b',
       fontWeight: '600'
+    },
+    playerRoleSub: {
+      fontSize: 9,
+      color: '#64748b',
+      fontWeight: '600'
+    },
+    rule15Banner: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+      backgroundColor: '#fffbeb',
+      borderWidth: 1,
+      borderColor: '#fde68a',
+      borderRadius: 8,
+      padding: 10,
+      marginVertical: 10
+    },
+    rule15Icon: {
+      fontSize: 18,
+      marginTop: 2
+    },
+    rule15Title: {
+      fontSize: 11.5,
+      fontWeight: '800',
+      color: '#b45309'
+    },
+    rule15Tamil: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: '#1e293b',
+      marginVertical: 2
+    },
+    rule15Sub: {
+      fontSize: 10,
+      color: '#78350f',
+      lineHeight: 14
+    },
+    attToolbar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4
+    },
+    attToolbarBtn: {
+      backgroundColor: 'rgba(255, 255, 255, 0.15)',
+      paddingHorizontal: 6,
+      paddingVertical: 2.5,
+      borderRadius: 4,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.25)'
+    },
+    attToolbarBtnClear: {
+      backgroundColor: 'rgba(239, 68, 68, 0.15)',
+      borderColor: 'rgba(239, 68, 68, 0.3)'
+    },
+    attToolbarBtnText: {
+      color: '#ffffff',
+      fontSize: 9,
+      fontWeight: '800'
+    },
+    checkboxBox: {
+      width: 18,
+      height: 18,
+      borderRadius: 4,
+      borderWidth: 1.5,
+      borderColor: '#cbd5e1',
+      backgroundColor: '#ffffff',
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    checkboxBoxChecked: {
+      borderColor: '#16a34a',
+      backgroundColor: '#16a34a'
+    },
+    checkboxCheck: {
+      fontSize: 11,
+      color: 'transparent',
+      fontWeight: '900'
+    },
+    checkboxCheckChecked: {
+      color: '#ffffff'
+    },
+    playerItemPresent: {
+      backgroundColor: '#f0fdf4',
+      borderBottomColor: '#dcfce7',
+      borderRadius: 4,
+      paddingHorizontal: 6
+    },
+    playerItemAbsent: {
+      opacity: 0.65,
+      backgroundColor: '#f8fafc',
+      borderRadius: 4,
+      paddingHorizontal: 6
+    },
+    playerNumBadgePresent: {
+      backgroundColor: '#bbf7d0'
+    },
+    playerNumberPresent: {
+      color: '#15803d'
+    },
+    playerNameAbsent: {
+      color: '#64748b',
+      textDecorationLine: 'line-through'
+    },
+    statusPill: {
+      paddingHorizontal: 5,
+      paddingVertical: 1,
+      borderRadius: 4
+    },
+    statusPillPresent: {
+      backgroundColor: '#dcfce7'
+    },
+    statusPillAbsent: {
+      backgroundColor: '#fee2e2'
+    },
+    statusPillText: {
+      fontSize: 8.5,
+      fontWeight: '800'
+    },
+    statusPillTextPresent: {
+      color: '#15803d'
+    },
+    statusPillTextAbsent: {
+      color: '#b91c1c'
     }
   });
 }

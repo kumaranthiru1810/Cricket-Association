@@ -70,6 +70,8 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     height: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
   },
   absoluteFill: {
     position: 'absolute',
@@ -106,5 +108,8 @@ const styles = StyleSheet.create({
   contentContainer: {
     flex: 1,
     zIndex: 10,
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
   }
 });

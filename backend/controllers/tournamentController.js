@@ -5,6 +5,7 @@
  */
 
 const tournamentService = require('../services/tournamentService');
+const db = require('../config/db');
 
 class TournamentController {
   /**

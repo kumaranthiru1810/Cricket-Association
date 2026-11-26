@@ -145,6 +145,9 @@ export default function ScorerNavigator({ onExit, initialParams }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'transparent'
+    backgroundColor: 'transparent',
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden'
   }
 });

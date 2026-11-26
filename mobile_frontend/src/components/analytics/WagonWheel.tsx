@@ -107,7 +107,7 @@ const resolveDeliveryAngleAndDist = (d: ShotDelivery): ShotDelivery => {
     const key = (d.shotZone || d.fieldingPosition || '').toLowerCase().trim();
     if (key && ZONE_ANGLES[key] !== undefined) {
       angle = ZONE_ANGLES[key];
-    } else {
+    } else if (runs === 4 || runs === 6) {
       const hash = (((d.ballNumber || 1) * 37 + (d.overNumber || 0) * 19 + runs * 53) % 360);
       angle = hash;
     }
@@ -220,7 +220,13 @@ export default function WagonWheel({
       sectorMap[s.key] = { runs: 0, balls: 0, fours: 0, sixes: 0 };
     });
 
-    batterDeliveries.forEach(d => {
+    // Only compute sector distributions for shots that have valid directions (boundaries 4s, 6s or explicit)
+    const validShots = batterDeliveries.filter(d => {
+      const runs = Number(d.runsBatter) || 0;
+      return runs === 4 || runs === 6 || (typeof d.shotAngle === 'number' && Boolean(d.shotZone || d.fieldingPosition));
+    });
+
+    validShots.forEach(d => {
       const runs = Number(d.runsBatter) || 0;
       totalRuns += runs;
       const angle = (typeof d.shotAngle === 'number' ? d.shotAngle : 315) % 360;
@@ -264,7 +270,7 @@ export default function WagonWheel({
 
     return {
       totalRuns,
-      totalBalls: batterDeliveries.length,
+      totalBalls: validShots.length,
       offRuns,
       legRuns,
       offPct,
@@ -288,14 +294,17 @@ export default function WagonWheel({
     return batterDeliveries.filter(d => {
       const runs = Number(d.runsBatter) || 0;
 
+      // In cricket scoring, wagon wheel direction is only recorded for boundaries (4s & 6s).
+      // Non-boundary shots (dots, 1s, 2s, 3s) have unknown direction and must not be plotted.
+      const isBoundary = runs === 4 || runs === 6;
+      const hasExplicitDirection = typeof d.shotAngle === 'number' && Boolean(d.shotZone || d.fieldingPosition);
+      if (!isBoundary && !hasExplicitDirection) {
+        return false;
+      }
+
       if (runFilter === '6' && runs !== 6) return false;
       if (runFilter === '4' && runs !== 4) return false;
-      if (runFilter === '3' && runs !== 3) return false;
-      if (runFilter === '2' && runs !== 2) return false;
-      if (runFilter === '1' && runs !== 1) return false;
-      if (runFilter === '0' && runs !== 0) return false;
-      if (runFilter === 'BOUNDARIES' && runs !== 4 && runs !== 6) return false;
-      if (runFilter === 'RUNNING' && runs !== 1 && runs !== 2 && runs !== 3) return false;
+      if (runFilter === 'BOUNDARIES' && !isBoundary) return false;
 
       if (sectorFilter) {
         const s = SECTORS.find(sec => sec.key === sectorFilter);
@@ -547,7 +556,7 @@ export default function WagonWheel({
               </Text>
               <View style={[styles.slidePillBadge, activeSlide === 'wheel' && styles.slidePillBadgeActive]}>
                 <Text style={[styles.slidePillBadgeText, activeSlide === 'wheel' && styles.slidePillBadgeTextActive]}>
-                  {displayedDeliveries.length} {runFilter === 'ALL' ? 'Shots' : runFilter === 'BOUNDARIES' || runFilter === '4' || runFilter === '6' ? 'Boundaries' : 'Shots'}
+                  {displayedDeliveries.length} {displayedDeliveries.length === 1 ? 'Shot' : 'Shots'}
                 </Text>
               </View>
             </View>
@@ -590,7 +599,7 @@ export default function WagonWheel({
                   This player has not hit any boundaries (4s or 6s) in this innings.
                 </Text>
                 <Text style={styles.noBoundariesSubtitle}>
-                  All {currentBatter?.runs || 0} runs were scored through running between wickets (1s, 2s & 3s). Shot trajectories for running runs are shown on the ground below.
+                  Wagon wheel shot trajectories are recorded for boundaries (4s & 6s). All {currentBatter?.runs || 0} runs were scored through running between wickets.
                 </Text>
               </View>
             </View>
@@ -606,28 +615,7 @@ export default function WagonWheel({
                 activeOpacity={0.7}
               >
                 <Text style={[styles.filterPillText, runFilter === 'ALL' && styles.filterPillTextActive]}>
-                  All Shots ({runCounts.total})
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.filterPill, runFilter === 'BOUNDARIES' && styles.filterPillActiveBoundary]}
-                onPress={() => setRunFilter(runFilter === 'BOUNDARIES' ? 'ALL' : 'BOUNDARIES')}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.filterPillText, runFilter === 'BOUNDARIES' && styles.filterPillTextActive]}>
-                  Boundaries ({runCounts.fours + runCounts.sixes})
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.filterPill, runFilter === '6' && styles.filterPillActiveSix]}
-                onPress={() => setRunFilter(runFilter === '6' ? 'ALL' : '6')}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.dotMarker, { backgroundColor: '#ec4899' }]} />
-                <Text style={[styles.filterPillText, runFilter === '6' && styles.filterPillTextActive]}>
-                  6s ({runCounts.sixes} × 6 = {scoringBreakdown.sixes.runs}r)
+                  All Shots ({runCounts.fours + runCounts.sixes})
                 </Text>
               </TouchableOpacity>
 
@@ -643,28 +631,15 @@ export default function WagonWheel({
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.filterPill, runFilter === 'RUNNING' && styles.filterPillActiveRunning]}
-                onPress={() => setRunFilter(runFilter === 'RUNNING' ? 'ALL' : 'RUNNING')}
+                style={[styles.filterPill, runFilter === '6' && styles.filterPillActiveSix]}
+                onPress={() => setRunFilter(runFilter === '6' ? 'ALL' : '6')}
                 activeOpacity={0.7}
               >
-                <View style={[styles.dotMarker, { backgroundColor: '#38bdf8' }]} />
-                <Text style={[styles.filterPillText, runFilter === 'RUNNING' && styles.filterPillTextActive]}>
-                  1s, 2s & 3s ({runCounts.ones + runCounts.twos + runCounts.threes})
+                <View style={[styles.dotMarker, { backgroundColor: '#ec4899' }]} />
+                <Text style={[styles.filterPillText, runFilter === '6' && styles.filterPillTextActive]}>
+                  6s ({runCounts.sixes} × 6 = {scoringBreakdown.sixes.runs}r)
                 </Text>
               </TouchableOpacity>
-
-              {runCounts.dots > 0 && (
-                <TouchableOpacity
-                  style={[styles.filterPill, runFilter === '0' && styles.filterPillActiveDot]}
-                  onPress={() => setRunFilter(runFilter === '0' ? 'ALL' : '0')}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.dotMarker, { backgroundColor: '#94a3b8' }]} />
-                  <Text style={[styles.filterPillText, runFilter === '0' && styles.filterPillTextActive]}>
-                    Dots ({runCounts.dots})
-                  </Text>
-                </TouchableOpacity>
-              )}
             </View>
           </View>
 
@@ -969,8 +944,8 @@ export default function WagonWheel({
               <View style={styles.emptyWagonNotice}>
                 <Text style={styles.emptyWagonText}>
                   🏏 {hasNoBoundaries
-                    ? `This player has not scored any boundaries (4s or 6s) in this innings. All ${currentBatter?.runs || 0} runs were scored through running between wickets (1s, 2s & 3s). Switch to 'All Shots' or '1s, 2s & 3s' to view shot directions on the field.`
-                    : `No ${runFilter === '6' ? 'sixes (6s)' : runFilter === '4' ? 'fours (4s)' : runFilter === '0' ? 'dot balls' : 'deliveries'} match filter for ${currentBatter?.name || 'this batsman'}. Switch to 'All Shots' to see all deliveries.`}
+                    ? `This player has not hit any boundaries (4s or 6s) in this innings. Wagon wheel trajectories are recorded for boundaries (4s & 6s).`
+                    : `No ${runFilter === '6' ? 'sixes (6s)' : runFilter === '4' ? 'fours (4s)' : 'boundary shots'} match the filter for ${currentBatter?.name || 'this batsman'}. Switch to 'All Shots' to see all boundaries.`}
                 </Text>
               </View>
             )}
@@ -978,28 +953,12 @@ export default function WagonWheel({
             {/* Professional Broadcast Color Legend */}
             <View style={styles.boundaryLegendRow}>
               <View style={styles.boundaryLegendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#ec4899' }]} />
-                <Text style={styles.legendText}>6s</Text>
-              </View>
-              <View style={styles.boundaryLegendItem}>
                 <View style={[styles.legendDot, { backgroundColor: '#06b6d4' }]} />
-                <Text style={styles.legendText}>4s</Text>
+                <Text style={styles.legendText}>4s ({runCounts.fours})</Text>
               </View>
               <View style={styles.boundaryLegendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#a855f7' }]} />
-                <Text style={styles.legendText}>3s</Text>
-              </View>
-              <View style={styles.boundaryLegendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
-                <Text style={styles.legendText}>2s</Text>
-              </View>
-              <View style={styles.boundaryLegendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#38bdf8' }]} />
-                <Text style={styles.legendText}>1s</Text>
-              </View>
-              <View style={styles.boundaryLegendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#94a3b8' }]} />
-                <Text style={styles.legendText}>0s (Dots)</Text>
+                <View style={[styles.legendDot, { backgroundColor: '#ec4899' }]} />
+                <Text style={styles.legendText}>6s ({runCounts.sixes})</Text>
               </View>
             </View>
 
@@ -1321,97 +1280,51 @@ function generateSyntheticShots(batter: BatterProfile): ShotDelivery[] {
   let remainingRuns = Math.max(0, runsTotal - boundaryRuns);
   let remainingBalls = Math.max(0, ballsTotal - (sixes + fours));
 
-  // Threes (3s)
+  // Threes (3s) - Running runs without wagon wheel trajectory
   let threes = 0;
   if (remainingRuns >= 6 && remainingBalls >= 4) {
     threes = Math.min(2, Math.floor(remainingRuns / 9) || 1);
     remainingRuns -= threes * 3;
     remainingBalls -= threes;
   }
-  const threePositions = [
-    { angle: 320, pos: 'Extra Cover', zone: 'Cover / Extra Cover' },
-    { angle: 80, pos: 'Deep Midwicket', zone: 'Midwicket / Cow Corner' },
-    { angle: 150, pos: 'Deep Fine Leg', zone: 'Fine Leg' }
-  ];
   for (let i = 0; i < threes; i++) {
-    const p = threePositions[i % threePositions.length];
     shots.push({
       strikerId: batter.id,
       runsBatter: 3,
-      shotAngle: p.angle,
-      shotDistance: 78,
-      fieldingPosition: p.pos,
-      shotZone: p.zone,
-      commentary: 'Pushed deep into the outfield, energetic running completes 3 runs!'
+      commentary: 'Running between wickets completes 3 runs.'
     });
   }
 
-  // Twos (2s)
+  // Twos (2s) - Running runs without wagon wheel trajectory
   const twos = Math.min(Math.floor(remainingRuns / 2), Math.floor(remainingBalls / 2));
   remainingRuns -= twos * 2;
   remainingBalls -= twos;
-  const twoPositions = [
-    { angle: 260, pos: 'Deep Point', zone: 'Point / Backward Point' },
-    { angle: 105, pos: 'Square Leg', zone: 'Square Leg' },
-    { angle: 330, pos: 'Deep Cover', zone: 'Cover / Extra Cover' },
-    { angle: 35, pos: 'Mid-On', zone: 'Mid-On / Long On' }
-  ];
   for (let i = 0; i < twos; i++) {
-    const p = twoPositions[i % twoPositions.length];
     shots.push({
       strikerId: batter.id,
       runsBatter: 2,
-      shotAngle: p.angle,
-      shotDistance: 62,
-      fieldingPosition: p.pos,
-      shotZone: p.zone,
-      commentary: 'Worked with soft hands into the gap for a brisk couple!'
+      commentary: 'Running between wickets completes 2 runs.'
     });
   }
 
-  // Singles (1s)
+  // Singles (1s) - Running runs without wagon wheel trajectory
   const ones = Math.min(remainingRuns, remainingBalls);
   remainingBalls -= ones;
-  const onePositions = [
-    { angle: 340, pos: 'Mid-Off', zone: 'Mid-Off / Long Off' },
-    { angle: 20, pos: 'Mid-On', zone: 'Mid-On / Long On' },
-    { angle: 280, pos: 'Point', zone: 'Point / Backward Point' },
-    { angle: 110, pos: 'Square Leg', zone: 'Square Leg' },
-    { angle: 200, pos: 'Third Man', zone: 'Third Man / Slips' },
-    { angle: 70, pos: 'Midwicket', zone: 'Midwicket / Cow Corner' }
-  ];
   for (let i = 0; i < ones; i++) {
-    const p = onePositions[i % onePositions.length];
     shots.push({
       strikerId: batter.id,
       runsBatter: 1,
-      shotAngle: p.angle,
-      shotDistance: 45,
-      fieldingPosition: p.pos,
-      shotZone: p.zone,
-      commentary: 'Tapped and scampered through for a sharp single.'
+      commentary: 'Single taken.'
     });
   }
 
-  // Dot balls (0s)
+  // Dot balls (0s) - Dot balls without wagon wheel trajectory
   const dots = Math.max(0, remainingBalls);
-  const dotPositions = [
-    { angle: 300, pos: 'Cover', zone: 'Cover / Extra Cover' },
-    { angle: 270, pos: 'Point', zone: 'Point / Backward Point' },
-    { angle: 0, pos: 'Bowler', zone: 'Mid-Off / Long Off' },
-    { angle: 90, pos: 'Midwicket', zone: 'Midwicket / Cow Corner' },
-    { angle: 120, pos: 'Square Leg', zone: 'Square Leg' }
-  ];
   for (let i = 0; i < dots; i++) {
-    const p = dotPositions[i % dotPositions.length];
     shots.push({
       strikerId: batter.id,
       runsBatter: 0,
-      shotAngle: p.angle,
-      shotDistance: 22,
-      fieldingPosition: p.pos,
-      shotZone: p.zone,
-      commentary: 'Solid defense straight to the fielder.'
+      commentary: 'Dot ball.'
     });
   }
 

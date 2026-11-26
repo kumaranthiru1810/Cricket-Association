@@ -39,3 +39,13 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Generated bundles & scratch files
+bundled.html
+inlineHtml.ts
+scratch/
+scratch_*.html
+*preview*.html
+*_backup.*
+bootstrap-5.0.2-dist/
+

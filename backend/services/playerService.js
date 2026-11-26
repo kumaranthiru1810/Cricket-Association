@@ -89,18 +89,32 @@ class PlayerService {
       throw { status: 404, message: 'Player profile not found in database.' };
     }
 
-    // Determine team details
-    let teamId = playerDoc?.team_id || squadEntry?.team_registration_id || null;
-    let teamName = squadEntry?.team_name || '';
+    // Determine team details (check Player, SquadEntry, User.player_details, Team, and TeamRegistration)
+    let teamId = playerDoc?.team_id || squadEntry?.team_registration_id || userDoc?.player_details?.team_id || userDoc?.team_id || null;
+    let teamName = squadEntry?.team_name || userDoc?.player_details?.team_name || '';
     let coachName = squadEntry?.coach_name || '';
     let coachEmail = squadEntry?.coach_email || '';
 
-    if (teamId && !squadEntry?.team_name) {
+    if (teamId && !teamName) {
       const teamDoc = await db.models.Team.findOne({ id: teamId }).lean();
       if (teamDoc) {
         teamName = teamDoc.name;
         coachName = teamDoc.coach_name || '';
         coachEmail = teamDoc.coach_email || '';
+      } else if (db.models.TeamRegistration) {
+        const regDoc = await db.models.TeamRegistration.findOne({ id: teamId }).lean();
+        if (regDoc) {
+          teamName = regDoc.team_name || '';
+          coachName = regDoc.coach_name || '';
+          coachEmail = regDoc.coach_email || '';
+        }
+      }
+    } else if (!teamId && teamName) {
+      const teamDoc = await db.models.Team.findOne({ name: teamName }).lean();
+      if (teamDoc) {
+        teamId = teamDoc.id;
+        coachName = coachName || teamDoc.coach_name || '';
+        coachEmail = coachEmail || teamDoc.coach_email || '';
       }
     }
 
@@ -450,6 +464,28 @@ class PlayerService {
       }
     });
 
+    // Collect all alias IDs and names for the player's team across both Team and TeamRegistration
+    const aliasTeamIds = new Set(teamId ? [teamId] : []);
+    const aliasTeamNames = new Set(playerTeamName ? [playerTeamName] : []);
+
+    if (teamId && teamMap[teamId]?.name) {
+      aliasTeamNames.add(String(teamMap[teamId].name).toLowerCase().trim());
+    }
+    (allTeams || []).forEach(t => {
+      const tName = (t.name || '').toLowerCase().trim();
+      if (t.id === teamId || (tName && aliasTeamNames.has(tName))) {
+        if (t.id) aliasTeamIds.add(t.id);
+        if (tName) aliasTeamNames.add(tName);
+      }
+    });
+    (teamRegs || []).forEach(r => {
+      const rName = (r.team_name || '').toLowerCase().trim();
+      if (r.id === teamId || (rName && aliasTeamNames.has(rName))) {
+        if (r.id) aliasTeamIds.add(r.id);
+        if (rName) aliasTeamNames.add(rName);
+      }
+    });
+
     const tournamentMap = {};
     (allTournaments || []).forEach(tour => { tournamentMap[tour.id] = tour; });
 
@@ -501,12 +537,17 @@ class PlayerService {
       const isLive = statusUpper === 'LIVE' || statusUpper === 'INNINGS_BREAK';
       const isCompleted = statusUpper === 'COMPLETED' || statusUpper === 'FINISHED';
 
+      const teamANameLower = (teamA.name || '').toLowerCase().trim();
+      const teamBNameLower = (teamB.name || '').toLowerCase().trim();
       const isMyTeamMatch = Boolean(
         hasPlayerPlayedDirectly ||
-        (teamId && (m.team_a_id === teamId || m.team_b_id === teamId)) ||
-        (playerTeamName && (
-          (teamA.name && teamA.name.toLowerCase().includes(playerTeamName)) ||
-          (teamB.name && teamB.name.toLowerCase().includes(playerTeamName))
+        aliasTeamIds.has(m.team_a_id) ||
+        aliasTeamIds.has(m.team_b_id) ||
+        aliasTeamNames.has(teamANameLower) ||
+        aliasTeamNames.has(teamBNameLower) ||
+        Array.from(aliasTeamNames).some(n => n && (
+          (teamANameLower && (teamANameLower.includes(n) || n.includes(teamANameLower))) ||
+          (teamBNameLower && (teamBNameLower.includes(n) || n.includes(teamBNameLower)))
         ))
       );
 
@@ -685,6 +726,16 @@ class PlayerService {
       dismissal_type: 'RUN_OUT'
     });
 
+    const directHitsCount = await db.models.Delivery.countDocuments({
+      $or: [{ fielder_id: playerId }, { fielder_name: profile.name }],
+      fielding_action: { $regex: /direct\s*hit/i }
+    });
+
+    const boundarySavesCount = await db.models.Delivery.countDocuments({
+      $or: [{ fielder_id: playerId }, { fielder_name: profile.name }],
+      fielding_action: { $regex: /boundary\s*save/i }
+    });
+
     // 4. Combine with Player.stats baseline if present
     const baseStats = playerDoc?.stats || {};
     const totalRuns = bRuns + (baseStats.runs || 0);
@@ -756,7 +807,9 @@ class PlayerService {
       fielding: {
         catches: totalCatches,
         runOuts: totalRunOuts,
-        stumpings: totalStumpings
+        stumpings: totalStumpings,
+        directHits: directHitsCount + (baseStats.direct_hits || 0),
+        boundarySaves: boundarySavesCount + (baseStats.boundary_saves || 0)
       },
       performancePoints: pointsData.points,
       tier: pointsData.currentTier,
@@ -991,7 +1044,6 @@ class PlayerService {
     const teamId = profile?.teamId || profile?.team_id;
 
     const query = {
-      type: { $in: ['MATCH_SCHEDULED', 'MATCH_RESCHEDULED'] },
       recipient_role: 'PLAYER',
       $or: [
         { recipient_id: { $in: playerIds } },

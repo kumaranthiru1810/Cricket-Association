@@ -136,17 +136,9 @@ function getCorsOptions() {
       'Authorization',
       'X-Requested-With',
       'X-Webhook-Signature',
-      'X-User-Role',
-      'X-User-Email',
-      'X-User-Id',
-      'x-user-role',
-      'x-user-email',
-      'x-user-id',
-      'role',
-      'user-email',
-      'scorer-id',
       'Accept',
-      'Origin'
+      'Origin',
+      ...(process.env.NODE_ENV !== 'production' ? ['x-user-role', 'x-user-email', 'x-user-id', 'scorer-id', 'role'] : [])
     ]
   };
 }

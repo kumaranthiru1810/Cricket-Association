@@ -39,6 +39,10 @@ jobs:
         working-directory: backend
         run: npm ci
 
+      - name: Run ESLint
+        working-directory: backend
+        run: npm run lint
+
       - name: Run Automated Backend Tests
         working-directory: backend
         env:
@@ -49,7 +53,7 @@ jobs:
         run: npm test
 
   frontend-check:
-    name: Frontend TypeScript Verification
+    name: Frontend Verification & Build
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -71,6 +75,10 @@ jobs:
       - name: Typecheck Frontend
         working-directory: mobile_frontend
         run: npx tsc --noEmit
+
+      - name: Export Production Web Build
+        working-directory: mobile_frontend
+        run: npx expo export -p web
 
   docker-verification:
     name: Docker Container Build Verification

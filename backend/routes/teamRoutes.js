@@ -9,6 +9,7 @@ const router = express.Router();
 const teamService = require('../services/teamService');
 const scorerService = require('../services/scorerService');
 const { requireTeamAuth, requireAdminAuth } = require('../middleware/authMiddleware');
+const { uploadLogo, processImageUpload } = require('../middleware/uploadMiddleware');
 
 // ──────────────────────────────────────────────
 // PUBLIC ROUTES (no auth required)
@@ -281,8 +282,8 @@ router.get('/profile', requireTeamAuth, async (req, res) => {
       coachName: team?.coach_name || teamReg?.coach_name || req.user?.name || 'Coach',
       coachPhone: team?.phone || teamReg?.phone || req.user?.mobile || '+91 94431 23456',
       coachEmail: coachEmail,
-      captain: team?.captain || teamReg?.captain || 'Suresh Kumar',
-      viceCaptain: team?.vice_captain || 'Vijay Anand',
+      captain: team?.captain || teamReg?.captain || '',
+      viceCaptain: team?.vice_captain || teamReg?.vice_captain || '',
       status: team?.status || teamReg?.status || 'APPROVED',
       homeGround: team?.home_ground || 'Kamarajar Stadium Sports Complex, Virudhunagar',
       certification: team?.certification || 'BCCI / TNCA Level 2 Certified',
@@ -396,11 +397,10 @@ router.put('/profile', requireTeamAuth, async (req, res) => {
  * POST /api/team/upload-photo
  * Direct upload/update for Team logo / crest photo
  */
-router.post('/upload-photo', requireTeamAuth, async (req, res) => {
+router.post('/upload-photo', requireTeamAuth, uploadLogo, processImageUpload, async (req, res) => {
   try {
     const db = require('../config/db');
-    await db.initDb();
-    const photo = req.body.photo || req.body.logo || req.body.image || req.body.image_path || req.body.teamLogo;
+    const photo = req.fileUrl || req.body?.photo || req.body?.logo || req.body?.image || req.body?.image_path || req.body?.teamLogo;
     const teamId = req.team?.id || req.user?.teamId || 'TM-01';
     const coachEmail = (req.user?.email || req.team?.coachEmail || '').toLowerCase().trim();
     const cleanImg = photo ? String(photo).trim() : null;
@@ -555,27 +555,73 @@ router.get('/matches', requireTeamAuth, async (req, res) => {
     const db = require('../config/db');
     await db.initDb();
     const teamId = req.team?.id || req.user?.teamId || 'TM-01';
-    const teamDoc = await db.models.Team.findOne({ id: teamId }).lean();
-    const teamNameLower = (teamDoc?.name || req.team?.name || '').toLowerCase().trim();
+    const coachEmailLower = (req.team?.coachEmail || req.user?.email || '').toLowerCase().trim();
+    const reqTeamNameLower = (req.team?.name || '').toLowerCase().trim();
 
-    const [allTeams, tournaments, matches] = await Promise.all([
+    const [allTeams, teamRegs, tournaments, matches] = await Promise.all([
       db.models.Team.find({}).lean(),
+      db.models.TeamRegistration ? db.models.TeamRegistration.find({}).lean() : [],
       db.models.Tournament.find({}).lean(),
       db.models.Match.find({}).sort({ match_date: -1, created_at: -1 }).lean()
     ]);
 
     const teamMap = {};
     allTeams.forEach(t => { teamMap[t.id] = t; });
+    (teamRegs || []).forEach(r => {
+      if (!teamMap[r.id]) {
+        teamMap[r.id] = { id: r.id, name: r.team_name, short_name: r.short_name || r.team_name, coach_email: r.coach_email };
+      }
+    });
+
+    // Collect all alias IDs and names for the logged-in team across both Team and TeamRegistration
+    const aliasTeamIds = new Set([teamId].filter(Boolean));
+    const aliasTeamNames = new Set();
+    if (reqTeamNameLower && reqTeamNameLower !== 'team') {
+      aliasTeamNames.add(reqTeamNameLower);
+    }
+
+    const addAliasFromTeam = (id, name) => {
+      if (id) aliasTeamIds.add(id);
+      const n = (name || '').toLowerCase().trim();
+      if (n && n !== 'team') aliasTeamNames.add(n);
+    };
+
+    allTeams.forEach(t => {
+      const tName = (t.name || '').toLowerCase().trim();
+      const tEmail = (t.coach_email || '').toLowerCase().trim();
+      if (t.id === teamId || (coachEmailLower && tEmail === coachEmailLower) || (tName && aliasTeamNames.has(tName))) {
+        addAliasFromTeam(t.id, t.name);
+      }
+    });
+
+    (teamRegs || []).forEach(r => {
+      const rName = (r.team_name || '').toLowerCase().trim();
+      const rEmail = (r.coach_email || '').toLowerCase().trim();
+      if (r.id === teamId || (coachEmailLower && rEmail === coachEmailLower) || (rName && aliasTeamNames.has(rName))) {
+        addAliasFromTeam(r.id, r.team_name);
+      }
+    });
+
+    // Second pass in case a registration matched by email and gave us the canonical name
+    allTeams.forEach(t => {
+      const tName = (t.name || '').toLowerCase().trim();
+      if (tName && aliasTeamNames.has(tName)) {
+        addAliasFromTeam(t.id, t.name);
+      }
+    });
+
+    const teamNameLower = Array.from(aliasTeamNames)[0] || reqTeamNameLower;
 
     const tourMap = {};
     tournaments.forEach(t => { tourMap[t.id] = t; });
 
-    // Filter matches involving this team
+    // Filter matches involving this team (checking all alias IDs and names)
     const myMatches = matches.filter(m => {
-      if (m.team_a_id === teamId || m.team_b_id === teamId) return true;
-      const tA = (teamMap[m.team_a_id]?.name || m.team_a_name || '').toLowerCase();
-      const tB = (teamMap[m.team_b_id]?.name || m.team_b_name || '').toLowerCase();
-      return teamNameLower && (tA.includes(teamNameLower) || tB.includes(teamNameLower));
+      if (aliasTeamIds.has(m.team_a_id) || aliasTeamIds.has(m.team_b_id)) return true;
+      const tA = (teamMap[m.team_a_id]?.name || m.team_a_name || '').toLowerCase().trim();
+      const tB = (teamMap[m.team_b_id]?.name || m.team_b_name || '').toLowerCase().trim();
+      if (aliasTeamNames.has(tA) || aliasTeamNames.has(tB)) return true;
+      return Array.from(aliasTeamNames).some(n => n && ((tA && (tA.includes(n) || n.includes(tA))) || (tB && (tB.includes(n) || n.includes(tB)))));
     });
 
     const formattedMatches = await Promise.all(myMatches.map(async (m) => {
@@ -597,7 +643,8 @@ router.get('/matches', requireTeamAuth, async (req, res) => {
         });
       }
 
-      const isCurrentTeamA = (teamA.id === teamId) || (teamNameLower && teamA.name.toLowerCase().includes(teamNameLower));
+      const teamANameLower = (teamA.name || '').toLowerCase().trim();
+      const isCurrentTeamA = aliasTeamIds.has(teamA.id) || aliasTeamIds.has(m.team_a_id) || aliasTeamNames.has(teamANameLower) || (teamNameLower && teamANameLower.includes(teamNameLower));
       const myAllocationStatus = isCurrentTeamA ? (m.team_a_allocation_status || 'PENDING') : (m.team_b_allocation_status || 'PENDING');
       const oppAllocationStatus = isCurrentTeamA ? (m.team_b_allocation_status || 'PENDING') : (m.team_a_allocation_status || 'PENDING');
       const bothAllocationsSubmitted = (m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED');

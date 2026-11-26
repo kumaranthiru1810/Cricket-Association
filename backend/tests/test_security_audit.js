@@ -3,6 +3,8 @@
  * Verification suite for the 6 Critical Security Vulnerability Fixes.
  */
 
+process.env.NODE_ENV = 'test';
+
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -177,6 +179,43 @@ async function runSecurityAuditTests() {
     new RegExp(escaped, 'i');
   }, 'Escaped regex string must be safe and valid');
   console.log('✅ PASS: High 4: ReDoS / regex injection escaping active for queries');
+
+  // 11. Final Mandatory Deliverable: Verify no default admin in production mode
+  const { seedDefaultData } = require('../config/db');
+  process.env.NODE_ENV = 'production';
+  delete process.env.ADMIN_INITIAL_EMAIL;
+  delete process.env.ADMIN_INITIAL_PASSWORD;
+  // Clean up any test user if present before checking seed behavior in production
+  await db.models.User.deleteMany({ email: 'production_test_admin@example.com' });
+  const countBefore = await db.models.User.countDocuments();
+  await seedDefaultData();
+  const countAfter = await db.models.User.countDocuments();
+  assert.strictEqual(countAfter, countBefore, 'seedDefaultData must not insert any users in production when initial admin env vars are unset');
+  console.log('✅ PASS: Final 1: No default admin created in production mode');
+
+  // 12. Final Mandatory Deliverable: Dev headers rejected in production mode
+  const corsOpts = getCorsOptions();
+  const devHeaders = ['x-user-role', 'x-user-email', 'x-user-id', 'scorer-id'];
+  const allowedHeadersList = corsOpts.allowedHeaders || [];
+  for (const h of devHeaders) {
+    assert(!allowedHeadersList.includes(h), `Dev impersonation header "${h}" must NOT be in CORS allowedHeaders in production`);
+  }
+  console.log('✅ PASS: Final 2: Dev impersonation headers strictly rejected from CORS headers');
+
+  // 13. Final Mandatory Deliverable: Unauthenticated write routes return 401
+  let unauthReq = { headers: {}, cookies: {}, body: { name: 'Test' } };
+  let unauthStatus = null;
+  let unauthRes = {
+    status: (code) => { unauthStatus = code; return { json: () => {} }; }
+  };
+  let writeCalled = false;
+  requireAdminAuth(unauthReq, unauthRes, () => { writeCalled = true; });
+  assert.strictEqual(writeCalled, false, 'Unauthenticated write route must not proceed');
+  assert.strictEqual(unauthStatus, 401, 'Unauthenticated write route must return 401');
+  console.log('✅ PASS: Final 3: Unauthenticated write routes return 401');
+
+  // Restore NODE_ENV
+  process.env.NODE_ENV = originalNodeEnv;
 
   console.log('\n==================================================');
   console.log('🎉 ALL CRITICAL & HIGH SECURITY AUDIT TESTS PASSED');

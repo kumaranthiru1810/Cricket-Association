@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image, useWindowDimensions, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image, useWindowDimensions, Platform, ActivityIndicator, Modal } from 'react-native';
 import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
 import MatchCard from '../../components/scorer/MatchCard';
 import SharedFooter from '../../components/scorer/SharedFooter';
 import { ScorerApi, getCurrentUser, logoutAndClearAllSessions } from '../../services/api';
 import { showInfo, showConfirm } from '../../utils/sweetalert';
+import { getTodayKolkata, calculateOfficialMatchTimings } from '../../utils/dateTimeValidation';
 
 export default function ScorerDashboardScreen() {
   const { navigate, onExit, params } = useScorerNavigation();
@@ -15,6 +16,8 @@ export default function ScorerDashboardScreen() {
   const [matches, setMatches] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [profile, setProfile] = useState<any>(params?.user || getCurrentUser() || { name: 'Official Scorer', id: 'SCORER', association: 'Virudhunagar District' });
+  const [timingAckMatch, setTimingAckMatch] = useState<any>(null);
+  const [showTimingAckModal, setShowTimingAckModal] = useState<boolean>(false);
   const [selectedFilter, setSelectedFilter] = useState<string | null>(() => {
     if (typeof window !== 'undefined' && window.location) {
       try {
@@ -115,6 +118,29 @@ export default function ScorerDashboardScreen() {
     setMatches(assignedMatches);
     setIsLoading(false);
 
+    // Mandatory Match Timings Protocol Check (Popup on Scorer Login)
+    try {
+      const todayStr = getTodayKolkata();
+      const matchToAcknowledge = assignedMatches.find((m: any) => {
+        const mDate = (m.match_date || m.date || '').split('T')[0].trim();
+        const status = (m.status || '').toUpperCase();
+        return mDate === todayStr && status !== 'COMPLETED' && status !== 'CANCELLED' && status !== 'ABANDONED';
+      }) || assignedMatches.find((m: any) => {
+        const status = (m.status || '').toUpperCase();
+        return (status === 'SCHEDULED' || status === 'UPCOMING' || status === 'TOSS');
+      });
+
+      if (matchToAcknowledge) {
+        const matchId = matchToAcknowledge.id || matchToAcknowledge._id;
+        const ackKey = `cfvd_scorer_ack_${matchId}_${todayStr}`;
+        const alreadyAcked = (typeof window !== 'undefined' && window.localStorage?.getItem(ackKey) === 'true') || matchToAcknowledge.scorer_acknowledged;
+        if (!alreadyAcked) {
+          setTimingAckMatch(matchToAcknowledge);
+          setShowTimingAckModal(true);
+        }
+      }
+    } catch (_ackErr) {}
+
     // Load profile
     try {
       const user = getCurrentUser();
@@ -127,6 +153,29 @@ export default function ScorerDashboardScreen() {
         }
       }
     } catch (_e) {}
+  };
+
+  const handleAcknowledgeTimings = async () => {
+    if (!timingAckMatch) return;
+    const todayStr = getTodayKolkata();
+    const matchId = timingAckMatch.id || timingAckMatch._id;
+    const ackKey = `cfvd_scorer_ack_${matchId}_${todayStr}`;
+
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(ackKey, 'true');
+      }
+      await ScorerApi.acknowledgeProtocol(matchId, {
+        scorer_id: profile?.id || profile?.scorerId || 'SCR-101',
+        scorer_name: profile?.name || 'Official Scorer'
+      });
+    } catch (_err) {
+      // Non-blocking fallback
+    }
+
+    setMatches(prev => prev.map(m => (m.id === matchId ? { ...m, scorer_acknowledged: true } : m)));
+    setShowTimingAckModal(false);
+    setTimingAckMatch(null);
   };
 
   const handleLogout = async () => {
@@ -183,34 +232,46 @@ export default function ScorerDashboardScreen() {
     }
   };
 
+  const isPostponedMatch = (m: any) => {
+    const s = (m.status || '').toLowerCase();
+    const r = (m.rawStatus || '').toUpperCase();
+    return s === 'postponed' || r === 'POSTPONED' || !!m.postponement?.is_postponed || !!m.isPostponed;
+  };
+
   // Categorized matches sorted by Date & Time:
   // 1. Live matches: currently active, sorted by most recent
   const liveMatches = matches
     .filter(m => {
+      if (isPostponedMatch(m)) return false;
       const s = (m.status || '').toLowerCase();
-      return s === 'live' || s === 'innings_break';
+      const r = (m.rawStatus || '').toUpperCase();
+      return s === 'live' || s === 'innings_break' || r === 'LIVE' || r === 'INNINGS_BREAK';
     })
     .sort((a, b) => parseMatchTimestamp(b) - parseMatchTimestamp(a));
 
   // 2. Upcoming matches: sorted ascending by date and time (nearest upcoming match first!)
   const upcomingMatches = matches
     .filter(m => {
+      if (isPostponedMatch(m)) return false;
       const s = (m.status || '').toLowerCase();
-      return s === 'upcoming' || s === 'scheduled';
+      const r = (m.rawStatus || '').toUpperCase();
+      return s === 'upcoming' || s === 'scheduled' || r === 'SCHEDULED';
     })
     .sort((a, b) => parseMatchTimestamp(a) - parseMatchTimestamp(b));
 
   // 3. Completed matches: sorted descending by date and time (most recently finished match first!)
   const completedMatches = matches
-    .filter(m => (m.status || '').toLowerCase() === 'completed')
+    .filter(m => {
+      if (isPostponedMatch(m)) return false;
+      const s = (m.status || '').toLowerCase();
+      const r = (m.rawStatus || '').toUpperCase();
+      return s === 'completed' || r === 'COMPLETED';
+    })
     .sort((a, b) => parseMatchTimestamp(b) - parseMatchTimestamp(a));
 
   // 4. Postponed matches:
   const postponedMatches = matches
-    .filter(m => {
-      const s = (m.status || '').toLowerCase();
-      return s === 'postponed' || !!m.postponement?.is_postponed || !!m.isPostponed;
-    })
+    .filter(isPostponedMatch)
     .sort((a, b) => parseMatchTimestamp(b) - parseMatchTimestamp(a));
 
   const totalAssigned = matches.length;
@@ -225,20 +286,87 @@ export default function ScorerDashboardScreen() {
     liveMatches.length > 0 ? 'Live' : (upcomingMatches.length > 0 ? 'Upcoming' : 'Completed')
   );
 
+  const renderPostponedMatchCard = (match: any) => (
+    <View key={match.id} style={styles.postponedCard}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <Text style={{ fontWeight: '700', fontSize: 16, color: '#1e293b' }}>
+          {match.teamA?.name || match.team_a_name || match.teamA || 'Team A'} <Text style={{ color: '#d97706' }}>vs</Text> {match.teamB?.name || match.team_b_name || match.teamB || 'Team B'}
+        </Text>
+        <View style={{ backgroundColor: '#fef3c7', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 4, borderColor: '#f59e0b', borderWidth: 1 }}>
+          <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 11 }}>⏸️ POSTPONED</Text>
+        </View>
+      </View>
+
+      <Text style={{ color: '#64748b', fontSize: 13, marginTop: 4 }}>
+        🏆 {match.tournamentName || match.tournament || 'Tournament'} • 📍 {match.venue || 'District Stadium'}
+      </Text>
+
+      <View style={{ backgroundColor: '#fffbeb', padding: 12, borderRadius: 6, marginTop: 10, borderColor: '#fde68a', borderWidth: 1 }}>
+        <Text style={{ color: '#92400e', fontWeight: '700', fontSize: 13 }}>
+          Reason: {match.postponement?.reason || match.postponementReason || 'Reason not recorded'}
+        </Text>
+        <Text style={{ color: '#78350f', fontSize: 12, marginTop: 3 }}>
+          Original Schedule: 📅 {match.postponement?.original_date || match.originalDate || match.date || match.match_date} • ⏰ {match.postponement?.original_time || match.originalTime || match.time || match.match_time || '09:30 AM'}
+        </Text>
+        {(match.postponement?.rescheduled_date || match.rescheduledDate) ? (
+          <Text style={{ color: '#15803d', fontWeight: '700', fontSize: 13, marginTop: 4 }}>
+            📅 Rescheduled Date: {match.postponement?.rescheduled_date || match.rescheduledDate} • ⏰ {match.postponement?.rescheduled_time || match.rescheduledTime || '09:30 AM'}
+          </Text>
+        ) : (
+          <Text style={{ color: '#b45309', fontStyle: 'italic', fontSize: 12, marginTop: 4 }}>
+            ⏳ Awaiting Admin Rescheduling
+          </Text>
+        )}
+
+        {/* Match Score & Over Situation at Postponement */}
+        <View style={{ marginTop: 8, padding: 10, backgroundColor: '#fef3c7', borderRadius: 6, borderLeftWidth: 4, borderLeftColor: '#d97706' }}>
+          <Text style={{ color: '#92400e', fontWeight: '800', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            📊 Match Situation at Postponement:
+          </Text>
+          <Text style={{ color: '#78350f', fontSize: 13, fontWeight: '700', marginTop: 3 }}>
+            {match.postponement?.postponed_score_display || match.postponedScoreDisplay || (
+              match.scoreA ? `${match.teamA?.name || match.teamA}: ${match.scoreA}${match.scoreB && match.scoreB !== 'Yet to bat' ? ` • ${match.teamB?.name || match.teamB}: ${match.scoreB}` : ''}` : 'Postponed before match start (0 overs bowled / Toss pending)'
+            )}
+          </Text>
+        </View>
+      </View>
+
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
+        <TouchableOpacity
+          style={{
+            backgroundColor: '#d97706',
+            paddingVertical: 7,
+            paddingHorizontal: 14,
+            borderRadius: 6,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6
+          }}
+          onPress={() => navigate('LiveScoring', { matchId: match.id })}
+          activeOpacity={0.8}
+        >
+          <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>
+            OPEN LIVE CONSOLE ▶
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       {/* PROFESSIONAL HEADER */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Image source={require('../../../assets/logo_transparent.png')} style={styles.logo} resizeMode="contain" />
-          <View>
-            <Text style={styles.title}>Scorer Dashboard</Text>
-            <Text style={styles.subtitle}>Official Match Scoring Console</Text>
+          <View style={{ flexShrink: 1, minWidth: 0 }}>
+            <Text style={styles.title} numberOfLines={1}>Scorer Dashboard</Text>
+            <Text style={styles.subtitle} numberOfLines={1}>Official Match Scoring Console</Text>
           </View>
         </View>
         <View style={styles.headerRight}>
           <View style={styles.scorerInfo}>
-            <Text style={styles.scorerName}>{profile?.name || 'Official Scorer'}</Text>
+            <Text style={styles.scorerName} numberOfLines={1}>{profile?.name || 'Official Scorer'}</Text>
             <Text style={styles.scorerId}>{profile?.id || 'SCORER'}</Text>
           </View>
           <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
@@ -385,6 +513,13 @@ export default function ScorerDashboardScreen() {
               </View>
             )}
 
+            {postponedMatches.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.subSectionHeader}>⏸️ POSTPONED MATCHES ({postponedMatches.length})</Text>
+                {postponedMatches.map(match => renderPostponedMatchCard(match))}
+              </View>
+            )}
+
             {completedMatches.length > 0 && (
               <View style={styles.section}>
                 <Text style={styles.subSectionHeader}>🟢 COMPLETED MATCHES ({completedMatches.length})</Text>
@@ -416,45 +551,26 @@ export default function ScorerDashboardScreen() {
             )}
           </View>
         ) : effectiveFilter === 'Upcoming' ? (
-          /* UPCOMING MATCHES - IF NONE, SHOW RECENT MATCHES DIRECTLY! */
+          /* UPCOMING MATCHES ONLY - IF NONE, SHOW EMPTY NOTICE ONLY */
           <View style={{ width: '100%' }}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionHeaderTitle}>UPCOMING MATCHES ({upcomingMatches.length})</Text>
+            </View>
+
             {upcomingMatches.length > 0 ? (
-              <>
-                <View style={styles.sectionHeaderRow}>
-                  <Text style={styles.sectionHeaderTitle}>UPCOMING MATCHES ({upcomingMatches.length})</Text>
-                </View>
-
-                {upcomingMatches.map(match => (
-                  <MatchCard key={match.id} match={match} variant="upcoming" />
-                ))}
-              </>
+              upcomingMatches.map(match => (
+                <MatchCard key={match.id} match={match} variant="upcoming" />
+              ))
             ) : (
-              /* UPCOMING MATCH ILLA NA -> RECENT MATCH KAATUNA POOTHUM */
-              <>
-                <View style={styles.emptyNoticeCard}>
-                  <Text style={styles.emptyNoticeIcon}>📅</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.emptyNoticeTitle}>No Upcoming Matches Scheduled</Text>
-                    <Text style={styles.emptyNoticeSub}>
-                      There are currently no upcoming fixtures assigned. Displaying recent matches below:
-                    </Text>
-                  </View>
+              <View style={styles.emptyNoticeCard}>
+                <Text style={styles.emptyNoticeIcon}>📅</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.emptyNoticeTitle}>No Upcoming Matches Scheduled</Text>
+                  <Text style={styles.emptyNoticeSub}>
+                    There are currently no upcoming fixtures assigned.
+                  </Text>
                 </View>
-
-                <View style={styles.sectionHeaderRow}>
-                  <Text style={styles.sectionHeaderTitle}>RECENT MATCHES ({completedMatches.length})</Text>
-                </View>
-
-                {completedMatches.length > 0 ? (
-                  completedMatches.map(match => (
-                    <MatchCard key={match.id} match={match} variant="completed" />
-                  ))
-                ) : (
-                  <View style={styles.emptyCard}>
-                    <Text style={styles.emptyCardText}>No matches found.</Text>
-                  </View>
-                )}
-              </>
+              </View>
             )}
           </View>
         ) : effectiveFilter === 'Completed' ? (
@@ -482,40 +598,7 @@ export default function ScorerDashboardScreen() {
             </View>
 
             {postponedMatches.length > 0 ? (
-              postponedMatches.map(match => (
-                <View key={match.id} style={styles.postponedCard}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                    <Text style={{ fontWeight: '700', fontSize: 16, color: '#1e293b' }}>
-                      {match.teamA?.name || match.team_a_name || 'Team A'} <Text style={{ color: '#d97706' }}>vs</Text> {match.teamB?.name || match.team_b_name || 'Team B'}
-                    </Text>
-                    <View style={{ backgroundColor: '#fef3c7', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 4, borderColor: '#f59e0b', borderWidth: 1 }}>
-                      <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 11 }}>⏸️ POSTPONED</Text>
-                    </View>
-                  </View>
-
-                  <Text style={{ color: '#64748b', fontSize: 13, marginTop: 4 }}>
-                    🏆 {match.tournamentName || 'Tournament'} • 📍 {match.venue || 'District Stadium'}
-                  </Text>
-
-                  <View style={{ backgroundColor: '#fffbeb', padding: 12, borderRadius: 6, marginTop: 10, borderColor: '#fde68a', borderWidth: 1 }}>
-                    <Text style={{ color: '#92400e', fontWeight: '700', fontSize: 13 }}>
-                      Reason: {match.postponement?.reason || match.postponementReason || 'Reason not recorded'}
-                    </Text>
-                    <Text style={{ color: '#78350f', fontSize: 12, marginTop: 3 }}>
-                      Original Schedule: 📅 {match.postponement?.original_date || match.originalDate || match.date} • ⏰ {match.postponement?.original_time || match.originalTime || match.time || '09:30 AM'}
-                    </Text>
-                    {(match.postponement?.rescheduled_date || match.rescheduledDate) ? (
-                      <Text style={{ color: '#15803d', fontWeight: '700', fontSize: 13, marginTop: 4 }}>
-                        📅 Rescheduled Date: {match.postponement?.rescheduled_date || match.rescheduledDate} • ⏰ {match.postponement?.rescheduled_time || match.rescheduledTime || '09:30 AM'}
-                      </Text>
-                    ) : (
-                      <Text style={{ color: '#b45309', fontStyle: 'italic', fontSize: 12, marginTop: 4 }}>
-                        ⏳ Awaiting Admin Rescheduling
-                      </Text>
-                    )}
-                  </View>
-                </View>
-              ))
+              postponedMatches.map(match => renderPostponedMatchCard(match))
             ) : (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyCardText}>No postponed matches.</Text>
@@ -527,41 +610,184 @@ export default function ScorerDashboardScreen() {
 
         <SharedFooter />
       </ScrollView>
+
+      {/* MANDATORY SCORER TIMING PROTOCOL ACKNOWLEDGEMENT POPUP */}
+      <Modal
+        visible={showTimingAckModal && Boolean(timingAckMatch)}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {}}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.ackModalContainer}>
+            {/* Modal Federation Header */}
+            <View style={styles.ackModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={styles.ackModalIconBadge}>
+                  <Text style={{ fontSize: 24 }}>🏏</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.ackModalTitleTamil}>
+                    Official Match Protocols & Timings Schedule
+                  </Text>
+                  <Text style={styles.ackModalSubtitle}>
+                    Official Match Protocol & Timings • Scorer Verification
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+              {/* Fixture Overview Box */}
+              {timingAckMatch && (
+                <View style={styles.ackFixtureCard}>
+                  <Text style={styles.ackTournamentText}>
+                    🏆 {timingAckMatch.tournament_name || timingAckMatch.tournament || 'Virudhunagar Premier League 2026'}
+                  </Text>
+                  <View style={styles.ackTeamsRow}>
+                    <Text style={styles.ackTeamName}>
+                      {timingAckMatch.teamA?.name || timingAckMatch.team_a_name || 'Team A'}
+                    </Text>
+                    <View style={styles.ackVsBadge}>
+                      <Text style={styles.ackVsBadgeText}>VS</Text>
+                    </View>
+                    <Text style={styles.ackTeamName}>
+                      {timingAckMatch.teamB?.name || timingAckMatch.team_b_name || 'Team B'}
+                    </Text>
+                  </View>
+                  <View style={styles.ackMetaRow}>
+                    <Text style={styles.ackMetaText}>
+                      📅 {timingAckMatch.match_date || timingAckMatch.date}
+                    </Text>
+                    <Text style={styles.ackMetaText}>
+                      📍 {timingAckMatch.venue || 'Kamarajar District Stadium'}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Highlighted Timings Grid */}
+              {(() => {
+                const timings = calculateOfficialMatchTimings(
+                  timingAckMatch?.match_time || timingAckMatch?.time || '08:30 AM'
+                );
+                return (
+                  <View style={styles.ackTimingsGrid}>
+                    {/* Toss Window Box */}
+                    <View style={styles.ackTimingItem}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <Text style={styles.ackTimingLabelTamil}>🪙 Toss Window</Text>
+                        <Text style={styles.ackTimingTag}>Toss Window</Text>
+                      </View>
+                      <Text style={styles.ackTimingValue}>
+                        {timingAckMatch?.toss_time_window || timings.tossWindow}
+                      </Text>
+                      <Text style={styles.ackTimingHint}>15 - 30 minutes before first ball</Text>
+                    </View>
+
+                    {/* First Ball Delivery Box */}
+                    <View style={[styles.ackTimingItem, { borderColor: '#f59e0b', backgroundColor: '#fffbeb' }]}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <Text style={[styles.ackTimingLabelTamil, { color: '#b45309' }]}>🏏 First Ball Time</Text>
+                        <Text style={[styles.ackTimingTag, { backgroundColor: '#fef3c7', color: '#b45309' }]}>First Ball</Text>
+                      </View>
+                      <Text style={[styles.ackTimingValue, { color: '#92400e' }]}>
+                        {timingAckMatch?.first_ball_time || timingAckMatch?.match_time || timings.firstBallTime}
+                      </Text>
+                      <Text style={[styles.ackTimingHint, { color: '#b45309' }]}>Mandatory delivery deadline</Text>
+                    </View>
+
+                    {/* Scorer Reporting Time */}
+                    <View style={[styles.ackTimingItem, { borderColor: '#3b82f6', backgroundColor: '#eff6ff' }]}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <Text style={[styles.ackTimingLabelTamil, { color: '#1d4ed8' }]}>⏰ Scorer Reporting Time</Text>
+                        <Text style={[styles.ackTimingTag, { backgroundColor: '#dbeafe', color: '#1d4ed8' }]}>Reporting</Text>
+                      </View>
+                      <Text style={[styles.ackTimingValue, { color: '#1e40af' }]}>
+                        {timingAckMatch?.scorer_reporting_time || timings.reportingTime}
+                      </Text>
+                      <Text style={[styles.ackTimingHint, { color: '#2563eb' }]}>Scorer booth arrival & roster check</Text>
+                    </View>
+                  </View>
+                );
+              })()}
+
+              {/* Official Association Rules Card */}
+              <View style={styles.ackRulesBox}>
+                <Text style={styles.ackRulesHeader}>📜 Official Association Rules & Standard Timings:</Text>
+                <View style={{ marginTop: 6, gap: 5 }}>
+                  <Text style={styles.ackRuleLine}>• <Text style={{ fontWeight: '700' }}>Toss Window:</Text> 08:00 AM to 08:15 AM (Morning) & 01:00 PM to 01:15 PM (Afternoon)</Text>
+                  <Text style={styles.ackRuleLine}>• <Text style={{ fontWeight: '700' }}>First Ball:</Text> Must be delivered at 08:30 AM (Morning) & 01:30 PM (Afternoon)</Text>
+                  <Text style={styles.ackRuleLine}>• <Text style={{ fontWeight: '700' }}>Rule 15:</Text> A minimum of 9 players must be present at the start of each innings.</Text>
+                </View>
+              </View>
+
+              {/* Scorer Consent Box */}
+              <View style={styles.ackConsentBox}>
+                <Text style={styles.ackConsentText}>
+                  🛡️ I acknowledge the scheduled match timings and toss protocols, and agree to officiate promptly in accordance with Association rules.
+                </Text>
+              </View>
+            </ScrollView>
+
+            {/* Mandatory Action Button */}
+            <TouchableOpacity
+              style={styles.ackSubmitBtn}
+              onPress={handleAcknowledgeTimings}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.ackSubmitBtnText}>
+                ✓ Acknowledge & Enter Scorer Portal
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const getStyles = (isDesktop: boolean) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'transparent' },
+  container: { flex: 1, backgroundColor: 'transparent', width: '100%', maxWidth: '100%', overflow: 'hidden' },
   
   // HEADER
   header: {
-    padding: 14,
-    paddingHorizontal: isDesktop ? 24 : 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    padding: 12,
+    paddingHorizontal: isDesktop ? 24 : 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    rowGap: 8,
     borderBottomColor: '#e2e8f0',
     borderBottomWidth: 1,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2,
+    width: '100%',
+    maxWidth: '100%'
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center' },
-  logo: { width: 32, height: 32, marginRight: 10 },
-  title: { color: '#1e293b', fontSize: 16, fontWeight: 'bold', letterSpacing: 0.5 },
-  subtitle: { color: '#b45309', fontSize: 11, marginTop: 1, fontWeight: '600' },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: isDesktop ? 220 : 160 },
+  logo: { width: 32, height: 32, marginRight: 8, flexShrink: 0 },
+  title: { color: '#1e293b', fontSize: isDesktop ? 16 : 14, fontWeight: 'bold', letterSpacing: 0.5 },
+  subtitle: { color: '#b45309', fontSize: isDesktop ? 11 : 10, marginTop: 1, fontWeight: '600' },
   
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: isDesktop ? 12 : 8, flexShrink: 0 },
   scorerInfo: { alignItems: 'flex-end' },
-  scorerName: { color: '#1e293b', fontSize: 13, fontWeight: '700' },
-  scorerId: { color: '#64748b', fontSize: 11 },
+  scorerName: { color: '#1e293b', fontSize: isDesktop ? 13 : 11.5, fontWeight: '700' },
+  scorerId: { color: '#64748b', fontSize: isDesktop ? 11 : 9.5 },
   
-  logoutBtn: { backgroundColor: '#fef2f2', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 6, borderWidth: 1, borderColor: '#fca5a5' },
-  logoutText: { color: '#dc2626', fontWeight: 'bold', fontSize: 12 },
+  logoutBtn: { backgroundColor: '#fef2f2', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#fca5a5' },
+  logoutText: { color: '#dc2626', fontWeight: 'bold', fontSize: 11 },
   
   // LAYOUT
-  scroll: { flexGrow: 1 },
-  contentWrapper: { padding: isDesktop ? 24 : 14, paddingBottom: 32 },
+  scroll: { flexGrow: 1, width: '100%', maxWidth: '100%' },
+  contentWrapper: { 
+    padding: isDesktop ? 24 : 12, 
+    paddingBottom: 32,
+    width: '100%',
+    maxWidth: 900,
+    alignSelf: 'center'
+  },
 
   // QUICK BANNERS
   liveBanner: {
@@ -572,9 +798,11 @@ const getStyles = (isDesktop: boolean) => StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#f43f5e',
     borderRadius: 8,
-    padding: 14,
+    padding: 12,
     marginBottom: 16,
-    gap: 12,
+    gap: 10,
+    width: '100%',
+    maxWidth: '100%',
     shadowColor: '#f43f5e',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -596,9 +824,11 @@ const getStyles = (isDesktop: boolean) => StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#3b82f6',
     borderRadius: 8,
-    padding: 14,
+    padding: 12,
     marginBottom: 16,
-    gap: 12,
+    gap: 10,
+    width: '100%',
+    maxWidth: '100%',
     shadowColor: '#3b82f6',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -615,16 +845,17 @@ const getStyles = (isDesktop: boolean) => StyleSheet.create({
   tabsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 18
+    gap: 6,
+    marginBottom: 16,
+    width: '100%'
   },
   tabButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.85)',
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderRadius: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 14
+    paddingVertical: 6,
+    paddingHorizontal: 10
   },
   tabButtonActive: {
     backgroundColor: '#0f172a',
@@ -706,5 +937,200 @@ const getStyles = (isDesktop: boolean) => StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 3
+  },
+
+  // MANDATORY ACKNOWLEDGEMENT MODAL
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16
+  },
+  ackModalContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 580,
+    padding: isDesktop ? 22 : 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+    borderWidth: 2,
+    borderColor: '#d97706'
+  },
+  ackModalHeader: {
+    paddingBottom: 14,
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#f1f5f9',
+    marginBottom: 14
+  },
+  ackModalIconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#fffbeb',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#f59e0b'
+  },
+  ackModalTitleTamil: {
+    fontSize: isDesktop ? 15.5 : 14,
+    fontWeight: '900',
+    color: '#0f172a'
+  },
+  ackModalSubtitle: {
+    fontSize: 11,
+    color: '#b45309',
+    fontWeight: '700',
+    marginTop: 2
+  },
+  ackFixtureCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 12
+  },
+  ackTournamentText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6
+  },
+  ackTeamsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginVertical: 4
+  },
+  ackTeamName: {
+    fontSize: isDesktop ? 16 : 14.5,
+    fontWeight: '900',
+    color: '#0f172a',
+    textAlign: 'center',
+    flex: 1
+  },
+  ackVsBadge: {
+    backgroundColor: '#d97706',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2
+  },
+  ackVsBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#ffffff'
+  },
+  ackMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    flexWrap: 'wrap'
+  },
+  ackMetaText: {
+    fontSize: 11.5,
+    color: '#475569',
+    fontWeight: '700'
+  },
+  ackTimingsGrid: {
+    flexDirection: 'column',
+    gap: 8,
+    marginBottom: 12
+  },
+  ackTimingItem: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    padding: 10
+  },
+  ackTimingLabelTamil: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#1e293b'
+  },
+  ackTimingTag: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#475569',
+    backgroundColor: '#e2e8f0',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4
+  },
+  ackTimingValue: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0f172a',
+    marginTop: 2
+  },
+  ackTimingHint: {
+    fontSize: 10.5,
+    color: '#64748b',
+    marginTop: 2
+  },
+  ackRulesBox: {
+    backgroundColor: '#fffbeb',
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#fcd34d',
+    padding: 12,
+    marginBottom: 12
+  },
+  ackRulesHeader: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#92400e'
+  },
+  ackRuleLine: {
+    fontSize: 11.5,
+    lineHeight: 17,
+    color: '#78350f'
+  },
+  ackConsentBox: {
+    backgroundColor: '#f0fdf4',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    padding: 10,
+    marginBottom: 12
+  },
+  ackConsentText: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: '#166534',
+    fontWeight: '600'
+  },
+  ackSubmitBtn: {
+    backgroundColor: '#15803d',
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#15803d',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4
+  },
+  ackSubmitBtnText: {
+    color: '#ffffff',
+    fontSize: isDesktop ? 14 : 12.5,
+    fontWeight: '900',
+    textAlign: 'center'
   }
 });

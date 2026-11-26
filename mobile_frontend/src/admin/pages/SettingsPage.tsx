@@ -23,6 +23,7 @@ import {
   Modal,
   ActivityIndicator,
   Platform,
+  Switch,
   useWindowDimensions
 } from 'react-native';
 import PageHeader from '../components/PageHeader';
@@ -107,6 +108,14 @@ export const DYNAMIC_CATEGORIES: DynamicCategoryDef[] = [
     singular: 'State',
     description: 'Affiliated states and regional territories for match and player origin.',
     placeholder: 'e.g. Tamil Nadu, Kerala, Karnataka'
+  },
+  {
+    key: 'district_venue',
+    label: 'Primary District Venue / Stadium',
+    iconText: '🏟️',
+    singular: 'Venue / Stadium',
+    description: 'Configure and manage official district stadiums, grounds, and match venues.',
+    placeholder: 'e.g. Kamarajar District Stadium, Sivakasi Cricket Ground'
   }
 ];
 
@@ -129,8 +138,7 @@ export const DEFAULT_MASTER_SETTINGS: Record<string, MasterSettingItem[]> = {
     { id: 'MSET-TALUK-04', category: 'taluk_jurisdiction', name: 'Srivilliputhur', code: 'SVPR', description: 'Srivilliputhur Heritage Taluk Jurisdiction', is_active: true, sort_order: 4 },
     { id: 'MSET-TALUK-05', category: 'taluk_jurisdiction', name: 'Aruppukottai', code: 'APKI', description: 'Aruppukottai Taluk Jurisdiction', is_active: true, sort_order: 5 },
     { id: 'MSET-TALUK-06', category: 'taluk_jurisdiction', name: 'Sattur', code: 'STR', description: 'Sattur Taluk Jurisdiction', is_active: true, sort_order: 6 },
-    { id: 'MSET-TALUK-07', category: 'taluk_jurisdiction', name: 'Watrap', code: 'WTR', description: 'Watrap Taluk Jurisdiction', is_active: true, sort_order: 7 },
-    { id: 'MSET-TALUK-08', category: 'taluk_jurisdiction', name: 'Kariapatti', code: 'KPT', description: 'Kariapatti Taluk Jurisdiction', is_active: true, sort_order: 8 },
+    { id: 'MSET-TALUK-08', category: 'taluk_jurisdiction', name: 'Kariapatti', code: 'KPT', description: 'Kariapatti Taluk Jurisdiction', is_active: true, sort_order: 7 },
     { id: 'MSET-TALUK-09', category: 'taluk_jurisdiction', name: 'Tiruchuli', code: 'TCL', description: 'Tiruchuli Taluk Jurisdiction', is_active: true, sort_order: 9 },
     { id: 'MSET-TALUK-10', category: 'taluk_jurisdiction', name: 'Vembakottai', code: 'VBK', description: 'Vembakottai Archaeological Taluk Jurisdiction', is_active: true, sort_order: 10 },
     { id: 'MSET-TALUK-11', category: 'taluk_jurisdiction', name: 'Other', code: 'OTHER', description: 'Other Regional Jurisdiction outside specified taluks', is_active: true, sort_order: 11 }
@@ -178,6 +186,12 @@ export const DEFAULT_MASTER_SETTINGS: Record<string, MasterSettingItem[]> = {
     { id: 'MSET-STATE-05', category: 'state', name: 'Telangana', code: 'TS', description: 'Telangana State, India', is_active: true, sort_order: 5 },
     { id: 'MSET-STATE-06', category: 'state', name: 'Pondicherry', code: 'PY', description: 'Puducherry Union Territory, India', is_active: true, sort_order: 6 },
     { id: 'MSET-STATE-07', category: 'state', name: 'Other', code: 'OTHER', description: 'Other Indian States / Union Territories', is_active: true, sort_order: 7 }
+  ],
+  district_venue: [
+    { id: 'VEN-01', category: 'district_venue', name: 'Kamarajar District Stadium', code: 'KDS', description: 'Virudhunagar Headquarters Main Turf Stadium', is_active: true, sort_order: 1 },
+    { id: 'VEN-02', category: 'district_venue', name: 'Municipal Cricket Complex', code: 'MCC', description: 'Municipal Cricket Complex, Sivakasi', is_active: true, sort_order: 2 },
+    { id: 'VEN-03', category: 'district_venue', name: 'Rajapalayam RAC Ground', code: 'RAC', description: 'PACR Road, Rajapalayam', is_active: true, sort_order: 3 },
+    { id: 'VEN-04', category: 'district_venue', name: 'Aruppukottai Pavilion Turf Ground', code: 'APTG', description: 'Pavilion Turf Ground, Aruppukottai', is_active: true, sort_order: 4 }
   ]
 };
 
@@ -203,6 +217,7 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
   };
 
   const [activeTab, setActiveTab] = useState<string>(getInitialTab());
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [items, setItems] = useState<MasterSettingItem[]>(
     DEFAULT_MASTER_SETTINGS[getInitialTab()] || []
@@ -220,6 +235,56 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
   // Delete Confirmation Dialog State
   const [itemToDelete, setItemToDelete] = useState<MasterSettingItem | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
+  // Admin Emblem Stealth Sequence State
+  const [emblemEnabled, setEmblemEnabled] = useState<boolean>(true);
+  const [emblemSequence, setEmblemSequence] = useState<Array<'LEFT' | 'RIGHT' | 'CENTER'>>([
+    'LEFT', 'RIGHT', 'LEFT', 'RIGHT', 'CENTER'
+  ]);
+  const [emblemSaving, setEmblemSaving] = useState<boolean>(false);
+  const [emblemExpanded, setEmblemExpanded] = useState<boolean>(false);
+
+  useEffect(() => {
+    adminApi
+      .getEmblemSequence()
+      .then((res: any) => {
+        if (res?.success && res.config) {
+          setEmblemEnabled(Boolean(res.config.enabled));
+          if (Array.isArray(res.config.sequence)) {
+            setEmblemSequence(res.config.sequence);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSaveEmblemSequence = async (nextEnabled = emblemEnabled, nextSeq = emblemSequence) => {
+    if (nextEnabled && nextSeq.length === 0) {
+      showToast('Please add at least 1 ball click to the sequence, or turn off emblem access.', 'error');
+      return;
+    }
+    setEmblemSaving(true);
+    try {
+      const res = await adminApi.updateEmblemSequence({
+        enabled: nextEnabled,
+        sequence: nextSeq
+      });
+      if (res?.success) {
+        showToast(
+          nextEnabled
+            ? `Emblem admin access updated (${nextSeq.length} clicks)`
+            : 'Emblem admin access disabled on Home page',
+          'success'
+        );
+      } else {
+        showToast(res?.error || 'Failed to save emblem sequence.', 'error');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to save emblem sequence.', 'error');
+    } finally {
+      setEmblemSaving(false);
+    }
+  };
 
   // Sync initialCategory when route changes
   useEffect(() => {
@@ -345,6 +410,11 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
             detail: { category: activeTab, item: createdItem }
           })
         );
+        window.dispatchEvent(
+          new CustomEvent('venues_updated', {
+            detail: { venue: createdItem }
+          })
+        );
       }
 
       showToast(res?.message || `Added "${trimmedName}" to database successfully!`, 'success');
@@ -381,6 +451,11 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
             detail: { category: activeTab, deletedId: target.id, deletedName: target.name }
           })
         );
+        window.dispatchEvent(
+          new CustomEvent('venues_updated', {
+            detail: { deletedId: target.id, deletedName: target.name }
+          })
+        );
       }
 
       showToast(res?.message || `Deleted "${target.name}" from database successfully!`, 'success');
@@ -405,36 +480,312 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
         ]}
       />
 
-      {/* DYNAMIC CATEGORY PILLS */}
-      <View style={styles.tabBarContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabBarScroll}
-        >
-          {DYNAMIC_CATEGORIES.map(cat => {
-            const isActive = activeTab === cat.key;
-            return (
-              <TouchableOpacity
-                key={cat.key}
-                style={[styles.tabPill, isActive && styles.tabPillActive]}
-                onPress={() => {
-                  setActiveTab(cat.key);
-                  setSearchQuery('');
-                  if (onNavigate) {
-                    onNavigate(`/admin/settings/${cat.key.replace(/_/g, '-')}`);
-                  }
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.tabPillIcon}>{cat.iconText}</Text>
-                <Text style={[styles.tabPillText, isActive && styles.tabPillTextActive]}>
-                  {cat.label}
+      {/* STEALTH ADMIN EMBLEM ACCESS SECURITY CARD */}
+      <View style={{
+        backgroundColor: '#ffffff',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: emblemEnabled ? '#fde68a' : '#e2e8f0',
+        padding: isMobile ? 14 : 16,
+        marginBottom: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 4,
+        elevation: 2
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <View style={{ flex: 1, minWidth: 220 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <Text style={{ fontSize: 15, fontWeight: '900', color: '#0f172a' }}>
+                🔐 Home Emblem Admin Login Trigger
+              </Text>
+              <View style={{
+                backgroundColor: emblemEnabled ? '#dcfce7' : '#fee2e2',
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 6
+              }}>
+                <Text style={{ fontSize: 10.5, fontWeight: '800', color: emblemEnabled ? '#166534' : '#991b1b' }}>
+                  {emblemEnabled ? `ACTIVE • ${emblemSequence.length} CLICKS` : 'DISABLED'}
                 </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+              </View>
+            </View>
+            <Text style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>
+              Control whether tapping the Left, Right &amp; Center balls on the Home crest opens Admin Login, and customize the exact click order.
+            </Text>
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Switch
+              value={emblemEnabled}
+              onValueChange={(val) => {
+                setEmblemEnabled(val);
+                handleSaveEmblemSequence(val, emblemSequence);
+              }}
+              trackColor={{ false: '#cbd5e1', true: '#f59e0b' }}
+              thumbColor="#ffffff"
+            />
+            <TouchableOpacity
+              onPress={() => setEmblemExpanded(prev => !prev)}
+              activeOpacity={0.8}
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 8,
+                backgroundColor: emblemExpanded ? '#fef3c7' : '#f8fafc',
+                borderWidth: 1,
+                borderColor: emblemExpanded ? '#f59e0b' : '#cbd5e1'
+              }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '700', color: emblemExpanded ? '#92400e' : '#334155' }}>
+                {emblemExpanded ? '▲ Hide Sequence' : '⚙️ Configure Sequence'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {emblemExpanded && (
+          <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+            <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#475569', textTransform: 'uppercase', marginBottom: 8 }}>
+              Tap Ball Buttons in Desired Order (1 to 12 Clicks)
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+              {[
+                { key: 'LEFT' as const, label: '+ Left Ball (9 o\'clock)' },
+                { key: 'CENTER' as const, label: '+ Center Ball (In-Flight)' },
+                { key: 'RIGHT' as const, label: '+ Right Ball (3 o\'clock)' }
+              ].map(btn => (
+                <TouchableOpacity
+                  key={btn.key}
+                  disabled={emblemSequence.length >= 12}
+                  onPress={() => setEmblemSequence(prev => (prev.length < 12 ? [...prev, btn.key] : prev))}
+                  activeOpacity={0.8}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    backgroundColor: '#fffbeb',
+                    borderWidth: 1,
+                    borderColor: '#f59e0b',
+                    opacity: emblemSequence.length >= 12 ? 0.5 : 1
+                  }}
+                >
+                  <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#92400e' }}>{btn.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Current Sequence Order */}
+            <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#64748b', marginBottom: 6 }}>
+              Configured Sequence Order ({emblemSequence.length} clicks — tap a step to remove):
+            </Text>
+            <View style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: 6,
+              backgroundColor: '#f8fafc',
+              borderWidth: 1,
+              borderColor: '#e2e8f0',
+              borderRadius: 10,
+              padding: 10,
+              minHeight: 46,
+              alignItems: 'center'
+            }}>
+              {emblemSequence.length === 0 ? (
+                <Text style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>
+                  No clicks added yet. Tap Left, Center, or Right Ball above to build your sequence.
+                </Text>
+              ) : (
+                emblemSequence.map((ball, idx) => (
+                  <TouchableOpacity
+                    key={`${ball}-${idx}`}
+                    onPress={() => setEmblemSequence(prev => prev.filter((_, i) => i !== idx))}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 5,
+                      backgroundColor: '#ffffff',
+                      borderWidth: 1,
+                      borderColor: '#cbd5e1',
+                      borderRadius: 8,
+                      paddingHorizontal: 9,
+                      paddingVertical: 5
+                    }}
+                  >
+                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0f172a' }}>
+                      {idx + 1}. {ball === 'LEFT' ? '◀ Left' : ball === 'RIGHT' ? '▶ Right' : '🎯 Center'}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#ef4444', fontWeight: '800' }}>✕</Text>
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+
+            {/* Counts & Action Row */}
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 10,
+              marginTop: 12
+            }}>
+              <Text style={{ fontSize: 12, color: '#475569', fontWeight: '600' }}>
+                Left: {emblemSequence.filter(b => b === 'LEFT').length} • Center: {emblemSequence.filter(b => b === 'CENTER').length} • Right: {emblemSequence.filter(b => b === 'RIGHT').length}
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                <TouchableOpacity
+                  onPress={() => setEmblemSequence([])}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: '#e2e8f0',
+                    backgroundColor: '#ffffff'
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748b' }}>Clear</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setEmblemSequence(['LEFT', 'RIGHT', 'LEFT', 'RIGHT', 'CENTER'])}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: '#cbd5e1',
+                    backgroundColor: '#f8fafc'
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>Reset Default (5)</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleSaveEmblemSequence(emblemEnabled, emblemSequence)}
+                  disabled={emblemSaving}
+                  style={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    backgroundColor: '#d97706',
+                    opacity: emblemSaving ? 0.6 : 1
+                  }}
+                >
+                  <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#ffffff' }}>
+                    {emblemSaving ? 'Saving...' : '✓ Save Sequence'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+      </View>
+
+      {/* DYNAMIC CATEGORY DROPDOWN */}
+      <View style={[styles.tabBarContainer, { position: 'relative', zIndex: 1000 }]}>
+        <View style={{
+          flexDirection: isMobile ? 'column' : 'row',
+          alignItems: isMobile ? 'stretch' : 'center',
+          gap: 10
+        }}>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: '#475569' }}>
+            Lookup Category:
+          </Text>
+          <View style={{ position: 'relative', flex: isMobile ? undefined : 1, maxWidth: isMobile ? '100%' : 400, zIndex: 1000 }}>
+            <TouchableOpacity
+              onPress={() => setCategoryDropdownOpen(prev => !prev)}
+              activeOpacity={0.8}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: '#ffffff',
+                borderWidth: 1.5,
+                borderColor: categoryDropdownOpen ? '#d97706' : '#cbd5e1',
+                borderRadius: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 11,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.05,
+                shadowRadius: 3,
+                elevation: 2
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                <Text style={{ fontSize: 15 }}>{activeCategoryDef?.iconText || '📍'}</Text>
+                <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0f172a' }} numberOfLines={1}>
+                  {activeCategoryDef?.label || 'Select Category'}
+                </Text>
+              </View>
+              <Text style={{ fontSize: 12, color: '#64748b', marginLeft: 8 }}>
+                {categoryDropdownOpen ? '▲' : '▼'}
+              </Text>
+            </TouchableOpacity>
+
+            {categoryDropdownOpen && (
+              <View style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                marginTop: 6,
+                backgroundColor: '#ffffff',
+                borderWidth: 1,
+                borderColor: '#e2e8f0',
+                borderRadius: 12,
+                paddingVertical: 6,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.14,
+                shadowRadius: 16,
+                elevation: 12,
+                zIndex: 2000
+              }}>
+                {DYNAMIC_CATEGORIES.map(cat => {
+                  const isActive = activeTab === cat.key;
+                  return (
+                    <TouchableOpacity
+                      key={cat.key}
+                      onPress={() => {
+                        setActiveTab(cat.key);
+                        setSearchQuery('');
+                        setCategoryDropdownOpen(false);
+                        if (onNavigate) {
+                          onNavigate(`/admin/settings/${cat.key.replace(/_/g, '-')}`);
+                        }
+                      }}
+                      activeOpacity={0.7}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingHorizontal: 14,
+                        paddingVertical: 10,
+                        backgroundColor: isActive ? '#fef3c7' : 'transparent'
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                        <Text style={{ fontSize: 15 }}>{cat.iconText}</Text>
+                        <Text style={{
+                          fontSize: 13.5,
+                          fontWeight: isActive ? '800' : '600',
+                          color: isActive ? '#92400e' : '#334155'
+                        }}>
+                          {cat.label}
+                        </Text>
+                      </View>
+                      {isActive && (
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#d97706' }}>✓</Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        </View>
       </View>
 
       {/* Dynamic Category Management View */}

@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const tournamentController = require('../controllers/tournamentController');
 const { requireAdminAuth, requireTeamAuth } = require('../middleware/authMiddleware');
+const { cacheResponse } = require('../middleware/cacheMiddleware');
 
 // ── Coach / Team Protected Registration Endpoints ──────────────────────
 // NOTE: Specific non-parameterized routes are declared first to prevent collision with /:id
@@ -40,7 +41,7 @@ router.get('/:id', (req, res) => tournamentController.getTournamentById(req, res
 router.get('/:id/schedule', (req, res) => tournamentController.getSchedule(req, res));
 
 // GET /api/tournaments/:id/points-table - Live calculated points table
-router.get('/:id/points-table', (req, res) => tournamentController.getPointsTable(req, res));
+router.get('/:id/points-table', cacheResponse(30, 'points-table'), (req, res) => tournamentController.getPointsTable(req, res));
 
 // GET /api/tournaments/:id/statistics - Top batters, bowlers, totals
 router.get('/:id/statistics', (req, res) => tournamentController.getStatistics(req, res));

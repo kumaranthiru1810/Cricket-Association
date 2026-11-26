@@ -12,6 +12,7 @@
  */
 
 const db = require('../config/db');
+const venueModel = require('./venueModel');
 
 const VALID_CATEGORIES = [
   'taluk_jurisdiction',
@@ -20,7 +21,8 @@ const VALID_CATEGORIES = [
   'age_category',
   'certification_level',
   'umpire_certification',
-  'state'
+  'state',
+  'district_venue'
 ];
 
 const CATEGORY_META = {
@@ -51,6 +53,10 @@ const CATEGORY_META = {
   state: {
     label: 'State',
     description: 'Federation affiliated states and territories'
+  },
+  district_venue: {
+    label: 'Primary District Venue / Stadium',
+    description: 'Official match stadiums, grounds, and playing venues in the district'
   }
 };
 
@@ -212,6 +218,37 @@ class MasterSettingModel {
       }
     }
 
+    // Merge venues from Venue collection if district_venue is requested or all categories
+    if (!category || String(category).toLowerCase().includes('venue')) {
+      try {
+        const venues = await venueModel.getAll();
+        if (venues && venues.length > 0) {
+          const venueItems = venues.map((v, idx) => ({
+            id: v.id || `VEN-${idx + 1}`,
+            category: 'district_venue',
+            name: v.name,
+            code: v.id || `VEN-${idx + 1}`,
+            description: v.location || v.description || 'Virudhunagar',
+            is_active: true,
+            sort_order: idx + 1
+          }));
+          const existingIds = new Set((items || []).map(it => it.id));
+          const existingNames = new Set((items || []).map(it => (it.name || '').toLowerCase()));
+          for (const vi of venueItems) {
+            if (!existingIds.has(vi.id) && !existingNames.has(vi.name.toLowerCase())) {
+              if (category && String(category).toLowerCase().includes('venue')) {
+                items.push(vi);
+              } else if (!category) {
+                items.push(vi);
+              }
+            }
+          }
+        }
+      } catch (venueErr) {
+        console.warn('[MasterSettingModel] Error loading venues into master settings:', venueErr.message);
+      }
+    }
+
     return items || [];
   }
 
@@ -344,6 +381,20 @@ class MasterSettingModel {
       fs.writeFileSync(jsonSeedPath, JSON.stringify(allSeeds, null, 2), 'utf8');
     } catch (fileErr) {}
 
+    // 4. If creating a venue, sync directly to Venue model
+    if (cleanCategory === 'district_venue') {
+      try {
+        await venueModel.save({
+          id: newObj.id,
+          name: cleanName,
+          location: newObj.description || 'Virudhunagar',
+          description: newObj.description || ''
+        });
+      } catch (venErr) {
+        console.warn('[MasterSettingModel] Error syncing to venueModel:', venErr.message);
+      }
+    }
+
     return savedItem || newObj;
   }
 
@@ -441,6 +492,14 @@ class MasterSettingModel {
         } catch (e) {}
       }
     }
+
+    // 4. Also delete from Venue model if it was a venue
+    try {
+      await venueModel.delete(id);
+      if (deleted && deleted.name) {
+        await venueModel.delete(deleted.name);
+      }
+    } catch (venErr) {}
 
     // Never fail with 400/404 if item already deleted
     return deleted || { id, name: id, deleted: true };

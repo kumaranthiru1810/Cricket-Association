@@ -24,7 +24,8 @@
     "start:frontend": "npm --prefix mobile_frontend start",
     "android": "npm --prefix mobile_frontend run android",
     "ios": "npm --prefix mobile_frontend run ios",
-    "web": "npm --prefix mobile_frontend run web"
+    "web": "npm --prefix mobile_frontend run web",
+    "build": "npm --prefix mobile_frontend run build"
   },
   "private": true,
   "devDependencies": {

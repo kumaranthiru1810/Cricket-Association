@@ -75,7 +75,7 @@ class TournamentService {
 
     const todayStr = new Date().toISOString().split('T')[0];
 
-    return rawTournaments.map(t => {
+    const enriched = rawTournaments.map(t => {
       const matchStats = matchesByTour[t.id] || { total: 0, scheduled: 0, live: 0, completed: 0, cancelled: 0 };
       const regStat = regStatsByTour[t.id] || { total: 0, pending: 0, approved: 0, rejected: 0 };
       
@@ -118,6 +118,24 @@ class TournamentService {
         match_stats: matchStats
       };
     });
+
+    // Enforce strictly one tournament per normalized name
+    const uniqueByName = new Map();
+    enriched.forEach(t => {
+      const key = (t.name || '').trim().toLowerCase() || t.id;
+      const existing = uniqueByName.get(key);
+      if (!existing) {
+        uniqueByName.set(key, t);
+      } else {
+        const existingScore = (existing.match_stats?.total || 0) * 10 + (existing.approved_teams_count || 0);
+        const currentScore = (t.match_stats?.total || 0) * 10 + (t.approved_teams_count || 0);
+        if (currentScore > existingScore) {
+          uniqueByName.set(key, t);
+        }
+      }
+    });
+
+    return Array.from(uniqueByName.values());
   }
 
   /**
@@ -141,15 +159,30 @@ class TournamentService {
     const teamIds = tournament.teams || [];
     let participatingTeams = [];
     if (teamIds.length > 0) {
+      const validObjIds = teamIds.filter(id => typeof id === 'string' && id.match(/^[0-9a-fA-F]{24}$/));
       const [regularTeams, regTeams] = await Promise.all([
-        db.models.Team.find({ id: { $in: teamIds } }).lean(),
-        db.models.TeamRegistration.find({ id: { $in: teamIds } }).lean()
+        db.models.Team.find({
+          $or: [
+            { id: { $in: teamIds } },
+            { team_id: { $in: teamIds } },
+            { name: { $in: teamIds } },
+            { team_name: { $in: teamIds } },
+            ...(validObjIds.map(id => ({ _id: id })))
+          ]
+        }).lean(),
+        db.models.TeamRegistration.find({
+          $or: [
+            { id: { $in: teamIds } },
+            { team_name: { $in: teamIds } },
+            ...(validObjIds.map(id => ({ _id: id })))
+          ]
+        }).lean()
       ]);
 
       const teamMap = {};
       regularTeams.forEach(rt => {
-        teamMap[rt.id] = {
-          id: rt.id,
+        const item = {
+          id: rt.id || rt.team_id || rt._id?.toString(),
           team_id: rt.team_id || rt.id,
           name: rt.name || rt.team_name,
           short_name: rt.short_name || 'VND',
@@ -160,23 +193,29 @@ class TournamentService {
           vice_captain: rt.vice_captain || '—',
           status: rt.status || 'ACTIVE'
         };
+        if (rt.id) teamMap[rt.id] = item;
+        if (rt.team_id) teamMap[rt.team_id] = item;
+        if (rt._id) teamMap[rt._id.toString()] = item;
+        if (rt.name) teamMap[rt.name] = item;
+        if (rt.team_name) teamMap[rt.team_name] = item;
       });
 
       regTeams.forEach(reg => {
-        if (!teamMap[reg.id]) {
-          teamMap[reg.id] = {
-            id: reg.id,
-            team_id: reg.id,
-            name: reg.team_name,
-            short_name: reg.team_name.split(' ').map(w => w[0]).join('').slice(0, 4).toUpperCase(),
-            coach_name: reg.coach_name,
-            coach_email: reg.coach_email,
-            city: reg.city || reg.taluk || 'Virudhunagar',
-            captain: '—',
-            vice_captain: '—',
-            status: reg.status
-          };
-        }
+        const item = {
+          id: reg.id || reg._id?.toString(),
+          team_id: reg.id || reg._id?.toString(),
+          name: reg.team_name,
+          short_name: reg.team_name ? reg.team_name.split(' ').map(w => w[0]).join('').slice(0, 4).toUpperCase() : 'VND',
+          coach_name: reg.coach_name || '—',
+          coach_email: reg.coach_email || '',
+          city: reg.city || reg.taluk || 'Virudhunagar',
+          captain: '—',
+          vice_captain: '—',
+          status: reg.status || 'PENDING'
+        };
+        if (reg.id && !teamMap[reg.id]) teamMap[reg.id] = item;
+        if (reg._id && !teamMap[reg._id.toString()]) teamMap[reg._id.toString()] = item;
+        if (reg.team_name && !teamMap[reg.team_name]) teamMap[reg.team_name] = item;
       });
 
       participatingTeams = teamIds.map(tid => teamMap[tid] || { id: tid, name: tid });
@@ -238,21 +277,16 @@ class TournamentService {
       throw { status: 400, message: `A tournament with name '${cleanName}' already exists. Please choose a unique name.` };
     }
 
-    // Validate Dates
-    if (!payload.start_date || !String(payload.start_date).trim()) {
-      throw { status: 400, message: 'Tournament Start Date is required.' };
-    }
-    if (!payload.end_date || !String(payload.end_date).trim()) {
-      throw { status: 400, message: 'Tournament End Date is required.' };
-    }
-
-    const startDate = new Date(payload.start_date);
-    const endDate = new Date(payload.end_date);
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-      throw { status: 400, message: 'Start Date and End Date must be valid dates (YYYY-MM-DD).' };
-    }
-    if (endDate < startDate) {
-      throw { status: 400, message: 'Tournament End Date cannot be before Start Date.' };
+    // Validate Dates if supplied
+    if (payload.start_date && payload.end_date) {
+      const startDate = new Date(payload.start_date);
+      const endDate = new Date(payload.end_date);
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        throw { status: 400, message: 'Start Date and End Date must be valid dates (YYYY-MM-DD).' };
+      }
+      if (endDate < startDate) {
+        throw { status: 400, message: 'Tournament End Date cannot be before Start Date.' };
+      }
     }
 
     // Validate Registration Dates if supplied
@@ -308,8 +342,8 @@ class TournamentService {
       overs_per_match: Number(payload.overs_per_match || payload.overs || 20),
       season: payload.season || '2026',
       venue: (payload.venue || 'Kamarajar District Stadium').trim(),
-      start_date: payload.start_date,
-      end_date: payload.end_date,
+      start_date: payload.start_date || null,
+      end_date: payload.end_date || null,
       registration_start_date: payload.registration_start_date || null,
       registration_end_date: payload.registration_end_date || null,
       max_teams: maxTeams,
@@ -600,13 +634,39 @@ class TournamentService {
     });
 
     // Fetch team names for readable fixture creation
+    const validTeamsObjIds = teams.filter(id => typeof id === 'string' && id.match(/^[0-9a-fA-F]{24}$/));
     const [teamDocs, regDocs] = await Promise.all([
-      db.models.Team.find({ id: { $in: teams } }).lean(),
-      db.models.TeamRegistration.find({ id: { $in: teams } }).lean()
+      db.models.Team.find({
+        $or: [
+          { id: { $in: teams } },
+          { team_id: { $in: teams } },
+          { name: { $in: teams } },
+          { team_name: { $in: teams } },
+          ...(validTeamsObjIds.map(id => ({ _id: id })))
+        ]
+      }).lean(),
+      db.models.TeamRegistration.find({
+        $or: [
+          { id: { $in: teams } },
+          { team_name: { $in: teams } },
+          ...(validTeamsObjIds.map(id => ({ _id: id })))
+        ]
+      }).lean()
     ]);
     const teamNameMap = {};
-    teamDocs.forEach(t => { teamNameMap[t.id] = t.name || t.team_name; });
-    regDocs.forEach(t => { if (!teamNameMap[t.id]) teamNameMap[t.id] = t.team_name; });
+    teamDocs.forEach(t => {
+      const name = t.name || t.team_name;
+      if (t.id) teamNameMap[t.id] = name;
+      if (t.team_id) teamNameMap[t.team_id] = name;
+      if (t._id) teamNameMap[t._id.toString()] = name;
+      if (t.name) teamNameMap[t.name] = name;
+    });
+    regDocs.forEach(t => {
+      const name = t.team_name;
+      if (t.id && !teamNameMap[t.id]) teamNameMap[t.id] = name;
+      if (t._id && !teamNameMap[t._id.toString()]) teamNameMap[t._id.toString()] = name;
+      if (t.team_name && !teamNameMap[t.team_name]) teamNameMap[t.team_name] = name;
+    });
 
     const tournamentType = options.tournament_type || tournament.tournament_type || 'LEAGUE';
     const roundRobinType = options.round_robin_type || tournament.format_config?.round_robin_type || 'SINGLE';
@@ -762,13 +822,37 @@ class TournamentService {
     const teamIds = tournament.teams || [];
     let teams = cachedTeams;
     if (!teams) {
+      const validTidsObjIds = teamIds.filter(id => typeof id === 'string' && id.match(/^[0-9a-fA-F]{24}$/));
       const [regTeams, appTeams] = await Promise.all([
-        db.models.Team.find({ id: { $in: teamIds } }).lean(),
-        db.models.TeamRegistration.find({ id: { $in: teamIds } }).lean()
+        db.models.Team.find({
+          $or: [
+            { id: { $in: teamIds } },
+            { team_id: { $in: teamIds } },
+            { name: { $in: teamIds } },
+            { team_name: { $in: teamIds } },
+            ...(validTidsObjIds.map(id => ({ _id: id })))
+          ]
+        }).lean(),
+        db.models.TeamRegistration.find({
+          $or: [
+            { id: { $in: teamIds } },
+            { team_name: { $in: teamIds } },
+            ...(validTidsObjIds.map(id => ({ _id: id })))
+          ]
+        }).lean()
       ]);
       const teamMap = {};
-      regTeams.forEach(t => { teamMap[t.id] = t.name || t.team_name; });
-      appTeams.forEach(t => { if (!teamMap[t.id]) teamMap[t.id] = t.team_name; });
+      regTeams.forEach(t => {
+        const name = t.name || t.team_name;
+        if (t.id) teamMap[t.id] = name;
+        if (t.team_id) teamMap[t.team_id] = name;
+        if (t._id) teamMap[t._id.toString()] = name;
+      });
+      appTeams.forEach(t => {
+        const name = t.team_name;
+        if (t.id && !teamMap[t.id]) teamMap[t.id] = name;
+        if (t._id && !teamMap[t._id.toString()]) teamMap[t._id.toString()] = name;
+      });
       teams = teamIds.map(id => ({ id, name: teamMap[id] || id }));
     }
 
@@ -1427,22 +1511,143 @@ class TournamentService {
   }
 
   /**
+   * Shared helper: Resolve real team metadata, captain, exact player count, and players roster
+   * across Team, TeamRegistration, and Player collections.
+   */
+  async _loadTeamRosterContext() {
+    const [allTeams, allTeamRegs, allPlayers] = await Promise.all([
+      db.models.Team.find({}).lean(),
+      db.models.TeamRegistration ? db.models.TeamRegistration.find({}).lean() : [],
+      db.models.Player.find({}).lean()
+    ]);
+
+    const teamById = {};
+    const teamByName = {};
+    const teamByEmail = {};
+    (allTeams || []).forEach(t => {
+      if (t.id) teamById[t.id] = t;
+      if (t.team_id) teamById[t.team_id] = t;
+      const n = (t.name || '').trim().toLowerCase();
+      if (n) teamByName[n] = t;
+      const e = (t.coach_email || '').trim().toLowerCase();
+      if (e) teamByEmail[e] = t;
+    });
+
+    const regById = {};
+    const regByName = {};
+    const regByEmail = {};
+    (allTeamRegs || []).forEach(tr => {
+      if (tr.id) regById[tr.id] = tr;
+      const n = (tr.team_name || '').trim().toLowerCase();
+      if (n) regByName[n] = tr;
+      const e = (tr.coach_email || '').trim().toLowerCase();
+      if (e) regByEmail[e] = tr;
+    });
+
+    const playersByTeamId = {};
+    (allPlayers || []).forEach(p => {
+      const tid = p.team_id;
+      if (!tid) return;
+      if (!playersByTeamId[tid]) playersByTeamId[tid] = [];
+      playersByTeamId[tid].push(p);
+    });
+
+    const resolveFor = ({ teamId, teamName, coachEmail }) => {
+      const nameKey = (teamName || '').trim().toLowerCase();
+      const emailKey = (coachEmail || '').trim().toLowerCase();
+
+      const tDoc = (teamId && teamById[teamId]) || (nameKey && teamByName[nameKey]) || (emailKey && teamByEmail[emailKey]) || null;
+      const rDoc = (teamId && regById[teamId]) || (nameKey && regByName[nameKey]) || (emailKey && regByEmail[emailKey]) || null;
+
+      const candidateIds = new Set([teamId, tDoc?.id, tDoc?.team_id, rDoc?.id].filter(Boolean));
+      const playerMap = new Map();
+
+      candidateIds.forEach(cid => {
+        (playersByTeamId[cid] || []).forEach(p => {
+          const pk = (p.email || p.id || p.name || '').toLowerCase();
+          if (pk && !playerMap.has(pk)) {
+            playerMap.set(pk, {
+              id: p.id,
+              name: p.name,
+              email: p.email || '',
+              mobile: p.mobile || p.phone || '',
+              role: p.role || 'PLAYER',
+              jersey_number: p.jersey_number ?? null,
+              is_captain: Boolean(p.is_captain) || String(p.role || '').toLowerCase().includes('captain')
+            });
+          }
+        });
+      });
+
+      if (rDoc && Array.isArray(rDoc.players)) {
+        rDoc.players.forEach((p, idx) => {
+          const pk = (p.email || p.name || `${rDoc.id}-${idx}`).toLowerCase();
+          if (pk && !playerMap.has(pk)) {
+            playerMap.set(pk, {
+              id: p.id || `PLY-${rDoc.id}-${idx + 1}`,
+              name: p.name || 'Player',
+              email: p.email || '',
+              mobile: p.phone || p.mobile || '',
+              role: p.role || 'PLAYER',
+              jersey_number: p.jersey_number ?? (idx + 1),
+              is_captain: Boolean(p.is_captain) || String(p.role || '').toLowerCase().includes('captain')
+            });
+          }
+        });
+      }
+
+      const players = Array.from(playerMap.values());
+      const captainPlayer = players.find(p => p.is_captain) || players.find(p => String(p.role || '').toLowerCase().includes('captain'));
+
+      return {
+        tDoc,
+        rDoc,
+        players,
+        squad_count: players.length,
+        captain: tDoc?.captain || rDoc?.captain || captainPlayer?.name || null,
+        coach_name: tDoc?.coach_name || rDoc?.coach_name || null,
+        coach_email: tDoc?.coach_email || rDoc?.coach_email || null,
+        coach_phone: tDoc?.coach_phone || rDoc?.coach_phone || rDoc?.coach_mobile || null,
+        city: tDoc?.city || tDoc?.taluk || rDoc?.taluk || rDoc?.city || null,
+        resolved_name: tDoc?.name || rDoc?.team_name || null
+      };
+    };
+
+    return { resolveFor };
+  }
+
+  /**
    * Get tournament registrations for Admin with filtering
    */
   async getTournamentRegistrations({ tournamentId, status, search } = {}) {
     await db.initDb();
     const registrations = await tournamentRegistrationModel.getAll({ tournamentId, status, search });
     
-    // Attach tournament metadata
+    // Attach tournament metadata + real team roster metadata
     const tourIds = [...new Set(registrations.map(r => r.tournament_id))];
-    const tournaments = await db.models.Tournament.find({ id: { $in: tourIds } }).lean();
+    const [tournaments, rosterCtx] = await Promise.all([
+      db.models.Tournament.find({ id: { $in: tourIds } }).lean(),
+      this._loadTeamRosterContext()
+    ]);
     const tourMap = {};
     tournaments.forEach(t => { tourMap[t.id] = t; });
 
     return registrations.map(reg => {
       const tour = tourMap[reg.tournament_id] || {};
+      const resolved = rosterCtx.resolveFor({
+        teamId: reg.team_id,
+        teamName: reg.team_name,
+        coachEmail: reg.coach_email
+      });
       return {
         ...reg,
+        team_name: reg.team_name || resolved.resolved_name || reg.team_id,
+        coach_name: reg.coach_name || resolved.coach_name || 'Coach',
+        coach_email: reg.coach_email || resolved.coach_email || '',
+        coach_phone: reg.coach_phone || resolved.coach_phone || '',
+        captain: reg.captain || resolved.captain || '',
+        squad_count: resolved.squad_count > 0 ? resolved.squad_count : (reg.squad_count || 0),
+        players: resolved.players,
         tournament_status: tour.status,
         tournament_venue: tour.venue,
         tournament_dates: tour.start_date && tour.end_date ? `${tour.start_date} to ${tour.end_date}` : ''
@@ -1572,11 +1777,13 @@ class TournamentService {
       throw { status: 404, message: `Tournament with ID '${tournamentId}' not found.` };
     }
 
-    // 1. Fetch from approved tournament registrations
-    const approvedRegistrations = await db.models.TournamentRegistration.find({
-      tournament_id: tournament.id,
-      status: 'APPROVED'
-    }).lean();
+    const [approvedRegistrations, rosterCtx] = await Promise.all([
+      db.models.TournamentRegistration.find({
+        tournament_id: tournament.id,
+        status: 'APPROVED'
+      }).lean(),
+      this._loadTeamRosterContext()
+    ]);
 
     // 2. Fetch from tournament.teams array
     const teamIds = [
@@ -1588,39 +1795,33 @@ class TournamentService {
 
     if (teamIds.length === 0) return [];
 
-    const [regularTeams, regTeams] = await Promise.all([
-      db.models.Team.find({ $or: [{ id: { $in: teamIds } }, { team_id: { $in: teamIds } }] }).lean(),
-      db.models.TeamRegistration.find({ id: { $in: teamIds } }).lean()
-    ]);
-
-    const teamMap = {};
-    regularTeams.forEach(t => {
-      teamMap[t.id] = t;
-      if (t.team_id) teamMap[t.team_id] = t;
-    });
-    regTeams.forEach(t => {
-      teamMap[t.id] = t;
-    });
-
     const regMap = {};
     approvedRegistrations.forEach(r => {
       regMap[r.team_id] = r;
     });
 
     return teamIds.map(tid => {
-      const t = teamMap[tid] || {};
       const r = regMap[tid] || {};
+      const resolved = rosterCtx.resolveFor({
+        teamId: tid,
+        teamName: r.team_name,
+        coachEmail: r.coach_email
+      });
       return {
         id: tid,
-        team_id: t.team_id || tid,
-        name: r.team_name || t.name || t.team_name || tid,
-        coach_name: r.coach_name || t.coach_name || '—',
-        coach_email: r.coach_email || t.coach_email || '',
-        city: r.team_city || t.city || t.taluk || 'Virudhunagar',
-        captain: r.captain || t.captain || '—',
-        squad_count: r.squad_count || (t.players ? t.players.length : 15),
+        team_id: resolved.tDoc?.team_id || resolved.tDoc?.id || tid,
+        name: r.team_name || resolved.resolved_name || tid,
+        team_name: r.team_name || resolved.resolved_name || tid,
+        coach_name: r.coach_name || resolved.coach_name || '—',
+        coach_email: r.coach_email || resolved.coach_email || '',
+        coach_phone: r.coach_phone || resolved.coach_phone || '',
+        city: r.team_city || r.team_taluk || resolved.city || 'Virudhunagar',
+        captain: r.captain || resolved.captain || '—',
+        squad_count: resolved.squad_count > 0 ? resolved.squad_count : (r.squad_count || 0),
+        players: resolved.players,
         registration_id: r.id || null,
         approved_at: r.approved_at || null,
+        approved_by: r.approved_by || null,
         status: 'APPROVED'
       };
     });

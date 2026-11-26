@@ -15,7 +15,7 @@ import {
 import { useAppNavigation } from '../../navigation/AppNavigator';
 import { ScorerApi, setAuthToken, setCurrentUser } from '../../services/api';
 import { showSuccess, showError, showWarning } from '../../utils/sweetalert';
-import { validateEmail, validatePassword } from '../../utils/validation';
+import { validateEmail } from '../../utils/validation';
 import ForgotPasswordModal from '../../components/auth/ForgotPasswordModal';
 import FindTeamModal from '../../components/auth/FindTeamModal';
 import EmailDomainSuggestions from '../../components/common/EmailDomainSuggestions';
@@ -124,7 +124,7 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
         const res = await ScorerApi.loginWithPassword(input, '', 'PLAYER', teamName.trim());
         if (res?.token) {
           setAuthToken(res.token, 'PLAYER');
-          if (res.user) setCurrentUser(res.user);
+          if (res.user) setCurrentUser({ ...res.user, role: 'PLAYER', portalRole: 'PLAYER' });
         }
         setStatusMessage(res?.message || 'Login successful!');
         setStatusType('success');
@@ -153,10 +153,9 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
       newErrors.identifier = emailResult.error;
     }
 
-    // 2. Password validation: min 8 characters, 1 uppercase, 1 special character, 2 numbers
-    const passwordResult = validatePassword(pass);
-    if (!passwordResult.isValid) {
-      newErrors.password = passwordResult.error;
+    // 2. Password validation: check not empty
+    if (!pass) {
+      newErrors.password = 'Please enter your account password.';
     }
 
     // If validation fails, show error messages and DO NOT SUBMIT
@@ -176,7 +175,7 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
 
       if (res?.token) {
         setAuthToken(res.token, activeRole);
-        if (res.user) setCurrentUser(res.user);
+        if (res.user) setCurrentUser({ ...res.user, role: activeRole, portalRole: activeRole });
       }
 
       setStatusMessage(res?.message || 'Login successful! Redirecting...');
@@ -406,7 +405,10 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
               }
               placeholderTextColor="#94a3b8"
               keyboardType="email-address"
+              autoComplete="email"
               autoCapitalize="none"
+              autoCorrect={false}
+              accessibilityLabel="Login email or user"
             />
             <EmailDomainSuggestions
               value={emailOrUser}
@@ -452,6 +454,10 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
                     secureTextEntry={!showPassword}
                     placeholder="Enter your password"
                     placeholderTextColor="#94a3b8"
+                    autoComplete="current-password"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    accessibilityLabel="Account password"
                   />
                   <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                     <Text style={styles.toggleText}>{showPassword ? '👁️' : '🔒'}</Text>
@@ -512,9 +518,11 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
         onNavigateToRegister={(targetRole) => {
           navigate('Registration', { initialRole: targetRole || activeRole });
         }}
-        onSuccess={(resetEmail) => {
+        onSuccess={(resetEmail, newPass) => {
           setEmailOrUser(resetEmail);
-          setPassword('');
+          if (newPass) {
+            setPassword(newPass);
+          }
         }}
       />
 

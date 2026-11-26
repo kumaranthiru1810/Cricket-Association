@@ -62,6 +62,27 @@ class UserModel {
     ).lean();
   }
 
+  async update(identifier, updateFields = {}) {
+    await db.initDb();
+    if (!identifier) return null;
+    const cleanId = typeof identifier === 'string' ? identifier.trim() : identifier;
+    const mongoose = require('mongoose');
+    const orConditions = [
+      { id: cleanId },
+      { email: typeof cleanId === 'string' ? cleanId.toLowerCase() : '' }
+    ];
+
+    if (mongoose && mongoose.Types && mongoose.Types.ObjectId && mongoose.Types.ObjectId.isValid(cleanId)) {
+      orConditions.push({ _id: cleanId });
+    }
+
+    return this.Model.findOneAndUpdate(
+      { $or: orConditions },
+      { $set: { ...updateFields, updated_at: new Date() } },
+      { returnDocument: 'after' }
+    ).lean();
+  }
+
   async getScorers(status = null) {
     await db.initDb();
     const query = { role: 'SCORER' };

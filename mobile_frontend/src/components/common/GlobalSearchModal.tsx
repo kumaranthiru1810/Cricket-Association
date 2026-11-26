@@ -33,7 +33,7 @@ const FALLBACK_TEAMS = [
   { id: 'TM-1310', name: 'Virudhunagar Super Strikers', short_name: 'VSS', taluk: 'Virudhunagar', coach_name: 'Coach Ramanathan', matches: 3, points: 4, nrr: '+0.350' },
   { id: 'TM-1303', name: 'eleven thunder', short_name: 'ETH', taluk: 'Srivilliputhur', coach_name: 'kani', matches: 2, points: 2, nrr: '-0.200' },
   { id: 'TM-6769', name: 'Royal Strikers', short_name: 'RYS', taluk: 'Srivilliputhur', coach_name: 'Royal', matches: 2, points: 4, nrr: '+0.600' },
-  { id: 'TM-2547', name: 'guna', short_name: 'GNA', taluk: 'Watrap', coach_name: 'guna', matches: 1, points: 0, nrr: '-0.400' },
+  { id: 'TM-2547', name: 'guna', short_name: 'GNA', taluk: 'Virudhunagar', coach_name: 'guna', matches: 1, points: 0, nrr: '-0.400' },
 ];
 
 const FALLBACK_PLAYERS = [
@@ -523,10 +523,14 @@ const styles = StyleSheet.create({
   },
   clearBtn: {
     padding: 4,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   closeBtn: {
-    width: 38,
-    height: 38,
+    width: 44,
+    height: 44,
     borderRadius: 8,
     backgroundColor: '#f1f5f9',
     justifyContent: 'center',

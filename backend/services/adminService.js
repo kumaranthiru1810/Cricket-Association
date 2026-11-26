@@ -13,7 +13,8 @@ const db = require('../config/db');
 const otpService = require('./otpService');
 const { sendOtpEmail } = require('../config/mailer');
 const contentModel = require('../models/contentModel');
-const { validateScheduleDateTime } = require('../utils/dateTimeValidation');
+const venueModel = require('../models/venueModel');
+const { validateScheduleDateTime, calculateOfficialMatchTimings } = require('../utils/dateTimeValidation');
 
 /**
  * Creates an audit log entry in MongoDB
@@ -62,10 +63,15 @@ async function getAdminOverview() {
 /**
  * List all users with optional role filtering
  */
-async function getUsers(role = null) {
+async function getUsers(role = null, status = null) {
   await db.initDb();
   const query = {};
-  if (role && role !== 'ALL') query.role = role.toUpperCase();
+  if (role && role !== 'ALL' && role !== 'undefined' && role !== 'null') {
+    query.role = String(role).toUpperCase();
+  }
+  if (status && status !== 'ALL' && status !== 'undefined' && status !== 'null') {
+    query.status = String(status).toUpperCase();
+  }
   const users = await db.models.User.find(query).sort({ created_at: -1 }).lean();
   return users.map(u => ({
     ...u,
@@ -120,23 +126,38 @@ async function getOfficials() {
   await db.initDb();
   const [officials, users] = await Promise.all([
     db.models.Official.find({}).sort({ name: 1 }).lean(),
-    db.models.User.find({ role: { $in: ['UMPIRE', 'SCORER'] } }).sort({ name: 1 }).lean()
+    db.models.User.find({
+      $or: [
+        { role: { $in: ['UMPIRE', 'SCORER'] } },
+        { role: { $regex: /^(scorer|umpire)$/i } },
+        { id: { $regex: /^(SCR|UMP)/i } }
+      ],
+      status: { $nin: ['REJECTED', 'SUSPENDED'] }
+    }).sort({ name: 1 }).lean()
   ]);
 
   const list = [...officials];
-  const seenIds = new Set(officials.map(o => o.id));
+  const seenIds = new Set(officials.map(o => o.id || (o._id ? String(o._id) : '')));
 
   (users || []).forEach(u => {
-    if (!seenIds.has(u.id)) {
-      seenIds.add(u.id);
-      list.push({
-        id: u.id,
-        name: u.name,
-        role: u.role,
-        email: u.email,
-        phone: u.mobile || '—',
-        status: u.status || 'ACTIVE'
-      });
+    const uid = u.id || (u._id ? String(u._id) : '');
+    if (uid && !seenIds.has(uid)) {
+      seenIds.add(uid);
+      let effectiveRole = (u.role || '').toUpperCase();
+      if (effectiveRole !== 'SCORER' && effectiveRole !== 'UMPIRE') {
+        if (uid.toUpperCase().startsWith('SCR')) effectiveRole = 'SCORER';
+        else if (uid.toUpperCase().startsWith('UMP')) effectiveRole = 'UMPIRE';
+      }
+      if (effectiveRole === 'SCORER' || effectiveRole === 'UMPIRE') {
+        list.push({
+          id: uid,
+          name: u.name,
+          role: effectiveRole,
+          email: u.email,
+          phone: u.mobile || '—',
+          status: u.status || 'ACTIVE'
+        });
+      }
     }
   });
 
@@ -168,7 +189,7 @@ async function saveOfficial({ id, name, role, email, phone, status = 'ACTIVE' },
  */
 async function getVenues() {
   await db.initDb();
-  return db.models.Venue.find({}).lean();
+  return venueModel.getAll();
 }
 
 /**
@@ -176,19 +197,14 @@ async function getVenues() {
  */
 async function saveVenue({ id, name, location, capacity, floodlights, description }, adminEmail) {
   await db.initDb();
-  const venId = id || `VEN-${Date.now()}`;
-  const venue = await db.models.Venue.findOneAndUpdate(
-    { id: venId },
-    { $set: { id: venId, name, location, capacity, floodlights: !!floodlights, description } },
-    { upsert: true, returnDocument: 'after' }
-  ).lean();
+  const venue = await venueModel.save({ id, name, location, capacity, floodlights, description });
 
   await addAuditLog({
     action: 'SAVE_VENUE',
     initiated_by: adminEmail,
     target_user: name,
     result: `Venue ${name} saved`,
-    details: `Venue saved at ${location}`
+    details: `Venue saved at ${location || 'Virudhunagar'}`
   });
 
   return venue;
@@ -200,9 +216,20 @@ async function saveVenue({ id, name, location, capacity, floodlights, descriptio
 async function saveTournament(tournamentData, adminEmail) {
   await db.initDb();
   const tourId = tournamentData.id || `T-${Date.now()}`;
+  const cleanName = (tournamentData.name || '').trim();
+  if (cleanName) {
+    const escaped = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const duplicate = await db.models.Tournament.findOne({
+      name: { $regex: new RegExp(`^${escaped}$`, 'i') },
+      id: { $ne: tourId }
+    }).lean();
+    if (duplicate) {
+      throw new Error(`A tournament with name '${cleanName}' already exists. Only one tournament per name is allowed.`);
+    }
+  }
   const tournament = await db.models.Tournament.findOneAndUpdate(
     { id: tourId },
-    { $set: { id: tourId, ...tournamentData } },
+    { $set: { id: tourId, ...tournamentData, ...(cleanName ? { name: cleanName } : {}) } },
     { upsert: true, returnDocument: 'after' }
   ).lean();
 
@@ -291,6 +318,9 @@ async function dispatchMatchScheduleNotifications(db, match, { isRescheduled = f
   const notifDocs = [];
   const type = isRescheduled ? 'MATCH_RESCHEDULED' : 'MATCH_SCHEDULED';
 
+  const notesText = (match.notes || match.match_notes || '').trim();
+  const notesSuffix = notesText ? `\n\n📝 Match Notes:\n${notesText}` : '';
+
   // 1. Notification for Team A
   notifDocs.push({
     id: `NOTIF-M-${match.id}-TEAM-A-${timestamp}`,
@@ -300,9 +330,9 @@ async function dispatchMatchScheduleNotifications(db, match, { isRescheduled = f
     team_id: teamAId,
     team_name: teamAName,
     title: isRescheduled ? `📅 Fixture Rescheduled vs ${teamBName}` : `🏏 Match Scheduled vs ${teamBName}`,
-    message: isRescheduled
+    message: (isRescheduled
       ? `Your match vs ${teamBName} has been rescheduled to ${date} at ${time} at ${venue}.`
-      : `Your match vs ${teamBName} has been scheduled on ${date} at ${time} at ${venue}.`,
+      : `Your match vs ${teamBName} has been scheduled on ${date} at ${time} at ${venue}.`) + notesSuffix,
     reference_id: match.id,
     link: mapLink,
     status: 'UNREAD'
@@ -320,14 +350,31 @@ async function dispatchMatchScheduleNotifications(db, match, { isRescheduled = f
       team_id: teamAId,
       team_name: teamAName,
       title: isRescheduled ? `📅 Match Rescheduled vs ${teamBName}` : `🏏 Match Scheduled vs ${teamBName}`,
-      message: isRescheduled
+      message: (isRescheduled
         ? `Your team ${teamAName} match vs ${teamBName} has been rescheduled to ${date} at ${time} at ${venue}.`
-        : `Your team ${teamAName} is scheduled to play against ${teamBName} on ${date} at ${time} at ${venue}.`,
+        : `Your team ${teamAName} is scheduled to play against ${teamBName} on ${date} at ${time} at ${venue}.`) + notesSuffix,
       reference_id: match.id,
       link: mapLink,
       status: 'UNREAD'
     });
   }
+
+  // Broadcast notification for any logged-in players of Team A
+  notifDocs.push({
+    id: `NOTIF-M-${match.id}-TEAM-A-PLAYERS-${timestamp}`,
+    type,
+    recipient_role: 'PLAYER',
+    recipient_id: `TEAM-${teamAId}-PLAYERS`,
+    team_id: teamAId,
+    team_name: teamAName,
+    title: isRescheduled ? `📅 Match Rescheduled vs ${teamBName}` : `🏏 Match Scheduled vs ${teamBName}`,
+    message: (isRescheduled
+      ? `Your team ${teamAName} match vs ${teamBName} has been rescheduled to ${date} at ${time} at ${venue}.`
+      : `Your team ${teamAName} is scheduled to play against ${teamBName} on ${date} at ${time} at ${venue}.`) + notesSuffix,
+    reference_id: match.id,
+    link: mapLink,
+    status: 'UNREAD'
+  });
 
   // 3. Notification for Team B
   notifDocs.push({
@@ -338,9 +385,9 @@ async function dispatchMatchScheduleNotifications(db, match, { isRescheduled = f
     team_id: teamBId,
     team_name: teamBName,
     title: isRescheduled ? `📅 Fixture Rescheduled vs ${teamAName}` : `🏏 Match Scheduled vs ${teamAName}`,
-    message: isRescheduled
+    message: (isRescheduled
       ? `Your match vs ${teamAName} has been rescheduled to ${date} at ${time} at ${venue}.`
-      : `Your match vs ${teamAName} has been scheduled on ${date} at ${time} at ${venue}.`,
+      : `Your match vs ${teamAName} has been scheduled on ${date} at ${time} at ${venue}.`) + notesSuffix,
     reference_id: match.id,
     link: mapLink,
     status: 'UNREAD'
@@ -358,14 +405,31 @@ async function dispatchMatchScheduleNotifications(db, match, { isRescheduled = f
       team_id: teamBId,
       team_name: teamBName,
       title: isRescheduled ? `📅 Match Rescheduled vs ${teamAName}` : `🏏 Match Scheduled vs ${teamAName}`,
-      message: isRescheduled
+      message: (isRescheduled
         ? `Your team ${teamBName} match vs ${teamAName} has been rescheduled to ${date} at ${time} at ${venue}.`
-        : `Your team ${teamBName} is scheduled to play against ${teamAName} on ${date} at ${time} at ${venue}.`,
+        : `Your team ${teamBName} is scheduled to play against ${teamAName} on ${date} at ${time} at ${venue}.`) + notesSuffix,
       reference_id: match.id,
       link: mapLink,
       status: 'UNREAD'
     });
   }
+
+  // Broadcast notification for any logged-in players of Team B
+  notifDocs.push({
+    id: `NOTIF-M-${match.id}-TEAM-B-PLAYERS-${timestamp}`,
+    type,
+    recipient_role: 'PLAYER',
+    recipient_id: `TEAM-${teamBId}-PLAYERS`,
+    team_id: teamBId,
+    team_name: teamBName,
+    title: isRescheduled ? `📅 Match Rescheduled vs ${teamAName}` : `🏏 Match Scheduled vs ${teamAName}`,
+    message: (isRescheduled
+      ? `Your team ${teamBName} match vs ${teamAName} has been rescheduled to ${date} at ${time} at ${venue}.`
+      : `Your team ${teamBName} is scheduled to play against ${teamAName} on ${date} at ${time} at ${venue}.`) + notesSuffix,
+    reference_id: match.id,
+    link: mapLink,
+    status: 'UNREAD'
+  });
 
   if (notifDocs.length > 0) {
     await db.models.Notification.insertMany(notifDocs);
@@ -482,6 +546,21 @@ async function scheduleMatch(fixtureData, adminEmail) {
     }
   }
 
+  let resolvedScorerName = fixtureData.assigned_scorer_name || fixtureData.scorer_name || null;
+  if (!resolvedScorerName && assigned_scorer_id) {
+    const scDoc = await db.models.User.findOne({ $or: [{ id: assigned_scorer_id }, { email: assigned_scorer_id }, { name: assigned_scorer_id }] }).lean();
+    if (scDoc) resolvedScorerName = scDoc.name;
+  }
+  if (!resolvedScorerName) {
+    resolvedScorerName = assigned_scorer_id || 'Official Scorer';
+  }
+
+  const officialTimings = calculateOfficialMatchTimings(cleanTime);
+  const toss_time_window = fixtureData.toss_time_window || officialTimings.tossWindow;
+  const first_ball_time = fixtureData.first_ball_time || officialTimings.firstBallTime;
+  const scorer_reporting_time = fixtureData.scorer_reporting_time || officialTimings.reportingTime;
+
+  const matchNotes = (fixtureData.notes || fixtureData.match_notes || '').trim();
   const matchId = fixtureData.id || `M-${Date.now()}`;
   const match = await db.models.Match.create({
     id: matchId,
@@ -500,10 +579,18 @@ async function scheduleMatch(fixtureData, adminEmail) {
     stage: stage || 'LEAGUE',
     status: 'SCHEDULED',
     assigned_scorer_id: assigned_scorer_id || 'SCR-101',
+    assigned_scorer_name: resolvedScorerName,
+    scorer_name: resolvedScorerName,
+    toss_time_window,
+    first_ball_time,
+    scorer_reporting_time,
+    schedule_confirmation_status: 'CONFIRMED',
     umpire1_id: umpire1_id || null,
     umpire2_id: umpire2_id || null,
     umpire1_name: resolvedUmpire1Name || (umpire1_id ? 'Official Umpire 1' : null),
-    umpire2_name: resolvedUmpire2Name || (umpire2_id ? 'Official Umpire 2' : null)
+    umpire2_name: resolvedUmpire2Name || (umpire2_id ? 'Official Umpire 2' : null),
+    notes: matchNotes,
+    match_notes: matchNotes
   });
 
   await addAuditLog({
@@ -515,10 +602,12 @@ async function scheduleMatch(fixtureData, adminEmail) {
   });
 
   // Dispatch targeted Notifications strictly to Team A, Team B, and their squad players
-  try {
-    await dispatchMatchScheduleNotifications(db, match, { isRescheduled: false });
-  } catch (notifErr) {
-    console.warn('Failed to dispatch match schedule notification:', notifErr.message);
+  if (fixtureData.notify_teams_and_coaches !== false && fixtureData.notify_teams !== false) {
+    try {
+      await dispatchMatchScheduleNotifications(db, match, { isRescheduled: false });
+    } catch (notifErr) {
+      console.warn('Failed to dispatch match schedule notification:', notifErr.message);
+    }
   }
 
   return match.toObject();
@@ -585,11 +674,22 @@ async function updateMatch(matchId, fixtureData, adminEmail) {
     }
     match.match_date = dtValidation.cleanDate;
     match.match_time = dtValidation.parsedTime.formatted12;
+    const officialTimings = calculateOfficialMatchTimings(match.match_time);
+    match.toss_time_window = fixtureData.toss_time_window || officialTimings.tossWindow;
+    match.first_ball_time = fixtureData.first_ball_time || officialTimings.firstBallTime;
+    match.scorer_reporting_time = fixtureData.scorer_reporting_time || officialTimings.reportingTime;
+  } else if (fixtureData.toss_time_window || fixtureData.first_ball_time) {
+    if (fixtureData.toss_time_window) match.toss_time_window = fixtureData.toss_time_window;
+    if (fixtureData.first_ball_time) match.first_ball_time = fixtureData.first_ball_time;
   }
 
   if (fixtureData.match_type) match.match_type = fixtureData.match_type;
   if (fixtureData.overs_per_side || fixtureData.overs) match.overs_per_side = Number(fixtureData.overs_per_side || fixtureData.overs);
-  if (fixtureData.assigned_scorer_id) match.assigned_scorer_id = fixtureData.assigned_scorer_id;
+  if (fixtureData.assigned_scorer_id) {
+    match.assigned_scorer_id = fixtureData.assigned_scorer_id;
+    if (fixtureData.assigned_scorer_name) match.assigned_scorer_name = fixtureData.assigned_scorer_name;
+    if (fixtureData.scorer_name) match.scorer_name = fixtureData.scorer_name;
+  }
   if (fixtureData.stage) match.stage = fixtureData.stage;
   if (fixtureData.umpire1_id !== undefined) {
     match.umpire1_id = fixtureData.umpire1_id;
@@ -598,6 +698,10 @@ async function updateMatch(matchId, fixtureData, adminEmail) {
   if (fixtureData.umpire2_id !== undefined) {
     match.umpire2_id = fixtureData.umpire2_id;
     if (fixtureData.umpire2_name) match.umpire2_name = fixtureData.umpire2_name;
+  }
+  if (fixtureData.notes !== undefined || fixtureData.match_notes !== undefined) {
+    match.notes = fixtureData.notes !== undefined ? fixtureData.notes : fixtureData.match_notes;
+    match.match_notes = match.notes;
   }
   if (fixtureData.status && !isLive) match.status = fixtureData.status;
 
@@ -611,6 +715,14 @@ async function updateMatch(matchId, fixtureData, adminEmail) {
     result: `Match ${matchId} updated/rescheduled`,
     details: `Updated details for ${match.match_date} at ${match.venue}`
   });
+
+  if (fixtureData.notify_teams_and_coaches === true || fixtureData.notify_teams === true) {
+    try {
+      await dispatchMatchScheduleNotifications(db, match, { isRescheduled: true });
+    } catch (notifErr) {
+      console.warn('Failed to dispatch match reschedule notification:', notifErr.message);
+    }
+  }
 
   return match.toObject();
 }
@@ -647,9 +759,52 @@ async function postponeMatch(matchId, optionsOrReason, adminEmail = 'admin@cfvd.
   const rescheduledDate = options.rescheduledDate || null;
   const rescheduledTime = options.rescheduledTime || null;
 
+  // Determine match situation at postponement (runs, wickets, overs, batting team)
+  const inns = await db.models.Innings.find({ match_id: matchId }).sort({ innings_number: 1 }).lean();
+  let hasPlayStarted = false;
+  let scoreSummary = '';
+  let runs = 0;
+  let wickets = 0;
+  let oversStr = '0.0';
+  let battingTeam = '';
+  let innNumber = 1;
+
+  if (inns && inns.length > 0) {
+    const lastInn = inns[inns.length - 1];
+    const totalBalls = (lastInn.overs || 0) * 6 + (lastInn.balls || 0);
+    if (totalBalls > 0 || (lastInn.total_runs || 0) > 0 || (lastInn.wickets || 0) > 0 || match.status === 'LIVE' || match.status === 'INNINGS_BREAK') {
+      hasPlayStarted = true;
+      runs = lastInn.total_runs || 0;
+      wickets = lastInn.wickets || 0;
+      oversStr = `${lastInn.overs || 0}.${lastInn.balls || 0}`;
+      innNumber = lastInn.innings_number || 1;
+      battingTeam = (lastInn.batting_team_id === match.team_a_id)
+        ? (match.team_a_name || match.team_a_id)
+        : (match.team_b_name || match.team_b_id);
+      const maxOv = match.overs_per_side || 20;
+      scoreSummary = `${battingTeam}: ${runs}/${wickets} (${oversStr}/${maxOv} Ov) - Innings ${innNumber}`;
+    }
+  }
+
+  // Allow explicit options from caller or fallback to database inspection
+  if (options.runsAtPostpone !== undefined && (options.runsAtPostpone > 0 || options.oversAtPostpone !== '0.0' || options.wicketsAtPostpone > 0)) {
+    hasPlayStarted = true;
+    runs = options.runsAtPostpone;
+    wickets = options.wicketsAtPostpone || 0;
+    oversStr = options.oversAtPostpone || oversStr;
+    battingTeam = options.battingTeamAtPostpone || battingTeam;
+    innNumber = options.inningsAtPostpone || innNumber;
+    scoreSummary = options.postponedScoreDisplay || `${battingTeam}: ${runs}/${wickets} (${oversStr}/${match.overs_per_side || 20} Ov) - Innings ${innNumber}`;
+  }
+
+  const finalStage = options.postponedStage || (hasPlayStarted ? 'IN_PLAY' : 'BEFORE_START');
+  const finalScoreDisplay = hasPlayStarted
+    ? (options.postponedScoreDisplay || scoreSummary)
+    : 'Postponed before match start (0 overs bowled / Toss pending)';
+
   match.status = 'POSTPONED';
-  match.status_comment = `Postponed: ${cleanReason}`;
-  match.result_summary = `Postponed: ${cleanReason}`;
+  match.status_comment = `Postponed: ${cleanReason} (${finalScoreDisplay})`;
+  match.result_summary = `Postponed: ${cleanReason} (${finalScoreDisplay})`;
 
   match.postponement = {
     is_postponed: true,
@@ -665,7 +820,23 @@ async function postponeMatch(matchId, optionsOrReason, adminEmail = 'admin@cfvd.
     rescheduled_date: rescheduledDate,
     rescheduled_time: rescheduledTime,
     rescheduled_at: (rescheduledDate || rescheduledTime) ? new Date() : null,
-    rescheduled_by: (rescheduledDate || rescheduledTime) ? adminEmail : null
+    rescheduled_by: (rescheduledDate || rescheduledTime) ? {
+      user_id: adminEmail,
+      role: actorRole,
+      name: actorName
+    } : {
+      user_id: null,
+      role: null,
+      name: ''
+    },
+    postponed_stage: finalStage,
+    postponed_score_display: finalScoreDisplay,
+    score_at_postponement: finalScoreDisplay,
+    runs,
+    wickets,
+    overs: oversStr,
+    batting_team: battingTeam,
+    innings_number: innNumber
   };
 
   // If there was an umpire postponement request pending, mark it approved
@@ -794,6 +965,10 @@ async function rescheduleMatch(matchId, { newDate, newTime, reason }, adminEmail
 
   match.match_date = cleanDate;
   match.match_time = cleanTime;
+  const officialTimings = calculateOfficialMatchTimings(cleanTime);
+  match.toss_time_window = officialTimings.tossWindow;
+  match.first_ball_time = officialTimings.firstBallTime;
+  match.scorer_reporting_time = officialTimings.reportingTime;
   match.status = 'SCHEDULED';
   match.status_comment = `Rescheduled to ${cleanDate} ${cleanTime}. ${cleanReason}`;
   match.result_summary = null;
@@ -1406,7 +1581,15 @@ async function getMatches() {
 
 async function getTournaments() {
   await db.initDb();
-  return db.models.Tournament.find({}).sort({ start_date: -1 }).lean();
+  const all = await db.models.Tournament.find({}).sort({ start_date: -1 }).lean();
+  const seenNames = new Set();
+  return (all || []).filter(t => {
+    const key = (t.name || '').trim().toLowerCase();
+    if (!key) return true;
+    if (seenNames.has(key)) return false;
+    seenNames.add(key);
+    return true;
+  });
 }
 
 async function getTeams() {
@@ -1482,7 +1665,7 @@ async function deleteOfficial(id, adminEmail) {
 
 async function deleteVenue(id, adminEmail) {
   await db.initDb();
-  await db.models.Venue.deleteOne({ id });
+  const deleted = await venueModel.delete(id);
   await addAuditLog({
     action: 'DELETE_VENUE',
     initiated_by: adminEmail,
@@ -1490,7 +1673,7 @@ async function deleteVenue(id, adminEmail) {
     result: `Venue ${id} deleted`,
     details: 'Venue deleted from system'
   });
-  return { success: true, message: 'Venue deleted successfully' };
+  return { success: true, message: 'Venue deleted successfully', data: deleted };
 }
 
 // -------------------------------------------------------------

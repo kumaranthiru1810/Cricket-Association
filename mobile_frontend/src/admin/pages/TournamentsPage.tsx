@@ -85,6 +85,10 @@ export const TournamentsPage: React.FC = () => {
       showToast('Tournament name is required.', 'error');
       return;
     }
+    if (!/^[a-zA-Z0-9_\s]+$/.test(formName.trim())) {
+      showToast('Tournament Name can only contain letters, numbers, spaces, and underscores (_). Special characters are not allowed.', 'error');
+      return;
+    }
 
     try {
       if (isAddMode) {
@@ -258,14 +262,19 @@ export const TournamentsPage: React.FC = () => {
                     />
                   </View>
                   <View style={[styles.fieldGroup, { flex: 1 }]}>
-                    <Text style={styles.fieldLabel}>Season</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={formSeason}
-                      onChangeText={setFormSeason}
-                      placeholder="2026"
-                      placeholderTextColor="#94A3B8"
-                    />
+                    <Text style={styles.fieldLabel}>Season (Year)</Text>
+                    <View style={{ position: 'relative', width: '100%', justifyContent: 'center' }}>
+                      <TextInput
+                        style={[styles.input, { paddingRight: 40 }]}
+                        value={formSeason}
+                        onChangeText={(val) => setFormSeason(val.replace(/[^0-9]/g, '').slice(0, 4))}
+                        placeholder="e.g. 2026"
+                        placeholderTextColor="#94A3B8"
+                        keyboardType="numeric"
+                        maxLength={4}
+                      />
+                      <Text style={{ position: 'absolute', right: 10, fontSize: 16, pointerEvents: 'none' as any }}>📅</Text>
+                    </View>
                   </View>
                 </View>
 

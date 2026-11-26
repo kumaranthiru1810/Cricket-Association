@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const db = require('../config/db');
+const { cacheResponse } = require('../middleware/cacheMiddleware');
 
 const contactRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -24,21 +25,36 @@ const contactRateLimiter = rateLimit({
  * Returns dynamic home payload: Association intro, announcements, live matches,
  * upcoming matches, top batsmen & bowlers, and news.
  */
-router.get('/home', async (req, res) => {
+router.get('/home', cacheResponse(30, 'portal-home'), async (req, res) => {
   try {
-    await db.initDb();
     const { Match, Team, Player, News, Tournament, InningsBatter, InningsBowler, TeamRegistration, User } = db.models;
 
     const [matches, teams, players, newsList, tournaments, inningsBatters, inningsBowlers, teamRegistrations, users] = await Promise.all([
-      Match.find({}).lean(),
-      Team.find({}).lean(),
-      Player.find({}).lean(),
-      News.find({ status: 'PUBLISHED' }).sort({ published_at: -1 }).limit(6).lean(),
-      Tournament.find({}).lean(),
-      InningsBatter ? InningsBatter.find({}).lean() : Promise.resolve([]),
-      InningsBowler ? InningsBowler.find({}).lean() : Promise.resolve([]),
-      TeamRegistration ? TeamRegistration.find({}).lean() : Promise.resolve([]),
-      User ? User.find({ role: { $in: ['PLAYER', 'TEAM', 'COACH'] } }).select('email photo image_path player_details').lean() : Promise.resolve([])
+      Match.find({ status: { $in: ['LIVE', 'SCHEDULED', 'COMPLETED'] } })
+        .select('id tournament_id team_a_id team_b_id team_a_name team_b_name venue match_date match_time status current_break status_comment score_a score_b result_summary winner_id')
+        .sort({ match_date: -1 })
+        .limit(30)
+        .lean(),
+      Team.find({ status: { $ne: 'REJECTED' } })
+        .select('id name short_name city logo photo image_path stats')
+        .lean(),
+      Player.find({ status: 'ACTIVE' })
+        .select('id name team_id role photo image_path email stats')
+        .sort({ 'stats.runs': -1 })
+        .limit(50)
+        .lean(),
+      News.find({ status: 'PUBLISHED' })
+        .select('id title summary category author image_url published_at created_at')
+        .sort({ published_at: -1 })
+        .limit(6)
+        .lean(),
+      Tournament.find({})
+        .select('id name short_name status season format overs_per_match')
+        .lean(),
+      InningsBatter ? InningsBatter.find({}).select('player_id runs balls fours sixes innings_id').limit(100).lean() : Promise.resolve([]),
+      InningsBowler ? InningsBowler.find({}).select('player_id wickets runs_conceded runs overs').limit(100).lean() : Promise.resolve([]),
+      TeamRegistration ? TeamRegistration.find({ status: { $ne: 'REJECTED' } }).select('id team_name photo logo image_path').lean() : Promise.resolve([]),
+      User ? User.find({ role: { $in: ['PLAYER', 'TEAM', 'COACH'] } }).select('email photo image_path player_details').limit(100).lean() : Promise.resolve([])
     ]);
 
     const teamMap = {};
@@ -405,14 +421,13 @@ router.get('/home', async (req, res) => {
  * GET /api/portal/stats
  * Complete Batting, Bowling, Fielding, and Team Statistics
  */
-router.get('/stats', async (req, res) => {
+router.get('/stats', cacheResponse(30, 'portal-stats'), async (req, res) => {
   try {
-    await db.initDb();
     const { Team, Player, User } = db.models;
 
     const [teams, players, users] = await Promise.all([
-      Team.find({}).lean(),
-      Player.find({}).lean(),
+      Team.find({}).select('id name short_name photo logo image_path stats').lean(),
+      Player.find({ status: 'ACTIVE' }).select('id name team_id role photo image_path email stats').lean(),
       User ? User.find({ role: 'PLAYER' }).select('email photo image_path player_details').lean() : Promise.resolve([])
     ]);
 
@@ -747,38 +762,40 @@ router.get('/teams/:teamId', async (req, res) => {
 
     const squad = [...squadMap.values()];
 
-    // 3. Load Matches and Scorecards
+    // 3. Load Matches directly from MongoDB using indexes
     let formattedMatches = [];
     try {
-      const stats = await scorerService.getDashboardStats(null);
-      const allMatches = stats?.matches || [];
-      formattedMatches = allMatches.filter(m => {
-        const tAName = (m.teamA || '').toLowerCase().trim();
-        const tBName = (m.teamB || '').toLowerCase().trim();
-        const curName = teamName.toLowerCase().trim();
-        return (
-          m.teamAId === teamId ||
-          m.teamBId === teamId ||
-          tAName === curName ||
-          tBName === curName
-        );
-      }).map(m => {
-        const isTeamA = m.teamAId === teamId || (m.teamA || '').toLowerCase().trim() === teamName.toLowerCase().trim();
-        const opponentName = isTeamA ? m.teamB : m.teamA;
-        const opponentId = isTeamA ? m.teamBId : m.teamAId;
-        const teamScore = isTeamA ? m.scoreA : m.scoreB;
-        const opponentScore = isTeamA ? m.scoreB : m.scoreA;
+      const allMatches = await Match.find({
+        $or: [
+          { team_a_id: teamId },
+          { team_b_id: teamId },
+          { team_a_name: teamName },
+          { team_b_name: teamName }
+        ]
+      })
+      .select('id tournament_name match_date match_time venue status team_a_id team_b_id team_a_name team_b_name score_a score_b result_summary winner_id overs_per_side')
+      .sort({ match_date: -1 })
+      .limit(30)
+      .lean();
+
+      formattedMatches = (allMatches || []).map(m => {
+        const isTeamA = m.team_a_id === teamId || (m.team_a_name || '').toLowerCase().trim() === teamName.toLowerCase().trim();
+        const opponentName = isTeamA ? (m.team_b_name || m.team_b_id) : (m.team_a_name || m.team_a_id);
+        const opponentId = isTeamA ? m.team_b_id : m.team_a_id;
+        const teamScore = isTeamA ? m.score_a : m.score_b;
+        const opponentScore = isTeamA ? m.score_b : m.score_a;
 
         // Check if winner
-        const resText = (m.result || m.result_summary || '').toLowerCase();
-        const isWinner = resText.includes(teamName.toLowerCase()) && (resText.includes('won') || resText.includes('win'));
-        const isLoser = (resText.includes('won') || resText.includes('win')) && !isWinner;
+        const resText = (m.result_summary || '').toLowerCase();
+        const isWinner = m.winner_id === teamId || (resText.includes(teamName.toLowerCase()) && (resText.includes('won') || resText.includes('win')));
+        const isLoser = (m.winner_id && m.winner_id !== teamId && m.winner_id !== 'TIE' && m.winner_id !== 'NO_RESULT') ||
+                        ((resText.includes('won') || resText.includes('win')) && !isWinner);
 
         return {
           id: m.id,
           matchId: m.id,
-          tournament: m.tournament || m.tournament_name || 'District Championship',
-          date: m.date || m.match_date || '2026-10-06',
+          tournament: m.tournament_name || 'District Championship',
+          date: m.match_date || '2026-10-06',
           venue: m.venue || 'Kamarajar District Stadium',
           status: m.status || 'SCHEDULED',
           isTeamA,
@@ -786,10 +803,10 @@ router.get('/teams/:teamId', async (req, res) => {
           opponentId,
           teamScore: teamScore || 'Yet to bat',
           opponentScore: opponentScore || 'Yet to bat',
-          result: m.result || m.result_summary || (m.status === 'LIVE' ? 'Match Live in Progress' : 'Match Scheduled'),
+          result: m.result_summary || (m.status === 'LIVE' ? 'Match Live in Progress' : 'Match Scheduled'),
           isWinner,
           isLoser,
-          overs: m.overs || 20
+          overs: m.overs_per_side || 20
         };
       });
     } catch (_mErr) {
@@ -1006,34 +1023,35 @@ router.get('/players/:playerId', async (req, res) => {
     const fifties = highestScore >= 100 ? Math.floor(runs / 120) : (highestScore >= 50 ? 1 : 0);
     const hundreds = highestScore >= 100 ? 1 : 0;
 
-    // 3. Genuine Match Log
+    // 3. Genuine Match Log loaded directly via indexed Match query
     let matchLog = [];
     try {
-      const statsDash = await scorerService.getDashboardStats(null);
-      const allMatches = statsDash?.matches || [];
-      matchLog = allMatches.filter(m => {
-        const tAName = (m.teamA || '').toLowerCase().trim();
-        const tBName = (m.teamB || '').toLowerCase().trim();
-        const curTeam = teamName.toLowerCase().trim();
-        return (
-          m.teamAId === playerDoc.team_id ||
-          m.teamBId === playerDoc.team_id ||
-          tAName === curTeam ||
-          tBName === curTeam
-        );
-      }).map(m => {
-        const isTeamA = m.teamAId === playerDoc.team_id || (m.teamA || '').toLowerCase().trim() === teamName.toLowerCase().trim();
-        const opponent = isTeamA ? m.teamB : m.teamA;
+      const allMatches = await Match.find({
+        $or: [
+          { team_a_id: playerDoc.team_id },
+          { team_b_id: playerDoc.team_id },
+          { team_a_name: teamName },
+          { team_b_name: teamName }
+        ]
+      })
+      .select('id tournament_name match_date venue score_a score_b result_summary status team_a_id team_b_id team_a_name team_b_name')
+      .sort({ match_date: -1 })
+      .limit(20)
+      .lean();
+
+      matchLog = (allMatches || []).map(m => {
+        const isTeamA = m.team_a_id === playerDoc.team_id || (m.team_a_name || '').toLowerCase().trim() === teamName.toLowerCase().trim();
+        const opponent = isTeamA ? (m.team_b_name || m.team_b_id) : (m.team_a_name || m.team_a_id);
         return {
           id: m.id,
           matchId: m.id,
-          tournament: m.tournament || m.tournament_name || 'VPL 2026',
-          date: m.date || m.match_date || '2026-10-06',
+          tournament: m.tournament_name || 'VPL 2026',
+          date: m.match_date || '2026-10-06',
           venue: m.venue || 'Kamarajar Stadium',
           opponent,
-          teamScore: isTeamA ? m.scoreA : m.scoreB,
-          opponentScore: isTeamA ? m.scoreB : m.scoreA,
-          result: m.result || m.result_summary || 'Match Concluded',
+          teamScore: isTeamA ? m.score_a : m.score_b,
+          opponentScore: isTeamA ? m.score_b : m.score_a,
+          result: m.result_summary || 'Match Concluded',
           status: m.status || 'COMPLETED',
           // Innings performance summary
           runsScored: runs > 0 ? Math.round(runs / 3) : 0,
@@ -1157,6 +1175,71 @@ router.post('/contact', contactRateLimiter, async (req, res) => {
       success: true,
       message: 'Thank you for reaching out. The association administration will respond shortly.'
     });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/portal/home-popup
+ * Public endpoint returning the dynamic Home Portal Popup configuration
+ */
+router.get('/home-popup', async (req, res) => {
+  try {
+    await db.initDb();
+    const record = await db.models.MasterSetting.findOne({ id: 'PORTAL_HOME_POPUP' }).lean();
+    let config = {
+      enabled: false,
+      presetKey: 'match_notice',
+      badgeText: 'OFFICIAL MATCH & RULES NOTICE',
+      imageKey: 'stadium',
+      customImageUrl: '',
+      title: 'Virudhunagar Premier League 2026 — Match & Rules Notice',
+      message: 'Check upcoming match schedules, venue allocations, and official CFVD tournament rules & regulations before match day.',
+      highlightText: 'All participating teams must report 45 minutes prior to toss with verified squad IDs.',
+      buttonText: 'View Match Schedules →',
+      buttonDestination: 'matches'
+    };
+
+    if (record?.description) {
+      try {
+        const parsed = JSON.parse(record.description);
+        config = { ...config, ...parsed, enabled: Boolean(record.is_active) };
+      } catch (_e) {}
+    }
+
+    res.json({ success: true, popup: config });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/portal/emblem-sequence
+ * Public endpoint returning the dynamic Emblem Ball Tap Sequence config for Admin Portal access
+ */
+router.get('/emblem-sequence', async (req, res) => {
+  try {
+    await db.initDb();
+    const record = await db.models.MasterSetting.findOne({ id: 'ADMIN_EMBLEM_SEQUENCE' }).lean();
+    let config = {
+      enabled: true,
+      sequence: ['LEFT', 'RIGHT', 'LEFT', 'RIGHT', 'CENTER']
+    };
+
+    if (record?.description) {
+      try {
+        const parsed = JSON.parse(record.description);
+        if (Array.isArray(parsed.sequence)) {
+          config = {
+            enabled: Boolean(record.is_active),
+            sequence: parsed.sequence
+          };
+        }
+      } catch (_e) {}
+    }
+
+    res.json({ success: true, config });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

@@ -11,935 +11,46 @@ const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/cricket_db';
+const MONGODB_URI = process.env.NODE_ENV === 'test'
+  ? (process.env.TEST_MONGODB_URI || 'mongodb://127.0.0.1:27017/cricket_test_db')
+  : (process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/cricket_db');
 
 let isConnected = false;
 
 // -------------------------------------------------------------
-// Pure MongoDB Schemas & Mongoose Models
+// Pure MongoDB Schemas & Mongoose Models (Imported from models/)
 // -------------------------------------------------------------
-
-// 1. User Schema (Multi-Role: Player, Coach, Scorer, Admin, Content)
-const UserSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  name: { type: String, required: true },
-  email: { type: String, required: true, unique: true, index: true, lowercase: true, trim: true },
-  mobile: { type: String, default: null },
-  aadhaar: { type: String, default: null },
-  password_hash: { type: String, default: null },
-  current_password: { type: String, default: null },
-  role: { 
-    type: String, 
-    enum: ['SUPER_ADMIN', 'ADMIN', 'COACH', 'TEAM', 'PLAYER', 'SCORER', 'UMPIRE', 'CONTENT', 'USER'], 
-    default: 'USER',
-    index: true 
-  },
-  status: { 
-    type: String, 
-    enum: ['ACTIVE', 'PENDING', 'SUSPENDED', 'REJECTED', 'APPROVED'], 
-    default: 'ACTIVE',
-    index: true 
-  },
-  token_version: { type: Number, default: 0 },
-  role_changed_at: { type: Date, default: null },
-  role_changed_by: { type: String, default: null },
-  is_super_admin: { type: Boolean, default: false },
-  admin_level: { type: String, default: 'Standard Administrator' },
-  admin_permissions: { type: [String], default: ['MATCH_MANAGE', 'SCORER_ASSIGN', 'VIEW_REPORTS'] },
-  approval_status: { type: String, enum: ['PENDING', 'APPROVED', 'REJECTED'], default: 'APPROVED' },
-  activation_token: { type: String, default: null },
-  activation_token_expires_at: { type: Date, default: null },
-  player_details: {
-    batting_style: { type: String, default: 'Right-Handed Batsman' },
-    bowling_style: { type: String, default: 'Right-arm Fast' },
-    role: { type: String, default: 'Batsman' },
-    playing_role: { type: String, default: 'Batsman' },
-    bowling_arm: { type: String, default: '' },
-    bowling_category: { type: String, default: '' },
-    bowling_action: { type: String, default: '' },
-    taluk: { type: String, default: 'Virudhunagar' },
-    category: { type: String, default: 'Senior Men' },
-    club_choice: { type: String, default: '' },
-    team_id: { type: String, default: null },
-    team_name: { type: String, default: null },
-    photo: { type: String, default: null },
-    image_path: { type: String, default: null }
-  },
-  photo: { type: String, default: null },
-  image_path: { type: String, default: null },
-  scorer_details: {
-    certification_level: { type: String, default: 'District Certified' },
-    taluk: { type: String, default: 'Virudhunagar' }
-  },
-  umpire_details: {
-    certification_level: { type: String, default: 'Panel A - Senior' },
-    taluk: { type: String, default: 'Virudhunagar' },
-    date_of_birth: { type: String, default: '' },
-    gender: { type: String, default: '' },
-    experience: { type: String, default: '' },
-    experience_years: { type: Number, default: 0 },
-    qualification: { type: String, default: '' },
-    certification_number: { type: String, default: '' },
-    previous_organization: { type: String, default: '' },
-    specialization: { type: String, default: '' },
-    address: { type: String, default: '' },
-    district: { type: String, default: 'Virudhunagar' },
-    state: { type: String, default: 'Tamil Nadu' },
-    profile_photo: { type: String, default: '' },
-    additional_info: { type: String, default: '' }
-  },
-  umpire_info: {
-    dateOfBirth: { type: String, default: '' },
-    gender: { type: String, default: '' },
-    experience: { type: String, default: '' },
-    qualification: { type: String, default: '' },
-    certificationNumber: { type: String, default: '' },
-    previousOrganization: { type: String, default: '' },
-    specialization: { type: String, default: '' },
-    district: { type: String, default: 'Virudhunagar' },
-    state: { type: String, default: 'Tamil Nadu' },
-    address: { type: String, default: '' },
-    profilePhoto: { type: String, default: '' },
-    additionalInfo: { type: String, default: '' }
-  },
-  otp_hash: { type: String, default: null },
-  otp_expires_at: { type: Date, default: null },
-  otp_attempts: { type: Number, default: 0 },
-  otp_verified_at: { type: Date, default: null },
-  created_at: { type: Date, default: Date.now },
-  updated_at: { type: Date, default: Date.now }
-}, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
-
-// 2. Tournament Schema
-const TournamentSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  name: { type: String, required: true, trim: true },
-  short_name: { type: String, default: '', trim: true },
-  logo_url: { type: String, default: '' },
-  description: { type: String, default: '' },
-  tournament_type: { 
-    type: String, 
-    enum: ['LEAGUE', 'KNOCKOUT', 'LEAGUE_KNOCKOUT'], 
-    default: 'LEAGUE' 
-  },
-  category: { type: String, default: 'Senior District Trophy' },
-  gender: { type: String, default: 'Men' },
-  ball_type: { type: String, default: 'Red Leather' },
-  match_format: { 
-    type: String, 
-    enum: ['T10', 'T20', 'ODI', 'CUSTOM'], 
-    default: 'T20' 
-  },
-  format: { type: String, default: 'T20' }, // Legacy compatibility
-  overs_per_match: { type: Number, default: 20 },
-  season: { type: String, default: '2026' },
-  team_a_name: { type: String, default: '' },
-  team_b_name: { type: String, default: '' },
-  venue: { type: String, default: 'Kamarajar District Stadium' },
-  venue_maps_url: { type: String, default: '' },
-  start_date: { type: String },
-  end_date: { type: String },
-  registration_start_date: { type: String, default: null },
-  registration_end_date: { type: String, default: null },
-  max_teams: { type: Number, default: 16 },
-  min_teams: { type: Number, default: 2 },
-  points_win: { type: Number, default: 2 },
-  points_tie: { type: Number, default: 1 },
-  points_no_result: { type: Number, default: 1 },
-  playing_xi_size: { type: Number, default: 11 },
-  substitute_count: { type: Number, default: 4 },
-  allow_super_over: { type: Boolean, default: true },
-  allow_dls: { type: Boolean, default: false },
-  rules: { type: String, default: 'Standard ICC / TNCA Playing Conditions' },
-  format_config: {
-    round_robin_type: { type: String, enum: ['SINGLE', 'DOUBLE'], default: 'SINGLE' },
-    knockout_stages: [{ type: String }],
-    qualifying_teams_count: { type: Number, default: 4 },
-    qualification_rules: { type: String, default: 'Top qualifying teams advance to knockout stage' }
-  },
-  teams: [{ type: String, ref: 'Team' }],
-  status: { 
-    type: String, 
-    enum: ['UPCOMING', 'REGISTRATION_OPEN', 'REGISTRATION_CLOSED', 'ONGOING', 'COMPLETED', 'CANCELLED', 'ACTIVE', 'INACTIVE'], 
-    default: 'UPCOMING',
-    index: true 
-  },
-  created_by: { type: String, default: 'admin@cfvd.org' }
-}, { timestamps: true });
-
-// 2b. Tournament Registration Schema (Team registrations for specific Tournaments)
-const TournamentRegistrationSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  tournament_id: { type: String, required: true, index: true },
-  tournament_name: { type: String, required: true },
-  team_id: { type: String, required: true, index: true },
-  team_name: { type: String, required: true },
-  coach_name: { type: String, required: true },
-  coach_email: { type: String, required: true, lowercase: true, trim: true, index: true },
-  coach_phone: { type: String, default: null },
-  coach_aadhaar: { type: String, default: null },
-  coach_phone: { type: String, default: '' },
-  team_city: { type: String, default: 'Virudhunagar' },
-  team_taluk: { type: String, default: 'Virudhunagar' },
-  captain: { type: String, default: '' },
-  squad_count: { type: Number, default: 15 },
-  status: { 
-    type: String, 
-    enum: ['PENDING', 'APPROVED', 'REJECTED'], 
-    default: 'PENDING',
-    index: true 
-  },
-  registration_date: { type: Date, default: Date.now },
-  approved_by: { type: String, default: null },
-  approved_at: { type: Date, default: null },
-  rejected_by: { type: String, default: null },
-  rejected_at: { type: Date, default: null },
-  rejection_reason: { type: String, default: null },
-  notes: { type: String, default: '' }
-}, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
-
-TournamentRegistrationSchema.index({ tournament_id: 1, team_id: 1 });
-
-// 3. Team Schema
-const TeamSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  team_id: { type: String, default: null, index: true },
-  name: { type: String, required: true },
-  team_name: { type: String, default: '' },
-  short_name: { type: String, default: 'VND' },
-  city: { type: String, default: 'Virudhunagar' },
-  taluk: { type: String, default: 'Virudhunagar' },
-  phone: { type: String, default: '' },
-  home_ground: { type: String, default: '' },
-  certification: { type: String, default: '' },
-  coach_name: { type: String, default: '' },
-  coach_email: { type: String, default: '' },
-  captain: { type: String, default: '' },
-  vice_captain: { type: String, default: '' },
-  photo: { type: String, default: null },
-  image_path: { type: String, default: null },
-  logo: { type: String, default: null },
-  team_passkey_hash: { type: String, default: null },
-  password_hash: { type: String, default: null },
-  status: { type: String, enum: ['ACTIVE', 'APPROVED', 'PENDING', 'INACTIVE'], default: 'ACTIVE' },
-  stats: {
-    matches: { type: Number, default: 0 },
-    won: { type: Number, default: 0 },
-    lost: { type: Number, default: 0 },
-    tied: { type: Number, default: 0 },
-    points: { type: Number, default: 0 },
-    nrr: { type: Number, default: 0.0 }
-  }
-}, { timestamps: true });
-
-// 4. Player Schema
-const PlayerSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  team_id: { type: String, required: true, index: true },
-  name: { type: String, required: true },
-  email: { type: String, default: null, lowercase: true, trim: true, index: true },
-  phone: { type: String, default: null },
-  mobile: { type: String, default: null },
-  aadhaar: { type: String, default: null },
-  password_hash: { type: String, default: null },
-  role: { type: String, enum: ['BATTER', 'BOWLER', 'ALL_ROUNDER', 'WICKET_KEEPER'], default: 'BATTER' },
-  jersey_number: { type: Number, default: 0 },
-  batting_style: { type: String, default: 'Right Hand Bat' },
-  bowling_style: { type: String, default: 'Right Arm Medium' },
-  photo: { type: String, default: null },
-  image_path: { type: String, default: null },
-  status: { type: String, default: 'ACTIVE' },
-  stats: {
-    runs: { type: Number, default: 0 },
-    balls: { type: Number, default: 0 },
-    fours: { type: Number, default: 0 },
-    sixes: { type: Number, default: 0 },
-    highest_score: { type: Number, default: 0 },
-    wickets: { type: Number, default: 0 },
-    overs: { type: Number, default: 0 },
-    runs_conceded: { type: Number, default: 0 },
-    catches: { type: Number, default: 0 },
-    stumpings: { type: Number, default: 0 }
-  }
-}, { timestamps: true });
-
-// 5. Team Registration Schema (Coach submission with 15 squad players)
-const TeamRegistrationSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  team_name: { type: String, required: true },
-  coach_name: { type: String, required: true },
-  coach_email: { type: String, required: true, lowercase: true, trim: true, index: true },
-  coach_phone: { type: String, default: null },
-  coach_aadhaar: { type: String, default: null },
-  password_hash: { type: String, default: null },
-  current_password: { type: String, default: null },
-  passkey: { type: String, default: '' },
-  city: { type: String, default: 'Virudhunagar' },
-  taluk: { type: String, default: 'Virudhunagar' },
-  phone: { type: String, default: '' },
-  photo: { type: String, default: null },
-  image_path: { type: String, default: null },
-  logo: { type: String, default: null },
-  status: { 
-    type: String, 
-    enum: ['PENDING', 'APPROVED', 'REJECTED'], 
-    default: 'PENDING',
-    index: true 
-  },
-  approved_by: { type: String, default: null },
-  approved_at: { type: Date, default: null },
-  rejection_reason: { type: String, default: null },
-  players: [{
-    jersey_number: { type: Number },
-    name: { type: String, required: true },
-    email: { type: String, required: true, lowercase: true, trim: true },
-    password_hash: { type: String, default: null },
-    phone: { type: String, default: null },
-    mobile: { type: String, default: null },
-    aadhaar: { type: String, default: null },
-    role: { type: String, default: 'BATTER' },
-    photo: { type: String, default: null },
-    image_path: { type: String, default: null },
-    status: { type: String, default: 'PENDING' }
-  }]
-}, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
-
-// 6. Match Schema
-const MatchSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  tournament_id: { type: String, default: 'T-2026-VPL' },
-  tournament_name: { type: String, default: 'Virudhunagar Premier League 2026' },
-  team_a_id: { type: String, required: true },
-  team_b_id: { type: String, required: true },
-  team_a_name: { type: String, default: '' },
-  team_b_name: { type: String, default: '' },
-  venue: { type: String, default: 'Kamarajar District Stadium' },
-  venue_maps_url: { type: String, default: '' },
-  match_date: { type: String, default: '2026-10-06' },
-  match_time: { type: String, default: '09:30 AM' },
-  match_type: { type: String, default: 'T20' },
-  overs_per_side: { type: Number, default: 20 },
-  stage: { type: String, default: 'LEAGUE' }, // LEAGUE, QUARTER_FINAL, SEMI_FINAL, FINAL, etc.
-  status: { type: String, enum: ['SCHEDULED', 'TOSS', 'LIVE', 'INNINGS_BREAK', 'PAUSED', 'COMPLETED', 'ABANDONED', 'CANCELLED', 'POSTPONED'], default: 'SCHEDULED', index: true },
-  postponement: {
-    is_postponed: { type: Boolean, default: false },
-    reason: { type: String, default: null },
-    postponed_at: { type: Date, default: null },
-    postponed_by: {
-      user_id: { type: String, default: null },
-      role: { type: String, default: 'ADMIN' },
-      name: { type: String, default: '' }
-    },
-    original_date: { type: String, default: null },
-    original_time: { type: String, default: null },
-    rescheduled_date: { type: String, default: null },
-    rescheduled_time: { type: String, default: null },
-    rescheduled_at: { type: Date, default: null },
-    rescheduled_by: {
-      user_id: { type: String, default: null },
-      role: { type: String, default: null },
-      name: { type: String, default: '' }
-    }
-  },
-  umpire_postponement_request: {
-    requested: { type: Boolean, default: false },
-    umpire_id: { type: String, default: null },
-    umpire_name: { type: String, default: '' },
-    reason: { type: String, default: '' },
-    status: { type: String, enum: ['NONE', 'PENDING', 'APPROVED', 'REJECTED'], default: 'NONE' },
-    requested_at: { type: Date, default: null },
-    reviewed_by: { type: String, default: null },
-    reviewed_at: { type: Date, default: null },
-    review_notes: { type: String, default: '' }
-  },
-  postponement_history: [{
-    action: { type: String, required: true }, // 'POSTPONED', 'RESCHEDULED', 'REQUESTED', 'REQUEST_APPROVED', 'REQUEST_REJECTED'
-    reason: { type: String, default: '' },
-    from_date: { type: String, default: '' },
-    from_time: { type: String, default: '' },
-    to_date: { type: String, default: '' },
-    to_time: { type: String, default: '' },
-    actor_id: { type: String, default: '' },
-    actor_name: { type: String, default: '' },
-    actor_role: { type: String, default: '' },
-    timestamp: { type: Date, default: Date.now },
-    notes: { type: String, default: '' }
-  }],
-  toss_winner_id: { type: String, default: null },
-  toss_decision: { type: String, default: null },
-  winner_id: { type: String, default: null, index: true },
-  scoring_lock: {
-    locked_at: { type: Date, default: null },
-    lock_id: { type: String, default: null }
-  },
-  current_innings_number: { type: Number, default: 1 },
-  result_summary: { type: String, default: null },
-  player_of_match: { type: String, default: null },
-  assigned_scorer_id: { type: String, default: 'SCR-101' },
-  scorer_name: { type: String, default: 'Official Scorer' },
-  assigned_scorer_name: { type: String, default: '' },
-  umpire1_id: { type: String, default: 'UMP-101', index: true },
-  umpire2_id: { type: String, default: 'UMP-102', index: true },
-  umpire1_name: { type: String, default: 'Thiru. K. Sundaram' },
-  umpire2_name: { type: String, default: 'Thiru. M. Ramanathan' },
-  umpire_result_confirmed: { type: Boolean, default: false },
-  umpire_confirmed_by: { type: String, default: null },
-  umpire_confirmation_notes: { type: String, default: null },
-  umpire_confirmed_at: { type: Date, default: null },
-  team_a_playing_xi: [{ type: String }],
-  team_b_playing_xi: [{ type: String }],
-  team_a_substitutes: [{ type: String }],
-  team_b_substitutes: [{ type: String }],
-  team_a_lineup: [mongoose.Schema.Types.Mixed],
-  team_b_lineup: [mongoose.Schema.Types.Mixed],
-  team_a_allocation_status: { type: String, enum: ['PENDING', 'SUBMITTED'], default: 'PENDING' },
-  team_b_allocation_status: { type: String, enum: ['PENDING', 'SUBMITTED'], default: 'PENDING' },
-  team_a_allocation_submitted_at: { type: Date, default: null },
-  team_b_allocation_submitted_at: { type: Date, default: null },
-  schedule_confirmation_status: { type: String, enum: ['PENDING', 'CONFIRMED'], default: 'PENDING' },
-  schedule_confirmed_at: { type: Date, default: null },
-  schedule_confirmed_by: { type: String, default: null },
-  revised_overs: { type: Number, default: null },
-  revised_target: { type: Number, default: null },
-  revised_comments: { type: String, default: '' },
-  is_super_over: { type: Boolean, default: false },
-  match_start_time: { type: String, default: null },
-  match_end_time: { type: String, default: null },
-  status_comment: { type: String, default: '' },
-  current_break: { type: mongoose.Schema.Types.Mixed, default: null },
-  breaks: [{
-    type: { type: String },
-    startTime: { type: String },
-    endTime: { type: String },
-    duration: { type: String },
-    comments: { type: String },
-    excludeBatsmanTime: { type: Boolean, default: false },
-    created_at: { type: Date, default: Date.now }
-  }],
-  sessions: [{
-    dayNo: { type: Number, default: 1 },
-    type: { type: String },
-    startInningsNo: { type: Number, default: 1 },
-    endInningsNo: { type: Number, default: 1 },
-    startOver: { type: String },
-    endOver: { type: String },
-    startTime: { type: String },
-    endTime: { type: String },
-    duration: { type: String },
-    created_at: { type: Date, default: Date.now }
-  }],
-  end_days: [{
-    dayNo: { type: Number, default: 1 },
-    startInningsNo: { type: Number, default: 1 },
-    endInningsNo: { type: Number, default: 1 },
-    startOver: { type: String },
-    endOver: { type: String },
-    startTime: { type: String },
-    endTime: { type: String },
-    duration: { type: String },
-    comments: { type: String },
-    created_at: { type: Date, default: Date.now }
-  }],
-  ball_changes: [{
-    ballType: { type: String },
-    over: { type: String },
-    time: { type: String },
-    comments: { type: String },
-    created_at: { type: Date, default: Date.now }
-  }],
-  umpire_assessment: {
-    umpire1: { type: String, default: '' },
-    rating1: { type: Number, default: 5 },
-    umpire2: { type: String, default: '' },
-    rating2: { type: Number, default: 5 },
-    pitchReport: { type: String, default: 'Normal Good Pitch' },
-    comments: { type: String, default: '' }
-  },
-  created_at: { type: Date, default: Date.now },
-  updated_at: { type: Date, default: Date.now }
-}, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
-
-// 7. Innings Schema
-const InningsSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  match_id: { type: String, required: true, index: true },
-  innings_number: { type: Number, required: true },
-  batting_team_id: { type: String, required: true },
-  bowling_team_id: { type: String, required: true },
-  total_runs: { type: Number, default: 0 },
-  wickets: { type: Number, default: 0 },
-  overs: { type: Number, default: 0 },
-  balls: { type: Number, default: 0 },
-  target: { type: Number, default: null },
-  revised_overs: { type: Number, default: null },
-  version: { type: Number, default: 0 },
-  is_super_over: { type: Boolean, default: false },
-  is_declared: { type: Boolean, default: false },
-  status: { type: String, default: 'LIVE' },
-  is_completed: { type: Boolean, default: false },
-  is_over_complete: { type: Boolean, default: false },
-  current_striker_id: { type: String, default: null },
-  current_non_striker_id: { type: String, default: null },
-  current_bowler_id: { type: String, default: null },
-  previous_bowler_id: { type: String, default: null },
-  suspended_bowler_ids: [{ type: String }],
-  bowler_substitutions: [{ type: mongoose.Schema.Types.Mixed }],
-  is_free_hit: { type: Boolean, default: false },
-  penalty_runs: { type: Number, default: 0 },
-  short_runs: { type: Number, default: 0 },
-  extras: {
-    wides: { type: Number, default: 0 },
-    no_balls: { type: Number, default: 0 },
-    byes: { type: Number, default: 0 },
-    leg_byes: { type: Number, default: 0 },
-    penalty: { type: Number, default: 0 },
-    total: { type: Number, default: 0 }
-  }
-}, { timestamps: true });
-
-// 8. Innings Batters & Bowlers
-const InningsBatterSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  innings_id: { type: String, required: true, index: true },
-  player_id: { type: String, required: true },
-  batting_position: { type: Number, default: 1 },
-  runs: { type: Number, default: 0 },
-  balls: { type: Number, default: 0 },
-  fours: { type: Number, default: 0 },
-  sixes: { type: Number, default: 0 },
-  strike_rate: { type: Number, default: 0.0 },
-  is_out: { type: Boolean, default: false },
-  dismissal_type: { type: String, default: null },
-  dismissal_text: { type: String, default: 'not out' },
-  bowler_id: { type: String, default: null },
-  fielder_id: { type: String, default: null }
-}, { timestamps: true });
-
-const InningsBowlerSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  innings_id: { type: String, required: true, index: true },
-  player_id: { type: String, required: true },
-  overs: { type: Number, default: 0 },
-  balls: { type: Number, default: 0 },
-  maidens: { type: Number, default: 0 },
-  runs_conceded: { type: Number, default: 0 },
-  runs: { type: Number, default: 0 },
-  wickets: { type: Number, default: 0 },
-  wides: { type: Number, default: 0 },
-  no_balls: { type: Number, default: 0 },
-  economy: { type: Number, default: 0.0 }
-}, { timestamps: true });
-
-// 9. Delivery Schema
-const DeliverySchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  innings_id: { type: String, required: true, index: true },
-  match_id: { type: String, default: null, index: true },
-  innings_number: { type: Number, default: 1 },
-  over_number: { type: Number, required: true },
-  ball_number: { type: Number, required: true },
-  bowler_id: { type: String, required: true },
-  striker_id: { type: String, required: true },
-  non_striker_id: { type: String, default: null },
-  runs_batter: { type: Number, default: 0 },
-  runs_extras: { type: Number, default: 0 },
-  extras: { type: Number, default: 0 },
-  total_runs: { type: Number, default: 0 },
-  extra_type: { type: String, default: 'NONE' },
-  is_wicket: { type: Boolean, default: false },
-  wicket: { type: Boolean, default: false },
-  wicket_type: { type: String, default: null },
-  dismissal_type: { type: String, default: null },
-  dismissed_player_id: { type: String, default: null },
-  boundary_type: { type: String, default: null },
-  is_legal_delivery: { type: Boolean, default: true },
-  is_free_hit: { type: Boolean, default: false },
-  shot_type: { type: String, default: null },
-  fielding_position: { type: String, default: null },
-  shot_angle: { type: Number, default: null },
-  shot_distance: { type: Number, default: null },
-  shot_zone: { type: String, default: null },
-  shot_x: { type: Number, default: null },
-  shot_y: { type: Number, default: null },
-  fielder_id: { type: String, default: null },
-  fielder_name: { type: String, default: null },
-  fielding_action: { type: String, default: null },
-  reason: { type: String, default: null },
-  replacement_batter_id: { type: String, default: null },
-  commentary: { type: String, default: '' },
-  created_by: { type: String, default: 'SCR-101' },
-  timestamp: { type: Date, default: Date.now },
-  created_at: { type: Date, default: Date.now }
-}, { timestamps: true, strict: false });
-
-// 10. Scorer Schema (Official Match Scorers)
-const ScorerSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  full_name: { type: String, required: true },
-  email: { type: String, required: true, unique: true, index: true, lowercase: true, trim: true },
-  mobile: { type: String, default: '' },
-  aadhaar: { type: String, default: '' },
-  association: { type: String, default: 'Virudhunagar District Cricket Association' },
-  status: { type: String, enum: ['PENDING', 'APPROVED', 'REJECTED'], default: 'PENDING', index: true },
-  approved_at: { type: Date, default: null },
-  rejected_at: { type: Date, default: null },
-  rejection_reason: { type: String, default: null },
-  otp_hash: { type: String, default: null },
-  otp_expires_at: { type: Date, default: null },
-  otp_attempts: { type: Number, default: 0 },
-  otp_verified_at: { type: Date, default: null },
-  created_at: { type: Date, default: Date.now },
-  updated_at: { type: Date, default: Date.now }
-}, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
-
-// 11. Team Player Schema (Squad Players from Team Registrations)
-const TeamPlayerSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  team_id: { type: String, required: true, index: true },
-  player_name: { type: String, required: true },
-  player_email: { type: String, required: true, lowercase: true, trim: true },
-  player_role: { type: String, default: 'BATTER' },
-  photo: { type: String, default: null },
-  image_path: { type: String, default: null },
-  created_at: { type: Date, default: Date.now }
-}, { timestamps: { createdAt: 'created_at' } });
-
-// 12. Notifications Schema (Strict Match Schedule Target Delivery)
-const NotificationSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  type: { type: String, default: 'MATCH_SCHEDULED' },
-  title: { type: String, required: true },
-  message: { type: String, required: true },
-  reference_id: { type: String, default: null },
-  recipient_role: { type: String, enum: ['TEAM', 'PLAYER', 'ADMIN'], default: 'TEAM' },
-  recipient_id: { type: String, default: null, index: true },
-  recipient_email: { type: String, default: null, index: true },
-  team_id: { type: String, default: null, index: true },
-  team_name: { type: String, default: null },
-  link: { type: String, default: '' },
-  status: { type: String, enum: ['UNREAD', 'READ'], default: 'UNREAD' },
-  created_at: { type: Date, default: Date.now }
-}, { timestamps: { createdAt: 'created_at' } });
-
-// 13. News Schema
-const NewsSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  title: { type: String, required: true },
-  summary: { type: String, required: true },
-  content: { type: String, required: true },
-  category: { type: String, default: 'ANNOUNCEMENT' },
-  author: { type: String, default: 'District Secretary' },
-  image_url: { type: String, default: '/assets_web/stadium.jpg' },
-  status: { type: String, default: 'PUBLISHED' }
-}, { timestamps: true });
-
-// 14. Officials & Venues & Audit
-const OfficialSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  name: { type: String, required: true },
-  role: { type: String, default: 'SCORER' },
-  email: { type: String, required: true },
-  phone: { type: String, default: '' },
-  status: { type: String, default: 'ACTIVE' }
-}, { timestamps: true });
-
-const VenueSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  name: { type: String, required: true },
-  location: { type: String, default: 'Virudhunagar' },
-  capacity: { type: Number, default: 5000 },
-  floodlights: { type: Boolean, default: true },
-  description: { type: String, default: '' }
-}, { timestamps: true });
-
-const AuditLogSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  action: { type: String, required: true },
-  initiated_by: { type: String, default: 'admin@cfvd.org' },
-  admin_email: { type: String, default: '' },
-  target_user: { type: String, default: '' },
-  timestamp: { type: Date, default: Date.now },
-  ip_address: { type: String, default: '127.0.0.1' },
-  result: { type: String, default: 'SUCCESS' },
-  details: { type: String, default: '' }
-}, { timestamps: { createdAt: 'timestamp' } });
-
-// Create or reuse Mongoose Models
-const User = mongoose.models.User || mongoose.model('User', UserSchema);
-const Tournament = mongoose.models.Tournament || mongoose.model('Tournament', TournamentSchema);
-const TournamentRegistration = mongoose.models.TournamentRegistration || mongoose.model('TournamentRegistration', TournamentRegistrationSchema);
-const Team = mongoose.models.Team || mongoose.model('Team', TeamSchema);
-const Player = mongoose.models.Player || mongoose.model('Player', PlayerSchema);
-const TeamRegistration = mongoose.models.TeamRegistration || mongoose.model('TeamRegistration', TeamRegistrationSchema);
-const Match = mongoose.models.Match || mongoose.model('Match', MatchSchema);
-const Innings = mongoose.models.Innings || mongoose.model('Innings', InningsSchema);
-const InningsBatter = mongoose.models.InningsBatter || mongoose.model('InningsBatter', InningsBatterSchema);
-const InningsBowler = mongoose.models.InningsBowler || mongoose.model('InningsBowler', InningsBowlerSchema);
-const Delivery = mongoose.models.Delivery || mongoose.model('Delivery', DeliverySchema);
-const Scorer = mongoose.models.Scorer || mongoose.model('Scorer', ScorerSchema);
-const TeamPlayer = mongoose.models.TeamPlayer || mongoose.model('TeamPlayer', TeamPlayerSchema);
-const Notification = mongoose.models.Notification || mongoose.model('Notification', NotificationSchema);
-const News = mongoose.models.News || mongoose.model('News', NewsSchema);
-const Official = mongoose.models.Official || mongoose.model('Official', OfficialSchema);
-const Venue = mongoose.models.Venue || mongoose.model('Venue', VenueSchema);
-const AuditLog = mongoose.models.AuditLog || mongoose.model('AuditLog', AuditLogSchema);
-
-// 15. Umpire Decisions Schema & Model
-const UmpireDecisionSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  match_id: { type: String, required: true, index: true },
-  umpire_id: { type: String, required: true, index: true },
-  umpire_name: { type: String, default: '' },
-  decision_type: { type: String, required: true, index: true },
-  description: { type: String, default: '' },
-  inning: { type: Number, default: 1 },
-  over: { type: Number, default: 0 },
-  ball: { type: Number, default: 0 },
-  timestamp: { type: Date, default: Date.now }
-}, { timestamps: { createdAt: 'timestamp' } });
-
-const UmpireDecision = mongoose.models.UmpireDecision || mongoose.model('UmpireDecision', UmpireDecisionSchema);
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 16. Cricket Laws Schema (MCC 2017 Code – Fourth Edition 2026)
-// ─────────────────────────────────────────────────────────────────────────────
-const CricketLawSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  law_number: { type: Number, required: true, unique: true, index: true },
-  title: { type: String, required: true },
-  short_description: { type: String, default: '' },
-  category: {
-    type: String,
-    enum: ['Batters', 'Bowlers', 'Fielders', 'Umpires', 'Scorers', 'Match Officials', 'Dismissals', 'Equipment', 'Match Situations', 'General'],
-    default: 'General',
-    index: true
-  },
-  edition: { type: String, default: '2017 Code – Fourth Edition 2026' },
-  effective_date: { type: String, default: '1 October 2026' },
-  source_url: { type: String, default: 'https://lawsofcricket.lords.org/' },
-  is_amended_2026: { type: Boolean, default: false },
-  amendment_notes: { type: String, default: '' },
-  subsection_count: { type: Number, default: 0 },
-  is_active: { type: Boolean, default: true, index: true },
-  last_verified_at: { type: Date, default: Date.now },
-  display_order: { type: Number, default: 0 }
-}, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
-
-const CricketLaw = mongoose.models.CricketLaw || mongoose.model('CricketLaw', CricketLawSchema);
-
-// 17. Cricket Law Sections Schema
-const CricketLawSectionSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  law_id: { type: String, required: true, index: true },
-  law_number: { type: Number, required: true, index: true },
-  section_number: { type: String, required: true }, // e.g. "30.1", "30.1.1"
-  section_title: { type: String, required: true },
-  explanation: { type: String, default: '' },
-  detailed_explanation: { type: String, default: '' },
-  practical_example: { type: String, default: '' },
-  parent_section_id: { type: String, default: null, index: true }, // null = top-level
-  depth: { type: Number, default: 1 }, // 1 = top, 2 = sub, 3 = sub-sub
-  display_order: { type: Number, default: 0 },
-  is_active: { type: Boolean, default: true }
-}, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
-
-CricketLawSectionSchema.index({ law_id: 1, section_number: 1 });
-CricketLawSectionSchema.index({ law_number: 1, section_number: 1 });
-
-const CricketLawSection = mongoose.models.CricketLawSection || mongoose.model('CricketLawSection', CricketLawSectionSchema);
-
-// 18. Cricket Law Versions Schema
-const CricketLawVersionSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  law_id: { type: String, required: true, index: true },
-  law_number: { type: Number, required: true },
-  edition: { type: String, required: true },
-  amendment_notes: { type: String, default: '' },
-  effective_date: { type: String, default: '' },
-  is_current: { type: Boolean, default: false, index: true }
-}, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
-
-const CricketLawVersion = mongoose.models.CricketLawVersion || mongoose.model('CricketLawVersion', CricketLawVersionSchema);
-
-// 19. Cricket Law Audit Log Schema
-const CricketLawAuditLogSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  law_id: { type: String, required: true, index: true },
-  law_number: { type: Number, required: true },
-  action: { type: String, required: true, enum: ['CREATE', 'UPDATE', 'PUBLISH', 'RESTORE', 'SECTION_ADD', 'SECTION_UPDATE'] },
-  updated_by: { type: String, required: true },
-  updated_by_email: { type: String, default: '' },
-  previous_version: { type: mongoose.Schema.Types.Mixed, default: null },
-  new_version: { type: mongoose.Schema.Types.Mixed, default: null },
-  notes: { type: String, default: '' },
-  timestamp: { type: Date, default: Date.now, index: true }
-}, { timestamps: { createdAt: 'timestamp' } });
-
-const CricketLawAuditLog = mongoose.models.CricketLawAuditLog || mongoose.model('CricketLawAuditLog', CricketLawAuditLogSchema);
-
-// 20. Tournament Calculation Settings Schema (DLS / VJD per tournament)
-const TournamentCalculationSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  tournament_id: { type: String, required: true, unique: true, index: true },
-  tournament_name: { type: String, default: '' },
-  calculation_method: {
-    type: String,
-    enum: ['DLS', 'VJD'],
-    default: 'DLS',
-    required: true
-  },
-  updated_by: { type: String, default: 'admin@cfvd.org' },
-  updated_by_name: { type: String, default: 'Administrator' },
-  updated_at: { type: Date, default: Date.now }
-}, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
-
-const TournamentCalculation = mongoose.models.TournamentCalculation || mongoose.model('TournamentCalculation', TournamentCalculationSchema);
-
-// 24. Player Performance Match Rating Schema
-const PlayerMatchRatingSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  player_id: { type: String, required: true, index: true },
-  player_name: { type: String, default: '' },
-  match_id: { type: String, required: true, index: true },
-  tournament_id: { type: String, default: null },
-  tournament_name: { type: String, default: '' },
-  match_date: { type: Date, default: Date.now },
-  format: { type: String, enum: ['T20', 'ONE_DAY', 'MULTI_DAY', 'T10', 'CUSTOM'], default: 'T20' },
-  role: { type: String, enum: ['BATSMAN', 'BOWLER', 'ALL_ROUNDER', 'WICKETKEEPER'], default: 'BATSMAN' },
-  batting_rating: { type: Number, default: null },
-  bowling_rating: { type: Number, default: null },
-  fielding_rating: { type: Number, default: null },
-  impact_rating: { type: Number, default: null },
-  overall_rating: { type: Number, default: null },
-  component_availability: {
-    batting: { type: Boolean, default: false },
-    bowling: { type: Boolean, default: false },
-    fielding: { type: Boolean, default: false },
-    impact: { type: Boolean, default: false }
-  },
-  match_stats: {
-    runs: { type: Number, default: 0 },
-    balls: { type: Number, default: 0 },
-    fours: { type: Number, default: 0 },
-    sixes: { type: Number, default: 0 },
-    strike_rate: { type: Number, default: 0 },
-    is_out: { type: Boolean, default: false },
-    dismissal_text: { type: String, default: '' },
-    overs: { type: Number, default: 0 },
-    balls_bowled: { type: Number, default: 0 },
-    maidens: { type: Number, default: 0 },
-    runs_conceded: { type: Number, default: 0 },
-    wickets: { type: Number, default: 0 },
-    economy: { type: Number, default: 0 },
-    catches: { type: Number, default: 0 },
-    run_outs: { type: Number, default: 0 },
-    stumpings: { type: Number, default: 0 }
-  },
-  calculation_version: { type: String, default: 'v2.0' },
-  verification_status: { type: String, enum: ['VERIFIED', 'PROVISIONAL', 'INVALIDATED'], default: 'VERIFIED' },
-  calculated_at: { type: Date, default: Date.now }
-}, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
-
-// Ensure compound index for fast lookups and unique constraint per player per match
-PlayerMatchRatingSchema.index({ player_id: 1, match_id: 1 }, { unique: true });
-PlayerMatchRatingSchema.index({ player_id: 1, match_date: -1 });
-PlayerMatchRatingSchema.index({ format: 1, overall_rating: -1 });
-
-const PlayerMatchRating = mongoose.models.PlayerMatchRating || mongoose.model('PlayerMatchRating', PlayerMatchRatingSchema);
-// 21. Master Settings & Dynamic Dropdown Options Schema
-const MasterSettingSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  category: { 
-    type: String, 
-    required: true, 
-    index: true,
-    enum: [
-      'taluk_jurisdiction',
-      'playing_role',
-      'batting_style',
-      'age_category',
-      'certification_level',
-      'umpire_certification',
-      'state'
-    ]
-  },
-  name: { type: String, required: true, trim: true },
-  code: { type: String, default: null, trim: true },
-  description: { type: String, default: '' },
-  is_active: { type: Boolean, default: true },
-  sort_order: { type: Number, default: 0 }
-}, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
-
-const MasterSetting = mongoose.models.MasterSetting || mongoose.model('MasterSetting', MasterSettingSchema);
-
-// 22. Super Admin Security Verification & Action OTP Schema
-const AdminActionOtpSchema = new mongoose.Schema({
-  session_id: { type: String, required: true, unique: true, index: true },
-  action: { 
-    type: String, 
-    required: true,
-    enum: [
-      'APPROVE_ADMIN',
-      'REJECT_ADMIN',
-      'CREATE_ADMIN',
-      'CHANGE_PERMISSIONS',
-      'CHANGE_ROLE',
-      'ACTIVATE_ADMIN',
-      'SUSPEND_ADMIN',
-      'REMOVE_ADMIN'
-    ]
-  },
-  super_admin_email: { type: String, required: true, default: 'admin@cfvd.org' },
-  target_id: { type: String, default: null },
-  target_email: { type: String, default: null },
-  target_data: { type: mongoose.Schema.Types.Mixed, default: {} },
-  otp_hash: { type: String, required: true },
-  salt: { type: String, required: true },
-  attempts: { type: Number, default: 0 },
-  max_attempts: { type: Number, default: 5 },
-  expires_at: { type: Date, required: true, index: { expires: '1h' } },
-  last_sent_at: { type: Date, default: Date.now },
-  status: { type: String, enum: ['PENDING', 'VERIFIED', 'EXPIRED', 'MAX_ATTEMPTS_EXCEEDED'], default: 'PENDING' },
-  created_at: { type: Date, default: Date.now }
-});
-
-const AdminActionOtp = mongoose.models.AdminActionOtp || mongoose.model('AdminActionOtp', AdminActionOtpSchema);
-
-// 23. Dual-Admin Approval & Role System (AdminRequest)
-const AdminRequestSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  type: { type: String, enum: ['PROMOTE', 'REMOVE'], required: true, index: true },
-  target_user_id: { type: String, required: true },
-  target_email: { type: String, required: true, lowercase: true, trim: true },
-  target_name: { type: String, default: '' },
-  requested_by_id: { type: String, required: true },
-  approver1_id: { type: String, required: true },
-  approver2_id: { type: String, required: true },
-  approver1_otp_hash: { type: String, required: true },
-  approver2_otp_hash: { type: String, required: true },
-  approver1_verified: { type: Boolean, default: false },
-  approver2_verified: { type: Boolean, default: false },
-  candidate_otp_hash: { type: String, default: null },
-  candidate_verified: { type: Boolean, default: false },
-  attempts: { type: Number, default: 0 },
-  status: {
-    type: String,
-    enum: ['PENDING', 'APPROVED', 'EXECUTING', 'COMPLETED', 'REJECTED', 'EXPIRED', 'LOCKED'],
-    default: 'PENDING',
-    index: true
-  },
-  expires_at: { type: Date, required: true, index: { expires: 0 } },
-  created_at: { type: Date, default: Date.now },
-  ip_address: { type: String, default: '' }
-}, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
-
-// Only one open request per target user at a time
-AdminRequestSchema.index(
-  { target_user_id: 1 },
-  { unique: true, partialFilterExpression: { status: { $in: ['PENDING', 'APPROVED', 'EXECUTING'] } } }
-);
-
-const AdminRequest = mongoose.models.AdminRequest || mongoose.model('AdminRequest', AdminRequestSchema);
+const {
+  User,
+  Tournament,
+  TournamentRegistration,
+  TournamentCalculation,
+  Team,
+  Player,
+  TeamRegistration,
+  Match,
+  Innings,
+  InningsBatter,
+  InningsBowler,
+  Delivery,
+  Scorer,
+  TeamPlayer,
+  Notification,
+  News,
+  Official,
+  Venue,
+  AuditLog,
+  UmpireDecision,
+  CricketLaw,
+  CricketLawSection,
+  CricketLawVersion,
+  CricketLawAuditLog,
+  PlayerMatchRating,
+  MasterSetting,
+  AdminActionOtp,
+  AdminRequest,
+  models
+} = require('../models');
 
 // In-Memory Temporary Registrations & OTPs cache
 const memoryDb = {
@@ -962,31 +73,63 @@ const memoryDb = {
 async function seedDefaultData() {
   try {
     const isProd = process.env.NODE_ENV === 'production';
-    const adminInitialPass = process.env.ADMIN_INITIAL_PASSWORD || (isProd ? crypto.randomBytes(16).toString('hex') : 'admin123');
+    const isDevOrTest = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
+
+    if (isProd) {
+      const adminEmail = (process.env.ADMIN_INITIAL_EMAIL || '').trim().toLowerCase();
+      const adminPass = process.env.ADMIN_INITIAL_PASSWORD;
+      if (!adminEmail || !adminPass) {
+        console.warn('Production Notice: ADMIN_INITIAL_EMAIL and/or ADMIN_INITIAL_PASSWORD not configured. Skipping initial admin seeding.');
+        return;
+      }
+      const existingAdmin = await User.findOne({ role: 'ADMIN' });
+      if (!existingAdmin) {
+        const passwordHash = await bcrypt.hash(adminPass, 12);
+        await User.create({
+          id: 'ADM-PROD-001',
+          name: 'Super Administrator',
+          email: adminEmail,
+          mobile: '9876543210',
+          role: 'ADMIN',
+          status: 'ACTIVE',
+          is_super_admin: true,
+          admin_level: 'Permanent Super Administrator',
+          password_hash: passwordHash
+        });
+        console.log(`Initial production super admin provisioned for: ${adminEmail}`);
+      }
+      return;
+    }
+
+    if (!isDevOrTest) {
+      return;
+    }
+
     const defaultPasswordHash = await bcrypt.hash('1234', 10);
-    const adminPasswordHash = await bcrypt.hash(adminInitialPass, 10);
+    const adminPasswordHash = await bcrypt.hash('admin123', 10);
+    const athiPasswordHash = await bcrypt.hash('athi1833@@', 10);
 
     const userCount = await User.countDocuments();
     if (userCount === 0) {
       await User.insertMany([
         {
           id: 'ADM-1001',
-          name: 'System Administrator',
+          name: 'System User (Former Admin)',
           email: 'admin@example.com',
           mobile: '9876543210',
-          role: 'ADMIN',
-          status: 'ACTIVE',
+          role: 'USER',
+          status: 'INACTIVE',
           password_hash: defaultPasswordHash
         },
         {
           id: 'ADM-1002',
-          name: 'Chief Administrator',
+          name: 'CFVD User (Former Admin)',
           email: 'admin@cfvd.org',
           mobile: '9876543210',
-          role: 'ADMIN',
-          status: 'ACTIVE',
-          is_super_admin: true,
-          admin_level: 'Permanent Super Administrator',
+          role: 'USER',
+          status: 'INACTIVE',
+          is_super_admin: false,
+          admin_level: 'Standard User',
           password_hash: adminPasswordHash
         },
         {
@@ -1000,12 +143,14 @@ async function seedDefaultData() {
         },
         {
           id: 'ADM-1004',
-          name: 'Athilingam (Admin & Scorer)',
+          name: 'Athilingam (Super Admin)',
           email: 'athilingam3336@gmail.com',
           mobile: '9876543212',
           role: 'ADMIN',
           status: 'ACTIVE',
-          password_hash: adminPasswordHash
+          is_super_admin: true,
+          admin_level: 'Permanent Super Administrator',
+          password_hash: athiPasswordHash
         },
         {
           id: 'ADM-1005',
@@ -1197,9 +342,9 @@ async function seedDefaultData() {
       { upsert: true }
     );
 
-    // Guarantee admin@cfvd.org is the sole permanent Super Admin across the system
+    // Guarantee athilingam3336@gmail.com is the permanent Super Admin across the system
     await User.updateOne(
-      { email: 'admin@cfvd.org' },
+      { email: 'athilingam3336@gmail.com' },
       {
         $set: {
           is_super_admin: true,
@@ -1210,8 +355,20 @@ async function seedDefaultData() {
       }
     );
     await User.updateMany(
-      { email: { $ne: 'admin@cfvd.org' }, role: 'ADMIN' },
+      { email: { $ne: 'athilingam3336@gmail.com' }, role: 'ADMIN' },
       { $set: { is_super_admin: false } }
+    );
+    // Explicitly strip ADMIN role from admin@example.com and admin@cfvd.org
+    await User.updateMany(
+      { email: { $in: ['admin@example.com', 'admin@cfvd.org'] } },
+      {
+        $set: {
+          role: 'USER',
+          is_super_admin: false,
+          admin_level: 'Standard User',
+          status: 'INACTIVE'
+        }
+      }
     );
 
     // Seed Scorers
@@ -1775,7 +932,7 @@ async function seedDefaultData() {
         { id: 'VEN-05', name: 'Aruppukottai SBK College Ground', location: 'Aruppukottai', capacity: 3000, floodlights: false, description: 'Taluk-level championship ground.' },
         { id: 'VEN-06', name: 'Sattur Railway Ground', location: 'Near Railway Station, Sattur', capacity: 2500, floodlights: false, description: 'Fast outfield and traditional turf pitch.' },
         { id: 'VEN-07', name: 'Vembakottai Sports Pavilion Ground', location: 'Vembakottai', capacity: 2000, floodlights: false, description: 'District rural sports development facility.' },
-        { id: 'VEN-08', name: 'Watrap Taluk Sports Arena Ground', location: 'Main Road, Watrap', capacity: 2000, floodlights: false, description: 'Taluk arena with newly relaid central pitch.' }
+        { id: 'VEN-08', name: 'Kariapatti Sports Arena Ground', location: 'Main Road, Kariapatti', capacity: 2000, floodlights: false, description: 'Taluk arena with newly relaid central pitch.' }
       ]);
     }
 
@@ -1804,10 +961,9 @@ async function seedDefaultData() {
           { category: 'taluk_jurisdiction', name: 'Srivilliputhur', code: 'SVPR', sort_order: 4 },
           { category: 'taluk_jurisdiction', name: 'Aruppukottai', code: 'APKI', sort_order: 5 },
           { category: 'taluk_jurisdiction', name: 'Sattur', code: 'STR', sort_order: 6 },
-          { category: 'taluk_jurisdiction', name: 'Watrap', code: 'WTR', sort_order: 7 },
-          { category: 'taluk_jurisdiction', name: 'Kariapatti', code: 'KPT', sort_order: 8 },
-          { category: 'taluk_jurisdiction', name: 'Tiruchuli', code: 'TCL', sort_order: 9 },
-          { category: 'taluk_jurisdiction', name: 'Vembakottai', code: 'VBK', sort_order: 10 },
+          { category: 'taluk_jurisdiction', name: 'Kariapatti', code: 'KPT', sort_order: 7 },
+          { category: 'taluk_jurisdiction', name: 'Tiruchuli', code: 'TCL', sort_order: 8 },
+          { category: 'taluk_jurisdiction', name: 'Vembakottai', code: 'VBK', sort_order: 9 },
 
           // 2. Playing Role
           { category: 'playing_role', name: 'Batsman', code: 'BAT', sort_order: 1 },
@@ -1868,6 +1024,68 @@ async function seedDefaultData() {
 
 // Connect to MongoDB
 let connectionPromise = null;
+let listenersAttached = false;
+
+function setupConnectionListeners() {
+  if (listenersAttached) return;
+  listenersAttached = true;
+
+  mongoose.connection.on('connected', () => {
+    isConnected = true;
+  });
+
+  mongoose.connection.on('disconnected', () => {
+    isConnected = false;
+    console.warn('MongoDB connection lost. Awaiting reconnect...');
+  });
+
+  mongoose.connection.on('reconnected', () => {
+    isConnected = true;
+    console.log('MongoDB connection restored.');
+  });
+
+  mongoose.connection.on('error', (err) => {
+    console.warn('MongoDB connection error:', err.message);
+  });
+}
+
+async function ensureIndexes() {
+  try {
+    const modelsToIndex = [
+      User, Tournament, TournamentRegistration, Team, Player,
+      TeamRegistration, Match, Innings, InningsBatter, InningsBowler,
+      Delivery, Scorer, TeamPlayer, Notification, News, Official,
+      Venue, AuditLog, UmpireDecision, CricketLaw, CricketLawSection,
+      MasterSetting
+    ];
+    for (const m of modelsToIndex) {
+      if (m && m.syncIndexes) {
+        await m.syncIndexes().catch(() => {});
+      }
+    }
+    console.log('Database indexes synchronized.');
+  } catch (err) {
+    console.warn('Database index sync note:', err.message);
+  }
+}
+
+async function ping() {
+  if (mongoose.connection.readyState !== 1) return false;
+  try {
+    await mongoose.connection.db.admin().ping();
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function close() {
+  try {
+    await mongoose.connection.close();
+    isConnected = false;
+  } catch (_) {}
+}
+
 async function initDb() {
   if (mongoose.connection.readyState === 1) {
     isConnected = true;
@@ -1876,16 +1094,21 @@ async function initDb() {
   if (connectionPromise) {
     return connectionPromise;
   }
+  setupConnectionListeners();
   connectionPromise = (async () => {
     try {
       mongoose.set('strictQuery', false);
       await mongoose.connect(MONGODB_URI, {
         serverSelectionTimeoutMS: 5000,
-        autoIndex: true
+        maxPoolSize: 20,
+        minPoolSize: 5,
+        socketTimeoutMS: 45000,
+        autoIndex: false
       });
       isConnected = true;
       console.log(`🍃 Connected to MongoDB Database Server at: ${MONGODB_URI}`);
       await seedDefaultData();
+      await ensureIndexes();
     } catch (err) {
       console.warn(`⚠️ MongoDB connection note: ${err.message}.`);
     } finally {
@@ -2277,6 +1500,10 @@ class MongoConnection {
 
 module.exports = {
   initDb,
+  ping,
+  close,
+  ensureIndexes,
+  seedDefaultData,
   getUseMemoryFallback: () => false,
   memoryDb,
   query: mongoQuery,

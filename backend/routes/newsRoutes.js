@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 const { verifyToken } = require('../middleware/authMiddleware');
+const { cacheResponse, invalidateCache } = require('../middleware/cacheMiddleware');
 
 function escapeRegex(str) {
   if (typeof str !== 'string') return '';
@@ -15,12 +16,15 @@ function escapeRegex(str) {
 
 /**
  * GET /api/news
- * List news articles with category and search filter
+ * List news articles with category, search filter, and pagination
  */
-router.get('/', async (req, res) => {
+router.get('/', cacheResponse(30, 'news'), async (req, res) => {
   try {
-    await db.initDb();
     const { category, search } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const skip = (page - 1) * limit;
+
     const query = { status: 'PUBLISHED' };
 
     if (category && category !== 'ALL') {
@@ -36,8 +40,25 @@ router.get('/', async (req, res) => {
       ];
     }
 
-    const newsList = await db.models.News.find(query).sort({ published_at: -1 }).lean();
-    res.json({ success: true, count: newsList.length, data: newsList });
+    const [total, newsList] = await Promise.all([
+      db.models.News.countDocuments(query),
+      db.models.News.find(query)
+        .select('id title summary category author image_url published_at created_at')
+        .sort({ published_at: -1, created_at: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean()
+    ]);
+
+    res.json({
+      success: true,
+      data: newsList,
+      count: newsList.length,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -102,6 +123,7 @@ router.post('/', verifyToken, async (req, res) => {
       published_at: new Date()
     });
 
+    invalidateCache('news');
     res.status(201).json({ success: true, message: 'News article published successfully', data: article });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -126,6 +148,7 @@ router.put('/:id', verifyToken, async (req, res) => {
     ).lean();
 
     if (!updated) return res.status(404).json({ success: false, error: 'Article not found' });
+    invalidateCache('news');
     res.json({ success: true, message: 'Article updated successfully', data: updated });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -145,6 +168,7 @@ router.delete('/:id', verifyToken, async (req, res) => {
 
     const deleted = await db.models.News.findOneAndDelete({ id: req.params.id });
     if (!deleted) return res.status(404).json({ success: false, error: 'Article not found' });
+    invalidateCache('news');
     res.json({ success: true, message: 'Article deleted successfully' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

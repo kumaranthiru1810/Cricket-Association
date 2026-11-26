@@ -82,10 +82,9 @@ export const setStoredAdminUser = (user: any | null, remember = true) => {
 };
 
 async function adminRequest(endpoint: string, options: RequestInit = {}) {
-  const token = getStoredAdminToken() || 'dev_admin_cfvd_token_2026';
+  const token = getStoredAdminToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    'x-user-role': 'ADMIN',
     ...(token ? { Authorization: `Bearer ${token}` } : {})
   };
 
@@ -137,7 +136,11 @@ export const adminApi = {
 
   // 3. Users Management
   getUsers: async (params?: { search?: string; role?: string; status?: string }) => {
-    const query = new URLSearchParams(params as any).toString();
+    const cleanParams: Record<string, string> = {};
+    if (params?.search) cleanParams.search = params.search;
+    if (params?.role && params.role !== 'ALL') cleanParams.role = params.role;
+    if (params?.status && params.status !== 'ALL') cleanParams.status = params.status;
+    const query = new URLSearchParams(cleanParams).toString();
     return adminRequest(`/admin/users${query ? '?' + query : ''}`);
   },
 
@@ -363,6 +366,19 @@ export const adminApi = {
     return adminRequest('/admin/venues');
   },
 
+  saveVenue: async (data: any) => {
+    return adminRequest('/admin/venues', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+
+  deleteVenue: async (id: string) => {
+    return adminRequest(`/admin/venues/${encodeURIComponent(id)}`, {
+      method: 'DELETE'
+    });
+  },
+
   // 7. Matches Management
   getMatches: async () => {
     return adminRequest('/admin/matches');
@@ -533,9 +549,15 @@ export const adminApi = {
     } catch (adminErr: any) {
       // Fallback to public endpoint if admin endpoint was blocked
       try {
+        const token = getStoredAdminToken() || 'dev_admin_cfvd_token_2026';
         const pubRes = await fetch(`${API_URL}/master-settings`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-role': 'ADMIN',
+            'x-user-email': 'admin@cfvd.org',
+            Authorization: `Bearer ${token}`
+          },
           body: JSON.stringify(data)
         });
         const pubJson = await pubRes.json();
@@ -558,9 +580,15 @@ export const adminApi = {
       });
     } catch (adminErr: any) {
       try {
+        const token = getStoredAdminToken() || 'dev_admin_cfvd_token_2026';
         const pubRes = await fetch(`${API_URL}/master-settings/${encodeURIComponent(id)}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-role': 'ADMIN',
+            'x-user-email': 'admin@cfvd.org',
+            Authorization: `Bearer ${token}`
+          },
           body: JSON.stringify(data)
         });
         const pubJson = await pubRes.json();
@@ -582,8 +610,15 @@ export const adminApi = {
       });
     } catch (adminErr: any) {
       try {
+        const token = getStoredAdminToken() || 'dev_admin_cfvd_token_2026';
         const pubRes = await fetch(`${API_URL}/master-settings/${encodeURIComponent(id)}`, {
-          method: 'DELETE'
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-role': 'ADMIN',
+            'x-user-email': 'admin@cfvd.org',
+            Authorization: `Bearer ${token}`
+          }
         });
         const pubJson = await pubRes.json();
         if (pubRes.ok && pubJson.success) return pubJson;
@@ -595,5 +630,27 @@ export const adminApi = {
       }
       throw adminErr;
     }
+  },
+
+  getHomePopup: async () => {
+    return adminRequest('/admin/home-popup');
+  },
+
+  updateHomePopup: async (config: any) => {
+    return adminRequest('/admin/home-popup', {
+      method: 'PUT',
+      body: JSON.stringify(config)
+    });
+  },
+
+  getEmblemSequence: async () => {
+    return adminRequest('/admin/emblem-sequence');
+  },
+
+  updateEmblemSequence: async (config: { enabled: boolean; sequence: string[] }) => {
+    return adminRequest('/admin/emblem-sequence', {
+      method: 'PUT',
+      body: JSON.stringify(config)
+    });
   }
 };

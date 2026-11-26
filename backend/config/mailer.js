@@ -10,19 +10,27 @@ const nodemailer = require('nodemailer');
 
 function getSmtpConfig() {
   const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const port = parseInt(process.env.SMTP_PORT || '465', 10);
-  const rawUser = process.env.SMTP_USER || 'cricketfederation21@gmail.com';
+  const port = parseInt(process.env.SMTP_PORT || '587', 10);
+  const rawUser = process.env.SMTP_USER || '';
   const rawPass = process.env.SMTP_PASS || process.env.SMTP_PASSWORD || '';
   const user = rawUser ? rawUser.replace(/^"|"$/g, '').trim() : '';
-  // Gmail app passwords can have spaces (e.g. "abcd efgh ijkl mnop"); strip them cleanly
   const pass = rawPass ? rawPass.replace(/^"|"$/g, '').replace(/\s+/g, '').trim() : '';
-  const secure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : (port === 465);
+  
+  // Port 465 uses SSL/TLS (secure: true); Port 587 uses STARTTLS (secure: false)
+  let secure = false;
+  if (process.env.SMTP_SECURE !== undefined && process.env.SMTP_SECURE !== '') {
+    secure = process.env.SMTP_SECURE === 'true';
+  } else {
+    secure = (port === 465);
+  }
+
   const from = process.env.SMTP_FROM
     ? process.env.SMTP_FROM.replace(/^"|"$/g, '').trim()
-    : `"Cricket Federation" <${user || 'cricketfederation21@gmail.com'}>`;
+    : `"Cricket Federation" <${user || 'notifications@cfvd.org'}>`;
   const superAdmin = (process.env.SUPER_ADMIN_EMAIL || 'admin@cfvd.org').toLowerCase().trim();
+  const provider = (process.env.EMAIL_PROVIDER || 'auto').toLowerCase().trim();
 
-  return { host, port, user, pass, secure, from, superAdmin };
+  return { host, port, user, pass, secure, from, superAdmin, provider };
 }
 
 const SUPER_ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || 'admin@cfvd.org').toLowerCase().trim();
@@ -270,6 +278,9 @@ async function sendSuperAdminVerificationEmail({
   otp,
   requestedAt = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
 }) {
+  const cfg = getSmtpConfig();
+  const toEmail = superAdminEmail;
+  const userName = 'Super Administrator';
   const subject = `Cricket Association – Security Verification [Code: ${otp}]`;
   const textContent = `CRICKET FEDERATION OF VIRUDHUNAGAR DISTRICT\nSUPER ADMINISTRATOR SECURITY VERIFICATION\n\nAction: ${actionTitle}\nDetails: ${actionDescription}\nRequested At: ${requestedAt}\n\nYour 6-Digit OTP: ${otp}\n\nThis code expires in 10 minutes. If you did not initiate this request, immediately secure your console.\n\nCricket Federation of Virudhunagar District (TNCA Affiliated)`;
 
@@ -438,11 +449,11 @@ async function sendSuperAdminVerificationEmail({
         return { success: true, message: `OTP sent to ${toEmail}`, messageId: data.id, provider: 'RESEND' };
       } else {
         console.warn(`⚠️ Resend API notice for ${toEmail}:`, data);
-        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND', ...attachDevOtp(otp) };
+        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND' };
       }
     } catch (apiErr) {
       console.warn(`⚠️ Resend fetch error for ${toEmail}:`, apiErr.message);
-      return { success: false, error: apiErr.message, provider: 'RESEND', ...attachDevOtp(otp) };
+      return { success: false, error: apiErr.message, provider: 'RESEND' };
     }
   }
 
@@ -453,12 +464,12 @@ async function sendSuperAdminVerificationEmail({
       // If superAdminEmail is internal (e.g. admin@cfvd.org) and SMTP_USER is a real Gmail,
       // include SMTP_USER so the administrator receives the real OTP in their Gmail inbox.
       const recipients = [superAdminEmail];
-      if (SMTP_USER && SMTP_USER.includes('@gmail.com') && SMTP_USER.toLowerCase() !== superAdminEmail.toLowerCase()) {
-        recipients.push(SMTP_USER);
+      if (cfg.user && cfg.user.includes('@gmail.com') && cfg.user.toLowerCase() !== superAdminEmail.toLowerCase()) {
+        recipients.push(cfg.user);
       }
 
       const info = await trans.sendMail({
-        from: SMTP_FROM,
+        from: cfg.from,
         to: recipients.join(', '),
         subject,
         text: textContent,
@@ -498,6 +509,8 @@ async function sendAdminApprovalEmail({
   adminLevel = 'Standard Administrator',
   setupUrl
 }) {
+  const cfg = getSmtpConfig();
+  const userName = adminName;
   const subject = 'Cricket Association – Administrator Account Approved';
   const textContent = `Hello ${adminName},\n\nYour appointment as an administrator for the Cricket Federation of Virudhunagar District has been approved by the Super Administrator (admin@cfvd.org).\n\nAccount Email: ${toEmail}\nClearance Level: ${adminLevel}\n\nPlease click the link below to set your password and activate your account:\n${setupUrl}\n\nCricket Federation of Virudhunagar District`;
 
@@ -629,11 +642,11 @@ async function sendAdminApprovalEmail({
         return { success: true, message: `OTP sent to ${toEmail}`, messageId: data.id, provider: 'RESEND' };
       } else {
         console.warn(`⚠️ Resend API notice for ${toEmail}:`, data);
-        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND', ...attachDevOtp(otp) };
+        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND' };
       }
     } catch (apiErr) {
       console.warn(`⚠️ Resend fetch error for ${toEmail}:`, apiErr.message);
-      return { success: false, error: apiErr.message, provider: 'RESEND', ...attachDevOtp(otp) };
+      return { success: false, error: apiErr.message, provider: 'RESEND' };
     }
   }
 
@@ -642,7 +655,7 @@ async function sendAdminApprovalEmail({
   if (trans) {
     try {
       const info = await trans.sendMail({
-        from: SMTP_FROM,
+        from: cfg.from,
         to: toEmail,
         subject,
         text: textContent,
@@ -664,6 +677,7 @@ async function sendOtpEmail({ toEmail, userName, otp }) {
   if (process.env.NODE_ENV === 'test') {
     return { success: true, message: `[TEST MODE] OTP dispatched to ${toEmail}`, otp };
   }
+  const cfg = getSmtpConfig();
   const subject = 'Cricket Association - Your Verification OTP';
   const textContent = `Hello ${userName || 'User'},\n\nYour One-Time Password (OTP) for verification is: ${otp}\n\nThis OTP is valid for 10 minutes.\n\nCricket Federation of Virudhunagar District`;
   const htmlContent = `
@@ -675,6 +689,134 @@ async function sendOtpEmail({ toEmail, userName, otp }) {
         <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #d97706;">${otp}</span>
       </div>
       <p style="font-size: 12px; color: #64748b;">This OTP is valid for 10 minutes.</p>
+    </div>
+  `;
+
+  // Helper internal dispatch function with retry
+  async function attemptDispatch() {
+    const rawBrevo = process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY || '';
+    const brevoApiKey = rawBrevo.replace(/^"|"$/g, '').trim();
+    const rawResend = process.env.RESEND_API_KEY || process.env.RESEND_KEY || process.env.RESEND_TOKEN || '';
+    const resendApiKey = rawResend.replace(/^"|"$/g, '').trim();
+
+    // 1. If EMAIL_PROVIDER === 'brevo' or 'auto', try Brevo
+    if ((cfg.provider === 'brevo' || cfg.provider === 'auto') && brevoApiKey) {
+      try {
+        const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'api-key': brevoApiKey,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({
+            sender: { name: 'Cricket Federation', email: process.env.BREVO_SENDER_EMAIL || '24ucs021@anjaconline.org' },
+            to: [{ email: toEmail, name: userName || 'User' }],
+            subject,
+            htmlContent
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.messageId) {
+          console.log(`✅ [BREVO EMAIL DELIVERED] To: ${toEmail} | Id: ${data.messageId}`);
+          return { success: true, message: `OTP sent to ${toEmail}`, messageId: data.messageId, provider: 'BREVO' };
+        } else {
+          console.warn(`⚠️ Brevo API notice for ${toEmail}:`, data);
+        }
+      } catch (brevoErr) {
+        console.warn(`⚠️ Brevo fetch error for ${toEmail}:`, brevoErr.message);
+      }
+    }
+
+    // 2. If EMAIL_PROVIDER === 'resend' or 'auto', try Resend
+    if ((cfg.provider === 'resend' || cfg.provider === 'auto') && resendApiKey) {
+      try {
+        const res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${resendApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            from: process.env.RESEND_FROM || 'Cricket Federation <onboarding@resend.dev>',
+            to: [toEmail],
+            subject,
+            text: textContent,
+            html: htmlContent
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.id) {
+          console.log(`✅ [RESEND EMAIL DELIVERED] To: ${toEmail} | Id: ${data.id}`);
+          return { success: true, message: `OTP sent to ${toEmail}`, messageId: data.id, provider: 'RESEND' };
+        } else {
+          console.warn(`⚠️ Resend API notice for ${toEmail}:`, data);
+        }
+      } catch (apiErr) {
+        console.warn(`⚠️ Resend fetch error for ${toEmail}:`, apiErr.message);
+      }
+    }
+
+    // 3. SMTP Dispatch
+    const trans = await getTransporter();
+    if (trans) {
+      try {
+        await trans.sendMail({
+          from: cfg.from,
+          to: toEmail,
+          subject,
+          text: textContent,
+          html: htmlContent
+        });
+        return { success: true, message: `OTP sent to ${toEmail}` };
+      } catch (err) {
+        console.warn(`SMTP delivery error to ${toEmail}:`, err.message);
+        throw err;
+      }
+    }
+    throw new Error('No active email transport or provider available');
+  }
+
+  // Attempt dispatch with one retry on failure
+  try {
+    return await attemptDispatch();
+  } catch (initialErr) {
+    console.warn(`[Mailer] Initial email dispatch to ${toEmail} failed (${initialErr.message}). Retrying once...`);
+    try {
+      // 500ms delay before retry
+      await new Promise(r => setTimeout(r, 500));
+      return await attemptDispatch();
+    } catch (retryErr) {
+      console.error(`[Mailer] Second attempt to send OTP to ${toEmail} failed:`, retryErr.message);
+      return {
+        success: false,
+        error: retryErr.message,
+        message: `OTP delivery failed after retry: ${retryErr.message}`,
+        ...attachDevOtp(otp)
+      };
+    }
+  }
+}
+
+/**
+ * Send Registered Team Details Email to Player
+ */
+async function sendPlayerTeamEmail({ toEmail, playerName, teamNames }) {
+  if (process.env.NODE_ENV === 'test') {
+    return { success: true, message: `[TEST MODE] Team details dispatched to ${toEmail}` };
+  }
+  const cfg = getSmtpConfig();
+  const userName = playerName || 'Player';
+  const teamList = Array.isArray(teamNames) ? teamNames : [teamNames];
+  const primaryTeam = teamList[0] || 'Unknown Team';
+  const teamListText = teamList.join(', ');
+  const subject = 'Cricket Association - Your Registered Team Details';
+  const textContent = `Hello ${playerName || 'Player'},\n\nYour Registered Team Name:\n${teamListText}\n\nCricket Federation of Virudhunagar District`;
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+      <h2 style="color: #0f2452; margin-top: 0;">Cricket Federation of Virudhunagar District</h2>
+      <p style="font-size: 14px; color: #334155;">Hello <strong>${playerName || 'Player'}</strong>,</p>
+      <p style="font-size: 13.5px; color: #475569; line-height: 1.5;">Your registered team is: <strong>${teamListText}</strong> (${primaryTeam})</p>
     </div>
   `;
 
@@ -735,11 +877,11 @@ async function sendOtpEmail({ toEmail, userName, otp }) {
         return { success: true, message: `OTP sent to ${toEmail}`, messageId: data.id, provider: 'RESEND' };
       } else {
         console.warn(`⚠️ Resend API notice for ${toEmail}:`, data);
-        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND', ...attachDevOtp(otp) };
+        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND' };
       }
     } catch (apiErr) {
       console.warn(`⚠️ Resend fetch error for ${toEmail}:`, apiErr.message);
-      return { success: false, error: apiErr.message, provider: 'RESEND', ...attachDevOtp(otp) };
+      return { success: false, error: apiErr.message, provider: 'RESEND' };
     }
   }
 
@@ -748,111 +890,13 @@ async function sendOtpEmail({ toEmail, userName, otp }) {
   if (trans) {
     try {
       await trans.sendMail({
-        from: SMTP_FROM,
-        to: toEmail,
-        subject,
-        text: textContent,
-        html: htmlContent
-      });
-      return { success: true, message: `OTP sent to ${toEmail}` };
-    } catch (err) {
-      console.warn(`Delivery note to ${toEmail}:`, err.message);
-      return { success: false, error: err.message, message: `OTP delivery failed: ${err.message}`, ...attachDevOtp(otp) };
-    }
-  }
-  return { success: true, message: `OTP dispatched to ${toEmail}` };
-}
-
-/**
- * Send Registered Team Details Email to Player
- */
-async function sendPlayerTeamEmail({ toEmail, playerName, teamNames }) {
-  if (process.env.NODE_ENV === 'test') {
-    return { success: true, message: `[TEST MODE] Team details dispatched to ${toEmail}` };
-  }
-  const teamList = Array.isArray(teamNames) ? teamNames : [teamNames];
-  const primaryTeam = teamList[0] || 'Unknown Team';
-  const teamListText = teamList.join(', ');
-  const subject = 'Cricket Association - Your Registered Team Details';
-  const textContent = `Hello ${playerName || 'Player'},\n\nYour Registered Team Name:\n${teamListText}\n\nCricket Federation of Virudhunagar District`;
-
-  // 1. Brevo (Sendinblue) HTTPS API (Port 443 - Sends to ANY recipient without requiring custom domain)
-  const rawBrevo = process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY || '';
-  const brevoApiKey = rawBrevo.replace(/^"|"$/g, '').trim();
-  if (brevoApiKey) {
-    try {
-      const res = await fetch('https://api.brevo.com/v3/smtp/email', {
-        method: 'POST',
-        headers: {
-          'api-key': brevoApiKey,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          sender: { name: 'Cricket Federation', email: process.env.BREVO_SENDER_EMAIL || '24ucs021@anjaconline.org' },
-          to: [{ email: toEmail, name: userName || 'User' }],
-          subject,
-          htmlContent
-        })
-      });
-      const data = await res.json();
-      if (res.ok && data.messageId) {
-        console.log(`✅ [BREVO EMAIL DELIVERED] To: ${toEmail} | Id: ${data.messageId}`);
-        return { success: true, message: `OTP sent to ${toEmail}`, messageId: data.messageId, provider: 'BREVO' };
-      } else {
-        console.warn(`⚠️ Brevo API notice for ${toEmail}:`, data);
-        // Fall through to Resend / SMTP if Brevo fails
-      }
-    } catch (brevoErr) {
-      console.warn(`⚠️ Brevo fetch error for ${toEmail}:`, brevoErr.message);
-    }
-  }
-
-  // 2. Resend HTTPS API Dispatch (Port 443 - 100% bypasses Render Free Tier SMTP port blocks)
-  const rawResend = process.env.RESEND_API_KEY || process.env.RESEND_KEY || process.env.RESEND_TOKEN || '';
-  const resendApiKey = rawResend.replace(/^"|"$/g, '').trim();
-  if (resendApiKey) {
-    try {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          from: process.env.RESEND_FROM || 'Cricket Federation <onboarding@resend.dev>',
-          to: [toEmail],
-          subject,
-          text: textContent,
-          html: htmlContent
-        })
-      });
-      const data = await res.json();
-      if (res.ok && data.id) {
-        console.log(`✅ [RESEND EMAIL DELIVERED] To: ${toEmail} | Id: ${data.id}`);
-        return { success: true, message: `OTP sent to ${toEmail}`, messageId: data.id, provider: 'RESEND' };
-      } else {
-        console.warn(`⚠️ Resend API notice for ${toEmail}:`, data);
-        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND', ...attachDevOtp(otp) };
-      }
-    } catch (apiErr) {
-      console.warn(`⚠️ Resend fetch error for ${toEmail}:`, apiErr.message);
-      return { success: false, error: apiErr.message, provider: 'RESEND', ...attachDevOtp(otp) };
-    }
-  }
-
-  // 2. Standard SMTP Dispatch (Works on local machine or Render paid plan)
-  const trans = await getTransporter();
-  if (trans) {
-    try {
-      await trans.sendMail({
-        from: SMTP_FROM,
+        from: cfg.from,
         to: toEmail,
         subject,
         text: textContent
       });
       return { success: true, message: `Team details sent to ${toEmail}` };
-    } catch (err) {
+    } catch (_err) {
       return { success: true, message: `Team details dispatched` };
     }
   }
@@ -872,6 +916,8 @@ async function sendDualAdminApprovalEmail({
   otp,
   dateIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })
 }) {
+  const cfg = getSmtpConfig();
+  const userName = approverName;
   const isRevoke = actionType === 'REMOVE';
   const actionLabel = isRevoke ? 'Revoke Administrator Privileges' : 'Grant Administrator Privileges';
   const headerSubtitle = isRevoke ? 'Admin Revocation Authorization' : 'Admin Promotion Authorization';
@@ -1025,11 +1071,11 @@ async function sendDualAdminApprovalEmail({
         return { success: true, message: `OTP sent to ${toEmail}`, messageId: data.id, provider: 'RESEND' };
       } else {
         console.warn(`⚠️ Resend API notice for ${toEmail}:`, data);
-        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND', ...attachDevOtp(otp) };
+        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND' };
       }
     } catch (apiErr) {
       console.warn(`⚠️ Resend fetch error for ${toEmail}:`, apiErr.message);
-      return { success: false, error: apiErr.message, provider: 'RESEND', ...attachDevOtp(otp) };
+      return { success: false, error: apiErr.message, provider: 'RESEND' };
     }
   }
 
@@ -1038,18 +1084,18 @@ async function sendDualAdminApprovalEmail({
   if (trans) {
     try {
       const recipients = [toEmail];
-      if (SMTP_USER && SMTP_USER.includes('@gmail.com') && SMTP_USER.toLowerCase() !== toEmail.toLowerCase()) {
-        recipients.push(SMTP_USER);
+      if (cfg.user && cfg.user.includes('@gmail.com') && cfg.user.toLowerCase() !== toEmail.toLowerCase()) {
+        recipients.push(cfg.user);
       }
 
       const info = await trans.sendMail({
-        from: SMTP_FROM,
+        from: cfg.from,
         to: recipients.join(', '),
         subject,
         text: textContent,
         html: htmlContent
       });
-      console.log(`✅ Dual-Admin authorization email dispatched to [${recipients.join(', ')}] (Code: ${otp})`);
+      console.log(`✅ Dual-Admin authorization email dispatched to [${recipients.join(', ')}]`);
       return { success: true, messageId: info.messageId };
     } catch (err) {
       console.error(`❌ Failed to send dual-admin OTP email:`, err.message);
@@ -1067,6 +1113,8 @@ async function sendCandidateVerificationEmail({
   candidateName = 'Administrator Candidate',
   otp
 }) {
+  const cfg = getSmtpConfig();
+  const userName = candidateName;
   const subject = `Cricket Association – Final Verification for Administrator Privileges [Code: ${otp}]`;
   const textContent = `Hello ${candidateName},\n\nYour promotion to Administrator has been approved by dual administrators.\nYour 6-digit confirmation code is: ${otp}\n\nThis code expires in 10 minutes.\n\nCricket Federation of Virudhunagar District`;
 
@@ -1141,11 +1189,11 @@ async function sendCandidateVerificationEmail({
         return { success: true, message: `OTP sent to ${toEmail}`, messageId: data.id, provider: 'RESEND' };
       } else {
         console.warn(`⚠️ Resend API notice for ${toEmail}:`, data);
-        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND', ...attachDevOtp(otp) };
+        return { success: false, error: data.message || JSON.stringify(data), provider: 'RESEND' };
       }
     } catch (apiErr) {
       console.warn(`⚠️ Resend fetch error for ${toEmail}:`, apiErr.message);
-      return { success: false, error: apiErr.message, provider: 'RESEND', ...attachDevOtp(otp) };
+      return { success: false, error: apiErr.message, provider: 'RESEND' };
     }
   }
 
@@ -1154,11 +1202,11 @@ async function sendCandidateVerificationEmail({
   if (trans) {
     try {
       const recipients = [toEmail];
-      if (SMTP_USER && SMTP_USER.includes('@gmail.com') && SMTP_USER.toLowerCase() !== toEmail.toLowerCase()) {
-        recipients.push(SMTP_USER);
+      if (cfg.user && cfg.user.includes('@gmail.com') && cfg.user.toLowerCase() !== toEmail.toLowerCase()) {
+        recipients.push(cfg.user);
       }
       await trans.sendMail({
-        from: SMTP_FROM,
+        from: cfg.from,
         to: recipients.join(', '),
         subject,
         text: textContent,

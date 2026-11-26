@@ -8,6 +8,7 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
+const adminService = require('../services/adminService');
 const { validateScheduleDateTime } = require('../utils/dateTimeValidation');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'cricket_super_secret_jwt_2026';
@@ -92,7 +93,7 @@ class AdminDashboardController {
             req.ip || '127.0.0.1'
           ]
         );
-      } catch (e) {}
+      } catch (e) { }
 
       return res.status(200).json({
         success: true,
@@ -174,7 +175,7 @@ class AdminDashboardController {
             status: 'PENDING'
           });
         });
-      } catch (e) {}
+      } catch (e) { }
 
       try {
         const teamRegistrationModel = require('../models/teamRegistrationModel');
@@ -190,7 +191,7 @@ class AdminDashboardController {
             status: 'PENDING'
           });
         });
-      } catch (e) {}
+      } catch (e) { }
 
       try {
         const pUmpires = await db.models.User.find({ role: 'UMPIRE', status: 'PENDING' }).sort({ created_at: -1 }).lean();
@@ -205,7 +206,7 @@ class AdminDashboardController {
             status: 'PENDING'
           });
         });
-      } catch (e) {}
+      } catch (e) { }
 
       try {
         const pPlayers = await db.models.User.find({ role: 'PLAYER', status: 'PENDING' }).sort({ created_at: -1 }).lean();
@@ -220,7 +221,7 @@ class AdminDashboardController {
             status: 'PENDING'
           });
         });
-      } catch (e) {}
+      } catch (e) { }
 
       const pendingApprovals = pendingList.length;
 
@@ -290,27 +291,41 @@ class AdminDashboardController {
   async getUsers(req, res) {
     try {
       const { search, role, status } = req.query;
-      const [rows] = await db.query('SELECT id, name, email, mobile, role, status, created_at FROM users ORDER BY created_at DESC');
-      let filtered = rows || [];
+      const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+      const skip = (page - 1) * limit;
 
+      const filter = {};
       if (search) {
-        const q = search.toLowerCase();
-        filtered = filtered.filter(u =>
-          (u.name && u.name.toLowerCase().includes(q)) ||
-          (u.email && u.email.toLowerCase().includes(q)) ||
-          (u.mobile && u.mobile.includes(q))
-        );
+        const safeRegex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        filter.$or = [{ name: safeRegex }, { email: safeRegex }, { mobile: safeRegex }];
       }
-
       if (role && role !== 'ALL') {
-        filtered = filtered.filter(u => (u.role || '').toUpperCase() === role.toUpperCase());
+        filter.role = role.toUpperCase();
       }
-
       if (status && status !== 'ALL') {
-        filtered = filtered.filter(u => (u.status || '').toUpperCase() === status.toUpperCase());
+        filter.status = status.toUpperCase();
       }
 
-      return res.status(200).json({ success: true, users: filtered });
+      const [total, users] = await Promise.all([
+        db.models.User.countDocuments(filter),
+        db.models.User.find(filter)
+          .select('id name email mobile aadhaar role status is_super_admin admin_level created_at updated_at')
+          .sort({ created_at: -1 })
+          .skip(skip)
+          .limit(limit)
+          .lean()
+      ]);
+
+      return res.status(200).json({
+        success: true,
+        data: users,
+        users,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -438,7 +453,20 @@ class AdminDashboardController {
         filtered = filtered.filter(p => (p.status || '').toUpperCase() === status.toUpperCase());
       }
 
-      return res.status(200).json({ success: true, players: filtered });
+      const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+      const skip = (page - 1) * limit;
+      const paginated = filtered.slice(skip, skip + limit);
+
+      return res.status(200).json({
+        success: true,
+        data: paginated,
+        players: paginated,
+        total: filtered.length,
+        page,
+        limit,
+        totalPages: Math.ceil(filtered.length / limit)
+      });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -489,20 +517,15 @@ class AdminDashboardController {
   async getTeams(req, res) {
     try {
       const { search, status } = req.query;
-      const [teams] = await db.query('SELECT * FROM teams ORDER BY name ASC');
-      const [teamPlayers] = await db.query('SELECT * FROM team_players');
+      const [teams, playerCountsResult, teamPlayerCountsResult] = await Promise.all([
+        db.models.Team.find({}).select('id team_id name team_name short_name city taluk coach_name coach_email logo photo image_path status stats').sort({ name: 1 }).lean(),
+        db.models.Player.aggregate([{ $group: { _id: '$team_id', count: { $sum: 1 } } }]),
+        db.models.TeamPlayer.aggregate([{ $group: { _id: '$team_id', count: { $sum: 1 } } }])
+      ]);
 
       const playerCounts = {};
-      (teamPlayers || []).forEach(tp => {
-        playerCounts[tp.team_id] = (playerCounts[tp.team_id] || 0) + 1;
-      });
-
-      const [directPlayers] = await db.query('SELECT * FROM players');
-      (directPlayers || []).forEach(dp => {
-        if (dp.team_id) {
-          playerCounts[dp.team_id] = (playerCounts[dp.team_id] || 0) + 1;
-        }
-      });
+      (teamPlayerCountsResult || []).forEach(r => { if (r._id) playerCounts[r._id] = (playerCounts[r._id] || 0) + r.count; });
+      (playerCountsResult || []).forEach(r => { if (r._id) playerCounts[r._id] = (playerCounts[r._id] || 0) + r.count; });
 
       let list = (teams || []).map(t => ({
         id: t.id,
@@ -528,7 +551,20 @@ class AdminDashboardController {
         list = list.filter(t => t.status === status.toUpperCase());
       }
 
-      return res.status(200).json({ success: true, teams: list });
+      const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+      const skip = (page - 1) * limit;
+      const paginated = list.slice(skip, skip + limit);
+
+      return res.status(200).json({
+        success: true,
+        data: paginated,
+        teams: paginated,
+        total: list.length,
+        page,
+        limit,
+        totalPages: Math.ceil(list.length / limit)
+      });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -654,8 +690,28 @@ class AdminDashboardController {
    */
   async getMatches(req, res) {
     try {
-      const [matches] = await db.query('SELECT * FROM matches ORDER BY scheduled_date ASC');
-      const [teams] = await db.query('SELECT id, name, team_name, short_name FROM teams');
+      const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+      const skip = (page - 1) * limit;
+
+      const filter = {};
+      if (req.query.status && req.query.status !== 'ALL') {
+        filter.status = req.query.status.toUpperCase();
+      }
+      if (req.query.tournament_id) {
+        filter.tournament_id = req.query.tournament_id;
+      }
+
+      const [total, matches, teams] = await Promise.all([
+        db.models.Match.countDocuments(filter),
+        db.models.Match.find(filter)
+          .sort({ match_date: -1, match_time: -1 })
+          .skip(skip)
+          .limit(limit)
+          .lean(),
+        db.models.Team.find({}).select('id name team_name short_name').lean()
+      ]);
+
       const teamMap = {};
       (teams || []).forEach(t => { teamMap[t.id] = t.name || t.team_name; });
 
@@ -698,7 +754,15 @@ class AdminDashboardController {
         };
       });
 
-      return res.status(200).json({ success: true, matches: formatted });
+      return res.status(200).json({
+        success: true,
+        data: formatted,
+        matches: formatted,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -977,7 +1041,20 @@ class AdminDashboardController {
       // Sort all items newest first
       items.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
 
-      return res.status(200).json({ success: true, approvals: items });
+      const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+      const skip = (page - 1) * limit;
+      const paginated = items.slice(skip, skip + limit);
+
+      return res.status(200).json({
+        success: true,
+        data: paginated,
+        approvals: paginated,
+        total: items.length,
+        page,
+        limit,
+        totalPages: Math.ceil(items.length / limit)
+      });
     } catch (err) {
       console.error('getApprovals error:', err);
       return res.status(500).json({ success: false, message: err.message });
@@ -1035,7 +1112,7 @@ class AdminDashboardController {
             queryId,
             { $set: { status: isApprove ? 'APPROVED' : 'REJECTED', approved_at: isApprove ? new Date() : null, rejected_at: isApprove ? null : new Date(), rejection_reason: reason || null, updated_at: new Date() } }
           );
-        } catch (e) {}
+        } catch (e) { }
 
         await notificationModel.create({
           type: 'APPROVAL_UPDATE',
@@ -1089,7 +1166,7 @@ class AdminDashboardController {
             queryId,
             { $set: { status: isApprove ? 'ACTIVE' : 'REJECTED', updated_at: new Date() } }
           );
-        } catch (e) {}
+        } catch (e) { }
 
         await notificationModel.create({
           type: 'APPROVAL_UPDATE',
@@ -1108,7 +1185,7 @@ class AdminDashboardController {
           details: `${cleanType} ${id} ${isApprove ? 'approved' : 'rejected'}: ${reason || 'Processed by administrator'}`,
           ip_address: req.ip || '127.0.0.1'
         });
-      } catch (e) {}
+      } catch (e) { }
 
       return res.status(200).json({
         success: true,
@@ -1237,14 +1314,34 @@ class AdminDashboardController {
    */
   async getNotifications(req, res) {
     try {
-      const notificationModel = require('../models/notificationModel');
-      const rows = await notificationModel.getAll({ limit: 100 });
+      const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+      const skip = (page - 1) * limit;
+
+      const [total, rows] = await Promise.all([
+        db.models.Notification.countDocuments(),
+        db.models.Notification.find()
+          .sort({ created_at: -1 })
+          .skip(skip)
+          .limit(limit)
+          .lean()
+      ]);
+
       const formatted = (rows || []).map(r => ({
         ...r,
         is_read: r.status === 'READ',
         target_audience: r.reference_id || 'ALL'
       }));
-      return res.status(200).json({ success: true, notifications: formatted });
+
+      return res.status(200).json({
+        success: true,
+        data: formatted,
+        notifications: formatted,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }

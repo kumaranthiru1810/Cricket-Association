@@ -459,7 +459,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5
   },
   mobileCloseBtn: {
-    padding: 6
+    padding: 6,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   navScrollView: {
     flex: 1,
@@ -490,7 +494,8 @@ const styles = StyleSheet.create({
   navItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 9,
+    minHeight: 44,
+    paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
     marginBottom: 3
@@ -657,6 +662,7 @@ const styles = StyleSheet.create({
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 44,
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 6,
