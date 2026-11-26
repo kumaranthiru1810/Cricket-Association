@@ -392,7 +392,7 @@ export const TournamentsPage: React.FC = () => {
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.modalBody}>
+              <ScrollView style={styles.modalBody} nestedScrollEnabled showsVerticalScrollIndicator={false}>
                 <View style={styles.fieldGroup}>
                   <Text style={styles.fieldLabel}>Tournament Name *</Text>
                   <TextInput
@@ -404,8 +404,8 @@ export const TournamentsPage: React.FC = () => {
                   />
                 </View>
 
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <View style={[styles.fieldGroup, { flex: 1 }]}>
+                <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
+                  <View style={[styles.fieldGroup, { flex: 1, minWidth: 160 }]}>
                     <Text style={styles.fieldLabel}>Short Name</Text>
                     <TextInput
                       style={styles.input}
@@ -432,8 +432,8 @@ export const TournamentsPage: React.FC = () => {
                   </View>
                 </View>
 
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <View style={[styles.fieldGroup, { flex: 1 }]}>
+                <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
+                  <View style={[styles.fieldGroup, { flex: 1, minWidth: 160 }]}>
                     <Text style={styles.fieldLabel}>Format</Text>
                     <select
                       value={formFormat}
@@ -460,7 +460,7 @@ export const TournamentsPage: React.FC = () => {
                       <option value="MULTI_DAY">Multi-Day League</option>
                     </select>
                   </View>
-                  <View style={[styles.fieldGroup, { flex: 1 }]}>
+                  <View style={[styles.fieldGroup, { flex: 1, minWidth: 120 }]}>
                     <Text style={styles.fieldLabel}>Overs Per Innings</Text>
                     <TextInput
                       style={styles.input}
@@ -472,8 +472,8 @@ export const TournamentsPage: React.FC = () => {
                   </View>
                 </View>
 
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <View style={[styles.fieldGroup, { flex: 1 }]}>
+                <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
+                  <View style={[styles.fieldGroup, { flex: 1, minWidth: 160 }]}>
                     <Text style={styles.fieldLabel}>Start Date</Text>
                     <input
                       type="date"
@@ -492,7 +492,7 @@ export const TournamentsPage: React.FC = () => {
                       }}
                     />
                   </View>
-                  <View style={[styles.fieldGroup, { flex: 1 }]}>
+                  <View style={[styles.fieldGroup, { flex: 1, minWidth: 160 }]}>
                     <Text style={styles.fieldLabel}>End Date</Text>
                     <input
                       type="date"
@@ -864,7 +864,7 @@ export const TournamentsPage: React.FC = () => {
                     </View>
                   </View>
                 </View>
-              </View>
+              </ScrollView>
 
               <View style={styles.modalFooter}>
                 <TouchableOpacity
@@ -964,11 +964,13 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 520,
+    maxHeight: '90%',
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    overflow: 'hidden'
+    overflow: 'hidden',
+    flexDirection: 'column'
   },
   modalHeader: {
     flexDirection: 'row',
@@ -986,7 +988,8 @@ const styles = StyleSheet.create({
     color: '#0A2540'
   },
   modalBody: {
-    padding: 20
+    padding: 20,
+    flexShrink: 1
   },
   fieldGroup: {
     marginBottom: 14
