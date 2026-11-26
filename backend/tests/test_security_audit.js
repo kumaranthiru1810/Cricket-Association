@@ -132,6 +132,8 @@ async function runSecurityAuditTests() {
   console.log('==================================================\n');
 
   // 7. CORS origin validation
+  const prevAllowed = process.env.ALLOWED_ORIGINS;
+  process.env.ALLOWED_ORIGINS = 'https://app.cricket-association.test';
   const { getCorsOptions } = require('../middleware/securityMiddleware');
   const corsOptions = getCorsOptions();
   let evilOriginAllowed = null;
@@ -141,16 +143,18 @@ async function runSecurityAuditTests() {
   assert.strictEqual(evilOriginAllowed, false, 'CORS must reject evil domains like cricketassociation.evil.com');
 
   let evilRenderAllowed = null;
-  corsOptions.origin('https://evil-onrender.com', (err, allow) => {
+  corsOptions.origin('https://evil.onrender.com', (err, allow) => {
     evilRenderAllowed = allow;
   });
-  assert.strictEqual(evilRenderAllowed, false, 'CORS must reject evil domains like evil-onrender.com');
+  assert.strictEqual(evilRenderAllowed, false, 'CORS must reject wildcard onrender.com domains in production');
 
   let validOriginAllowed = null;
-  corsOptions.origin('https://cricketassociation.onrender.com', (err, allow) => {
+  corsOptions.origin('https://app.cricket-association.test', (err, allow) => {
     validOriginAllowed = allow;
   });
-  assert.strictEqual(validOriginAllowed, true, 'CORS must allow legitimate onrender domain');
+  assert.strictEqual(validOriginAllowed, true, 'CORS must allow exact configured ALLOWED_ORIGINS domain');
+  if (prevAllowed !== undefined) process.env.ALLOWED_ORIGINS = prevAllowed;
+  else delete process.env.ALLOWED_ORIGINS;
   console.log('✅ PASS: High 1: Strict CORS hostname validation prevents origin bypass');
 
   // 8. Unauthenticated recalculate-ratings protection

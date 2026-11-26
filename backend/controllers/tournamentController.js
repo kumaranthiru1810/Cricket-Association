@@ -70,7 +70,7 @@ class TournamentController {
    */
   async createTournament(req, res) {
     try {
-      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const adminEmail = req.adminUser?.email || req.user?.email || 'system-admin';
       const tournament = await tournamentService.createTournament(req.body, adminEmail);
       res.status(201).json({
         success: true,
@@ -92,7 +92,7 @@ class TournamentController {
    */
   async updateTournament(req, res) {
     try {
-      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const adminEmail = req.adminUser?.email || req.user?.email || 'system-admin';
       const tournament = await tournamentService.updateTournament(req.params.id, req.body, adminEmail);
       res.json({
         success: true,
@@ -114,7 +114,7 @@ class TournamentController {
    */
   async deleteTournament(req, res) {
     try {
-      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const adminEmail = req.adminUser?.email || req.user?.email || 'system-admin';
       const result = await tournamentService.deleteTournament(req.params.id, adminEmail);
       res.json(result);
     } catch (err) {
@@ -131,7 +131,7 @@ class TournamentController {
    */
   async addTeams(req, res) {
     try {
-      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const adminEmail = req.adminUser?.email || req.user?.email || 'system-admin';
       const { teams, teamIds } = req.body;
       const selected = teams || teamIds;
       if (!selected || (Array.isArray(selected) && selected.length === 0)) {
@@ -158,7 +158,7 @@ class TournamentController {
    */
   async removeTeam(req, res) {
     try {
-      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const adminEmail = req.adminUser?.email || req.user?.email || 'system-admin';
       const tournament = await tournamentService.removeTeam(req.params.id, req.params.teamId, adminEmail);
       res.json({
         success: true,
@@ -180,13 +180,76 @@ class TournamentController {
    */
   async generateMatches(req, res) {
     try {
-      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const adminEmail = req.adminUser?.email || req.user?.email || 'system-admin';
       const result = await tournamentService.generateMatches(req.params.id, req.body, adminEmail);
       res.json(result);
     } catch (err) {
       res.status(err.status || 400).json({
         success: false,
         message: err.message || 'Failed to generate matches.'
+      });
+    }
+  }
+
+  /**
+   * POST /api/tournaments/:id/preview-matches
+   */
+  async previewMatches(req, res) {
+    try {
+      const result = await tournamentService.previewFixtures(req.params.id, req.body || {});
+      res.json(result);
+    } catch (err) {
+      res.status(err.status || 400).json({
+        success: false,
+        message: err.message || 'Failed to preview matches.'
+      });
+    }
+  }
+
+  /**
+   * GET /api/tournaments/:id/group-points-table
+   */
+  async getGroupPointsTable(req, res) {
+    try {
+      const result = await tournamentService.getGroupPointsTables(req.params.id);
+      res.json(result);
+    } catch (err) {
+      res.status(err.status || 500).json({
+        success: false,
+        message: err.message || 'Failed to compute group points tables.'
+      });
+    }
+  }
+
+  /**
+   * PUT /api/tournaments/:id/groups
+   */
+  async updateGroups(req, res) {
+    try {
+      const adminEmail = req.adminUser?.email || req.user?.email || 'system-admin';
+      const result = await tournamentService.updateTournamentGroups(req.params.id, req.body || {}, adminEmail);
+      res.json(result);
+    } catch (err) {
+      res.status(err.status || 400).json({
+        success: false,
+        code: err.code,
+        message: err.message || 'Failed to update tournament groups.'
+      });
+    }
+  }
+
+  /**
+   * POST /api/tournaments/:id/resolve-tie
+   */
+  async resolveTie(req, res) {
+    try {
+      const adminEmail = req.adminUser?.email || req.user?.email || 'system-admin';
+      const result = await tournamentService.resolveTie(req.params.id, req.body?.orderedTeamIds || [], adminEmail);
+      res.json({ success: true, ...result });
+    } catch (err) {
+      res.status(err.status || 400).json({
+        success: false,
+        message: err.message || 'Failed to resolve tie.'
       });
     }
   }
@@ -267,7 +330,7 @@ class TournamentController {
       if (!status) {
         return res.status(400).json({ success: false, message: 'Status is required.' });
       }
-      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const adminEmail = req.adminUser?.email || req.user?.email || 'system-admin';
       const tournament = await tournamentService.updateTournament(req.params.id, { status }, adminEmail);
       res.json({
         success: true,
@@ -375,7 +438,7 @@ class TournamentController {
   async approveRegistration(req, res) {
     try {
       const regId = req.params.regId || req.params.id;
-      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const adminEmail = req.adminUser?.email || req.user?.email || 'system-admin';
       const updated = await tournamentService.approveRegistration(regId, adminEmail);
       res.json({
         success: true,
@@ -399,7 +462,7 @@ class TournamentController {
     try {
       const regId = req.params.regId || req.params.id;
       const reason = req.body.reason || req.body.rejectionReason || 'Application rejected by tournament committee.';
-      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const adminEmail = req.adminUser?.email || req.user?.email || 'system-admin';
       const updated = await tournamentService.rejectRegistration(regId, reason, adminEmail);
       res.json({
         success: true,
@@ -440,7 +503,7 @@ class TournamentController {
   async allocateGroups(req, res) {
     try {
       const tournamentEngine = require('../services/tournamentEngine');
-      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const adminEmail = req.adminUser?.email || req.user?.email || 'system-admin';
       const result = await tournamentEngine.allocateGroups(req.params.id, req.body, adminEmail);
       res.json(result);
     } catch (err) {
@@ -451,7 +514,7 @@ class TournamentController {
   async moveTeamBetweenGroups(req, res) {
     try {
       const tournamentEngine = require('../services/tournamentEngine');
-      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const adminEmail = req.adminUser?.email || req.user?.email || 'system-admin';
       const { teamId, fromGroupId, toGroupId } = req.body;
       const result = await tournamentEngine.moveTeamBetweenGroups(req.params.id, teamId, fromGroupId, toGroupId, adminEmail);
       res.json(result);
@@ -463,7 +526,7 @@ class TournamentController {
   async confirmGroups(req, res) {
     try {
       const tournamentEngine = require('../services/tournamentEngine');
-      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const adminEmail = req.adminUser?.email || req.user?.email || 'system-admin';
       const result = await tournamentEngine.confirmGroups(req.params.id, adminEmail);
       res.json(result);
     } catch (err) {
@@ -474,7 +537,7 @@ class TournamentController {
   async updateQualificationConfig(req, res) {
     try {
       const tournamentEngine = require('../services/tournamentEngine');
-      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const adminEmail = req.adminUser?.email || req.user?.email || 'system-admin';
       const result = await tournamentEngine.updateQualificationConfig(req.params.id, req.body, adminEmail);
       res.json(result);
     } catch (err) {
@@ -505,7 +568,7 @@ class TournamentController {
   async resolveManualTie(req, res) {
     try {
       const tournamentEngine = require('../services/tournamentEngine');
-      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const adminEmail = req.adminUser?.email || req.user?.email || 'system-admin';
       const result = await tournamentEngine.resolveManualTie(req.params.id, req.body, adminEmail);
       res.json({ success: true, ...result });
     } catch (err) {
@@ -516,7 +579,7 @@ class TournamentController {
   async generateNextStage(req, res) {
     try {
       const tournamentEngine = require('../services/tournamentEngine');
-      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const adminEmail = req.adminUser?.email || req.user?.email || 'system-admin';
       const result = await tournamentEngine.generateNextStageFromStandings(req.params.id, adminEmail);
       res.json(result);
     } catch (err) {
@@ -548,7 +611,7 @@ class TournamentController {
   async withdrawTeam(req, res) {
     try {
       const tournamentEngine = require('../services/tournamentEngine');
-      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const adminEmail = req.adminUser?.email || req.user?.email || 'system-admin';
       const { teamId, reason, rule } = req.body;
       const result = await tournamentEngine.withdrawTeam(req.params.id, teamId, { reason, rule }, adminEmail);
       res.json(result);
@@ -581,7 +644,7 @@ class TournamentController {
   async reverseMatchResult(req, res) {
     try {
       const tournamentEngine = require('../services/tournamentEngine');
-      const adminEmail = req.adminUser?.email || req.user?.email || 'admin@cfvd.org';
+      const adminEmail = req.adminUser?.email || req.user?.email || 'system-admin';
       const result = await tournamentEngine.reverseMatchProgression(req.params.id, adminEmail, req.body || {});
       res.json(result);
     } catch (err) {

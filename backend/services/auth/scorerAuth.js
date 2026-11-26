@@ -55,7 +55,10 @@ class ScorerAuth {
     }
 
     if (!user) {
-      throw { status: 404, notFound: true, message: 'Scorer account not found. Please register as a scorer first.' };
+      return {
+        success: true,
+        message: 'If an eligible scorer account exists for this email, an OTP has been dispatched.'
+      };
     }
 
     if (user.role !== 'SCORER' && user.role !== 'ADMIN') {
@@ -131,28 +134,37 @@ class ScorerAuth {
     }
 
     if (!user) {
-      throw { status: 404, message: 'Scorer not found.' };
+      throw { status: 401, message: 'Invalid or expired OTP code.' };
+    }
+
+    const attempts = Number(user.otp_attempts || 0);
+    if (attempts >= 5) {
+      await userModel.clearOtp(user.id || cleanEmail);
+      try { await scorerModel.clearOtp(user.id || cleanEmail); } catch (e) { }
+      throw { status: 429, message: 'Too many invalid OTP attempts. Please request a new OTP.' };
     }
 
     if (!user.otp_hash) {
-      throw { status: 400, message: 'No active OTP found. Please request an OTP first.' };
+      throw { status: 401, message: 'Invalid or expired OTP code.' };
     }
 
     const isExpired = user.otp_expires_at && new Date() > new Date(user.otp_expires_at);
     if (isExpired) {
       await userModel.clearOtp(user.id || cleanEmail);
       try { await scorerModel.clearOtp(user.id || cleanEmail); } catch (e) { }
-      throw { status: 400, message: 'OTP has expired. Please request a new OTP.' };
+      throw { status: 401, message: 'Invalid or expired OTP code.' };
     }
 
     const isOtpValid = otpService.verifyOtpCode(cleanOtp, user.otp_hash);
     if (!isOtpValid) {
+      const nextAttempts = attempts + 1;
       try {
         const User = db.models.User;
-        await User.updateOne({ email: cleanEmail }, { $inc: { otp_attempts: 1 } });
+        await User.updateOne({ email: cleanEmail }, { $set: nextAttempts >= 5 ? { otp_attempts: nextAttempts, otp_hash: null, otp_expires_at: null } : { otp_attempts: nextAttempts } });
         await scorerModel.incrementOtpAttempts(user.id || cleanEmail);
+        if (nextAttempts >= 5) await scorerModel.clearOtp(user.id || cleanEmail);
       } catch (e) { }
-      throw { status: 400, message: 'Invalid OTP code. Please enter the correct code.' };
+      throw { status: 401, message: 'Invalid or expired OTP code.' };
     }
 
     await userModel.clearOtp(user.id || cleanEmail);
@@ -161,9 +173,9 @@ class ScorerAuth {
     const certLevel = user.certificationLevel || user.scorer_details?.certification_level || 'District Certified';
 
     const token = jwt.sign(
-      { id: user.id, name: user.name, email: user.email, role: 'SCORER', certificationLevel: certLevel },
+      { id: user.id, name: user.name, email: user.email, role: 'SCORER', certificationLevel: certLevel, tv: user.token_version ?? 0 },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '12h' }
     );
 
     return {
@@ -214,19 +226,11 @@ class ScorerAuth {
     if (passwordHash) {
       try {
         const bcrypt = require('bcryptjs');
-        passwordHash = await bcrypt.hash(passwordHash, 10);
+        passwordHash = await bcrypt.hash(passwordHash, 12);
       } catch (_e) { }
     }
 
-    const ADMIN_OR_DEV_EMAILS = [
-      'admin@example.com',
-      'admin@cfvd.org',
-      'cricketfederation21@gmail.com',
-      'athilingam3336@gmail.com',
-      'ponramanan21@gmail.com',
-      'ramana.twone@gmail.com'
-    ];
-    const isAutoApproved = ADMIN_OR_DEV_EMAILS.includes(cleanEmail) || existingUser?.role === 'ADMIN';
+    const isAutoApproved = existingUser?.role === 'ADMIN';
     const targetStatus = isAutoApproved ? 'ACTIVE' : 'PENDING';
 
     // Case 1: Account already exists
@@ -290,7 +294,8 @@ class ScorerAuth {
         throw { status: 409, message: 'An account with this email address is already registered as an Official Scorer. Please log in directly.' };
       }
 
-      // If existing user has a DIFFERENT role
+      const crypto = require('crypto');
+      const generatedPin = pin ? String(pin).trim() : String(crypto.randomInt(10000000, 99999999));
       const updateData = {
         name: scorerName,
         role: isAutoApproved ? (existingUser.role === 'ADMIN' ? 'ADMIN' : 'SCORER') : 'SCORER',
@@ -299,7 +304,7 @@ class ScorerAuth {
         aadhaar: cleanAadhaar || existingUser.aadhaar || null,
         taluk: taluk || 'Virudhunagar',
         certificationLevel: certificationLevel || 'District Certified',
-        scoringPin: pin || '1234',
+        must_change_password: !pin,
         scorer_details: {
           certification_level: certificationLevel || 'District Certified',
           taluk: taluk || 'Virudhunagar'
@@ -307,6 +312,9 @@ class ScorerAuth {
       };
       if (passwordHash) {
         updateData.password_hash = passwordHash;
+      } else {
+        const bcrypt = require('bcryptjs');
+        updateData.password_hash = await bcrypt.hash(generatedPin, 12);
       }
 
       await db.models.User.updateOne({ email: cleanEmail }, { $set: updateData });
@@ -356,6 +364,10 @@ class ScorerAuth {
       };
     }
 
+    const crypto = require('crypto');
+    const bcrypt = require('bcryptjs');
+    const finalPin = pin ? String(pin).trim() : String(crypto.randomInt(10000000, 99999999));
+    const finalPasswordHash = passwordHash || await bcrypt.hash(finalPin, 12);
     const userId = `SCR-${Math.floor(100 + Math.random() * 900)}`;
     const user = await userModel.create({
       id: userId,
@@ -363,13 +375,12 @@ class ScorerAuth {
       email: cleanEmail,
       mobile: cleanMobile || null,
       aadhaar: cleanAadhaar || null,
-      password_hash: passwordHash,
-      current_password: pin || '1234',
+      password_hash: finalPasswordHash,
+      must_change_password: !pin && !passwordHash,
       role: 'SCORER',
       status: 'PENDING',
       taluk: taluk || 'Virudhunagar',
       certificationLevel: certificationLevel || 'District Certified',
-      scoringPin: pin || '1234',
       scorer_details: {
         certification_level: certificationLevel || 'District Certified',
         taluk: taluk || 'Virudhunagar'

@@ -119,8 +119,6 @@ class TeamRegistrationModel {
       coach_phone: cleanCoachPhone || null,
       coach_aadhaar: cleanCoachAadhaar || null,
       password_hash: computedPasswordHash,
-      current_password: password ? String(password).trim() : (secretPasskey || null),
-      passkey: secretPasskey,
       city: city || taluk || 'Virudhunagar',
       taluk: taluk || 'Virudhunagar',
       status: 'PENDING',
@@ -139,8 +137,7 @@ class TeamRegistrationModel {
         aadhaar: cleanCoachAadhaar || null,
         role: 'COACH',
         status: 'PENDING',
-        password_hash: computedPasswordHash,
-        current_password: password ? String(password).trim() : (secretPasskey || null)
+        password_hash: computedPasswordHash
       });
     } else {
       await db.models.User.updateOne(
@@ -152,9 +149,10 @@ class TeamRegistrationModel {
             ...(cleanCoachAadhaar && { aadhaar: cleanCoachAadhaar }),
             role: 'COACH',
             status: 'PENDING',
-            ...(computedPasswordHash && { password_hash: computedPasswordHash, current_password: password ? String(password).trim() : (secretPasskey || null) }),
+            ...(computedPasswordHash && { password_hash: computedPasswordHash }),
             updated_at: new Date()
-          }
+          },
+          $unset: { current_password: '' }
         }
       );
     }
@@ -380,7 +378,7 @@ class TeamRegistrationModel {
         team_id: null,
         team_name: 'District Association Squad',
         coach_name: 'District Association',
-        coach_email: 'cricketfederation21@gmail.com',
+        coach_email: 'noreply@yourdomain.test',
         team_status: userDoc.status === 'ACTIVE' ? 'APPROVED' : userDoc.status
       };
     }

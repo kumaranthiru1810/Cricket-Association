@@ -235,14 +235,27 @@ class ScorerService {
   async getDashboardStats(scorerId = null, userEmail = null, userRole = null) {
     await db.initDb();
 
-    // Query matches assigned to this scorer (or all matches if scorerId is null or 'ALL' or user is ADMIN)
+    // Query matches assigned strictly to this scorer (or all matches if scorerId is null or 'ALL' or user is ADMIN)
     let linkedOfficialIds = [];
+    let userName = '';
     if (userEmail || scorerId) {
       const orConds = [];
       if (userEmail) orConds.push({ email: userEmail.toLowerCase() });
       if (scorerId) orConds.push({ id: scorerId });
+
+      const userDoc = await db.models.User.findOne({
+        $or: [
+          ...(scorerId ? [{ id: scorerId }] : []),
+          ...(userEmail ? [{ email: userEmail.toLowerCase() }] : [])
+        ]
+      }).lean();
+      if (userDoc?.name) {
+        userName = userDoc.name.trim();
+        orConds.push({ name: new RegExp(`^${userName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') });
+      }
+
       const off = await db.models.Official.find({ $or: orConds }).lean();
-      linkedOfficialIds = (off || []).map(o => o.id);
+      linkedOfficialIds = (off || []).map(o => o.id).filter(Boolean);
     }
 
     let query = {};
@@ -263,18 +276,25 @@ class ScorerService {
       if (!scorerId || scorerId === 'ALL') {
         query = statusCondition;
       } else {
+        const scorerMatchValues = Array.from(new Set([
+          scorerId,
+          ...linkedOfficialIds,
+          userEmail,
+          userName
+        ].filter(Boolean)));
+
+        const scorerOrConds = [
+          { assigned_scorer_id: { $in: scorerMatchValues } }
+        ];
+        if (userName) {
+          const escaped = userName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          scorerOrConds.push({ assigned_scorer_name: new RegExp(`^${escaped}$`, 'i') });
+          scorerOrConds.push({ scorer_name: new RegExp(`^${escaped}$`, 'i') });
+        }
+
         query = {
           $and: [
-            {
-              $or: [
-                { assigned_scorer_id: scorerId },
-                { assigned_scorer_id: { $in: linkedOfficialIds } },
-                { assigned_scorer_id: { $in: ['SCR-101', 'SCR-102', 'SCR-103', 'OFF-01', 'OFF-02'] } },
-                { assigned_scorer_id: null },
-                { assigned_scorer_id: '' },
-                { assigned_scorer_id: 'Unassigned' }
-              ]
-            },
+            { $or: scorerOrConds },
             statusCondition
           ]
         };
@@ -380,8 +400,9 @@ class ScorerService {
         lastDelivery,
         lastEvent: lastDelivery,
         result: m.result_summary,
-        assigned_scorer_id: m.assigned_scorer_id || 'SCR-101',
-        assigned_scorer: m.assigned_scorer || (m.assigned_scorer_id === 'OFF-02' ? 'K. Murugan' : (m.assigned_scorer_id === 'OFF-01' ? 'S. Ramesh' : 'Athi Lingam')),
+        assigned_scorer_id: m.assigned_scorer_id || '',
+        assigned_scorer_name: m.assigned_scorer_name || m.scorer_name || m.assigned_scorer || '',
+        assigned_scorer: m.assigned_scorer_name || m.scorer_name || m.assigned_scorer || (m.assigned_scorer_id === 'OFF-02' ? 'K. Murugan' : (m.assigned_scorer_id === 'OFF-01' ? 'S. Ramesh' : m.assigned_scorer_id || 'Official Scorer')),
         umpire1_id: m.umpire1_id || 'UMP-101',
         umpire2_id: m.umpire2_id || 'UMP-102',
         umpire1_name: m.umpire1_name || 'Thiru. K. Sundaram',
@@ -594,9 +615,24 @@ class ScorerService {
     // Over completion detection (Canonical MongoDB ground truth)
     const isOverComplete = Boolean(currentInnings.is_over_complete);
 
+    const tournamentDoc = await db.models.Tournament.findOne({
+      $or: [
+        ...(match.tournament_id ? [{ id: match.tournament_id }] : []),
+        ...(match.tournament_name ? [{ name: match.tournament_name }] : [])
+      ]
+    }).lean();
+
+    const snap = match.rules_snapshot || null;
+    const allowChainOver = snap?.allow_chain_over !== undefined
+      ? Boolean(snap.allow_chain_over)
+      : Boolean(tournamentDoc?.playing_rules?.allow_chain_over);
+    const customBowlerMax = Number(
+      (snap?.max_overs_per_bowler !== undefined ? snap.max_overs_per_bowler : tournamentDoc?.playing_rules?.max_overs_per_bowler) || 0
+    );
+
     // Enriched bowling squad
-    const matchOvers = match.revised_overs || match.overs_per_side || 20;
-    const maxQuota = Math.ceil(matchOvers / 5) || 4;
+    const matchOvers = currentInnings.revised_overs || match.revised_overs || match.overs_per_side || 20;
+    const maxQuota = customBowlerMax > 0 ? customBowlerMax : (Math.ceil(matchOvers / 5) || 4);
 
     const enrichedBowlingSquad = bowlingSquad.map(p => {
       const stats = bowlerStatsMap[p.id];
@@ -609,7 +645,7 @@ class ScorerService {
         runs: stats ? stats.runs_conceded : 0,
         wickets: stats ? stats.wickets : 0,
         economy: stats ? stats.economy : 0,
-        isPreviousBowler: Boolean(p.id === currentInnings.previous_bowler_id),
+        isPreviousBowler: allowChainOver ? false : Boolean(p.id === currentInnings.previous_bowler_id),
         maxQuota,
         isQuotaFull
       };
@@ -638,15 +674,60 @@ class ScorerService {
     }
     if (!nonStrikerName) nonStrikerName = 'Non-Striker';
 
+    const FORMAT_LABELS = {
+      SINGLE_ROUND_ROBIN: 'Single Round Robin',
+      DOUBLE_ROUND_ROBIN: 'Double Round Robin',
+      SINGLE_ELIMINATION: 'Single Elimination',
+      DOUBLE_ELIMINATION: 'Double Elimination',
+      GROUP_KNOCKOUT: 'Group + Knockout',
+      LEAGUE_PLAYOFFS: 'League + Playoffs',
+      LEAGUE: tournamentDoc?.format_config?.round_robin_type === 'DOUBLE' ? 'Double Round Robin' : 'Single Round Robin',
+      KNOCKOUT: 'Single Elimination',
+      LEAGUE_KNOCKOUT: 'League + Playoffs',
+      GROUP_SUPER_LEAGUE: 'Group + Knockout'
+    };
+    const rawFormat = snap?.tournament_type || tournamentDoc?.tournament_type || 'SINGLE_ROUND_ROBIN';
+    const pr = snap || tournamentDoc?.playing_rules || {};
+
+    const tournamentRules = {
+      tournament_type: rawFormat,
+      tournament_format_label: FORMAT_LABELS[rawFormat] || 'Single Round Robin',
+      match_stage: match.stage || 'LEAGUE_STAGE',
+      powerplay_overs: pr.powerplay_overs ?? 5,
+      max_outside_powerplay: pr.max_outside_powerplay ?? 2,
+      max_outside_post_powerplay: pr.max_outside_post_powerplay ?? 5,
+      max_on_side_fielders: pr.max_on_side_fielders ?? 5,
+      max_on_side_behind_crease: pr.max_on_side_behind_crease ?? 2,
+      free_hit_on_all_noballs: pr.free_hit_on_all_noballs !== false,
+      allow_chain_over: allowChainOver,
+      max_overs_per_bowler: maxQuota,
+      delay_penalty_enabled: pr.delay_penalty_enabled !== false,
+      delay_interval_value: pr.delay_interval_value ?? 4,
+      delay_interval_unit: pr.delay_interval_unit || 'MINUTES',
+      delay_reduce_unit: pr.delay_reduce_unit || 'OVERS',
+      delay_overs_reduced_per_interval: pr.delay_overs_reduced_per_interval ?? 1,
+      tie_handling: pr.tie_handling || 'SHARE_POINTS',
+      allow_super_over: snap?.allow_super_over !== undefined ? Boolean(snap.allow_super_over) : (tournamentDoc?.allow_super_over !== false),
+      allow_dls: snap?.allow_dls !== undefined ? Boolean(snap.allow_dls) : Boolean(tournamentDoc?.allow_dls),
+      points_win: tournamentDoc?.points_win ?? 4,
+      points_loss: tournamentDoc?.points_loss ?? 0,
+      points_tie: tournamentDoc?.points_tie ?? 2,
+      points_bonus_win: tournamentDoc?.points_bonus_win ?? 1,
+      points_bonus_loss: tournamentDoc?.points_bonus_loss ?? -1,
+      points_walkover_win: tournamentDoc?.points_walkover_win ?? 4,
+      points_walkover_loss: tournamentDoc?.points_walkover_loss ?? -1
+    };
+
     return {
+      tournamentRules,
       match: {
         id: match.id,
         tournament: match.tournament_name || 'VPL 2026',
         venue: match.venue || 'Kamarajar Stadium, Virudhunagar',
         venue_maps_url: match.venue_maps_url || (match.venue ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(match.venue + (match.venue.toLowerCase().includes('virudhunagar') ? '' : ', Virudhunagar'))}` : 'https://www.google.com/maps/search/?api=1&query=Kamarajar+District+Stadium+Virudhunagar'),
-        overs: match.revised_overs || match.overs_per_side || 20,
+        overs: currentInnings.revised_overs || match.revised_overs || match.overs_per_side || 20,
         originalOvers: match.overs_per_side || 20,
-        revisedOvers: match.revised_overs || null,
+        revisedOvers: currentInnings.revised_overs || match.revised_overs || null,
         revisedTarget: match.revised_target || null,
         revisedComments: match.revised_comments || '',
         isSuperOver: Boolean(match.is_super_over),

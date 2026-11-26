@@ -8,7 +8,7 @@ const mongoose = require('mongoose');
 const AuditLogSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   action: { type: String, required: true },
-  initiated_by: { type: String, default: 'admin@cfvd.org' },
+  initiated_by: { type: String, default: 'SYSTEM' },
   admin_email: { type: String, default: '' },
   target_user: { type: String, default: '' },
   timestamp: { type: Date, default: Date.now },

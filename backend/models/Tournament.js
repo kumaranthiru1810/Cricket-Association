@@ -13,8 +13,20 @@ const TournamentSchema = new mongoose.Schema({
   description: { type: String, default: '' },
   tournament_type: { 
     type: String, 
-    enum: ['LEAGUE', 'KNOCKOUT', 'LEAGUE_KNOCKOUT', 'DOUBLE_ELIMINATION', 'GROUP_KNOCKOUT', 'LEAGUE_PLAYOFFS', 'CUSTOM'], 
-    default: 'LEAGUE' 
+    enum: [
+      'SINGLE_ROUND_ROBIN',
+      'DOUBLE_ROUND_ROBIN',
+      'SINGLE_ELIMINATION',
+      'DOUBLE_ELIMINATION',
+      'GROUP_KNOCKOUT',
+      'LEAGUE_PLAYOFFS',
+      'LEAGUE',
+      'KNOCKOUT',
+      'LEAGUE_KNOCKOUT',
+      'GROUP_SUPER_LEAGUE',
+      'CUSTOM'
+    ],
+    default: 'SINGLE_ROUND_ROBIN'
   },
   category: { type: String, default: 'Senior District Trophy' },
   gender: { type: String, default: 'Men' },
@@ -37,66 +49,78 @@ const TournamentSchema = new mongoose.Schema({
   registration_end_date: { type: String, default: null },
   max_teams: { type: Number, default: 16 },
   min_teams: { type: Number, default: 2 },
-  points_win: { type: Number, default: 2 },
-  points_tie: { type: Number, default: 1 },
-  points_no_result: { type: Number, default: 1 },
+  points_win: { type: Number, default: 4 },
+  points_loss: { type: Number, default: 0 },
+  points_tie: { type: Number, default: 2 },
+  points_no_result: { type: Number, default: 2 },
+  points_bonus_win: { type: Number, default: 1 },
+  points_bonus_loss: { type: Number, default: -1 },
+  points_walkover_win: { type: Number, default: 4 },
+  points_walkover_loss: { type: Number, default: -1 },
   playing_xi_size: { type: Number, default: 11 },
   substitute_count: { type: Number, default: 4 },
   allow_super_over: { type: Boolean, default: true },
   allow_dls: { type: Boolean, default: false },
   rules: { type: String, default: 'Standard ICC / TNCA Playing Conditions' },
+  playing_rules: {
+    powerplay_overs: { type: Number, default: 5 },
+    max_outside_powerplay: { type: Number, default: 2 },
+    max_outside_post_powerplay: { type: Number, default: 5 },
+    max_on_side_fielders: { type: Number, default: 5 },
+    max_on_side_behind_crease: { type: Number, default: 2 },
+    free_hit_on_all_noballs: { type: Boolean, default: true },
+    allow_chain_over: { type: Boolean, default: false },
+    max_overs_per_bowler: { type: Number, default: 4 },
+    delay_penalty_enabled: { type: Boolean, default: true },
+    delay_interval_value: { type: Number, default: 4 },
+    delay_interval_unit: { type: String, enum: ['HOURS', 'MINUTES', 'SECONDS'], default: 'MINUTES' },
+    delay_reduce_unit: { type: String, enum: ['OVERS', 'BALLS'], default: 'OVERS' },
+    delay_overs_reduced_per_interval: { type: Number, default: 1 },
+    tie_handling: { type: String, enum: ['SHARE_POINTS', 'SUPER_OVER'], default: 'SHARE_POINTS' }
+  },
   format_config: {
     round_robin_type: { type: String, enum: ['SINGLE', 'DOUBLE'], default: 'SINGLE' },
     knockout_stages: [{ type: String }],
     qualifying_teams_count: { type: Number, default: 4 },
     qualification_rules: { type: String, default: 'Top qualifying teams advance to knockout stage' },
-    top_n_per_group: { type: Number, default: 2 },
+    group_count: { type: Number, default: 5 },
+    allow_extra_group: { type: Boolean, default: true },
+    teams_per_group: { type: Number, default: 8 },
+    qualifiers_per_group: { type: Number, default: 2 },
+    super_league_enabled: { type: Boolean, default: true },
+    super_league_groups: { type: Number, default: 4 },
+    super_league_qualifiers_per_group: { type: Number, default: 1 },
+    include_semifinals: { type: Boolean, default: true },
+    include_final: { type: Boolean, default: true },
+    group_distribution: { type: String, enum: ['BALANCED', 'RANDOM', 'SEEDED', 'MANUAL'], default: 'BALANCED' },
+    best_runners_up_count: { type: Number, default: 0 },
     best_third_place_count: { type: Number, default: 0 },
-    tie_breaker_order: { type: [String], default: ['POINTS', 'NRR', 'HEAD_TO_HEAD', 'WINS'] },
-    allow_grand_final_reset: { type: Boolean, default: true },
-    playoffs_format: { type: String, enum: ['STANDARD', 'IPL'], default: 'STANDARD' },
-    min_rest_hours: { type: Number, default: 4 },
-    max_squad_size: { type: Number, default: 18 },
-    min_squad_size: { type: Number, default: 11 },
-    age_limit: { type: Number, default: null }
+    group_names: [{ type: String }],
+    manual_groups: { type: mongoose.Schema.Types.Mixed, default: null },
+    tie_breaker_order: { type: [String], default: ['POINTS', 'WINS', 'NRR', 'HEAD_TO_HEAD'] },
+    groups_snapshot: [{ type: mongoose.Schema.Types.Mixed }],
+    byes: [{ type: mongoose.Schema.Types.Mixed }],
+    unresolved_ties: [{ type: mongoose.Schema.Types.Mixed }],
+    manual_groups_tie_resolution: { type: mongoose.Schema.Types.Mixed, default: {} }
   },
+  progression_lock_until: { type: Date, default: null },
   teams: [{ type: String, ref: 'Team' }],
-  groups: [{
-    id: { type: String, required: true },
-    name: { type: String, required: true },
-    teams: [{ type: String }],
-    locked: { type: Boolean, default: false }
-  }],
-  group_allocation_mode: { type: String, enum: ['BALANCED', 'RANDOM', 'SEEDED', 'MANUAL'], default: 'BALANCED' },
-  groups_confirmed: { type: Boolean, default: false },
-  bracket: { type: mongoose.Schema.Types.Mixed, default: null },
-  manual_tie_breakers: [{
-    group_id: { type: String, default: 'ALL' },
-    resolved_order: [{ type: String }],
-    resolved_by: { type: String, default: '' },
-    resolved_at: { type: Date, default: Date.now },
-    reason: { type: String, default: '' }
-  }],
-  withdrawn_teams: [{
-    team_id: { type: String, required: true },
-    team_name: { type: String, default: '' },
-    withdrawn_at: { type: Date, default: Date.now },
-    withdrawn_by: { type: String, default: '' },
-    reason: { type: String, default: '' },
-    rule_applied: { type: String, default: 'REMAINING_WALKOVER' }
-  }],
-  champion_team_id: { type: String, default: null },
-  champion_team_name: { type: String, default: '' },
+  winner_team_id: { type: String, default: null },
+  winner_team_name: { type: String, default: '' },
   runner_up_team_id: { type: String, default: null },
   runner_up_team_name: { type: String, default: '' },
-  completed_at: { type: Date, default: null },
+  awards_config: {
+    winner_trophy_title: { type: String, default: 'Championship Winner Trophy' },
+    runner_up_trophy_title: { type: String, default: 'Runner-Up Trophy' },
+    potm_every_match: { type: Boolean, default: true }
+  },
   status: { 
     type: String, 
     enum: ['UPCOMING', 'REGISTRATION_OPEN', 'REGISTRATION_CLOSED', 'ONGOING', 'COMPLETED', 'CANCELLED', 'ACTIVE', 'INACTIVE'], 
     default: 'UPCOMING',
     index: true 
   },
-  created_by: { type: String, default: 'admin@cfvd.org' }
+  created_by: { type: String, default: 'system-admin' }
 }, { timestamps: true });
 
 const TournamentRegistrationSchema = new mongoose.Schema({
@@ -140,7 +164,7 @@ const TournamentCalculationSchema = new mongoose.Schema({
     default: 'DLS',
     required: true
   },
-  updated_by: { type: String, default: 'admin@cfvd.org' },
+  updated_by: { type: String, default: 'system-admin' },
   updated_by_name: { type: String, default: 'Administrator' },
   updated_at: { type: Date, default: Date.now }
 }, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });

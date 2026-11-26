@@ -632,14 +632,12 @@ export const adminApi = {
     } catch (adminErr: any) {
       // Fallback to public endpoint if admin endpoint was blocked
       try {
-        const token = getStoredAdminToken() || 'dev_admin_cfvd_token_2026';
+        const token = getStoredAdminToken();
         const pubRes = await fetch(`${API_URL}/master-settings`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-user-role': 'ADMIN',
-            'x-user-email': 'admin@cfvd.org',
-            Authorization: `Bearer ${token}`
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
           },
           body: JSON.stringify(data)
         });
@@ -663,14 +661,12 @@ export const adminApi = {
       });
     } catch (adminErr: any) {
       try {
-        const token = getStoredAdminToken() || 'dev_admin_cfvd_token_2026';
+        const token = getStoredAdminToken();
         const pubRes = await fetch(`${API_URL}/master-settings/${encodeURIComponent(id)}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
-            'x-user-role': 'ADMIN',
-            'x-user-email': 'admin@cfvd.org',
-            Authorization: `Bearer ${token}`
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
           },
           body: JSON.stringify(data)
         });
@@ -693,14 +689,12 @@ export const adminApi = {
       });
     } catch (adminErr: any) {
       try {
-        const token = getStoredAdminToken() || 'dev_admin_cfvd_token_2026';
+        const token = getStoredAdminToken();
         const pubRes = await fetch(`${API_URL}/master-settings/${encodeURIComponent(id)}`, {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
-            'x-user-role': 'ADMIN',
-            'x-user-email': 'admin@cfvd.org',
-            Authorization: `Bearer ${token}`
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
           }
         });
         const pubJson = await pubRes.json();
@@ -732,6 +726,28 @@ export const adminApi = {
 
   updateEmblemSequence: async (config: { enabled: boolean; sequence: string[] }) => {
     return adminRequest('/admin/emblem-sequence', {
+      method: 'PUT',
+      body: JSON.stringify(config)
+    });
+  },
+
+  getRule15Config: async () => {
+    return adminRequest('/admin/rule-15');
+  },
+
+  updateRule15Config: async (config: { enabled: boolean; minPlayers: number; ruleText?: string }) => {
+    return adminRequest('/admin/rule-15', {
+      method: 'PUT',
+      body: JSON.stringify(config)
+    });
+  },
+
+  getCommitteeMembers: async () => {
+    return adminRequest('/admin/committee-members');
+  },
+
+  updateCommitteeMembers: async (config: any) => {
+    return adminRequest('/admin/committee-members', {
       method: 'PUT',
       body: JSON.stringify(config)
     });

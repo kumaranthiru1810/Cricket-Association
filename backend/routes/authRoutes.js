@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
 const { verifyToken, requireAdminAuth } = require('../middleware/authMiddleware');
+const { otpRateLimiter, registerRateLimiter } = require('../middleware/securityMiddleware');
 const {
   validateBody,
   loginSchema,
@@ -21,15 +22,15 @@ const {
 } = require('../middleware/validationMiddleware');
 
 // 1. Email OTP Verification for Registration
-router.post('/send-registration-otp', validateBody(otpRequestSchema), (req, res) => authController.requestRegistrationOtp(req, res));
-router.post('/verify-registration-otp', validateBody(otpVerifySchema), (req, res) => authController.verifyRegistrationOtp(req, res));
+router.post('/send-registration-otp', otpRateLimiter, validateBody(otpRequestSchema), (req, res) => authController.requestRegistrationOtp(req, res));
+router.post('/verify-registration-otp', otpRateLimiter, validateBody(otpVerifySchema), (req, res) => authController.verifyRegistrationOtp(req, res));
 router.post('/check-registration-exists', (req, res) => authController.checkRegistrationExists(req, res));
 router.post('/check-team-exists', (req, res) => authController.checkTeamExists(req, res));
 
 // 1.1. Multi-Step Forgot Password Flow (4-Digit OTP & Bcrypt Password Reset)
-router.post('/forgot-password/request-otp', validateBody(otpRequestSchema), (req, res) => authController.requestForgotPasswordOtp(req, res));
-router.post('/forgot-password/verify-otp', validateBody(otpVerifySchema), (req, res) => authController.verifyForgotPasswordOtp(req, res));
-router.post('/forgot-password/reset-password', validateBody(resetPasswordSchema), (req, res) => authController.resetPasswordWithOtp(req, res));
+router.post('/forgot-password/request-otp', otpRateLimiter, validateBody(otpRequestSchema), (req, res) => authController.requestForgotPasswordOtp(req, res));
+router.post('/forgot-password/verify-otp', otpRateLimiter, validateBody(otpVerifySchema), (req, res) => authController.verifyForgotPasswordOtp(req, res));
+router.post('/forgot-password/reset-password', otpRateLimiter, validateBody(resetPasswordSchema), (req, res) => authController.resetPasswordWithOtp(req, res));
 
 // 2. Password-Based Login for All Roles & Cookie Session Management
 router.post('/login', (req, res) => authController.login(req, res));
@@ -39,21 +40,21 @@ router.get('/logout', (req, res) => authController.logout(req, res));
 router.get('/me', verifyToken, (req, res) => authController.getMe(req, res));
 
 // 3. Legacy / OTP Login Compatibility
-router.post('/request-otp', validateBody(otpRequestSchema), (req, res) => authController.requestOtp(req, res));
-router.post('/verify-otp', validateBody(otpVerifySchema), (req, res) => authController.verifyOtp(req, res));
-router.post('/team/request-otp', (req, res) => authController.requestTeamOtp(req, res));
-router.post('/team/verify-otp', (req, res) => authController.verifyTeamOtp(req, res));
-router.post('/player/request-otp', (req, res) => authController.requestPlayerOtp(req, res));
-router.post('/player/verify-otp', (req, res) => authController.verifyPlayerOtp(req, res));
+router.post('/request-otp', otpRateLimiter, validateBody(otpRequestSchema), (req, res) => authController.requestOtp(req, res));
+router.post('/verify-otp', otpRateLimiter, validateBody(otpVerifySchema), (req, res) => authController.verifyOtp(req, res));
+router.post('/team/request-otp', otpRateLimiter, (req, res) => authController.requestTeamOtp(req, res));
+router.post('/team/verify-otp', otpRateLimiter, (req, res) => authController.verifyTeamOtp(req, res));
+router.post('/player/request-otp', otpRateLimiter, (req, res) => authController.requestPlayerOtp(req, res));
+router.post('/player/verify-otp', otpRateLimiter, (req, res) => authController.verifyPlayerOtp(req, res));
 router.post('/player/find-team', (req, res) => authController.findPlayerTeam(req, res));
 
 // 4. Registration Endpoints by Role (With Password)
-router.post('/register', (req, res) => authController.register(req, res));
-router.post('/register-player', validateBody(playerRegistrationSchema), (req, res) => authController.registerPlayer(req, res));
-router.post('/register-team', validateBody(teamRegistrationSchema), (req, res) => authController.registerTeam(req, res));
-router.post('/register-scorer', validateBody(scorerRegistrationSchema), (req, res) => authController.registerScorer(req, res));
-router.post('/register-umpire', validateBody(umpireRegistrationSchema), (req, res) => authController.registerUmpire(req, res));
-router.post('/register-content', (req, res) => authController.registerContentStaff(req, res));
+router.post('/register', registerRateLimiter, (req, res) => authController.register(req, res));
+router.post('/register-player', registerRateLimiter, validateBody(playerRegistrationSchema), (req, res) => authController.registerPlayer(req, res));
+router.post('/register-team', registerRateLimiter, validateBody(teamRegistrationSchema), (req, res) => authController.registerTeam(req, res));
+router.post('/register-scorer', registerRateLimiter, validateBody(scorerRegistrationSchema), (req, res) => authController.registerScorer(req, res));
+router.post('/register-umpire', registerRateLimiter, validateBody(umpireRegistrationSchema), (req, res) => authController.registerUmpire(req, res));
+router.post('/register-content', registerRateLimiter, (req, res) => authController.registerContentStaff(req, res));
 
 // 5. Admin & Management (Strictly Protected with requireAdminAuth)
 router.get('/teams', (req, res) => authController.getTeams(req, res));

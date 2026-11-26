@@ -83,52 +83,7 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
           res = { success: false, message: apiRes.message };
         }
       } catch (apiErr: any) {
-        // Fallback for official development admin credentials
-        if (
-          cleanEmail.toLowerCase() === 'athilingam3336@gmail.com' &&
-          cleanPass === 'athi1833@@'
-        ) {
-          const fallbackUser = {
-            id: 'ADM-1004',
-            name: 'Athi Lingam',
-            email: 'athilingam3336@gmail.com',
-            role: 'ADMIN',
-            status: 'ACTIVE'
-          };
-          setStoredAdminToken('dev_admin_athi_token_2026', rememberMe);
-          setStoredAdminUser(fallbackUser, rememberMe);
-          res = { success: true, message: 'Authenticated successfully.' };
-        } else if (
-          cleanEmail.toLowerCase() === 'admin@cfvd.org' &&
-          (cleanPass === 'CFVD@Admin2026' || cleanPass === 'admin123')
-        ) {
-          const fallbackUser = {
-            id: 'ADM-1002',
-            name: 'Chief Administrator',
-            email: 'admin@cfvd.org',
-            role: 'ADMIN',
-            status: 'ACTIVE'
-          };
-          setStoredAdminToken('dev_admin_cfvd_token_2026', rememberMe);
-          setStoredAdminUser(fallbackUser, rememberMe);
-          res = { success: true, message: 'Authenticated successfully.' };
-        } else if (
-          cleanEmail.toLowerCase() === 'admin@example.com' &&
-          cleanPass === '1234'
-        ) {
-          const fallbackUser = {
-            id: 'ADM-1001',
-            name: 'System Administrator',
-            email: 'admin@example.com',
-            role: 'ADMIN',
-            status: 'ACTIVE'
-          };
-          setStoredAdminToken('dev_admin_example_token_2026', rememberMe);
-          setStoredAdminUser(fallbackUser, rememberMe);
-          res = { success: true, message: 'Authenticated successfully.' };
-        } else {
-          res = { success: false, message: apiErr.message || 'Invalid administrator credentials. Access denied.' };
-        }
+        res = { success: false, message: apiErr.message || 'Invalid administrator credentials. Access denied.' };
       }
     }
 
@@ -222,7 +177,7 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
                 style={styles.input}
                 value={email}
                 onChangeText={setEmail}
-                placeholder="e.g. athilingam3336@gmail.com"
+                placeholder="e.g. admin@yourdomain.com"
                 placeholderTextColor="#64748b"
                 keyboardType="email-address"
                 autoCapitalize="none"

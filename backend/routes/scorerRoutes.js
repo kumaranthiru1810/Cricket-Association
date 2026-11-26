@@ -30,8 +30,10 @@ const {
 // 1. PUBLIC AUTH ROUTES
 // ==========================================
 
+const { registerRateLimiter, otpRateLimiter } = require('../middleware/securityMiddleware');
+
 // Scorer Registration (Requirement 1 & 12)
-router.post('/register', async (req, res) => {
+router.post('/register', registerRateLimiter, async (req, res) => {
   try {
     const result = await authService.registerScorer(req.body);
     res.status(201).json({ success: true, ...result });
@@ -41,7 +43,7 @@ router.post('/register', async (req, res) => {
 });
 
 // Scorer Login - Step 1: Request OTP or Direct Verify (Requirement 2 & 12)
-router.post('/login', async (req, res) => {
+router.post('/login', otpRateLimiter, async (req, res) => {
   try {
     const { email, otp, password } = req.body;
     if (!email) {
@@ -157,6 +159,16 @@ router.get('/matches/:matchId/setup', verifyMatchPermission, async (req, res) =>
   try {
     const setup = await matchService.getMatchSetup(req.params.matchId, req.user);
     res.json({ success: true, data: setup });
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
+// Persist Rule 5 Delay Timer & Penalty state across logout/refresh
+router.post('/matches/:matchId/delay-timer', verifyMatchPermission, async (req, res) => {
+  try {
+    const result = await matchService.saveDelayTimer(req.params.matchId, req.body);
+    res.json(result);
   } catch (err) {
     res.status(err.status || 500).json({ success: false, error: err.message });
   }
@@ -321,7 +333,17 @@ router.post('/matches/:matchId/end', verifyMatchPermission, async (req, res) => 
     const result = await scoringEngine.endMatch(req.params.matchId, req.body);
     res.json(result);
   } catch (err) {
-    res.status(err.status || 500).json({ success: false, error: err.message });
+    res.status(err.status || 500).json({ success: false, error: err.message, code: err.code });
+  }
+});
+
+// Correct / Reverse Completed Match Result
+router.post('/matches/:matchId/correct-result', verifyMatchPermission, async (req, res) => {
+  try {
+    const result = await scoringEngine.correctMatchResult(req.params.matchId, req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message, code: err.code });
   }
 });
 

@@ -10,7 +10,9 @@
  */
 
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = rateLimit;
 const crypto = require('crypto');
+const env = require('../config/env');
 
 /**
  * 1. NoSQL Injection & Prototype Pollution Sanitizer
@@ -68,7 +70,7 @@ const generalRateLimiter = rateLimit({
 // Strict Auth / Sensitive Endpoint Rate Limiter (Brute-force protection)
 const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 100 : 500, // Allow sufficient verification & submission attempts
+  max: !env.isDevelopment ? 25 : 500,
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => req.method === 'OPTIONS',
@@ -78,25 +80,53 @@ const authRateLimiter = rateLimit({
   }
 });
 
+// Strict OTP Request & Verification Rate Limiter (max 5 per 15 min per IP+account)
+const otpRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: !env.isDevelopment ? 5 : 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.method === 'OPTIONS',
+  keyGenerator: (req) => {
+    const email = String(req.body?.email || req.body?.coachEmail || '').trim().toLowerCase();
+    return `${ipKeyGenerator(req.ip)}:${email}`;
+  },
+  message: {
+    success: false,
+    message: 'Too many OTP attempts. Please try again after 15 minutes.'
+  }
+});
+
+// Registration Rate Limiter (max 10 per 15 min per IP)
+const registerRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: !env.isDevelopment ? 10 : 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.method === 'OPTIONS',
+  message: {
+    success: false,
+    message: 'Too many registration attempts. Please try again after 15 minutes.'
+  }
+});
+
 /**
  * 3. CORS Whitelist Policy
  */
-const DEFAULT_ALLOWED_ORIGINS = [
+const DEV_ALLOWED_ORIGINS = [
   'http://localhost:8081',
   'http://localhost:3000',
-  'http://localhost:5000',
   'http://127.0.0.1:8081',
-  'http://127.0.0.1:3000',
-  'http://127.0.0.1:5000',
-  'https://cricketassociation.onrender.com',
-  'https://cricket-backend-dqdm.onrender.com'
+  'http://127.0.0.1:3000'
 ];
 
 function getCorsOptions() {
-  const allowed = [...DEFAULT_ALLOWED_ORIGINS];
-  if (process.env.ALLOWED_ORIGINS) {
-    allowed.push(...process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean));
-  }
+  const configured = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+    : [];
+  const allowed = env.isDevelopment
+    ? [...DEV_ALLOWED_ORIGINS, ...configured]
+    : configured;
 
   return {
     origin: (origin, callback) => {
@@ -105,26 +135,23 @@ function getCorsOptions() {
       if (allowed.includes(origin)) {
         return callback(null, true);
       }
-      
-      try {
-        const parsed = new URL(origin);
-        const hostname = parsed.hostname;
-        if (
-          hostname === 'localhost' ||
-          hostname === '127.0.0.1' ||
-          /^192\.168\.\d+\.\d+$/.test(hostname) ||
-          /^10\.\d+\.\d+\.\d+$/.test(hostname) ||
-          /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(hostname) ||
-          hostname === 'cricketassociation.onrender.com' ||
-          hostname === 'cricket-backend-dqdm.onrender.com' ||
-          hostname.endsWith('.onrender.com') ||
-          hostname.endsWith('.vercel.app') ||
-          hostname.endsWith('.netlify.app')
-        ) {
-          return callback(null, true);
+
+      if (env.isDevelopment) {
+        try {
+          const parsed = new URL(origin);
+          const hostname = parsed.hostname;
+          if (
+            hostname === 'localhost' ||
+            hostname === '127.0.0.1' ||
+            /^192\.168\.\d+\.\d+$/.test(hostname) ||
+            /^10\.\d+\.\d+\.\d+$/.test(hostname) ||
+            /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(hostname)
+          ) {
+            return callback(null, true);
+          }
+        } catch (_e) {
+          return callback(null, false);
         }
-      } catch (_e) {
-        return callback(null, false);
       }
 
       return callback(null, false);
@@ -138,7 +165,7 @@ function getCorsOptions() {
       'X-Webhook-Signature',
       'Accept',
       'Origin',
-      ...(process.env.NODE_ENV !== 'production' ? ['x-user-role', 'x-user-email', 'x-user-id', 'scorer-id', 'role'] : [])
+      ...(require('../config/env').isDevelopment ? ['x-user-role', 'x-user-email', 'x-user-id', 'scorer-id', 'role'] : [])
     ]
   };
 }
@@ -204,7 +231,14 @@ function validateFileUpload({ maxSizeBytes = 5 * 1024 * 1024 } = {}) {
 function verifyWebhookSignature(secretEnvVar = 'WEBHOOK_SECRET') {
   return (req, res, next) => {
     const signature = req.headers['x-webhook-signature'] || req.headers['x-signature'];
-    const secret = process.env[secretEnvVar] || 'cricket_webhook_secret_key_2026';
+    const secret = process.env[secretEnvVar] || env.WEBHOOK_SECRET;
+
+    if (!secret) {
+      return res.status(503).json({
+        success: false,
+        message: 'Webhook signature verification is not configured.'
+      });
+    }
 
     if (!signature) {
       return res.status(401).json({
@@ -253,6 +287,8 @@ module.exports = {
   sanitizeInput,
   generalRateLimiter,
   authRateLimiter,
+  otpRateLimiter,
+  registerRateLimiter,
   getCorsOptions,
   validateFileUpload,
   verifyWebhookSignature,

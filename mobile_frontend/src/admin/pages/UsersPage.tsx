@@ -2,10 +2,10 @@
  * src/admin/pages/UsersPage.tsx
  * 
  * Users & Dynamic Administrator Management Page for Cricket Association Admin Panel.
- * Implements strict Nodemailer Email OTP verification for Super Administrator (admin@cfvd.org).
+ * Implements strict Nodemailer Email OTP verification for Super Administrator (Apex Authority).
  * 
  * Invariants:
- * 1. Single Permanent Super Admin: admin@cfvd.org (Apex Authority).
+ * 1. Single Permanent Super Admin: Super Administrator (Apex Authority).
  * 2. Dynamic Administrators: created, approved, activated, suspended, or removed via Super Admin OTP.
  * 3. Responsive for Android, iPhone, tablet, and desktop viewports.
  */
@@ -21,7 +21,7 @@ import { adminApi } from '../services/adminApi';
 import { useAdminLayout } from '../components/AdminLayout';
 import DualAdminSecurityModal from '../../components/admin/DualAdminSecurityModal';
 
-const PERMANENT_SUPER_ADMIN = 'admin@cfvd.org';
+const PERMANENT_SUPER_ADMIN = 'Super Administrator';
 
 export const UsersPage: React.FC = () => {
   const { width } = useWindowDimensions();
@@ -141,7 +141,7 @@ export const UsersPage: React.FC = () => {
     setIsEditMode(true);
   };
 
-  // 1. Initiate Add New Administrator (Triggers Nodemailer OTP to admin@cfvd.org)
+  // 1. Initiate Add New Administrator (Triggers Nodemailer OTP to Super Administrator)
   const handleInitiateAddAdmin = async () => {
     if (!newAdminName.trim() || !newAdminEmail.trim()) {
       showToast('Administrator Name and Email are required.', 'error');
@@ -168,7 +168,7 @@ export const UsersPage: React.FC = () => {
         setResendCooldown(60);
         setShowAddAdminModal(false);
         setShowOtpModal(true);
-        showToast('Nodemailer verification code dispatched to admin@cfvd.org', 'info');
+        showToast('Nodemailer verification code dispatched to Super Administrator', 'info');
       } else {
         showToast(res.message || 'Failed to dispatch Super Admin OTP.', 'error');
       }
@@ -571,7 +571,7 @@ export const UsersPage: React.FC = () => {
     <View style={styles.container}>
       <PageHeader
         title="Users & Dynamic Administrator Management"
-        subtitle="Manage federation accounts. Super Administrator (admin@cfvd.org) exercises cryptographic OTP approval over all dynamic admins."
+        subtitle="Manage federation accounts. Super Administrator (Apex Authority) exercises cryptographic OTP approval over all dynamic admins."
         breadcrumbs={[{ label: 'Admin' }, { label: 'Users & Admins' }]}
         actions={
           <View style={[styles.headerActionsWrap, isMobile && { width: '100%', gap: 8 }]}>
@@ -886,7 +886,7 @@ export const UsersPage: React.FC = () => {
                     style={styles.fieldInput}
                     value={newAdminEmail}
                     onChangeText={setNewAdminEmail}
-                    placeholder="e.g. senthil.admin@cfvd.org"
+                    placeholder="e.g. senthil.Super Administrator"
                     keyboardType="email-address"
                     autoCapitalize="none"
                     placeholderTextColor="#94a3b8"
@@ -951,7 +951,7 @@ export const UsersPage: React.FC = () => {
                 <View style={styles.securityNoticeCard}>
                   <Text style={styles.securityNoticeTitle}>🛡️ Super Administrator Oversight Policy</Text>
                   <Text style={styles.securityNoticeText}>
-                    New administrators have dynamic privileges and strictly require Nodemailer 6-digit OTP verification from the permanent Super Administrator (<Text style={{ fontWeight: '800', color: '#991b1b' }}>admin@cfvd.org</Text>). Upon approval, an activation link is automatically emailed to the new administrator.
+                    New administrators have dynamic privileges and strictly require Nodemailer 6-digit OTP verification from the permanent Super Administrator (<Text style={{ fontWeight: '800', color: '#991b1b' }}>Super Administrator</Text>). Upon approval, an activation link is automatically emailed to the new administrator.
                   </Text>
                 </View>
               </ScrollView>

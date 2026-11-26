@@ -244,6 +244,40 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
   const [emblemSaving, setEmblemSaving] = useState<boolean>(false);
   const [emblemExpanded, setEmblemExpanded] = useState<boolean>(false);
 
+  // Association Rule 15 (Minimum Players Per Team) State
+  const [rule15Enabled, setRule15Enabled] = useState<boolean>(true);
+  const [rule15MinPlayers, setRule15MinPlayers] = useState<number>(9);
+  const [rule15Text, setRule15Text] = useState<string>('');
+  const [rule15Saving, setRule15Saving] = useState<boolean>(false);
+  const [rule15Expanded, setRule15Expanded] = useState<boolean>(false);
+
+  // Office Bearers & Ground In-Charges State (100% English Admin UI)
+  const [committeeEnabled, setCommitteeEnabled] = useState<boolean>(true);
+  const [committeeTitle, setCommitteeTitle] = useState<string>('Tournament Committee & Office Bearers');
+  const [committeeRoles, setCommitteeRoles] = useState<Array<{ roleTitle: string; members: string }>>([
+    { roleTitle: 'Tournament Coordinator', members: 'D. Saravanamuthu (Assistant Secretary)' },
+    { roleTitle: 'Assistants', members: 'Thangamarimuthu (JC), B. Sri Vallaba Ganesh (Redrose)' },
+    { roleTitle: 'Registration Coordinators', members: 'M. Suresh (Yazhini), Christopher (Yazhini)' },
+    { roleTitle: 'Umpire & Scorer Coordinator', members: 'S. Kabirthasan • Assistants: G. Sankar (Nature), Guhan (Sasinagar)' },
+    { roleTitle: 'Media Coordinators', members: 'R. Sankar (Joint Secretary), M. Manikannan (Miraculous)' }
+  ]);
+  const [groundInCharges, setGroundInCharges] = useState<Array<{ groundName: string; inCharge: string }>>([
+    { groundName: 'Ramco Cements Turf', inCharge: 'Ramco' },
+    { groundName: 'CFVD Ground', inCharge: 'Shooters' },
+    { groundName: 'Mepco', inCharge: 'Physical Education Director' },
+    { groundName: 'PACR', inCharge: 'Ramco' },
+    { groundName: 'AAA', inCharge: 'War Horses & Leo Sports' },
+    { groundName: 'MCC', inCharge: 'Mathai' }
+  ]);
+  const [teamNotice, setTeamNotice] = useState<string>(
+    'On every match day, each team must nominate 3 members from their squad for match official duties. We kindly request everyone to keep the ground clean.'
+  );
+  const [signatoryTitle, setSignatoryTitle] = useState<string>('Secretary');
+  const [signatoryName, setSignatoryName] = useState<string>('P. Mohanraj');
+  const [noticeDate, setNoticeDate] = useState<string>('21.11.2026');
+  const [committeeSaving, setCommitteeSaving] = useState<boolean>(false);
+  const [committeeExpanded, setCommitteeExpanded] = useState<boolean>(false);
+
   useEffect(() => {
     adminApi
       .getEmblemSequence()
@@ -256,7 +290,101 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
         }
       })
       .catch(() => {});
+
+    adminApi
+      .getRule15Config()
+      .then((res: any) => {
+        if (res?.success && res.config) {
+          setRule15Enabled(res.config.enabled !== false);
+          if (typeof res.config.minPlayers === 'number') {
+            setRule15MinPlayers(res.config.minPlayers);
+          }
+          if (typeof res.config.ruleText === 'string') {
+            setRule15Text(res.config.ruleText);
+          }
+        }
+      })
+      .catch(() => {});
+
+    adminApi
+      .getCommitteeMembers()
+      .then((res: any) => {
+        if (res?.success && res.config) {
+          setCommitteeEnabled(res.config.enabled !== false);
+          if (res.config.sectionTitle) setCommitteeTitle(res.config.sectionTitle);
+          if (Array.isArray(res.config.roles)) setCommitteeRoles(res.config.roles);
+          if (Array.isArray(res.config.groundInCharges)) setGroundInCharges(res.config.groundInCharges);
+          if (typeof res.config.teamNotice === 'string') setTeamNotice(res.config.teamNotice);
+          if (typeof res.config.signatoryTitle === 'string') setSignatoryTitle(res.config.signatoryTitle);
+          if (typeof res.config.signatoryName === 'string') setSignatoryName(res.config.signatoryName);
+          if (typeof res.config.noticeDate === 'string') setNoticeDate(res.config.noticeDate);
+        }
+      })
+      .catch(() => {});
   }, []);
+
+  const handleSaveCommittee = async (nextEnabled = committeeEnabled) => {
+    setCommitteeSaving(true);
+    try {
+      const res = await adminApi.updateCommitteeMembers({
+        enabled: nextEnabled,
+        sectionTitle: committeeTitle,
+        roles: committeeRoles.filter(r => r.roleTitle.trim() && r.members.trim()),
+        groundInCharges: groundInCharges.filter(g => g.groundName.trim() && g.inCharge.trim()),
+        teamNotice,
+        signatoryTitle,
+        signatoryName,
+        noticeDate
+      });
+      if (res?.success) {
+        showToast(
+          nextEnabled
+            ? 'Office Bearers & Ground In-Charges saved to Home website.'
+            : 'Office Bearers section hidden from Home website.',
+          'success'
+        );
+      } else {
+        showToast(res?.error || 'Failed to save Office Bearers.', 'error');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to save Office Bearers.', 'error');
+    } finally {
+      setCommitteeSaving(false);
+    }
+  };
+
+  const handleSaveRule15 = async (
+    nextEnabled = rule15Enabled,
+    nextMin = rule15MinPlayers,
+    nextText = rule15Text
+  ) => {
+    if (nextMin < 1 || nextMin > 11) {
+      showToast('Minimum players must be between 1 and 11.', 'error');
+      return;
+    }
+    setRule15Saving(true);
+    try {
+      const res = await adminApi.updateRule15Config({
+        enabled: nextEnabled,
+        minPlayers: nextMin,
+        ruleText: nextText
+      });
+      if (res?.success) {
+        showToast(
+          nextEnabled
+            ? `Rule 15 updated: Minimum ${nextMin} players per team`
+            : 'Rule 15 minimum attendance check disabled',
+          'success'
+        );
+      } else {
+        showToast(res?.error || 'Failed to save Rule 15 settings.', 'error');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to save Rule 15 settings.', 'error');
+    } finally {
+      setRule15Saving(false);
+    }
+  };
 
   const handleSaveEmblemSequence = async (nextEnabled = emblemEnabled, nextSeq = emblemSequence) => {
     if (nextEnabled && nextSeq.length === 0) {
@@ -677,6 +805,497 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
                   </Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          </View>
+        )}
+      </View>
+
+      {/* ASSOCIATION RULE 15 • MATCH ATTENDANCE REQUIREMENT */}
+      <View style={{
+        backgroundColor: '#ffffff',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: rule15Enabled ? '#fde68a' : '#e2e8f0',
+        marginBottom: 16,
+        overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2
+      }}>
+        <TouchableOpacity
+          activeOpacity={0.75}
+          onPress={() => setRule15Expanded(prev => !prev)}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 16,
+            paddingVertical: 14,
+            backgroundColor: rule15Enabled ? '#fffbeb' : '#f8fafc'
+          }}
+        >
+          <View style={{ flex: 1, marginRight: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <Text style={{ fontSize: 15, fontWeight: '800', color: '#0f172a' }}>
+                📜 Association Rule 15 • Match Attendance
+              </Text>
+              <View style={{
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 999,
+                backgroundColor: rule15Enabled ? '#fef3c7' : '#e2e8f0',
+                borderWidth: 1,
+                borderColor: rule15Enabled ? '#f59e0b' : '#cbd5e1'
+              }}>
+                <Text style={{
+                  fontSize: 10.5,
+                  fontWeight: '800',
+                  color: rule15Enabled ? '#92400e' : '#475569'
+                }}>
+                  {rule15Enabled ? `ACTIVE • MIN ${rule15MinPlayers} PLAYERS` : 'DISABLED'}
+                </Text>
+              </View>
+            </View>
+            <Text style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>
+              Configure minimum attending players required per team before a scorer can start a match
+            </Text>
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Switch
+              value={rule15Enabled}
+              onValueChange={(val) => {
+                setRule15Enabled(val);
+                handleSaveRule15(val, rule15MinPlayers, rule15Text);
+              }}
+              trackColor={{ false: '#cbd5e1', true: '#f59e0b' }}
+              thumbColor="#ffffff"
+            />
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#475569' }}>
+              {rule15Expanded ? '▲' : '▼'}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        {rule15Expanded && (
+          <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: '#f1f5f9', gap: 14 }}>
+            <View>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155', marginBottom: 8 }}>
+                Minimum Players Required Per Team (1 – 11):
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                {[5, 7, 8, 9, 10, 11].map((num) => {
+                  const active = rule15MinPlayers === num;
+                  return (
+                    <TouchableOpacity
+                      key={`rule15-preset-${num}`}
+                      onPress={() => setRule15MinPlayers(num)}
+                      style={{
+                        paddingHorizontal: 14,
+                        paddingVertical: 8,
+                        borderRadius: 10,
+                        borderWidth: 1.5,
+                        borderColor: active ? '#d97706' : '#cbd5e1',
+                        backgroundColor: active ? '#fef3c7' : '#f8fafc'
+                      }}
+                    >
+                      <Text style={{
+                        fontSize: 13,
+                        fontWeight: '800',
+                        color: active ? '#92400e' : '#334155'
+                      }}>
+                        {num} Players
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 4 }}>
+                  <TouchableOpacity
+                    onPress={() => setRule15MinPlayers(prev => Math.max(1, prev - 1))}
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 8,
+                      backgroundColor: '#f1f5f9',
+                      borderWidth: 1,
+                      borderColor: '#cbd5e1',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: '#0f172a' }}>-</Text>
+                  </TouchableOpacity>
+                  <Text style={{ minWidth: 28, textAlign: 'center', fontSize: 15, fontWeight: '800', color: '#0f172a' }}>
+                    {rule15MinPlayers}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setRule15MinPlayers(prev => Math.min(11, prev + 1))}
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 8,
+                      backgroundColor: '#f1f5f9',
+                      borderWidth: 1,
+                      borderColor: '#cbd5e1',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: '#0f172a' }}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
+            <View>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155', marginBottom: 6 }}>
+                Custom Rule Display Text (Optional — leave blank for automatic):
+              </Text>
+              <TextInput
+                value={rule15Text}
+                onChangeText={setRule15Text}
+                placeholder={`Rule 15: A minimum of ${rule15MinPlayers} players must be present at the start of each innings.`}
+                placeholderTextColor="#94a3b8"
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#cbd5e1',
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  fontSize: 13,
+                  color: '#0f172a',
+                  backgroundColor: '#f8fafc'
+                }}
+              />
+            </View>
+
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 10,
+              paddingTop: 4
+            }}>
+              <Text style={{ fontSize: 11.5, color: '#64748b', flex: 1 }}>
+                Preview: &quot;{rule15Text.trim() || `Rule 15: A minimum of ${rule15MinPlayers} players must be present at the start of each innings.`}&quot;
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setRule15Enabled(true);
+                    setRule15MinPlayers(9);
+                    setRule15Text('');
+                  }}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: '#cbd5e1',
+                    backgroundColor: '#f8fafc'
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>Reset Default (9)</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleSaveRule15(rule15Enabled, rule15MinPlayers, rule15Text)}
+                  disabled={rule15Saving}
+                  style={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    backgroundColor: '#d97706',
+                    opacity: rule15Saving ? 0.6 : 1
+                  }}
+                >
+                  <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#ffffff' }}>
+                    {rule15Saving ? 'Saving...' : '✓ Save Rule 15'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+      </View>
+
+      {/* OFFICE BEARERS & GROUND IN-CHARGES (ENGLISH ADMIN UI -> PUBLIC WEBSITE) */}
+      <View style={{
+        backgroundColor: '#ffffff',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: committeeEnabled ? '#bfdbfe' : '#e2e8f0',
+        marginBottom: 16,
+        overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2
+      }}>
+        <TouchableOpacity
+          activeOpacity={0.75}
+          onPress={() => setCommitteeExpanded(prev => !prev)}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 16,
+            paddingVertical: 14,
+            backgroundColor: committeeEnabled ? '#eff6ff' : '#f8fafc'
+          }}
+        >
+          <View style={{ flex: 1, marginRight: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <Text style={{ fontSize: 15, fontWeight: '800', color: '#0f172a' }}>
+                👥 Office Bearers & Ground In-Charges
+              </Text>
+              <View style={{
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 999,
+                backgroundColor: committeeEnabled ? '#dbeafe' : '#e2e8f0',
+                borderWidth: 1,
+                borderColor: committeeEnabled ? '#3b82f6' : '#cbd5e1'
+              }}>
+                <Text style={{
+                  fontSize: 10.5,
+                  fontWeight: '800',
+                  color: committeeEnabled ? '#1e40af' : '#475569'
+                }}>
+                  {committeeEnabled ? `LIVE ON HOME • ${committeeRoles.length} ROLES` : 'HIDDEN'}
+                </Text>
+              </View>
+            </View>
+            <Text style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>
+              Manage Tournament Coordinators, Ground In-Charges, Team Notice, and Secretary Signatory shown on the public website
+            </Text>
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Switch
+              value={committeeEnabled}
+              onValueChange={(val) => {
+                setCommitteeEnabled(val);
+                handleSaveCommittee(val);
+              }}
+              trackColor={{ false: '#cbd5e1', true: '#2563eb' }}
+              thumbColor="#ffffff"
+            />
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#475569' }}>
+              {committeeExpanded ? '▲' : '▼'}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        {committeeExpanded && (
+          <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: '#f1f5f9', gap: 14 }}>
+            <View>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155', marginBottom: 6 }}>
+                Section Heading (Public Website):
+              </Text>
+              <TextInput
+                value={committeeTitle}
+                onChangeText={setCommitteeTitle}
+                placeholder="Tournament Committee & Office Bearers"
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#cbd5e1',
+                  borderRadius: 8,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  fontSize: 13,
+                  color: '#0f172a',
+                  backgroundColor: '#f8fafc'
+                }}
+              />
+            </View>
+
+            {/* Committee Roles */}
+            <View style={{ gap: 8 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#1e293b' }}>
+                  Committee Roles & Coordinators ({committeeRoles.length})
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setCommitteeRoles(prev => [...prev, { roleTitle: '', members: '' }])}
+                  style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, backgroundColor: '#dbeafe' }}
+                >
+                  <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#1d4ed8' }}>+ Add Role</Text>
+                </TouchableOpacity>
+              </View>
+
+              {committeeRoles.map((item, idx) => (
+                <View key={`role-row-${idx}`} style={{ flexDirection: isMobile ? 'column' : 'row', gap: 8, alignItems: isMobile ? 'stretch' : 'center' }}>
+                  <TextInput
+                    value={item.roleTitle}
+                    onChangeText={(txt) => setCommitteeRoles(prev => prev.map((r, i) => i === idx ? { ...r, roleTitle: txt } : r))}
+                    placeholder="Role Title (e.g. Tournament Coordinator)"
+                    style={{
+                      flex: 1,
+                      borderWidth: 1,
+                      borderColor: '#cbd5e1',
+                      borderRadius: 8,
+                      paddingHorizontal: 10,
+                      paddingVertical: 7,
+                      fontSize: 12.5,
+                      backgroundColor: '#ffffff'
+                    }}
+                  />
+                  <TextInput
+                    value={item.members}
+                    onChangeText={(txt) => setCommitteeRoles(prev => prev.map((r, i) => i === idx ? { ...r, members: txt } : r))}
+                    placeholder="Members & Clubs (e.g. D. Saravanamuthu (Assistant Secretary))"
+                    style={{
+                      flex: 2,
+                      borderWidth: 1,
+                      borderColor: '#cbd5e1',
+                      borderRadius: 8,
+                      paddingHorizontal: 10,
+                      paddingVertical: 7,
+                      fontSize: 12.5,
+                      backgroundColor: '#ffffff'
+                    }}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setCommitteeRoles(prev => prev.filter((_, i) => i !== idx))}
+                    style={{ paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8, backgroundColor: '#fee2e2', alignItems: 'center' }}
+                  >
+                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#b91c1c' }}>Remove</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+
+            {/* Ground In-Charges */}
+            <View style={{ gap: 8 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#1e293b' }}>
+                  Ground In-Charges ({groundInCharges.length})
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setGroundInCharges(prev => [...prev, { groundName: '', inCharge: '' }])}
+                  style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, backgroundColor: '#dcfce7' }}
+                >
+                  <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#15803d' }}>+ Add Ground</Text>
+                </TouchableOpacity>
+              </View>
+
+              {groundInCharges.map((g, idx) => (
+                <View key={`ground-row-${idx}`} style={{ flexDirection: isMobile ? 'column' : 'row', gap: 8, alignItems: isMobile ? 'stretch' : 'center' }}>
+                  <TextInput
+                    value={g.groundName}
+                    onChangeText={(txt) => setGroundInCharges(prev => prev.map((row, i) => i === idx ? { ...row, groundName: txt } : row))}
+                    placeholder="Ground Name (e.g. Ramco Cements Turf)"
+                    style={{
+                      flex: 1,
+                      borderWidth: 1,
+                      borderColor: '#cbd5e1',
+                      borderRadius: 8,
+                      paddingHorizontal: 10,
+                      paddingVertical: 7,
+                      fontSize: 12.5,
+                      backgroundColor: '#ffffff'
+                    }}
+                  />
+                  <TextInput
+                    value={g.inCharge}
+                    onChangeText={(txt) => setGroundInCharges(prev => prev.map((row, i) => i === idx ? { ...row, inCharge: txt } : row))}
+                    placeholder="In-Charge Club / Person (e.g. Ramco)"
+                    style={{
+                      flex: 1,
+                      borderWidth: 1,
+                      borderColor: '#cbd5e1',
+                      borderRadius: 8,
+                      paddingHorizontal: 10,
+                      paddingVertical: 7,
+                      fontSize: 12.5,
+                      backgroundColor: '#ffffff'
+                    }}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setGroundInCharges(prev => prev.filter((_, i) => i !== idx))}
+                    style={{ paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8, backgroundColor: '#fee2e2', alignItems: 'center' }}
+                  >
+                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#b91c1c' }}>Remove</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+
+            {/* Request to Teams + Signatory */}
+            <View>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155', marginBottom: 6 }}>
+                Official Request / Notice to Teams:
+              </Text>
+              <TextInput
+                value={teamNotice}
+                onChangeText={setTeamNotice}
+                multiline
+                numberOfLines={2}
+                placeholder="Official notice for participating teams..."
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#cbd5e1',
+                  borderRadius: 8,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  fontSize: 12.5,
+                  color: '#0f172a',
+                  backgroundColor: '#f8fafc',
+                  minHeight: 56
+                }}
+              />
+            </View>
+
+            <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 8 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#475569', marginBottom: 4 }}>Signatory Title</Text>
+                <TextInput
+                  value={signatoryTitle}
+                  onChangeText={setSignatoryTitle}
+                  placeholder="Secretary"
+                  style={{ borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, fontSize: 12.5, backgroundColor: '#ffffff' }}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#475569', marginBottom: 4 }}>Signatory Name</Text>
+                <TextInput
+                  value={signatoryName}
+                  onChangeText={setSignatoryName}
+                  placeholder="P. Mohanraj"
+                  style={{ borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, fontSize: 12.5, backgroundColor: '#ffffff' }}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#475569', marginBottom: 4 }}>Date</Text>
+                <TextInput
+                  value={noticeDate}
+                  onChangeText={setNoticeDate}
+                  placeholder="21.11.2026"
+                  style={{ borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, fontSize: 12.5, backgroundColor: '#ffffff' }}
+                />
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, paddingTop: 4 }}>
+              <TouchableOpacity
+                onPress={() => handleSaveCommittee(committeeEnabled)}
+                disabled={committeeSaving}
+                style={{
+                  paddingHorizontal: 16,
+                  paddingVertical: 9,
+                  borderRadius: 8,
+                  backgroundColor: '#2563eb',
+                  opacity: committeeSaving ? 0.6 : 1
+                }}
+              >
+                <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#ffffff' }}>
+                  {committeeSaving ? 'Saving...' : '✓ Save Office Bearers'}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}

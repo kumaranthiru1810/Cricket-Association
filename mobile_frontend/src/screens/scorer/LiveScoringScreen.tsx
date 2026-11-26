@@ -200,6 +200,7 @@ const LiveDrawerClock = React.memo(({ textStyle }: { textStyle: any }) => {
   }, []);
   return <Text style={textStyle}>{timeStr || '11:34:00 am'}</Text>;
 });
+LiveDrawerClock.displayName = 'LiveDrawerClock';
 
 export default function LiveScoringScreen() {
   const { navigate, params, onExit } = useScorerNavigation();
@@ -664,6 +665,7 @@ export default function LiveScoringScreen() {
   const [pendingBoundaryRun, setPendingBoundaryRun] = useState<number | null>(null);
   const [autoPromptWagonWheel, setAutoPromptWagonWheel] = useState<boolean>(true);
   const lastScoreTapTimeRef = useRef<number>(0);
+  const isRecordingRef = useRef<boolean>(false);
 
   // 7. Umpire Assessment Modal State (Prepopulated from Match Schedule & Customizable by Scorer)
   const [showUmpireModal, setShowUmpireModal] = useState<boolean>(false);
@@ -716,8 +718,26 @@ export default function LiveScoringScreen() {
 
   // 11. End Match & Super Over Modal State
   const [showEndMatchModal, setShowEndMatchModal] = useState<boolean>(false);
-  const [endMatchResult, setEndMatchResult] = useState<'WIN' | 'TIE'>('WIN');
+  const [endMatchResult, setEndMatchResult] = useState<'WIN' | 'TIE' | 'NO_RESULT' | 'ABANDONED'>('WIN');
   const [winnerTeamId, setWinnerTeamId] = useState<string>('');
+  const [isWalkover, setIsWalkover] = useState<boolean>(false);
+  const [bonusPointWinner, setBonusPointWinner] = useState<boolean>(false);
+  const [bonusPointLoserPenalty, setBonusPointLoserPenalty] = useState<boolean>(false);
+  const [tournamentRules, setTournamentRules] = useState<any>({
+    powerplay_overs: 5,
+    max_outside_powerplay: 2,
+    max_outside_post_powerplay: 5,
+    max_on_side_fielders: 5,
+    max_on_side_behind_crease: 2,
+    free_hit_on_all_noballs: true,
+    points_win: 4,
+    points_loss: 0,
+    points_tie: 2,
+    points_bonus_win: 1,
+    points_bonus_loss: -1,
+    points_walkover_win: 4,
+    points_walkover_loss: -1
+  });
   const [isSuperOverSelected, setIsSuperOverSelected] = useState<boolean>(false);
   const [superOverBattingTeam, setSuperOverBattingTeam] = useState<string>('');
   const [playerOfMatchInput, setPlayerOfMatchInput] = useState<string>('');
@@ -1412,6 +1432,10 @@ export default function LiveScoringScreen() {
       setIsInningsBreak(isBreak);
       setIsMatchEnded(Boolean(isCompleted));
 
+      if (d.tournamentRules) {
+        setTournamentRules(d.tournamentRules);
+      }
+
       if (d.match) {
         const teamAName = d.match.teamA || d.innings?.battingTeam || 'Team A';
         const teamBName = d.match.teamB || d.innings?.bowlingTeam || 'Team B';
@@ -1547,7 +1571,8 @@ export default function LiveScoringScreen() {
       if (d.bowlingSquad && Array.isArray(d.bowlingSquad)) {
         setBowlingSquad(d.bowlingSquad);
         const prevId = d.innings?.previousBowlerId;
-        const eligible = d.bowlingSquad.filter((b: any) => b.id !== prevId && !b.isPreviousBowler);
+        const allowChain = Boolean(d.tournamentRules?.allow_chain_over);
+        const eligible = d.bowlingSquad.filter((b: any) => !b.isQuotaFull && (allowChain || (b.id !== prevId && !b.isPreviousBowler)));
         if (eligible.length > 0) {
           setSelectedNextBowlerId((prev) => (prev ? prev : eligible[0].id));
         }
@@ -1582,9 +1607,9 @@ export default function LiveScoringScreen() {
   };
 
   const handleScore = async (run: number, type: 'normal' | 'wide' | 'noball' | 'bye' | 'legbye', customOpts: any = {}) => {
-    // Prevent accidental physical bounce / double-tap under 160ms
+    // Prevent accidental physical bounce, double-tap, or fast repeat while recording
     const now = Date.now();
-    if (now - lastScoreTapTimeRef.current < 160) {
+    if (isRecordingRef.current || isSubmittingDelivery || now - lastScoreTapTimeRef.current < 500) {
       return;
     }
     lastScoreTapTimeRef.current = now;
@@ -1620,7 +1645,10 @@ export default function LiveScoringScreen() {
     let runsBatter = 0;
     let runsExtras = 0;
 
-    if (type === 'normal') {
+    if (customOpts.extraType === 'PENALTY') {
+      runsBatter = 0;
+      runsExtras = Number(customOpts.runsExtras ?? (run > 0 ? run : 5));
+    } else if (type === 'normal') {
       runsBatter = run;
       runsExtras = 0;
     } else if (type === 'wide') {
@@ -1655,7 +1683,8 @@ export default function LiveScoringScreen() {
       bowlerId: bowler?.id,
       runsBatter,
       runsExtras,
-      extraType: extraTypeMap[type] || 'NONE',
+      extraType: customOpts.extraType || extraTypeMap[type] || 'NONE',
+      noBallReason: customOpts.noBallReason || undefined,
       wicket: false,
       fieldingPosition: finalFieldingPos,
       shotType: selectedShotType,
@@ -1689,7 +1718,7 @@ export default function LiveScoringScreen() {
       isOverComplete
     };
 
-    const isLegal = type !== 'wide' && type !== 'noball';
+    const isLegal = type !== 'wide' && type !== 'noball' && customOpts.extraType !== 'PENALTY';
     const totalDelRuns = runsBatter + runsExtras;
 
     // 1. Instant update to total team runs
@@ -1773,17 +1802,19 @@ export default function LiveScoringScreen() {
       runsBatter,
       runsExtras,
       extra: type !== 'normal',
-      extraType: extraTypeMap[type] || 'NONE',
+      extraType: customOpts.extraType || extraTypeMap[type] || 'NONE',
+      noBallReason: customOpts.noBallReason || undefined,
       wicket: false,
       text: ballLabel,
       overNumber: ovNum
     };
-    setRecentDeliveries(prev => [...(prev || []), optimisticDel]);
+    setRecentDeliveries(prev => [optimisticDel, ...(prev || [])]);
     setIsBallInProgress(false);
 
     // =========================================================================
     // ASYNCHRONOUS BACKGROUND SYNC: DISPATCH TO SERVER WITHOUT BLOCKING UI
     // =========================================================================
+    isRecordingRef.current = true;
     setIsSubmittingDelivery(true);
 
     try {
@@ -1833,7 +1864,7 @@ export default function LiveScoringScreen() {
           type: isConsecutive ? 'CONSECUTIVE_WIDES' : 'WIDE',
           batterName: striker?.name,
           bowlerName: bowler?.name,
-          overText: `Over ${getOvers(balls)}`,
+          overText: `Over ${getOvers(newTotalBalls)}`,
           extraDetails: isConsecutive
             ? `Consecutive wide balls bowled by ${bowler?.name || 'Bowler'} • Standing umpire caution issued`
             : '+1 Extra run added to team total • Ball must be re-bowled (MCC Law 22)'
@@ -1843,7 +1874,7 @@ export default function LiveScoringScreen() {
           type: 'NO_BALL',
           batterName: striker?.name,
           bowlerName: bowler?.name,
-          overText: `Over ${getOvers(balls)}`,
+          overText: `Over ${getOvers(newTotalBalls)}`,
           extraDetails: '+1 Penalty run • Mandatory Free Hit awarded for next delivery (MCC Law 21)'
         });
       } else if ((type as string) === 'deadball') {
@@ -1851,7 +1882,7 @@ export default function LiveScoringScreen() {
           type: 'DEAD_BALL',
           batterName: striker?.name,
           bowlerName: bowler?.name,
-          overText: `Over ${getOvers(balls)}`,
+          overText: `Over ${getOvers(newTotalBalls)}`,
           extraDetails: 'Ball is dead • Delivery cancelled, ball does not count toward over (MCC Law 20)'
         });
       } else if (type === 'legbye') {
@@ -1859,37 +1890,39 @@ export default function LiveScoringScreen() {
           type: 'LEG_BYE',
           batterName: striker?.name,
           bowlerName: bowler?.name,
-          runs: runs,
-          overText: `Over ${getOvers(balls)}`,
-          extraDetails: `${runs} Leg Bye run(s) credited to extras • Signal to official scorer (MCC Law 23)`
+          runs: run,
+          overText: `Over ${getOvers(newTotalBalls)}`,
+          extraDetails: `${run} Leg Bye run(s) credited to extras • Signal to official scorer (MCC Law 23)`
         });
       } else if (type === 'bye') {
         setActiveUmpireSignal({
           type: 'BYE',
           batterName: striker?.name,
           bowlerName: bowler?.name,
-          runs: runs,
-          overText: `Over ${getOvers(balls)}`,
-          extraDetails: `${runs} Bye run(s) credited to extras • Signal to official scorer (MCC Law 23)`
+          runs: run,
+          overText: `Over ${getOvers(newTotalBalls)}`,
+          extraDetails: `${run} Bye run(s) credited to extras • Signal to official scorer (MCC Law 23)`
         });
-      } else if (type === 'normal' && runs === 4) {
+      } else if (type === 'normal' && run === 4) {
         setActiveUmpireSignal({
           type: 'FOUR',
           batterName: striker?.name,
           bowlerName: bowler?.name,
           runs: 4,
-          overText: `Over ${getOvers(balls)}`,
+          overText: `Over ${getOvers(newTotalBalls)}`,
           extraDetails: `${striker?.name || 'Batter'} hits boundary four along the ground (MCC Law 19)`
         });
-      } else if (type === 'normal' && runs === 6) {
+      } else if (type === 'normal' && run === 6) {
         setActiveUmpireSignal({
           type: 'SIX',
           batterName: striker?.name,
           bowlerName: bowler?.name,
           runs: 6,
-          overText: `Over ${getOvers(balls)}`,
+          overText: `Over ${getOvers(newTotalBalls)}`,
           extraDetails: `${striker?.name || 'Batter'} smashes massive six over the boundary rope (MCC Law 19)`
         });
+      } else {
+        setActiveUmpireSignal(null);
       }
 
       // Smart Rules Analysis: Consecutive Wides
@@ -1963,6 +1996,7 @@ export default function LiveScoringScreen() {
         Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
       }
     } finally {
+      isRecordingRef.current = false;
       setIsSubmittingDelivery(false);
     }
   };
@@ -2022,6 +2056,16 @@ export default function LiveScoringScreen() {
       finalReason = `${moreRunsSelected} Running Runs (Between Wickets)`;
     } else if (moreRunsReasonKey === 'PENALTY') {
       finalReason = `Penalty 5 Runs (Law 28 - Helmet Hit)`;
+    } else if (moreRunsReasonKey === 'FIELDING_VIOLATION_NB') {
+      const ppOv = Number(tournamentRules?.powerplay_overs ?? 5);
+      const curOv = Math.floor((balls || 0) / 6) + 1;
+      const inPP = curOv <= ppOv;
+      const maxOut = inPP ? (tournamentRules?.max_outside_powerplay ?? 2) : (tournamentRules?.max_outside_post_powerplay ?? 5);
+      finalReason = `Rule 8 Fielding Violation (${inPP ? `Powerplay Ov ${curOv}/${ppOv}: Max ${maxOut} outside` : `Post-PP: Max ${maxOut} outside`}, Max ${tournamentRules?.max_on_side_fielders ?? 5} leg-side, Max ${tournamentRules?.max_on_side_behind_crease ?? 2} behind crease) — No Ball + Free Hit`;
+    } else if (moreRunsReasonKey === 'RULE_PENALTY_RUNS') {
+      finalReason = `Rule Violation Penalty (+${moreRunsSelected} Runs • Law 41 Unfair Play / Time Wasting)`;
+    } else if (moreRunsReasonKey === 'OFFICIAL_WARNING') {
+      finalReason = `Official Umpire Warning (Rule Violation • 0 Runs)`;
     } else if (moreRunsReason) {
       finalReason = moreRunsReason;
     }
@@ -2039,7 +2083,17 @@ export default function LiveScoringScreen() {
     setShowMoreRunsModal(false);
     const totalR = moreRunsSelected;
 
-    if (moreRunsReasonKey === 'WIDE' || finalReason.toLowerCase().includes('wide')) {
+    if (moreRunsReasonKey === 'OFFICIAL_WARNING') {
+      setAiCommentary(`⚠️ OFFICIAL UMPIRE WARNING: ${finalReason}`);
+      const warnMsg = 'Official Umpire Warning recorded (0 runs, no wicket/ball penalty).';
+      Platform.OS === 'web' ? window.alert(warnMsg) : Alert.alert('Warning Logged', warnMsg);
+    } else if (moreRunsReasonKey === 'FIELDING_VIOLATION_NB') {
+      await handleScore(0, 'noball', {
+        extraType: 'NO_BALL',
+        noBallReason: 'FIELDING_RESTRICTION',
+        remarks: finalReason
+      });
+    } else if (moreRunsReasonKey === 'WIDE' || finalReason.toLowerCase().includes('wide')) {
       await handleScore(1, 'wide', {
         runsExtras: totalR,
         extraType: 'WIDE',
@@ -2050,7 +2104,7 @@ export default function LiveScoringScreen() {
         extraType: 'NO_BALL',
         remarks: finalReason
       });
-    } else if (moreRunsReasonKey === 'PENALTY' || finalReason.toLowerCase().includes('penalty')) {
+    } else if (moreRunsReasonKey === 'PENALTY' || moreRunsReasonKey === 'RULE_PENALTY_RUNS' || finalReason.toLowerCase().includes('penalty')) {
       await handleScore(0, 'normal', {
         runsExtras: totalR,
         extraType: 'PENALTY',
@@ -2398,6 +2452,7 @@ export default function LiveScoringScreen() {
       const msg = err.message || 'Error recording wicket. Score was not changed.';
       Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
     } finally {
+      isRecordingRef.current = false;
       setIsSubmittingDelivery(false);
     }
   };
@@ -2516,6 +2571,7 @@ export default function LiveScoringScreen() {
       const msg = err.message || 'Error recording custom delivery.';
       Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
     } finally {
+      isRecordingRef.current = false;
       setIsSubmittingDelivery(false);
     }
   };
@@ -2879,24 +2935,51 @@ export default function LiveScoringScreen() {
   };
 
   const handleEndMatchSubmit = async () => {
+    if (isSubmittingEndMatch || matchInfo?.status === 'COMPLETED') return;
     if (endMatchResult === 'TIE' && isSuperOverSelected) {
       return handleStartSuperOver();
     }
     setIsSubmittingEndMatch(true);
     try {
       let summary = '';
+      let resolvedWinnerId = 'TIE';
       if (endMatchResult === 'WIN') {
         const wTeamName = winnerTeamId === matchInfo?.teamAId ? matchInfo?.teamA : matchInfo?.teamB;
-        summary = `${wTeamName} won the match`;
+        summary = isWalkover ? `${wTeamName} won by Walkover` : `${wTeamName} won the match`;
+        resolvedWinnerId = winnerTeamId;
+      } else if (endMatchResult === 'NO_RESULT') {
+        summary = 'No Result';
+        resolvedWinnerId = 'NO_RESULT';
+      } else if (endMatchResult === 'ABANDONED') {
+        summary = 'Match Abandoned';
+        resolvedWinnerId = 'ABANDONED';
       } else {
         summary = 'Match Tied';
+        resolvedWinnerId = 'TIE';
       }
-      await ScorerApi.endMatch(matchId, {
+      const forfeitedId = isWalkover && endMatchResult === 'WIN'
+        ? (winnerTeamId === matchInfo?.teamAId ? matchInfo?.teamBId : matchInfo?.teamAId)
+        : null;
+      const endRes = await ScorerApi.endMatch(matchId, {
+        resultType: endMatchResult,
         resultText: summary,
-        playerOfMatch: playerOfMatchInput.trim()
+        playerOfMatch: playerOfMatchInput.trim(),
+        winnerId: resolvedWinnerId,
+        isWalkover: endMatchResult === 'WIN' ? isWalkover : false,
+        walkoverForfeitedTeamId: forfeitedId,
+        bonusPointWinner: endMatchResult === 'WIN' && !isWalkover ? bonusPointWinner : false,
+        bonusPointLoserPenalty: endMatchResult === 'WIN' && !isWalkover ? bonusPointLoserPenalty : false
       });
       setShowEndMatchModal(false);
       await loadLiveState(false);
+      const prog = endRes?.tournamentProgression || endRes?.data?.tournamentProgression;
+      if (prog?.unresolved_ties?.length) {
+        const tieMsg = 'Match completed & standings updated. Unresolved qualification tie flagged for Admin resolution.';
+        Platform.OS === 'web' ? window.alert(tieMsg) : Alert.alert('Match Completed', tieMsg);
+      } else if (prog?.advanced && prog?.created_count) {
+        const advMsg = `Match completed & standings updated. ${prog.created_count} next-round fixture(s) generated automatically.`;
+        Platform.OS === 'web' ? window.alert(advMsg) : Alert.alert('Tournament Advanced', advMsg);
+      }
       navigate('Scorecard', { matchId });
     } catch (err: any) {
       const msg = err.message || 'Failed to end match.';
@@ -6051,6 +6134,66 @@ export default function LiveScoringScreen() {
                     </TouchableOpacity>
                   </View>
                 </View>
+
+                <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setIsWalkover(w => !w);
+                      if (!isWalkover) {
+                        setBonusPointWinner(false);
+                        setBonusPointLoserPenalty(false);
+                      }
+                    }}
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 7,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: isWalkover ? '#dc2626' : '#cbd5e1',
+                      backgroundColor: isWalkover ? '#fef2f2' : '#f8fafc'
+                    }}
+                  >
+                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: isWalkover ? '#991b1b' : '#334155' }}>
+                      {isWalkover
+                        ? `✅ Walkover (+${tournamentRules?.points_walkover_win ?? 4} / ${tournamentRules?.points_walkover_loss ?? -1})`
+                        : 'Walkover Win'}
+                    </Text>
+                  </TouchableOpacity>
+                  {!isWalkover && (
+                    <>
+                      <TouchableOpacity
+                        onPress={() => setBonusPointWinner(b => !b)}
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 7,
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: bonusPointWinner ? '#059669' : '#cbd5e1',
+                          backgroundColor: bonusPointWinner ? '#ecfdf5' : '#f8fafc'
+                        }}
+                      >
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: bonusPointWinner ? '#065f46' : '#334155' }}>
+                          {bonusPointWinner ? `✅ Bonus Win (+${tournamentRules?.points_bonus_win ?? 1})` : `Bonus Win (+${tournamentRules?.points_bonus_win ?? 1})`}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => setBonusPointLoserPenalty(b => !b)}
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 7,
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: bonusPointLoserPenalty ? '#d97706' : '#cbd5e1',
+                          backgroundColor: bonusPointLoserPenalty ? '#fffbeb' : '#f8fafc'
+                        }}
+                      >
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: bonusPointLoserPenalty ? '#92400e' : '#334155' }}>
+                          {bonusPointLoserPenalty ? `✅ Loser Penalty (${tournamentRules?.points_bonus_loss ?? -1})` : `Loser Penalty (${tournamentRules?.points_bonus_loss ?? -1})`}
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </View>
               </View>
             )}
 
@@ -6155,7 +6298,9 @@ export default function LiveScoringScreen() {
               <View style={styles.categoryGrid}>
                 {[
                   { key: 'WIN', label: 'Match Won', desc: 'Select winning team' },
-                  { key: 'TIE', label: 'Match Tied', desc: 'Tie / Super Over option' }
+                  { key: 'TIE', label: 'Match Tied', desc: 'Tie / Super Over option' },
+                  { key: 'NO_RESULT', label: 'No Result', desc: 'Weather / incomplete' },
+                  { key: 'ABANDONED', label: 'Abandoned', desc: 'Match abandoned' }
                 ].map((res) => (
                   <TouchableOpacity
                     key={res.key}
@@ -6268,6 +6413,29 @@ export default function LiveScoringScreen() {
               />
             </View>
 
+            {/* Result Summary Preview Before Submission */}
+            <View style={{ marginTop: 10, padding: 10, borderRadius: 10, backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A' }}>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: '#92400E' }}>
+                RESULT SUMMARY PREVIEW
+              </Text>
+              <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0F172A', marginTop: 2 }}>
+                {endMatchResult === 'WIN'
+                  ? `${winnerTeamId === matchInfo?.teamAId ? matchInfo?.teamA : matchInfo?.teamB} ${isWalkover ? 'won by Walkover' : 'won the match'}`
+                  : endMatchResult === 'NO_RESULT'
+                    ? 'No Result (Points shared per tournament rules)'
+                    : endMatchResult === 'ABANDONED'
+                      ? 'Match Abandoned (Points shared per tournament rules)'
+                      : isSuperOverSelected
+                        ? 'Match Tied — Proceeding to Super Over'
+                        : 'Match Tied'}
+              </Text>
+              {matchInfo?.status === 'COMPLETED' && (
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#DC2626', marginTop: 4 }}>
+                  ✓ Official result already submitted.
+                </Text>
+              )}
+            </View>
+
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.modalCancelBtn}
@@ -6278,16 +6446,23 @@ export default function LiveScoringScreen() {
               <TouchableOpacity
                 style={[
                   styles.modalConfirmBtn,
-                  { backgroundColor: isSuperOverSelected && endMatchResult === 'TIE' ? '#059669' : '#dc2626' }
+                  {
+                    backgroundColor: isSuperOverSelected && endMatchResult === 'TIE' ? '#059669' : '#dc2626',
+                    opacity: isSubmittingEndMatch || matchInfo?.status === 'COMPLETED' ? 0.5 : 1
+                  }
                 ]}
-                disabled={isSubmittingEndMatch}
+                disabled={isSubmittingEndMatch || matchInfo?.status === 'COMPLETED'}
                 onPress={handleEndMatchSubmit}
               >
                 {isSubmittingEndMatch ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <Text style={styles.modalConfirmText}>
-                    {isSuperOverSelected && endMatchResult === 'TIE' ? 'Start Super Over ▶' : 'End Match'}
+                    {matchInfo?.status === 'COMPLETED'
+                      ? 'Result Submitted'
+                      : isSuperOverSelected && endMatchResult === 'TIE'
+                        ? 'Start Super Over ▶'
+                        : 'End Match'}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -6513,9 +6688,34 @@ export default function LiveScoringScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 12, fontWeight: '500' }}>
-              Select run value and specific delivery reason (e.g. Wide + 4 boundary, overthrows, penalties):
+            <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 8, fontWeight: '500' }}>
+              Select run value, delivery reason, or apply a Tournament Rule Violation penalty:
             </Text>
+
+            {/* Active Tournament Rule Context Banner */}
+            {(() => {
+              const ppOv = Number(tournamentRules?.powerplay_overs ?? 5);
+              const curOv = Math.floor((balls || 0) / 6) + 1;
+              const inPP = curOv <= ppOv;
+              const maxOut = inPP
+                ? Number(tournamentRules?.max_outside_powerplay ?? 2)
+                : Number(tournamentRules?.max_outside_post_powerplay ?? 5);
+              return (
+                <View style={{
+                  paddingHorizontal: 10,
+                  paddingVertical: 7,
+                  borderRadius: 8,
+                  backgroundColor: inPP ? '#fef3c7' : '#f1f5f9',
+                  borderWidth: 1,
+                  borderColor: inPP ? '#f59e0b' : '#cbd5e1',
+                  marginBottom: 10
+                }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: inPP ? '#92400e' : '#334155' }}>
+                    {inPP ? `⚡ Powerplay Active (Ov ${curOv}/${ppOv})` : `🛡️ Post-Powerplay (Ov ${curOv})`} • Max {maxOut} Outside • Max {tournamentRules?.max_on_side_fielders ?? 5} Leg-Side • Max {tournamentRules?.max_on_side_behind_crease ?? 2} Behind Crease
+                  </Text>
+                </View>
+              );
+            })()}
 
             {/* Quick Run Selection Buttons */}
             <Text style={{ fontSize: 11, fontWeight: '800', color: '#1e293b', textTransform: 'uppercase', marginBottom: 6 }}>
@@ -6555,7 +6755,10 @@ export default function LiveScoringScreen() {
                 { key: 'NO_BALL', label: `No Ball + ${moreRunsSelected - 1} (Bat Boundary)` },
                 { key: 'OVERTHROW', label: `${moreRunsSelected} Overthrow Runs (All Extras)` },
                 { key: 'RUNNING', label: `${moreRunsSelected} Running Runs (Between Wickets)` },
-                { key: 'PENALTY', label: `Penalty 5 Runs (Law 28 - Helmet Hit)` }
+                { key: 'PENALTY', label: `Penalty 5 Runs (Law 28 - Helmet Hit)` },
+                { key: 'FIELDING_VIOLATION_NB', label: `🚫 Rule 8 Fielding Violation → No-Ball (+1 Run${tournamentRules?.free_hit_on_all_noballs !== false ? ' + Free Hit' : ''})` },
+                { key: 'RULE_PENALTY_RUNS', label: `⚖️ Rule Break → +${moreRunsSelected} Penalty Runs (Law 41 / Unfair Play)` },
+                { key: 'OFFICIAL_WARNING', label: `⚠️ Rule Break → Official Umpire Warning (0 Runs)` }
               ].map((reasonItem) => {
                 const isSelected = moreRunsReasonKey === reasonItem.key;
                 return (
@@ -8715,7 +8918,7 @@ export default function LiveScoringScreen() {
               );
 
               const ballEvents = (latest && !isInitialLoadBall) ? mapBallToEvents({
-                ballId: `${latest.id || recentDeliveries.length}-${runsBat}-${runs}-${wickets}`,
+                ballId: `${recentDeliveries.length}-${latest.ball || '0'}-${runsBat}-${rExtras}-${rawExtra || 'NONE'}-${Boolean(latest?.wicket)}`,
                 runsOffBat: runsBat,
                 extraType: rawExtra,
                 extraRuns: rExtras > 0 ? rExtras : undefined,
@@ -8976,6 +9179,58 @@ export default function LiveScoringScreen() {
                   </View>
                 )}
 
+                {/* Live Rule 8: Powerplay & Fielding Restrictions Pill + 1-Tap Fielding Violation No-Ball */}
+                {(() => {
+                  const ppOvers = Number(tournamentRules?.powerplay_overs ?? 5);
+                  const curOverNum = Math.floor((balls || 0) / 6) + 1;
+                  const inPP = curOverNum <= ppOvers;
+                  const maxOut = inPP
+                    ? Number(tournamentRules?.max_outside_powerplay ?? 2)
+                    : Number(tournamentRules?.max_outside_post_powerplay ?? 5);
+                  const maxLeg = Number(tournamentRules?.max_on_side_fielders ?? 5);
+                  const maxCrease = Number(tournamentRules?.max_on_side_behind_crease ?? 2);
+                  const maxBowlerOv = Number(tournamentRules?.max_overs_per_bowler || 0);
+                  const chainOverOn = Boolean(tournamentRules?.allow_chain_over);
+                  return (
+                    <View style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: 6,
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      marginBottom: 8,
+                      borderRadius: 8,
+                      backgroundColor: inPP ? '#fef3c7' : '#f1f5f9',
+                      borderWidth: 1,
+                      borderColor: inPP ? '#f59e0b' : '#cbd5e1'
+                    }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: inPP ? '#92400e' : '#334155', flex: 1 }}>
+                        {inPP ? `⚡ POWERPLAY (Ov ${curOverNum}/${ppOvers})` : `🛡️ POST-PP (Ov ${curOverNum})`} • Max {maxOut} Outside • Max {maxLeg} Leg-Side • Max {maxCrease} Behind Crease{maxBowlerOv > 0 ? ` • Max ${maxBowlerOv} Ov/Bowler` : ''} • {chainOverOn ? '🔗 Chain Over: ON' : 'Chain Over: OFF'}
+                      </Text>
+                      <TouchableOpacity
+                        disabled={matchStatus !== 'LIVE' || isInningsBreak || isMatchEnded}
+                        onPress={() => handleScore(0, 'noball', {
+                          noBallReason: 'FIELDING_RESTRICTION',
+                          remarks: 'Rule 8 Fielding Restriction Violation — No Ball + Free Hit'
+                        })}
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 6,
+                          backgroundColor: '#dc2626',
+                          opacity: (matchStatus !== 'LIVE' || isInningsBreak || isMatchEnded) ? 0.4 : 1
+                        }}
+                      >
+                        <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#ffffff' }}>
+                          🚫 Fielding NB
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })()}
+
                 {/* Cricket Rules, Umpire Signals & DLS/VJD Quick Navigation Buttons */}
                 <View style={{ flexDirection: 'row', gap: isDesktop ? 8 : 4, marginBottom: isDesktop ? 10 : 6, flexWrap: 'nowrap' }}>
                   <TouchableOpacity
@@ -9234,7 +9489,9 @@ export default function LiveScoringScreen() {
                   {bowlingSquad.find((b) => b.id === previousBowlerId)?.name || bowler?.name || 'Previous Bowler'}
                 </Text>
                 <Text style={styles.prevBowlerBannerNote}>
-                  Rule: Bowler who bowled the previous over is ineligible for consecutive overs.
+                  {tournamentRules?.allow_chain_over
+                    ? '🔗 Chain Over Enabled: Same bowler can bowl consecutive overs (subject to bowler quota).'
+                    : 'Rule: Bowler who bowled the previous over is ineligible for consecutive overs.'}
                 </Text>
               </View>
             )}
@@ -9245,22 +9502,30 @@ export default function LiveScoringScreen() {
               </View>
             )}
 
-            <Text style={styles.selectLabel}>CHOOSE FROM BOWLING TEAM PLAYING XI:</Text>
+            <Text style={styles.selectLabel}>
+              CHOOSE FROM BOWLING TEAM PLAYING XI{tournamentRules?.max_overs_per_bowler ? ` (MAX ${tournamentRules.max_overs_per_bowler} OV/BOWLER)` : ''}:
+            </Text>
             <ScrollView style={{ maxHeight: 220, marginBottom: 14 }}>
               {bowlingSquad.map((player) => {
-                const isPrev = player.id === previousBowlerId || player.isPreviousBowler;
+                const allowChain = Boolean(tournamentRules?.allow_chain_over);
+                const maxQuota = Number(player.maxQuota || tournamentRules?.max_overs_per_bowler || 0);
+                const completedOvers = Math.floor(parseFloat(String(player.overs || '0')));
+                const isQuotaFull = Boolean(player.isQuotaFull) || (maxQuota > 0 && completedOvers >= maxQuota);
+                const isPrev = !allowChain && (player.id === previousBowlerId || player.isPreviousBowler);
+                const isDisabled = isPrev || isQuotaFull;
+                const isSamePrevAllowed = allowChain && !isQuotaFull && player.id === previousBowlerId;
                 const isSelected = selectedNextBowlerId === player.id;
                 return (
                   <TouchableOpacity
                     key={player.id}
-                    disabled={isPrev || isSubmittingBowler}
+                    disabled={isDisabled || isSubmittingBowler}
                     style={[
                       styles.bowlerOption,
                       isSelected && styles.bowlerOptionSelected,
-                      isPrev && styles.bowlerOptionDisabled
+                      isDisabled && styles.bowlerOptionDisabled
                     ]}
                     onPress={() => {
-                      if (!isPrev) {
+                      if (!isDisabled) {
                         setSelectedNextBowlerId(player.id);
                         setBowlerErrorMessage(null);
                       }
@@ -9272,13 +9537,13 @@ export default function LiveScoringScreen() {
                           style={[
                             styles.radioDot,
                             isSelected && styles.radioDotSelected,
-                            isPrev && styles.radioDotDisabled
+                            isDisabled && styles.radioDotDisabled
                           ]}
                         />
                         <Text
                           style={[
                             styles.bowlerOptionName,
-                            isPrev && styles.bowlerOptionNameDisabled
+                            isDisabled && styles.bowlerOptionNameDisabled
                           ]}
                         >
                           {player.name}
@@ -9288,16 +9553,24 @@ export default function LiveScoringScreen() {
                       <View style={styles.bowlerStatsRow}>
                         <Text style={styles.bowlerStatsText}>
                           {player.overs > 0 || player.runs > 0 || player.wickets > 0
-                            ? `${player.overs} ov | ${player.runs} runs | ${player.wickets} wkts | Econ: ${player.economy}`
-                            : 'Yet to bowl in this innings'}
+                            ? `${player.overs}${maxQuota > 0 ? `/${maxQuota}` : ''} ov | ${player.runs} runs | ${player.wickets} wkts | Econ: ${player.economy}`
+                            : `Yet to bowl${maxQuota > 0 ? ` (Max ${maxQuota} ov)` : ''}`}
                         </Text>
                       </View>
                     </View>
-                    {isPrev && (
+                    {isQuotaFull ? (
+                      <View style={styles.ineligibleBadge}>
+                        <Text style={styles.ineligibleBadgeText}>Quota Full ({maxQuota} Ov)</Text>
+                      </View>
+                    ) : isPrev ? (
                       <View style={styles.ineligibleBadge}>
                         <Text style={styles.ineligibleBadgeText}>Bowled Prev Over</Text>
                       </View>
-                    )}
+                    ) : isSamePrevAllowed ? (
+                      <View style={[styles.ineligibleBadge, { backgroundColor: '#DCFCE7', borderColor: '#86EFAC' }]}>
+                        <Text style={[styles.ineligibleBadgeText, { color: '#166534' }]}>Chain Over OK</Text>
+                      </View>
+                    ) : null}
                   </TouchableOpacity>
                 );
               })}

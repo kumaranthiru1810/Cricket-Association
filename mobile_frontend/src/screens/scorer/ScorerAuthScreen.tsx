@@ -282,7 +282,7 @@ export default function ScorerAuthScreen() {
                   style={[styles.input, otpSent && styles.inputDisabled]}
                   value={email}
                   onChangeText={setEmail}
-                  placeholder="e.g. scorer@cfvd.org or athilingam3336@gmail.com"
+                  placeholder="e.g. scorer@yourdomain.com or admin@yourdomain.com"
                   keyboardType="email-address"
                   placeholderTextColor="#9bb0cf"
                   autoCapitalize="none"
@@ -374,7 +374,7 @@ export default function ScorerAuthScreen() {
                   style={styles.input}
                   value={email}
                   onChangeText={setEmail}
-                  placeholder="e.g. scorer@cfvd.org"
+                  placeholder="e.g. scorer@yourdomain.com"
                   keyboardType="email-address"
                   placeholderTextColor="#9bb0cf"
                   autoCapitalize="none"

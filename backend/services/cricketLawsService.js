@@ -361,7 +361,7 @@ async function updateCalculationSettings(tournamentId, method, adminEmail, admin
 
   if (existing) {
     existing.calculation_method = method;
-    existing.updated_by = adminEmail || 'admin@cfvd.org';
+    existing.updated_by = adminEmail || 'system-admin';
     existing.updated_by_name = adminName || 'Administrator';
     existing.updated_at = new Date();
     await existing.save();
@@ -372,7 +372,7 @@ async function updateCalculationSettings(tournamentId, method, adminEmail, admin
       tournament_id: tournamentId,
       tournament_name: tournament.name,
       calculation_method: method,
-      updated_by: adminEmail || 'admin@cfvd.org',
+      updated_by: adminEmail || 'system-admin',
       updated_by_name: adminName || 'Administrator',
       updated_at: new Date()
     });

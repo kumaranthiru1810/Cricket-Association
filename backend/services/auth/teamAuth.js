@@ -30,7 +30,10 @@ class TeamAuth {
     if (!reg) {
       team = await db.models.Team.findOne({ coach_email: cleanEmail }).lean();
       if (!team) {
-        throw { status: 404, message: `No team registration found for coach email "${cleanEmail}". Please register your team first.` };
+        return {
+          success: true,
+          message: 'If an eligible team account exists for this email, an OTP has been dispatched.'
+        };
       }
     }
 
@@ -114,9 +117,9 @@ class TeamAuth {
     const teamName = reg?.team_name || teamDoc?.name || 'Virudhunagar Team';
 
     const token = jwt.sign(
-      { id: authResult.user.id, name: authResult.user.name, email: authResult.user.email, role: 'COACH', teamId, teamName },
+      { id: authResult.user.id, name: authResult.user.name, email: authResult.user.email, role: 'COACH', teamId, teamName, tv: authResult.user.token_version ?? 0 },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '12h' }
     );
 
     return {
@@ -202,7 +205,6 @@ class TeamAuth {
         aadhaar: cleanCoachAadhaar || null,
         role: 'COACH',
         password_hash: passwordHash,
-        current_password: password ? String(password).trim() : null,
         status: 'PENDING'
       });
     } else {
@@ -213,10 +215,11 @@ class TeamAuth {
             name: coachName.trim(),
             ...(cleanCoachPhone && { mobile: cleanCoachPhone }),
             ...(cleanCoachAadhaar && { aadhaar: cleanCoachAadhaar }),
-            ...(passwordHash ? { password_hash: passwordHash, current_password: password ? String(password).trim() : null } : {}),
+            ...(passwordHash ? { password_hash: passwordHash } : {}),
             role: 'COACH',
             status: 'PENDING'
-          }
+          },
+          $unset: { current_password: '' }
         }
       );
     }
@@ -257,7 +260,7 @@ class TeamAuth {
 
   async checkTeamExists(teamName, coachEmail) {
     await db.initDb();
-    const cleanTeam = (teamName || '').trim().toLowerCase();
+    const cleanTeam = (teamName || '').trim().toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const cleanEmail = (coachEmail || '').trim().toLowerCase();
     return db.models.TeamRegistration.findOne({
       $or: [

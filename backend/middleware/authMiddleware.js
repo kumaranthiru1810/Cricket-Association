@@ -4,7 +4,8 @@
  */
 
 const jwt = require('jsonwebtoken');
-const { JWT_SECRET } = require('../config/env');
+const env = require('../config/env');
+const { JWT_SECRET } = env;
 
 function verifyToken(req, res, next) {
   let token = null;
@@ -17,13 +18,13 @@ function verifyToken(req, res, next) {
   }
 
   if (token) {
-    // Support dev tokens in development environment ONLY
-    if (process.env.NODE_ENV === 'development' && (token.startsWith('dev_admin') || token.includes('athi') || token.includes('admin_cfvd') || token === 'dev_admin_cfvd_token_2026')) {
+    // Support dev tokens in explicit development environment ONLY
+    if (env.isDevelopment && (token.startsWith('dev_admin') || token === 'dev_admin_cfvd_token_2026')) {
       req.user = {
-        id: 'ADM-1004',
-        email: 'athilingam3336@gmail.com',
+        id: 'ADM-DEV',
+        email: env.DEV_ADMIN_EMAIL,
         role: 'ADMIN',
-        name: 'Athi Lingam',
+        name: 'Development Admin',
         status: 'ACTIVE',
         is_super_admin: true
       };
@@ -34,23 +35,7 @@ function verifyToken(req, res, next) {
       const decoded = jwt.verify(token, JWT_SECRET);
       req.user = decoded;
       return next();
-    } catch (err) {
-      if (!process.env.NODE_ENV || process.env.NODE_ENV !== 'production') {
-        const roleHeader = req.headers['x-user-role'] || req.headers['role'];
-        const referer = req.headers['referer'] || '';
-        const isUrlAdmin = req.originalUrl?.includes('/admin') || req.originalUrl?.includes('/tournaments') || req.url?.includes('/tournaments');
-        if (roleHeader || referer.includes('/admin') || referer.includes('tab=') || isUrlAdmin) {
-          req.user = {
-            id: req.headers['x-user-id'] || 'ADM-1004',
-            email: req.headers['x-user-email'] || 'athilingam3336@gmail.com',
-            role: String(roleHeader).toUpperCase(),
-            name: 'Athi Lingam',
-            status: 'ACTIVE',
-            is_super_admin: true
-          };
-          return next();
-        }
-      }
+    } catch (_err) {
       return res.status(401).json({
         success: false,
         message: 'Unauthorized: Invalid or expired token.'
@@ -58,24 +43,22 @@ function verifyToken(req, res, next) {
     }
   }
 
-  // Development/testing custom headers (in non-production if token is absent)
-  if (!process.env.NODE_ENV || process.env.NODE_ENV !== 'production') {
+  // Development-only custom headers (strictly disabled outside development)
+  if (env.isDevelopment) {
     const roleHeader = req.headers['x-user-role'] || req.headers['role'];
     const emailHeader = req.headers['x-user-email'] || req.headers['user-email'];
     const idHeader = req.headers['x-user-id'] || req.headers['scorer-id'];
 
-    const referer = req.headers['referer'] || '';
-    const isUrlAdmin = req.originalUrl?.includes('/admin') || req.originalUrl?.includes('/tournaments') || req.url?.includes('/tournaments');
-
-    if (roleHeader || referer.includes('/admin') || referer.includes('tab=') || isUrlAdmin) {
+    if (roleHeader) {
+      const upperRole = String(roleHeader).toUpperCase();
       req.user = {
-        id: idHeader || (roleHeader.toUpperCase() === 'ADMIN' ? 'ADM-1004' : 'SCR-101'),
-        email: emailHeader || (roleHeader.toUpperCase() === 'ADMIN' ? 'athilingam3336@gmail.com' : 'ramesh@gmail.com'),
-        role: roleHeader.toUpperCase(),
-        name: roleHeader.toUpperCase() === 'ADMIN' ? 'Athi Lingam' : 'S. Ramesh',
+        id: idHeader || (upperRole === 'ADMIN' ? 'ADM-DEV' : 'SCR-DEV'),
+        email: emailHeader || (upperRole === 'ADMIN' ? env.DEV_ADMIN_EMAIL : 'scorer@localhost.test'),
+        role: upperRole,
+        name: upperRole === 'ADMIN' ? 'Development Admin' : 'Development Scorer',
         certificationLevel: 'Level 1 (District Official)',
         status: 'ACTIVE',
-        is_super_admin: roleHeader.toUpperCase() === 'ADMIN'
+        is_super_admin: upperRole === 'ADMIN'
       };
       return next();
     }
@@ -109,13 +92,11 @@ async function requireScorerAuth(req, res, next) {
       }
 
       // Check token_version for immediate session invalidation
-      if (req.user.tv !== undefined && user.token_version !== undefined) {
-        if (Number(req.user.tv) !== Number(user.token_version)) {
-          return res.status(401).json({
-            success: false,
-            message: 'Unauthorized: Session invalidated due to security update. Please log in again.'
-          });
-        }
+      if (Number(req.user.tv ?? 0) !== Number(user.token_version ?? 0)) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized: Session invalidated due to security update. Please log in again.'
+        });
       }
 
       // Role check: Scorer or Admin
@@ -188,10 +169,28 @@ async function verifyMatchPermission(req, res, next) {
     }
 
     // Scorer must be assigned to this match, or match must be unassigned, or admin
-    const isDev = process.env.NODE_ENV === 'development';
-    const isAssigned = (match.assigned_scorer_id === req.user.id) || 
-                       (!match.assigned_scorer_id) ||
-                       (isDev && (match.assigned_scorer_id === 'SCR-101' || (req.user.email && ['ramesh@gmail.com', 'scorer@cfvd.org'].includes(req.user.email))));
+    const isDev = require('../config/env').isDevelopment;
+    let isAssigned = (match.assigned_scorer_id === req.user.id) ||
+                     (!match.assigned_scorer_id) ||
+                     (isDev && (match.assigned_scorer_id === 'SCR-101' || (req.user.email && ['ramesh@gmail.com', 'scorer@cfvd.org'].includes(req.user.email))));
+
+    if (!isAssigned && req.user) {
+      const uEmail = (req.user.email || '').toLowerCase();
+      const uName = (req.user.name || '').trim().toLowerCase();
+      if (uName && ((match.assigned_scorer_name || '').trim().toLowerCase() === uName || (match.scorer_name || '').trim().toLowerCase() === uName || (match.assigned_scorer_id || '').trim().toLowerCase() === uName)) {
+        isAssigned = true;
+      } else if (uEmail || req.user.id) {
+        const off = await db.models.Official.findOne({
+          $or: [
+            ...(uEmail ? [{ email: uEmail }] : []),
+            ...(req.user.id ? [{ id: req.user.id }] : [])
+          ]
+        }).lean();
+        if (off && match.assigned_scorer_id === off.id) {
+          isAssigned = true;
+        }
+      }
+    }
 
     if (!isAssigned) {
       return res.status(403).json({
@@ -207,33 +206,18 @@ async function verifyMatchPermission(req, res, next) {
   }
 }
 
-const ADMIN_OR_DEV_EMAILS = [
-  'admin@example.com',
-  'admin@cfvd.org',
-  'cricketfederation21@gmail.com',
-  'athilingam3336@gmail.com',
-  'ponramanan21@gmail.com',
-  'ramana.twone@gmail.com'
-];
-
 // Admin authorization helper (re-checks DB role, status, and token_version on every admin request)
 function requireAdminAuth(req, res, next) {
   verifyToken(req, res, async () => {
-    const tokenEmail = (req.user && req.user.email ? req.user.email.toLowerCase() : '');
-    const isSpecialAdmin = ADMIN_OR_DEV_EMAILS.includes(tokenEmail);
-
-    // Immediate role rejection if token is not an admin role
     const tokenRole = req.user && req.user.role;
-    if (!isSpecialAdmin && tokenRole && tokenRole !== 'ADMIN' && tokenRole !== 'SUPER_ADMIN' && !req.user.is_super_admin) {
+    if (tokenRole !== 'ADMIN' && tokenRole !== 'SUPER_ADMIN' && !req.user?.is_super_admin) {
       return res.status(403).json({
         success: false,
-        message: 'Forbidden: ADMIN authorization required.',
-        details: `Role '${tokenRole}' cannot access administrative management endpoints.`
+        message: 'Forbidden: ADMIN authorization required.'
       });
     }
 
-    // In non-production development, allow admin access directly
-    if ((!process.env.NODE_ENV || process.env.NODE_ENV !== 'production') && req.user && (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN')) {
+    if (env.isDevelopment && env.DEV_ADMIN_BYPASS && req.user?.id === 'ADM-DEV') {
       req.adminUser = req.user;
       return next();
     }
@@ -246,7 +230,7 @@ function requireAdminAuth(req, res, next) {
         ]
       }).lean();
 
-      if (!user && !isSpecialAdmin) {
+      if (!user) {
         return res.status(401).json({
           success: false,
           message: 'Unauthorized: User account not found in database.'
@@ -254,25 +238,22 @@ function requireAdminAuth(req, res, next) {
       }
 
       // Check token_version for immediate session invalidation
-      if (user && req.user.tv !== undefined && user.token_version !== undefined) {
-        if (Number(req.user.tv) !== Number(user.token_version)) {
-          return res.status(401).json({
-            success: false,
-            message: 'Unauthorized: Session invalidated due to security update. Please log in again.'
-          });
-        }
-      }
-
-      const isAllowedRole = isSpecialAdmin || (user && (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' || user.is_super_admin));
-      if (!isAllowedRole) {
-        return res.status(403).json({
+      if (Number(req.user.tv ?? 0) !== Number(user.token_version ?? 0)) {
+        return res.status(401).json({
           success: false,
-          message: 'Forbidden: ADMIN authorization required.',
-          details: `Role '${user?.role}' cannot access administrative management endpoints.`
+          message: 'Unauthorized: Session invalidated due to security update. Please log in again.'
         });
       }
 
-      if (user && user.status !== 'ACTIVE' && user.status !== 'APPROVED') {
+      const isAllowedRole = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' || user.is_super_admin;
+      if (!isAllowedRole) {
+        return res.status(403).json({
+          success: false,
+          message: 'Forbidden: ADMIN authorization required.'
+        });
+      }
+
+      if (user.status !== 'ACTIVE' && user.status !== 'APPROVED') {
         return res.status(403).json({
           success: false,
           message: `Access denied: Account status is ${user.status}.`
@@ -281,13 +262,13 @@ function requireAdminAuth(req, res, next) {
 
       req.user = {
         ...req.user,
-        ...(user || {}),
-        role: (user && user.is_super_admin) ? 'SUPER_ADMIN' : 'ADMIN'
+        ...user,
+        role: user.is_super_admin ? 'SUPER_ADMIN' : 'ADMIN'
       };
       req.adminUser = req.user;
       return next();
-    } catch (err) {
-      return res.status(500).json({ success: false, message: 'Admin authentication check failed.', error: err.message });
+    } catch (_err) {
+      return res.status(500).json({ success: false, message: 'Admin authentication check failed.' });
     }
   });
 }
@@ -324,13 +305,11 @@ async function requirePlayerAuth(req, res, next) {
       }
 
       // Check token_version for immediate session invalidation
-      if (req.user.tv !== undefined && user.token_version !== undefined) {
-        if (Number(req.user.tv) !== Number(user.token_version)) {
-          return res.status(401).json({
-            success: false,
-            message: 'Unauthorized: Session invalidated due to security update. Please log in again.'
-          });
-        }
+      if (Number(req.user.tv ?? 0) !== Number(user.token_version ?? 0)) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized: Session invalidated due to security update. Please log in again.'
+        });
       }
 
       // Role check: Player or Admin
@@ -396,13 +375,11 @@ async function requireTeamAuth(req, res, next) {
       }
 
       // Check token_version for immediate session invalidation
-      if (req.user.tv !== undefined && user.token_version !== undefined) {
-        if (Number(req.user.tv) !== Number(user.token_version)) {
-          return res.status(401).json({
-            success: false,
-            message: 'Unauthorized: Session invalidated due to security update. Please log in again.'
-          });
-        }
+      if (Number(req.user.tv ?? 0) !== Number(user.token_version ?? 0)) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized: Session invalidated due to security update. Please log in again.'
+        });
       }
 
       // Role check: COACH, TEAM, or ADMIN
@@ -506,17 +483,15 @@ async function requireUmpireAuth(req, res, next) {
       }
 
       // Check token_version for immediate session invalidation
-      if (req.user.tv !== undefined && user.token_version !== undefined) {
-        if (Number(req.user.tv) !== Number(user.token_version)) {
-          return res.status(401).json({
-            success: false,
-            message: 'Unauthorized: Session invalidated due to security update. Please log in again.'
-          });
-        }
+      if (Number(req.user.tv ?? 0) !== Number(user.token_version ?? 0)) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized: Session invalidated due to security update. Please log in again.'
+        });
       }
 
-      // Role check: Umpire, Admin, or Scorer
-      const isAllowedRole = user.role === 'UMPIRE' || user.role === 'ADMIN' || user.role === 'SCORER';
+      // Role check: Umpire or Admin only
+      const isAllowedRole = user.role === 'UMPIRE' || user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' || user.is_super_admin;
       if (!isAllowedRole) {
         return res.status(403).json({
           success: false,

@@ -180,12 +180,25 @@ class AuthController {
   async logout(req, res) {
     try {
       clearAuthCookies(res);
-      if (req.user && (req.user.id || req.user.email)) {
+      let userInfo = req.user;
+      if (!userInfo) {
+        const authHeader = req.headers['authorization'];
+        const rawTok = (authHeader && authHeader.startsWith('Bearer '))
+          ? authHeader.substring(7).trim()
+          : (req.cookies?.auth_token || req.cookies?.token || null);
+        if (rawTok) {
+          try {
+            const jwt = require('jsonwebtoken');
+            userInfo = jwt.verify(rawTok, require('../config/env').JWT_SECRET);
+          } catch (_e) {}
+        }
+      }
+      if (userInfo && (userInfo.id || userInfo.email)) {
         try {
           const db = require('../config/db');
           await db.initDb();
           await db.models.User.updateOne(
-            { $or: [{ id: req.user.id }, { email: req.user.email }] },
+            { $or: [{ id: userInfo.id }, { email: userInfo.email }] },
             { $inc: { token_version: 1 } }
           );
         } catch (_e) { }

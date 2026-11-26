@@ -66,7 +66,7 @@ const logger = {
     console.error(formatMessage('error', msg, meta));
   },
   debug: (msg, meta) => {
-    if (process.env.NODE_ENV !== 'production') {
+    if (require('./env').isDevelopment) {
       console.log(formatMessage('debug', msg, meta));
     }
   }

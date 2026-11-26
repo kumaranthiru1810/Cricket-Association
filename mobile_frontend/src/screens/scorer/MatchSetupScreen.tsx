@@ -39,6 +39,61 @@ export default function MatchSetupScreen() {
   const [tossDecision, setTossDecision] = useState<'BAT' | 'BOWL'>('BAT');
   const [matchOvers, setMatchOvers] = useState<string>('20');
 
+  // Rule 5: Post-Toss Delay Timer & Over-Reduction Penalty State (Persisted across logout/refresh)
+  const [delayTimerRunning, setDelayTimerRunning] = useState<boolean>(false);
+  const [delayTimerStartedAt, setDelayTimerStartedAt] = useState<string | null>(null);
+  const [delayBaseElapsed, setDelayBaseElapsed] = useState<number>(0);
+  const [delayElapsedSeconds, setDelayElapsedSeconds] = useState<number>(0);
+  const [delayPenaltySkipped, setDelayPenaltySkipped] = useState<boolean>(false);
+  const [delayPenaltyAppliedOvers, setDelayPenaltyAppliedOvers] = useState<number>(0);
+  const [delayPenaltyApplied, setDelayPenaltyApplied] = useState<boolean>(false);
+  const [delayPenaltyTeam, setDelayPenaltyTeam] = useState<'BATTING' | 'BOWLING' | 'BOTH'>('BOTH');
+  const [teamAOvers, setTeamAOvers] = useState<number | null>(null);
+  const [teamBOvers, setTeamBOvers] = useState<number | null>(null);
+
+  const persistDelayState = (next: {
+    running?: boolean;
+    startedAt?: string | null;
+    elapsedSeconds?: number;
+    skipped?: boolean;
+    penaltyOvers?: number;
+    penaltyTeam?: 'NONE' | 'BATTING' | 'BOWLING' | 'BOTH';
+    penaltyApplied?: boolean;
+    teamAOvers?: number | null;
+    teamBOvers?: number | null;
+  }) => {
+    const payload = {
+      running: next.running !== undefined ? next.running : delayTimerRunning,
+      startedAt: next.startedAt !== undefined ? next.startedAt : delayTimerStartedAt,
+      elapsedSeconds: next.elapsedSeconds !== undefined ? next.elapsedSeconds : delayBaseElapsed,
+      skipped: next.skipped !== undefined ? next.skipped : delayPenaltySkipped,
+      penaltyOvers: next.penaltyOvers !== undefined ? next.penaltyOvers : delayPenaltyAppliedOvers,
+      penaltyTeam: next.penaltyTeam !== undefined ? next.penaltyTeam : delayPenaltyTeam,
+      penaltyApplied: next.penaltyApplied !== undefined ? next.penaltyApplied : delayPenaltyApplied,
+      teamAOvers: next.teamAOvers !== undefined ? next.teamAOvers : teamAOvers,
+      teamBOvers: next.teamBOvers !== undefined ? next.teamBOvers : teamBOvers
+    };
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(`cfvd_delay_${matchId}`, JSON.stringify(payload));
+      } catch (_e) {}
+    }
+    ScorerApi.saveDelayTimer(matchId, payload).catch(() => {});
+  };
+
+  useEffect(() => {
+    if (!delayTimerRunning) return;
+    const tick = () => {
+      const sinceStart = delayTimerStartedAt
+        ? Math.max(0, Math.floor((Date.now() - new Date(delayTimerStartedAt).getTime()) / 1000))
+        : 0;
+      setDelayElapsedSeconds(delayBaseElapsed + sinceStart);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [delayTimerRunning, delayTimerStartedAt, delayBaseElapsed]);
+
   useEffect(() => {
     loadSetupData();
   }, [matchId]);
@@ -53,8 +108,39 @@ export default function MatchSetupScreen() {
         if (res.data.tossDecision) {
           setTossDecision(res.data.tossDecision);
         }
-        if (res.data.overs) {
-          setMatchOvers(String(res.data.overs));
+        const adminFixedOvers = Number(res.data.overs || 20);
+        setMatchOvers(String(adminFixedOvers));
+
+        // Restore persisted Rule 5 Delay Timer & Penalty state (backend first, localStorage fallback)
+        let dt = res.data.delayTimer;
+        if ((!dt || (!dt.running && !dt.elapsedSeconds && !dt.penaltyApplied && !dt.skipped)) && typeof window !== 'undefined' && window.localStorage) {
+          try {
+            const cached = window.localStorage.getItem(`cfvd_delay_${matchId}`);
+            if (cached) dt = JSON.parse(cached);
+          } catch (_e) {}
+        }
+        if (dt) {
+          const isRun = Boolean(dt.running);
+          const sAt = dt.startedAt || null;
+          const baseEl = Number(dt.elapsedSeconds || 0);
+          const liveEl = isRun && sAt
+            ? baseEl + Math.max(0, Math.floor((Date.now() - new Date(sAt).getTime()) / 1000))
+            : baseEl;
+          setDelayTimerRunning(isRun);
+          setDelayTimerStartedAt(sAt);
+          setDelayBaseElapsed(baseEl);
+          setDelayElapsedSeconds(liveEl);
+          setDelayPenaltySkipped(Boolean(dt.skipped));
+          setDelayPenaltyAppliedOvers(Number(dt.penaltyOvers || 0));
+          setDelayPenaltyApplied(Boolean(dt.penaltyApplied));
+          if (dt.penaltyTeam && ['BATTING', 'BOWLING', 'BOTH'].includes(dt.penaltyTeam)) {
+            setDelayPenaltyTeam(dt.penaltyTeam);
+          }
+          setTeamAOvers(dt.teamAOvers ?? null);
+          setTeamBOvers(dt.teamBOvers ?? null);
+          if (dt.penaltyApplied && dt.penaltyTeam === 'BOTH' && dt.teamAOvers) {
+            setMatchOvers(String(dt.teamAOvers));
+          }
         }
 
         // Initialize Attendance for Team A (Default: pre-selected 11 or pre-allocated Playing XI)
@@ -135,22 +221,24 @@ export default function MatchSetupScreen() {
       return;
     }
 
-    // Association Rule 15: At least 9 players must be present at the start of the match
+    // Association Rule 15: Dynamic minimum players configured by Admin
+    const rule15Enabled = setupData?.rule15?.enabled !== false;
+    const minRequiredPlayers = rule15Enabled ? (setupData?.rule15?.minPlayers ?? 9) : 1;
     const presentA = (setupData?.teamAPlayers || []).filter((p: any) => attendanceA[p.id]);
     const presentB = (setupData?.teamBPlayers || []).filter((p: any) => attendanceB[p.id]);
 
-    if (presentA.length < 9) {
+    if (presentA.length < minRequiredPlayers) {
       showWarning(
-        'Rule 15: Minimum 9 Players Required',
-        `Rule 15: A minimum of 9 players must be present at the start of each innings.\n\n${teamA.name} has only ${presentA.length} players marked present. Please mark attendance for at least 9 players before starting.`
+        `Rule 15: Minimum ${minRequiredPlayers} Players Required`,
+        `Rule 15: A minimum of ${minRequiredPlayers} players must be present at the start of each innings.\n\n${teamA.name} has only ${presentA.length} players marked present. Please mark attendance for at least ${minRequiredPlayers} players before starting.`
       );
       return;
     }
 
-    if (presentB.length < 9) {
+    if (presentB.length < minRequiredPlayers) {
       showWarning(
-        'Rule 15: Minimum 9 Players Required',
-        `Rule 15: A minimum of 9 players must be present at the start of each innings.\n\n${teamB.name} has only ${presentB.length} players marked present. Please mark attendance for at least 9 players before starting.`
+        `Rule 15: Minimum ${minRequiredPlayers} Players Required`,
+        `Rule 15: A minimum of ${minRequiredPlayers} players must be present at the start of each innings.\n\n${teamB.name} has only ${presentB.length} players marked present. Please mark attendance for at least ${minRequiredPlayers} players before starting.`
       );
       return;
     }
@@ -162,6 +250,11 @@ export default function MatchSetupScreen() {
         tossDecision,
         overs: parsedOvers,
         totalOvers: parsedOvers,
+        delayPenaltyOvers: delayPenaltySkipped ? 0 : delayPenaltyAppliedOvers,
+        delayPenaltySkipped,
+        delayPenaltyTeam: delayPenaltySkipped || !delayPenaltyApplied ? 'NONE' : delayPenaltyTeam,
+        teamAOvers: delayPenaltySkipped || !delayPenaltyApplied ? Number(setupData?.overs || parsedOvers) : (teamAOvers ?? parsedOvers),
+        teamBOvers: delayPenaltySkipped || !delayPenaltyApplied ? Number(setupData?.overs || parsedOvers) : (teamBOvers ?? parsedOvers),
         teamAPlayingXI: presentA.map((p: any) => p.id),
         teamBPlayingXI: presentB.map((p: any) => p.id),
         teamAAttendance: presentA.map((p: any) => p.id),
@@ -303,6 +396,32 @@ export default function MatchSetupScreen() {
                     <Text style={styles.detailLabel}>MATCH STATUS</Text>
                     <Text style={[styles.detailVal, { color: '#eab308' }]}>{setupData?.status || 'SCHEDULED'}</Text>
                   </View>
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailLabel}>TOURNAMENT FORMAT</Text>
+                    <Text style={styles.detailVal} numberOfLines={1}>
+                      {setupData?.tournamentRules?.tournament_format_label || 'Single Round Robin'}
+                    </Text>
+                  </View>
+                  {setupData?.tournamentRules?.match_stage ? (
+                    <View style={styles.detailItem}>
+                      <Text style={styles.detailLabel}>STAGE</Text>
+                      <Text style={styles.detailVal} numberOfLines={1}>
+                        {String(setupData.tournamentRules.match_stage).replace(/_/g, ' ')}
+                      </Text>
+                    </View>
+                  ) : null}
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailLabel}>MAX OVERS / BOWLER</Text>
+                    <Text style={styles.detailVal} numberOfLines={1}>
+                      {setupData?.tournamentRules?.max_overs_per_bowler || Math.max(1, Math.ceil((Number(setupData?.overs || 20)) / 5))} Overs
+                    </Text>
+                  </View>
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailLabel}>CHAIN OVER</Text>
+                    <Text style={[styles.detailVal, { color: setupData?.tournamentRules?.allow_chain_over ? '#16a34a' : '#64748b' }]} numberOfLines={1}>
+                      {setupData?.tournamentRules?.allow_chain_over ? '✓ Allowed' : 'Not Allowed'}
+                    </Text>
+                  </View>
                 </View>
               </View>
 
@@ -362,49 +481,319 @@ export default function MatchSetupScreen() {
                   </View>
                 </View>
 
-                {/* OVERS PER SIDE CONFIGURATION (DEFAULT: 20 OVERS, EDITABLE BY SCORER) */}
+                {/* OVERS PER SIDE CONFIGURATION (LOCKED TO ADMIN SETTING — ONLY REDUCIBLE VIA RULE 5 DELAY PENALTY) */}
                 <View style={[styles.tossBlock, { marginTop: 4 }]}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                    <Text style={styles.fieldLabel}>MATCH OVERS PER SIDE (DEFAULT: 20):</Text>
+                    <Text style={styles.fieldLabel}>MATCH OVERS PER SIDE (ADMIN FIXED):</Text>
                     <Text style={{ fontSize: 11, fontWeight: '800', color: '#0d9488' }}>
-                      Format: {parseInt(matchOvers || '20', 10) <= 20 ? 'T20' : parseInt(matchOvers || '20', 10) <= 50 ? 'One Day' : 'Custom'}
+                      Format: {Number(setupData?.overs || 20) <= 20 ? 'T20' : Number(setupData?.overs || 20) <= 50 ? 'One Day' : 'Custom'}
                     </Text>
                   </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <TextInput
-                      style={styles.oversInputBox}
-                      value={matchOvers}
-                      onChangeText={(val) => setMatchOvers(val.replace(/[^0-9]/g, ''))}
-                      keyboardType="number-pad"
-                      maxLength={3}
-                      placeholder="20"
-                      placeholderTextColor="#94a3b8"
-                    />
-                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#334155' }}>Overs</Text>
-                    <View style={{ flexDirection: 'row', gap: 6, marginLeft: 'auto' }}>
-                      {[10, 15, 20].map((quickOv) => (
-                        <TouchableOpacity
-                          key={quickOv}
-                          onPress={() => setMatchOvers(String(quickOv))}
-                          style={[
-                            styles.quickOverChip,
-                            matchOvers === String(quickOv) && styles.quickOverChipActive
-                          ]}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={[
-                            styles.quickOverChipText,
-                            matchOvers === String(quickOv) && styles.quickOverChipTextActive
-                          ]}>
-                            {quickOv} Ov
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    backgroundColor: '#f1f5f9',
+                    borderWidth: 1,
+                    borderColor: '#cbd5e1'
+                  }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={{ fontSize: 14 }}>🔒</Text>
+                      <Text style={{ fontSize: 15, fontWeight: '900', color: '#0f172a' }}>
+                        {setupData?.overs || 20} Overs / Side
+                      </Text>
+                    </View>
+                    <View style={{
+                      backgroundColor: '#e2e8f0',
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: 6
+                    }}>
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: '#475569' }}>LOCKED BY ADMIN</Text>
                     </View>
                   </View>
-                  <Text style={{ fontSize: 10.5, color: '#64748b', marginTop: 4 }}>
-                    Change 20 to 15, 10 or custom overs before starting. Match will begin with this overs limit.
-                  </Text>
+                  {delayPenaltyApplied && !delayPenaltySkipped && delayPenaltyAppliedOvers > 0 ? (
+                    <View style={{
+                      marginTop: 6,
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      borderRadius: 8,
+                      backgroundColor: '#fef2f2',
+                      borderWidth: 1,
+                      borderColor: '#fecaca'
+                    }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#991b1b' }}>
+                        ⚖️ Delay Penalty Applied (-{delayPenaltyAppliedOvers} Ov • {delayPenaltyTeam === 'BOTH' ? 'Both Teams' : (delayPenaltyTeam === 'BATTING' ? 'Batting Team' : 'Bowling Team')}):
+                        {' '}{teamA.name}: {teamAOvers ?? setupData?.overs ?? 20} Ov • {teamB.name}: {teamBOvers ?? setupData?.overs ?? 20} Ov
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={{ fontSize: 10.5, color: '#64748b', marginTop: 4 }}>
+                      Overs are fixed by Admin and cannot be manually edited by Scorer.
+                    </Text>
+                  )}
+
+                  {/* RULE 5: POST-TOSS DELAY TIMER & OVER/BALL PENALTY (WITH TEAM SELECTION & PERSISTENCE) */}
+                  {(() => {
+                    const tr = setupData?.tournamentRules || {};
+                    if (tr.delay_penalty_enabled === false) return null;
+                    const intervalVal = Number(tr.delay_interval_value || 4);
+                    const intervalUnit = ['HOURS', 'MINUTES', 'SECONDS'].includes(tr.delay_interval_unit)
+                      ? tr.delay_interval_unit
+                      : 'MINUTES';
+                    const intervalSec = intervalUnit === 'HOURS'
+                      ? intervalVal * 3600
+                      : (intervalUnit === 'SECONDS' ? intervalVal : intervalVal * 60);
+                    const reduceUnit = tr.delay_reduce_unit === 'BALLS' ? 'BALLS' : 'OVERS';
+                    const amountPerStep = Number(tr.delay_overs_reduced_per_interval || 1);
+                    const baseOvers = Number(setupData?.overs || 20);
+                    const intervalsElapsed = Math.floor(delayElapsedSeconds / Math.max(1, intervalSec));
+                    const rawReduced = delayPenaltySkipped ? 0 : intervalsElapsed * amountPerStep;
+                    const oversEquivalent = reduceUnit === 'BALLS' ? Math.floor(rawReduced / 6) : rawReduced;
+                    const secsToNext = intervalSec - (delayElapsedSeconds % Math.max(1, intervalSec));
+                    const hrsDisp = String(Math.floor(delayElapsedSeconds / 3600)).padStart(2, '0');
+                    const minsDisp = String(Math.floor((delayElapsedSeconds % 3600) / 60)).padStart(2, '0');
+                    const secsDisp = String(delayElapsedSeconds % 60).padStart(2, '0');
+                    const unitShort = intervalUnit === 'HOURS' ? 'hr' : (intervalUnit === 'SECONDS' ? 'sec' : 'min');
+                    const penaltyShort = reduceUnit === 'BALLS' ? 'Balls' : 'Ov';
+
+                    const firstBatTeamId = tossDecision === 'BAT'
+                      ? (tossWinner || teamA.id)
+                      : ((tossWinner || teamA.id) === teamA.id ? teamB.id : teamA.id);
+                    const firstBowlTeamId = firstBatTeamId === teamA.id ? teamB.id : teamA.id;
+                    const firstBatName = firstBatTeamId === teamA.id ? teamA.name : teamB.name;
+                    const firstBowlName = firstBowlTeamId === teamA.id ? teamA.name : teamB.name;
+
+                    return (
+                      <View style={{
+                        marginTop: 10,
+                        padding: 10,
+                        borderRadius: 10,
+                        backgroundColor: delayPenaltySkipped ? '#f8fafc' : '#fff7ed',
+                        borderWidth: 1,
+                        borderColor: delayPenaltySkipped ? '#cbd5e1' : '#fed7aa'
+                      }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                          <Text style={{ fontSize: 11.5, fontWeight: '800', color: delayPenaltySkipped ? '#475569' : '#9a3412' }}>
+                            ⏱️ Rule 5 • Field Delay Timer (-{amountPerStep} {penaltyShort} / {intervalVal} {unitShort})
+                          </Text>
+                          <Text style={{ fontSize: 13, fontWeight: '900', color: '#0f172a', fontVariant: ['tabular-nums'] }}>
+                            {intervalUnit === 'HOURS' ? `${hrsDisp}:${minsDisp}:${secsDisp}` : `${minsDisp}:${secsDisp}`}
+                          </Text>
+                        </View>
+
+                        <Text style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
+                          {delayPenaltySkipped
+                            ? 'Delay penalty skipped / waived by Scorer.'
+                            : `Penalty due: -${rawReduced} ${penaltyShort}${reduceUnit === 'BALLS' && rawReduced >= 6 ? ` (-${oversEquivalent} Ov)` : ''} • Next -${amountPerStep} ${penaltyShort} in ${secsToNext}s`}
+                        </Text>
+
+                        {/* Delay Caused By Team Selector (Batting Team / Bowling Team / Both) */}
+                        {!delayPenaltySkipped && (
+                          <View style={{ marginTop: 8 }}>
+                            <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#9a3412', marginBottom: 5 }}>
+                              DELAY CAUSED BY (REDUCE OVERS FOR):
+                            </Text>
+                            <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+                              {([
+                                { key: 'BATTING', label: `🏏 Batting (${firstBatName})` },
+                                { key: 'BOWLING', label: `⚾ Bowling (${firstBowlName})` },
+                                { key: 'BOTH', label: '⚔️ Both Teams' }
+                              ] as const).map(opt => {
+                                const active = delayPenaltyTeam === opt.key;
+                                return (
+                                  <TouchableOpacity
+                                    key={opt.key}
+                                    onPress={() => {
+                                      setDelayPenaltyTeam(opt.key);
+                                      persistDelayState({ penaltyTeam: opt.key });
+                                    }}
+                                    style={{
+                                      paddingHorizontal: 9,
+                                      paddingVertical: 5,
+                                      borderRadius: 6,
+                                      borderWidth: 1,
+                                      borderColor: active ? '#ea580c' : '#cbd5e1',
+                                      backgroundColor: active ? '#ffedd5' : '#ffffff'
+                                    }}
+                                  >
+                                    <Text style={{ fontSize: 10.5, fontWeight: active ? '800' : '600', color: active ? '#9a3412' : '#475569' }} numberOfLines={1}>
+                                      {active ? '✓ ' : ''}{opt.label}
+                                    </Text>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </View>
+                          </View>
+                        )}
+
+                        <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                          {!delayPenaltySkipped && (
+                            <>
+                              <TouchableOpacity
+                                onPress={() => {
+                                  if (delayTimerRunning) {
+                                    // Pause: capture current elapsed into baseElapsed
+                                    const nowElapsed = delayElapsedSeconds;
+                                    setDelayTimerRunning(false);
+                                    setDelayTimerStartedAt(null);
+                                    setDelayBaseElapsed(nowElapsed);
+                                    persistDelayState({
+                                      running: false,
+                                      startedAt: null,
+                                      elapsedSeconds: nowElapsed
+                                    });
+                                  } else {
+                                    // Start/Resume: store startedAt timestamp
+                                    const nowIso = new Date().toISOString();
+                                    setDelayTimerRunning(true);
+                                    setDelayTimerStartedAt(nowIso);
+                                    persistDelayState({
+                                      running: true,
+                                      startedAt: nowIso,
+                                      elapsedSeconds: delayBaseElapsed
+                                    });
+                                  }
+                                }}
+                                style={{
+                                  paddingHorizontal: 10,
+                                  paddingVertical: 6,
+                                  borderRadius: 6,
+                                  backgroundColor: delayTimerRunning ? '#dc2626' : '#0f766e'
+                                }}
+                              >
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#ffffff' }}>
+                                  {delayTimerRunning ? '⏸ Pause' : '▶ Start Timer'}
+                                </Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={() => {
+                                  setDelayTimerRunning(false);
+                                  setDelayTimerStartedAt(null);
+                                  setDelayBaseElapsed(0);
+                                  setDelayElapsedSeconds(0);
+                                  setDelayPenaltyAppliedOvers(0);
+                                  setDelayPenaltyApplied(false);
+                                  setTeamAOvers(null);
+                                  setTeamBOvers(null);
+                                  setMatchOvers(String(baseOvers));
+                                  persistDelayState({
+                                    running: false,
+                                    startedAt: null,
+                                    elapsedSeconds: 0,
+                                    penaltyOvers: 0,
+                                    penaltyApplied: false,
+                                    teamAOvers: null,
+                                    teamBOvers: null
+                                  });
+                                }}
+                                style={{
+                                  paddingHorizontal: 10,
+                                  paddingVertical: 6,
+                                  borderRadius: 6,
+                                  backgroundColor: '#e2e8f0'
+                                }}
+                              >
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>Reset</Text>
+                              </TouchableOpacity>
+                              {oversEquivalent > 0 && (
+                                <TouchableOpacity
+                                  onPress={() => {
+                                    const reduced = Math.max(1, baseOvers - oversEquivalent);
+                                    let nextA = baseOvers;
+                                    let nextB = baseOvers;
+                                    if (delayPenaltyTeam === 'BATTING') {
+                                      if (firstBatTeamId === teamA.id) nextA = reduced;
+                                      else nextB = reduced;
+                                    } else if (delayPenaltyTeam === 'BOWLING') {
+                                      if (firstBowlTeamId === teamA.id) nextA = reduced;
+                                      else nextB = reduced;
+                                    } else {
+                                      nextA = reduced;
+                                      nextB = reduced;
+                                    }
+                                    setTeamAOvers(nextA);
+                                    setTeamBOvers(nextB);
+                                    setMatchOvers(delayPenaltyTeam === 'BOTH' ? String(reduced) : String(baseOvers));
+                                    setDelayPenaltyAppliedOvers(oversEquivalent);
+                                    setDelayPenaltyApplied(true);
+                                    persistDelayState({
+                                      running: delayTimerRunning,
+                                      startedAt: delayTimerStartedAt,
+                                      elapsedSeconds: delayBaseElapsed,
+                                      penaltyOvers: oversEquivalent,
+                                      penaltyTeam: delayPenaltyTeam,
+                                      penaltyApplied: true,
+                                      teamAOvers: nextA,
+                                      teamBOvers: nextB
+                                    });
+                                  }}
+                                  style={{
+                                    paddingHorizontal: 10,
+                                    paddingVertical: 6,
+                                    borderRadius: 6,
+                                    backgroundColor: delayPenaltyApplied ? '#16a34a' : '#ea580c'
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#ffffff' }}>
+                                    {delayPenaltyApplied
+                                      ? `✓ Applied (-${oversEquivalent} Ov to ${delayPenaltyTeam === 'BOTH' ? 'Both' : (delayPenaltyTeam === 'BATTING' ? 'Batting' : 'Bowling')})`
+                                      : `Apply (-${oversEquivalent} Ov → ${Math.max(1, baseOvers - oversEquivalent)} Ov)`}
+                                  </Text>
+                                </TouchableOpacity>
+                              )}
+                            </>
+                          )}
+                          <TouchableOpacity
+                            onPress={() => {
+                              if (delayPenaltySkipped) {
+                                setDelayPenaltySkipped(false);
+                                persistDelayState({ skipped: false });
+                              } else {
+                                setDelayTimerRunning(false);
+                                setDelayTimerStartedAt(null);
+                                setDelayBaseElapsed(delayElapsedSeconds);
+                                setDelayPenaltySkipped(true);
+                                setDelayPenaltyAppliedOvers(0);
+                                setDelayPenaltyApplied(false);
+                                setTeamAOvers(null);
+                                setTeamBOvers(null);
+                                setMatchOvers(String(baseOvers));
+                                persistDelayState({
+                                  running: false,
+                                  startedAt: null,
+                                  elapsedSeconds: delayElapsedSeconds,
+                                  skipped: true,
+                                  penaltyOvers: 0,
+                                  penaltyApplied: false,
+                                  teamAOvers: null,
+                                  teamBOvers: null
+                                });
+                              }
+                            }}
+                            style={{
+                              paddingHorizontal: 10,
+                              paddingVertical: 6,
+                              borderRadius: 6,
+                              borderWidth: 1,
+                              borderColor: '#94a3b8',
+                              backgroundColor: '#ffffff',
+                              marginLeft: 'auto'
+                            }}
+                          >
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#334155' }}>
+                              {delayPenaltySkipped ? '↺ Re-enable Penalty' : '⏭️ Skip Penalty'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })()}
                 </View>
 
                 {tossWinnerName ? (
@@ -472,7 +861,9 @@ export default function MatchSetupScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.cardHeader}>Match Squad Attendance &amp; Playing Squad</Text>
                     <Text style={styles.sectionHelp}>
-                      Scorer Attendance Checklist • Tap players to mark Present (Min 9 players per team)
+                      {setupData?.rule15?.enabled === false
+                        ? 'Scorer Attendance Checklist • Tap players to mark Present (Min 1 player per team)'
+                        : `Scorer Attendance Checklist • Tap players to mark Present (Min ${setupData?.rule15?.minPlayers ?? 9} players per team)`}
                     </Text>
                   </View>
                   <View style={styles.xiMainBadge}>
@@ -483,20 +874,34 @@ export default function MatchSetupScreen() {
                 </View>
 
                 {/* ASSOCIATION RULE 15 ATTENDANCE BANNER */}
-                <View style={styles.rule15Banner}>
-                  <Text style={styles.rule15Icon}>📜</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.rule15Title}>
-                      Association Rule 15 • Match Attendance Requirement
-                    </Text>
-                    <Text style={styles.rule15Tamil}>
-                      "Rule 15: A minimum of 9 players must be present at the start of each innings."
-                    </Text>
-                    <Text style={styles.rule15Sub}>
-                      Official Scorer: Mark checkboxes for each attending player. At least 9 players must be marked Present per team before starting the match.
-                    </Text>
-                  </View>
-                </View>
+                {(() => {
+                  const r15Enabled = setupData?.rule15?.enabled !== false;
+                  const minReq = r15Enabled ? (setupData?.rule15?.minPlayers ?? 9) : 1;
+                  const customText = setupData?.rule15?.ruleText?.trim();
+                  const bannerQuote = customText
+                    ? customText
+                    : (r15Enabled
+                      ? `Rule 15: A minimum of ${minReq} players must be present at the start of each innings.`
+                      : 'Rule 15 minimum player check is currently waived by Admin.');
+                  return (
+                    <View style={styles.rule15Banner}>
+                      <Text style={styles.rule15Icon}>📜</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.rule15Title}>
+                          Association Rule 15 • Match Attendance Requirement
+                        </Text>
+                        <Text style={styles.rule15Tamil}>
+                          &quot;{bannerQuote}&quot;
+                        </Text>
+                        <Text style={styles.rule15Sub}>
+                          {r15Enabled
+                            ? `Official Scorer: Mark checkboxes for each attending player. At least ${minReq} players must be marked Present per team before starting the match.`
+                            : 'Official Scorer: Mark checkboxes for attending players before starting the match.'}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })()}
 
                 {/* Mobile Tab Switcher */}
                 {!isDesktop && (
@@ -529,9 +934,13 @@ export default function MatchSetupScreen() {
                         <View style={{ flex: 1, minWidth: 0 }}>
                           <Text style={styles.teamColTitle} numberOfLines={1}>{teamA.name}</Text>
                           <Text style={styles.teamColSub}>
-                            {teamAPlayers.filter((p: any) => attendanceA[p.id]).length >= 9
-                              ? `✅ ${teamAPlayers.filter((p: any) => attendanceA[p.id]).length} Present (Min 9 Met)`
-                              : `⚠️ Only ${teamAPlayers.filter((p: any) => attendanceA[p.id]).length} Present (Rule 15: Need 9)`}
+                            {(() => {
+                              const minReq = setupData?.rule15?.enabled === false ? 1 : (setupData?.rule15?.minPlayers ?? 9);
+                              const countA = teamAPlayers.filter((p: any) => attendanceA[p.id]).length;
+                              return countA >= minReq
+                                ? `✅ ${countA} Present (Min ${minReq} Met)`
+                                : `⚠️ Only ${countA} Present (Rule 15: Need ${minReq})`;
+                            })()}
                           </Text>
                         </View>
                         {/* Attendance Quick Action Buttons */}
@@ -566,9 +975,13 @@ export default function MatchSetupScreen() {
                         <View style={{ flex: 1, minWidth: 0 }}>
                           <Text style={styles.teamColTitle} numberOfLines={1}>{teamB.name}</Text>
                           <Text style={styles.teamColSub}>
-                            {teamBPlayers.filter((p: any) => attendanceB[p.id]).length >= 9
-                              ? `✅ ${teamBPlayers.filter((p: any) => attendanceB[p.id]).length} Present (Min 9 Met)`
-                              : `⚠️ Only ${teamBPlayers.filter((p: any) => attendanceB[p.id]).length} Present (Rule 15: Need 9)`}
+                            {(() => {
+                              const minReq = setupData?.rule15?.enabled === false ? 1 : (setupData?.rule15?.minPlayers ?? 9);
+                              const countB = teamBPlayers.filter((p: any) => attendanceB[p.id]).length;
+                              return countB >= minReq
+                                ? `✅ ${countB} Present (Min ${minReq} Met)`
+                                : `⚠️ Only ${countB} Present (Rule 15: Need ${minReq})`;
+                            })()}
                           </Text>
                         </View>
                         {/* Attendance Quick Action Buttons */}

@@ -71,10 +71,11 @@ class PlayerAuth {
             email: cleanEmail,
             role: 'PLAYER',
             teamName: resolvedTeamName,
-            teamId: existingUser.team_id || null
+            teamId: existingUser.team_id || null,
+            tv: existingUser.token_version ?? 0
           },
           JWT_SECRET,
-          { expiresIn: '24h' }
+          { expiresIn: '12h' }
         );
 
         return {
@@ -93,10 +94,8 @@ class PlayerAuth {
       }
 
       throw {
-        status: 404,
-        message: teamName
-          ? `Player with email "${email}" was not found in team "${teamName}". Please verify your email or click "Find your team".`
-          : `No player account found for "${email}".`
+        status: 401,
+        message: 'Invalid player credentials or account not eligible.'
       };
     }
 
@@ -122,10 +121,11 @@ class PlayerAuth {
         email: cleanEmail,
         role: 'PLAYER',
         teamName: teamReg.team_name,
-        teamId: teamReg.id
+        teamId: teamReg.id,
+        tv: 0
       },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '12h' }
     );
 
     return {
@@ -155,9 +155,9 @@ class PlayerAuth {
 
     const playerInfo = await teamRegistrationModel.findPlayerByEmailOrName(queryStr);
     if (!playerInfo) {
-      throw {
-        status: 404,
-        message: `Player "${queryStr}" was not found in any team squad. Please make sure your coach has submitted your name and email.`
+      return {
+        success: true,
+        message: 'If an eligible player account exists, an OTP has been dispatched.'
       };
     }
 
@@ -229,7 +229,7 @@ class PlayerAuth {
     const queryStr = nameOrEmail.trim();
     const playerInfo = await teamRegistrationModel.findPlayerByEmailOrName(queryStr);
     if (!playerInfo) {
-      throw { status: 404, message: 'Player record not found.' };
+      throw { status: 401, message: 'Invalid or expired OTP code.' };
     }
 
     const authResult = await verifyOtpFn(playerInfo.email, otp);
@@ -284,7 +284,6 @@ class PlayerAuth {
       aadhaar: cleanAadhaar,
       aadhaar_number: cleanAadhaar,
       password_hash: passwordHash,
-      current_password: password ? String(password).trim() : null,
       role: 'PLAYER',
       status: 'ACTIVE',
       player_details: {
@@ -414,9 +413,9 @@ class PlayerAuth {
     const uniqueTeamNames = [...new Set(matchedTeams)].filter(Boolean);
 
     if (uniqueTeamNames.length === 0) {
-      throw {
-        status: 404,
-        message: `No player account or team affiliation found for "${cleanEmail}". Please check your email or contact your team coach.`
+      return {
+        success: true,
+        message: 'If a team affiliation exists for this email, the details have been sent to your inbox.'
       };
     }
 

@@ -25,7 +25,7 @@ class DeliveryService {
     // 1. Fetch Match
     const match = await db.models.Match.findOne({ id: matchId });
     if (!match) throw { status: 404, message: `Match '${matchId}' not found.` };
-    
+
     // Status checks
     if (match.status === 'SCHEDULED') {
       throw { status: 400, message: 'Match is SCHEDULED. Please perform toss and start match before recording deliveries.' };
@@ -51,7 +51,7 @@ class DeliveryService {
           currentBreak: null,
           statusComment: ''
         });
-      } catch (_) {}
+      } catch (_) { }
     }
 
     // 2. Fetch Active Innings
@@ -336,7 +336,17 @@ class DeliveryService {
 
     let nextIsFreeHit = false;
     if (extraType === 'NO_BALL') {
-      nextIsFreeHit = true;
+      const tournamentDoc = await db.models.Tournament.findOne({
+        $or: [
+          ...(match.tournament_id ? [{ id: match.tournament_id }] : []),
+          ...(match.tournament_name ? [{ name: match.tournament_name }] : [])
+        ]
+      }).lean();
+      const freeHitAll = (match.rules_snapshot?.free_hit_on_all_noballs !== undefined
+        ? match.rules_snapshot.free_hit_on_all_noballs
+        : tournamentDoc?.playing_rules?.free_hit_on_all_noballs) !== false;
+      const nbReason = String(deliveryData.noBallReason || deliveryData.no_ball_reason || '').toUpperCase();
+      nextIsFreeHit = freeHitAll || !nbReason || nbReason === 'OVERSTEP';
     } else if (wasDeliveryFreeHit) {
       if (extraType === 'WIDE') {
         nextIsFreeHit = true;
@@ -504,6 +514,7 @@ class DeliveryService {
     // Check match completion
     const maxWickets = getMaxWicketsForInnings(innings, match);
     let isMatchCompleted = false;
+    const inningsMaxOvers = innings.revised_overs || match.revised_overs || match.overs_per_side;
     if (innings.innings_number === 2 && innings.target && innings.total_runs >= innings.target) {
       match.status = 'COMPLETED';
       isMatchCompleted = true;
@@ -515,7 +526,7 @@ class DeliveryService {
       innings.is_over_complete = false;
       await match.save();
       await innings.save();
-    } else if (innings.wickets >= maxWickets || (match.overs_per_side && overNumber >= match.overs_per_side)) {
+    } else if (innings.wickets >= maxWickets || (inningsMaxOvers && overNumber >= inningsMaxOvers)) {
       if (innings.innings_number === 1) {
         innings.is_completed = true;
         innings.is_over_complete = false;
@@ -524,19 +535,22 @@ class DeliveryService {
 
         const target = (innings.total_runs || 0) + 1;
         const inn2Id = `INN-${matchId}-2`;
+        const inn2BattingTeamId = innings.bowling_team_id;
+        const inn2RevisedOvers = (inn2BattingTeamId === match.team_a_id ? match.team_a_overs : match.team_b_overs) || match.revised_overs || match.overs_per_side || null;
         let inn2 = await db.models.Innings.findOne({ id: inn2Id });
         if (!inn2) {
           await db.models.Innings.create({
             id: inn2Id,
             match_id: matchId,
             innings_number: 2,
-            batting_team_id: innings.bowling_team_id,
+            batting_team_id: inn2BattingTeamId,
             bowling_team_id: innings.batting_team_id,
             total_runs: 0,
             wickets: 0,
             overs: 0,
             balls: 0,
             target,
+            revised_overs: inn2RevisedOvers,
             status: 'LIVE',
             is_completed: false,
             is_over_complete: false,
@@ -544,6 +558,7 @@ class DeliveryService {
           });
         } else {
           inn2.target = target;
+          inn2.revised_overs = inn2RevisedOvers;
           inn2.is_completed = false;
           await inn2.save();
         }
@@ -573,8 +588,8 @@ class DeliveryService {
     if (isMatchCompleted) {
       try {
         const tournamentService = require('../tournamentService');
-        tournamentService.onMatchCompleted(matchId);
-      } catch (_err) {}
+        await tournamentService.onMatchCompleted(matchId);
+      } catch (_err) { }
     }
 
     // Warnings and Analysis
@@ -611,7 +626,7 @@ class DeliveryService {
           };
           noBallWarning = dangerousBowlingWarning;
         }
-      } catch (_e) {}
+      } catch (_e) { }
     }
 
     let consecutiveWidesWarning = null;
@@ -636,7 +651,7 @@ class DeliveryService {
             message: `Bowler ${bowlerName} has bowled ${wideCountInOver} Wides in Over ${overNumber + 1}. Check wide tramlines (MCC Law 22).`
           };
         }
-      } catch (_e) {}
+      } catch (_e) { }
     }
 
     const matchTotalOvers = match.overs || 20;
@@ -685,7 +700,7 @@ class DeliveryService {
       match.markModified('score_a');
       match.markModified('score_b');
       await match.save();
-    } catch (_mErr) {}
+    } catch (_mErr) { }
 
     const lastDelPayload = {
       ball: `${overNumber}.${ballNumber}`,
@@ -724,7 +739,7 @@ class DeliveryService {
         lastDelivery: lastDelPayload,
         lastEvent: lastDelPayload
       });
-    } catch (e) {}
+    } catch (e) { }
 
     return {
       success: true,
@@ -915,7 +930,7 @@ class DeliveryService {
         reason: reason || (isMidOver ? 'INJURY_SUBSTITUTION' : 'REGULAR'),
         situation: situation || reason
       });
-    } catch (e) {}
+    } catch (e) { }
 
     return {
       success: true,

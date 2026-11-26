@@ -28,7 +28,9 @@ const { uploadSingle, processImageUpload } = require('../middleware/uploadMiddle
  * POST /api/player/register
  * Individual player registration -> Status = PENDING -> Awaiting Admin Approval
  */
-router.post('/register', async (req, res) => {
+const { registerRateLimiter, otpRateLimiter } = require('../middleware/securityMiddleware');
+
+router.post('/register', registerRateLimiter, async (req, res) => {
   try {
     const result = await authService.registerPlayer(req.body);
     res.status(201).json(result);
@@ -46,7 +48,7 @@ router.post('/register', async (req, res) => {
  * Step 1: Request OTP for registered player name / email
  * Strictly verifies player exists & admin approval status before generating & dispatching OTP
  */
-router.post('/login', async (req, res) => {
+router.post('/login', otpRateLimiter, async (req, res) => {
   try {
     const { name, email, playerName, nameOrEmail, emailOrPhone, input } = req.body;
     const identifier = playerName || nameOrEmail || emailOrPhone || input || email || name;

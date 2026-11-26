@@ -33,7 +33,9 @@ router.get('/districts', async (req, res) => {
  * Register a new team account
  * Body: { teamName, districtId, captainName, phone, email, password }
  */
-router.post('/register', async (req, res) => {
+const { registerRateLimiter, authRateLimiter } = require('../middleware/securityMiddleware');
+
+router.post('/register', registerRateLimiter, async (req, res) => {
   try {
     const { teamName, districtId, captainName, phone, email, password, players } = req.body;
     const result = await teamService.registerTeam({ teamName, districtId, captainName, phone, email, password, players });
@@ -65,7 +67,7 @@ const authController = require('../controllers/authController');
  * Team login endpoint
  * Body: { email, password }
  */
-router.post('/login', async (req, res) => {
+router.post('/login', authRateLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     const result = await teamService.loginTeam({ email, password });
@@ -1060,30 +1062,72 @@ router.get('/notifications', requireTeamAuth, async (req, res) => {
       teamReg?.id
     ].filter(Boolean);
 
+    const targetTeamNames = [
+      teamNameQuery,
+      team?.name,
+      team?.team_name,
+      teamReg?.team_name
+    ].filter(Boolean);
+
     const query = {
       type: { $in: ['MATCH_SCHEDULED', 'MATCH_RESCHEDULED'] },
       recipient_role: 'TEAM',
       $or: [
         { recipient_id: { $in: targetTeamIds } },
-        { team_id: { $in: targetTeamIds } }
+        { team_id: { $in: targetTeamIds } },
+        ...(targetTeamNames.length > 0 ? [{ team_name: { $in: targetTeamNames } }] : [])
       ]
     };
 
     const notifications = await db.models.Notification.find(query).sort({ created_at: -1 }).limit(40).lean();
+    const mappedNotifs = notifications.map(n => ({
+      id: n.id,
+      _id: n._id,
+      type: n.type || 'MATCH_SCHEDULED',
+      title: n.title,
+      message: n.message,
+      reference_id: n.reference_id,
+      link: n.link || null,
+      status: n.status,
+      isRead: n.status === 'READ',
+      createdAt: n.created_at || new Date().toISOString()
+    }));
+
+    // Also include any scheduled/upcoming matches for this team that may not have a Notification doc yet
+    const existingMatchRefs = new Set(mappedNotifs.map(n => n.reference_id).filter(Boolean));
+    const teamMatches = await db.models.Match.find({
+      status: { $in: ['SCHEDULED', 'LIVE', 'TOSS'] },
+      $or: [
+        { team_a_id: { $in: targetTeamIds } },
+        { team_b_id: { $in: targetTeamIds } },
+        ...(targetTeamNames.length > 0 ? [
+          { team_a_name: { $in: targetTeamNames } },
+          { team_b_name: { $in: targetTeamNames } }
+        ] : [])
+      ]
+    }).sort({ created_at: -1 }).limit(20).lean();
+
+    for (const m of teamMatches) {
+      if (existingMatchRefs.has(m.id)) continue;
+      const isTeamA = targetTeamIds.includes(m.team_a_id) || targetTeamNames.includes(m.team_a_name);
+      const opponent = isTeamA ? (m.team_b_name || m.team_b_id) : (m.team_a_name || m.team_a_id);
+      mappedNotifs.push({
+        id: `SYNTH-NOTIF-${m.id}`,
+        _id: `SYNTH-NOTIF-${m.id}`,
+        type: 'MATCH_SCHEDULED',
+        title: `🏏 Match Scheduled vs ${opponent}`,
+        message: `Your match vs ${opponent} has been scheduled on ${m.match_date || 'TBD'} at ${m.match_time || 'TBD'} at ${m.venue || 'District Stadium'}.`,
+        reference_id: m.id,
+        link: m.venue_maps_url || null,
+        status: 'UNREAD',
+        isRead: false,
+        createdAt: m.created_at || new Date().toISOString()
+      });
+    }
+
     res.json({
       success: true,
-      notifications: notifications.map(n => ({
-        id: n.id,
-        _id: n._id,
-        type: n.type || 'MATCH_SCHEDULED',
-        title: n.title,
-        message: n.message,
-        reference_id: n.reference_id,
-        link: n.link || null,
-        status: n.status,
-        isRead: n.status === 'READ',
-        createdAt: n.created_at || new Date().toISOString()
-      }))
+      notifications: mappedNotifs
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

@@ -129,12 +129,11 @@ class UmpireAuth {
     const cleanOtp = String(otp || '').trim();
     if (cleanOtp) {
       const record = registrationOtpMap ? registrationOtpMap.get(cleanEmail) : null;
-      const isDevFallback = cleanOtp === '1234' || cleanOtp === '123456';
-      if (!isDevFallback && record) {
+      if (record) {
         if (new Date() > new Date(record.expiresAt)) {
           throw { status: 400, message: 'Verification code has expired. Please request a new code.' };
         }
-        const isMatch = record.otp === cleanOtp || otpService.verifyOtpCode(cleanOtp, record.hash);
+        const isMatch = otpService.verifyOtpCode(cleanOtp, record.hash);
         if (!isMatch) {
           throw { status: 400, message: 'Invalid verification code.' };
         }
@@ -142,17 +141,14 @@ class UmpireAuth {
       }
     }
 
-    // Password validation & hashing
+    // Password validation & hashing (bcrypt cost 12)
     const rawPass = password || pin;
     if (!rawPass || String(rawPass).trim().length < 4) {
       throw { status: 400, message: 'Please enter a password of at least 4 characters.' };
     }
 
-    let passwordHash = String(rawPass).trim();
-    try {
-      const bcrypt = require('bcryptjs');
-      passwordHash = await bcrypt.hash(passwordHash, 10);
-    } catch (_e) { }
+    const bcrypt = require('bcryptjs');
+    const passwordHash = await bcrypt.hash(String(rawPass).trim(), 12);
 
     const userId = `UMP-${Math.floor(100 + Math.random() * 900)}`;
     const user = await userModel.create({
@@ -162,7 +158,6 @@ class UmpireAuth {
       mobile: cleanMobile,
       aadhaar: cleanAadhaar || null,
       password_hash: passwordHash,
-      current_password: String(rawPass).trim(),
       role: 'UMPIRE',
       status: 'PENDING',
       umpire_details: {

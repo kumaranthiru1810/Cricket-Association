@@ -32,7 +32,7 @@ export const getBackendHost = () => {
   return '10.34.20.112';
 };
 
-const PROD_BACKEND_URL = 'https://cricket-backend-dqdm.onrender.com';
+// Base API URL resolved dynamically from EXPO_PUBLIC_API_URL or current origin
 
 const getBaseUrl = () => {
   if (process.env.EXPO_PUBLIC_API_URL) {
@@ -1173,6 +1173,31 @@ export const ScorerApi = {
     });
   },
 
+  previewTournamentMatches: async (id: string, options?: any) => {
+    return request(`/tournaments/${id}/preview-matches`, {
+      method: 'POST',
+      body: JSON.stringify(options || {})
+    });
+  },
+
+  getGroupPointsTable: async (id: string) => {
+    return request(`/tournaments/${id}/group-points-table`);
+  },
+
+  resolveTournamentTie: async (id: string, orderedTeamIds: string[]) => {
+    return request(`/tournaments/${id}/resolve-tie`, {
+      method: 'POST',
+      body: JSON.stringify({ orderedTeamIds })
+    });
+  },
+
+  updateTournamentGroups: async (id: string, payload: any) => {
+    return request(`/tournaments/${id}/groups`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  },
+
   getTournamentSchedule: async (id: string) => {
     return request(`/tournaments/${id}/schedule`);
   },
@@ -1289,6 +1314,17 @@ export const ScorerApi = {
 
   getMatchSetup: async (matchId: string) => {
     return request(`/scorer/matches/${matchId}/setup`);
+  },
+
+  saveDelayTimer: async (matchId: string, payload: any) => {
+    return request(`/scorer/matches/${matchId}/delay-timer`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  getRule15Config: async () => {
+    return request('/portal/rule-15');
   },
 
   startMatch: async (matchId: string, setup: any) => {
@@ -1416,6 +1452,13 @@ export const ScorerApi = {
 
   endMatch: async (matchId: string, payload?: any) => {
     return request(`/scorer/matches/${matchId}/end`, {
+      method: 'POST',
+      body: JSON.stringify(payload || {})
+    });
+  },
+
+  correctMatchResult: async (matchId: string, payload?: any) => {
+    return request(`/scorer/matches/${matchId}/correct-result`, {
       method: 'POST',
       body: JSON.stringify(payload || {})
     });

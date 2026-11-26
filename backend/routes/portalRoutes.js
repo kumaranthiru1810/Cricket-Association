@@ -1245,4 +1245,83 @@ router.get('/emblem-sequence', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/portal/rule-15
+ * Public endpoint returning the dynamic Association Rule 15 (minimum players per team) config
+ */
+router.get('/rule-15', async (req, res) => {
+  try {
+    await db.initDb();
+    const record = await db.models.MasterSetting.findOne({ id: 'ADMIN_RULE_15' }).lean();
+    let config = {
+      enabled: true,
+      minPlayers: 9,
+      ruleText: ''
+    };
+    if (record?.description) {
+      try {
+        const parsed = JSON.parse(record.description);
+        const parsedMin = parseInt(parsed.minPlayers, 10);
+        config = {
+          enabled: record.is_active !== false,
+          minPlayers: (!isNaN(parsedMin) && parsedMin >= 1 && parsedMin <= 11) ? parsedMin : 9,
+          ruleText: typeof parsed.ruleText === 'string' ? parsed.ruleText : ''
+        };
+      } catch (_e) {}
+    }
+    res.json({ success: true, config });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/portal/committee-members
+ * Public endpoint returning Office Bearers, Ground In-Charges, and Team Notice for Home website
+ */
+router.get('/committee-members', async (req, res) => {
+  try {
+    await db.initDb();
+    const record = await db.models.MasterSetting.findOne({ id: 'ADMIN_COMMITTEE_MEMBERS' }).lean();
+    let config = {
+      enabled: true,
+      sectionTitle: 'Tournament Committee & Office Bearers',
+      roles: [
+        { roleTitle: 'Tournament Coordinator', members: 'D. Saravanamuthu (Assistant Secretary)' },
+        { roleTitle: 'Assistants', members: 'Thangamarimuthu (JC), B. Sri Vallaba Ganesh (Redrose)' },
+        { roleTitle: 'Registration Coordinators', members: 'M. Suresh (Yazhini), Christopher (Yazhini)' },
+        { roleTitle: 'Umpire & Scorer Coordinator', members: 'S. Kabirthasan • Assistants: G. Sankar (Nature), Guhan (Sasinagar)' },
+        { roleTitle: 'Media Coordinators', members: 'R. Sankar (Joint Secretary), M. Manikannan (Miraculous)' }
+      ],
+      groundInCharges: [
+        { groundName: 'Ramco Cements Turf', inCharge: 'Ramco' },
+        { groundName: 'CFVD Ground', inCharge: 'Shooters' },
+        { groundName: 'Mepco', inCharge: 'Physical Education Director' },
+        { groundName: 'PACR', inCharge: 'Ramco' },
+        { groundName: 'AAA', inCharge: 'War Horses & Leo Sports' },
+        { groundName: 'MCC', inCharge: 'Mathai' }
+      ],
+      teamNotice: 'On every match day, each team must nominate 3 members from their squad for match official duties. We kindly request everyone to keep the ground clean.',
+      signatoryTitle: 'Secretary',
+      signatoryName: 'P. Mohanraj',
+      noticeDate: '21.11.2026'
+    };
+
+    if (record?.description) {
+      try {
+        const parsed = JSON.parse(record.description);
+        config = {
+          ...config,
+          ...parsed,
+          enabled: record.is_active !== false
+        };
+      } catch (_e) {}
+    }
+
+    res.json({ success: true, config });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;

@@ -33,16 +33,34 @@ const TeamSchema = new mongoose.Schema({
     tied: { type: Number, default: 0 },
     no_result: { type: Number, default: 0 },
     points: { type: Number, default: 0 },
-    nrr: { type: Number, default: 0.0 }
+    nrr: { type: Number, default: 0.0 },
+    win_percentage: { type: Number, default: 0.0 },
+    team_rating: { type: Number, default: 1000 }
   },
-  championships: [{
-    tournament_id: { type: String, required: true },
-    tournament_name: { type: String, default: '' },
-    season: { type: String, default: '' },
-    position: { type: String, enum: ['CHAMPION', 'RUNNER_UP'], default: 'CHAMPION' },
-    awarded_at: { type: Date, default: Date.now }
+  championship_titles: [{
+    tournament_id: { type: String },
+    tournament_name: { type: String },
+    season: { type: String },
+    won_at: { type: Date, default: Date.now }
   }],
-  trophies_count: { type: Number, default: 0 }
+  runner_up_titles: [{
+    tournament_id: { type: String },
+    tournament_name: { type: String },
+    season: { type: String },
+    won_at: { type: Date, default: Date.now }
+  }],
+  tournament_history: [{
+    tournament_id: { type: String },
+    tournament_name: { type: String },
+    season: { type: String },
+    matches: { type: Number, default: 0 },
+    won: { type: Number, default: 0 },
+    lost: { type: Number, default: 0 },
+    tied: { type: Number, default: 0 },
+    points: { type: Number, default: 0 },
+    nrr: { type: Number, default: 0.0 },
+    stage_reached: { type: String, default: 'PARTICIPATED' }
+  }]
 }, { timestamps: true });
 
 const TeamRegistrationSchema = new mongoose.Schema({
@@ -53,7 +71,6 @@ const TeamRegistrationSchema = new mongoose.Schema({
   coach_phone: { type: String, default: null },
   coach_aadhaar: { type: String, default: null },
   password_hash: { type: String, default: null },
-  current_password: { type: String, default: null },
   passkey: { type: String, default: '' },
   city: { type: String, default: 'Virudhunagar' },
   taluk: { type: String, default: 'Virudhunagar' },

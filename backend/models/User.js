@@ -12,7 +12,6 @@ const UserSchema = new mongoose.Schema({
   mobile: { type: String, default: null },
   aadhaar: { type: String, default: null },
   password_hash: { type: String, default: null },
-  current_password: { type: String, default: null },
   role: { 
     type: String, 
     enum: ['SUPER_ADMIN', 'ADMIN', 'COACH', 'TEAM', 'PLAYER', 'SCORER', 'UMPIRE', 'CONTENT', 'USER'], 

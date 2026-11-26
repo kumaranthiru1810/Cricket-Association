@@ -108,24 +108,29 @@ class UndoEditService {
       await bowler.save();
     }
 
+    // If match was completed by this delivery, safely check & revert tournament stats before deleting delivery
+    const match = await db.models.Match.findOne({ id: matchId });
+    if (match && match.status === 'COMPLETED' && match.stats_processed) {
+      const tournamentService = require('../tournamentService');
+      await tournamentService.revertMatchCompletion(matchId, 'UNDO_LAST_DELIVERY');
+    }
+
     // Remove the delivery from DB
     await db.models.Delivery.deleteOne({ id: lastDelivery.id });
 
-    // If match was completed by this delivery, revert match status & tournament progression
-    const match = await db.models.Match.findOne({ id: matchId });
+    // Revert match & innings status to LIVE
     if (match && match.status === 'COMPLETED') {
-      try {
-        const tournamentEngine = require('../tournamentEngine');
-        await tournamentEngine.reverseMatchProgression(matchId, 'SYSTEM_UNDO', { reopenMatch: true });
-      } catch (revErr) {
-        if (revErr && revErr.status === 409) {
-          throw revErr;
-        }
-        match.status = 'LIVE';
-        match.winner_id = null;
-        match.result_summary = 'In Progress';
-        await match.save();
-      }
+      match.status = 'LIVE';
+      match.winner_id = null;
+      match.result_summary = 'In Progress';
+      match.stats_processed = false;
+      match.stats_processing_status = 'IDLE';
+      match.stats_processed_at = null;
+      await match.save();
+    }
+    if (innings && innings.is_completed) {
+      innings.is_completed = false;
+      await innings.save();
     }
 
     try {

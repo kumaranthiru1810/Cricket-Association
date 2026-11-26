@@ -53,11 +53,13 @@ async function runAllTests() {
   let authToken = null;
   let scorerUser = null;
 
-  await test('CASE 1: Development Admin Login (admin@example.com + 1234) -> Role ADMIN', async () => {
-    const res = await authService.verifyOtp('admin@example.com', '1234');
-    assert(res.token, 'Token should be returned');
-    assert.strictEqual(res.user.role, 'ADMIN');
-    assert.strictEqual(res.user.email, 'admin@example.com');
+  await test('CASE 1: Hardcoded dev admin bypass (admin@example.com + 1234) is REJECTED outside development', async () => {
+    try {
+      await authService.verifyOtp('admin@example.com', '1234');
+      assert.fail('Hardcoded dev bypass must be rejected in test/production');
+    } catch (err) {
+      assert.strictEqual(err.status, 401);
+    }
   });
 
   await test('CASE 2: Normal registered Gmail + correct OTP -> LOGIN SUCCESS (Role: SCORER)', async () => {
@@ -134,7 +136,8 @@ async function runAllTests() {
     // User requests new OTP, overwriting old OTP in MongoDB
     await userModel.updateOtp(rows[0].id, {
       otp_hash: newHash,
-      otp_expires_at: new Date(Date.now() + 5 * 60 * 1000)
+      otp_expires_at: new Date(Date.now() + 5 * 60 * 1000),
+      otp_attempts: 0
     });
 
     try {
@@ -146,14 +149,10 @@ async function runAllTests() {
     }
   });
 
-  await test('CASE 6: Unregistered email -> 404 proper error', async () => {
-    try {
-      await authService.requestOtp('unregistered_scorer_99@test.com');
-      assert.fail('Unregistered email should fail');
-    } catch (err) {
-      assert.strictEqual(err.status, 404);
-      assert(err.message.toLowerCase().includes('not registered') || err.message.toLowerCase().includes('not found'));
-    }
+  await test('CASE 6: Unregistered email -> generic 200 response (no account enumeration)', async () => {
+    const res = await authService.requestOtp('unregistered_scorer_99@test.com');
+    assert.strictEqual(res.success, true);
+    assert(!res.otp, 'Must not return OTP');
   });
 
   await test('CASE 7: SCORER trying to access ADMIN API -> 403 Forbidden', async () => {
@@ -219,14 +218,10 @@ async function runAllTests() {
     otpService.resetRateLimit('scorer@cfvd.org');
   });
 
-  await test('SCORER TEST 3: POST /api/auth/scorer/send-otp with unregistered email -> 404 Not Found', async () => {
-    try {
-      await authService.requestScorerOtp('unknown_scorer@example.com');
-      assert.fail('Should have rejected unregistered email');
-    } catch (err) {
-      assert.strictEqual(err.status, 404);
-      assert(err.message.toLowerCase().includes('not found') || err.message.toLowerCase().includes('register'));
-    }
+  await test('SCORER TEST 3: POST /api/auth/scorer/send-otp with unregistered email -> generic 200 (no enumeration)', async () => {
+    const res = await authService.requestScorerOtp('unknown_scorer@example.com');
+    assert.strictEqual(res.success, true);
+    assert(!res.otp, 'Must not return OTP');
   });
 
   await test('SCORER TEST 4: POST /api/auth/scorer/send-otp with non-scorer role -> 403 Forbidden', async () => {
@@ -264,8 +259,8 @@ async function runAllTests() {
       await authService.verifyScorerOtp('scorer@cfvd.org', '654321');
       assert.fail('Reused OTP must be rejected');
     } catch (err) {
-      assert.strictEqual(err.status, 400);
-      assert(err.message.toLowerCase().includes('no active otp') || err.message.toLowerCase().includes('request an otp'));
+      assert.strictEqual(err.status, 401);
+      assert(err.message.toLowerCase().includes('invalid') || err.message.toLowerCase().includes('expired'));
     }
   });
 
@@ -283,8 +278,8 @@ async function runAllTests() {
       await authService.verifyScorerOtp('scorer@cfvd.org', '999999');
       assert.fail('Should fail on wrong OTP');
     } catch (err) {
-      assert.strictEqual(err.status, 400);
-      assert(err.message.toLowerCase().includes('invalid otp'));
+      assert.strictEqual(err.status, 401);
+      assert(err.message.toLowerCase().includes('invalid'));
     }
 
     const refreshed = await userModel.findByEmail('scorer@cfvd.org');
@@ -305,7 +300,7 @@ async function runAllTests() {
       await authService.verifyScorerOtp('scorer@cfvd.org', knownOtp);
       assert.fail('Should fail on expired OTP');
     } catch (err) {
-      assert.strictEqual(err.status, 400);
+      assert.strictEqual(err.status, 401);
       assert(err.message.toLowerCase().includes('expired'));
     }
   });
@@ -670,14 +665,10 @@ async function runAllTests() {
     }
   });
 
-  await test('LOGIN ATTEMPT: Unregistered email returns 404 with notFound: true', async () => {
-    try {
-      await authService.requestScorerOtp('completely_unknown@example.com');
-      assert.fail('Should reject unregistered email');
-    } catch (err) {
-      assert.strictEqual(err.status, 404);
-      assert.strictEqual(err.notFound, true);
-    }
+  await test('LOGIN ATTEMPT: Unregistered email returns generic 200 (no enumeration)', async () => {
+    const res = await authService.requestScorerOtp('completely_unknown@example.com');
+    assert.strictEqual(res.success, true);
+    assert(!res.otp, 'Must not return OTP');
   });
 
   await test('ADMIN: List pending scorer requests includes new registration', async () => {

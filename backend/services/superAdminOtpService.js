@@ -4,7 +4,7 @@
  * High-Security Nodemailer Email OTP Verification Service for Super Administrator.
  * 
  * Core Invariants:
- * 1. Permanent Super Admin: ONLY admin@cfvd.org (single permanent Super Admin).
+ * 1. Permanent Super Admin: ONLY system-admin (single permanent Super Admin).
  * 2. All other administrator accounts are dynamically managed.
  * 3. Cryptographically secure 6-digit OTP generated via Node.js crypto.
  * 4. Hashed OTP storage (SHA-256 HMAC with random salt).
@@ -198,7 +198,7 @@ async function requestSuperAdminOtp({
     mailDispatched: mailResult.success,
     previewUrl: mailResult.previewUrl || null,
     // Provide demoOtp in development for seamless UI testing
-    demoOtp: process.env.NODE_ENV !== 'production' ? otp : undefined
+    ...(require('../config/env').isDevelopment ? { demoOtp: otp } : {})
   };
 }
 
@@ -257,7 +257,7 @@ async function resendSuperAdminOtp({ sessionId, requesterEmail = SUPER_ADMIN_EMA
     sessionId,
     cooldownSeconds: 60,
     expiresAt: session.expires_at,
-    demoOtp: process.env.NODE_ENV !== 'production' ? otp : undefined
+    ...(require('../config/env').isDevelopment ? { demoOtp: otp } : {})
   };
 }
 
@@ -355,8 +355,8 @@ async function verifyAndExecuteSuperAdminAction({
         actionResult = existingUser.toObject();
       } else {
         const adminId = `ADM-${Date.now()}`;
-        const tempPassword = data.password || 'Admin@2026!';
-        const passwordHash = await bcrypt.hash(tempPassword, 10);
+        const tempPassword = data.password || crypto.randomBytes(12).toString('base64url');
+        const passwordHash = await bcrypt.hash(tempPassword, 12);
         const activationToken = crypto.randomBytes(24).toString('hex');
 
         const newAdmin = await db.models.User.create({
@@ -370,7 +370,7 @@ async function verifyAndExecuteSuperAdminAction({
           admin_level: data.roleLevel || 'Standard Administrator',
           approval_status: 'APPROVED',
           password_hash: passwordHash,
-          current_password: tempPassword,
+          must_change_password: true,
           activation_token: activationToken,
           activation_token_expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000)
         });
@@ -446,7 +446,7 @@ async function verifyAndExecuteSuperAdminAction({
       if (!adminUser) throw new Error(`Administrator ${session.target_id} not found.`);
 
       if (adminUser.email.toLowerCase() === SUPER_ADMIN_EMAIL || adminUser.is_super_admin) {
-        throw new Error('Forbidden: The permanent Super Administrator account (admin@cfvd.org) cannot be suspended.');
+        throw new Error('Forbidden: The permanent Super Administrator account cannot be suspended.');
       }
 
       adminUser.status = 'SUSPENDED';
@@ -460,7 +460,7 @@ async function verifyAndExecuteSuperAdminAction({
       if (!adminUser) throw new Error(`Administrator ${session.target_id} not found.`);
 
       if (adminUser.email.toLowerCase() === SUPER_ADMIN_EMAIL || adminUser.is_super_admin) {
-        throw new Error('Forbidden: The permanent Super Administrator account (admin@cfvd.org) cannot be removed.');
+        throw new Error('Forbidden: The permanent Super Administrator account cannot be removed.');
       }
 
       await db.models.User.deleteOne({ id: session.target_id });

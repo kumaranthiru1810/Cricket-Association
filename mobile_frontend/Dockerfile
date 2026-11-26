@@ -1,5 +1,5 @@
 # Multi-stage Dockerfile for Expo Web Frontend
-FROM node:20-alpine AS builder
+FROM node:20.18-alpine3.20 AS builder
 WORKDIR /app
 
 # Copy package descriptors
@@ -17,7 +17,7 @@ ENV CI=true \
 RUN npx expo export -p web
 
 # Runner stage: Production Nginx web server
-FROM nginx:alpine AS runner
+FROM nginx:1.27.3-alpine AS runner
 
 # Create non-root directories & default configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf

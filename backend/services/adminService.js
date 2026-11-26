@@ -75,8 +75,8 @@ async function getUsers(role = null, status = null) {
   const users = await db.models.User.find(query).sort({ created_at: -1 }).lean();
   return users.map(u => ({
     ...u,
-    is_permanent_super_admin: (u.email || '').toLowerCase().trim() === 'admin@cfvd.org',
-    admin_tier: (u.email || '').toLowerCase().trim() === 'admin@cfvd.org' ? 'Permanent Super Administrator' : (u.role === 'ADMIN' ? 'Dynamic Administrator' : u.role)
+    is_permanent_super_admin: Boolean(u.is_super_admin || u.role === 'SUPER_ADMIN'),
+    admin_tier: (u.is_super_admin || u.role === 'SUPER_ADMIN') ? 'Permanent Super Administrator' : (u.role === 'ADMIN' ? 'Dynamic Administrator' : u.role)
   }));
 }
 
@@ -88,8 +88,8 @@ async function updateUserStatus(userId, status, adminEmail) {
   const existing = await db.models.User.findOne({ id: userId }).lean();
   if (!existing) throw new Error('User not found');
 
-  if ((existing.email || '').toLowerCase().trim() === 'admin@cfvd.org' && status !== 'ACTIVE') {
-    throw new Error('Forbidden: The permanent Super Administrator account (admin@cfvd.org) cannot be suspended or deactivated.');
+  if ((existing.is_super_admin || existing.role === 'SUPER_ADMIN') && status !== 'ACTIVE') {
+    throw new Error('Forbidden: The permanent Super Administrator account cannot be suspended or deactivated.');
   }
 
   const updated = await db.models.User.findOneAndUpdate(
@@ -730,7 +730,7 @@ async function updateMatch(matchId, fixtureData, adminEmail) {
 /**
  * Postpone a match fixture with a mandatory reason
  */
-async function postponeMatch(matchId, optionsOrReason, adminEmail = 'admin@cfvd.org') {
+async function postponeMatch(matchId, optionsOrReason, adminEmail = 'system-admin') {
   await db.initDb();
 
   const options = (typeof optionsOrReason === 'object' && optionsOrReason !== null) ? optionsOrReason : { reason: optionsOrReason };
@@ -929,7 +929,7 @@ async function postponeMatch(matchId, optionsOrReason, adminEmail = 'admin@cfvd.
 /**
  * Reschedule a postponed match with a new valid date and time
  */
-async function rescheduleMatch(matchId, { newDate, newTime, reason }, adminEmail = 'admin@cfvd.org') {
+async function rescheduleMatch(matchId, { newDate, newTime, reason }, adminEmail = 'system-admin') {
   await db.initDb();
 
   const dtValidation = validateScheduleDateTime(newDate, newTime);
@@ -1074,7 +1074,7 @@ async function rescheduleMatch(matchId, { newDate, newTime, reason }, adminEmail
 /**
  * Review an umpire postponement request (Approve or Reject)
  */
-async function reviewUmpirePostponement(matchId, { decision, reviewNotes }, adminEmail = 'admin@cfvd.org') {
+async function reviewUmpirePostponement(matchId, { decision, reviewNotes }, adminEmail = 'system-admin') {
   await db.initDb();
 
   const match = await db.models.Match.findOne({ id: matchId });
@@ -1175,7 +1175,7 @@ async function getPostponementRequests() {
 /**
  * Confirm a match schedule once BOTH teams have submitted their player allocations.
  */
-async function confirmMatchSchedule(matchId, adminEmail = 'admin@cfvd.org') {
+async function confirmMatchSchedule(matchId, adminEmail = 'system-admin') {
   await db.initDb();
 
   const match = await db.models.Match.findOne({ id: matchId });
@@ -1399,7 +1399,7 @@ async function verifyAddCurrentAdminOtp({ requestId, otp, currentAdminEmail }) {
   const reqObj = pendingAdminRequests.find(r => r.requestId === requestId);
   if (!reqObj) throw new Error('Request not found or expired.');
 
-  if (!otpService.verifyOtpCode(otp, reqObj.currentAdminOtpHash) && otp !== '1234') {
+  if (!otpService.verifyOtpCode(otp, reqObj.currentAdminOtpHash)) {
     throw new Error('Invalid OTP for current admin.');
   }
 
@@ -1418,7 +1418,7 @@ async function verifyAddCurrentAdminOtp({ requestId, otp, currentAdminEmail }) {
   return {
     success: true,
     message: `Current admin verified. Verification OTP dispatched to candidate ${reqObj.email}`,
-    devOtp: targetOtp
+    ...(require('../config/env').isDevelopment ? { devOtp: targetOtp } : {})
   };
 }
 
@@ -1430,7 +1430,7 @@ async function verifyAddTargetAdminOtp({ requestId, otp, newAdminEmail }) {
     throw new Error('Current admin must verify first.');
   }
 
-  if (!otpService.verifyOtpCode(otp, reqObj.targetAdminOtpHash) && otp !== '1234') {
+  if (!otpService.verifyOtpCode(otp, reqObj.targetAdminOtpHash)) {
     throw new Error('Invalid OTP for new admin.');
   }
 
@@ -1690,11 +1690,11 @@ async function getContentStats() {
 async function createContent(contentData, adminEmail) {
   const article = await contentModel.create({
     ...contentData,
-    created_by: adminEmail || 'admin@cfvd.org'
+    created_by: adminEmail || 'system-admin'
   });
   await addAuditLog({
     action: 'CREATE_CONTENT',
-    initiated_by: adminEmail || 'admin@cfvd.org',
+    initiated_by: adminEmail || 'system-admin',
     target_user: article.id,
     result: `Notice/Article "${article.title}" published`,
     details: { title: article.title, category: article.category }
@@ -1707,7 +1707,7 @@ async function updateContent(id, contentData, adminEmail) {
   if (!updated) throw new Error('Article not found.');
   await addAuditLog({
     action: 'UPDATE_CONTENT',
-    initiated_by: adminEmail || 'admin@cfvd.org',
+    initiated_by: adminEmail || 'system-admin',
     target_user: id,
     result: `Notice/Article "${id}" updated`,
     details: contentData
@@ -1720,7 +1720,7 @@ async function deleteContent(id, adminEmail) {
   if (!success) throw new Error('Article not found.');
   await addAuditLog({
     action: 'DELETE_CONTENT',
-    initiated_by: adminEmail || 'admin@cfvd.org',
+    initiated_by: adminEmail || 'system-admin',
     target_user: id,
     result: `Notice/Article "${id}" deleted`,
     details: 'Deleted by administrator'
@@ -1737,21 +1737,28 @@ let dualAdminSessions = [];
 
 async function requestDualAdminOtp({ initiatorEmail, action, targetData }) {
   await db.initDb();
+  const env = require('../config/env');
 
-  const superAdminPool = [
-    'admin@cfvd.org',
-    'athilingam3336@gmail.com',
-    'cricketfederation21@gmail.com',
-    'admin@example.com'
-  ];
+  const activeAdmins = await db.models.User.find({
+    role: { $in: ['ADMIN', 'SUPER_ADMIN'] },
+    status: 'ACTIVE'
+  }).select('email').lean();
 
-  // Pick Admin 1 and Admin 2 ensuring they are distinct
+  const superAdminPool = activeAdmins.map(a => a.email.toLowerCase()).filter(Boolean);
+  if (env.ADMIN_INITIAL_EMAIL && !superAdminPool.includes(env.ADMIN_INITIAL_EMAIL.toLowerCase())) {
+    superAdminPool.push(env.ADMIN_INITIAL_EMAIL.toLowerCase());
+  }
+
   let admin1Email = initiatorEmail && superAdminPool.includes(initiatorEmail.toLowerCase())
     ? initiatorEmail.toLowerCase()
-    : 'admin@cfvd.org';
-  let admin2Email = superAdminPool.find(e => e.toLowerCase() !== admin1Email.toLowerCase()) || 'athilingam3336@gmail.com';
+    : (superAdminPool[0] || env.ADMIN_INITIAL_EMAIL);
+  let admin2Email = superAdminPool.find(e => e !== admin1Email) || admin1Email;
 
-  const authSessionId = 'DUAL-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000);
+  if (!admin1Email) {
+    throw new Error('No active administrator email configured for dual-admin verification.');
+  }
+
+  const authSessionId = 'DUAL-' + Date.now() + '-' + crypto.randomInt(1000, 10000);
   const admin1Otp = otpService.generateOtpCode();
   const admin2Otp = otpService.generateOtpCode();
 
@@ -1762,13 +1769,11 @@ async function requestDualAdminOtp({ initiatorEmail, action, targetData }) {
     targetData: targetData || {},
     admin1: {
       email: admin1Email,
-      otpHash: otpService.hashOtp(admin1Otp),
-      plainOtp: admin1Otp
+      otpHash: otpService.hashOtp(admin1Otp)
     },
     admin2: {
       email: admin2Email,
-      otpHash: otpService.hashOtp(admin2Otp),
-      plainOtp: admin2Otp
+      otpHash: otpService.hashOtp(admin2Otp)
     },
     expiresAt: Date.now() + 10 * 60 * 1000 // 10 minutes
   };
@@ -1801,11 +1806,8 @@ async function requestDualAdminOtp({ initiatorEmail, action, targetData }) {
     validitySeconds: 600,
     admin1Email,
     admin2Email,
-    demoOtps: {
-      admin1: admin1Otp,
-      admin2: admin2Otp
-    },
-    message: `Dual-Admin security OTPs dispatched to ${admin1Email} and ${admin2Email}. Valid for 10 minutes.`
+    ...(env.isDevelopment ? { demoOtps: { admin1: admin1Otp, admin2: admin2Otp } } : {}),
+    message: `Dual-Admin security OTPs dispatched. Valid for 10 minutes.`
   };
 }
 
@@ -1826,16 +1828,14 @@ async function verifyAndExecuteDualAdmin({ authSessionId, admin1Otp, admin2Otp, 
   const cleanOtp1 = String(admin1Otp || '').trim();
   const cleanOtp2 = String(admin2Otp || '').trim();
 
-  const isMatch1 = otpService.verifyOtpCode(cleanOtp1, session.admin1.otpHash) ||
-    cleanOtp1 === session.admin1.plainOtp || cleanOtp1 === '123456';
+  const isMatch1 = otpService.verifyOtpCode(cleanOtp1, session.admin1.otpHash);
   if (!isMatch1) {
-    throw new Error(`Invalid or incorrect OTP for Super Admin 1 (${session.admin1.email}).`);
+    throw new Error(`Invalid or incorrect OTP for Super Admin 1.`);
   }
 
-  const isMatch2 = otpService.verifyOtpCode(cleanOtp2, session.admin2.otpHash) ||
-    cleanOtp2 === session.admin2.plainOtp || cleanOtp2 === '123456';
+  const isMatch2 = otpService.verifyOtpCode(cleanOtp2, session.admin2.otpHash);
   if (!isMatch2) {
-    throw new Error(`Invalid or incorrect OTP for Super Admin 2 (${session.admin2.email}).`);
+    throw new Error(`Invalid or incorrect OTP for Super Admin 2.`);
   }
 
   // Dual OTPs successfully verified!
@@ -1848,12 +1848,10 @@ async function verifyAndExecuteDualAdmin({ authSessionId, admin1Otp, admin2Otp, 
       throw new Error('Administrator Name and Email are required.');
     }
 
-    let passwordHash = null;
-    const rawPass = target.password || 'admin123';
-    try {
-      const bcrypt = require('bcryptjs');
-      passwordHash = await bcrypt.hash(rawPass, 10);
-    } catch (_e) { }
+    const crypto = require('crypto');
+    const bcrypt = require('bcryptjs');
+    const rawPass = target.password || crypto.randomBytes(12).toString('hex');
+    const passwordHash = await bcrypt.hash(rawPass, 12);
 
     const adminId = `ADM-${Math.floor(1000 + Math.random() * 9000)}`;
 

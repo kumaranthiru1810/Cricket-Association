@@ -21,7 +21,7 @@ const AdminActionOtpSchema = new mongoose.Schema({
       'REMOVE_ADMIN'
     ]
   },
-  super_admin_email: { type: String, required: true, default: 'admin@cfvd.org' },
+  super_admin_email: { type: String, required: true, default: '' },
   target_id: { type: String, default: null },
   target_email: { type: String, default: null },
   target_data: { type: mongoose.Schema.Types.Mixed, default: {} },

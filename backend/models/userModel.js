@@ -110,12 +110,10 @@ class UserModel {
     const setFields = {
       otp_hash,
       otp_expires_at,
+      otp_attempts: typeof otp_attempts === 'number' ? otp_attempts : 0,
       otp_verified_at: null,
       updated_at: new Date()
     };
-    if (typeof otp_attempts === 'number') {
-      setFields.otp_attempts = otp_attempts;
-    }
     return this.Model.findOneAndUpdate(
       query,
       { $set: setFields },

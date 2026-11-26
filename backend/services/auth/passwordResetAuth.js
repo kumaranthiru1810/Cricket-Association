@@ -56,7 +56,6 @@ class PasswordResetAuth {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
     registrationOtpMap.set(cleanEmail, {
-      otp: rawOtp,
       hash: otpHash,
       expiresAt,
       name: name || 'Applicant',
@@ -70,12 +69,12 @@ class PasswordResetAuth {
       otp: rawOtp
     }).catch(err => console.warn('Background OTP email dispatch notice:', err.message));
 
-    const isProd = process.env.NODE_ENV === 'production';
+    const env = require('../../config/env');
     return {
       success: true,
       message: `Verification code sent to ${cleanEmail}. Please enter the 6-digit OTP code sent to your email.`,
       email: cleanEmail,
-      ...(!isProd ? { otp: rawOtp } : {})
+      ...(env.isDevelopment ? { otp: rawOtp } : {})
     };
   }
 
@@ -89,31 +88,33 @@ class PasswordResetAuth {
 
     const cleanEmail = email.trim().toLowerCase();
     const cleanOtp = String(otp).trim();
-    const isDevFallback = cleanOtp === '1234' || cleanOtp === '123456';
     const record = registrationOtpMap.get(cleanEmail);
 
-    if (!record && !isDevFallback) {
+    if (!record) {
       throw {
         status: 400,
         message: 'No OTP requested for this email or OTP has expired. Please click Send Code again.'
       };
     }
 
-    if (record && !isDevFallback) {
-      if (new Date() > new Date(record.expiresAt)) {
-        registrationOtpMap.delete(cleanEmail);
-        throw { status: 400, message: 'Verification code has expired. Please request a new code.' };
-      }
-
-      const isMatch = record.otp === cleanOtp || otpService.verifyOtpCode(cleanOtp, record.hash);
-      if (!isMatch) {
-        throw { status: 400, message: 'Invalid verification code. Please check your email and try again.' };
-      }
+    if (new Date() > new Date(record.expiresAt)) {
+      registrationOtpMap.delete(cleanEmail);
+      throw { status: 400, message: 'Verification code has expired. Please request a new code.' };
     }
 
-    if (record) {
-      record.verified = true;
+    record.attempts = (record.attempts || 0) + 1;
+    if (record.attempts > 5) {
+      registrationOtpMap.delete(cleanEmail);
+      throw { status: 429, message: 'Too many invalid OTP attempts. Please request a new code.' };
     }
+
+    const isMatch = otpService.verifyOtpCode(cleanOtp, record.hash);
+    if (!isMatch) {
+      if (record.attempts >= 5) registrationOtpMap.delete(cleanEmail);
+      throw { status: 400, message: 'Invalid verification code. Please check your email and try again.' };
+    }
+
+    record.verified = true;
 
     return {
       success: true,
@@ -171,39 +172,11 @@ class PasswordResetAuth {
       }
     }
 
-    // Auto-recognize demo accounts (Admin, Coach, Player)
-    const recognizedAdmins = ['admin@example.com', 'admin@cfvd.org', 'cricketfederation21@gmail.com'];
-    if (!user && (recognizedAdmins.includes(cleanEmail) || (cleanEmail.includes('admin') && role === 'ADMIN'))) {
-      user = {
-        id: 'ADM-1001',
-        name: 'District Administrator',
-        email: cleanEmail,
-        role: 'ADMIN',
-        status: 'ACTIVE'
-      };
-    } else if (!user && cleanEmail === 'saravanan.r@strikerscc.org') {
-      user = {
-        id: 'PLY-DEMO-01',
-        name: 'R. Saravanan (Striker)',
-        email: cleanEmail,
-        role: 'PLAYER',
-        status: 'ACTIVE'
-      };
-    } else if (!user && cleanEmail === 'kannan.coach@strikerscc.org') {
-      user = {
-        id: 'COACH-DEMO-01',
-        name: 'Coach Kannan',
-        email: cleanEmail,
-        role: 'COACH',
-        status: 'ACTIVE'
-      };
-    }
-
     if (!user) {
-      throw {
-        status: 404,
-        notRegistered: true,
-        message: "You can't join this association! Please register first."
+      return {
+        success: true,
+        message: 'If an eligible account exists for this email, a verification code has been dispatched.',
+        email: cleanEmail
       };
     }
 
@@ -220,7 +193,6 @@ class PasswordResetAuth {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     forgotPasswordOtpMap.set(cleanEmail, {
-      otp: rawOtp,
       hash: otpHash,
       expiresAt,
       name: user.name || 'Member',
@@ -242,12 +214,12 @@ class PasswordResetAuth {
       otp: rawOtp
     });
 
-    const isProd = process.env.NODE_ENV === 'production';
+    const env = require('../../config/env');
     return {
       success: true,
       message: `A 4-digit verification code has been sent to ${cleanEmail}.`,
       email: cleanEmail,
-      ...(!isProd ? { otp: rawOtp } : {})
+      ...(env.isDevelopment ? { otp: rawOtp } : {})
     };
   }
 
@@ -261,7 +233,6 @@ class PasswordResetAuth {
 
     const cleanEmail = email.trim().toLowerCase();
     const cleanOtp = String(otp).trim();
-    const isDevFallback = cleanOtp === '1234' || cleanOtp === '0000';
     const record = forgotPasswordOtpMap.get(cleanEmail);
 
     await db.initDb();
@@ -269,46 +240,58 @@ class PasswordResetAuth {
 
     let isMatch = false;
 
-    if (isDevFallback) {
-      isMatch = true;
-    } else if (record) {
+    if (record) {
       if (new Date() > new Date(record.expiresAt)) {
         forgotPasswordOtpMap.delete(cleanEmail);
         throw { status: 400, message: 'Verification code has expired. Please request a new code.' };
       }
-      isMatch = record.otp === cleanOtp || otpService.verifyOtpCode(cleanOtp, record.hash);
+      record.attempts = (record.attempts || 0) + 1;
+      if (record.attempts > 5) {
+        forgotPasswordOtpMap.delete(cleanEmail);
+        throw { status: 429, message: 'Too many invalid OTP attempts. Please request a new code.' };
+      }
+      isMatch = otpService.verifyOtpCode(cleanOtp, record.hash);
+      if (!isMatch && record.attempts >= 5) {
+        forgotPasswordOtpMap.delete(cleanEmail);
+      }
     } else if (dbUser && dbUser.otp_hash) {
+      const attempts = Number(dbUser.otp_attempts || 0);
+      if (attempts >= 5) {
+        await db.models.User.updateOne({ email: cleanEmail }, { $set: { otp_hash: null, otp_expires_at: null } });
+        throw { status: 429, message: 'Too many invalid OTP attempts. Please request a new code.' };
+      }
       const notExpired = dbUser.otp_expires_at && new Date() < new Date(dbUser.otp_expires_at);
       if (!notExpired) {
         throw { status: 400, message: 'Verification code has expired. Please request a new code.' };
       }
       isMatch = otpService.verifyOtpCode(cleanOtp, dbUser.otp_hash);
+      if (!isMatch) {
+        const nextAttempts = attempts + 1;
+        await db.models.User.updateOne(
+          { email: cleanEmail },
+          { $set: nextAttempts >= 5 ? { otp_attempts: nextAttempts, otp_hash: null, otp_expires_at: null } : { otp_attempts: nextAttempts } }
+        );
+      }
     }
 
     if (!isMatch) {
-      throw { status: 400, message: 'Invalid 4-digit OTP code. Please check your email and try again.' };
+      throw { status: 400, message: 'Invalid or expired OTP code.' };
     }
 
     if (record) {
       record.verified = true;
     } else {
       forgotPasswordOtpMap.set(cleanEmail, {
-        otp: cleanOtp,
         hash: otpService.hashOtp(cleanOtp),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
         verified: true
       });
     }
 
-    const teamDoc = await db.models.TeamRegistration.findOne({ coach_email: cleanEmail }).lean();
-    const oldPassword = dbUser?.current_password || teamDoc?.current_password || (dbUser?.password_hash === '1234' ? '1234' : null);
-
     return {
       success: true,
       message: 'OTP verified successfully! You can configure your new password.',
-      email: cleanEmail,
-      oldPassword: oldPassword,
-      currentPassword: oldPassword
+      email: cleanEmail
     };
   }
 
@@ -323,25 +306,22 @@ class PasswordResetAuth {
     const cleanEmail = email.trim().toLowerCase();
     const cleanPass = String(newPassword).trim();
 
-    if (cleanPass.length < 4) {
-      throw { status: 400, message: 'New password must be at least 4 characters.' };
+    if (cleanPass.length < 8) {
+      throw { status: 400, message: 'New password must be at least 8 characters.' };
     }
 
-    const cleanOtp = String(otp).trim();
-    const isDevFallback = cleanOtp === '1234' || cleanOtp === '0000';
+    const cleanOtp = String(otp || '').trim();
     const record = forgotPasswordOtpMap.get(cleanEmail);
 
     await db.initDb();
     const dbUser = await userModel.findByEmail(cleanEmail);
 
     let isMatch = false;
-    if (isDevFallback) {
+    if (record && record.verified && new Date() <= new Date(record.expiresAt)) {
       isMatch = true;
-    } else if (record && record.verified) {
-      isMatch = true;
-    } else if (record) {
-      isMatch = record.otp === cleanOtp || otpService.verifyOtpCode(cleanOtp, record.hash);
-    } else if (dbUser && dbUser.otp_hash) {
+    } else if (record && new Date() <= new Date(record.expiresAt)) {
+      isMatch = otpService.verifyOtpCode(cleanOtp, record.hash);
+    } else if (dbUser && dbUser.otp_hash && dbUser.otp_expires_at && new Date() < new Date(dbUser.otp_expires_at)) {
       isMatch = otpService.verifyOtpCode(cleanOtp, dbUser.otp_hash);
     }
 
@@ -349,21 +329,19 @@ class PasswordResetAuth {
       throw { status: 400, message: 'Invalid or unverified OTP. Please verify OTP first.' };
     }
 
-    let passwordHash = cleanPass;
-    try {
-      const bcrypt = require('bcryptjs');
-      passwordHash = await bcrypt.hash(cleanPass, 10);
-    } catch (_e) { }
+    const bcrypt = require('bcryptjs');
+    const passwordHash = await bcrypt.hash(cleanPass, 12);
 
     let updated = false;
 
-    // 1. Update in User collection
+    // 1. Update in User collection (bump token_version to invalidate existing sessions)
     if (dbUser) {
       await userModel.update(dbUser.id || dbUser._id, {
         password_hash: passwordHash,
-        current_password: cleanPass,
         otp_hash: null,
-        otp_expires_at: null
+        otp_expires_at: null,
+        otp_attempts: 0,
+        token_version: Number(dbUser.token_version || 0) + 1
       });
       updated = true;
     }
@@ -373,11 +351,8 @@ class PasswordResetAuth {
       const teamRes = await db.models.TeamRegistration.updateOne(
         { coach_email: cleanEmail },
         {
-          $set: {
-            password_hash: passwordHash,
-            current_password: cleanPass,
-            passkey: cleanPass
-          }
+          $set: { password_hash: passwordHash },
+          $unset: { current_password: '', passkey: '' }
         }
       );
       if (teamRes.modifiedCount > 0) updated = true;
@@ -388,16 +363,14 @@ class PasswordResetAuth {
       const scorerRes = await db.models.Scorer.updateOne(
         { email: cleanEmail },
         {
-          $set: {
-            password_hash: passwordHash,
-            current_password: cleanPass
-          }
+          $set: { password_hash: passwordHash },
+          $unset: { current_password: '' }
         }
       );
       if (scorerRes.modifiedCount > 0) updated = true;
     } catch (_e) { }
 
-    // Remove from in-memory cache
+    // Single-use: remove from in-memory cache immediately
     forgotPasswordOtpMap.delete(cleanEmail);
 
     return {

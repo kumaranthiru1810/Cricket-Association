@@ -13,15 +13,6 @@ const db = require('../../config/db');
 
 const { JWT_SECRET } = require('../../config/env');
 
-const ADMIN_OR_DEV_EMAILS = [
-  'admin@example.com',
-  'admin@cfvd.org',
-  'cricketfederation21@gmail.com',
-  'athilingam3336@gmail.com',
-  'ponramanan21@gmail.com',
-  'ramana.twone@gmail.com'
-];
-
 class AdminAuth {
   /**
    * Request OTP for email login (Admins, Scorers, Umpires, Coaches)
@@ -37,46 +28,25 @@ class AdminAuth {
       throw { status: 400, message: 'Invalid email address format.' };
     }
 
-    let user = await userModel.findByEmail(cleanEmail);
-
-    if (!user && ADMIN_OR_DEV_EMAILS.includes(cleanEmail)) {
-      user = await userModel.create({
-        id: `ADM-${Date.now()}`,
-        name: cleanEmail.includes('athilingam')
-          ? 'Athilingam (Admin & Scorer)'
-          : (cleanEmail.includes('ramana') || cleanEmail.includes('ponramanan')
-            ? 'Mathan / Ramana (Admin & Scorer)'
-            : 'Association Admin'),
-        email: cleanEmail,
-        role: 'ADMIN',
-        status: 'ACTIVE'
-      });
-    }
+    const user = await userModel.findByEmail(cleanEmail);
 
     if (!user) {
-      throw { status: 404, message: `Email "${cleanEmail}" is not registered. Please register first or contact the administrator.` };
+      return {
+        success: true,
+        message: 'If an eligible account exists for this email, a verification OTP has been dispatched.'
+      };
     }
 
-    if (ADMIN_OR_DEV_EMAILS.includes(cleanEmail) && user.status !== 'ACTIVE') {
-      await userModel.updateStatus(user.id, 'ACTIVE');
-      user.status = 'ACTIVE';
-    }
-
-    const isScorerAccessAllowed = roleRequired === 'SCORER' && (user.role === 'SCORER' || user.role === 'ADMIN' || user.role === 'COACH' || ADMIN_OR_DEV_EMAILS.includes(cleanEmail));
+    const isScorerAccessAllowed = roleRequired === 'SCORER' && (user.role === 'SCORER' || user.role === 'ADMIN' || user.role === 'COACH');
     if (roleRequired && user.role !== roleRequired && user.role !== 'ADMIN' && !isScorerAccessAllowed) {
       throw { status: 403, message: `Access restricted. Your account is registered as ${user.role}, not ${roleRequired}.` };
     }
 
     if (user.status === 'PENDING') {
-      if (ADMIN_OR_DEV_EMAILS.includes(cleanEmail)) {
-        await userModel.updateStatus(user.id, 'ACTIVE');
-        user.status = 'ACTIVE';
-      } else {
-        throw {
-          status: 403,
-          message: 'Your registration is PENDING admin approval. You can only log in once an administrator approves your account.'
-        };
-      }
+      throw {
+        status: 403,
+        message: 'Your registration is PENDING admin approval. You can only log in once an administrator approves your account.'
+      };
     }
     if (user.status === 'REJECTED' || user.status === 'SUSPENDED') {
       throw {
@@ -107,13 +77,13 @@ class AdminAuth {
 
     if (mailResult && !mailResult.success && mailResult.smtpError) {
       console.warn(`⚠️ [SMTP DELIVERY WARNING] Could not send OTP email to ${user.email}: ${mailResult.smtpError}`);
-      const isDev = process.env.NODE_ENV !== 'production';
-      if (!isDev) {
+      const env = require('../../config/env');
+      if (!env.isDevelopment) {
         throw { status: 500, message: 'Failed to dispatch OTP email. Please try again in a few moments.' };
       }
       return {
         success: true,
-        message: `OTP generated successfully! (SMTP Notice: Email delivery failed [${mailResult.smtpError}]. For testing/dev use OTP: ${rawOtp})`,
+        message: 'OTP generated (development mode email fallback).',
         email: user.email,
         otp: rawOtp,
         devOtp: rawOtp,
@@ -139,35 +109,50 @@ class AdminAuth {
     const cleanEmail = email.trim().toLowerCase();
     const cleanOtp = String(otp).trim();
 
+    const env = require('../../config/env');
     if (
-      process.env.DEV_ADMIN_BYPASS === 'true' &&
-      cleanEmail === (process.env.DEV_ADMIN_EMAIL || 'admin@example.com') &&
-      cleanOtp === (process.env.DEV_ADMIN_OTP || '1234')
+      env.isDevelopment &&
+      env.DEV_ADMIN_BYPASS &&
+      cleanEmail === env.DEV_ADMIN_EMAIL &&
+      env.DEV_ADMIN_OTP &&
+      cleanOtp === env.DEV_ADMIN_OTP
     ) {
       const adminUser = await userModel.findByEmail(cleanEmail);
       const token = jwt.sign(
-        { id: adminUser?.id || 'ADM-1001', name: adminUser?.name || 'Administrator', email: cleanEmail, role: 'ADMIN' },
+        { id: adminUser?.id || 'ADM-DEV', name: adminUser?.name || 'Administrator', email: cleanEmail, role: 'ADMIN', tv: adminUser?.token_version || 0 },
         JWT_SECRET,
-        { expiresIn: '24h' }
+        { expiresIn: '12h' }
       );
       return {
         success: true,
         message: 'Admin bypass authenticated successfully.',
-        user: { id: adminUser?.id || 'ADM-1001', name: adminUser?.name || 'Administrator', email: cleanEmail, role: 'ADMIN' },
+        user: { id: adminUser?.id || 'ADM-DEV', name: adminUser?.name || 'Administrator', email: cleanEmail, role: 'ADMIN' },
         token
       };
     }
 
     const user = await userModel.findByEmail(cleanEmail);
     if (!user) {
-      throw { status: 404, message: 'User not found.' };
+      throw { status: 401, message: 'Invalid or expired OTP code.' };
     }
 
-    const isOtpValid = otpService.verifyOtpCode(cleanOtp, user.otp_hash);
-    const isNotExpired = user.otp_expires_at && new Date() < new Date(user.otp_expires_at);
-    const isDevFallback = (cleanOtp === '1234' || cleanOtp === '123456') && (process.env.NODE_ENV !== 'production' || user.status === 'ACTIVE' || user.status === 'APPROVED');
+    const attempts = Number(user.otp_attempts || 0);
+    if (attempts >= 5) {
+      await db.models.User.updateOne({ email: cleanEmail }, { $set: { otp_hash: null, otp_expires_at: null } });
+      throw { status: 429, message: 'Too many invalid OTP attempts. Please request a new OTP.' };
+    }
 
-    if (!isDevFallback && (!isOtpValid || !isNotExpired)) {
+    const isOtpValid = user.otp_hash ? otpService.verifyOtpCode(cleanOtp, user.otp_hash) : false;
+    const isNotExpired = user.otp_expires_at && new Date() < new Date(user.otp_expires_at);
+
+    if (!isOtpValid || !isNotExpired) {
+      const nextAttempts = attempts + 1;
+      const update = { otp_attempts: nextAttempts };
+      if (nextAttempts >= 5) {
+        update.otp_hash = null;
+        update.otp_expires_at = null;
+      }
+      await db.models.User.updateOne({ email: cleanEmail }, { $set: update });
       throw { status: 401, message: 'Invalid or expired OTP code.' };
     }
 
@@ -198,9 +183,9 @@ class AdminAuth {
     await userModel.markOtpVerified(user.id || user.email);
 
     const token = jwt.sign(
-      { id: user.id || user.email, name: user.name, email: user.email, role: user.role },
+      { id: user.id || user.email, name: user.name, email: user.email, role: user.role, tv: user.token_version || 0 },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '12h' }
     );
 
     return {
@@ -230,36 +215,9 @@ class AdminAuth {
 
     await db.initDb();
 
-    let user = await userModel.findByEmail(cleanEmail);
-
-    const recognizedAdmins = ['admin@example.com', 'admin@cfvd.org', 'cricketfederation21@gmail.com', 'athilingam3336@gmail.com'];
-    if (!user && recognizedAdmins.includes(cleanEmail)) {
-      const defaultPass = cleanEmail === 'athilingam3336@gmail.com' ? 'athi1833@@' : '1234';
-      const bcrypt = require('bcryptjs');
-      const hashedPass = await bcrypt.hash(defaultPass, 10);
-      user = await userModel.create({
-        id: `ADM-${Date.now()}`,
-        name: cleanEmail === 'athilingam3336@gmail.com' ? 'Athi Lingam' : 'Chief Administrator',
-        email: cleanEmail,
-        role: 'ADMIN',
-        status: 'ACTIVE',
-        password_hash: hashedPass
-      });
-    }
-
-    if (!user) {
-      throw { status: 404, message: `Admin account with email "${cleanEmail}" not found.` };
-    }
-
-    if (user.role !== 'ADMIN') {
-      if (cleanEmail === 'athilingam3336@gmail.com' || cleanEmail === 'admin@cfvd.org') {
-        user.role = 'ADMIN';
-        try {
-          await userModel.update(user.id, { role: 'ADMIN', status: 'ACTIVE' });
-        } catch (e) {}
-      } else {
-        throw { status: 403, message: 'Access denied: User is not authorized as an administrator.' };
-      }
+    const user = await userModel.findByEmail(cleanEmail);
+    if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN')) {
+      throw { status: 401, message: 'Invalid administrator credentials.' };
     }
 
     const bcrypt = require('bcryptjs');
@@ -267,35 +225,19 @@ class AdminAuth {
     if (user.password_hash) {
       try {
         isPasswordValid = await bcrypt.compare(cleanPass, user.password_hash);
-      } catch (e) {
+      } catch (_e) {
         isPasswordValid = false;
       }
     }
-    if (!isPasswordValid) {
-      if (cleanEmail === 'athilingam3336@gmail.com' && cleanPass === 'athi1833@@') {
-        isPasswordValid = true;
-      } else if (cleanEmail === 'admin@example.com' && cleanPass === '1234') {
-        isPasswordValid = true;
-      } else if (cleanEmail === 'admin@cfvd.org' && (cleanPass === 'CFVD@Admin2026' || cleanPass === 'admin123')) {
-        isPasswordValid = true;
-      }
-
-      if (isPasswordValid) {
-        try {
-          const updatedHash = await bcrypt.hash(cleanPass, 10);
-          await userModel.update(user.id, { password_hash: updatedHash });
-        } catch (e) {}
-      }
-    }
 
     if (!isPasswordValid) {
-      throw { status: 401, message: 'Invalid administrator password.' };
+      throw { status: 401, message: 'Invalid administrator credentials.' };
     }
 
     const token = jwt.sign(
-      { id: user.id, name: user.name, email: user.email, role: 'ADMIN' },
+      { id: user.id, name: user.name, email: user.email, role: 'ADMIN', tv: user.token_version || 0 },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '12h' }
     );
 
     try {
@@ -354,99 +296,8 @@ class AdminAuth {
       }).lean();
     }
 
-    if (!user && (roleRequired === 'COACH' || roleRequired === 'TEAM')) {
-      const reg = await teamRegistrationModel.findByCoachEmail(cleanEmail);
-      if (reg) {
-        user = await userModel.findByEmail(cleanEmail);
-      }
-    }
-
-    if (!user && (roleRequired === 'COACH' || roleRequired === 'TEAM' || !roleRequired)) {
-      if (cleanEmail === 'spartans@gmail.com' || cleanEmail.includes('spartan') || cleanEmail === 'coach@cfvd.org') {
-        user = await userModel.findByEmail('spartans@gmail.com');
-        if (!user) {
-          user = await userModel.create({
-            id: 'COACH-TM-01',
-            name: 'Virudhunagar Spartans Official',
-            email: 'spartans@gmail.com',
-            role: 'TEAM',
-            status: 'APPROVED',
-            team_id: 'TM-01',
-            password_hash: '1234'
-          });
-        }
-      } else if (cleanEmail === 'royals@gmail.com' || cleanEmail.includes('royal') || cleanEmail === 'coach.royals@gmail.com') {
-        user = await userModel.findByEmail('royals@gmail.com');
-        if (!user) {
-          user = await userModel.create({
-            id: 'COACH-TM-03',
-            name: 'Rajapalayam Royals Official',
-            email: 'royals@gmail.com',
-            role: 'TEAM',
-            status: 'APPROVED',
-            team_id: 'TM-03',
-            password_hash: '1234'
-          });
-        }
-      }
-    }
-
-    if (!user && (roleRequired === 'PLAYER' || !roleRequired)) {
-      const playerDoc = await db.models.Player.findOne({
-        $or: [
-          { email: cleanEmail },
-          { name: { $regex: new RegExp(`^${cleanId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } }
-        ]
-      }).lean();
-      if (playerDoc) {
-        user = await userModel.create({
-          id: playerDoc.id,
-          name: playerDoc.name,
-          email: playerDoc.email || cleanEmail,
-          role: 'PLAYER',
-          status: 'ACTIVE',
-          team_id: playerDoc.team_id,
-          password_hash: '1234'
-        });
-      }
-    }
-
-    const recognizedUmpires = ['sundaram.umpire@cfvd.org', 'umpire@cfvd.org', 'ramanathan.umpire@cfvd.org'];
-    if (!user && (recognizedUmpires.includes(cleanEmail) || (cleanEmail.includes('umpire') && (roleRequired === 'UMPIRE' || !roleRequired)))) {
-      user = await userModel.create({
-        id: `UMP-${Date.now().toString().slice(-4)}`,
-        name: cleanEmail.includes('ramanathan') ? 'Thiru. M. Ramanathan' : 'Thiru. K. Sundaram',
-        email: cleanEmail,
-        role: 'UMPIRE',
-        status: 'ACTIVE',
-        password_hash: '1234',
-        umpire_details: {
-          certification_level: 'Panel A - Senior',
-          taluk: 'Virudhunagar'
-        }
-      });
-    }
-
-    if (!user && (cleanEmail === 'saravanan.r@strikerscc.org' || (cleanEmail.includes('player') && (roleRequired === 'PLAYER' || !roleRequired)))) {
-      user = await userModel.create({
-        id: 'PLY-101',
-        name: 'R. Saravanan (Player)',
-        email: cleanEmail === 'saravanan.r@strikerscc.org' ? cleanEmail : 'player@example.com',
-        role: 'PLAYER',
-        status: 'ACTIVE',
-        password_hash: '1234',
-        player_details: {
-          batting_style: 'Right Hand Bat',
-          bowling_style: 'Right Arm Fast/Medium',
-          taluk: 'Virudhunagar',
-          category: 'Senior Men',
-          club_choice: 'Strikers CC'
-        }
-      });
-    }
-
     if (!user) {
-      throw { status: 404, message: `Account with identifier "${cleanId}" not found. Please register first.` };
+      throw { status: 401, message: 'Invalid credentials.' };
     }
 
     // Role check
@@ -498,14 +349,6 @@ class AdminAuth {
       try {
         isCredentialValid = await bcrypt.compare(cleanCredential, user.password_hash);
       } catch (_e) { }
-      if (!isCredentialValid && (user.password_hash === cleanCredential || user.current_password === cleanCredential)) {
-        isCredentialValid = true;
-      }
-    }
-
-    // Fallback for development/testing
-    if (!isCredentialValid && (cleanCredential === '1234' || cleanCredential === '123456') && (process.env.NODE_ENV !== 'production' || user.status === 'ACTIVE' || user.status === 'APPROVED')) {
-      isCredentialValid = true;
     }
 
     if (!isCredentialValid) {
@@ -513,9 +356,9 @@ class AdminAuth {
     }
 
     const token = jwt.sign(
-      { id: user.id || user.email, name: user.name, email: user.email, role: user.role, team_id: user.team_id },
+      { id: user.id || user.email, name: user.name, email: user.email, role: user.role, team_id: user.team_id, tv: user.token_version || 0 },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '12h' }
     );
 
     return {

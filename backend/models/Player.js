@@ -22,17 +22,45 @@ const PlayerSchema = new mongoose.Schema({
   image_path: { type: String, default: null },
   status: { type: String, default: 'ACTIVE' },
   stats: {
+    matches: { type: Number, default: 0 },
+    innings: { type: Number, default: 0 },
+    not_outs: { type: Number, default: 0 },
     runs: { type: Number, default: 0 },
     balls: { type: Number, default: 0 },
     fours: { type: Number, default: 0 },
     sixes: { type: Number, default: 0 },
+    fifties: { type: Number, default: 0 },
+    hundreds: { type: Number, default: 0 },
     highest_score: { type: Number, default: 0 },
     wickets: { type: Number, default: 0 },
     overs: { type: Number, default: 0 },
+    maidens: { type: Number, default: 0 },
     runs_conceded: { type: Number, default: 0 },
     catches: { type: Number, default: 0 },
-    stumpings: { type: Number, default: 0 }
-  }
+    stumpings: { type: Number, default: 0 },
+    run_outs: { type: Number, default: 0 },
+    potm_awards: { type: Number, default: 0 }
+  },
+  team_membership_history: [{
+    team_id: { type: String, required: true },
+    team_name: { type: String, default: '' },
+    season: { type: String, default: '' },
+    role: { type: String, default: 'BATTER' },
+    joined_at: { type: Date, default: Date.now },
+    left_at: { type: Date, default: null },
+    is_current: { type: Boolean, default: true }
+  }],
+  tournament_history: [{
+    tournament_id: { type: String, required: true },
+    tournament_name: { type: String, default: '' },
+    season: { type: String, default: '' },
+    team_id: { type: String, default: '' },
+    team_name: { type: String, default: '' },
+    matches: { type: Number, default: 0 },
+    runs: { type: Number, default: 0 },
+    wickets: { type: Number, default: 0 },
+    potm_count: { type: Number, default: 0 }
+  }]
 }, { timestamps: true });
 
 const PlayerMatchRatingSchema = new mongoose.Schema({

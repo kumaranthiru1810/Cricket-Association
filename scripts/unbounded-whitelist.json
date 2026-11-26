@@ -1,0 +1,21 @@
+{
+  "justification": "Internal small-collection or bounded admin/lookup queries",
+  "files": [
+    "backend/routes/portalRoutes.js",
+    "backend/routes/teamRoutes.js",
+    "backend/controllers/adminDashboardController.js",
+    "backend/controllers/tournamentController.js",
+    "backend/services/adminService.js",
+    "backend/services/auth/adminAuth.js",
+    "backend/services/auth/playerAuth.js",
+    "backend/services/cricketLawsService.js",
+    "backend/services/historyService.js",
+    "backend/services/playerService.js",
+    "backend/services/scorerService.js",
+    "backend/services/scoring/deliveryHelpers.js",
+    "backend/services/tournamentService.js",
+    "backend/services/umpireService.js",
+    "backend/services/scoring/matchService.js"
+  ]
+}
+
