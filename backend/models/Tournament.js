@@ -13,7 +13,7 @@ const TournamentSchema = new mongoose.Schema({
   description: { type: String, default: '' },
   tournament_type: { 
     type: String, 
-    enum: ['LEAGUE', 'KNOCKOUT', 'LEAGUE_KNOCKOUT'], 
+    enum: ['LEAGUE', 'KNOCKOUT', 'LEAGUE_KNOCKOUT', 'DOUBLE_ELIMINATION', 'GROUP_KNOCKOUT', 'LEAGUE_PLAYOFFS', 'CUSTOM'], 
     default: 'LEAGUE' 
   },
   category: { type: String, default: 'Senior District Trophy' },
@@ -49,9 +49,47 @@ const TournamentSchema = new mongoose.Schema({
     round_robin_type: { type: String, enum: ['SINGLE', 'DOUBLE'], default: 'SINGLE' },
     knockout_stages: [{ type: String }],
     qualifying_teams_count: { type: Number, default: 4 },
-    qualification_rules: { type: String, default: 'Top qualifying teams advance to knockout stage' }
+    qualification_rules: { type: String, default: 'Top qualifying teams advance to knockout stage' },
+    top_n_per_group: { type: Number, default: 2 },
+    best_third_place_count: { type: Number, default: 0 },
+    tie_breaker_order: { type: [String], default: ['POINTS', 'NRR', 'HEAD_TO_HEAD', 'WINS'] },
+    allow_grand_final_reset: { type: Boolean, default: true },
+    playoffs_format: { type: String, enum: ['STANDARD', 'IPL'], default: 'STANDARD' },
+    min_rest_hours: { type: Number, default: 4 },
+    max_squad_size: { type: Number, default: 18 },
+    min_squad_size: { type: Number, default: 11 },
+    age_limit: { type: Number, default: null }
   },
   teams: [{ type: String, ref: 'Team' }],
+  groups: [{
+    id: { type: String, required: true },
+    name: { type: String, required: true },
+    teams: [{ type: String }],
+    locked: { type: Boolean, default: false }
+  }],
+  group_allocation_mode: { type: String, enum: ['BALANCED', 'RANDOM', 'SEEDED', 'MANUAL'], default: 'BALANCED' },
+  groups_confirmed: { type: Boolean, default: false },
+  bracket: { type: mongoose.Schema.Types.Mixed, default: null },
+  manual_tie_breakers: [{
+    group_id: { type: String, default: 'ALL' },
+    resolved_order: [{ type: String }],
+    resolved_by: { type: String, default: '' },
+    resolved_at: { type: Date, default: Date.now },
+    reason: { type: String, default: '' }
+  }],
+  withdrawn_teams: [{
+    team_id: { type: String, required: true },
+    team_name: { type: String, default: '' },
+    withdrawn_at: { type: Date, default: Date.now },
+    withdrawn_by: { type: String, default: '' },
+    reason: { type: String, default: '' },
+    rule_applied: { type: String, default: 'REMAINING_WALKOVER' }
+  }],
+  champion_team_id: { type: String, default: null },
+  champion_team_name: { type: String, default: '' },
+  runner_up_team_id: { type: String, default: null },
+  runner_up_team_name: { type: String, default: '' },
+  completed_at: { type: Date, default: null },
   status: { 
     type: String, 
     enum: ['UPCOMING', 'REGISTRATION_OPEN', 'REGISTRATION_CLOSED', 'ONGOING', 'COMPLETED', 'CANCELLED', 'ACTIVE', 'INACTIVE'], 

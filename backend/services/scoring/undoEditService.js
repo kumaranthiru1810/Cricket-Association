@@ -111,13 +111,21 @@ class UndoEditService {
     // Remove the delivery from DB
     await db.models.Delivery.deleteOne({ id: lastDelivery.id });
 
-    // If match was completed by this delivery, revert match status to LIVE
+    // If match was completed by this delivery, revert match status & tournament progression
     const match = await db.models.Match.findOne({ id: matchId });
     if (match && match.status === 'COMPLETED') {
-      match.status = 'LIVE';
-      match.winner_id = null;
-      match.result_summary = 'In Progress';
-      await match.save();
+      try {
+        const tournamentEngine = require('../tournamentEngine');
+        await tournamentEngine.reverseMatchProgression(matchId, 'SYSTEM_UNDO', { reopenMatch: true });
+      } catch (revErr) {
+        if (revErr && revErr.status === 409) {
+          throw revErr;
+        }
+        match.status = 'LIVE';
+        match.winner_id = null;
+        match.result_summary = 'In Progress';
+        await match.save();
+      }
     }
 
     try {

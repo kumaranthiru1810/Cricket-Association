@@ -26,6 +26,7 @@ import { adminApi } from '../services/adminApi';
 import { showSuccess, showError, showWarning, showConfirm } from '../../utils/sweetalert';
 import { useDebounce } from '../../utils/debounce';
 import { Ionicons } from '@expo/vector-icons';
+import TournamentAdvancedTabs from './TournamentAdvancedTabs';
 
 export interface TournamentManagementProps {
   onOpenScheduler?: (tournament: any, match?: any) => void;
@@ -33,8 +34,8 @@ export interface TournamentManagementProps {
 }
 
 type TournamentFilterStatus = 'ALL' | 'UPCOMING' | 'ONGOING' | 'COMPLETED' | 'CANCELLED';
-type TournamentTab = 'overview' | 'teams' | 'schedule' | 'points' | 'stats' | 'rules';
-type TournamentType = 'LEAGUE' | 'KNOCKOUT' | 'LEAGUE_KNOCKOUT';
+type TournamentTab = 'overview' | 'teams' | 'groups' | 'schedule' | 'points' | 'bracket' | 'stats' | 'simulator' | 'rules';
+type TournamentType = 'LEAGUE' | 'KNOCKOUT' | 'LEAGUE_KNOCKOUT' | 'DOUBLE_ELIMINATION' | 'GROUP_KNOCKOUT' | 'LEAGUE_PLAYOFFS' | 'CUSTOM';
 type MatchFormat = 'T10' | 'T20' | 'ODI' | 'CUSTOM';
 
 // Web select inline style to ensure appearance: none and full width render across all browsers
@@ -2183,8 +2184,12 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                           style={webSelectStyle}
                         >
                           <option value="LEAGUE">League (Round Robin)</option>
-                          <option value="KNOCKOUT">Knockout (Bracket Elimination)</option>
-                          <option value="LEAGUE_KNOCKOUT">League + Knockout (Group Stage + Playoffs)</option>
+                          <option value="KNOCKOUT">Knockout (Single Elimination)</option>
+                          <option value="DOUBLE_ELIMINATION">Double Elimination (WB + LB + GF Reset)</option>
+                          <option value="GROUP_KNOCKOUT">Group Stage + Knockout</option>
+                          <option value="LEAGUE_PLAYOFFS">League + IPL Playoffs (Q1 / Elim / Q2 / Final)</option>
+                          <option value="LEAGUE_KNOCKOUT">League + Knockout (Standard)</option>
+                          <option value="CUSTOM">Custom Format</option>
                         </select>
                         <View style={styles.selectChevron}>
                           <Text style={styles.selectChevronText}>▾</Text>
@@ -2861,9 +2866,12 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                   {[
                     { key: 'overview', label: '📊 Overview' },
                     { key: 'teams', label: `🛡️ Participating Teams (${(selectedTournament.participating_teams || []).length})` },
+                    { key: 'groups', label: `🗂️ Groups (${(selectedTournament.groups || []).length})` },
                     { key: 'schedule', label: `📅 Matches (${(selectedTournament.matches || []).length})` },
                     { key: 'points', label: '🏆 Points Table' },
+                    { key: 'bracket', label: '🌿 Bracket' },
                     { key: 'stats', label: '📈 Statistics' },
+                    { key: 'simulator', label: '🔮 Simulator & Rules' },
                     { key: 'rules', label: '📜 Rules & Playing Conditions' }
                   ].map(tab => {
                     const active = detailsTab === tab.key;
@@ -3252,6 +3260,15 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                         </Text>
                       </View>
                     </View>
+                  )}
+
+                  {/* ADVANCED TABS: GROUPS / BRACKET / SIMULATOR */}
+                  {(detailsTab === 'groups' || detailsTab === 'bracket' || detailsTab === 'simulator') && (
+                    <TournamentAdvancedTabs
+                      tournament={selectedTournament}
+                      activeTab={detailsTab}
+                      onRefresh={() => handleOpenDetails(selectedTournament)}
+                    />
                   )}
                 </ScrollView>
               </>

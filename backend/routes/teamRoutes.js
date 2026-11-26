@@ -1445,4 +1445,15 @@ router.delete('/players/:playerId', requireTeamAuth, async (req, res) => {
   }
 });
 
+const historyService = require('../services/historyService');
+
+router.get('/:id/history', async (req, res) => {
+  try {
+    const result = await historyService.getTeamHistory(req.params.id);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, message: err.message || 'Failed to load team history.' });
+  }
+});
+
 module.exports = router;

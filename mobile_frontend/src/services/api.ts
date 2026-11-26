@@ -941,6 +941,26 @@ export const ScorerApi = {
     return request(`/portal/players/${encodeURIComponent(playerId)}`);
   },
 
+  getTeamHistory: async (teamId: string) => {
+    return request(`/team/${encodeURIComponent(teamId)}/history`);
+  },
+
+  getPlayerHistory: async (playerId: string) => {
+    return request(`/player/${encodeURIComponent(playerId)}/history`);
+  },
+
+  comparePlayers: async (player1: string, player2: string) => {
+    return request(`/player/compare?player1=${encodeURIComponent(player1)}&player2=${encodeURIComponent(player2)}`);
+  },
+
+  getTournamentBracket: async (tournamentId: string) => {
+    return request(`/tournaments/${encodeURIComponent(tournamentId)}/bracket`);
+  },
+
+  getTournamentStandings: async (tournamentId: string) => {
+    return request(`/tournaments/${encodeURIComponent(tournamentId)}/standings`);
+  },
+
   submitContact: async (data: { name: string; email: string; subject?: string; message: string }) => {
     return request('/portal/contact', {
       method: 'POST',
