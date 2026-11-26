@@ -484,7 +484,7 @@ class InningsService {
     // Reset transient completion state so endMatch validates and re-processes cleanly
     await db.models.Match.updateOne(
       { id: matchId },
-      { $set: { status: 'LIVE', stats_processed: false, stats_processing_status: 'IDLE' } }
+      { $set: { status: 'LIVE', stats_processed: false, stats_processing_status: 'IDLE', progression_processed: false } }
     );
     return this.endMatch(matchId, payload);
   }

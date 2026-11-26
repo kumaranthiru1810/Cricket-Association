@@ -1852,20 +1852,23 @@ class TournamentService {
 
       if (!match.tournament_id) return { processed: Boolean(claimedMatch), progression: { advanced: false } };
 
-      // Advance knockout / playoff stages if current stage is complete
-      const progression = await this.advanceTournamentStage(match.tournament_id);
-
       const tour = await db.models.Tournament.findOne({ id: match.tournament_id });
-      if (!tour) return { processed: Boolean(claimedMatch), progression };
+      if (!tour) return { processed: Boolean(claimedMatch), progression: { advanced: false } };
 
       // Run idempotent bracket/knockout progression & team stats sync FIRST
       // so next-round fixtures are created before checking if tournament is finished
       const tournamentEngine = require('./tournamentEngine');
-      await tournamentEngine.processMatchProgression(matchId);
+      const engineRes = await tournamentEngine.processMatchProgression(matchId);
 
       // Re-fetch tournament after progression
       const refreshedTour = await db.models.Tournament.findOne({ id: match.tournament_id });
-      if (!refreshedTour) return;
+      if (!refreshedTour) return { processed: Boolean(claimedMatch), progression: { advanced: false } };
+
+      // Fallback to stage-based progression only for legacy/non-bracketed formats (e.g. GROUP_SUPER_LEAGUE)
+      let progression = { advanced: false };
+      if (!refreshedTour.bracket && (engineRes?.skipped || refreshedTour.tournament_type === 'GROUP_SUPER_LEAGUE')) {
+        progression = await this.advanceTournamentStage(match.tournament_id);
+      }
 
       let changed = false;
       if (refreshedTour.status === 'UPCOMING') {
@@ -1873,14 +1876,14 @@ class TournamentService {
         changed = true;
       }
 
-      // Check remaining matches (only mark COMPLETED if no pending matches and no unresolved ties)
+      // Check remaining matches (only mark COMPLETED if no pending matches, no active bracket, and no unresolved ties)
       const activePendingCount = await db.models.Match.countDocuments({
         tournament_id: match.tournament_id,
         status: { $in: ['SCHEDULED', 'LIVE', 'INNINGS_BREAK', 'TOSS', 'PAUSED'] }
       });
       const hasUnresolvedTies = Array.isArray(progression?.unresolved_ties) && progression.unresolved_ties.length > 0;
 
-      if (activePendingCount === 0 && !hasUnresolvedTies) {
+      if (activePendingCount === 0 && !refreshedTour.bracket && !hasUnresolvedTies) {
         const completedCount = await db.models.Match.countDocuments({
           tournament_id: match.tournament_id,
           status: 'COMPLETED'
@@ -1997,6 +2000,10 @@ class TournamentService {
 
       if (downstreamToRemove.length > 0) {
         await db.models.Match.deleteMany({ id: { $in: downstreamToRemove.map(m => m.id) } });
+        const st = String(freshMatch.stage || '');
+        if (st.startsWith('GROUP_') || st.startsWith('LEAGUE_STAGE')) {
+          await db.models.Tournament.updateOne({ id: freshMatch.tournament_id }, { $set: { bracket: null } });
+        }
       }
 
       if (freshMatch.tournament_id) {

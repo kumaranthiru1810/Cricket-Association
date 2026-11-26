@@ -101,10 +101,44 @@ const TournamentSchema = new mongoose.Schema({
     groups_snapshot: [{ type: mongoose.Schema.Types.Mixed }],
     byes: [{ type: mongoose.Schema.Types.Mixed }],
     unresolved_ties: [{ type: mongoose.Schema.Types.Mixed }],
-    manual_groups_tie_resolution: { type: mongoose.Schema.Types.Mixed, default: {} }
+    manual_groups_tie_resolution: { type: mongoose.Schema.Types.Mixed, default: {} },
+    top_n_per_group: { type: Number, default: null },
+    allow_grand_final_reset: { type: Boolean, default: true },
+    playoffs_format: { type: String, enum: ['STANDARD', 'IPL'], default: 'STANDARD' },
+    min_rest_hours: { type: Number, default: 4 },
+    max_squad_size: { type: Number, default: 18 },
+    min_squad_size: { type: Number, default: 11 },
+    age_limit: { type: Number, default: null }
   },
   progression_lock_until: { type: Date, default: null },
   teams: [{ type: String, ref: 'Team' }],
+  groups: [{
+    id: { type: String, required: true },
+    name: { type: String, required: true },
+    teams: [{ type: String }],
+    locked: { type: Boolean, default: false }
+  }],
+  group_allocation_mode: { type: String, enum: ['BALANCED', 'RANDOM', 'SEEDED', 'MANUAL'], default: 'BALANCED' },
+  groups_confirmed: { type: Boolean, default: false },
+  bracket: { type: mongoose.Schema.Types.Mixed, default: null },
+  manual_tie_breakers: [{
+    group_id: { type: String, default: 'ALL' },
+    resolved_order: [{ type: String }],
+    resolved_by: { type: String, default: '' },
+    resolved_at: { type: Date, default: Date.now },
+    reason: { type: String, default: '' }
+  }],
+  withdrawn_teams: [{
+    team_id: { type: String, required: true },
+    team_name: { type: String, default: '' },
+    withdrawn_at: { type: Date, default: Date.now },
+    withdrawn_by: { type: String, default: '' },
+    reason: { type: String, default: '' },
+    rule_applied: { type: String, default: 'REMAINING_WALKOVER' }
+  }],
+  champion_team_id: { type: String, default: null },
+  champion_team_name: { type: String, default: '' },
+  completed_at: { type: Date, default: null },
   winner_team_id: { type: String, default: null },
   winner_team_name: { type: String, default: '' },
   runner_up_team_id: { type: String, default: null },
