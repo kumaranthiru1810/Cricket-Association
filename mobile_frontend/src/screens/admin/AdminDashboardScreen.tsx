@@ -73,7 +73,7 @@ export interface AdminDashboardProps {
   isSuperAdminMode?: boolean;
 }
 
-type AdminTab = 'overview' | 'users' | 'admins' | 'teams' | 'scorers' | 'umpires' | 'content' | 'schedules' | 'tournaments' | 'laws' | 'calculations' | 'master_settings' | 'settings';
+type AdminTab = 'overview' | 'users' | 'admins' | 'teams' | 'scorers' | 'umpires' | 'content' | 'schedules' | 'tournaments' | 'records' | 'laws' | 'calculations' | 'master_settings' | 'settings';
 type FilterStatus = 'all' | 'Pending' | 'Approved' | 'Rejected';
 type MatchFilterStatus = 'all' | 'SCHEDULED' | 'LIVE' | 'COMPLETED' | 'CANCELLED' | 'POSTPONED' | 'REQUESTS';
 
