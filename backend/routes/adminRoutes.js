@@ -250,6 +250,8 @@ router.get('/tournaments/:id/bracket', (req, res) => tournamentController.getBra
 router.post('/tournaments/:id/withdraw', (req, res) => tournamentController.withdrawTeam(req, res));
 router.post('/tournaments/:id/eligibility-check', (req, res) => tournamentController.checkEligibility(req, res));
 router.post('/tournaments/:id/simulate', (req, res) => tournamentController.simulateWhatIf(req, res));
+router.get('/tournaments/:id/records', (req, res) => tournamentController.getTournamentRecords(req, res));
+router.post('/tournaments/:id/records/import', (req, res) => tournamentController.importTournamentRecords(req, res));
 router.post('/matches/:id/reverse-result', (req, res) => tournamentController.reverseMatchResult(req, res));
 
 /**

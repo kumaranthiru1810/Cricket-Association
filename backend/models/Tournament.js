@@ -148,6 +148,7 @@ const TournamentSchema = new mongoose.Schema({
     runner_up_trophy_title: { type: String, default: 'Runner-Up Trophy' },
     potm_every_match: { type: Boolean, default: true }
   },
+  imported_records: { type: mongoose.Schema.Types.Mixed, default: null },
   status: { 
     type: String, 
     enum: ['UPCOMING', 'REGISTRATION_OPEN', 'REGISTRATION_CLOSED', 'ONGOING', 'COMPLETED', 'CANCELLED', 'ACTIVE', 'INACTIVE'], 

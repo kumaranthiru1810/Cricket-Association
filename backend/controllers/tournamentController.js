@@ -651,6 +651,25 @@ class TournamentController {
       res.status(err.status || 400).json({ success: false, message: err.message || 'Failed to reverse match result.' });
     }
   }
+
+  async getTournamentRecords(req, res) {
+    try {
+      const result = await tournamentService.getTournamentRecordsSummary(req.params.id);
+      res.json(result);
+    } catch (err) {
+      res.status(err.status || 500).json({ success: false, message: err.message || 'Failed to load tournament records.' });
+    }
+  }
+
+  async importTournamentRecords(req, res) {
+    try {
+      const adminEmail = req.adminUser?.email || req.user?.email || 'system-admin';
+      const result = await tournamentService.importTournamentRecords(req.params.id, req.body || {}, adminEmail);
+      res.json(result);
+    } catch (err) {
+      res.status(err.status || 400).json({ success: false, message: err.message || 'Failed to import tournament records.' });
+    }
+  }
 }
 
 module.exports = new TournamentController();
