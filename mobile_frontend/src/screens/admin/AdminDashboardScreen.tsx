@@ -2515,6 +2515,32 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             )}
           </TouchableOpacity>
 
+          {/* Tournaments Management */}
+          <TouchableOpacity
+            style={[
+              styles.sidebarNavItem,
+              activeTab === 'tournaments' && styles.sidebarNavItemTournamentsActive,
+              isCollapsed && styles.sidebarNavItemCollapsed
+            ]}
+            onPress={() => {
+              setActiveTab('tournaments');
+              if (isMobileDrawer) setMobileSidebarOpen(false);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.sidebarNavIcon, activeTab === 'tournaments' && styles.sidebarNavIconActive]}>🏆</Text>
+            {!isCollapsed && (
+              <Text style={[styles.sidebarNavLabel, activeTab === 'tournaments' && styles.sidebarNavLabelActive]}>
+                Tournaments
+              </Text>
+            )}
+            {!isCollapsed && pendingTournamentsCount > 0 && (
+              <View style={styles.sidebarBadgeAmber}>
+                <Text style={styles.sidebarBadgeText}>{pendingTournamentsCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
           {/* Match Schedules */}
           <TouchableOpacity
             style={[
@@ -2543,32 +2569,6 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 <Text style={styles.sidebarBadgeText}>{scheduledMatchesCount}</Text>
               </View>
             ))}
-          </TouchableOpacity>
-
-          {/* Tournaments Management */}
-          <TouchableOpacity
-            style={[
-              styles.sidebarNavItem,
-              activeTab === 'tournaments' && styles.sidebarNavItemTournamentsActive,
-              isCollapsed && styles.sidebarNavItemCollapsed
-            ]}
-            onPress={() => {
-              setActiveTab('tournaments');
-              if (isMobileDrawer) setMobileSidebarOpen(false);
-            }}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.sidebarNavIcon, activeTab === 'tournaments' && styles.sidebarNavIconActive]}>🏆</Text>
-            {!isCollapsed && (
-              <Text style={[styles.sidebarNavLabel, activeTab === 'tournaments' && styles.sidebarNavLabelActive]}>
-                Tournaments
-              </Text>
-            )}
-            {!isCollapsed && pendingTournamentsCount > 0 && (
-              <View style={styles.sidebarBadgeAmber}>
-                <Text style={styles.sidebarBadgeText}>{pendingTournamentsCount}</Text>
-              </View>
-            )}
           </TouchableOpacity>
 
           {/* Tournament Records & Exports */}
