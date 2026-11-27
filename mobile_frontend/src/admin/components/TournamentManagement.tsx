@@ -303,6 +303,12 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
   const [matchStatusFilter, setMatchStatusFilter] = useState<'ALL' | 'SCHEDULED' | 'LIVE' | 'COMPLETED'>('ALL');
   const [matchGroupFilter, setMatchGroupFilter] = useState<string>('ALL');
   const [generatingMatches, setGeneratingMatches] = useState<boolean>(false);
+  const [genModalOpen, setGenModalOpen] = useState<boolean>(false);
+  const [genStartDate, setGenStartDate] = useState<string>('');
+  const [genMatchesPerDay, setGenMatchesPerDay] = useState<string>('2');
+  const [genTimeSlots, setGenTimeSlots] = useState<string>('09:30 AM, 02:30 PM');
+  const [genSelectedVenues, setGenSelectedVenues] = useState<string[]>([]);
+  const [genIgnoreConflicts, setGenIgnoreConflicts] = useState<boolean>(false);
   const [backendPreviewData, setBackendPreviewData] = useState<any | null>(null);
   const [backendPreviewLoading, setBackendPreviewLoading] = useState<boolean>(false);
   const [groupPointsData, setGroupPointsData] = useState<any | null>(null);
@@ -445,7 +451,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
 
   const loadTeamsFromDb = async () => {
     try {
-      const [regRes, teamsRes, adminTeamsRes] = await Promise.all([
+      const [regRes, teamsRes, adminTeamsRes, playersRes] = await Promise.all([
         ScorerApi.getAllRegistrations().catch(err => {
           console.warn('[TournamentManagement] getAllRegistrations error:', err);
           return { success: false, registrations: [] };
@@ -457,12 +463,58 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
         adminApi.getTeams().catch(err => {
           console.warn('[TournamentManagement] adminApi.getTeams error:', err);
           return { success: false, data: [] };
+        }),
+        adminApi.getPlayers().catch(err => {
+          console.warn('[TournamentManagement] adminApi.getPlayers error:', err);
+          return { success: false, data: [] };
         })
       ]);
 
       const raw = regRes?.registrations || regRes?.data || [];
       const teamsList = teamsRes?.teams || teamsRes?.data || [];
       const adminTeamsList = adminTeamsRes?.data || adminTeamsRes?.teams || (Array.isArray(adminTeamsRes) ? adminTeamsRes : []);
+      const playersList = playersRes?.data || playersRes?.players || (Array.isArray(playersRes) ? playersRes : []);
+
+      // Map each team ID to its players (with mobile/phone) for per-tournament duplicate player checking
+      const teamPlayersMap: Record<string, Array<{ name: string; mobile: string }>> = {};
+      const addPlayerToTeamMap = (tid: string, pName: string, pPhone: string) => {
+        const key = (tid || '').trim().toLowerCase();
+        const digits = String(pPhone || '').replace(/\D/g, '');
+        const normMobile = digits.length >= 10 ? digits.slice(-10) : digits;
+        if (!key || !normMobile) return;
+        if (!teamPlayersMap[key]) teamPlayersMap[key] = [];
+        if (!teamPlayersMap[key].some(p => p.mobile === normMobile)) {
+          teamPlayersMap[key].push({ name: pName || 'Player', mobile: normMobile });
+        }
+      };
+
+      if (Array.isArray(raw)) {
+        raw.forEach((r: any) => {
+          if (r.type === 'TEAM') {
+            const tid = r.id || r.mongoId || r._id;
+            const members = r.members || r.players || r.details?.players || [];
+            if (Array.isArray(members)) {
+              members.forEach((m: any) => addPlayerToTeamMap(tid, m.name || m.playerName, m.phone || m.mobile));
+            }
+          }
+        });
+      }
+      if (Array.isArray(teamsList)) {
+        teamsList.forEach((t: any) => {
+          const tid = t.id || t.team_id || t._id;
+          const members = t.members || t.players || [];
+          if (Array.isArray(members)) {
+            members.forEach((m: any) => addPlayerToTeamMap(tid, m.name || m.playerName, m.phone || m.mobile));
+          }
+        });
+      }
+      if (Array.isArray(playersList)) {
+        playersList.forEach((p: any) => {
+          const tid = p.team_id || p.teamId;
+          if (tid) addPlayerToTeamMap(tid, p.name || p.playerName, p.mobile || p.phone);
+        });
+      }
+
       const allTeams: any[] = [];
       const seenIds = new Set<string>();
 
@@ -491,7 +543,8 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
             coach_email: coachEmail || '',
             taluk: taluk || 'Virudhunagar',
             status: isApproved ? 'Approved' : 'Pending',
-            created_at: createdAt || null
+            created_at: createdAt || null,
+            players: teamPlayersMap[key] || []
           });
         }
       };
@@ -1013,6 +1066,30 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
     setWizardStep(4);
   };
 
+  // Check if any player (by mobile number) in candidateTeamId already belongs to another selected team in this tournament
+  const findDuplicatePlayerConflict = (candidateTeamId: string, currentSelectedIds: string[]) => {
+    const candidate = dbTeams.find(t => t.id === candidateTeamId);
+    const candidatePlayers: Array<{ name: string; mobile: string }> = candidate?.players || [];
+    if (candidatePlayers.length === 0) return null;
+
+    for (const selId of currentSelectedIds) {
+      if (selId === candidateTeamId) continue;
+      const otherTeam = dbTeams.find(t => t.id === selId);
+      const otherPlayers: Array<{ name: string; mobile: string }> = otherTeam?.players || [];
+      for (const cp of candidatePlayers) {
+        const match = otherPlayers.find(op => op.mobile && op.mobile === cp.mobile);
+        if (match) {
+          return {
+            playerName: cp.name || match.name || 'Player',
+            mobile: cp.mobile,
+            conflictingTeamName: otherTeam?.name || otherTeam?.team_name || selId
+          };
+        }
+      }
+    }
+    return null;
+  };
+
   // ── Toggle Team Selection ─────────────────────────────────────────────
   const toggleTeamSelection = (teamId: string) => {
     const maxT = parseInt(formMaxTeams, 10) || 8;
@@ -1023,14 +1100,38 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
         showWarning('Limit Reached', `Only ${maxT} teams can be selected for this tournament.`);
         return;
       }
+      const conflict = findDuplicatePlayerConflict(teamId, selectedTeamIds);
+      if (conflict) {
+        showWarning(
+          'Duplicate Player in Tournament',
+          `Player "${conflict.playerName}" (Mobile: ${conflict.mobile}) is already in selected team "${conflict.conflictingTeamName}". A player cannot play for two teams in the same tournament.`
+        );
+        return;
+      }
       setSelectedTeamIds([...selectedTeamIds, teamId]);
     }
   };
 
   const selectAllTeams = () => {
     const maxT = parseInt(formMaxTeams, 10) || 8;
-    const allFiltered = filteredTeams.slice(0, maxT).map(t => t.id);
-    setSelectedTeamIds(allFiltered);
+    const accepted: string[] = [];
+    const skipped: string[] = [];
+    for (const t of filteredTeams) {
+      if (accepted.length >= maxT) break;
+      const conflict = findDuplicatePlayerConflict(t.id, accepted);
+      if (conflict) {
+        skipped.push(`${t.name || t.team_name} (Player: ${conflict.playerName}, ${conflict.mobile})`);
+      } else {
+        accepted.push(t.id);
+      }
+    }
+    setSelectedTeamIds(accepted);
+    if (skipped.length > 0) {
+      showWarning(
+        'Some Teams Skipped (Duplicate Players)',
+        `Skipped ${skipped.length} team(s) with players already in another selected team for this tournament:\n${skipped.slice(0, 3).join('\n')}`
+      );
+    }
   };
 
   const deselectAllTeams = () => {
@@ -1250,12 +1351,22 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
   const handlePreviewMatches = async () => {
     if (!selectedTournament) return;
     setBackendPreviewLoading(true);
+    const payload = {
+      tournament_type: selectedTournament.tournament_type,
+      round_robin_type: selectedTournament.format_config?.round_robin_type || 'SINGLE',
+      format_config: selectedTournament.format_config || {}
+    };
     try {
-      const res = await ScorerApi.previewTournamentMatches(selectedTournament.id, {
-        tournament_type: selectedTournament.tournament_type,
-        round_robin_type: selectedTournament.format_config?.round_robin_type || 'SINGLE',
-        format_config: selectedTournament.format_config || {}
-      });
+      let res: any = null;
+      try {
+        res = await adminApi.previewTournamentMatches(selectedTournament.id, payload);
+      } catch (primaryErr: any) {
+        if (String(primaryErr?.message || '').includes('404')) {
+          res = await adminApi.previewTournamentSchedule(selectedTournament.id, payload);
+        } else {
+          throw primaryErr;
+        }
+      }
       setBackendPreviewData(res);
     } catch (err: any) {
       await showError('Preview Failed', err?.message || 'Unable to preview fixtures.');
@@ -1273,28 +1384,51 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
       return;
     }
 
-    const confirmGen = await showConfirm(
-      'Generate Championship Matches?',
-      `This will generate official match pairings for all ${teamCount} registered teams (${selectedTournament.tournament_type || 'LEAGUE'}). Existing scheduled fixtures will be refreshed. Proceed?`,
-      '⚡ Generate Matches',
-      'Cancel',
-      'question'
+    const defaultStart = selectedTournament.start_date || new Date().toISOString().split('T')[0];
+    const defaultPerDay = Number(selectedTournament.format_config?.matches_per_day || 2);
+    setGenStartDate(defaultStart);
+    setGenMatchesPerDay(String(defaultPerDay));
+    setGenTimeSlots(
+      defaultPerDay > 2
+        ? '07:00 AM, 10:30 AM, 02:00 PM, 05:30 PM'
+        : '09:30 AM, 02:30 PM'
     );
-    if (!confirmGen) return;
+    const primaryVenue = selectedTournament.venue || (dbVenues[0]?.name || 'Kamarajar District Stadium');
+    setGenSelectedVenues([primaryVenue]);
+    setGenIgnoreConflicts(false);
+    setGenModalOpen(true);
+  };
+
+  const handleConfirmGenerateMatches = async () => {
+    if (!selectedTournament) return;
+    const perDayNum = Math.max(1, parseInt(genMatchesPerDay, 10) || 1);
+    const parsedSlots = genTimeSlots
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+    const venuesToUse = genSelectedVenues.length > 0
+      ? genSelectedVenues
+      : [selectedTournament.venue || 'Kamarajar District Stadium'];
 
     setGeneratingMatches(true);
     try {
       const res = await ScorerApi.generateTournamentMatches(selectedTournament.id, {
         tournament_type: selectedTournament.tournament_type,
         round_robin_type: selectedTournament.format_config?.round_robin_type || 'SINGLE',
-        venue: selectedTournament.venue,
+        venue: venuesToUse[0],
+        venues: venuesToUse,
+        start_date: genStartDate || undefined,
+        matches_per_day: perDayNum,
+        time_slots: parsedSlots.length > 0 ? parsedSlots : undefined,
+        ignoreConflicts: genIgnoreConflicts,
         match_format: selectedTournament.match_format,
         overs_per_match: selectedTournament.overs_per_match
       });
 
+      setGenModalOpen(false);
       await showSuccess(
         'Fixtures Generated!',
-        `Successfully generated ${res.total_matches_generated || 'championship'} matches. You can now schedule dates, venues, scorers, and umpires.`
+        `Successfully generated ${res.total_matches_generated || 'championship'} matches (${perDayNum} match(es)/day starting ${genStartDate || 'tournament start'}).`
       );
       await refreshTournamentDetails();
       await loadTournaments();
@@ -1906,11 +2040,11 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
             </View>
 
             {/* Championship & Approval Status Dropdowns Row */}
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginTop: 10, zIndex: 100 }}>
+            <View style={[{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginTop: 10, zIndex: 100 }, isMobile && { flexDirection: 'column', alignItems: 'stretch' }]}>
               {/* Championship Dropdown */}
-              <View style={[{ flex: 1, minWidth: 210, flexDirection: 'row', alignItems: 'center', gap: 8, position: 'relative' }, regTourDropdownOpen && { zIndex: 200 }]}>
+              <View style={[{ flex: 1, minWidth: 210, flexDirection: 'row', alignItems: 'center', gap: 8, position: 'relative' }, isMobile && { flex: 0, width: '100%', minWidth: 0, flexDirection: 'column', alignItems: 'stretch', gap: 4 }, regTourDropdownOpen && { zIndex: 200 }]}>
                 <Text style={styles.filterSectionLabel}>Championship:</Text>
-                <View style={{ flex: 1, position: 'relative' }}>
+                <View style={{ flex: 1, minWidth: 0, position: 'relative' }}>
                   <TouchableOpacity
                     style={{
                       flexDirection: 'row',
@@ -2015,9 +2149,9 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
               </View>
 
               {/* Approval Status Dropdown */}
-              <View style={[{ flex: 1, minWidth: 190, flexDirection: 'row', alignItems: 'center', gap: 8, position: 'relative' }, regStatusDropdownOpen && { zIndex: 200 }]}>
+              <View style={[{ flex: 1, minWidth: 190, flexDirection: 'row', alignItems: 'center', gap: 8, position: 'relative' }, isMobile && { flex: 0, width: '100%', minWidth: 0, flexDirection: 'column', alignItems: 'stretch', gap: 4 }, regStatusDropdownOpen && { zIndex: 200 }]}>
                 <Text style={styles.filterSectionLabel}>Approval Status:</Text>
-                <View style={{ flex: 1, position: 'relative' }}>
+                <View style={{ flex: 1, minWidth: 0, position: 'relative' }}>
                   <TouchableOpacity
                     style={{
                       flexDirection: 'row',
@@ -2317,9 +2451,9 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
           {/* Tournament Selection Bar */}
           <View style={[styles.toolbarCard, { zIndex: 50, position: 'relative' }]}>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10, zIndex: 100 }}>
+            <View style={[{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10, zIndex: 100 }, isMobile && { flexDirection: 'column', alignItems: 'stretch', gap: 6 }]}>
               <Text style={styles.filterSectionLabel}>Select Championship:</Text>
-              <View style={{ flex: 1, minWidth: 210, position: 'relative' }}>
+              <View style={[{ flex: 1, minWidth: 210, position: 'relative' }, isMobile && { flex: 0, width: '100%', minWidth: 0 }]}>
                 <TouchableOpacity
                   style={{
                     flexDirection: 'row',
@@ -2399,8 +2533,8 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
             </View>
 
             {activeApprovedTournament && (
-              <View style={styles.approvedTourSummaryBanner}>
-                <View>
+              <View style={[styles.approvedTourSummaryBanner, { flexWrap: 'wrap', gap: 10 }]}>
+                <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.approvedTourBannerTitle}>{activeApprovedTournament.name}</Text>
                   <Text style={styles.approvedTourBannerSub}>
                     {activeApprovedTournament.season || '2026'} Season • {activeApprovedTournament.match_format || 'T20'} • {activeApprovedTournament.venue}
@@ -2462,11 +2596,11 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                           <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 16 }}>{initials}</Text>
                         </View>
                       )}
-                      <View style={{ flex: 1 }}>
+                      <View style={{ flex: 1, minWidth: 0 }}>
                         <Text style={styles.approvedTeamName}>{t.team_name || t.name}</Text>
                         <Text style={styles.approvedTeamTaluk}>📍 {t.team_city || t.team_taluk || t.taluk || 'Virudhunagar'}</Text>
                       </View>
-                      <View style={styles.officialBadge}>
+                      <View style={[styles.officialBadge, { flexShrink: 0 }]}>
                         <Text style={styles.officialBadgeText}>OFFICIAL</Text>
                       </View>
                     </View>
@@ -2557,7 +2691,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
               horizontal={isMobile}
               showsHorizontalScrollIndicator={false}
               style={{ flexGrow: 0, borderBottomWidth: 1, borderBottomColor: '#e2e8f0', backgroundColor: '#f8fafc' }}
-              contentContainerStyle={[styles.stepperBar, { borderBottomWidth: 0, flexGrow: 1 }]}
+              contentContainerStyle={[styles.stepperBar, { borderBottomWidth: 0 }, !isMobile && { flexGrow: 1 }]}
             >
               {[
                 { step: 1, label: '1. Basic Information' },
@@ -2572,7 +2706,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                     key={item.step}
                     style={[
                       styles.stepperItem,
-                      isMobile && { flex: 0, paddingHorizontal: 12, paddingVertical: 10 },
+                      isMobile && { flex: 0, flexShrink: 0, paddingHorizontal: 14, paddingVertical: 10 },
                       active && styles.stepperItemActive
                     ]}
                     onPress={() => {
@@ -2635,7 +2769,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                       )}
                     </View>
 
-                    <View style={styles.formColHalf}>
+                    <View style={[styles.formColHalf, isMobile && { flex: 0, width: '100%' }]}>
                       <Text style={styles.inputLabel}>Season (Year) *</Text>
                       <View style={styles.seasonInputWrapper}>
                         <TextInput
@@ -2692,7 +2826,7 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                       </View>
                     </View>
 
-                    <View style={styles.formColHalf}>
+                    <View style={[styles.formColHalf, isMobile && { flex: 0, width: '100%' }]}>
                       <Text style={styles.inputLabel}>Match Format *</Text>
                       <View style={styles.selectWrap}>
                         <select
@@ -4494,76 +4628,78 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                           <Text style={styles.emptyStateSub}>Standings will update automatically as tournament matches are completed and scored.</Text>
                         </View>
                       ) : (
-                        <View style={styles.tableCard}>
-                          {/* Table Header */}
-                          <View style={styles.tableHeaderRow}>
-                            <Text style={[styles.thCell, { width: 44, textAlign: 'center' }]}>POS</Text>
-                            <Text style={[styles.thCell, { flex: 2 }]}>TEAM</Text>
-                            <Text style={[styles.thCell, { width: 40, textAlign: 'center' }]}>P</Text>
-                            <Text style={[styles.thCell, { width: 40, textAlign: 'center' }]}>W</Text>
-                            <Text style={[styles.thCell, { width: 40, textAlign: 'center' }]}>L</Text>
-                            <Text style={[styles.thCell, { width: 40, textAlign: 'center' }]}>T</Text>
-                            <Text style={[styles.thCell, { width: 40, textAlign: 'center' }]}>NR</Text>
-                            <Text style={[styles.thCell, { width: 50, textAlign: 'center', color: '#020612', fontWeight: '800' }]}>PTS</Text>
-                            <Text style={[styles.thCell, { width: 75, textAlign: 'center' }]}>NRR</Text>
-                            <Text style={[styles.thCell, { width: 85, textAlign: 'center' }]}>LAST 5</Text>
-                          </View>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{ width: '100%' }}>
+                          <View style={[styles.tableCard, { minWidth: 620 }]}>
+                            {/* Table Header */}
+                            <View style={styles.tableHeaderRow}>
+                              <Text style={[styles.thCell, { width: 44, textAlign: 'center' }]}>POS</Text>
+                              <Text style={[styles.thCell, { width: 150, minWidth: 150 }]}>TEAM</Text>
+                              <Text style={[styles.thCell, { width: 40, textAlign: 'center' }]}>P</Text>
+                              <Text style={[styles.thCell, { width: 40, textAlign: 'center' }]}>W</Text>
+                              <Text style={[styles.thCell, { width: 40, textAlign: 'center' }]}>L</Text>
+                              <Text style={[styles.thCell, { width: 40, textAlign: 'center' }]}>T</Text>
+                              <Text style={[styles.thCell, { width: 40, textAlign: 'center' }]}>NR</Text>
+                              <Text style={[styles.thCell, { width: 50, textAlign: 'center', color: '#F59E0B', fontWeight: '800' }]}>PTS</Text>
+                              <Text style={[styles.thCell, { width: 75, textAlign: 'center' }]}>NRR</Text>
+                              <Text style={[styles.thCell, { width: 95, textAlign: 'center' }]}>LAST 5</Text>
+                            </View>
 
-                          {/* Table Rows */}
-                          {selectedTournament.points_table.map((row: any, idx: number) => {
-                            const isTopZone = row.position <= 2;
-                            return (
-                              <View
-                                key={row.team_id || idx}
-                                style={[
-                                  styles.tableDataRow,
-                                  isTopZone && styles.tableRowTopZone,
-                                  idx % 2 === 1 && styles.tableRowAlt
-                                ]}
-                              >
-                                <View style={[styles.posBadge, isTopZone && styles.posBadgeTop]}>
-                                  <Text style={[styles.posBadgeText, isTopZone && styles.posBadgeTextTop]}>
-                                    {row.position}
+                            {/* Table Rows */}
+                            {selectedTournament.points_table.map((row: any, idx: number) => {
+                              const isTopZone = row.position <= 2;
+                              return (
+                                <View
+                                  key={row.team_id || idx}
+                                  style={[
+                                    styles.tableDataRow,
+                                    isTopZone && styles.tableRowTopZone,
+                                    idx % 2 === 1 && styles.tableRowAlt
+                                  ]}
+                                >
+                                  <View style={[styles.posBadge, isTopZone && styles.posBadgeTop]}>
+                                    <Text style={[styles.posBadgeText, isTopZone && styles.posBadgeTextTop]}>
+                                      {row.position}
+                                    </Text>
+                                  </View>
+
+                                  <View style={{ width: 150, minWidth: 150, paddingLeft: 8 }}>
+                                    <Text style={styles.tableTeamName} numberOfLines={2}>{row.team_name}</Text>
+                                  </View>
+
+                                  <Text style={[styles.tdCell, { width: 40, textAlign: 'center' }]}>{row.played}</Text>
+                                  <Text style={[styles.tdCell, { width: 40, textAlign: 'center', color: '#16a34a', fontWeight: '700' }]}>{row.won}</Text>
+                                  <Text style={[styles.tdCell, { width: 40, textAlign: 'center', color: '#dc2626' }]}>{row.lost}</Text>
+                                  <Text style={[styles.tdCell, { width: 40, textAlign: 'center' }]}>{row.tied}</Text>
+                                  <Text style={[styles.tdCell, { width: 40, textAlign: 'center' }]}>{row.no_result}</Text>
+                                  <Text style={[styles.tdCell, { width: 50, textAlign: 'center', fontWeight: '800', color: '#020612', fontSize: 14 }]}>
+                                    {row.points}
                                   </Text>
-                                </View>
+                                  <Text style={[styles.tdCell, { width: 75, textAlign: 'center', fontWeight: '600' }]}>
+                                    {row.nrr_formatted || row.nrr}
+                                  </Text>
 
-                                <View style={{ flex: 2, paddingLeft: 8 }}>
-                                  <Text style={styles.tableTeamName}>{row.team_name}</Text>
+                                  {/* Form Guide (W, L, T, NR) */}
+                                  <View style={{ width: 95, flexDirection: 'row', justifyContent: 'center', gap: 3 }}>
+                                    {(row.recent_form || []).map((f: string, fIdx: number) => (
+                                      <View
+                                        key={fIdx}
+                                        style={[
+                                          styles.formPill,
+                                          f === 'W' && styles.formPillWin,
+                                          f === 'L' && styles.formPillLoss,
+                                          f === 'T' && styles.formPillTie,
+                                          f === 'NR' && styles.formPillNR
+                                        ]}
+                                      >
+                                        <Text style={styles.formPillText}>{f}</Text>
+                                      </View>
+                                    ))}
+                                  </View>
                                 </View>
-
-                                <Text style={[styles.tdCell, { width: 40, textAlign: 'center' }]}>{row.played}</Text>
-                                <Text style={[styles.tdCell, { width: 40, textAlign: 'center', color: '#16a34a', fontWeight: '700' }]}>{row.won}</Text>
-                                <Text style={[styles.tdCell, { width: 40, textAlign: 'center', color: '#dc2626' }]}>{row.lost}</Text>
-                                <Text style={[styles.tdCell, { width: 40, textAlign: 'center' }]}>{row.tied}</Text>
-                                <Text style={[styles.tdCell, { width: 40, textAlign: 'center' }]}>{row.no_result}</Text>
-                                <Text style={[styles.tdCell, { width: 50, textAlign: 'center', fontWeight: '800', color: '#020612', fontSize: 14 }]}>
-                                  {row.points}
-                                </Text>
-                                <Text style={[styles.tdCell, { width: 75, textAlign: 'center', fontWeight: '600' }]}>
-                                  {row.nrr_formatted || row.nrr}
-                                </Text>
-
-                                {/* Form Guide (W, L, T, NR) */}
-                                <View style={{ width: 85, flexDirection: 'row', justifyContent: 'center', gap: 3 }}>
-                                  {(row.recent_form || []).map((f: string, fIdx: number) => (
-                                    <View
-                                      key={fIdx}
-                                      style={[
-                                        styles.formPill,
-                                        f === 'W' && styles.formPillWin,
-                                        f === 'L' && styles.formPillLoss,
-                                        f === 'T' && styles.formPillTie,
-                                        f === 'NR' && styles.formPillNR
-                                      ]}
-                                    >
-                                      <Text style={styles.formPillText}>{f}</Text>
-                                    </View>
-                                  ))}
-                                </View>
-                              </View>
-                            );
-                          })}
-                        </View>
+                              );
+                            })}
+                          </View>
+                        </ScrollView>
                       )}
                     </View>
                   )}
@@ -5148,6 +5284,187 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
               </View>
             </View>
           </TouchableOpacity>
+        </Modal>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          MODAL 5: GENERATE FIXTURES & MULTI-MATCH PER DAY SCHEDULE CONFIG
+      ═══════════════════════════════════════════════════════════════════════ */}
+      {genModalOpen && selectedTournament && (
+        <Modal transparent animationType="fade" visible={genModalOpen} onRequestClose={() => setGenModalOpen(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.wizardCard, { maxWidth: 560, width: '94%', maxHeight: '90%' }]}>
+              <View style={styles.wizardHeader}>
+                <View>
+                  <Text style={styles.wizardTitle}>⚡ Generate Fixtures & Schedule</Text>
+                  <Text style={styles.wizardSub}>
+                    Configure how many matches to schedule per date for {selectedTournament.name}.
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => setGenModalOpen(false)} style={styles.closeBtn}>
+                  <Text style={styles.closeBtnText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={{ padding: 20 }} showsVerticalScrollIndicator={false}>
+                <View style={styles.formRow}>
+                  <View style={styles.formColHalf}>
+                    <Text style={styles.inputLabel}>Start Date</Text>
+                    <input
+                      type="date"
+                      value={genStartDate}
+                      onChange={(e: any) => setGenStartDate(e.target.value)}
+                      style={styles.nativeDateInput as any}
+                    />
+                  </View>
+                  <View style={styles.formColHalf}>
+                    <Text style={styles.inputLabel}>Matches Per Day</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      keyboardType="numeric"
+                      value={genMatchesPerDay}
+                      onChangeText={(val) => {
+                        const cleaned = sanitizeUnsignedInt(val);
+                        setGenMatchesPerDay(cleaned);
+                        const n = parseInt(cleaned, 10) || 1;
+                        if (n > 2 && genSelectedVenues.length <= 1 && genTimeSlots === '09:30 AM, 02:30 PM') {
+                          setGenTimeSlots('07:00 AM, 10:30 AM, 02:00 PM, 05:30 PM');
+                        }
+                      }}
+                      placeholder="e.g. 2, 3, 4"
+                    />
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+                  {[
+                    { label: '1 / day', value: '1', slots: '09:30 AM' },
+                    { label: '2 / day', value: '2', slots: '09:30 AM, 02:30 PM' },
+                    { label: '3 / day', value: '3', slots: '07:00 AM, 11:00 AM, 03:00 PM' },
+                    { label: '4 / day', value: '4', slots: '07:00 AM, 10:30 AM, 02:00 PM, 05:30 PM' },
+                    { label: '6 / day', value: '6', slots: '07:00 AM, 10:30 AM, 02:00 PM, 05:30 PM' },
+                    { label: 'All on 1 Date', value: '99', slots: '07:00 AM, 10:30 AM, 02:00 PM, 05:30 PM' }
+                  ].map((preset) => {
+                    const active = genMatchesPerDay === preset.value;
+                    return (
+                      <TouchableOpacity
+                        key={preset.label}
+                        onPress={() => {
+                          setGenMatchesPerDay(preset.value);
+                          setGenTimeSlots(preset.slots);
+                          if (Number(preset.value) > 4 && genSelectedVenues.length <= 1) {
+                            setGenIgnoreConflicts(true);
+                          }
+                        }}
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: active ? '#F59E0B' : '#CBD5E1',
+                          backgroundColor: active ? '#FEF3C7' : '#F8FAFC'
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: active ? '#92400E' : '#334155' }}>
+                          {preset.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={styles.inputLabel}>Time Slots (comma-separated)</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={genTimeSlots}
+                    onChangeText={setGenTimeSlots}
+                    placeholder="07:00 AM, 10:30 AM, 02:00 PM, 05:30 PM"
+                  />
+                </View>
+
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={styles.inputLabel}>Grounds / Venues (select multiple for parallel matches on same date)</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+                    {(dbVenues.length > 0 ? dbVenues : [{ name: selectedTournament.venue || 'Kamarajar District Stadium' }]).map((v: any) => {
+                      const vName = v.name || v;
+                      const selected = genSelectedVenues.includes(vName);
+                      return (
+                        <TouchableOpacity
+                          key={v.id || vName}
+                          onPress={() => {
+                            setGenSelectedVenues(prev =>
+                              prev.includes(vName)
+                                ? (prev.length > 1 ? prev.filter(x => x !== vName) : prev)
+                                : [...prev, vName]
+                            );
+                          }}
+                          style={{
+                            paddingHorizontal: 10,
+                            paddingVertical: 6,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: selected ? '#0EA5E9' : '#CBD5E1',
+                            backgroundColor: selected ? '#E0F2FE' : '#FFFFFF'
+                          }}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: selected ? '#0369A1' : '#475569' }}>
+                            {selected ? '✓ ' : ''}{vName}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  onPress={() => setGenIgnoreConflicts(prev => !prev)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: 12,
+                    borderRadius: 10,
+                    backgroundColor: genIgnoreConflicts ? '#FEF3C7' : '#F8FAFC',
+                    borderWidth: 1,
+                    borderColor: genIgnoreConflicts ? '#F59E0B' : '#E2E8F0',
+                    marginBottom: 10
+                  }}
+                >
+                  <Text style={{ fontSize: 16 }}>{genIgnoreConflicts ? '☑️' : '⬜'}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0F172A' }}>
+                      Allow overlapping / same-venue slots on the same date
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#64748B' }}>
+                      Enable if you want multiple matches on the same date even at the same ground/time.
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </ScrollView>
+
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, padding: 16, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
+                <TouchableOpacity
+                  onPress={() => setGenModalOpen(false)}
+                  style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#F1F5F9' }}
+                  disabled={generatingMatches}
+                >
+                  <Text style={{ fontWeight: '700', color: '#475569' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleConfirmGenerateMatches}
+                  style={[styles.btnActionGold, { paddingHorizontal: 18, paddingVertical: 10 }]}
+                  disabled={generatingMatches}
+                >
+                  {generatingMatches ? (
+                    <ActivityIndicator size="small" color="#020612" />
+                  ) : (
+                    <Text style={styles.btnActionGoldText}>⚡ Generate Fixtures</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
         </Modal>
       )}
     </View>

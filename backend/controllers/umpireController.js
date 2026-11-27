@@ -4,6 +4,7 @@
  */
 
 const umpireService = require('../services/umpireService');
+const { sendListResponse } = require('../utils/responseHelper');
 
 class UmpireController {
   // GET /api/umpire/profile
@@ -32,7 +33,7 @@ class UmpireController {
       const { filter } = req.query;
       const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SCORER';
       const data = await umpireService.getAssignedMatches(req.user.id, req.user.email, filter, isAdmin);
-      res.json({ success: true, data });
+      return sendListResponse(res, data, { data });
     } catch (err) {
       res.status(err.status || 500).json({ success: false, message: err.message, error: err.message });
     }
@@ -89,7 +90,7 @@ class UmpireController {
     try {
       const { matchId } = req.params;
       const data = await umpireService.getDecisions(matchId);
-      res.json({ success: true, data });
+      return sendListResponse(res, data, { data });
     } catch (err) {
       res.status(err.status || 500).json({ success: false, message: err.message, error: err.message });
     }

@@ -12,6 +12,7 @@ const adminDashboardController = require('../controllers/adminDashboardControlle
 const { requireAdminAuth } = require('../middleware/authMiddleware');
 
 const masterSettingController = require('../controllers/masterSettingController');
+const { sendListResponse } = require('../utils/responseHelper');
 
 /**
  * Public/Accredited Directory Reads:
@@ -22,7 +23,7 @@ const masterSettingController = require('../controllers/masterSettingController'
 router.get('/officials', async (req, res) => {
   try {
     const officials = await adminService.getOfficials();
-    res.json({ success: true, officials });
+    return sendListResponse(res, officials, { officials });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -31,7 +32,7 @@ router.get('/officials', async (req, res) => {
 router.get('/venues', async (req, res) => {
   try {
     const venues = await adminService.getVenues();
-    res.json({ success: true, venues });
+    return sendListResponse(res, venues, { venues });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -61,7 +62,7 @@ router.get('/users', async (req, res) => {
   try {
     const { role, status } = req.query;
     const users = await adminService.getUsers(role, status);
-    res.json({ success: true, users });
+    return sendListResponse(res, users, { users });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -138,7 +139,7 @@ router.get('/teams/pending', async (req, res) => {
   try {
     const teamRegistrationModel = require('../models/teamRegistrationModel');
     const pendingTeams = await teamRegistrationModel.getAll('PENDING');
-    res.json({ success: true, count: pendingTeams.length, teams: pendingTeams });
+    return sendListResponse(res, pendingTeams, { teams: pendingTeams });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -152,7 +153,7 @@ router.get('/teams', async (req, res) => {
     const status = req.query.status || null;
     const teamRegistrationModel = require('../models/teamRegistrationModel');
     const teams = await teamRegistrationModel.getAll(status);
-    res.json({ success: true, count: teams.length, teams });
+    return sendListResponse(res, teams, { teams });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -216,6 +217,108 @@ router.post('/teams', async (req, res) => {
   }
 });
 
+// Update Team Registration details & Coach/Team Password (Admin & Super Admin)
+router.put('/teams/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { teamName, coachName, coachEmail, coachPhone, taluk, password } = req.body || {};
+    const db = require('../config/db');
+    await db.initDb();
+
+    if (password && String(password).trim().length > 0 && String(password).trim().length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters.' });
+    }
+
+    const cleanTeamName = teamName !== undefined ? String(teamName).trim() : undefined;
+    const cleanCoachName = coachName !== undefined ? String(coachName).trim() : undefined;
+    const cleanCoachEmail = coachEmail !== undefined ? String(coachEmail).trim().toLowerCase() : undefined;
+    const cleanCoachPhone = coachPhone !== undefined ? String(coachPhone).trim() : undefined;
+    const cleanTaluk = taluk !== undefined ? String(taluk).trim() : undefined;
+
+    let passwordHash = null;
+    if (password && String(password).trim().length >= 6) {
+      const bcrypt = require('bcryptjs');
+      passwordHash = await bcrypt.hash(String(password).trim(), 10);
+    }
+
+    const reg = await db.models.TeamRegistration.findOne({ id });
+    const teamDoc = await db.models.Team.findOne({ $or: [{ id }, { team_id: id }] });
+    if (!reg && !teamDoc) {
+      return res.status(404).json({ success: false, message: 'Team registration not found.' });
+    }
+
+    const oldCoachEmail = (reg?.coach_email || teamDoc?.coach_email || '').trim().toLowerCase();
+
+    if (reg) {
+      if (cleanTeamName) reg.team_name = cleanTeamName;
+      if (cleanCoachName) reg.coach_name = cleanCoachName;
+      if (cleanCoachEmail) reg.coach_email = cleanCoachEmail;
+      if (cleanCoachPhone !== undefined) {
+        reg.coach_phone = cleanCoachPhone;
+        reg.phone = cleanCoachPhone;
+      }
+      if (cleanTaluk) {
+        reg.taluk = cleanTaluk;
+        reg.city = cleanTaluk;
+      }
+      if (passwordHash) {
+        reg.password_hash = passwordHash;
+      }
+      await reg.save();
+    }
+
+    if (teamDoc) {
+      if (cleanTeamName) {
+        teamDoc.name = cleanTeamName;
+        teamDoc.team_name = cleanTeamName;
+      }
+      if (cleanCoachName) teamDoc.coach_name = cleanCoachName;
+      if (cleanCoachEmail) teamDoc.coach_email = cleanCoachEmail;
+      if (cleanCoachPhone !== undefined) teamDoc.phone = cleanCoachPhone;
+      if (cleanTaluk) {
+        teamDoc.taluk = cleanTaluk;
+        teamDoc.city = cleanTaluk;
+      }
+      if (passwordHash) {
+        teamDoc.password_hash = passwordHash;
+      }
+      await teamDoc.save();
+    }
+
+    // Update or upsert Coach User record so login password/email stays in sync
+    const lookupEmail = oldCoachEmail || cleanCoachEmail;
+    if (lookupEmail) {
+      const coachUser = await db.models.User.findOne({ email: lookupEmail });
+      if (coachUser) {
+        if (cleanCoachName) coachUser.name = cleanCoachName;
+        if (cleanCoachEmail) coachUser.email = cleanCoachEmail;
+        if (cleanCoachPhone !== undefined) coachUser.mobile = cleanCoachPhone;
+        if (passwordHash) coachUser.password_hash = passwordHash;
+        await coachUser.save();
+      } else if (passwordHash && (cleanCoachEmail || oldCoachEmail)) {
+        await db.models.User.create({
+          id: `COACH-${Date.now()}`,
+          name: cleanCoachName || reg?.coach_name || teamDoc?.coach_name || 'Team Coach',
+          email: cleanCoachEmail || oldCoachEmail,
+          mobile: cleanCoachPhone || reg?.coach_phone || teamDoc?.phone || null,
+          role: 'COACH',
+          password_hash: passwordHash,
+          status: 'ACTIVE'
+        });
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: passwordHash
+        ? `Team "${cleanTeamName || reg?.team_name || teamDoc?.name}" updated & password changed successfully.`
+        : `Team "${cleanTeamName || reg?.team_name || teamDoc?.name}" updated successfully.`
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message || 'Failed to update team.' });
+  }
+});
+
 /**
  * Tournament Management APIs under /api/admin/tournaments
  */
@@ -227,6 +330,7 @@ router.delete('/tournaments/:id', (req, res) => tournamentController.deleteTourn
 router.post('/tournaments/:id/teams', (req, res) => tournamentController.addTeams(req, res));
 router.delete('/tournaments/:id/teams/:teamId', (req, res) => tournamentController.removeTeam(req, res));
 router.post('/tournaments/:id/generate-matches', (req, res) => tournamentController.generateMatches(req, res));
+router.post('/tournaments/:id/preview-matches', (req, res) => tournamentController.previewMatches(req, res));
 router.get('/tournaments/:id/schedule', (req, res) => tournamentController.getSchedule(req, res));
 router.get('/tournaments/:id/points-table', (req, res) => tournamentController.getPointsTable(req, res));
 router.get('/tournaments/:id/statistics', (req, res) => tournamentController.getStatistics(req, res));
@@ -265,7 +369,7 @@ router.post('/matches/:id/reverse-result', (req, res) => tournamentController.re
 router.get('/matches', async (req, res) => {
   try {
     const matches = await adminService.getMatches();
-    res.json({ success: true, matches });
+    return sendListResponse(res, matches, { matches });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -349,7 +453,7 @@ router.put('/matches/:id/reschedule', handleRescheduleMatch);
 const handleGetPostponementRequests = async (req, res) => {
   try {
     const requests = await adminService.getPostponementRequests();
-    res.json({ success: true, requests });
+    return sendListResponse(res, requests, { requests });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -384,7 +488,7 @@ router.delete('/matches/:id', async (req, res) => {
 router.get('/audit-logs', async (req, res) => {
   try {
     const logs = await adminService.getAuditLogs();
-    res.json({ success: true, logs });
+    return sendListResponse(res, logs, { logs });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -396,7 +500,7 @@ router.get('/audit-logs', async (req, res) => {
 router.get('/admins', async (req, res) => {
   try {
     const admins = await adminService.getAdmins();
-    res.json({ success: true, admins });
+    return sendListResponse(res, admins, { admins });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -489,9 +593,183 @@ router.post('/smtp/test-send', async (req, res) => {
 router.get('/administrators', async (req, res) => {
   try {
     const list = await superAdminOtpService.getAdministratorsList();
-    res.json({ success: true, administrators: list, permanentSuperAdmin: 'system-admin' });
+    return sendListResponse(res, list, { administrators: list, permanentSuperAdmin: 'system-admin' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Create a new Administrator directly (Super Admin only)
+router.post('/administrators', async (req, res) => {
+  try {
+    const caller = req.adminUser || req.user || {};
+    if (!caller.is_super_admin && caller.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, message: 'Forbidden: Only Super Administrators can add new admins.' });
+    }
+
+    const { name, email, mobile, password, admin_level } = req.body || {};
+    if (!name || !email || !password) {
+      return res.status(400).json({ success: false, message: 'Name, email, and password are required.' });
+    }
+    if (String(password).trim().length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters.' });
+    }
+
+    const cleanEmail = String(email).trim().toLowerCase();
+    const db = require('../config/db');
+    await db.initDb();
+
+    const existing = await db.models.User.findOne({ email: cleanEmail }).lean();
+    if (existing) {
+      return res.status(409).json({ success: false, message: `An account with email '${cleanEmail}' already exists.` });
+    }
+
+    const bcrypt = require('bcryptjs');
+    const passwordHash = await bcrypt.hash(String(password).trim(), 12);
+    const newId = `ADM-${Date.now()}`;
+
+    const created = await db.models.User.create({
+      id: newId,
+      name: String(name).trim(),
+      email: cleanEmail,
+      mobile: mobile ? String(mobile).trim() : '',
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      is_super_admin: false,
+      admin_level: (admin_level && String(admin_level).trim()) || 'District Administrator',
+      password_hash: passwordHash
+    });
+
+    await superAdminOtpService.recordAuditLog({
+      action: 'CREATE_ADMIN',
+      initiatedBy: caller.email || 'super-admin',
+      targetUser: cleanEmail,
+      result: 'SUCCESS',
+      details: `Super Admin created administrator ${created.name} (${created.id})`
+    });
+
+    const out = created.toObject();
+    delete out.password_hash;
+    return res.status(201).json({ success: true, message: `Administrator '${created.name}' added successfully.`, administrator: out });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message || 'Failed to create administrator.' });
+  }
+});
+
+// Update an Administrator (Super Admin only)
+router.put('/administrators/:id', async (req, res) => {
+  try {
+    const caller = req.adminUser || req.user || {};
+    if (!caller.is_super_admin && caller.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, message: 'Forbidden: Only Super Administrators can edit admins.' });
+    }
+
+    const { id } = req.params;
+    const { name, email, mobile, password, admin_level, status } = req.body || {};
+
+    const db = require('../config/db');
+    await db.initDb();
+
+    const target = await db.models.User.findOne({ id });
+    if (!target) {
+      return res.status(404).json({ success: false, message: 'Administrator not found.' });
+    }
+    if (target.is_super_admin || (target.email || '').toLowerCase() === superAdminOtpService.SUPER_ADMIN_EMAIL) {
+      return res.status(403).json({ success: false, message: 'Cannot modify the permanent Super Administrator account.' });
+    }
+
+    if (name !== undefined) {
+      if (!String(name).trim()) {
+        return res.status(400).json({ success: false, message: 'Administrator name cannot be empty.' });
+      }
+      target.name = String(name).trim();
+    }
+
+    if (email !== undefined) {
+      const cleanEmail = String(email).trim().toLowerCase();
+      if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        return res.status(400).json({ success: false, message: 'Valid email address is required.' });
+      }
+      if (cleanEmail !== (target.email || '').toLowerCase()) {
+        const dup = await db.models.User.findOne({ email: cleanEmail, id: { $ne: id } }).lean();
+        if (dup) {
+          return res.status(409).json({ success: false, message: `An account with email '${cleanEmail}' already exists.` });
+        }
+        target.email = cleanEmail;
+      }
+    }
+
+    if (mobile !== undefined) {
+      target.mobile = String(mobile).trim();
+    }
+    if (admin_level !== undefined) {
+      target.admin_level = String(admin_level).trim() || 'District Administrator';
+    }
+    if (status !== undefined && ['ACTIVE', 'INACTIVE', 'SUSPENDED'].includes(String(status).toUpperCase())) {
+      target.status = String(status).toUpperCase();
+    }
+    if (password && String(password).trim().length > 0) {
+      if (String(password).trim().length < 6) {
+        return res.status(400).json({ success: false, message: 'Password must be at least 6 characters.' });
+      }
+      const bcrypt = require('bcryptjs');
+      target.password_hash = await bcrypt.hash(String(password).trim(), 12);
+    }
+
+    await target.save();
+
+    await superAdminOtpService.recordAuditLog({
+      action: 'UPDATE_ADMIN',
+      initiatedBy: caller.email || 'super-admin',
+      targetUser: target.email,
+      result: 'SUCCESS',
+      details: `Super Admin updated administrator ${target.name} (${target.id})`
+    });
+
+    const out = target.toObject();
+    delete out.password_hash;
+    return res.json({ success: true, message: `Administrator '${target.name}' updated successfully.`, administrator: out });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message || 'Failed to update administrator.' });
+  }
+});
+
+// Delete an Administrator (Super Admin only)
+router.delete('/administrators/:id', async (req, res) => {
+  try {
+    const caller = req.adminUser || req.user || {};
+    if (!caller.is_super_admin && caller.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, message: 'Forbidden: Only Super Administrators can delete admins.' });
+    }
+
+    const { id } = req.params;
+    const db = require('../config/db');
+    await db.initDb();
+
+    const target = await db.models.User.findOne({ id }).lean();
+    if (!target) {
+      return res.status(404).json({ success: false, message: 'Administrator not found.' });
+    }
+    if (target.is_super_admin || (target.email || '').toLowerCase() === superAdminOtpService.SUPER_ADMIN_EMAIL) {
+      return res.status(403).json({ success: false, message: 'Cannot delete a Super Administrator account.' });
+    }
+    if (caller.id && caller.id === target.id) {
+      return res.status(403).json({ success: false, message: 'You cannot delete your own active account.' });
+    }
+
+    await db.models.User.deleteOne({ id });
+
+    await superAdminOtpService.recordAuditLog({
+      action: 'DELETE_ADMIN',
+      initiatedBy: caller.email || 'super-admin',
+      targetUser: target.email,
+      result: 'SUCCESS',
+      details: `Super Admin removed administrator ${target.name} (${target.id})`
+    });
+
+    return res.json({ success: true, message: `Administrator '${target.name}' deleted successfully.` });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message || 'Failed to delete administrator.' });
   }
 });
 
@@ -678,7 +956,7 @@ router.get('/content', async (req, res) => {
   try {
     const { category, status, search, limit } = req.query;
     const articles = await adminService.getContentList({ category, status, search, limit });
-    res.json({ success: true, count: articles.length, data: articles });
+    return sendListResponse(res, articles);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

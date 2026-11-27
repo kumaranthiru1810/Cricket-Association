@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const scorerService = require('../services/scorerService');
 const matchService = require('../services/matchService');
+const { sendListResponse } = require('../utils/responseHelper');
 
 // Get Full Scorecard for a match
 router.get('/:matchId/scorecard', async (req, res) => {
@@ -32,7 +33,7 @@ router.get('/:matchId/live', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const stats = await scorerService.getDashboardStats(null);
-    res.json({ success: true, data: stats.matches || [] });
+    return sendListResponse(res, stats.matches || []);
   } catch (err) {
     res.status(err.status || 500).json({ success: false, error: err.message });
   }

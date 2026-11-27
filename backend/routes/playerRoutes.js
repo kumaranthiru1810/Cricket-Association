@@ -19,6 +19,7 @@ const playerService = require('../services/playerService');
 const playerRatingService = require('../services/playerRatingService');
 const { requirePlayerAuth, requireAdminAuth } = require('../middleware/authMiddleware');
 const { uploadSingle, processImageUpload } = require('../middleware/uploadMiddleware');
+const { sendListResponse } = require('../utils/responseHelper');
 
 // -------------------------------------------------------------
 // 1. PUBLIC AUTHENTICATION & REGISTRATION ENDPOINTS
@@ -229,7 +230,7 @@ router.get('/statistics', requirePlayerAuth, async (req, res) => {
 router.get('/notifications', requirePlayerAuth, async (req, res) => {
   try {
     const notifications = await playerService.getNotifications(req.user.id, req.user.email);
-    res.status(200).json({ success: true, notifications });
+    return sendListResponse(res, notifications, { notifications });
   } catch (err) {
     const status = err.status || 500;
     res.status(status).json({ success: false, message: err.message });
@@ -248,7 +249,7 @@ router.get('/leaderboards/ratings', async (req, res) => {
   try {
     const { category = 'overall', format = 'ALL', limit = 10 } = req.query;
     const leaders = await playerRatingService.getRatingsLeaderboard({ category, format, limit });
-    res.status(200).json({ success: true, category, format, leaders });
+    return sendListResponse(res, leaders, { category, format, leaders });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -273,7 +274,7 @@ router.post('/matches/:matchId/recalculate-ratings', requireAdminAuth, async (re
 router.get('/ratings', requirePlayerAuth, async (req, res) => {
   try {
     const ratings = await playerRatingService.getPlayerMatchRatings(req.user.id);
-    res.status(200).json({ success: true, ratings });
+    return sendListResponse(res, ratings, { ratings });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -328,7 +329,7 @@ router.get('/:id/history', async (req, res) => {
 router.get('/:id/ratings', async (req, res) => {
   try {
     const ratings = await playerRatingService.getPlayerMatchRatings(req.params.id);
-    res.status(200).json({ success: true, playerId: req.params.id, ratings });
+    return sendListResponse(res, ratings, { playerId: req.params.id, ratings });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

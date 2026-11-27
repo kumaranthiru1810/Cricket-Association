@@ -37,6 +37,7 @@ export const AdminTopbar: React.FC<Props> = ({
 
   const routeTitleMap: Record<AdminRouteKey, string> = {
     dashboard: 'Association Overview & Dashboard',
+    admins: 'Administrators & Super Admin Access',
     users: 'System Users Management',
     players: 'Cricket Players Directory',
     teams: 'Affiliated Teams & Clubs',

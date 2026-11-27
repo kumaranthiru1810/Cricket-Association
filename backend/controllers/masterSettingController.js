@@ -12,6 +12,7 @@
 
 const masterSettingModel = require('../models/masterSettingModel');
 const db = require('../config/db');
+const { sendListResponse } = require('../utils/responseHelper');
 
 class MasterSettingController {
   /**
@@ -32,9 +33,7 @@ class MasterSettingController {
         includeInactive: includeInactive === 'true'
       });
 
-      return res.status(200).json({
-        success: true,
-        count: items.length,
+      return sendListResponse(res, items, {
         category: category || null,
         data: items,
         grouped,
@@ -74,6 +73,18 @@ class MasterSettingController {
         description,
         sort_order
       });
+
+      // Sync Ground / Venue settings to Venue collection for match scheduling
+      if (category === 'ground' || category === 'district_venue') {
+        try {
+          const venueModel = require('../models/venueModel');
+          await venueModel.save({
+            name: created.name,
+            location: created.description || 'Virudhunagar',
+            description: created.description || ''
+          });
+        } catch (_syncErr) {}
+      }
 
       return res.status(201).json({
         success: true,
@@ -139,6 +150,14 @@ class MasterSettingController {
       }
 
       const deleted = await masterSettingModel.delete(id);
+
+      if (deleted && (deleted.category === 'ground' || deleted.category === 'district_venue')) {
+        try {
+          const venueModel = require('../models/venueModel');
+          await venueModel.delete(deleted.name);
+        } catch (_syncErr) {}
+      }
+
       return res.status(200).json({
         success: true,
         message: `Deleted "${deleted.name}" successfully.`,

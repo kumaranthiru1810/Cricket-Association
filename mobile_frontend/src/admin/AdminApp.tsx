@@ -12,6 +12,7 @@ import { AdminLayout } from './components/AdminLayout';
 
 // Sub Pages
 import { DashboardPage } from './pages/DashboardPage';
+import { AdminsPage } from './pages/AdminsPage';
 import { UsersPage } from './pages/UsersPage';
 import { PlayersPage } from './pages/PlayersPage';
 import { TeamsPage } from './pages/TeamsPage';
@@ -74,6 +75,8 @@ const AdminRoutingShell: React.FC<{ onExitAdmin?: () => void }> = ({ onExitAdmin
       case '/admin':
       case '/admin/dashboard':
         return <DashboardPage onNavigate={handleNavigate} />;
+      case '/admin/admins':
+        return <AdminsPage />;
       case '/admin/users':
         return <UsersPage />;
       case '/admin/players':

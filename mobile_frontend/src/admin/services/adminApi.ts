@@ -125,6 +125,13 @@ export const adminApi = {
     });
   },
 
+  superAdminLogin: async (email: string, password: string) => {
+    return adminRequest('/auth/super-admin/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password })
+    });
+  },
+
   getMe: async () => {
     return adminRequest('/admin/me');
   },
@@ -142,6 +149,30 @@ export const adminApi = {
     if (params?.status && params.status !== 'ALL') cleanParams.status = params.status;
     const query = new URLSearchParams(cleanParams).toString();
     return adminRequest(`/admin/users${query ? '?' + query : ''}`);
+  },
+
+  getAdministrators: async () => {
+    return adminRequest('/admin/administrators');
+  },
+
+  createAdministrator: async (data: { name: string; email: string; mobile?: string; password: string; admin_level?: string }) => {
+    return adminRequest('/admin/administrators', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+
+  updateAdministrator: async (id: string, data: { name?: string; email?: string; mobile?: string; password?: string; admin_level?: string; status?: string }) => {
+    return adminRequest(`/admin/administrators/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+  },
+
+  deleteAdministrator: async (id: string) => {
+    return adminRequest(`/admin/administrators/${encodeURIComponent(id)}`, {
+      method: 'DELETE'
+    });
   },
 
   updateUserStatus: async (id: string, status: string) => {
@@ -207,10 +238,6 @@ export const adminApi = {
     });
   },
 
-  getAdministrators: async () => {
-    return adminRequest('/admin/administrators');
-  },
-
   getSmtpStatus: async () => {
     return adminRequest('/admin/smtp/status');
   },
@@ -267,6 +294,16 @@ export const adminApi = {
     });
   },
 
+  updateTeamRegistration: async (
+    id: string,
+    data: { teamName?: string; coachName?: string; coachEmail?: string; coachPhone?: string; taluk?: string; password?: string }
+  ) => {
+    return adminRequest(`/admin/teams/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+  },
+
   // 6. Tournaments Management
   getTournaments: async (params?: { status?: string; search?: string }) => {
     const q = new URLSearchParams(params as any).toString();
@@ -312,6 +349,13 @@ export const adminApi = {
 
   generateTournamentMatches: async (id: string, options?: any) => {
     return adminRequest(`/admin/tournaments/${id}/generate-matches`, {
+      method: 'POST',
+      body: JSON.stringify(options || {})
+    });
+  },
+
+  previewTournamentMatches: async (id: string, options?: any) => {
+    return adminRequest(`/admin/tournaments/${id}/preview-matches`, {
       method: 'POST',
       body: JSON.stringify(options || {})
     });

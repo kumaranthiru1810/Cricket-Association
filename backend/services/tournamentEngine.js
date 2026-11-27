@@ -63,6 +63,38 @@ function buildBracketSeedOrder(p) {
   return seeds;
 }
 
+function createScheduleSlotAssigner({ startDate, totalDays, matchesPerDay = 0, venue = 'Kamarajar District Stadium', venues = [], timeSlots = [] }) {
+  const venueList = Array.isArray(venues) && venues.length > 0
+    ? venues.map(v => String(v).trim()).filter(Boolean)
+    : [venue || 'Kamarajar District Stadium'];
+  const perDay = Number(matchesPerDay) >= 1 ? Math.floor(Number(matchesPerDay)) : 0;
+
+  let slots = Array.isArray(timeSlots) && timeSlots.length > 0
+    ? timeSlots.map(t => String(t).trim()).filter(Boolean)
+    : null;
+  if (!slots) {
+    if (perDay > 2 && venueList.length === 1) {
+      slots = ['07:00 AM', '10:30 AM', '02:00 PM', '05:30 PM', '08:00 PM'];
+    } else {
+      slots = ['09:30 AM', '02:30 PM', '06:00 PM'];
+    }
+  }
+
+  return (idx, total) => {
+    const dayOffset = perDay >= 1
+      ? Math.floor(idx / perDay)
+      : Math.floor((idx / Math.max(1, total)) * Math.max(1, totalDays));
+    const slotInDay = perDay >= 1 ? (idx % perDay) : (idx % 2);
+    const assignedVenue = venueList[slotInDay % venueList.length];
+    const assignedTime = slots[Math.floor(slotInDay / venueList.length) % slots.length];
+    return {
+      match_date: new Date(startDate.getTime() + dayOffset * 86400000).toISOString().split('T')[0],
+      match_time: assignedTime,
+      venue: assignedVenue
+    };
+  };
+}
+
 class TournamentEngine {
   async _logAudit(action, adminEmail, target, result, details) {
     try {
@@ -444,7 +476,7 @@ class TournamentEngine {
   /**
    * Build Single Elimination Bracket structure & initial matches (supports byes & odd counts)
    */
-  _buildSingleEliminationBracket(tournament, teamIds, teamNameMap, defaults, startDate, totalDays, venue, matchType, overs) {
+  _buildSingleEliminationBracket(tournament, teamIds, teamNameMap, defaults, startDate, totalDays, venue, matchType, overs, assignSlot = null) {
     const n = teamIds.length;
     const p = nextPowerOf2(n);
     const totalRounds = Math.log2(p);
@@ -530,10 +562,7 @@ class TournamentEngine {
     }
 
     // Create Match docs for any slot that has both teams resolved (Round 1 non-byes + Round 2 matches fed by two byes)
-    const getMatchDate = (idx, total) => {
-      const dayOffset = Math.floor((idx / Math.max(1, total)) * totalDays);
-      return new Date(startDate.getTime() + dayOffset * 86400000).toISOString().split('T')[0];
-    };
+    const slotAssigner = assignSlot || createScheduleSlotAssigner({ startDate, totalDays, venue });
 
     const allPlayableSlots = [];
     slotsByRound.forEach(rSlots => {
@@ -545,6 +574,7 @@ class TournamentEngine {
     });
 
     allPlayableSlots.forEach((slot, idx) => {
+      const slotSchedule = slotAssigner(idx, Math.max(1, allPlayableSlots.length));
       matchDocs.push({
         id: slot.match_id,
         tournament_id: tournament.id,
@@ -553,9 +583,9 @@ class TournamentEngine {
         team_b_id: slot.team_b_id,
         team_a_name: teamNameMap[slot.team_a_id] || slot.team_a_id,
         team_b_name: teamNameMap[slot.team_b_id] || slot.team_b_id,
-        venue,
-        match_date: getMatchDate(idx, Math.max(1, allPlayableSlots.length)),
-        match_time: idx % 2 === 0 ? '09:30 AM' : '02:30 PM',
+        venue: slotSchedule.venue,
+        match_date: slotSchedule.match_date,
+        match_time: slotSchedule.match_time,
         match_type: matchType,
         overs_per_side: overs,
         stage: slot.stage,
@@ -594,7 +624,7 @@ class TournamentEngine {
    * Build Complete Double Elimination Bracket (Winners, Losers, Grand Final, Grand Final Reset)
    * Supports any N >= 3 (including 3, 5, 8, 12, 16) with proper Byes & Loser drops.
    */
-  _buildDoubleEliminationBracket(tournament, teamIds, teamNameMap, defaults, startDate, totalDays, venue, matchType, overs) {
+  _buildDoubleEliminationBracket(tournament, teamIds, teamNameMap, defaults, startDate, totalDays, venue, matchType, overs, assignSlot = null) {
     const n = teamIds.length;
     if (n < 3) {
       throw { status: 400, message: 'Double Elimination requires at least 3 participating teams.' };
@@ -813,10 +843,7 @@ class TournamentEngine {
     lbFinal.next_match_slot = 'B';
 
     // 4. Collect initial playable matches (WB matches where both teams are known)
-    const getMatchDate = (idx, total) => {
-      const dayOffset = Math.floor((idx / Math.max(1, total)) * totalDays);
-      return new Date(startDate.getTime() + dayOffset * 86400000).toISOString().split('T')[0];
-    };
+    const slotAssigner = assignSlot || createScheduleSlotAssigner({ startDate, totalDays, venue });
 
     const playable = [];
     wbRounds.forEach(rSlots => {
@@ -826,17 +853,19 @@ class TournamentEngine {
     });
 
     let matchSeq = 1;
-    const matchDocs = playable.map((slot, idx) => ({
-      id: slot.match_id,
-      tournament_id: tournament.id,
-      tournament_name: tournament.name,
-      team_a_id: slot.team_a_id,
-      team_b_id: slot.team_b_id,
-      team_a_name: teamNameMap[slot.team_a_id] || slot.team_a_id,
-      team_b_name: teamNameMap[slot.team_b_id] || slot.team_b_id,
-      venue,
-      match_date: getMatchDate(idx, Math.max(1, playable.length)),
-      match_time: idx % 2 === 0 ? '09:30 AM' : '02:30 PM',
+    const matchDocs = playable.map((slot, idx) => {
+      const slotSchedule = slotAssigner(idx, Math.max(1, playable.length));
+      return {
+        id: slot.match_id,
+        tournament_id: tournament.id,
+        tournament_name: tournament.name,
+        team_a_id: slot.team_a_id,
+        team_b_id: slot.team_b_id,
+        team_a_name: teamNameMap[slot.team_a_id] || slot.team_a_id,
+        team_b_name: teamNameMap[slot.team_b_id] || slot.team_b_id,
+        venue: slotSchedule.venue,
+        match_date: slotSchedule.match_date,
+        match_time: slotSchedule.match_time,
       match_type: matchType,
       overs_per_side: overs,
       stage: slot.stage,
@@ -855,7 +884,8 @@ class TournamentEngine {
       umpire2_id: defaults.umpire2Id,
       umpire1_name: defaults.umpire1Name,
       umpire2_name: defaults.umpire2Name
-    }));
+      };
+    });
 
     return {
       bracket: {
@@ -1020,17 +1050,29 @@ class TournamentEngine {
     let bracketData = null;
     let byesSummary = [];
 
-    const getMatchDate = (idx, total) => {
-      const dayOffset = Math.floor((idx / Math.max(1, total)) * totalDays);
-      return new Date(startDate.getTime() + dayOffset * 86400000).toISOString().split('T')[0];
-    };
+    const matchesPerDay = Number(options.matches_per_day ?? tournament.format_config?.matches_per_day ?? 0);
+    const venuesOption = Array.isArray(options.venues) && options.venues.length > 0
+      ? options.venues
+      : (Array.isArray(tournament.format_config?.venues) ? tournament.format_config.venues : []);
+    const timeSlotsOption = Array.isArray(options.time_slots) && options.time_slots.length > 0
+      ? options.time_slots
+      : (Array.isArray(tournament.format_config?.time_slots) ? tournament.format_config.time_slots : []);
+
+    const slotAssigner = createScheduleSlotAssigner({
+      startDate,
+      totalDays,
+      matchesPerDay,
+      venue,
+      venues: venuesOption,
+      timeSlots: timeSlotsOption
+    });
 
     if (tournamentType === 'DOUBLE_ELIMINATION') {
-      const res = this._buildDoubleEliminationBracket(tournament, teams, teamNameMap, defaults, startDate, totalDays, venue, matchType, overs);
+      const res = this._buildDoubleEliminationBracket(tournament, teams, teamNameMap, defaults, startDate, totalDays, venue, matchType, overs, slotAssigner);
       generatedFixtures = res.fixtures;
       bracketData = res.bracket;
     } else if (tournamentType === 'KNOCKOUT' || tournamentType === 'SINGLE_ELIMINATION') {
-      const res = this._buildSingleEliminationBracket(tournament, teams, teamNameMap, defaults, startDate, totalDays, venue, matchType, overs);
+      const res = this._buildSingleEliminationBracket(tournament, teams, teamNameMap, defaults, startDate, totalDays, venue, matchType, overs, slotAssigner);
       generatedFixtures = res.fixtures;
       bracketData = res.bracket;
     } else if (tournamentType === 'GROUP_KNOCKOUT' || (tournamentType === 'LEAGUE_KNOCKOUT' && Array.isArray(tournament.groups) && tournament.groups.length > 0)) {
@@ -1060,35 +1102,38 @@ class TournamentEngine {
         });
       });
 
-      generatedFixtures = allPairings.map((p, idx) => ({
-        id: `M-${prefix}-G-${String(idx + 1).padStart(3, '0')}`,
-        tournament_id: tournament.id,
-        tournament_name: tournament.name,
-        team_a_id: p.home,
-        team_b_id: p.away,
-        team_a_name: teamNameMap[p.home] || p.home,
-        team_b_name: teamNameMap[p.away] || p.away,
-        venue,
-        match_date: getMatchDate(idx, allPairings.length),
-        match_time: idx % 2 === 0 ? '09:30 AM' : '02:30 PM',
-        match_type: matchType,
-        overs_per_side: overs,
-        stage: p.stage,
-        group_id: p.group_id,
-        group_key: p.group_id,
-        group_name: p.group_name,
-        round_number: p.round,
-        match_number: idx + 1,
-        bracket_type: 'LEAGUE',
-        status: 'SCHEDULED',
-        assigned_scorer_id: defaults.scorerId,
-        assigned_scorer_name: defaults.scorerName,
-        umpire1_id: defaults.umpire1Id,
-        umpire2_id: defaults.umpire2Id,
-        umpire1_name: defaults.umpire1Name,
-        umpire2_name: defaults.umpire2Name,
-        schedule_confirmed_by: 'SYSTEM_QUALIFICATION'
-      }));
+      generatedFixtures = allPairings.map((p, idx) => {
+        const slotSchedule = slotAssigner(idx, allPairings.length);
+        return {
+          id: `M-${prefix}-G-${String(idx + 1).padStart(3, '0')}`,
+          tournament_id: tournament.id,
+          tournament_name: tournament.name,
+          team_a_id: p.home,
+          team_b_id: p.away,
+          team_a_name: teamNameMap[p.home] || p.home,
+          team_b_name: teamNameMap[p.away] || p.away,
+          venue: slotSchedule.venue,
+          match_date: slotSchedule.match_date,
+          match_time: slotSchedule.match_time,
+          match_type: matchType,
+          overs_per_side: overs,
+          stage: p.stage,
+          group_id: p.group_id,
+          group_key: p.group_id,
+          group_name: p.group_name,
+          round_number: p.round,
+          match_number: idx + 1,
+          bracket_type: 'LEAGUE',
+          status: 'SCHEDULED',
+          assigned_scorer_id: defaults.scorerId,
+          assigned_scorer_name: defaults.scorerName,
+          umpire1_id: defaults.umpire1Id,
+          umpire2_id: defaults.umpire2Id,
+          umpire1_name: defaults.umpire1Name,
+          umpire2_name: defaults.umpire2Name,
+          schedule_confirmed_by: 'SYSTEM_QUALIFICATION'
+        };
+      });
     } else {
       // LEAGUE, LEAGUE_KNOCKOUT (no groups), LEAGUE_PLAYOFFS, CUSTOM
       const rounds = this._generateRoundRobinRounds(teams, isDoubleRR);
@@ -1105,32 +1150,35 @@ class TournamentEngine {
         });
       });
 
-      generatedFixtures = allPairings.map((p, idx) => ({
-        id: `M-${prefix}-${String(idx + 1).padStart(3, '0')}`,
-        tournament_id: tournament.id,
-        tournament_name: tournament.name,
-        team_a_id: p.home,
-        team_b_id: p.away,
-        team_a_name: teamNameMap[p.home] || p.home,
-        team_b_name: teamNameMap[p.away] || p.away,
-        venue,
-        match_date: getMatchDate(idx, allPairings.length),
-        match_time: idx % 2 === 0 ? '09:30 AM' : '02:30 PM',
-        match_type: matchType,
-        overs_per_side: overs,
-        stage: p.stage,
-        round_number: p.round,
-        match_number: idx + 1,
-        bracket_type: 'LEAGUE',
-        status: 'SCHEDULED',
-        assigned_scorer_id: defaults.scorerId,
-        assigned_scorer_name: defaults.scorerName,
-        umpire1_id: defaults.umpire1Id,
-        umpire2_id: defaults.umpire2Id,
-        umpire1_name: defaults.umpire1Name,
-        umpire2_name: defaults.umpire2Name,
-        schedule_confirmed_by: 'SYSTEM_QUALIFICATION'
-      }));
+      generatedFixtures = allPairings.map((p, idx) => {
+        const slotSchedule = slotAssigner(idx, allPairings.length);
+        return {
+          id: `M-${prefix}-${String(idx + 1).padStart(3, '0')}`,
+          tournament_id: tournament.id,
+          tournament_name: tournament.name,
+          team_a_id: p.home,
+          team_b_id: p.away,
+          team_a_name: teamNameMap[p.home] || p.home,
+          team_b_name: teamNameMap[p.away] || p.away,
+          venue: slotSchedule.venue,
+          match_date: slotSchedule.match_date,
+          match_time: slotSchedule.match_time,
+          match_type: matchType,
+          overs_per_side: overs,
+          stage: p.stage,
+          round_number: p.round,
+          match_number: idx + 1,
+          bracket_type: 'LEAGUE',
+          status: 'SCHEDULED',
+          assigned_scorer_id: defaults.scorerId,
+          assigned_scorer_name: defaults.scorerName,
+          umpire1_id: defaults.umpire1Id,
+          umpire2_id: defaults.umpire2Id,
+          umpire1_name: defaults.umpire1Name,
+          umpire2_name: defaults.umpire2Name,
+          schedule_confirmed_by: 'SYSTEM_QUALIFICATION'
+        };
+      });
     }
 
     const { conflicts, warnings } = await this.detectScheduleConflicts(generatedFixtures, {

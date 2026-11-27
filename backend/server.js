@@ -19,6 +19,7 @@ const db = require('./config/db');
 const logger = require('./config/logger');
 const { initSocket } = require('./services/socketService');
 const { cacheResponse } = require('./middleware/cacheMiddleware');
+const { notFoundHandler } = require('./middleware/notFoundMiddleware');
 
 const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
@@ -196,6 +197,7 @@ const authController = require('./controllers/authController');
 
 // Security 7: Strict Rate Limiting on Authentication Endpoints (Brute-force protection)
 app.post('/api/admin/login', authRateLimiter, (req, res) => authController.adminLogin(req, res));
+app.post('/api/super-admin/login', authRateLimiter, (req, res) => require('./controllers/adminDashboardController').superAdminLogin(req, res));
 app.use('/api/auth/login', authRateLimiter);
 app.use('/api/auth/send-otp', authRateLimiter);
 app.use('/api/auth/verify-otp', authRateLimiter);
@@ -250,6 +252,9 @@ app.delete('/api/master-settings/:id', requireAdminAuth, (req, res) => {
   invalidateCache('master-settings');
   masterSettingController.deleteSetting(req, res);
 });
+
+// 404 Catch-All for unmatched routes/endpoints
+app.use(notFoundHandler);
 
 // Security 8: Global Error Handler - Consistent response format { success: false, message, code }
 app.use((err, req, res, next) => {

@@ -107,8 +107,12 @@ export const MatchesPage: React.FC = () => {
         const vList = Array.isArray(vRes)
           ? vRes
           : (Array.isArray(vRes.venues) ? vRes.venues : (Array.isArray(vRes.data) ? vRes.data : []));
+        setVenues(vList);
         if (vList.length > 0) {
-          setVenues(vList);
+          const firstVName = typeof vList[0] === 'string' ? vList[0] : vList[0].name;
+          if (firstVName) {
+            setFormVenue(prev => (prev && vList.some((v: any) => (typeof v === 'string' ? v : v.name) === prev) ? prev : firstVName));
+          }
         }
       }
     } catch (e: any) {
@@ -120,6 +124,22 @@ export const MatchesPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      const handleGroundUpdate = () => {
+        adminApi.getVenues().then((vRes: any) => {
+          const vList = Array.isArray(vRes)
+            ? vRes
+            : (Array.isArray(vRes?.venues) ? vRes.venues : (Array.isArray(vRes?.data) ? vRes.data : []));
+          setVenues(vList);
+        }).catch(() => {});
+      };
+      window.addEventListener('venues_updated', handleGroundUpdate);
+      window.addEventListener('master_settings_updated', handleGroundUpdate);
+      return () => {
+        window.removeEventListener('venues_updated', handleGroundUpdate);
+        window.removeEventListener('master_settings_updated', handleGroundUpdate);
+      };
+    }
   }, []);
 
   const todayKolkata = getTodayKolkata();
@@ -145,7 +165,7 @@ export const MatchesPage: React.FC = () => {
     setIsScheduleMode(true);
   };
 
-  const handleSaveSchedule = async () => {
+  const handleSaveSchedule = async (keepOpen = false) => {
     if (!formTeamA || !formTeamB) {
       showToast('Please select both competing teams.', 'error');
       return;
@@ -173,8 +193,18 @@ export const MatchesPage: React.FC = () => {
         time: formTime,
         overs: parseInt(formOvers, 10) || 20
       });
-      showToast('Match scheduled successfully.', 'success');
-      setIsScheduleMode(false);
+      if (keepOpen) {
+        showToast(`Match scheduled on ${formDate}! Add next match for the same date.`, 'success');
+        // Advance default time slot suggestion if standard slot used
+        const slotOrder = ['07:00 AM', '09:30 AM', '10:30 AM', '01:00 PM', '02:30 PM', '04:30 PM', '06:00 PM'];
+        const curIdx = slotOrder.indexOf(formTime.trim().toUpperCase());
+        if (curIdx >= 0 && curIdx + 1 < slotOrder.length) {
+          setFormTime(slotOrder[curIdx + 1]);
+        }
+      } else {
+        showToast('Match scheduled successfully.', 'success');
+        setIsScheduleMode(false);
+      }
       loadData();
     } catch (e: any) {
       showToast(`Schedule error: ${e.message}`, 'error');
@@ -792,13 +822,9 @@ export const MatchesPage: React.FC = () => {
                         );
                       })
                     ) : (
-                      <>
-                        <option value="Kamarajar District Stadium, Virudhunagar">Kamarajar District Stadium, Virudhunagar</option>
-                        <option value="Sivakasi Cricket Ground">Sivakasi Cricket Ground (Sivakasi Bypass)</option>
-                        <option value="Aruppukottai Sports Complex Ground">Aruppukottai Sports Complex Ground</option>
-                        <option value="Rajapalayam Cricket Arena">Rajapalayam Cricket Arena</option>
-                        <option value="Srivilliputhur Town Ground">Srivilliputhur Town Ground</option>
-                      </>
+                      <option value="" disabled>
+                        No grounds found — add grounds in Settings
+                      </option>
                     )}
                   </select>
                 </View>
@@ -903,8 +929,15 @@ export const MatchesPage: React.FC = () => {
                   <Text style={styles.cancelBtnText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
+                  style={[styles.saveBtn, { backgroundColor: '#0284C7' }, !isScheduleValid && styles.saveBtnDisabled]}
+                  onPress={() => handleSaveSchedule(true)}
+                  disabled={!isScheduleValid}
+                >
+                  <Text style={styles.saveBtnText}>+ Save & Add Another (Same Date)</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
                   style={[styles.saveBtn, !isScheduleValid && styles.saveBtnDisabled]}
-                  onPress={handleSaveSchedule}
+                  onPress={() => handleSaveSchedule(false)}
                   disabled={!isScheduleValid}
                 >
                   <Text style={styles.saveBtnText}>Save Fixture</Text>

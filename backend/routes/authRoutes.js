@@ -36,6 +36,7 @@ router.post('/forgot-password/reset-password', otpRateLimiter, validateBody(rese
 // 2. Password-Based Login for All Roles & Cookie Session Management
 router.post('/login', (req, res) => authController.login(req, res));
 router.post('/admin/login', validateBody(adminLoginSchema), (req, res) => authController.adminLogin(req, res));
+router.post('/super-admin/login', validateBody(adminLoginSchema), (req, res) => require('../controllers/adminDashboardController').superAdminLogin(req, res));
 router.post('/logout', (req, res) => authController.logout(req, res));
 router.get('/logout', (req, res) => authController.logout(req, res));
 router.get('/me', verifyToken, (req, res) => authController.getMe(req, res));

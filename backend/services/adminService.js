@@ -189,7 +189,48 @@ async function saveOfficial({ id, name, role, email, phone, status = 'ACTIVE' },
  */
 async function getVenues() {
   await db.initDb();
-  return venueModel.getAll();
+  const [venues, groundSettings] = await Promise.all([
+    venueModel.getAll(),
+    db.models.MasterSetting
+      ? db.models.MasterSetting.find({
+          category: { $in: ['ground', 'district_venue'] },
+          is_active: true
+        })
+          .sort({ sort_order: 1, name: 1 })
+          .lean()
+      : []
+  ]);
+
+  const seen = new Set();
+  const merged = [];
+
+  // Prioritize MasterSetting grounds/venues configured in Admin Settings
+  (groundSettings || []).forEach(g => {
+    const cleanName = String(g.name || '').trim();
+    if (!cleanName) return;
+    const key = cleanName.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push({
+      id: g.id,
+      name: cleanName,
+      code: g.code || '',
+      location: g.description || 'Virudhunagar',
+      description: g.description || '',
+      source: 'settings'
+    });
+  });
+
+  (venues || []).forEach(v => {
+    const cleanName = String(v.name || '').trim();
+    if (!cleanName) return;
+    const key = cleanName.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push(v);
+  });
+
+  return merged;
 }
 
 /**

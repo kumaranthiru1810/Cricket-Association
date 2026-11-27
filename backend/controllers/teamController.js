@@ -6,6 +6,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const teamModel = require('../models/teamModel');
+const { sendListResponse } = require('../utils/responseHelper');
 
 const { JWT_SECRET } = require('../config/env');
 
@@ -242,16 +243,16 @@ class TeamController {
       }
 
       const players = await teamModel.getPlayersByTeamId(teamId);
-      return res.status(200).json({
-        success: true,
-        count: players.length,
-        players: players.map(p => ({
-          id: p.id,
-          playerName: p.player_name,
-          playerEmail: p.player_email,
-          role: p.player_role,
-          createdAt: p.created_at
-        }))
+      const formattedPlayers = (players || []).map(p => ({
+        id: p.id,
+        playerName: p.player_name,
+        playerEmail: p.player_email,
+        role: p.player_role,
+        createdAt: p.created_at
+      }));
+      return sendListResponse(res, formattedPlayers, {
+        players: formattedPlayers,
+        data: formattedPlayers
       });
     } catch (err) {
       console.error('Get Me Players Error:', err);
@@ -275,7 +276,7 @@ class TeamController {
   async getAllTeamsForAdmin(req, res) {
     try {
       const teams = await teamModel.getAllTeams();
-      return res.status(200).json({ success: true, teams });
+      return sendListResponse(res, teams, { teams, data: teams });
     } catch (err) {
       console.error('Get All Teams Admin Error:', err);
       return res.status(500).json({ success: false, message: 'Failed to list teams.' });

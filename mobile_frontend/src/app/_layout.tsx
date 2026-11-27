@@ -31,12 +31,15 @@ export default function RootLayout() {
           <Stack.Screen name="login" />
           <Stack.Screen name="register" />
           <Stack.Screen name="admin-login" />
+          <Stack.Screen name="superadmin" />
+          <Stack.Screen name="super-admin/index" />
           <Stack.Screen name="admin/index" />
           <Stack.Screen name="team/index" />
           <Stack.Screen name="player/index" />
           <Stack.Screen name="umpire/index" />
           <Stack.Screen name="scorer/index" />
           <Stack.Screen name="scorecard/index" />
+          <Stack.Screen name="+not-found" options={{ title: 'Page Not Found' }} />
         </Stack>
         {showPreloader && (
           <VideoPreloader onComplete={() => setShowPreloader(false)} />

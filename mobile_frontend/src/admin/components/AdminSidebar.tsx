@@ -25,7 +25,8 @@ import {
   ChevronRightIcon,
   ChevronDownIcon,
   LawsIcon,
-  CalculatorIcon
+  CalculatorIcon,
+  ShieldIcon
 } from './Icons';
 import { useAdminAuth } from '../context/AdminAuthContext';
 
@@ -83,6 +84,7 @@ export const SETTINGS_SUBCATEGORIES: SettingsSubCategory[] = [
 
 export type AdminRouteKey =
   | 'dashboard'
+  | 'admins'
   | 'users'
   | 'players'
   | 'teams'
@@ -130,6 +132,7 @@ export const AdminSidebar: React.FC<Props> = ({
   liveMatchesCount = 0
 }) => {
   const { adminUser, logout } = useAdminAuth();
+  const isSuperAdmin = Boolean(adminUser?.is_super_admin);
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
   const effectiveCollapsed = isMobileOpen ? false : collapsed;
@@ -149,9 +152,18 @@ export const AdminSidebar: React.FC<Props> = ({
       label: 'Dashboard',
       icon: c => <DashboardIcon size={18} color={c} />
     },
+    ...(isSuperAdmin
+      ? [
+          {
+            key: 'admins' as AdminRouteKey,
+            label: 'Admins',
+            icon: (c: string) => <ShieldIcon size={18} color={c} />
+          }
+        ]
+      : []),
     {
       key: 'users',
-      label: 'Users',
+      label: 'Players',
       icon: c => <UsersIcon size={18} color={c} />
     },
     {
@@ -223,7 +235,7 @@ export const AdminSidebar: React.FC<Props> = ({
               </Text>
               <Text style={styles.brandSub}>Virudhunagar District</Text>
               <View style={styles.adminBadge}>
-                <Text style={styles.adminBadgeText}>ADMIN PANEL</Text>
+                <Text style={styles.adminBadgeText}>{isSuperAdmin ? 'SUPER ADMIN' : 'ADMIN PANEL'}</Text>
               </View>
             </View>
           )}

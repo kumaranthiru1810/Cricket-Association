@@ -6,6 +6,7 @@
 const cricketLawsService = require('../services/cricketLawsService');
 const dlsService = require('../services/dlsService');
 const vjdService = require('../services/vjdService');
+const { sendListResponse } = require('../utils/responseHelper');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public Endpoints
@@ -15,7 +16,7 @@ exports.getAllLaws = async (req, res) => {
   try {
     const { category, search, isAmended } = req.query;
     const laws = await cricketLawsService.getAllLaws({ category, search, isAmended });
-    res.json({ success: true, laws, total: laws.length });
+    return sendListResponse(res, laws, { laws, total: laws.length });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -35,10 +36,10 @@ exports.searchLaws = async (req, res) => {
   try {
     const { q } = req.query;
     if (!q || q.trim().length < 1) {
-      return res.json({ success: true, results: [], total: 0 });
+      return sendListResponse(res, [], { results: [], total: 0 });
     }
     const results = await cricketLawsService.searchLaws(q);
-    res.json({ success: true, results, total: results.length, query: q });
+    return sendListResponse(res, results, { results, total: results.length, query: q });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -47,7 +48,7 @@ exports.searchLaws = async (req, res) => {
 exports.getLawCategories = async (req, res) => {
   try {
     const categories = await cricketLawsService.getLawCategories();
-    res.json({ success: true, categories });
+    return sendListResponse(res, categories, { categories });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -114,7 +115,7 @@ exports.getAuditLogs = async (req, res) => {
   try {
     const { lawId, limit } = req.query;
     const logs = await cricketLawsService.getAuditLogs({ lawId, limit: parseInt(limit, 10) || 50 });
-    res.json({ success: true, logs, total: logs.length });
+    return sendListResponse(res, logs, { logs, total: logs.length });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

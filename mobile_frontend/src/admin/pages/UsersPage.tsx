@@ -12,6 +12,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ActivityIndicator, ScrollView, useWindowDimensions } from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import PageHeader from '../components/PageHeader';
 import DataTable, { ColumnDef } from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
@@ -19,7 +20,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import { EditIcon, CheckIcon, CloseIcon, EyeIcon, ShieldIcon } from '../components/Icons';
 import { adminApi } from '../services/adminApi';
 import { useAdminLayout } from '../components/AdminLayout';
-import DualAdminSecurityModal from '../../components/admin/DualAdminSecurityModal';
+// import DualAdminSecurityModal from '../../components/admin/DualAdminSecurityModal';
 
 const PERMANENT_SUPER_ADMIN = 'Super Administrator';
 
@@ -28,7 +29,7 @@ export const UsersPage: React.FC = () => {
   const isMobile = width < 768;
   const isSmall = width < 480;
   const { showToast } = useAdminLayout();
-  const [showDualSecurityModal, setShowDualSecurityModal] = useState(false);
+  // const [showDualSecurityModal, setShowDualSecurityModal] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [roleFilter, setRoleFilter] = useState('ALL');
@@ -85,7 +86,10 @@ export const UsersPage: React.FC = () => {
         status: statusFilter !== 'ALL' ? statusFilter : undefined
       });
       if (res && res.success) {
-        setUsers(res.users || []);
+        const nonAdminUsers = (res.users || []).filter(
+          (u: any) => !['ADMIN', 'SUPER_ADMIN', 'COACH', 'SCORER'].includes((u.role || '').toUpperCase())
+        );
+        setUsers(nonAdminUsers);
       }
     } catch (e: any) {
       showToast(`Failed to load users: ${e.message}`, 'error');
@@ -378,8 +382,9 @@ export const UsersPage: React.FC = () => {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <Text style={styles.userNameText}>{item.name}</Text>
               {isSuperAdmin && (
-                <View style={styles.superAdminCrownBadge}>
-                  <Text style={styles.superAdminCrownText}>👑 Super Admin</Text>
+                <View style={[styles.superAdminCrownBadge, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                  <MaterialCommunityIcons name="crown" size={12} color="#b45309" />
+                  <Text style={styles.superAdminCrownText}>Super Admin</Text>
                 </View>
               )}
             </View>
@@ -396,8 +401,18 @@ export const UsersPage: React.FC = () => {
       render: item => (
         <View>
           <Text style={styles.userEmailText}>{item.email}</Text>
-          {item.mobile && <Text style={styles.userMobileSub}>📱 {item.mobile}</Text>}
-          {item.aadhaar && <Text style={{ color: '#991b1b', fontSize: 10, fontWeight: '700', marginTop: 2 }}>🆔 UIDAI: {item.aadhaar}</Text>}
+          {item.mobile && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <Ionicons name="call-outline" size={11} color="#64748b" />
+              <Text style={styles.userMobileSub}>{item.mobile}</Text>
+            </View>
+          )}
+          {item.aadhaar && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <Ionicons name="card-outline" size={11} color="#991b1b" />
+              <Text style={{ color: '#991b1b', fontSize: 10, fontWeight: '700' }}>UIDAI: {item.aadhaar}</Text>
+            </View>
+          )}
         </View>
       )
     },
@@ -440,8 +455,9 @@ export const UsersPage: React.FC = () => {
       render: item => {
         if (item.status === 'PENDING') {
           return (
-            <View style={styles.pendingBadge}>
-              <Text style={styles.pendingBadgeText}>⏳ PENDING APPROVAL</Text>
+            <View style={[styles.pendingBadge, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+              <Ionicons name="hourglass-outline" size={11} color="#b45309" />
+              <Text style={styles.pendingBadgeText}>PENDING APPROVAL</Text>
             </View>
           );
         }
@@ -480,16 +496,18 @@ export const UsersPage: React.FC = () => {
           return (
             <View style={styles.actionsRow}>
               <TouchableOpacity
-                style={styles.btnApproveCompact}
+                style={[styles.btnApproveCompact, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                 onPress={() => handleInitiateApproveAdmin(item)}
               >
-                <Text style={styles.btnApproveCompactText}>✓ Approve</Text>
+                <Ionicons name="checkmark" size={12} color="#ffffff" />
+                <Text style={styles.btnApproveCompactText}>Approve</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.btnRejectCompact}
+                style={[styles.btnRejectCompact, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                 onPress={() => handleInitiateRejectAdmin(item)}
               >
-                <Text style={styles.btnRejectCompactText}>✕ Reject</Text>
+                <Ionicons name="close" size={12} color="#ffffff" />
+                <Text style={styles.btnRejectCompactText}>Reject</Text>
               </TouchableOpacity>
             </View>
           );
@@ -558,7 +576,7 @@ export const UsersPage: React.FC = () => {
                 onPress={() => handleInitiateAdminStatusAction(item, 'REMOVE_ADMIN')}
                 accessibilityLabel="Remove Administrator"
               >
-                <Text style={{ fontSize: 11 }}>🗑️</Text>
+                <Ionicons name="trash-outline" size={13} color="#dc2626" />
               </TouchableOpacity>
             )}
           </View>
@@ -570,11 +588,12 @@ export const UsersPage: React.FC = () => {
   return (
     <View style={styles.container}>
       <PageHeader
-        title="Users & Dynamic Administrator Management"
-        subtitle="Manage federation accounts. Super Administrator (Apex Authority) exercises cryptographic OTP approval over all dynamic admins."
-        breadcrumbs={[{ label: 'Admin' }, { label: 'Users & Admins' }]}
+        title="Players Management"
+        subtitle="Manage registered federation players and member accounts."
+        breadcrumbs={[{ label: 'Dashboard' }, { label: 'Players' }]}
         actions={
           <View style={[styles.headerActionsWrap, isMobile && { width: '100%', gap: 8 }]}>
+            {/* Dual-Admin Security (Commented out - not needed)
             <TouchableOpacity
               style={[
                 styles.addAdminBtn,
@@ -585,8 +604,9 @@ export const UsersPage: React.FC = () => {
               activeOpacity={0.8}
             >
               <ShieldIcon size={15} color="#ffffff" style={{ marginRight: 6 }} />
-              <Text style={styles.addAdminBtnText} numberOfLines={1}>🛡️ Dual-Admin Security</Text>
+              <Text style={styles.addAdminBtnText} numberOfLines={1}>Dual-Admin Security</Text>
             </TouchableOpacity>
+            */}
             <TouchableOpacity
               style={[
                 styles.addAdminBtn,
@@ -624,7 +644,7 @@ export const UsersPage: React.FC = () => {
               </TouchableOpacity>
               {roleDropdownOpen && (
                 <View style={styles.dropdownMenu}>
-                  {['ALL', 'ADMIN', 'SCORER', 'PLAYER', 'USER'].map(r => {
+                  {['ALL', 'ADMIN', 'PLAYER', 'USER'].map(r => {
                     const label = r === 'ADMIN' ? 'ADMINISTRATORS' : r;
                     const isSelected = roleFilter === r;
                     return (
@@ -949,7 +969,10 @@ export const UsersPage: React.FC = () => {
                 </View>
 
                 <View style={styles.securityNoticeCard}>
-                  <Text style={styles.securityNoticeTitle}>🛡️ Super Administrator Oversight Policy</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <Ionicons name="shield-checkmark" size={15} color="#991b1b" />
+                    <Text style={[styles.securityNoticeTitle, { marginBottom: 0 }]}>Super Administrator Oversight Policy</Text>
+                  </View>
                   <Text style={styles.securityNoticeText}>
                     New administrators have dynamic privileges and strictly require Nodemailer 6-digit OTP verification from the permanent Super Administrator (<Text style={{ fontWeight: '800', color: '#991b1b' }}>Super Administrator</Text>). Upon approval, an activation link is automatically emailed to the new administrator.
                   </Text>
@@ -1015,9 +1038,12 @@ export const UsersPage: React.FC = () => {
 
               {/* Action Banner */}
               <View style={styles.superAdminActionBanner}>
-                <Text style={styles.superAdminActionTitle}>
-                  🔒 {otpActionTitle || 'Administrative Operation'}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="lock-closed" size={15} color="#0f2452" />
+                  <Text style={styles.superAdminActionTitle}>
+                    {otpActionTitle || 'Administrative Operation'}
+                  </Text>
+                </View>
                 {otpActionDesc ? (
                   <Text style={styles.superAdminActionDesc}>{otpActionDesc}</Text>
                 ) : null}
@@ -1025,15 +1051,20 @@ export const UsersPage: React.FC = () => {
 
               {/* Timer & Resend Row */}
               <View style={styles.otpTimerRow}>
-                <Text style={styles.otpTimerText}>
-                  ⏳ Code valid for: <Text style={{ fontWeight: '800' }}>{formatCountdown(otpCountdown)}</Text>
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Ionicons name="hourglass-outline" size={13} color="#475569" />
+                  <Text style={styles.otpTimerText}>
+                    Code valid for: <Text style={{ fontWeight: '800' }}>{formatCountdown(otpCountdown)}</Text>
+                  </Text>
+                </View>
                 <TouchableOpacity
                   onPress={handleResendOtp}
                   disabled={resendCooldown > 0}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
                 >
+                  <Ionicons name={resendCooldown > 0 ? 'hourglass-outline' : 'sync'} size={13} color={resendCooldown > 0 ? '#94a3b8' : '#1d4ed8'} />
                   <Text style={[styles.otpResendText, resendCooldown > 0 && { color: '#94a3b8' }]}>
-                    {resendCooldown > 0 ? `⏳ Resend OTP (${resendCooldown}s)` : '🔄 Resend OTP'}
+                    {resendCooldown > 0 ? `Resend OTP (${resendCooldown}s)` : 'Resend OTP'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1042,17 +1073,18 @@ export const UsersPage: React.FC = () => {
               <View style={styles.superAdminOtpCard}>
                 <View style={styles.superAdminOtpCardHeader}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={{ fontSize: 13 }}>👑</Text>
+                    <MaterialCommunityIcons name="crown" size={14} color="#d97706" />
                     <Text style={styles.superAdminOtpLabel}>
                       Enter 6-Digit OTP sent to <Text style={{ fontWeight: '800', color: '#0f2452' }}>{PERMANENT_SUPER_ADMIN}</Text>:
                     </Text>
                   </View>
                   {demoOtp && (
                     <TouchableOpacity
-                      style={styles.demoFillChip}
+                      style={[styles.demoFillChip, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                       onPress={() => setOtpInput(demoOtp)}
                     >
-                      <Text style={styles.demoFillText}>⚡ Demo OTP: {demoOtp}</Text>
+                      <Ionicons name="flash" size={12} color="#b45309" />
+                      <Text style={styles.demoFillText}>Demo OTP: {demoOtp}</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -1069,9 +1101,12 @@ export const UsersPage: React.FC = () => {
               </View>
 
               {/* Security Policy Reminder */}
-              <Text style={styles.securityPolicyNote}>
-                🛡️ Single-use cryptographically secure OTP. All newly created or modified administrators remain under dynamic management of the permanent Super Administrator.
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginBottom: 12 }}>
+                <Ionicons name="shield-checkmark-outline" size={14} color="#64748b" style={{ marginTop: 2 }} />
+                <Text style={[styles.securityPolicyNote, { flex: 1, marginBottom: 0 }]}>
+                  Single-use cryptographically secure OTP. All newly created or modified administrators remain under dynamic management of the permanent Super Administrator.
+                </Text>
+              </View>
 
               {/* Modal Actions */}
               <View style={[styles.superAdminOtpFooter, isMobile && { flexDirection: 'column-reverse', gap: 8, paddingHorizontal: 12 }]}>
@@ -1085,7 +1120,8 @@ export const UsersPage: React.FC = () => {
                   style={[
                     styles.btnVerifySuperAdmin,
                     (otpInput.length !== 6 || isVerifyingOtp) && { opacity: 0.6 },
-                    isMobile && { width: '100%', minWidth: 0, paddingVertical: 11 }
+                    isMobile && { width: '100%', minWidth: 0, paddingVertical: 11 },
+                    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }
                   ]}
                   onPress={handleVerifyOtp}
                   disabled={otpInput.length !== 6 || isVerifyingOtp}
@@ -1093,9 +1129,12 @@ export const UsersPage: React.FC = () => {
                   {isVerifyingOtp ? (
                     <ActivityIndicator size="small" color="#ffffff" />
                   ) : (
-                    <Text style={styles.btnVerifySuperAdminText}>
-                      ✓ Verify OTP & Authorize Action
-                    </Text>
+                    <>
+                      <Ionicons name="checkmark" size={15} color="#ffffff" />
+                      <Text style={styles.btnVerifySuperAdminText}>
+                        Verify OTP & Authorize Action
+                      </Text>
+                    </>
                   )}
                 </TouchableOpacity>
               </View>
@@ -1104,7 +1143,7 @@ export const UsersPage: React.FC = () => {
         </Modal>
       )}
 
-      {/* High-Security Dual-Admin Approval & Revocation Modal */}
+      {/* High-Security Dual-Admin Approval & Revocation Modal (Commented out - not needed)
       <DualAdminSecurityModal
         visible={showDualSecurityModal}
         onClose={() => setShowDualSecurityModal(false)}
@@ -1113,6 +1152,7 @@ export const UsersPage: React.FC = () => {
           showToast('Dual-admin operation completed successfully.', 'success');
         }}
       />
+      */}
     </View>
   );
 };

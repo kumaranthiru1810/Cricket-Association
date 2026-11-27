@@ -5,6 +5,7 @@
  */
 
 const authService = require('../services/authService');
+const { sendListResponse } = require('../utils/responseHelper');
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
@@ -513,7 +514,7 @@ class AuthController {
   async getTeams(req, res) {
     try {
       const teams = await authService.getTeams();
-      res.status(200).json({ success: true, teams });
+      return sendListResponse(res, teams, { teams, data: teams });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
     }
@@ -541,7 +542,7 @@ class AuthController {
     try {
       const { status, role } = req.query || {};
       const result = await authService.getAllRegistrations(status, role);
-      res.status(200).json({ success: true, registrations: result, count: (result || []).length });
+      return sendListResponse(res, result || [], { registrations: result || [], data: result || [] });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
     }
@@ -550,7 +551,7 @@ class AuthController {
   async getAdminNotifications(req, res) {
     try {
       const notifs = await authService.getAdminNotifications();
-      res.status(200).json({ success: true, notifications: notifs });
+      return sendListResponse(res, notifs || [], { notifications: notifs || [], data: notifs || [] });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
     }

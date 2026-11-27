@@ -12,6 +12,7 @@ import {
   useWindowDimensions
 } from 'react-native';
 import { adminApi } from '../../admin/services/adminApi';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import {
   DEFAULT_HOME_POPUP_CONFIG,
   HOME_POPUP_DESTINATIONS,
@@ -140,7 +141,7 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
                 alignItems: 'center',
                 justifyContent: 'center'
               }}>
-                <Text style={{ fontSize: 18 }}>📢</Text>
+                <Ionicons name="megaphone" size={18} color="#f59e0b" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 16, fontWeight: '900', color: '#ffffff' }}>
@@ -152,7 +153,7 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
               </View>
             </View>
             <TouchableOpacity onPress={onClose} style={{ padding: 6 }}>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: '#94a3b8' }}>✕</Text>
+              <Ionicons name="close" size={20} color="#94a3b8" />
             </TouchableOpacity>
           </View>
 
@@ -206,9 +207,12 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
               {/* Tournament Quick-Fill Selector */}
               {tournaments.length > 0 && (
                 <View style={{ marginBottom: 16, zIndex: 800 }}>
-                  <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#475569', marginBottom: 6, textTransform: 'uppercase' }}>
-                    🏆 Link to a Tournament (Auto-Fill)
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+                    <Ionicons name="trophy-outline" size={13} color="#475569" />
+                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#475569', textTransform: 'uppercase' }}>
+                      Link to a Tournament (Auto-Fill)
+                    </Text>
+                  </View>
                   <View style={{ position: 'relative' }}>
                     <TouchableOpacity
                       onPress={() => setTourDropdownOpen(p => !p)}
@@ -226,7 +230,7 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
                       }}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                        <Text style={{ fontSize: 15 }}>🏏</Text>
+                        <MaterialCommunityIcons name="cricket" size={16} color="#1e40af" />
                         <Text style={{ fontSize: 13, fontWeight: '600', color: selectedTournamentId ? '#1d4ed8' : '#94a3b8', flex: 1 }} numberOfLines={1}>
                           {selectedTournamentId
                             ? (tournaments.find(t => t._id === selectedTournamentId)?.name || 'Selected')
@@ -303,7 +307,7 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
                                 </Text>
                               </View>
                               {selectedTournamentId === t._id && (
-                                <Text style={{ fontSize: 14, color: '#1d4ed8' }}>✓</Text>
+                                <Ionicons name="checkmark" size={15} color="#1d4ed8" />
                               )}
                             </TouchableOpacity>
                           ))}
@@ -312,17 +316,21 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
                     )}
                   </View>
                   {selectedTournamentId && (
-                    <TouchableOpacity onPress={() => { setSelectedTournamentId(''); }} style={{ marginTop: 4 }}>
-                      <Text style={{ fontSize: 11, color: '#94a3b8' }}>✕ Clear selection</Text>
+                    <TouchableOpacity onPress={() => { setSelectedTournamentId(''); }} style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Ionicons name="close" size={12} color="#94a3b8" />
+                      <Text style={{ fontSize: 11, color: '#94a3b8' }}>Clear selection</Text>
                     </TouchableOpacity>
                   )}
                 </View>
               )}
 
               {/* Quick Presets */}
-              <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#475569', marginBottom: 8, textTransform: 'uppercase' }}>
-                ⚡ Quick Presets (1-Click Fill)
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 }}>
+                <Ionicons name="flash" size={13} color="#d97706" />
+                <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#475569', textTransform: 'uppercase' }}>
+                  Quick Presets (1-Click Fill)
+                </Text>
+              </View>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
                 {HOME_POPUP_PRESETS.map(p => {
                   const isActive = config.presetKey === p.key;
@@ -367,9 +375,12 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
               </View>
 
               {/* Select Banner Image */}
-              <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#475569', marginBottom: 8, textTransform: 'uppercase' }}>
-                🖼️ Select Banner Image
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 }}>
+                <Ionicons name="image-outline" size={13} color="#475569" />
+                <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#475569', textTransform: 'uppercase' }}>
+                  Select Banner Image
+                </Text>
+              </View>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
                 {HOME_POPUP_IMAGES.map(img => {
                   const isSelected = config.imageKey === img.key;
@@ -392,7 +403,7 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
                         <Image source={img.source} style={{ width: '100%', height: 58 }} resizeMode="cover" />
                       ) : (
                         <View style={{ height: 58, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9' }}>
-                          <Text style={{ fontSize: 20 }}>🔗</Text>
+                          <Ionicons name="link-outline" size={20} color="#64748b" />
                         </View>
                       )}
                       <View style={{ padding: 6, alignItems: 'center' }}>
@@ -439,7 +450,8 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
                         gap: 6
                       }}
                     >
-                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#ffffff' }}>📁 Upload Image</Text>
+                      <Ionicons name="cloud-upload-outline" size={15} color="#ffffff" />
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#ffffff' }}>Upload Image</Text>
                     </TouchableOpacity>
                     <Text style={{ fontSize: 11.5, color: '#94a3b8', flex: 1 }}>or paste URL below</Text>
                   </View>
@@ -649,9 +661,12 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
               </View>
 
               {/* Live Visitor Preview */}
-              <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#475569', marginBottom: 8, textTransform: 'uppercase' }}>
-                👁️ Live Home Visitor Preview
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 }}>
+                <Ionicons name="eye-outline" size={14} color="#475569" />
+                <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#475569', textTransform: 'uppercase' }}>
+                  Live Home Visitor Preview
+                </Text>
+              </View>
               <View style={{
                 borderWidth: 1,
                 borderColor: '#fde68a',
@@ -669,10 +684,14 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
                     backgroundColor: '#d97706',
                     paddingHorizontal: 10,
                     paddingVertical: 4,
-                    borderRadius: 6
+                    borderRadius: 6,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4
                   }}>
+                    <MaterialCommunityIcons name="cricket" size={11} color="#ffffff" />
                     <Text style={{ color: '#ffffff', fontSize: 10, fontWeight: '800' }}>
-                      🏏 {config.badgeText || 'OFFICIAL NOTICE'}
+                      {config.badgeText || 'OFFICIAL NOTICE'}
                     </Text>
                   </View>
                 </View>
@@ -693,10 +712,14 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
                       borderRadius: 8,
                       paddingHorizontal: 10,
                       paddingVertical: 7,
-                      marginTop: 10
+                      marginTop: 10,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 5
                     }}>
-                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#92400e' }}>
-                        ⚖️ {config.highlightText}
+                      <MaterialCommunityIcons name="scale-balance" size={13} color="#92400e" />
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#92400e', flex: 1 }}>
+                        {config.highlightText}
                       </Text>
                     </View>
                   )}
@@ -766,11 +789,15 @@ export const HomePopupManagerModal: React.FC<Props> = ({ visible, onClose, onSav
                 paddingVertical: 10,
                 borderRadius: 8,
                 backgroundColor: '#f59e0b',
-                opacity: saving ? 0.6 : 1
+                opacity: saving ? 0.6 : 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5
               }}
             >
+              {!saving && <Ionicons name="checkmark" size={14} color="#0f172a" />}
               <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>
-                {saving ? 'Saving...' : '✓ Save & Apply Settings'}
+                {saving ? 'Saving...' : 'Save & Apply Settings'}
               </Text>
             </TouchableOpacity>
           </View>
