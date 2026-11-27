@@ -2020,8 +2020,6 @@ class TournamentEngine {
     const cfg = tournament.format_config || {};
     const minSquad = Number(cfg.min_squad_size || 11);
     const maxSquad = Number(cfg.max_squad_size || 18);
-    const minAge = cfg.min_age != null ? Number(cfg.min_age) : (tournament.rules?.min_age != null ? Number(tournament.rules.min_age) : null);
-    const maxAge = cfg.max_age != null ? Number(cfg.max_age) : (tournament.rules?.max_age != null ? Number(tournament.rules.max_age) : null);
 
     const teamPlayers = await db.models.Player.find({ team_id: teamId }).lean();
     const targetPlayers = playerIds
@@ -2038,100 +2036,27 @@ class TournamentEngine {
       errors.push(`Squad size (${targetPlayers.length}) exceeds tournament maximum (${maxSquad}).`);
     }
 
-    const calcAgeYears = (dobValue) => {
-      if (!dobValue) return null;
-      const dob = new Date(dobValue);
-      if (Number.isNaN(dob.getTime())) return null;
-      const refDate = tournament.start_date ? new Date(tournament.start_date) : new Date();
-      let age = refDate.getFullYear() - dob.getFullYear();
-      const mDiff = refDate.getMonth() - dob.getMonth();
-      if (mDiff < 0 || (mDiff === 0 && refDate.getDate() < dob.getDate())) age--;
-      return age;
-    };
-
-    // Check inactive/suspended players and age restrictions
+    // Check inactive/suspended players
     targetPlayers.forEach(p => {
       if (p.status && !['ACTIVE', 'APPROVED'].includes(String(p.status).toUpperCase())) {
         errors.push(`Player '${p.name}' (${p.id}) is not ACTIVE (status: ${p.status}).`);
       }
-      if (minAge !== null || maxAge !== null) {
-        const age = p.age != null ? Number(p.age) : calcAgeYears(p.date_of_birth);
-        if (age === null || Number.isNaN(age)) {
-          warnings.push(`Player '${p.name}' (${p.id}) has no date of birth/age on file to verify tournament age limit.`);
-        } else {
-          if (minAge !== null && age < minAge) {
-            errors.push(`Player '${p.name}' (${p.id}) age ${age} is below minimum age (${minAge}).`);
-          }
-          if (maxAge !== null && age > maxAge) {
-            errors.push(`Player '${p.name}' (${p.id}) age ${age} exceeds maximum age (${maxAge}).`);
-          }
-        }
-      }
     });
 
-    // Check duplicate player registration (email, aadhaar, mobile) across other teams in the same tournament
+    // Check duplicate player registration across other teams in the same tournament
     const otherTeamIds = (tournament.teams || []).filter(tid => tid !== teamId);
     if (otherTeamIds.length > 0 && targetPlayers.length > 0) {
       const otherPlayers = await db.models.Player.find({ team_id: { $in: otherTeamIds } }).lean();
       const otherEmails = new Map();
-      const otherAadhaars = new Map();
-      const otherPhones = new Map();
       otherPlayers.forEach(op => {
-        if (op.email) otherEmails.set(String(op.email).trim().toLowerCase(), op);
-        const aadhaar = String(op.aadhaar || '').replace(/\D/g, '');
-        if (aadhaar.length === 12) otherAadhaars.set(aadhaar, op);
-        const phone = String(op.mobile || op.phone || '').replace(/\D/g, '').slice(-10);
-        if (phone.length === 10) otherPhones.set(phone, op);
+        if (op.email) otherEmails.set(op.email.toLowerCase(), op);
       });
       targetPlayers.forEach(p => {
-        if (p.email && otherEmails.has(String(p.email).trim().toLowerCase())) {
-          const dup = otherEmails.get(String(p.email).trim().toLowerCase());
+        if (p.email && otherEmails.has(p.email.toLowerCase())) {
+          const dup = otherEmails.get(p.email.toLowerCase());
           errors.push(`Player '${p.name}' (${p.email}) is already registered with another team (${dup.team_id}) in this tournament.`);
         }
-        const aadhaar = String(p.aadhaar || '').replace(/\D/g, '');
-        if (aadhaar.length === 12 && otherAadhaars.has(aadhaar)) {
-          const dup = otherAadhaars.get(aadhaar);
-          errors.push(`Player '${p.name}' Aadhaar matches another registered player in team (${dup.team_id}) in this tournament.`);
-        }
-        const phone = String(p.mobile || p.phone || '').replace(/\D/g, '').slice(-10);
-        if (phone.length === 10 && otherPhones.has(phone)) {
-          const dup = otherPhones.get(phone);
-          errors.push(`Player '${p.name}' phone matches another registered player in team (${dup.team_id}) in this tournament.`);
-        }
       });
-    }
-
-    // Check player transfer restriction: cannot transfer after appearing in a LIVE/COMPLETED match for another team in this tournament
-    if (targetPlayers.length > 0) {
-      const tourMatches = await db.models.Match.find({
-        tournament_id: tournament.id,
-        status: { $in: ['LIVE', 'COMPLETED'] }
-      }).select('id').lean();
-      const tourMatchIds = tourMatches.map(m => m.id);
-      if (tourMatchIds.length > 0) {
-        const targetIds = targetPlayers.map(p => p.id);
-        const inningsDocs = await db.models.Innings.find({ match_id: { $in: tourMatchIds } })
-          .select('batting_team_id bowling_team_id batting_stats bowling_stats')
-          .lean();
-        const playedForOtherTeam = new Map();
-        for (const inn of inningsDocs) {
-          for (const b of (inn.batting_stats || [])) {
-            if (targetIds.includes(b.player_id) && inn.batting_team_id && inn.batting_team_id !== teamId) {
-              playedForOtherTeam.set(b.player_id, inn.batting_team_id);
-            }
-          }
-          for (const bw of (inn.bowling_stats || [])) {
-            if (targetIds.includes(bw.player_id) && inn.bowling_team_id && inn.bowling_team_id !== teamId) {
-              playedForOtherTeam.set(bw.player_id, inn.bowling_team_id);
-            }
-          }
-        }
-        targetPlayers.forEach(p => {
-          if (playedForOtherTeam.has(p.id)) {
-            errors.push(`Transfer restricted: Player '${p.name}' (${p.id}) has already played in this tournament for team '${playedForOtherTeam.get(p.id)}'.`);
-          }
-        });
-      }
     }
 
     return {

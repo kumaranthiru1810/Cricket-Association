@@ -329,25 +329,14 @@ async function runSuite() {
     const dbCountAfterSim = await db.models.Match.countDocuments({ tournament_id: tid, status: 'COMPLETED' });
     assert.strictEqual(dbCountAfterSim, 0, 'What-If simulation must NEVER mutate DB');
 
-    // Eligibility validation (duplicate email + age restriction)
+    // Eligibility validation
     await db.models.Player.create([
-      { id: 'TE-PL-1', team_id: teams40[0], name: 'Test P1', email: 'tep1@test.com', age: 21, status: 'ACTIVE' },
-      { id: 'TE-PL-2', team_id: teams40[0], name: 'Test P2', email: 'tep2@test.com', age: 20, status: 'ACTIVE' },
-      { id: 'TE-PL-3', team_id: teams40[1], name: 'Dup P1', email: 'tep1@test.com', age: 21, status: 'ACTIVE' }
+      { id: 'TE-PL-1', team_id: teams40[0], name: 'Test P1', email: 'tep1@test.com', status: 'ACTIVE' },
+      { id: 'TE-PL-2', team_id: teams40[0], name: 'Test P2', email: 'tep2@test.com', status: 'ACTIVE' },
+      { id: 'TE-PL-3', team_id: teams40[1], name: 'Dup P1', email: 'tep1@test.com', status: 'ACTIVE' }
     ]);
     const eligOk = await tournamentEngine.validatePlayerEligibility(tid, teams40[0]);
     assert.strictEqual(eligOk.eligible, false, 'Duplicate email across teams in same tournament must fail');
-
-    await db.models.Tournament.updateOne({ id: tid }, { $set: { 'format_config.max_age': 19 } });
-    const eligAgeFail = await tournamentEngine.validatePlayerEligibility(tid, teams40[0]);
-    assert.strictEqual(eligAgeFail.eligible, false, 'Players exceeding max_age must fail eligibility');
-    assert(eligAgeFail.errors.some(e => e.includes('exceeds maximum age')), 'Age restriction error must be reported');
-
-    // Player Comparison
-    const cmp = await historyService.comparePlayers('TE-PL-1', 'TE-PL-2');
-    assert.strictEqual(cmp.success, true);
-    assert.strictEqual(cmp.player_1.player.id, 'TE-PL-1');
-    assert.strictEqual(cmp.player_2.player.id, 'TE-PL-2');
 
     // Withdrawal
     const wd = await tournamentEngine.withdrawTeam(tid, teams40[3], { reason: 'Unable to travel', rule: 'REMAINING_WALKOVER' });

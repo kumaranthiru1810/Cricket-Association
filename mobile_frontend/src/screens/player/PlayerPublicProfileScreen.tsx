@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   ActivityIndicator,
   useWindowDimensions,
   Image,
@@ -90,30 +89,6 @@ export default function PlayerPublicProfileScreen({
 
   const [matchLog, setMatchLog] = useState<any[]>([]);
   const [playerHistory, setPlayerHistory] = useState<any | null>(null);
-  const [compareQuery, setCompareQuery] = useState('');
-  const [compareResult, setCompareResult] = useState<any | null>(null);
-  const [compareLoading, setCompareLoading] = useState(false);
-  const [compareError, setCompareError] = useState<string | null>(null);
-
-  const handleComparePlayer = async () => {
-    const q = compareQuery.trim();
-    if (!q) return;
-    const baseTarget = player.id || playerId || player.name;
-    try {
-      setCompareLoading(true);
-      setCompareError(null);
-      const res: any = await ScorerApi.comparePlayers(String(baseTarget), q);
-      if (res && res.success) {
-        setCompareResult(res);
-      } else {
-        setCompareError(res?.message || 'Unable to compare players.');
-      }
-    } catch (err: any) {
-      setCompareError(err?.message || 'Player not found for comparison.');
-    } finally {
-      setCompareLoading(false);
-    }
-  };
 
   useEffect(() => {
     let isMounted = true;
@@ -477,73 +452,6 @@ export default function PlayerPublicProfileScreen({
                 ))}
               </View>
             )}
-
-            {/* Player Comparison Card */}
-            <View style={[styles.matchCard, { marginBottom: 14 }]}>
-              <Text style={[styles.sectionTitle, { fontSize: 14, marginBottom: 8 }]}>Compare With Another Player</Text>
-              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                <TextInput
-                  value={compareQuery}
-                  onChangeText={setCompareQuery}
-                  placeholder="Enter Player ID or Name"
-                  placeholderTextColor="#94a3b8"
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    borderWidth: 1,
-                    borderColor: '#cbd5e1',
-                    borderRadius: 8,
-                    paddingHorizontal: 10,
-                    paddingVertical: 8,
-                    fontSize: 13,
-                    color: '#0f172a',
-                    backgroundColor: '#f8fafc'
-                  }}
-                />
-                <TouchableOpacity
-                  onPress={handleComparePlayer}
-                  disabled={compareLoading || !compareQuery.trim()}
-                  style={{
-                    backgroundColor: '#0f2452',
-                    paddingHorizontal: 14,
-                    paddingVertical: 9,
-                    borderRadius: 8,
-                    opacity: compareLoading || !compareQuery.trim() ? 0.6 : 1
-                  }}
-                >
-                  <Text style={{ color: '#fbbf24', fontWeight: '800', fontSize: 12 }}>
-                    {compareLoading ? '...' : 'Compare'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              {compareError && (
-                <Text style={{ color: '#dc2626', fontSize: 12, marginTop: 6 }}>{compareError}</Text>
-              )}
-              {compareResult && compareResult.player_1 && compareResult.player_2 && (
-                <View style={{ marginTop: 10, borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 10, gap: 6 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text style={{ flex: 1, fontWeight: '800', fontSize: 12, color: '#0f172a' }}>{compareResult.player_1.player?.name}</Text>
-                    <Text style={{ width: 70, textAlign: 'center', fontWeight: '700', fontSize: 11, color: '#64748b' }}>STAT</Text>
-                    <Text style={{ flex: 1, textAlign: 'right', fontWeight: '800', fontSize: 12, color: '#0f172a' }}>{compareResult.player_2.player?.name}</Text>
-                  </View>
-                  {[
-                    ['Matches', compareResult.player_1.career?.matches, compareResult.player_2.career?.matches],
-                    ['Runs', compareResult.player_1.career?.runs, compareResult.player_2.career?.runs],
-                    ['Bat Avg', compareResult.player_1.career?.batting_average, compareResult.player_2.career?.batting_average],
-                    ['Strike Rate', compareResult.player_1.career?.strike_rate, compareResult.player_2.career?.strike_rate],
-                    ['Wickets', compareResult.player_1.career?.wickets, compareResult.player_2.career?.wickets],
-                    ['Economy', compareResult.player_1.career?.economy, compareResult.player_2.career?.economy],
-                    ['POTM', compareResult.player_1.career?.potm_awards, compareResult.player_2.career?.potm_awards]
-                  ].map(([label, v1, v2]) => (
-                    <View key={String(label)} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 }}>
-                      <Text style={{ flex: 1, fontSize: 12, fontWeight: '700', color: '#1e293b' }}>{v1 ?? 0}</Text>
-                      <Text style={{ width: 70, textAlign: 'center', fontSize: 11, color: '#64748b' }}>{label}</Text>
-                      <Text style={{ flex: 1, textAlign: 'right', fontSize: 12, fontWeight: '700', color: '#1e293b' }}>{v2 ?? 0}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
 
             {/* View Team Button */}
             <TouchableOpacity style={styles.fullTeamBtn} onPress={handleOpenTeam} activeOpacity={0.85}>
