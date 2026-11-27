@@ -2977,6 +2977,369 @@ class TournamentService {
       };
     });
   }
+
+  /**
+   * Build complete tournament records summary (Winner, Runner-up, Awards, Points Table, and Top-10 Leaderboards)
+   */
+  async getTournamentRecordsSummary(tournamentId) {
+    await db.initDb();
+    const tournament = await tournamentModel.findById(tournamentId);
+    if (!tournament) throw { status: 404, message: `Tournament '${tournamentId}' not found.` };
+
+    const [matches, teams, players, pointsTable] = await Promise.all([
+      db.models.Match.find({
+        $or: [{ tournament_id: tournament.id }, { tournament_name: tournament.name }]
+      }).lean(),
+      db.models.Team.find({}).select('id team_id name team_name short_name').lean(),
+      db.models.Player.find({}).select('id name team_id stats').lean(),
+      this.getPointsTable(tournament.id, tournament).catch(() => [])
+    ]);
+
+    const teamNameMap = {};
+    teams.forEach(t => {
+      if (t.id) teamNameMap[t.id] = t.team_name || t.name || t.id;
+      if (t.team_id) teamNameMap[t.team_id] = t.team_name || t.name || t.team_id;
+    });
+    const playerMap = {};
+    players.forEach(p => {
+      if (p.id) playerMap[p.id] = p;
+    });
+
+    const matchIds = matches.map(m => m.id);
+    const [batters, bowlers, inningsList, ballEvents] = matchIds.length > 0
+      ? await Promise.all([
+          db.models.InningsBatter.find({ match_id: { $in: matchIds } }).lean(),
+          db.models.InningsBowler.find({ match_id: { $in: matchIds } }).lean(),
+          db.models.Innings.find({ match_id: { $in: matchIds } }).lean(),
+          db.models.BallEvent.find({ match_id: { $in: matchIds }, is_wicket: true }).lean()
+        ])
+      : [[], [], [], []];
+
+    const batterAgg = {};
+    const bestBattingInnings = [];
+    batters.forEach(b => {
+      const pid = b.player_id || b.player_name;
+      if (!pid) return;
+      const pName = b.player_name || playerMap[pid]?.name || pid;
+      const teamName = teamNameMap[playerMap[pid]?.team_id] || '';
+      if (!batterAgg[pid]) {
+        batterAgg[pid] = {
+          player_id: pid,
+          player_name: pName,
+          team_name: teamName,
+          innings: 0,
+          not_outs: 0,
+          runs: 0,
+          balls: 0,
+          fours: 0,
+          sixes: 0,
+          highest_score: 0
+        };
+      }
+      const entry = batterAgg[pid];
+      entry.innings += 1;
+      if (!b.is_out) entry.not_outs += 1;
+      entry.runs += Number(b.runs || 0);
+      entry.balls += Number(b.balls || 0);
+      entry.fours += Number(b.fours || 0);
+      entry.sixes += Number(b.sixes || 0);
+      if (Number(b.runs || 0) > entry.highest_score) entry.highest_score = Number(b.runs || 0);
+
+      bestBattingInnings.push({
+        player_id: pid,
+        player_name: pName,
+        team_name: teamName,
+        runs: Number(b.runs || 0),
+        balls: Number(b.balls || 0),
+        fours: Number(b.fours || 0),
+        sixes: Number(b.sixes || 0),
+        not_out: !b.is_out,
+        score_display: `${b.runs || 0}${!b.is_out ? '*' : ''} (${b.balls || 0})`,
+        strike_rate: Number(b.balls || 0) > 0 ? Number(((Number(b.runs || 0) / Number(b.balls)) * 100).toFixed(2)) : 0
+      });
+    });
+
+    // Fallback to Innings.batting_stats if InningsBatter is empty
+    if (batters.length === 0) {
+      inningsList.forEach(inn => {
+        (inn.batting_stats || []).forEach(b => {
+          const pid = b.player_id || b.name;
+          if (!pid) return;
+          const pName = b.name || playerMap[pid]?.name || pid;
+          const teamName = teamNameMap[inn.batting_team_id] || '';
+          if (!batterAgg[pid]) {
+            batterAgg[pid] = {
+              player_id: pid,
+              player_name: pName,
+              team_name: teamName,
+              innings: 0,
+              not_outs: 0,
+              runs: 0,
+              balls: 0,
+              fours: 0,
+              sixes: 0,
+              highest_score: 0
+            };
+          }
+          const entry = batterAgg[pid];
+          entry.innings += 1;
+          if (!b.is_out) entry.not_outs += 1;
+          entry.runs += Number(b.runs || 0);
+          entry.balls += Number(b.balls || 0);
+          entry.fours += Number(b.fours || 0);
+          entry.sixes += Number(b.sixes || 0);
+          if (Number(b.runs || 0) > entry.highest_score) entry.highest_score = Number(b.runs || 0);
+          bestBattingInnings.push({
+            player_id: pid,
+            player_name: pName,
+            team_name: teamName,
+            runs: Number(b.runs || 0),
+            balls: Number(b.balls || 0),
+            fours: Number(b.fours || 0),
+            sixes: Number(b.sixes || 0),
+            not_out: !b.is_out,
+            score_display: `${b.runs || 0}${!b.is_out ? '*' : ''} (${b.balls || 0})`,
+            strike_rate: Number(b.balls || 0) > 0 ? Number(((Number(b.runs || 0) / Number(b.balls)) * 100).toFixed(2)) : 0
+          });
+        });
+      });
+    }
+
+    const bowlerAgg = {};
+    const bestBowlingInnings = [];
+    const addBowlerRow = (bw, teamNameFallback = '') => {
+      const pid = bw.player_id || bw.player_name || bw.name;
+      if (!pid) return;
+      const pName = bw.player_name || bw.name || playerMap[pid]?.name || pid;
+      const teamName = teamNameMap[playerMap[pid]?.team_id] || teamNameFallback;
+      const ballsBowled = bw.balls != null ? Number(bw.balls) : (Math.floor(Number(bw.overs || 0)) * 6 + Math.round((Number(bw.overs || 0) % 1) * 10));
+      const runsConceded = Number(bw.runs_conceded ?? bw.runs ?? 0);
+      const wickets = Number(bw.wickets || 0);
+      if (!bowlerAgg[pid]) {
+        bowlerAgg[pid] = {
+          player_id: pid,
+          player_name: pName,
+          team_name: teamName,
+          innings: 0,
+          balls: 0,
+          runs_conceded: 0,
+          wickets: 0,
+          maidens: 0
+        };
+      }
+      bowlerAgg[pid].innings += 1;
+      bowlerAgg[pid].balls += ballsBowled;
+      bowlerAgg[pid].runs_conceded += runsConceded;
+      bowlerAgg[pid].wickets += wickets;
+      bowlerAgg[pid].maidens += Number(bw.maidens || 0);
+
+      bestBowlingInnings.push({
+        player_id: pid,
+        player_name: pName,
+        team_name: teamName,
+        wickets,
+        runs_conceded: runsConceded,
+        overs: `${Math.floor(ballsBowled / 6)}.${ballsBowled % 6}`,
+        figures: `${wickets}/${runsConceded}`,
+        economy: ballsBowled > 0 ? Number(((runsConceded / ballsBowled) * 6).toFixed(2)) : 0
+      });
+    };
+
+    bowlers.forEach(bw => addBowlerRow(bw));
+    if (bowlers.length === 0) {
+      inningsList.forEach(inn => {
+        (inn.bowling_stats || []).forEach(bw => addBowlerRow(bw, teamNameMap[inn.bowling_team_id] || ''));
+      });
+    }
+
+    // Catches from BallEvent + InningsBatter dismissal_text
+    const catchMap = {};
+    const addCatch = (pid, name) => {
+      const key = pid || name;
+      if (!key) return;
+      if (!catchMap[key]) {
+        catchMap[key] = {
+          player_id: key,
+          player_name: name || playerMap[key]?.name || key,
+          team_name: teamNameMap[playerMap[key]?.team_id] || '',
+          catches: 0
+        };
+      }
+      catchMap[key].catches += 1;
+    };
+    ballEvents.forEach(ev => {
+      const wt = String(ev.wicket_type || ev.dismissal_type || '').toUpperCase();
+      if (wt === 'CAUGHT' && (ev.fielder_id || ev.fielder_name)) {
+        addCatch(ev.fielder_id, ev.fielder_name);
+      }
+    });
+    if (Object.keys(catchMap).length === 0) {
+      batters.forEach(b => {
+        const txt = String(b.dismissal_text || '');
+        const match = txt.match(/^c\s+([^b(]+?)(?:\s+b\s+|\s*\()/i);
+        if (match && match[1]) {
+          addCatch(null, match[1].trim());
+        }
+      });
+    }
+
+    const batterList = Object.values(batterAgg).map(b => {
+      const dismissals = Math.max(1, b.innings - b.not_outs);
+      const average = b.innings > 0 ? Number((b.runs / dismissals).toFixed(2)) : 0;
+      const strikeRate = b.balls > 0 ? Number(((b.runs / b.balls) * 100).toFixed(2)) : 0;
+      return { ...b, average, strike_rate: strikeRate };
+    });
+
+    const bowlerList = Object.values(bowlerAgg).map(bw => {
+      const oversDisplay = `${Math.floor(bw.balls / 6)}.${bw.balls % 6}`;
+      const economy = bw.balls > 0 ? Number(((bw.runs_conceded / bw.balls) * 6).toFixed(2)) : 0;
+      return { ...bw, overs: oversDisplay, economy };
+    });
+
+    const top10MostRuns = [...batterList].sort((a, b) => b.runs - a.runs || b.average - a.average).slice(0, 10);
+    const top10MostWickets = [...bowlerList].sort((a, b) => b.wickets - a.wickets || a.economy - b.economy).slice(0, 10);
+    const top10MostCatches = Object.values(catchMap).sort((a, b) => b.catches - a.catches).slice(0, 10);
+    const top10BestAverage = [...batterList].filter(b => b.innings > 0).sort((a, b) => b.average - a.average || b.runs - a.runs).slice(0, 10);
+    const top10BestEconomy = [...bowlerList].filter(bw => bw.balls >= 6).sort((a, b) => a.economy - b.economy || b.wickets - a.wickets).slice(0, 10);
+    const top10BestBatting = [...bestBattingInnings].sort((a, b) => b.runs - a.runs || a.balls - b.balls).slice(0, 10);
+    const top10BestBowling = [...bestBowlingInnings].sort((a, b) => b.wickets - a.wickets || a.runs_conceded - b.runs_conceded).slice(0, 10);
+
+    // Man of the Tournament (composite MVP score)
+    const mvpScores = {};
+    batterList.forEach(b => {
+      mvpScores[b.player_id] = {
+        player_id: b.player_id,
+        player_name: b.player_name,
+        team_name: b.team_name,
+        runs: b.runs,
+        wickets: 0,
+        catches: 0,
+        points: b.runs
+      };
+    });
+    bowlerList.forEach(bw => {
+      if (!mvpScores[bw.player_id]) {
+        mvpScores[bw.player_id] = { player_id: bw.player_id, player_name: bw.player_name, team_name: bw.team_name, runs: 0, wickets: 0, catches: 0, points: 0 };
+      }
+      mvpScores[bw.player_id].wickets = bw.wickets;
+      mvpScores[bw.player_id].points += bw.wickets * 20;
+    });
+    Object.values(catchMap).forEach(c => {
+      if (!mvpScores[c.player_id]) {
+        mvpScores[c.player_id] = { player_id: c.player_id, player_name: c.player_name, team_name: c.team_name, runs: 0, wickets: 0, catches: 0, points: 0 };
+      }
+      mvpScores[c.player_id].catches = c.catches;
+      mvpScores[c.player_id].points += c.catches * 10;
+    });
+    const mvpLeader = Object.values(mvpScores).sort((a, b) => b.points - a.points)[0] || null;
+
+    // Final match & Winner / Runner-up
+    const finalMatch = matches.find(m =>
+      String(m.stage || '').toUpperCase().includes('FINAL') &&
+      !String(m.stage || '').toUpperCase().includes('SEMI') &&
+      !String(m.stage || '').toUpperCase().includes('QUARTER')
+    ) || matches.filter(m => m.status === 'COMPLETED').slice(-1)[0] || null;
+
+    const winnerId = tournament.champion_team_id || tournament.winner_team_id || finalMatch?.winner_id || null;
+    const winnerName = tournament.champion_team_name || tournament.winner_team_name || (winnerId ? (teamNameMap[winnerId] || winnerId) : 'TBD');
+    let runnerId = tournament.runner_up_team_id || null;
+    if (!runnerId && finalMatch && winnerId) {
+      runnerId = finalMatch.team_a_id === winnerId ? finalMatch.team_b_id : finalMatch.team_a_id;
+    }
+    const runnerName = tournament.runner_up_team_name || (runnerId ? (teamNameMap[runnerId] || runnerId) : 'TBD');
+
+    const motmFinalPlayer = finalMatch?.potm_player_id
+      ? {
+          player_id: finalMatch.potm_player_id,
+          player_name: finalMatch.potm_player_name || playerMap[finalMatch.potm_player_id]?.name || finalMatch.potm_player_id,
+          team_name: teamNameMap[playerMap[finalMatch.potm_player_id]?.team_id] || ''
+        }
+      : null;
+
+    const imported = tournament.imported_records || {};
+
+    return {
+      success: true,
+      tournament: {
+        id: tournament.id,
+        name: tournament.name,
+        short_name: tournament.short_name,
+        season: tournament.season || (tournament.start_date ? String(tournament.start_date).slice(0, 4) : '2026'),
+        start_date: tournament.start_date,
+        end_date: tournament.end_date,
+        status: tournament.status,
+        tournament_type: tournament.tournament_type
+      },
+      winner: imported.winner || { team_id: winnerId, name: winnerName },
+      runner_up: imported.runner_up || { team_id: runnerId, name: runnerName },
+      man_of_the_match_final: imported.man_of_the_match_final || motmFinalPlayer,
+      man_of_the_tournament: imported.man_of_the_tournament || mvpLeader,
+      awards: {
+        most_runs: imported.awards?.most_runs || top10MostRuns[0] || null,
+        most_wickets: imported.awards?.most_wickets || top10MostWickets[0] || null,
+        most_catches: imported.awards?.most_catches || top10MostCatches[0] || null,
+        best_batting_average: imported.awards?.best_batting_average || top10BestAverage[0] || null,
+        best_bowling_economy: imported.awards?.best_bowling_economy || top10BestEconomy[0] || null,
+        best_batting: imported.awards?.best_batting || top10BestBatting[0] || null,
+        best_bowling: imported.awards?.best_bowling || top10BestBowling[0] || null
+      },
+      points_table: Array.isArray(imported.points_table) && imported.points_table.length > 0
+        ? imported.points_table
+        : (pointsTable || []),
+      top_10: {
+        most_runs: Array.isArray(imported.top_10?.most_runs) && imported.top_10.most_runs.length > 0 ? imported.top_10.most_runs.slice(0, 10) : top10MostRuns,
+        most_wickets: Array.isArray(imported.top_10?.most_wickets) && imported.top_10.most_wickets.length > 0 ? imported.top_10.most_wickets.slice(0, 10) : top10MostWickets,
+        most_catches: Array.isArray(imported.top_10?.most_catches) && imported.top_10.most_catches.length > 0 ? imported.top_10.most_catches.slice(0, 10) : top10MostCatches,
+        best_batting_average: Array.isArray(imported.top_10?.best_batting_average) && imported.top_10.best_batting_average.length > 0 ? imported.top_10.best_batting_average.slice(0, 10) : top10BestAverage,
+        best_bowling_economy: Array.isArray(imported.top_10?.best_bowling_economy) && imported.top_10.best_bowling_economy.length > 0 ? imported.top_10.best_bowling_economy.slice(0, 10) : top10BestEconomy,
+        best_batting: Array.isArray(imported.top_10?.best_batting) && imported.top_10.best_batting.length > 0 ? imported.top_10.best_batting.slice(0, 10) : top10BestBatting,
+        best_bowling: Array.isArray(imported.top_10?.best_bowling) && imported.top_10.best_bowling.length > 0 ? imported.top_10.best_bowling.slice(0, 10) : top10BestBowling
+      },
+      has_imported_overrides: Boolean(tournament.imported_records)
+    };
+  }
+
+  /**
+   * Import / update official tournament records (winner, runner-up, awards, top-10, points table)
+   */
+  async importTournamentRecords(tournamentId, recordsPayload = {}, adminEmail = 'system-admin') {
+    await db.initDb();
+    const tournament = await tournamentModel.findById(tournamentId);
+    if (!tournament) throw { status: 404, message: `Tournament '${tournamentId}' not found.` };
+
+    const updateSet = {
+      imported_records: recordsPayload
+    };
+    if (recordsPayload.winner?.name) {
+      updateSet.champion_team_name = String(recordsPayload.winner.name).trim();
+      updateSet.winner_team_name = String(recordsPayload.winner.name).trim();
+    }
+    if (recordsPayload.winner?.team_id) {
+      updateSet.champion_team_id = String(recordsPayload.winner.team_id).trim();
+      updateSet.winner_team_id = String(recordsPayload.winner.team_id).trim();
+    }
+    if (recordsPayload.runner_up?.name) {
+      updateSet.runner_up_team_name = String(recordsPayload.runner_up.name).trim();
+    }
+    if (recordsPayload.runner_up?.team_id) {
+      updateSet.runner_up_team_id = String(recordsPayload.runner_up.team_id).trim();
+    }
+
+    await db.models.Tournament.updateOne({ id: tournament.id }, { $set: updateSet });
+
+    try {
+      const adminService = require('./adminService');
+      await adminService.addAuditLog({
+        action: 'IMPORT_TOURNAMENT_RECORDS',
+        initiated_by: adminEmail,
+        target_user: tournament.name,
+        result: 'SUCCESS',
+        details: `Imported/updated official records for tournament ${tournament.id}`
+      });
+    } catch (_e) {}
+
+    return this.getTournamentRecordsSummary(tournament.id);
+  }
 }
 
 module.exports = new TournamentService();

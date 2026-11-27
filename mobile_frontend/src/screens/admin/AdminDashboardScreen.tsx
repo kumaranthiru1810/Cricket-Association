@@ -38,6 +38,7 @@ import Svg, { Path, Circle, G, Text as SvgText } from 'react-native-svg';
 import { ScorerApi, getCurrentUser, getAuthToken, setAuthToken, setCurrentUser } from '../../services/api';
 import { showSuccess, showError, showWarning, showConfirm, showInfo, swal } from '../../utils/sweetalert';
 import TournamentManagement from '../../admin/components/TournamentManagement';
+import TournamentRecordsPanel from '../../admin/components/TournamentRecordsPanel';
 import CricketLawsManagement from '../../admin/components/CricketLawsManagement';
 import CalculationSettingsManagement from '../../admin/components/CalculationSettingsManagement';
 import SettingsPage from '../../admin/pages/SettingsPage';
@@ -68,7 +69,7 @@ export interface AdminDashboardProps {
   initialParams?: any;
 }
 
-type AdminTab = 'overview' | 'users' | 'teams' | 'scorers' | 'umpires' | 'content' | 'schedules' | 'tournaments' | 'laws' | 'calculations' | 'master_settings' | 'settings';
+type AdminTab = 'overview' | 'users' | 'teams' | 'scorers' | 'umpires' | 'content' | 'schedules' | 'tournaments' | 'records' | 'laws' | 'calculations' | 'master_settings' | 'settings';
 type FilterStatus = 'all' | 'Pending' | 'Approved' | 'Rejected';
 type MatchFilterStatus = 'all' | 'SCHEDULED' | 'LIVE' | 'COMPLETED' | 'CANCELLED' | 'POSTPONED' | 'REQUESTS';
 
@@ -257,11 +258,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       try {
         const q = new URL(window.location.href).searchParams.get('tab') as AdminTab;
-        if (q && ['overview', 'users', 'teams', 'scorers', 'umpires', 'content', 'schedules', 'tournaments', 'laws', 'calculations', 'master_settings', 'settings'].includes(q)) {
+        if (q && ['overview', 'users', 'teams', 'scorers', 'umpires', 'content', 'schedules', 'tournaments', 'records', 'laws', 'calculations', 'master_settings', 'settings'].includes(q)) {
           return q;
         }
         const saved = localStorage.getItem('cfvd_admin_active_tab') as AdminTab;
-        if (saved && ['overview', 'teams', 'scorers', 'umpires', 'content', 'schedules', 'tournaments', 'laws', 'calculations'].includes(saved)) {
+        if (saved && ['overview', 'teams', 'scorers', 'umpires', 'content', 'schedules', 'tournaments', 'records', 'laws', 'calculations'].includes(saved)) {
           return saved;
         }
       } catch (e) { }
@@ -2570,6 +2571,27 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             )}
           </TouchableOpacity>
 
+          {/* Tournament Records & Exports */}
+          <TouchableOpacity
+            style={[
+              styles.sidebarNavItem,
+              activeTab === 'records' && styles.sidebarNavItemTournamentsActive,
+              isCollapsed && styles.sidebarNavItemCollapsed
+            ]}
+            onPress={() => {
+              setActiveTab('records');
+              if (isMobileDrawer) setMobileSidebarOpen(false);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.sidebarNavIcon, activeTab === 'records' && styles.sidebarNavIconActive]}>📊</Text>
+            {!isCollapsed && (
+              <Text style={[styles.sidebarNavLabel, activeTab === 'records' && styles.sidebarNavLabelActive]}>
+                Tournament Records
+              </Text>
+            )}
+          </TouchableOpacity>
+
           {/* News & Content */}
           <TouchableOpacity
             style={[
@@ -2819,6 +2841,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     {activeTab === 'umpires' && '⚖️ Umpires Management'}
                     {activeTab === 'schedules' && '⚡ Match Schedules'}
                     {activeTab === 'tournaments' && '🏆 Tournament Management & Approvals'}
+                    {activeTab === 'records' && '📊 Tournament Records, Awards & Exports'}
                     {activeTab === 'content' && '📰 News & Content'}
                     {activeTab === 'settings' && '⚙️ Settings & Dynamic Categories'}
                   </Text>
@@ -5556,6 +5579,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               ───────────────────────────────────────────────────────────── */}
             {activeTab === 'tournaments' && (
               <TournamentManagement />
+            )}
+
+            {activeTab === 'records' && (
+              <TournamentRecordsPanel tournaments={tournamentsList} />
             )}
 
             {/* ─────────────────────────────────────────────────────────────

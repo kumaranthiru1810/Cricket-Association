@@ -444,6 +444,17 @@ export const adminApi = {
     });
   },
 
+  getTournamentRecords: async (id: string) => {
+    return adminRequest(`/admin/tournaments/${encodeURIComponent(id)}/records`);
+  },
+
+  importTournamentRecords: async (id: string, payload: any) => {
+    return adminRequest(`/admin/tournaments/${encodeURIComponent(id)}/records/import`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
   // 6b. Venues & Grounds Management
   getVenues: async () => {
     return adminRequest('/admin/venues');
