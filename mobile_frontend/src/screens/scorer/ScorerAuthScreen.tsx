@@ -13,6 +13,7 @@ import {
 import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
 import SharedFooter from '../../components/scorer/SharedFooter';
 import { ScorerApi } from '../../services/api';
+import { TurnstileWidget } from '../../components/common/TurnstileWidget';
 
 export default function ScorerAuthScreen() {
   const { navigate, onExit, params } = useScorerNavigation();
@@ -29,6 +30,7 @@ export default function ScorerAuthScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   
   // Status feedback states
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -57,7 +59,13 @@ export default function ScorerAuthScreen() {
     setStatusType('info');
 
     try {
-      const res = await ScorerApi.requestOtp(cleanEmail, 'SCORER');
+      const res = await ScorerApi.requestOtp(cleanEmail, 'SCORER', turnstileToken || undefined);
+      if (res?.otpBypassed && res?.token) {
+        setStatusMessage(res.message || 'Trusted device verified. Redirecting...');
+        setStatusType('success');
+        navigate('Dashboard');
+        return;
+      }
       setOtpSent(true);
       const code = String(res?.otp || res?.devOtp || '');
       if (code) {
@@ -224,6 +232,7 @@ export default function ScorerAuthScreen() {
                 ? (otpSent ? 'Enter the verification code sent to your email' : 'Enter your registered email to receive an OTP')
                 : 'Create an account to become an authorized scorer'}
             </Text>
+            <TurnstileWidget onToken={setTurnstileToken} />
 
             {statusMessage && (
               <View

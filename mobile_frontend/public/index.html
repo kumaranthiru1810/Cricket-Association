@@ -680,19 +680,12 @@
           });
         }
 
-        // Attempt initial unmuted play
-        video.muted = false;
-        video.volume = 1.0;
+        // Start muted cleanly so browsers never emit autoplay NotAllowedError
+        video.muted = true;
         var playPromise = video.play();
         if (playPromise !== undefined) {
-          playPromise.catch(function(err) {
-            // Mobile browser policy restricted sound before first touch: play muted temporarily and display activation hint
-            console.warn('[CFVD Preloader] Autoplay audio waiting for mobile gesture:', err);
-            video.muted = true;
-            video.play().then(function() {
-              if (soundHint) soundHint.style.display = 'block';
-              if (soundStatusText) soundStatusText.textContent = 'TAP FOR SOUND';
-            }).catch(function() {});
+          playPromise.catch(function() {
+            // Silently ignore if autoplay is blocked
           });
         }
 

@@ -28,6 +28,7 @@ import {
   PanResponder,
   StatusBar as RNStatusBar
 } from 'react-native';
+import CricketLoader from '../../components/common/CricketLoader';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
@@ -1649,10 +1650,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
         {/* MAIN CONTENT AREA ON RIGHT (Begins strictly AFTER the sidebar) */}
         <View style={styles.mainColumn}>
           {isLoading && !isRefreshing ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#f59e0b" />
-              <Text style={styles.loadingText}>Loading Official Team Roster & Records...</Text>
-            </View>
+            <CricketLoader fullScreen={false} />
           ) : (
             <ScrollView
               style={styles.rightContentScrollView}
@@ -4153,7 +4151,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                     userSelect: 'none'
                   } as any)
                 ]}
-                {...panResponder.panHandlers}
+                {...(Platform.OS !== 'web' ? panResponder.panHandlers : {})}
                 {...(Platform.OS === 'web'
                   ? {
                       onMouseDown: (e: any) => {

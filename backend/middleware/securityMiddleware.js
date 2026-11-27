@@ -97,6 +97,80 @@ const otpRateLimiter = rateLimit({
   }
 });
 
+// Per-IP OTP Request Limiter (max 10 OTP requests / 15 min per IP)
+const otpIpRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: (!env.isDevelopment || process.env.ENFORCE_OTP_LIMITS === 'true') ? 10 : 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.method === 'OPTIONS',
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
+  message: {
+    success: false,
+    error: 'Too many OTP requests from this network. Please try again after 15 minutes.',
+    message: 'Too many OTP requests from this network. Please try again after 15 minutes.'
+  }
+});
+
+// Per-Email OTP Request Limiter (max 3 OTP requests / 15 min per email)
+const otpEmailRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: (!env.isDevelopment || process.env.ENFORCE_OTP_LIMITS === 'true') ? 3 : 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.method === 'OPTIONS',
+  keyGenerator: (req) => {
+    const email = String(req.body?.email || req.body?.coachEmail || '').trim().toLowerCase();
+    return email ? `email:${email}` : `ip:${ipKeyGenerator(req.ip)}`;
+  },
+  message: {
+    success: false,
+    error: 'Too many OTP requests for this email. Please try again after 15 minutes.',
+    message: 'Too many OTP requests for this email. Please try again after 15 minutes.'
+  }
+});
+
+// 60-second per-email resend cooldown
+const otpCooldownMap = new Map();
+const OTP_COOLDOWN_MS = 60 * 1000;
+
+function otpResendCooldown(req, res, next) {
+  if (req.method === 'OPTIONS') return next();
+  if (env.isDevelopment && process.env.ENFORCE_OTP_LIMITS !== 'true') {
+    return next();
+  }
+  const email = String(req.body?.email || req.body?.coachEmail || '').trim().toLowerCase();
+  if (!email) return next();
+
+  const now = Date.now();
+  const lastSentAt = otpCooldownMap.get(email);
+  if (lastSentAt && now - lastSentAt < OTP_COOLDOWN_MS) {
+    const retryAfter = Math.ceil((OTP_COOLDOWN_MS - (now - lastSentAt)) / 1000);
+    return res.status(429).json({
+      success: false,
+      retryAfter,
+      error: `Please wait ${retryAfter}s before requesting another OTP.`,
+      message: `Please wait ${retryAfter}s before requesting another OTP.`
+    });
+  }
+
+  otpCooldownMap.set(email, now);
+  // Prevent unbounded memory growth
+  if (otpCooldownMap.size > 5000) {
+    const cutoff = now - OTP_COOLDOWN_MS;
+    for (const [k, ts] of otpCooldownMap.entries()) {
+      if (ts < cutoff) otpCooldownMap.delete(k);
+    }
+  }
+  return next();
+}
+
+function resetOtpCooldown() {
+  otpCooldownMap.clear();
+}
+
+const otpRequestRateLimiter = [otpResendCooldown, otpIpRateLimiter, otpEmailRateLimiter];
+
 // Registration Rate Limiter (max 10 per 15 min per IP)
 const registerRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -288,6 +362,11 @@ module.exports = {
   generalRateLimiter,
   authRateLimiter,
   otpRateLimiter,
+  otpRequestRateLimiter,
+  otpIpRateLimiter,
+  otpEmailRateLimiter,
+  otpResendCooldown,
+  resetOtpCooldown,
   registerRateLimiter,
   getCorsOptions,
   validateFileUpload,

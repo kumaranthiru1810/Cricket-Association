@@ -7,7 +7,8 @@ const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
 const { verifyToken, requireAdminAuth } = require('../middleware/authMiddleware');
-const { otpRateLimiter, registerRateLimiter } = require('../middleware/securityMiddleware');
+const { otpRateLimiter, otpRequestRateLimiter, registerRateLimiter } = require('../middleware/securityMiddleware');
+const { requireTurnstile } = require('../middleware/turnstileMiddleware');
 const {
   validateBody,
   loginSchema,
@@ -22,13 +23,13 @@ const {
 } = require('../middleware/validationMiddleware');
 
 // 1. Email OTP Verification for Registration
-router.post('/send-registration-otp', otpRateLimiter, validateBody(otpRequestSchema), (req, res) => authController.requestRegistrationOtp(req, res));
+router.post('/send-registration-otp', requireTurnstile, otpRequestRateLimiter, validateBody(otpRequestSchema), (req, res) => authController.requestRegistrationOtp(req, res));
 router.post('/verify-registration-otp', otpRateLimiter, validateBody(otpVerifySchema), (req, res) => authController.verifyRegistrationOtp(req, res));
 router.post('/check-registration-exists', (req, res) => authController.checkRegistrationExists(req, res));
 router.post('/check-team-exists', (req, res) => authController.checkTeamExists(req, res));
 
 // 1.1. Multi-Step Forgot Password Flow (4-Digit OTP & Bcrypt Password Reset)
-router.post('/forgot-password/request-otp', otpRateLimiter, validateBody(otpRequestSchema), (req, res) => authController.requestForgotPasswordOtp(req, res));
+router.post('/forgot-password/request-otp', requireTurnstile, otpRequestRateLimiter, validateBody(otpRequestSchema), (req, res) => authController.requestForgotPasswordOtp(req, res));
 router.post('/forgot-password/verify-otp', otpRateLimiter, validateBody(otpVerifySchema), (req, res) => authController.verifyForgotPasswordOtp(req, res));
 router.post('/forgot-password/reset-password', otpRateLimiter, validateBody(resetPasswordSchema), (req, res) => authController.resetPasswordWithOtp(req, res));
 
@@ -40,21 +41,21 @@ router.get('/logout', (req, res) => authController.logout(req, res));
 router.get('/me', verifyToken, (req, res) => authController.getMe(req, res));
 
 // 3. Legacy / OTP Login Compatibility
-router.post('/request-otp', otpRateLimiter, validateBody(otpRequestSchema), (req, res) => authController.requestOtp(req, res));
+router.post('/request-otp', requireTurnstile, otpRequestRateLimiter, validateBody(otpRequestSchema), (req, res) => authController.requestOtp(req, res));
 router.post('/verify-otp', otpRateLimiter, validateBody(otpVerifySchema), (req, res) => authController.verifyOtp(req, res));
-router.post('/team/request-otp', otpRateLimiter, (req, res) => authController.requestTeamOtp(req, res));
+router.post('/team/request-otp', requireTurnstile, otpRequestRateLimiter, (req, res) => authController.requestTeamOtp(req, res));
 router.post('/team/verify-otp', otpRateLimiter, (req, res) => authController.verifyTeamOtp(req, res));
-router.post('/player/request-otp', otpRateLimiter, (req, res) => authController.requestPlayerOtp(req, res));
+router.post('/player/request-otp', requireTurnstile, otpRequestRateLimiter, (req, res) => authController.requestPlayerOtp(req, res));
 router.post('/player/verify-otp', otpRateLimiter, (req, res) => authController.verifyPlayerOtp(req, res));
 router.post('/player/find-team', (req, res) => authController.findPlayerTeam(req, res));
 
 // 4. Registration Endpoints by Role (With Password)
-router.post('/register', registerRateLimiter, (req, res) => authController.register(req, res));
-router.post('/register-player', registerRateLimiter, validateBody(playerRegistrationSchema), (req, res) => authController.registerPlayer(req, res));
-router.post('/register-team', registerRateLimiter, validateBody(teamRegistrationSchema), (req, res) => authController.registerTeam(req, res));
-router.post('/register-scorer', registerRateLimiter, validateBody(scorerRegistrationSchema), (req, res) => authController.registerScorer(req, res));
-router.post('/register-umpire', registerRateLimiter, validateBody(umpireRegistrationSchema), (req, res) => authController.registerUmpire(req, res));
-router.post('/register-content', registerRateLimiter, (req, res) => authController.registerContentStaff(req, res));
+router.post('/register', registerRateLimiter, requireTurnstile, (req, res) => authController.register(req, res));
+router.post('/register-player', registerRateLimiter, requireTurnstile, validateBody(playerRegistrationSchema), (req, res) => authController.registerPlayer(req, res));
+router.post('/register-team', registerRateLimiter, requireTurnstile, validateBody(teamRegistrationSchema), (req, res) => authController.registerTeam(req, res));
+router.post('/register-scorer', registerRateLimiter, requireTurnstile, validateBody(scorerRegistrationSchema), (req, res) => authController.registerScorer(req, res));
+router.post('/register-umpire', registerRateLimiter, requireTurnstile, validateBody(umpireRegistrationSchema), (req, res) => authController.registerUmpire(req, res));
+router.post('/register-content', registerRateLimiter, requireTurnstile, (req, res) => authController.registerContentStaff(req, res));
 
 // 5. Admin & Management (Strictly Protected with requireAdminAuth)
 router.get('/teams', (req, res) => authController.getTeams(req, res));

@@ -140,7 +140,11 @@ class MatchService {
         penaltyTeam: match.delay_penalty_team || 'NONE',
         penaltyApplied: Boolean(match.delay_penalty_applied),
         teamAOvers: match.team_a_overs ?? null,
-        teamBOvers: match.team_b_overs ?? null
+        teamBOvers: match.team_b_overs ?? null,
+        teamACompleted: Boolean(match.delay_team_a_completed),
+        teamAStoppedElapsed: match.delay_team_a_stopped_elapsed ?? null,
+        teamBCompleted: Boolean(match.delay_team_b_completed),
+        teamBStoppedElapsed: match.delay_team_b_stopped_elapsed ?? null
       }
     };
   }
@@ -159,6 +163,10 @@ class MatchService {
     if (typeof payload.penaltyApplied === 'boolean') match.delay_penalty_applied = payload.penaltyApplied;
     if (payload.teamAOvers !== undefined) match.team_a_overs = payload.teamAOvers !== null ? Number(payload.teamAOvers) : null;
     if (payload.teamBOvers !== undefined) match.team_b_overs = payload.teamBOvers !== null ? Number(payload.teamBOvers) : null;
+    if (typeof payload.teamACompleted === 'boolean') match.delay_team_a_completed = payload.teamACompleted;
+    if (payload.teamAStoppedElapsed !== undefined) match.delay_team_a_stopped_elapsed = payload.teamAStoppedElapsed !== null ? Number(payload.teamAStoppedElapsed) : null;
+    if (typeof payload.teamBCompleted === 'boolean') match.delay_team_b_completed = payload.teamBCompleted;
+    if (payload.teamBStoppedElapsed !== undefined) match.delay_team_b_stopped_elapsed = payload.teamBStoppedElapsed !== null ? Number(payload.teamBStoppedElapsed) : null;
 
     await match.save();
     return {
@@ -172,7 +180,11 @@ class MatchService {
         penaltyTeam: match.delay_penalty_team || 'NONE',
         penaltyApplied: Boolean(match.delay_penalty_applied),
         teamAOvers: match.team_a_overs ?? null,
-        teamBOvers: match.team_b_overs ?? null
+        teamBOvers: match.team_b_overs ?? null,
+        teamACompleted: Boolean(match.delay_team_a_completed),
+        teamAStoppedElapsed: match.delay_team_a_stopped_elapsed ?? null,
+        teamBCompleted: Boolean(match.delay_team_b_completed),
+        teamBStoppedElapsed: match.delay_team_b_stopped_elapsed ?? null
       }
     };
   }

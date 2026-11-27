@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ScorerApi, resolveImageUrl } from '../../services/api';
 import { useAppNavigation } from '../../navigation/AppNavigator';
+import CricketLoader from '../../components/common/CricketLoader';
 
 interface PlayerPublicProfileProps {
   initialPlayerId?: string;
@@ -320,10 +321,7 @@ export default function PlayerPublicProfileScreen({
         </View>
 
         {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#f59e0b" />
-            <Text style={styles.loadingText}>Loading genuine player statistics from MongoDB...</Text>
-          </View>
+          <CricketLoader fullScreen={false} />
         ) : activeTab === 'stats' ? (
           /* ─── TAB 1: CAREER STATS BREAKDOWN ─── */
           <View style={styles.sectionBody}>

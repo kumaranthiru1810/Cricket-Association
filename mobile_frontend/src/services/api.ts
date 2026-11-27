@@ -96,13 +96,12 @@ export const SOCKET_URL = getSocketUrl();
 const apiCache = new Map<string, { data: any; expiresAt: number }>();
 const inFlightRequests = new Map<string, Promise<any>>();
 
-// Cache TTL in ms: master-settings (120s), tournaments (60s), laws (300s)
+// Cache TTL in ms: static/reference data only (never cache live scores)
 const CACHE_CONFIG: Record<string, number> = {
   '/master-settings': 120000,
   '/admin/master-settings': 60000,
   '/tournaments': 60000,
   '/cricket-laws': 300000,
-  '/portal/home': 30000,
 };
 
 export const clearApiCache = (pattern?: string) => {
@@ -551,10 +550,16 @@ export const ScorerApi = {
     });
   },
 
-  sendRegistrationOtp: async (email: string, name?: string, role?: string, teamName?: string) => {
+  sendRegistrationOtp: async (
+    email: string,
+    name?: string,
+    role?: string,
+    teamName?: string,
+    turnstileToken?: string
+  ) => {
     return request('/auth/send-registration-otp', {
       method: 'POST',
-      body: JSON.stringify({ email, name, role, teamName })
+      body: JSON.stringify({ email, name, role, teamName, turnstileToken })
     });
   },
 
@@ -565,10 +570,16 @@ export const ScorerApi = {
     });
   },
 
-  loginWithPassword: async (email: string, password: string, role?: string, teamName?: string) => {
+  loginWithPassword: async (
+    email: string,
+    password: string,
+    role?: string,
+    teamName?: string,
+    rememberDevice?: boolean
+  ) => {
     const res = await request('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password, role, teamName })
+      body: JSON.stringify({ email, password, role, teamName, rememberDevice })
     });
     if (res.token) {
       const resolvedRole = (role && role.toUpperCase() !== 'ADMIN')
@@ -587,10 +598,10 @@ export const ScorerApi = {
   },
 
   // Forgot Password Flow (Step 1: Request 4-digit OTP)
-  requestForgotPasswordOtp: async (email: string, role?: string) => {
+  requestForgotPasswordOtp: async (email: string, role?: string, turnstileToken?: string) => {
     return request('/auth/forgot-password/request-otp', {
       method: 'POST',
-      body: JSON.stringify({ email, role })
+      body: JSON.stringify({ email, role, turnstileToken })
     });
   },
 
@@ -619,17 +630,17 @@ export const ScorerApi = {
     });
   },
 
-  requestOtp: async (email: string, role?: string) => {
+  requestOtp: async (email: string, role?: string, turnstileToken?: string) => {
     return request('/auth/request-otp', {
       method: 'POST',
-      body: JSON.stringify({ email, role: role || 'SCORER' })
+      body: JSON.stringify({ email, role: role || 'SCORER', turnstileToken })
     });
   },
 
-  verifyOtp: async (email: string, otp: string, role?: string) => {
+  verifyOtp: async (email: string, otp: string, role?: string, rememberDevice?: boolean) => {
     const res = await request('/auth/verify-otp', {
       method: 'POST',
-      body: JSON.stringify({ email, otp, role: role || 'SCORER' })
+      body: JSON.stringify({ email, otp, role: role || 'SCORER', rememberDevice })
     });
     if (res.token) {
       const resolvedRole = (role && role.toUpperCase() !== 'ADMIN')
@@ -961,7 +972,7 @@ export const ScorerApi = {
     return request(`/tournaments/${encodeURIComponent(tournamentId)}/standings`);
   },
 
-  submitContact: async (data: { name: string; email: string; subject?: string; message: string }) => {
+  submitContact: async (data: { name: string; email: string; subject?: string; message: string; turnstileToken?: string }) => {
     return request('/portal/contact', {
       method: 'POST',
       body: JSON.stringify(data)
@@ -1594,24 +1605,37 @@ export const ScorerApi = {
     });
   },
 
-  // --- SCORECARD ---
+  // --- SCORECARD & PUBLIC LIVE ---
   getScorecard: async (matchId: string) => {
     return request(`/matches/${matchId}/scorecard`);
   },
 
+  getPortalLive: async () => {
+    return request('/portal/live');
+  },
+
   // --- REAL-TIME SOCKET.IO CONNECTION ---
-  connectSocket: (matchId: string, onUpdate: (data: any) => void) => {
+  connectSocket: (matchId: string, onUpdate: (data: any) => void, onStatusChange?: (connected: boolean) => void) => {
     if (currentSocket) {
       currentSocket.disconnect();
     }
 
     try {
       currentSocket = io(SOCKET_URL, {
-        transports: ['websocket', 'polling']
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 10000
       });
 
       currentSocket.on('connect', () => {
+        onStatusChange?.(true);
         currentSocket?.emit('join:match', matchId);
+      });
+
+      currentSocket.on('disconnect', () => {
+        onStatusChange?.(false);
       });
 
       currentSocket.on('score:update', (payload) => {
@@ -1621,8 +1645,41 @@ export const ScorerApi = {
       });
 
       return currentSocket;
-    } catch (e) {
+    } catch (_e) {
       console.warn('Socket.IO connection could not be established; falling back to REST.');
+      onStatusChange?.(false);
+      return null;
+    }
+  },
+
+  connectLiveSocket: (onUpdate: (data: any) => void, onStatusChange?: (connected: boolean) => void) => {
+    try {
+      const sock = io(SOCKET_URL, {
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 10000
+      });
+
+      sock.on('connect', () => {
+        onStatusChange?.(true);
+        sock.emit('join:live');
+      });
+
+      sock.on('disconnect', () => {
+        onStatusChange?.(false);
+      });
+
+      sock.on('score:update', (payload) => {
+        if (payload?.matchId) {
+          onUpdate(payload);
+        }
+      });
+
+      return sock;
+    } catch (_e) {
+      onStatusChange?.(false);
       return null;
     }
   },

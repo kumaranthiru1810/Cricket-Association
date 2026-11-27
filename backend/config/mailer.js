@@ -40,6 +40,336 @@ function attachDevOtp(otp) {
   return (require('./env').isDevelopment && otp) ? { otp } : {};
 }
 
+function escapeHtml(value) {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function getDailyDateKey(dateObj = new Date()) {
+  return dateObj.toISOString().slice(0, 10);
+}
+
+function isQuotaOrClientHttpError(status) {
+  return typeof status === 'number' && (status === 429 || (status >= 400 && status < 500));
+}
+
+async function getDailyEmailStatus() {
+  const mongoose = require('mongoose');
+  const date = getDailyDateKey();
+  const cfg = getSmtpConfig();
+  const primaryProvider = (process.env.EMAIL_PROVIDER || 'brevo').toLowerCase().trim();
+  const fallbackProvider = (process.env.EMAIL_FALLBACK_PROVIDER || (primaryProvider === 'brevo' ? 'resend' : 'smtp')).toLowerCase().trim();
+
+  if (mongoose.connection.readyState !== 1) {
+    return {
+      date,
+      count: 0,
+      failures: 0,
+      alertSentAt: null,
+      currentProvider: primaryProvider || cfg.provider,
+      fallbackProvider,
+      lastProvider: null,
+      lastError: null
+    };
+  }
+
+  const { EmailDailyCounter } = require('../models');
+  const doc = await EmailDailyCounter.findOne({ date }).lean();
+  return {
+    date,
+    count: doc?.count || 0,
+    failures: doc?.failures || 0,
+    alertSentAt: doc?.alert_sent_at || null,
+    currentProvider: doc?.last_provider || primaryProvider || cfg.provider,
+    configuredPrimaryProvider: primaryProvider,
+    fallbackProvider,
+    lastError: doc?.last_error || null
+  };
+}
+
+async function sendViaProvider(providerName, { toEmail, toName, subject, textContent, htmlContent }) {
+  const cfg = getSmtpConfig();
+  const provider = String(providerName || '').toLowerCase().trim();
+
+  if (provider === 'brevo') {
+    const rawBrevo = process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY || '';
+    const brevoApiKey = rawBrevo.replace(/^"|"$/g, '').trim();
+    if (!brevoApiKey) {
+      return { ok: false, status: 0, provider: 'BREVO', error: 'BREVO_API_KEY not configured' };
+    }
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': brevoApiKey,
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
+      body: JSON.stringify({
+        sender: { name: 'Cricket Federation', email: process.env.BREVO_SENDER_EMAIL || '24ucs021@anjaconline.org' },
+        to: [{ email: toEmail, name: toName || 'User' }],
+        subject,
+        textContent,
+        htmlContent
+      })
+    });
+    let data = {};
+    try { data = await res.json(); } catch (_e) {}
+    if (res.ok && data.messageId) {
+      return { ok: true, status: res.status, messageId: data.messageId, provider: 'BREVO' };
+    }
+    return {
+      ok: false,
+      status: res.status,
+      provider: 'BREVO',
+      quotaError: isQuotaOrClientHttpError(res.status),
+      error: data.message || data.code || `HTTP ${res.status}`
+    };
+  }
+
+  if (provider === 'resend') {
+    const rawResend = process.env.RESEND_API_KEY || process.env.RESEND_KEY || process.env.RESEND_TOKEN || '';
+    const resendApiKey = rawResend.replace(/^"|"$/g, '').trim();
+    if (!resendApiKey) {
+      return { ok: false, status: 0, provider: 'RESEND', error: 'RESEND_API_KEY not configured' };
+    }
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: process.env.RESEND_FROM || 'Cricket Federation <onboarding@resend.dev>',
+        to: [toEmail],
+        subject,
+        text: textContent,
+        html: htmlContent
+      })
+    });
+    let data = {};
+    try { data = await res.json(); } catch (_e) {}
+    if (res.ok && data.id) {
+      return { ok: true, status: res.status, messageId: data.id, provider: 'RESEND' };
+    }
+    return {
+      ok: false,
+      status: res.status,
+      provider: 'RESEND',
+      quotaError: isQuotaOrClientHttpError(res.status),
+      error: data.message || `HTTP ${res.status}`
+    };
+  }
+
+  if (provider === 'smtp') {
+    const trans = await getTransporter();
+    if (!trans) {
+      return { ok: false, status: 0, provider: 'SMTP', error: 'No active SMTP transporter' };
+    }
+    const info = await trans.sendMail({
+      from: cfg.from,
+      to: toEmail,
+      subject,
+      text: textContent,
+      html: htmlContent
+    });
+    return { ok: true, status: 250, messageId: info?.messageId || `smtp-${Date.now()}`, provider: 'SMTP' };
+  }
+
+  return { ok: false, status: 0, provider: provider.toUpperCase() || 'UNKNOWN', error: `Unsupported provider: ${provider}` };
+}
+
+async function send250ThresholdAlert(count, dateKey) {
+  const mongoose = require('mongoose');
+  const now = new Date();
+  const istTime = now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true });
+  const isoTime = now.toISOString();
+
+  console.warn(`⚠️ [MAILER QUOTA ALERT] Daily email count reached ${count} on ${dateKey} at ${istTime} IST (${isoTime})`);
+
+  const recipients = new Set();
+  if (process.env.ADMIN_ALERT_EMAIL) {
+    process.env.ADMIN_ALERT_EMAIL.split(',').forEach((e) => {
+      const clean = e.trim().toLowerCase();
+      if (clean) recipients.add(clean);
+    });
+  }
+  if (SUPER_ADMIN_EMAIL) {
+    recipients.add(String(SUPER_ADMIN_EMAIL).trim().toLowerCase());
+  }
+
+  if (mongoose.connection.readyState === 1) {
+    try {
+      const { User } = require('../models');
+      const admins = await User.find({
+        role: { $in: ['ADMIN', 'SUPER_ADMIN'] },
+        status: { $nin: ['DELETED', 'SUSPENDED', 'REJECTED'] }
+      }).select('email').lean();
+      for (const a of admins) {
+        if (a?.email) recipients.add(String(a.email).trim().toLowerCase());
+      }
+    } catch (err) {
+      console.warn('[Mailer Alert] Could not query admin emails:', err.message);
+    }
+  }
+
+  if (recipients.size === 0) return { sent: 0 };
+
+  const fallbackProvider = (process.env.EMAIL_FALLBACK_PROVIDER || 'resend').toLowerCase().trim();
+  const subject = `[URGENT ALERT] 250 Daily Email/OTP Limit Reached (${dateKey})`;
+  const textContent =
+    `Cricket Federation of Virudhunagar District - Email Quota Alert\n\n` +
+    `Daily email/OTP count has reached ${count} on ${dateKey}.\n` +
+    `Exact Timestamp: ${istTime} IST (${isoTime})\n\n` +
+    `Please check the Email Status dashboard and provider quota immediately.`;
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 540px; margin: 0 auto; padding: 20px; border: 1px solid #fecaca; border-radius: 8px; background: #fff;">
+      <h2 style="color: #991b1b; margin-top: 0;">Cricket Federation of Virudhunagar District</h2>
+      <p><strong>Urgent Quota Alert:</strong> Daily email/OTP volume has reached <strong>${escapeHtml(count)}</strong> on <strong>${escapeHtml(dateKey)}</strong>.</p>
+      <p><strong>Exact Time:</strong> ${escapeHtml(istTime)} IST (${escapeHtml(isoTime)})</p>
+      <p>Please check your email provider quota and Admin Email Status panel immediately.</p>
+    </div>
+  `;
+
+  let sent = 0;
+  for (const adminEmail of recipients) {
+    try {
+      const res = await sendViaProvider(fallbackProvider, {
+        toEmail: adminEmail,
+        toName: 'Administrator',
+        subject,
+        textContent,
+        htmlContent
+      });
+      if (res.ok) {
+        sent += 1;
+        console.log(`🚨 [MAILER 250-ALERT] provider=${res.provider} status=${res.status} messageId=${res.messageId}`);
+      } else {
+        console.warn(`⚠️ [MAILER 250-ALERT FAILED] provider=${res.provider} status=${res.status}`);
+      }
+    } catch (err) {
+      console.warn(`⚠️ [MAILER 250-ALERT ERROR] provider=${fallbackProvider} err=${err.message}`);
+    }
+  }
+  return { sent, recipients: Array.from(recipients) };
+}
+
+async function dispatchEmailWithHardening({
+  toEmail,
+  toName = 'User',
+  subject,
+  textContent,
+  htmlContent,
+  priority = 'OTP',
+  bypassCounter = false
+}) {
+  const mongoose = require('mongoose');
+  const dateKey = getDailyDateKey();
+  const highPriority = priority === 'OTP' || priority === 'PASSWORD_RESET';
+  const dbReady = mongoose.connection.readyState === 1;
+  const { EmailDailyCounter } = dbReady ? require('../models') : {};
+
+  if (!bypassCounter && dbReady && !highPriority) {
+    const existing = await EmailDailyCounter.findOne({ date: dateKey }).lean();
+    if ((existing?.count || 0) >= 200) {
+      console.warn(`[Mailer] Daily count >= 200 (${existing.count}); deferring/skipping ${priority} email.`);
+      return {
+        success: false,
+        skippedDueToDailyLimit: true,
+        message: 'Daily non-OTP email limit reached'
+      };
+    }
+  }
+
+  const configuredPrimary = (process.env.EMAIL_PROVIDER || 'brevo').toLowerCase().trim();
+  const configuredFallback = (process.env.EMAIL_FALLBACK_PROVIDER || (configuredPrimary === 'brevo' ? 'resend' : 'smtp')).toLowerCase().trim();
+  const providerChain = configuredPrimary === 'auto'
+    ? ['brevo', 'resend', 'smtp']
+    : [configuredPrimary, ...(configuredFallback && configuredFallback !== configuredPrimary ? [configuredFallback] : [])];
+
+  let lastResult = null;
+  let sawQuotaError = false;
+
+  for (const prov of providerChain) {
+    try {
+      const res = await sendViaProvider(prov, { toEmail, toName, subject, textContent, htmlContent });
+      console.log(`[Mailer] provider=${res.provider} status=${res.status} messageId=${res.messageId || 'none'} ok=${res.ok}`);
+      if (res.ok) {
+        if (!bypassCounter && dbReady) {
+          const updated = await EmailDailyCounter.findOneAndUpdate(
+            { date: dateKey },
+            {
+              $inc: { count: 1 },
+              $set: { last_provider: res.provider, updated_at: new Date() }
+            },
+            { upsert: true, new: true }
+          );
+          if (updated && updated.count >= 250 && !updated.alert_sent_at) {
+            const claimed = await EmailDailyCounter.findOneAndUpdate(
+              { date: dateKey, count: { $gte: 250 }, alert_sent_at: null },
+              { $set: { alert_sent_at: new Date() } },
+              { new: true }
+            );
+            if (claimed) {
+              await send250ThresholdAlert(claimed.count, dateKey);
+            }
+          }
+        }
+        return {
+          success: true,
+          message: `Email sent to ${toEmail}`,
+          messageId: res.messageId,
+          provider: res.provider,
+          status: res.status
+        };
+      }
+      if (res.quotaError) sawQuotaError = true;
+      lastResult = res;
+    } catch (err) {
+      console.warn(`[Mailer] provider=${prov.toUpperCase()} status=ERR error=${err.message}`);
+      lastResult = { ok: false, status: 500, provider: prov.toUpperCase(), error: err.message };
+    }
+  }
+
+  if (!bypassCounter && dbReady) {
+    await EmailDailyCounter.findOneAndUpdate(
+      { date: dateKey },
+      {
+        $inc: { failures: 1 },
+        $set: {
+          last_provider: lastResult?.provider || configuredPrimary.toUpperCase(),
+          last_error: lastResult?.error || 'Delivery failed',
+          updated_at: new Date()
+        }
+      },
+      { upsert: true }
+    );
+  }
+
+  if (sawQuotaError) {
+    return {
+      success: false,
+      quotaExceeded: true,
+      status: lastResult?.status || 429,
+      provider: lastResult?.provider,
+      error: 'OTP service is busy, please try again later',
+      message: 'OTP service is busy, please try again later'
+    };
+  }
+
+  return {
+    success: false,
+    status: lastResult?.status || 500,
+    provider: lastResult?.provider,
+    error: lastResult?.error || 'Email delivery failed',
+    message: lastResult?.error || 'Email delivery failed'
+  };
+}
+
 let activeTransporter = null;
 let transporterType = 'NONE'; // 'GMAIL' | 'ETHEREAL' | 'VIRTUAL' | 'NONE'
 
@@ -674,129 +1004,48 @@ async function sendAdminApprovalEmail({
 /**
  * Standard OTP Email for Player / User Registration
  */
-async function sendOtpEmail({ toEmail, userName, otp }) {
-  if (process.env.NODE_ENV === 'test') {
+async function sendOtpEmail({ toEmail, userName, otp, priority = 'OTP' }) {
+  if (process.env.NODE_ENV === 'test' && process.env.TEST_HARDENED_MAILER !== 'true') {
     return { success: true, message: `[TEST MODE] OTP dispatched to ${toEmail}`, otp };
   }
-  const cfg = getSmtpConfig();
-  const subject = 'Cricket Association - Your Verification OTP';
-  const textContent = `Hello ${userName || 'User'},\n\nYour One-Time Password (OTP) for verification is: ${otp}\n\nThis OTP is valid for 10 minutes.\n\nCricket Federation of Virudhunagar District`;
+  const safeName = escapeHtml(userName || 'Member');
+  const safeOtp = escapeHtml(String(otp || ''));
+  const subject = 'Cricket Federation of Virudhunagar District - Verification OTP';
+  const textContent =
+    `Cricket Federation of Virudhunagar District\n\n` +
+    `Hello ${userName || 'Member'},\n\n` +
+    `Your verification code is: ${otp}\n` +
+    `This code expires in 10 minutes.\n\n` +
+    `Ignore if you did not request this.`;
   const htmlContent = `
-    <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px;">
-      <h2 style="color: #0f2452;">Cricket Association Portal</h2>
-      <p>Hello <strong>${userName || 'User'}</strong>,</p>
-      <p>Your One-Time Password (OTP) for verification is:</p>
-      <div style="background-color: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 8px; padding: 18px; text-align: center; margin: 24px 0;">
-        <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #d97706;">${otp}</span>
+    <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff;">
+      <h2 style="color: #0f2452; margin-top: 0;">Cricket Federation of Virudhunagar District</h2>
+      <p>Hello <strong>${safeName}</strong>,</p>
+      <p>Your verification code is:</p>
+      <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">
+        <span style="font-size: 30px; font-weight: bold; letter-spacing: 6px; color: #0f2452;">${safeOtp}</span>
       </div>
-      <p style="font-size: 12px; color: #64748b;">This OTP is valid for 10 minutes.</p>
+      <p style="font-size: 13px; color: #475569;">This code is valid for 10 minutes.</p>
+      <p style="font-size: 12px; color: #64748b; margin-bottom: 0;">Ignore if you did not request this.</p>
     </div>
   `;
 
-  // Helper internal dispatch function with retry
-  async function attemptDispatch() {
-    const rawBrevo = process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY || '';
-    const brevoApiKey = rawBrevo.replace(/^"|"$/g, '').trim();
-    const rawResend = process.env.RESEND_API_KEY || process.env.RESEND_KEY || process.env.RESEND_TOKEN || '';
-    const resendApiKey = rawResend.replace(/^"|"$/g, '').trim();
+  const result = await dispatchEmailWithHardening({
+    toEmail,
+    toName: userName || 'Member',
+    subject,
+    textContent,
+    htmlContent,
+    priority
+  });
 
-    // 1. If EMAIL_PROVIDER === 'brevo' or 'auto', try Brevo
-    if ((cfg.provider === 'brevo' || cfg.provider === 'auto') && brevoApiKey) {
-      try {
-        const res = await fetch('https://api.brevo.com/v3/smtp/email', {
-          method: 'POST',
-          headers: {
-            'api-key': brevoApiKey,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify({
-            sender: { name: 'Cricket Federation', email: process.env.BREVO_SENDER_EMAIL || '24ucs021@anjaconline.org' },
-            to: [{ email: toEmail, name: userName || 'User' }],
-            subject,
-            htmlContent
-          })
-        });
-        const data = await res.json();
-        if (res.ok && data.messageId) {
-          console.log(`✅ [BREVO EMAIL DELIVERED] To: ${toEmail} | Id: ${data.messageId}`);
-          return { success: true, message: `OTP sent to ${toEmail}`, messageId: data.messageId, provider: 'BREVO' };
-        } else {
-          console.warn(`⚠️ Brevo API notice for ${toEmail}:`, data);
-        }
-      } catch (brevoErr) {
-        console.warn(`⚠️ Brevo fetch error for ${toEmail}:`, brevoErr.message);
-      }
-    }
-
-    // 2. If EMAIL_PROVIDER === 'resend' or 'auto', try Resend
-    if ((cfg.provider === 'resend' || cfg.provider === 'auto') && resendApiKey) {
-      try {
-        const res = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${resendApiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            from: process.env.RESEND_FROM || 'Cricket Federation <onboarding@resend.dev>',
-            to: [toEmail],
-            subject,
-            text: textContent,
-            html: htmlContent
-          })
-        });
-        const data = await res.json();
-        if (res.ok && data.id) {
-          console.log(`✅ [RESEND EMAIL DELIVERED] To: ${toEmail} | Id: ${data.id}`);
-          return { success: true, message: `OTP sent to ${toEmail}`, messageId: data.id, provider: 'RESEND' };
-        } else {
-          console.warn(`⚠️ Resend API notice for ${toEmail}:`, data);
-        }
-      } catch (apiErr) {
-        console.warn(`⚠️ Resend fetch error for ${toEmail}:`, apiErr.message);
-      }
-    }
-
-    // 3. SMTP Dispatch
-    const trans = await getTransporter();
-    if (trans) {
-      try {
-        await trans.sendMail({
-          from: cfg.from,
-          to: toEmail,
-          subject,
-          text: textContent,
-          html: htmlContent
-        });
-        return { success: true, message: `OTP sent to ${toEmail}` };
-      } catch (err) {
-        console.warn(`SMTP delivery error to ${toEmail}:`, err.message);
-        throw err;
-      }
-    }
-    throw new Error('No active email transport or provider available');
+  if (!result.success) {
+    return {
+      ...result,
+      ...(!result.quotaExceeded && process.env.NODE_ENV !== 'production' ? attachDevOtp(otp) : {})
+    };
   }
-
-  // Attempt dispatch with one retry on failure
-  try {
-    return await attemptDispatch();
-  } catch (initialErr) {
-    console.warn(`[Mailer] Initial email dispatch to ${toEmail} failed (${initialErr.message}). Retrying once...`);
-    try {
-      // 500ms delay before retry
-      await new Promise(r => setTimeout(r, 500));
-      return await attemptDispatch();
-    } catch (retryErr) {
-      console.error(`[Mailer] Second attempt to send OTP to ${toEmail} failed:`, retryErr.message);
-      return {
-        success: false,
-        error: retryErr.message,
-        message: `OTP delivery failed after retry: ${retryErr.message}`,
-        ...attachDevOtp(otp)
-      };
-    }
-  }
+  return result;
 }
 
 /**
@@ -1238,5 +1487,9 @@ module.exports = {
   sendCandidateVerificationEmail,
   sendOtpEmail,
   sendPlayerTeamEmail,
+  dispatchEmailWithHardening,
+  getDailyEmailStatus,
+  send250ThresholdAlert,
+  escapeHtml,
   SUPER_ADMIN_EMAIL
 };

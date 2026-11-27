@@ -16,6 +16,19 @@ const adminService = require('../services/adminService');
 const { requireScorerAuth, verifyMatchPermission } = require('../middleware/authMiddleware');
 const { acquireMatchLock } = require('../middleware/concurrencyLock');
 const { broadcastScoreUpdate } = require('../services/socketService');
+const { invalidateCache } = require('../middleware/cacheMiddleware');
+
+// Invalidate public portal-home cache on any match mutation
+router.use('/matches/:matchId', (req, res, next) => {
+  if (req.method !== 'GET') {
+    res.on('finish', () => {
+      if (res.statusCode >= 200 && res.statusCode < 400) {
+        invalidateCache('portal-home');
+      }
+    });
+  }
+  next();
+});
 const {
   validateBody,
   deliverySchema,
@@ -199,6 +212,17 @@ router.get('/matches/:matchId/live', async (req, res) => {
 const handleRecordDelivery = async (req, res) => {
   try {
     const result = await scoringEngine.recordDelivery(req.params.matchId, req.body, req.user.id);
+    if (result && result._timings) {
+      const t = result._timings;
+      const headerVal = Object.entries(t)
+        .map(([k, v]) => `${k};dur=${Number(v).toFixed(2)}`)
+        .join(', ');
+      res.setHeader('Server-Timing', headerVal);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[PERF recordDelivery ${req.params.matchId}] ${headerVal}`);
+      }
+      delete result._timings;
+    }
     res.json(result);
   } catch (err) {
     res.status(err.status || 500).json({ success: false, message: err.message, error: err.message });

@@ -270,7 +270,7 @@ export default function MatchCard({ match, variant = 'upcoming' }: Props) {
         
         <View style={styles.liveTeamsRow}>
           <View style={styles.teamCol}>
-            <Text style={styles.liveTeamName} numberOfLines={1}>{match.teamA}</Text>
+            <Text style={styles.liveTeamName} numberOfLines={2}>{match.teamA}</Text>
             <Text style={styles.liveScore}>{formatScoreWithTotalOvers(match.scoreA, totalMatchOvers)}</Text>
           </View>
           <View style={styles.vsCol}>
@@ -282,7 +282,7 @@ export default function MatchCard({ match, variant = 'upcoming' }: Props) {
             </View>
           </View>
           <View style={styles.teamColRight}>
-            <Text style={styles.liveTeamNameRight} numberOfLines={1}>{match.teamB}</Text>
+            <Text style={styles.liveTeamNameRight} numberOfLines={2}>{match.teamB}</Text>
             <Text style={[styles.liveScoreRight, { fontSize: match.scoreB ? (isMobile ? 15 : 20) : (isMobile ? 12 : 14), color: match.scoreB ? '#1e293b' : '#64748b' }]}>
               {formatScoreWithTotalOvers(match.scoreB, totalMatchOvers)}
             </Text>
@@ -1105,15 +1105,15 @@ const getStyles = (isMobile: boolean) => StyleSheet.create({
   liveTeamsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 12,
     width: '100%'
   },
-  teamCol: { flex: 1, minWidth: 0, paddingRight: 4 },
-  teamColRight: { flex: 1, minWidth: 0, alignItems: 'flex-end', paddingLeft: 4 },
-  vsCol: { width: isMobile ? 44 : 64, alignItems: 'center', paddingHorizontal: 2, flexShrink: 0 },
-  liveTeamName: { color: '#0f172a', fontSize: isMobile ? 13 : 14, fontWeight: '700', marginBottom: 2 },
-  liveTeamNameRight: { color: '#0f172a', fontSize: isMobile ? 13 : 14, fontWeight: '700', marginBottom: 2, textAlign: 'right' },
+  teamCol: { flex: 1, minWidth: 0, paddingRight: 6 },
+  teamColRight: { flex: 1, minWidth: 0, alignItems: 'flex-end', paddingLeft: 6 },
+  vsCol: { width: isMobile ? 54 : 68, alignItems: 'center', paddingHorizontal: 2, paddingTop: 2, flexShrink: 0 },
+  liveTeamName: { color: '#0f172a', fontSize: isMobile ? 13 : 14, fontWeight: '700', marginBottom: 3, lineHeight: isMobile ? 17 : 19 },
+  liveTeamNameRight: { color: '#0f172a', fontSize: isMobile ? 13 : 14, fontWeight: '700', marginBottom: 3, textAlign: 'right', lineHeight: isMobile ? 17 : 19 },
   liveScore: { color: '#0f172a', fontSize: isMobile ? 15 : 20, fontWeight: '900' },
   liveScoreRight: { color: '#0f172a', fontSize: isMobile ? 15 : 20, fontWeight: '900', textAlign: 'right' },
   liveVs: { color: '#94a3b8', fontSize: 12, fontWeight: 'bold' },

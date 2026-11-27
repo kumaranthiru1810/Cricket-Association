@@ -5,9 +5,9 @@
 
 const db = require('../../config/db');
 const socketService = require('../socketService');
+const { invalidateCache } = require('../../middleware/cacheMiddleware');
 const {
   broadcastScoreUpdate,
-  getFullPlayerMap,
   getMaxWicketsForInnings,
   buildDismissalText,
   generateCommentary
@@ -15,18 +15,134 @@ const {
 
 let deliverySequence = 10000;
 
+// Per-match player cache: matchId -> { expiresAt: number, players: Map<string, { id, name, role }> }
+const MATCH_PLAYER_CACHE_TTL_MS = 30 * 60 * 1000;
+const matchPlayerCache = new Map();
+
+// Recent idempotency response cache: `${matchId}:${clientDeliveryId}` -> { expiresAt, response }
+const IDEMPOTENCY_TTL_MS = 5 * 60 * 1000;
+const idempotencyCache = new Map();
+
+function invalidateMatchPlayerCache(matchId) {
+  if (matchId) matchPlayerCache.delete(matchId);
+  else matchPlayerCache.clear();
+}
+
+async function getMatchPlayersByIds(matchId, ids) {
+  const now = Date.now();
+  let entry = matchPlayerCache.get(matchId);
+  if (!entry || entry.expiresAt <= now) {
+    entry = { expiresAt: now + MATCH_PLAYER_CACHE_TTL_MS, players: new Map() };
+    matchPlayerCache.set(matchId, entry);
+  }
+  const uniqueIds = Array.from(new Set((ids || []).filter(Boolean)));
+  const missing = uniqueIds.filter((id) => !entry.players.has(id));
+  if (missing.length > 0) {
+    const docs = await db.models.Player.find({ id: { $in: missing } }, 'id name role').lean();
+    for (const d of docs) {
+      entry.players.set(d.id, { id: d.id, name: d.name, role: d.role });
+    }
+  }
+  const result = {};
+  for (const id of uniqueIds) {
+    if (entry.players.has(id)) result[id] = entry.players.get(id);
+  }
+  return result;
+}
+
+const hrMs = (start) => Number(process.hrtime.bigint() - start) / 1e6;
+
 class DeliveryService {
   /**
    * Records a single delivery in MongoDB (Ball-by-Ball)
    */
   async recordDelivery(matchId, deliveryData, scorerId) {
-    await db.initDb();
+    const tTotalStart = process.hrtime.bigint();
+    const _timings = {};
 
-    // 1. Fetch Match
-    const match = await db.models.Match.findOne({ id: matchId });
+    if (!db.models || !db.models.Match) {
+      await db.initDb();
+    }
+
+    // 0. Idempotency check
+    const tIdemStart = process.hrtime.bigint();
+    const clientDeliveryId = deliveryData.clientDeliveryId ? String(deliveryData.clientDeliveryId) : null;
+    if (clientDeliveryId) {
+      const cacheKey = `${matchId}:${clientDeliveryId}`;
+      const cached = idempotencyCache.get(cacheKey);
+      if (cached && cached.expiresAt > Date.now()) {
+        _timings.idempotency = hrMs(tIdemStart);
+        _timings.total = hrMs(tTotalStart);
+        return { ...cached.response, idempotent: true, _timings };
+      }
+      const existingDel = await db.models.Delivery.findOne(
+        { match_id: matchId, client_delivery_id: clientDeliveryId },
+        'id total_runs runs_batter runs_extras extra_type is_free_hit boundary_type wicket is_legal_delivery commentary over_number ball_number'
+      ).lean();
+      if (existingDel) {
+        const [mSnap, iSnap] = await Promise.all([
+          db.models.Match.findOne({ id: matchId }, 'status').lean(),
+          db.models.Innings.findOne({ match_id: matchId }).sort({ innings_number: -1 }).lean()
+        ]);
+        _timings.idempotency = hrMs(tIdemStart);
+        _timings.total = hrMs(tTotalStart);
+        return {
+          success: true,
+          idempotent: true,
+          message: 'Delivery already recorded (idempotent replay).',
+          deliveryId: existingDel.id,
+          score: `${iSnap?.total_runs || 0}/${iSnap?.wickets || 0}`,
+          overs: `${iSnap?.overs || 0}.${iSnap?.balls || 0}`,
+          commentary: existingDel.commentary || '',
+          matchStatus: mSnap?.status || 'LIVE',
+          isOverComplete: Boolean(iSnap?.is_over_complete),
+          isFreeHit: Boolean(iSnap?.is_free_hit),
+          strikerId: iSnap?.current_striker_id || null,
+          nonStrikerId: iSnap?.current_non_striker_id || null,
+          bowlerId: iSnap?.current_bowler_id || null,
+          data: {
+            deliveryId: existingDel.id,
+            score: `${iSnap?.total_runs || 0}/${iSnap?.wickets || 0}`,
+            overs: `${iSnap?.overs || 0}.${iSnap?.balls || 0}`,
+            totalRuns: iSnap?.total_runs || 0,
+            wickets: iSnap?.wickets || 0,
+            isFreeHit: Boolean(iSnap?.is_free_hit),
+            strikerId: iSnap?.current_striker_id || null,
+            nonStrikerId: iSnap?.current_non_striker_id || null,
+            bowlerId: iSnap?.current_bowler_id || null,
+            isOverComplete: Boolean(iSnap?.is_over_complete),
+            isMatchCompleted: mSnap?.status === 'COMPLETED',
+            lastDelivery: {
+              id: existingDel.id,
+              runsBatter: existingDel.runs_batter,
+              runsExtras: existingDel.runs_extras,
+              totalRuns: existingDel.total_runs,
+              extraType: existingDel.extra_type,
+              isFreeHit: existingDel.is_free_hit,
+              boundaryType: existingDel.boundary_type,
+              wicket: existingDel.wicket,
+              isLegalDelivery: existingDel.is_legal_delivery,
+              commentary: existingDel.commentary
+            }
+          },
+          _timings
+        };
+      }
+    }
+    _timings.idempotency = hrMs(tIdemStart);
+
+    // 1. Parallel Match + Active Innings Read
+    const tReadStart = process.hrtime.bigint();
+    const [match, activeInnings] = await Promise.all([
+      db.models.Match.findOne({ id: matchId }),
+      db.models.Innings.findOne({
+        match_id: matchId,
+        is_completed: { $ne: true },
+        status: { $ne: 'COMPLETED' }
+      }).sort({ innings_number: -1 })
+    ]);
+
     if (!match) throw { status: 404, message: `Match '${matchId}' not found.` };
-
-    // Status checks
     if (match.status === 'SCHEDULED') {
       throw { status: 400, message: 'Match is SCHEDULED. Please perform toss and start match before recording deliveries.' };
     }
@@ -37,27 +153,9 @@ class DeliveryService {
       throw { status: 400, message: 'Match has been ABANDONED. Scoring is disabled.' };
     }
 
-    // Auto-resume play if match was on break
-    if (match.current_break) {
-      match.current_break = null;
-      match.status_comment = '';
-      match.markModified('current_break');
-      match.markModified('status_comment');
-      await match.save();
-      try {
-        broadcastScoreUpdate(matchId, {
-          action: 'BREAK_ENDED',
-          matchId,
-          currentBreak: null,
-          statusComment: ''
-        });
-      } catch (_) { }
-    }
-
-    // 2. Fetch Active Innings
-    let innings = await db.models.Innings.findOne({ match_id: matchId, is_completed: { $ne: true }, status: { $ne: "COMPLETED" } }).sort({ innings_number: -1 });
+    let innings = activeInnings;
     if (!innings) {
-      const inn1 = await db.models.Innings.findOne({ match_id: matchId, innings_number: 1 });
+      const inn1 = await db.models.Innings.findOne({ match_id: matchId, innings_number: 1 }).lean();
       if (inn1 && inn1.is_completed && match.status !== 'COMPLETED') {
         const target = (inn1.total_runs || 0) + 1;
         const inn2Id = `INN-${matchId}-2`;
@@ -87,7 +185,6 @@ class DeliveryService {
         match.current_innings_number = 2;
         match.target_runs = target;
         match.status = 'LIVE';
-        await match.save();
       } else {
         innings = await db.models.Innings.findOne({ match_id: matchId }).sort({ innings_number: -1 });
       }
@@ -96,12 +193,16 @@ class DeliveryService {
       throw { status: 400, message: 'No active innings found for this match. Please start the match first.' };
     }
 
-    // State conflict check: prevent duplicate or stale delivery execution
+    // State conflict check
     if (deliveryData.expectedOver !== undefined && deliveryData.expectedBall !== undefined) {
       if (innings.overs !== Number(deliveryData.expectedOver) || innings.balls !== Number(deliveryData.expectedBall)) {
-        throw { status: 409, message: `Conflict: Stale delivery state. Expected ${deliveryData.expectedOver}.${deliveryData.expectedBall}, current is ${innings.overs}.${innings.balls}.` };
+        throw {
+          status: 409,
+          message: `Conflict: Stale delivery state. Expected ${deliveryData.expectedOver}.${deliveryData.expectedBall}, current is ${innings.overs}.${innings.balls}.`
+        };
       }
     }
+    _timings.read = hrMs(tReadStart);
 
     // Input extraction
     const {
@@ -158,8 +259,6 @@ class DeliveryService {
     if (runsBatter === 4) boundaryType = 'FOUR';
     if (runsBatter === 6) boundaryType = 'SIX';
 
-    const playerMap = await getFullPlayerMap();
-
     let activeStrikerId = strikerId || innings.current_striker_id;
     let activeNonStrikerId = nonStrikerId || innings.current_non_striker_id;
     let activeBowlerId = bowlerId || innings.current_bowler_id;
@@ -167,16 +266,13 @@ class DeliveryService {
     if (!activeStrikerId || !activeNonStrikerId || !activeBowlerId) {
       try {
         const scorerService = require('../scorerService');
-        const matchDoc = await db.models.Match.findOne({ id: innings.match_id }).lean();
-        const battingSquad = await scorerService.getSquadForTeam(innings.batting_team_id, matchDoc);
-        const bowlingSquad = await scorerService.getSquadForTeam(innings.bowling_team_id, matchDoc);
+        const [battingSquad, bowlingSquad] = await Promise.all([
+          scorerService.getSquadForTeam(innings.batting_team_id, match),
+          scorerService.getSquadForTeam(innings.bowling_team_id, match)
+        ]);
         if (!activeStrikerId) activeStrikerId = battingSquad[0]?.id || 'P101';
         if (!activeNonStrikerId) activeNonStrikerId = battingSquad.find(p => p.id !== activeStrikerId)?.id || battingSquad[1]?.id || 'P102';
         if (!activeBowlerId) activeBowlerId = bowlingSquad.find(p => p.role === 'BOWLER')?.id || bowlingSquad[0]?.id || 'P201';
-        innings.current_striker_id = activeStrikerId;
-        innings.current_non_striker_id = activeNonStrikerId;
-        innings.current_bowler_id = activeBowlerId;
-        await innings.save();
       } catch (_e) {
         if (!activeStrikerId) activeStrikerId = 'P101';
         if (!activeNonStrikerId) activeNonStrikerId = 'P102';
@@ -185,12 +281,39 @@ class DeliveryService {
     }
 
     const actualDismissedId = dismissedPlayerId || (wicket ? activeStrikerId : null);
-    const dismissedBatterName = actualDismissedId ? (playerMap[actualDismissedId]?.name || 'Batter') : null;
+    const replacementId = deliveryData.replacementBatterId || deliveryData.nextBatterId;
 
+    // 2. Parallel Players (cached/projected $in) + Batter/Bowler Stats Read
+    const tPlayersStart = process.hrtime.bigint();
+    const neededPlayerIds = [
+      activeStrikerId,
+      activeNonStrikerId,
+      activeBowlerId,
+      actualDismissedId,
+      fielderId,
+      replacementId
+    ].filter(Boolean);
+
+    const needsNonStrikerStat = Boolean(
+      activeNonStrikerId &&
+      activeNonStrikerId !== activeStrikerId &&
+      (wicket && dismissedPlayerId === activeNonStrikerId)
+    );
+
+    const [playerMap, existingStriker, existingNonStriker, existingBowler] = await Promise.all([
+      getMatchPlayersByIds(matchId, neededPlayerIds),
+      db.models.InningsBatter.findOne({ innings_id: innings.id, player_id: activeStrikerId }),
+      needsNonStrikerStat
+        ? db.models.InningsBatter.findOne({ innings_id: innings.id, player_id: activeNonStrikerId })
+        : Promise.resolve(null),
+      db.models.InningsBowler.findOne({ innings_id: innings.id, player_id: activeBowlerId })
+    ]);
+    _timings.players = hrMs(tPlayersStart);
+
+    const dismissedBatterName = actualDismissedId ? (playerMap[actualDismissedId]?.name || 'Batter') : null;
     const strikerName = (activeStrikerId && playerMap[activeStrikerId]?.name) || 'Batter';
     const bowlerName = (activeBowlerId && playerMap[activeBowlerId]?.name) || 'Bowler';
     const actualFielderName = resolvedFielderName || (fielderId && playerMap[fielderId]?.name) || null;
-
     const dismissalText = wicket ? buildDismissalText(wicketType, bowlerName, actualFielderName) : null;
 
     let commentary = generateCommentary(
@@ -205,63 +328,15 @@ class DeliveryService {
       actualFielderName,
       dismissedBatterName
     );
-
     if (isOverthrow) {
       const fNames = actualFielderName || (overthrowFielders.length ? overthrowFielders.join(', ') : 'fielding side');
       commentary = `Overthrow! Stray throw by ${fNames} conceded ${Number(runsBatter) || totalRuns} extra runs.`;
     }
-
     const runReason = (reason || note || deliveryData.customReason || '').trim();
-    if (runReason) {
-      commentary = `${commentary} [${runReason}]`;
-    }
+    if (runReason) commentary = `${commentary} [${runReason}]`;
 
-    const replacementId = deliveryData.replacementBatterId || deliveryData.nextBatterId;
-
-    const deliveryId = 'DEL-' + Date.now() + '-' + String(++deliverySequence).padStart(6, '0');
+    // Update innings in-memory state
     const wasDeliveryFreeHit = !!innings.is_free_hit;
-    const deliveryDoc = await db.models.Delivery.create({
-      id: deliveryId,
-      match_id: matchId,
-      innings_id: innings.id,
-      innings_number: innings.innings_number,
-      over_number: isLegal && ballNumber === 0 ? overNumber : overNumber + 1,
-      ball_number: isLegal ? (ballNumber === 0 ? 6 : ballNumber) : ballNumber,
-      striker_id: activeStrikerId,
-      non_striker_id: activeNonStrikerId,
-      bowler_id: activeBowlerId,
-      runs_batter: Number(runsBatter),
-      runs_extras: Number(runsExtras),
-      total_runs: totalRuns,
-      extra_type: extraType,
-      is_free_hit: wasDeliveryFreeHit,
-      wicket: Boolean(wicket),
-      wicket_type: wicketType,
-      dismissal_type: wicketType,
-      dismissal_text: dismissalText,
-      dismissed_player_id: actualDismissedId,
-      replacement_batter_id: replacementId || null,
-      reason: runReason || null,
-      boundary_type: boundaryType,
-      is_legal_delivery: isLegal,
-      shot_type: shotType,
-      fielding_position: fieldingPosition,
-      shot_angle: shotAngle !== null && shotAngle !== undefined ? Number(shotAngle) : (deliveryData.shot_angle !== undefined && deliveryData.shot_angle !== null ? Number(deliveryData.shot_angle) : null),
-      shot_distance: shotDistance !== null && shotDistance !== undefined ? Number(shotDistance) : (deliveryData.shot_distance !== undefined && deliveryData.shot_distance !== null ? Number(deliveryData.shot_distance) : null),
-      shot_zone: shotZone || deliveryData.shot_zone || fieldingPosition || null,
-      shot_x: shotX !== null && shotX !== undefined ? Number(shotX) : (deliveryData.shot_x !== undefined && deliveryData.shot_x !== null ? Number(deliveryData.shot_x) : null),
-      shot_y: shotY !== null && shotY !== undefined ? Number(shotY) : (deliveryData.shot_y !== undefined && deliveryData.shot_y !== null ? Number(deliveryData.shot_y) : null),
-      fielder_id: fielderId,
-      fielder_name: actualFielderName,
-      fielding_action: fieldingAction || deliveryData.fielding_action || deliveryData.fieldingAction || (isOverthrow ? 'Overthrow' : null),
-      is_overthrow: isOverthrow,
-      overthrow_fielders: overthrowFielders,
-      remarks: deliveryData.remarks || null,
-      commentary,
-      created_by: scorerId || 'SCR-101',
-      timestamp: new Date()
-    });
-
     innings.total_runs += totalRuns;
     const isRetiredHurt = wicket && wicketType === 'RETIRED_HURT';
     if (wicket && !isRetiredHurt) {
@@ -281,7 +356,6 @@ class DeliveryService {
 
     let nextStriker = activeStrikerId;
     let nextNonStriker = activeNonStrikerId;
-
     if (wicket && replacementId) {
       if (dismissedPlayerId && dismissedPlayerId === activeNonStrikerId) {
         nextNonStriker = replacementId;
@@ -291,11 +365,8 @@ class DeliveryService {
     }
 
     let runsThatRotate = 0;
-    if (extraType === 'NONE') {
-      runsThatRotate = Number(runsBatter) || 0;
-    } else if (extraType === 'WIDE') {
-      runsThatRotate = Number(runsBatter) > 0 ? Number(runsBatter) : Math.max(0, Number(runsExtras) - 1);
-    } else if (extraType === 'NO_BALL') {
+    if (extraType === 'NONE') runsThatRotate = Number(runsBatter) || 0;
+    else if (extraType === 'WIDE' || extraType === 'NO_BALL') {
       runsThatRotate = Number(runsBatter) > 0 ? Number(runsBatter) : Math.max(0, Number(runsExtras) - 1);
     } else if (extraType === 'BYE' || extraType === 'LEG_BYE') {
       runsThatRotate = Number(runsExtras) || Number(runsBatter) || 0;
@@ -304,22 +375,18 @@ class DeliveryService {
     } else {
       runsThatRotate = Number(runsBatter) || 0;
     }
-
     if (deliveryData.runs_ran !== undefined && deliveryData.runs_ran !== null) {
       runsThatRotate = Number(deliveryData.runs_ran);
     }
 
     let isOdd = runsThatRotate % 2 !== 0;
-    if (deliveryData.rotateStrike !== undefined) {
-      isOdd = Boolean(deliveryData.rotateStrike);
-    }
+    if (deliveryData.rotateStrike !== undefined) isOdd = Boolean(deliveryData.rotateStrike);
 
     if (isOdd) {
       const temp = nextStriker;
       nextStriker = nextNonStriker;
       nextNonStriker = temp;
     }
-
     if (isOverFinished) {
       const temp = nextStriker;
       nextStriker = nextNonStriker;
@@ -336,335 +403,372 @@ class DeliveryService {
 
     let nextIsFreeHit = false;
     if (extraType === 'NO_BALL') {
-      const tournamentDoc = await db.models.Tournament.findOne({
-        $or: [
-          ...(match.tournament_id ? [{ id: match.tournament_id }] : []),
-          ...(match.tournament_name ? [{ name: match.tournament_name }] : [])
-        ]
-      }).lean();
-      const freeHitAll = (match.rules_snapshot?.free_hit_on_all_noballs !== undefined
-        ? match.rules_snapshot.free_hit_on_all_noballs
-        : tournamentDoc?.playing_rules?.free_hit_on_all_noballs) !== false;
-      const nbReason = String(deliveryData.noBallReason || deliveryData.no_ball_reason || '').toUpperCase();
-      nextIsFreeHit = freeHitAll || !nbReason || nbReason === 'OVERSTEP';
-    } else if (wasDeliveryFreeHit) {
-      if (extraType === 'WIDE') {
-        nextIsFreeHit = true;
-      } else {
-        nextIsFreeHit = false;
+      let freeHitAll = match.rules_snapshot?.free_hit_on_all_noballs;
+      if (freeHitAll === undefined) {
+        const tournamentDoc = await db.models.Tournament.findOne({
+          $or: [
+            ...(match.tournament_id ? [{ id: match.tournament_id }] : []),
+            ...(match.tournament_name ? [{ name: match.tournament_name }] : [])
+          ]
+        }, 'playing_rules.free_hit_on_all_noballs').lean();
+        freeHitAll = tournamentDoc?.playing_rules?.free_hit_on_all_noballs;
       }
-    } else {
-      nextIsFreeHit = false;
+      const nbReason = String(deliveryData.noBallReason || deliveryData.no_ball_reason || '').toUpperCase();
+      nextIsFreeHit = (freeHitAll !== false) || !nbReason || nbReason === 'OVERSTEP';
+    } else if (wasDeliveryFreeHit) {
+      nextIsFreeHit = extraType === 'WIDE';
     }
     innings.is_free_hit = nextIsFreeHit;
 
-    await innings.save();
+    // In-innings counters for warnings (avoids extra Delivery.countDocuments / find queries!)
+    let noBallWarning = null;
+    let dangerousBowlingWarning = null;
+    const isDangerousBeamer = deliveryData.noBallReason === 'BEAMER' || deliveryData.isDangerousDelivery || deliveryData.remarks?.toLowerCase().includes('beamer');
+    if (extraType === 'NO_BALL') {
+      const nbMap = { ...(innings.bowler_no_balls || {}) };
+      const totalNoBalls = Number(nbMap[activeBowlerId] || 0) + 1;
+      nbMap[activeBowlerId] = totalNoBalls;
+      innings.bowler_no_balls = nbMap;
+      innings.markModified('bowler_no_balls');
 
-    // Update Batter
-    let batter = await db.models.InningsBatter.findOne({ innings_id: innings.id, player_id: activeStrikerId });
-    if (!batter) {
-      try {
-        batter = await db.models.InningsBatter.create({
-          id: `BAT-${innings.id}-${activeStrikerId}`,
-          innings_id: innings.id,
-          player_id: activeStrikerId,
-          batting_position: (await db.models.InningsBatter.countDocuments({ innings_id: innings.id })) + 1,
-          runs: 0,
-          balls: 0,
-          fours: 0,
-          sixes: 0,
-          is_out: false,
-          dismissal_text: 'not out'
-        });
-      } catch (_err) {
-        batter = await db.models.InningsBatter.findOne({ innings_id: innings.id, player_id: activeStrikerId });
+      if (totalNoBalls >= 2) {
+        dangerousBowlingWarning = {
+          level: 'SUSPENSION',
+          action: 'MANDATORY_SUSPENSION',
+          bowlerId: activeBowlerId,
+          bowlerName,
+          noBallCount: totalNoBalls,
+          message: `MCC Law 41.7 Violation: Bowler ${bowlerName} has bowled ${totalNoBalls} No-Balls in this innings. Under cricket rules, the umpire directs the captain to take the bowler off immediately.`
+        };
+        noBallWarning = dangerousBowlingWarning;
+      } else if (isDangerousBeamer) {
+        dangerousBowlingWarning = {
+          level: 'WARNING',
+          action: 'FIRST_WARNING',
+          bowlerId: activeBowlerId,
+          bowlerName,
+          noBallCount: 1,
+          message: `WARNING (MCC Law 41.7): First dangerous waist-high beamer bowled by ${bowlerName}. A second beamer will result in mandatory bowling suspension.`
+        };
+        noBallWarning = dangerousBowlingWarning;
       }
     }
 
-    if (extraType === 'NONE' || extraType === 'NO_BALL') {
-      batter.runs += Number(runsBatter);
-      if (runsBatter === 4) batter.fours += 1;
-      if (runsBatter === 6) batter.sixes += 1;
+    let consecutiveWidesWarning = null;
+    if (extraType === 'WIDE') {
+      const prevWasWide = Boolean(innings.prev_ball_was_wide) && innings.last_wide_over === overNumber;
+      const wideCountInOver = (innings.last_wide_over === overNumber ? Number(innings.over_wide_count || 0) : 0) + 1;
+      innings.last_wide_over = overNumber;
+      innings.over_wide_count = wideCountInOver;
+      innings.prev_ball_was_wide = true;
+      if (prevWasWide) {
+        consecutiveWidesWarning = {
+          bowlerId: activeBowlerId,
+          bowlerName,
+          overNumber: overNumber + 1,
+          count: wideCountInOver,
+          message: `Bowler ${bowlerName} has bowled ${wideCountInOver} Wides in Over ${overNumber + 1}. Check wide tramlines (MCC Law 22).`
+        };
+      }
+    } else {
+      innings.prev_ball_was_wide = false;
     }
-    if (isLegal || extraType === 'NO_BALL') {
-      batter.balls += 1;
-    }
-    batter.strike_rate = batter.balls > 0 ? parseFloat(((batter.runs / batter.balls) * 100).toFixed(2)) : 0.00;
 
+    // Prepare Striker update
     const nonBowlerDismissals = ['RUN_OUT', 'RETIRED_OUT', 'RETIRED_HURT', 'OBSTRUCTING_FIELD', 'HIT_BALL_TWICE', 'TIMED_OUT'];
+    const batRunsInc = (extraType === 'NONE' || extraType === 'NO_BALL') ? Number(runsBatter) : 0;
+    const batFoursInc = (extraType === 'NONE' || extraType === 'NO_BALL') && runsBatter === 4 ? 1 : 0;
+    const batSixesInc = (extraType === 'NONE' || extraType === 'NO_BALL') && runsBatter === 6 ? 1 : 0;
+    const batBallsInc = (isLegal || extraType === 'NO_BALL') ? 1 : 0;
+    const newBatRuns = (existingStriker?.runs || 0) + batRunsInc;
+    const newBatBalls = (existingStriker?.balls || 0) + batBallsInc;
+    const newStrikeRate = newBatBalls > 0 ? parseFloat(((newBatRuns / newBatBalls) * 100).toFixed(2)) : 0.00;
+    const strikerDismissed = Boolean(wicket && (!dismissedPlayerId || dismissedPlayerId === activeStrikerId));
 
-    if (wicket && (!dismissedPlayerId || dismissedPlayerId === activeStrikerId)) {
-      batter.is_out = !isRetiredHurt;
-      batter.dismissal_type = wicketType || 'BOWLED';
-      batter.dismissal_text = isRetiredHurt ? 'retired hurt (not out)' : (dismissalText || 'out');
-      batter.bowler_id = nonBowlerDismissals.includes(wicketType) ? null : activeBowlerId;
-      batter.fielder_id = fielderId || null;
-    }
-    await batter.save();
-
-    // Non-striker Batter
-    if (activeNonStrikerId && activeNonStrikerId !== activeStrikerId) {
-      let nonStrikerBatter = await db.models.InningsBatter.findOne({ innings_id: innings.id, player_id: activeNonStrikerId });
-      if (!nonStrikerBatter) {
-        try {
-          nonStrikerBatter = await db.models.InningsBatter.create({
-            id: `BAT-${innings.id}-${activeNonStrikerId}`,
-            innings_id: innings.id,
-            player_id: activeNonStrikerId,
-            batting_position: (await db.models.InningsBatter.countDocuments({ innings_id: innings.id })) + 1,
-            runs: 0,
-            balls: 0,
-            fours: 0,
-            sixes: 0,
-            is_out: false,
-            dismissal_text: 'not out'
-          });
-        } catch (_err) {
-          nonStrikerBatter = await db.models.InningsBatter.findOne({ innings_id: innings.id, player_id: activeNonStrikerId });
-        }
-      }
-
-      if (wicket && dismissedPlayerId === activeNonStrikerId) {
-        nonStrikerBatter.is_out = !isRetiredHurt;
-        nonStrikerBatter.dismissal_type = wicketType || 'RUN_OUT';
-        nonStrikerBatter.dismissal_text = isRetiredHurt ? 'retired hurt (not out)' : (dismissalText || 'run out');
-        nonStrikerBatter.bowler_id = nonBowlerDismissals.includes(wicketType) ? null : activeBowlerId;
-        nonStrikerBatter.fielder_id = fielderId || null;
-      }
-      await nonStrikerBatter.save();
-    }
-
-    // Replacement incoming batter
-    if (replacementId) {
-      if (deliveryData.replacementBatterName && deliveryData.replacementBatterName.trim()) {
-        const cleanRepName = deliveryData.replacementBatterName.trim();
-        const existingPlayer = await db.models.Player.findOne({
-          $or: [{ id: replacementId }, { name: cleanRepName }]
-        });
-        if (!existingPlayer) {
-          await db.models.Player.create({
-            id: replacementId,
-            name: cleanRepName,
-            role: 'BATTER',
-            team_id: innings.batting_team_id
-          });
-        }
-      }
-
-      let repBatter = await db.models.InningsBatter.findOne({ innings_id: innings.id, player_id: replacementId });
-      if (!repBatter) {
-        repBatter = new db.models.InningsBatter({
-          id: `BAT-${innings.id}-${replacementId}`,
-          innings_id: innings.id,
-          player_id: replacementId,
-          batting_position: (await db.models.InningsBatter.countDocuments({ innings_id: innings.id })) + 1,
-          runs: 0,
-          balls: 0,
-          fours: 0,
-          sixes: 0,
-          strike_rate: 0.0,
-          is_out: false,
-          dismissal_text: 'not out'
-        });
-        await repBatter.save();
-      }
-    }
-
-    // Update Bowler
-    let bowler = await db.models.InningsBowler.findOne({ innings_id: innings.id, player_id: activeBowlerId });
-    if (!bowler) {
-      try {
-        bowler = await db.models.InningsBowler.create({
-          id: `BWL-${innings.id}-${activeBowlerId}`,
-          innings_id: innings.id,
-          player_id: activeBowlerId,
-          overs: 0,
-          balls: 0,
-          maidens: 0,
-          runs_conceded: 0,
-          wickets: 0,
-          wides: 0,
-          no_balls: 0
-        });
-      } catch (_err) {
-        bowler = await db.models.InningsBowler.findOne({ innings_id: innings.id, player_id: activeBowlerId });
-      }
-    }
-
+    // Prepare Bowler update
+    let bwlOvers = existingBowler?.overs || 0;
+    let bwlBalls = existingBowler?.balls || 0;
     if (isLegal) {
-      bowler.balls += 1;
-      if (bowler.balls === 6) {
-        bowler.overs += 1;
-        bowler.balls = 0;
+      bwlBalls += 1;
+      if (bwlBalls === 6) {
+        bwlOvers += 1;
+        bwlBalls = 0;
       }
     }
     const bowlerRuns = Number(runsBatter) + (extraType === 'WIDE' || extraType === 'NO_BALL' ? Number(runsExtras) : 0);
-    bowler.runs_conceded += bowlerRuns;
+    const newBwlRuns = (existingBowler?.runs_conceded || 0) + bowlerRuns;
     const bowlerCreditedDismissals = ['BOWLED', 'CAUGHT', 'CAUGHT_BEHIND', 'CAUGHT_AND_BOWLED', 'LBW', 'STUMPED', 'HIT_WICKET'];
-    if (wicket && bowlerCreditedDismissals.includes(wicketType)) {
-      bowler.wickets += 1;
-    }
-    if (extraType === 'WIDE') bowler.wides += Number(runsExtras);
-    if (extraType === 'NO_BALL') bowler.no_balls += Number(runsExtras);
+    const bwlWktInc = (wicket && bowlerCreditedDismissals.includes(wicketType)) ? 1 : 0;
+    const totalBowlerOvers = bwlOvers + (bwlBalls / 6);
+    const newBwlEcon = totalBowlerOvers > 0 ? parseFloat((newBwlRuns / totalBowlerOvers).toFixed(2)) : 0.00;
 
-    const totalBowlerOvers = bowler.overs + (bowler.balls / 6);
-    bowler.economy = totalBowlerOvers > 0 ? parseFloat((bowler.runs_conceded / totalBowlerOvers).toFixed(2)) : 0.00;
-    await bowler.save();
-
-    // Check match completion
+    // Match completion & score strings
     const maxWickets = getMaxWicketsForInnings(innings, match);
     let isMatchCompleted = false;
     const inningsMaxOvers = innings.revised_overs || match.revised_overs || match.overs_per_side;
+    const postWriteOps = [];
+
     if (innings.innings_number === 2 && innings.target && innings.total_runs >= innings.target) {
       match.status = 'COMPLETED';
       isMatchCompleted = true;
-      const winnerTeam = await db.models.Team.findOne({ id: innings.batting_team_id }).lean();
+      const winnerTeam = await db.models.Team.findOne({ id: innings.batting_team_id }, 'name').lean();
       const wicketsRemaining = Math.max(0, maxWickets - innings.wickets);
       match.result_summary = `${winnerTeam?.name || 'Chasing Team'} won by ${wicketsRemaining} wicket${wicketsRemaining > 1 ? 's' : ''}`;
       match.winner_id = innings.batting_team_id;
       innings.is_completed = true;
       innings.is_over_complete = false;
-      await match.save();
-      await innings.save();
     } else if (innings.wickets >= maxWickets || (inningsMaxOvers && overNumber >= inningsMaxOvers)) {
       if (innings.innings_number === 1) {
         innings.is_completed = true;
         innings.is_over_complete = false;
         match.status = 'INNINGS_BREAK';
-        await innings.save();
-
         const target = (innings.total_runs || 0) + 1;
         const inn2Id = `INN-${matchId}-2`;
         const inn2BattingTeamId = innings.bowling_team_id;
         const inn2RevisedOvers = (inn2BattingTeamId === match.team_a_id ? match.team_a_overs : match.team_b_overs) || match.revised_overs || match.overs_per_side || null;
-        let inn2 = await db.models.Innings.findOne({ id: inn2Id });
-        if (!inn2) {
-          await db.models.Innings.create({
-            id: inn2Id,
-            match_id: matchId,
-            innings_number: 2,
-            batting_team_id: inn2BattingTeamId,
-            bowling_team_id: innings.batting_team_id,
-            total_runs: 0,
-            wickets: 0,
-            overs: 0,
-            balls: 0,
-            target,
-            revised_overs: inn2RevisedOvers,
-            status: 'LIVE',
-            is_completed: false,
-            is_over_complete: false,
-            extras: { wides: 0, no_balls: 0, byes: 0, leg_byes: 0, total: 0 }
-          });
-        } else {
-          inn2.target = target;
-          inn2.revised_overs = inn2RevisedOvers;
-          inn2.is_completed = false;
-          await inn2.save();
-        }
         match.target_runs = target;
         match.current_innings_number = 2;
-        await match.save();
+        postWriteOps.push(
+          db.models.Innings.findOneAndUpdate(
+            { id: inn2Id },
+            {
+              $setOnInsert: {
+                id: inn2Id,
+                match_id: matchId,
+                innings_number: 2,
+                batting_team_id: inn2BattingTeamId,
+                bowling_team_id: innings.batting_team_id,
+                total_runs: 0,
+                wickets: 0,
+                overs: 0,
+                balls: 0,
+                status: 'LIVE',
+                extras: { wides: 0, no_balls: 0, byes: 0, leg_byes: 0, total: 0 }
+              },
+              $set: { target, revised_overs: inn2RevisedOvers, is_completed: false }
+            },
+            { upsert: true }
+          )
+        );
       } else {
         innings.is_completed = true;
         innings.is_over_complete = false;
         match.status = 'COMPLETED';
         isMatchCompleted = true;
-        const inn1 = await db.models.Innings.findOne({ match_id: matchId, innings_number: 1 }).lean();
+        const inn1 = await db.models.Innings.findOne({ match_id: matchId, innings_number: 1 }, 'total_runs batting_team_id').lean();
         const runsDiff = (inn1?.total_runs || 0) - innings.total_runs;
         if (runsDiff > 0) {
-          const winnerTeam = await db.models.Team.findOne({ id: inn1.batting_team_id }).lean();
+          const winnerTeam = await db.models.Team.findOne({ id: inn1.batting_team_id }, 'name').lean();
           match.result_summary = `${winnerTeam?.name || 'Defending Team'} won by ${runsDiff} runs`;
           match.winner_id = inn1.batting_team_id;
         } else if (runsDiff === 0) {
           match.result_summary = 'Match Tied';
           match.winner_id = 'TIE';
         }
-        await innings.save();
-        await match.save();
       }
     }
 
-    if (isMatchCompleted) {
-      try {
-        const tournamentService = require('../tournamentService');
-        await tournamentService.onMatchCompleted(matchId);
-      } catch (_err) { }
+    const currentScoreStr = `${innings.total_runs}/${innings.wickets} (${innings.overs}.${innings.balls} Ov)`;
+    let scoreAStr = match.score_a || null;
+    let scoreBStr = match.score_b || null;
+    if (innings.batting_team_id === match.team_a_id) scoreAStr = currentScoreStr;
+    else scoreBStr = currentScoreStr;
+
+    const matchUpdateFields = {
+      score_a: scoreAStr,
+      score_b: scoreBStr,
+      status: match.status,
+      current_innings_number: match.current_innings_number,
+      target_runs: match.target_runs,
+      result_summary: match.result_summary,
+      winner_id: match.winner_id
+    };
+    if (match.current_break) {
+      matchUpdateFields.current_break = null;
+      matchUpdateFields.status_comment = '';
     }
 
-    // Warnings and Analysis
-    let noBallWarning = null;
-    let dangerousBowlingWarning = null;
-    const isDangerousBeamer = deliveryData.noBallReason === 'BEAMER' || deliveryData.isDangerousDelivery || deliveryData.remarks?.toLowerCase().includes('beamer');
+    const deliveryId = 'DEL-' + Date.now() + '-' + String(++deliverySequence).padStart(6, '0');
 
-    if (extraType === 'NO_BALL') {
-      try {
-        const totalNoBalls = await db.models.Delivery.countDocuments({
-          innings_id: innings.id,
-          bowler_id: activeBowlerId,
-          extra_type: 'NO_BALL'
-        });
-
-        if (totalNoBalls >= 2) {
-          dangerousBowlingWarning = {
-            level: 'SUSPENSION',
-            action: 'MANDATORY_SUSPENSION',
-            bowlerId: activeBowlerId,
-            bowlerName,
-            noBallCount: totalNoBalls,
-            message: `MCC Law 41.7 Violation: Bowler ${bowlerName} has bowled ${totalNoBalls} No-Balls in this innings. Under cricket rules, the umpire directs the captain to take the bowler off immediately.`
-          };
-          noBallWarning = dangerousBowlingWarning;
-        } else if (isDangerousBeamer) {
-          dangerousBowlingWarning = {
-            level: 'WARNING',
-            action: 'FIRST_WARNING',
-            bowlerId: activeBowlerId,
-            bowlerName,
-            noBallCount: 1,
-            message: `WARNING (MCC Law 41.7): First dangerous waist-high beamer bowled by ${bowlerName}. A second beamer will result in mandatory bowling suspension.`
-          };
-          noBallWarning = dangerousBowlingWarning;
-        }
-      } catch (_e) { }
-    }
-
-    let consecutiveWidesWarning = null;
-    if (extraType === 'WIDE') {
-      try {
-        const recentOverDeliveries = await db.models.Delivery.find({
-          innings_id: innings.id,
-          over_number: overNumber
-        }).sort({ created_at: -1, delivery_sequence: -1 }).limit(3).lean();
-
-        if (recentOverDeliveries.length >= 2 && recentOverDeliveries[1].extra_type === 'WIDE') {
-          const wideCountInOver = await db.models.Delivery.countDocuments({
+    // 3. Parallel Core Writes (Delivery + Innings + Striker + Bowler + Match + optional NonStriker/Replacement)
+    const tWriteStart = process.hrtime.bigint();
+    const coreWrites = [
+      db.models.Delivery.create({
+        id: deliveryId,
+        match_id: matchId,
+        innings_id: innings.id,
+        innings_number: innings.innings_number,
+        over_number: isLegal && ballNumber === 0 ? overNumber : overNumber + 1,
+        ball_number: isLegal ? (ballNumber === 0 ? 6 : ballNumber) : ballNumber,
+        striker_id: activeStrikerId,
+        non_striker_id: activeNonStrikerId,
+        bowler_id: activeBowlerId,
+        runs_batter: Number(runsBatter),
+        runs_extras: Number(runsExtras),
+        total_runs: totalRuns,
+        extra_type: extraType,
+        is_free_hit: wasDeliveryFreeHit,
+        wicket: Boolean(wicket),
+        wicket_type: wicketType,
+        dismissal_type: wicketType,
+        dismissal_text: dismissalText,
+        dismissed_player_id: actualDismissedId,
+        replacement_batter_id: replacementId || null,
+        client_delivery_id: clientDeliveryId,
+        reason: runReason || null,
+        boundary_type: boundaryType,
+        is_legal_delivery: isLegal,
+        shot_type: shotType,
+        fielding_position: fieldingPosition,
+        shot_angle: shotAngle !== null && shotAngle !== undefined ? Number(shotAngle) : (deliveryData.shot_angle !== undefined && deliveryData.shot_angle !== null ? Number(deliveryData.shot_angle) : null),
+        shot_distance: shotDistance !== null && shotDistance !== undefined ? Number(shotDistance) : (deliveryData.shot_distance !== undefined && deliveryData.shot_distance !== null ? Number(deliveryData.shot_distance) : null),
+        shot_zone: shotZone || deliveryData.shot_zone || fieldingPosition || null,
+        shot_x: shotX !== null && shotX !== undefined ? Number(shotX) : (deliveryData.shot_x !== undefined && deliveryData.shot_x !== null ? Number(deliveryData.shot_x) : null),
+        shot_y: shotY !== null && shotY !== undefined ? Number(shotY) : (deliveryData.shot_y !== undefined && deliveryData.shot_y !== null ? Number(deliveryData.shot_y) : null),
+        fielder_id: fielderId,
+        fielder_name: actualFielderName,
+        fielding_action: fieldingAction || deliveryData.fielding_action || deliveryData.fieldingAction || (isOverthrow ? 'Overthrow' : null),
+        is_overthrow: isOverthrow,
+        overthrow_fielders: overthrowFielders,
+        remarks: deliveryData.remarks || null,
+        commentary,
+        created_by: scorerId || 'SCR-101',
+        timestamp: new Date()
+      }),
+      innings.save(),
+      db.models.InningsBatter.findOneAndUpdate(
+        { innings_id: innings.id, player_id: activeStrikerId },
+        {
+          $setOnInsert: {
+            id: `BAT-${innings.id}-${activeStrikerId}`,
             innings_id: innings.id,
-            over_number: overNumber,
-            extra_type: 'WIDE'
-          });
-          consecutiveWidesWarning = {
-            bowlerId: activeBowlerId,
-            bowlerName,
-            overNumber: overNumber + 1,
-            count: wideCountInOver,
-            message: `Bowler ${bowlerName} has bowled ${wideCountInOver} Wides in Over ${overNumber + 1}. Check wide tramlines (MCC Law 22).`
-          };
-        }
-      } catch (_e) { }
+            player_id: activeStrikerId,
+            batting_position: existingStriker ? existingStriker.batting_position : 1
+          },
+          $set: {
+            runs: newBatRuns,
+            balls: newBatBalls,
+            fours: (existingStriker?.fours || 0) + batFoursInc,
+            sixes: (existingStriker?.sixes || 0) + batSixesInc,
+            strike_rate: newStrikeRate,
+            ...(strikerDismissed
+              ? {
+                  is_out: !isRetiredHurt,
+                  dismissal_type: wicketType || 'BOWLED',
+                  dismissal_text: isRetiredHurt ? 'retired hurt (not out)' : (dismissalText || 'out'),
+                  bowler_id: nonBowlerDismissals.includes(wicketType) ? null : activeBowlerId,
+                  fielder_id: fielderId || null
+                }
+              : existingStriker ? {} : { is_out: false, dismissal_text: 'not out' })
+          }
+        },
+        { upsert: true, returnDocument: 'after' }
+      ),
+      db.models.InningsBowler.findOneAndUpdate(
+        { innings_id: innings.id, player_id: activeBowlerId },
+        {
+          $setOnInsert: {
+            id: `BWL-${innings.id}-${activeBowlerId}`,
+            innings_id: innings.id,
+            player_id: activeBowlerId,
+            maidens: 0
+          },
+          $set: {
+            overs: bwlOvers,
+            balls: bwlBalls,
+            runs_conceded: newBwlRuns,
+            wickets: (existingBowler?.wickets || 0) + bwlWktInc,
+            wides: (existingBowler?.wides || 0) + (extraType === 'WIDE' ? Number(runsExtras) : 0),
+            no_balls: (existingBowler?.no_balls || 0) + (extraType === 'NO_BALL' ? Number(runsExtras) : 0),
+            economy: newBwlEcon
+          }
+        },
+        { upsert: true, returnDocument: 'after' }
+      ),
+      db.models.Match.updateOne({ id: matchId }, { $set: matchUpdateFields }),
+      ...postWriteOps
+    ];
+
+    if (needsNonStrikerStat) {
+      coreWrites.push(
+        db.models.InningsBatter.findOneAndUpdate(
+          { innings_id: innings.id, player_id: activeNonStrikerId },
+          {
+            $setOnInsert: {
+              id: `BAT-${innings.id}-${activeNonStrikerId}`,
+              innings_id: innings.id,
+              player_id: activeNonStrikerId,
+              batting_position: existingNonStriker ? existingNonStriker.batting_position : 2,
+              runs: 0,
+              balls: 0,
+              fours: 0,
+              sixes: 0
+            },
+            $set: {
+              is_out: !isRetiredHurt,
+              dismissal_type: wicketType || 'RUN_OUT',
+              dismissal_text: isRetiredHurt ? 'retired hurt (not out)' : (dismissalText || 'run out'),
+              bowler_id: nonBowlerDismissals.includes(wicketType) ? null : activeBowlerId,
+              fielder_id: fielderId || null
+            }
+          },
+          { upsert: true }
+        )
+      );
     }
 
-    const matchTotalOvers = match.overs || 20;
+    if (replacementId) {
+      coreWrites.push(
+        db.models.InningsBatter.findOneAndUpdate(
+          { innings_id: innings.id, player_id: replacementId },
+          {
+            $setOnInsert: {
+              id: `BAT-${innings.id}-${replacementId}`,
+              innings_id: innings.id,
+              player_id: replacementId,
+              batting_position: 3,
+              runs: 0,
+              balls: 0,
+              fours: 0,
+              sixes: 0,
+              strike_rate: 0.0,
+              is_out: false,
+              dismissal_text: 'not out'
+            }
+          },
+          { upsert: true }
+        )
+      );
+      if (deliveryData.replacementBatterName && deliveryData.replacementBatterName.trim()) {
+        const cleanRepName = deliveryData.replacementBatterName.trim();
+        coreWrites.push(
+          db.models.Player.updateOne(
+            { id: replacementId },
+            { $setOnInsert: { id: replacementId, name: cleanRepName, role: 'BATTER', team_id: innings.batting_team_id } },
+            { upsert: true }
+          )
+        );
+      }
+    }
+
+    await Promise.all(coreWrites);
+    _timings.writes = hrMs(tWriteStart);
+
+    // 4. Invalidate portal-home cache & emit Socket.IO delta immediately
+    const tEmitStart = process.hrtime.bigint();
+    invalidateCache('portal-home');
+
+    const matchTotalOvers = match.overs || match.overs_per_side || 20;
     const maxQuota = Math.ceil(matchTotalOvers / 5) || 4;
     let bowlerQuotaWarning = null;
-    if (bowler && bowler.overs >= maxQuota) {
+    if (bwlOvers >= maxQuota) {
       bowlerQuotaWarning = {
         bowlerId: activeBowlerId,
         bowlerName,
-        overs: bowler.overs,
+        overs: bwlOvers,
         maxQuota,
         isQuotaFull: true,
-        message: `Bowler ${bowlerName} has completed their maximum bowling quota (${bowler.overs}/${maxQuota} overs).`
+        message: `Bowler ${bowlerName} has completed their maximum bowling quota (${bwlOvers}/${maxQuota} overs).`
       };
     }
 
@@ -682,25 +786,6 @@ class DeliveryService {
     const isSix = Number(runsBatter) === 6 || boundaryType === 'SIX';
     const isWkt = Boolean(wicket);
     const totalDeliveryRuns = Number(runsBatter) + Number(runsExtras);
-
-    const currentScoreStr = `${innings.total_runs}/${innings.wickets} (${innings.overs}.${innings.balls} Ov)`;
-    let scoreAStr = null;
-    let scoreBStr = null;
-    if (innings.batting_team_id === match.team_a_id) {
-      scoreAStr = currentScoreStr;
-      scoreBStr = match.score_b || null;
-    } else {
-      scoreAStr = match.score_a || null;
-      scoreBStr = currentScoreStr;
-    }
-
-    try {
-      match.score_a = scoreAStr;
-      match.score_b = scoreBStr;
-      match.markModified('score_a');
-      match.markModified('score_b');
-      await match.save();
-    } catch (_mErr) { }
 
     const lastDelPayload = {
       ball: `${overNumber}.${ballNumber}`,
@@ -724,14 +809,17 @@ class DeliveryService {
         matchId,
         score: currentScoreStr,
         overs: `${innings.overs}.${innings.balls}`,
+        totalRuns: innings.total_runs,
+        wickets: innings.wickets,
+        status: match.status,
         scoreA: scoreAStr,
         scoreB: scoreBStr,
         battingTeamId: innings.batting_team_id,
         currentInnings: innings.innings_number,
         isOverComplete: isOverFinished,
         isFreeHit: nextIsFreeHit,
-        currentBreak: match.current_break || null,
-        statusComment: match.status_comment || '',
+        currentBreak: null,
+        statusComment: '',
         noBallWarning,
         consecutiveWidesWarning,
         bowlerQuotaWarning,
@@ -739,11 +827,27 @@ class DeliveryService {
         lastDelivery: lastDelPayload,
         lastEvent: lastDelPayload
       });
-    } catch (e) { }
+    } catch (_e) {}
+    _timings.emit = hrMs(tEmitStart);
+    _timings.total = hrMs(tTotalStart);
 
-    return {
+    // 5. Run non-critical post-delivery tasks in background after response
+    if (isMatchCompleted) {
+      setImmediate(() => {
+        try {
+          const tournamentService = require('../tournamentService');
+          Promise.resolve(tournamentService.onMatchCompleted(matchId)).catch((err) => {
+            console.error('[BG onMatchCompleted error]', err?.message || err);
+          });
+        } catch (err) {
+          console.error('[BG onMatchCompleted require error]', err?.message || err);
+        }
+      });
+    }
+
+    const responseObj = {
       success: true,
-      message: 'Delivery recorded successfully in MongoDB.',
+      message: 'Delivery recorded successfully.',
       deliveryId,
       score: `${innings.total_runs}/${innings.wickets}`,
       overs: `${innings.overs}.${innings.balls}`,
@@ -774,6 +878,21 @@ class DeliveryService {
         consecutiveWidesWarning,
         bowlerQuotaWarning,
         powerplay,
+        strikerStats: {
+          id: activeStrikerId,
+          runs: newBatRuns,
+          balls: newBatBalls,
+          fours: (existingStriker?.fours || 0) + batFoursInc,
+          sixes: (existingStriker?.sixes || 0) + batSixesInc,
+          strikeRate: newStrikeRate
+        },
+        bowlerStats: {
+          id: activeBowlerId,
+          overs: `${bwlOvers}.${bwlBalls}`,
+          runs: newBwlRuns,
+          wickets: (existingBowler?.wickets || 0) + bwlWktInc,
+          economy: newBwlEcon
+        },
         lastDelivery: {
           id: deliveryId,
           runsBatter: Number(runsBatter),
@@ -786,8 +905,18 @@ class DeliveryService {
           isLegalDelivery: isLegal,
           commentary
         }
-      }
+      },
+      _timings
     };
+
+    if (clientDeliveryId) {
+      idempotencyCache.set(`${matchId}:${clientDeliveryId}`, {
+        expiresAt: Date.now() + IDEMPOTENCY_TTL_MS,
+        response: responseObj
+      });
+    }
+
+    return responseObj;
   }
 
   async swapStrike(matchId) {
@@ -856,6 +985,26 @@ class DeliveryService {
 
     if (innings.suspended_bowler_ids && innings.suspended_bowler_ids.includes(resolvedId)) {
       throw { status: 400, message: 'This bowler is suspended from bowling for 2 dangerous no-balls (MCC Law 41.7).' };
+    }
+
+    const match = await db.models.Match.findOne({ id: matchId }).lean();
+    const tournamentDoc = match
+      ? await db.models.Tournament.findOne({
+          $or: [
+            ...(match.tournament_id ? [{ id: match.tournament_id }] : []),
+            ...(match.tournament_name ? [{ name: match.tournament_name }] : [])
+          ]
+        }).lean()
+      : null;
+    const snap = match?.rules_snapshot || null;
+    const allowChainOver = snap?.allow_chain_over !== undefined
+      ? Boolean(snap.allow_chain_over)
+      : Boolean(tournamentDoc?.playing_rules?.allow_chain_over);
+    if (!allowChainOver && innings.previous_bowler_id && resolvedId === innings.previous_bowler_id) {
+      throw {
+        status: 400,
+        message: 'Bowler who bowled the previous over cannot bowl consecutive overs (Chain Over is disabled).'
+      };
     }
 
     const oldBowlerId = innings.current_bowler_id;

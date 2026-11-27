@@ -63,11 +63,15 @@ class PasswordResetAuth {
       verified: false
     });
 
-    sendOtpEmail({
+    const emailResult = await sendOtpEmail({
       toEmail: cleanEmail,
       userName: name || 'Applicant',
-      otp: rawOtp
-    }).catch(err => console.warn('Background OTP email dispatch notice:', err.message));
+      otp: rawOtp,
+      priority: 'OTP'
+    });
+    if (emailResult && emailResult.quotaExceeded) {
+      throw { status: 429, message: 'OTP service is busy, please try again later' };
+    }
 
     const env = require('../../config/env');
     return {
@@ -208,16 +212,20 @@ class PasswordResetAuth {
       });
     } catch (_e) { }
 
-    await sendOtpEmail({
+    const emailResult = await sendOtpEmail({
       toEmail: cleanEmail,
       userName: user.name || 'Member',
-      otp: rawOtp
+      otp: rawOtp,
+      priority: 'PASSWORD_RESET'
     });
+    if (emailResult && emailResult.quotaExceeded) {
+      throw { status: 429, message: 'OTP service is busy, please try again later' };
+    }
 
     const env = require('../../config/env');
     return {
       success: true,
-      message: `A 4-digit verification code has been sent to ${cleanEmail}.`,
+      message: 'If an eligible account exists for this email, a verification code has been dispatched.',
       email: cleanEmail,
       ...(env.isDevelopment ? { otp: rawOtp } : {})
     };

@@ -279,28 +279,8 @@ interface VPLSoundControlsProps {
   style?: StyleProp<ViewStyle>;
 }
 
-export function VPLSoundControls({ role, style }: VPLSoundControlsProps) {
-  useEffect(() => {
-    vplSound.configure(role);
-  }, [role]);
-
-  const { state, toggle, unlock } = useVPLSound();
-
-  if (!state.supported) return null;
-
-  if (!state.unlocked && role === 'public') {
-    return (
-      <Pressable onPress={() => unlock(true)} style={[styles.unlockPrompt, style]}>
-        <Text style={styles.unlockText}>🔇 Tap to enable sound</Text>
-      </Pressable>
-    );
-  }
-
-  return (
-    <Pressable onPress={toggle} style={[styles.muteBtn, style]} accessibilityLabel={state.muted ? 'Unmute' : 'Mute'}>
-      <Text style={styles.muteText}>{state.muted ? '🔇' : '🔊'}</Text>
-    </Pressable>
-  );
+export function VPLSoundControls({ role: _role, style: _style }: VPLSoundControlsProps) {
+  return null;
 }
 
 // ── Styles ─────────────────────────────────────────────────────────────

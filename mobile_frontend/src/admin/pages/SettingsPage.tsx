@@ -277,8 +277,24 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
   const [noticeDate, setNoticeDate] = useState<string>('21.11.2026');
   const [committeeSaving, setCommitteeSaving] = useState<boolean>(false);
   const [committeeExpanded, setCommitteeExpanded] = useState<boolean>(false);
+  const [emailStatus, setEmailStatus] = useState<{
+    date?: string;
+    count?: number;
+    failures?: number;
+    currentProvider?: string;
+    fallbackProvider?: string;
+    alertSentAt?: string | null;
+  } | null>(null);
 
   useEffect(() => {
+    adminApi
+      .getEmailStatus()
+      .then((res: any) => {
+        if (res?.success) {
+          setEmailStatus(res);
+        }
+      })
+      .catch(() => {});
     adminApi
       .getEmblemSequence()
       .then((res: any) => {
@@ -1300,6 +1316,47 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
           </View>
         )}
       </View>
+
+      {/* EMAIL & OTP SERVICE STATUS */}
+      {emailStatus && (
+        <View style={{
+          backgroundColor: '#ffffff',
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: '#e2e8f0',
+          padding: 14,
+          marginBottom: 14,
+          flexDirection: isMobile ? 'column' : 'row',
+          alignItems: isMobile ? 'flex-start' : 'center',
+          justifyContent: 'space-between',
+          gap: 10
+        }}>
+          <View>
+            <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0f172a' }}>
+              ✉️ Email & OTP Service Status ({emailStatus.date || 'Today'})
+            </Text>
+            <Text style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
+              Provider: <Text style={{ fontWeight: '700', color: '#0f2452' }}>{String(emailStatus.currentProvider || 'BREVO').toUpperCase()}</Text>
+              {' • '}Fallback: <Text style={{ fontWeight: '700', color: '#334155' }}>{String(emailStatus.fallbackProvider || 'RESEND').toUpperCase()}</Text>
+              {emailStatus.alertSentAt ? ' • ⚠️ 250-Alert Dispatched' : ''}
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ backgroundColor: '#f8fafc', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0' }}>
+              <Text style={{ fontSize: 10.5, color: '#64748b', fontWeight: '700' }}>TODAY SENT</Text>
+              <Text style={{ fontSize: 15, fontWeight: '800', color: (emailStatus.count || 0) >= 250 ? '#dc2626' : '#0f2452' }}>
+                {emailStatus.count ?? 0}
+              </Text>
+            </View>
+            <View style={{ backgroundColor: '#f8fafc', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0' }}>
+              <Text style={{ fontSize: 10.5, color: '#64748b', fontWeight: '700' }}>FAILURES</Text>
+              <Text style={{ fontSize: 15, fontWeight: '800', color: (emailStatus.failures || 0) > 0 ? '#d97706' : '#16a34a' }}>
+                {emailStatus.failures ?? 0}
+              </Text>
+            </View>
+          </View>
+        </View>
+      )}
 
       {/* DYNAMIC CATEGORY DROPDOWN */}
       <View style={[styles.tabBarContainer, { position: 'relative', zIndex: 1000 }]}>

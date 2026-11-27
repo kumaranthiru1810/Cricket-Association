@@ -33,6 +33,7 @@ import { VPLEventBanner, VPLSoundControls } from '../../components/common/VPLEve
 import { mapBallToEvents, normalizeExtraType, normalizeDismissal } from '../../utils/vplEventMapper';
 import CalculationSettingsManagement from '../../admin/components/CalculationSettingsManagement';
 import { DeliveryInspectionModal } from '../../components/scorer/DeliveryInspectionModal';
+import CricketLoader from '../../components/common/CricketLoader';
 
 const IMG_LOGO = require('../../../assets/logo_transparent.png');
 const IMG_CHAMPIONS = require('../../../assets/cricket_champions.png');
@@ -202,6 +203,25 @@ const LiveDrawerClock = React.memo(({ textStyle }: { textStyle: any }) => {
 });
 LiveDrawerClock.displayName = 'LiveDrawerClock';
 
+const BOWLER_ROLE_PRIORITY: Record<string, number> = {
+  BOWLER: 0,
+  ALL_ROUNDER: 1,
+  ALLROUNDER: 1,
+  WICKET_KEEPER: 2,
+  WICKETKEEPER: 2,
+  WK: 2,
+  BATTER: 3,
+  BATSMAN: 3,
+};
+
+const getBowlerRolePriority = (role?: string): number => {
+  const normalized = (role || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+  return BOWLER_ROLE_PRIORITY[normalized] ?? 4;
+};
+
+const sortBowlersByRole = (players: any[]): any[] =>
+  [...players].sort((a, b) => getBowlerRolePriority(a.role) - getBowlerRolePriority(b.role));
+
 export default function LiveScoringScreen() {
   const { navigate, params, onExit } = useScorerNavigation();
   const { width } = useWindowDimensions();
@@ -357,6 +377,11 @@ export default function LiveScoringScreen() {
 
   // Delivery Submission State
   const [isSubmittingDelivery, setIsSubmittingDelivery] = useState<boolean>(false);
+  const [pendingSyncCount, setPendingSyncCount] = useState<number>(0);
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline'>('synced');
+  const buttonTapTimeRef = useRef<Record<string, number>>({});
+  const deliveryQueueRef = useRef<Array<{ id: string; payload: any; snapshot: any; meta: any }>>([]);
+  const isFlushingQueueRef = useRef<boolean>(false);
   const [isUndoing, setIsUndoing] = useState<boolean>(false);
   const [isUndoingDelivery, setIsUndoingDelivery] = useState<boolean>(false);
   const [isStartingNextInnings, setIsStartingNextInnings] = useState<boolean>(false);
@@ -1028,12 +1053,25 @@ export default function LiveScoringScreen() {
       }
     });
 
-    // Polling fallback every 12s ONLY when disconnected from Socket.IO room
+    // Full sync every 60s & reconnect flush
     const pollInterval = setInterval(() => {
       if (!socket || !socket.connected) {
         handleSyncOfflineQueue();
       }
-    }, 12000);
+      if (deliveryQueueRef.current.length === 0) {
+        loadLiveState(false).catch(() => {});
+      }
+    }, 60000);
+
+    if (socket) {
+      socket.on('connect', () => {
+        if (deliveryQueueRef.current.length > 0) {
+          flushDeliveryQueue();
+        } else {
+          loadLiveState(false).catch(() => {});
+        }
+      });
+    }
 
     return () => {
       clearInterval(pollInterval);
@@ -1572,7 +1610,7 @@ export default function LiveScoringScreen() {
         setBowlingSquad(d.bowlingSquad);
         const prevId = d.innings?.previousBowlerId;
         const allowChain = Boolean(d.tournamentRules?.allow_chain_over);
-        const eligible = d.bowlingSquad.filter((b: any) => !b.isQuotaFull && (allowChain || (b.id !== prevId && !b.isPreviousBowler)));
+        const eligible = sortBowlersByRole(d.bowlingSquad).filter((b: any) => !b.isQuotaFull && (allowChain || (b.id !== prevId && !b.isPreviousBowler)));
         if (eligible.length > 0) {
           setSelectedNextBowlerId((prev) => (prev ? prev : eligible[0].id));
         }
@@ -1606,13 +1644,214 @@ export default function LiveScoringScreen() {
     }
   };
 
+  const applyDeliveryServerDelta = (res: any, meta: any) => {
+    const { run, type, newTotalBalls, tempId } = meta;
+    hasRecordedNewBallRef.current = true;
+    if (res.commentary) {
+      setAiCommentary(res.commentary);
+    }
+    if (currentBreak) {
+      setCurrentBreak(null);
+    }
+    const delId = res.deliveryId || res.data?.deliveryId;
+    if (delId && tempId) {
+      setRecentDeliveries(prev => (prev || []).map((d: any) => (d.id === tempId ? { ...d, id: delId } : d)));
+    }
+    if (res.isOverComplete || res.data?.isOverComplete) {
+      setIsOverComplete(true);
+      if (res.matchStatus === 'LIVE' && !res.data?.isMatchCompleted) {
+        setShowBowlerModal(true);
+      }
+      loadLiveState(false).catch(() => {});
+    } else if (res.data?.isMatchCompleted || res.matchStatus === 'INNINGS_BREAK' || res.matchStatus === 'COMPLETED') {
+      loadLiveState(false).catch(() => {});
+    }
+
+    if (res.isFreeHit || res.data?.isFreeHit || type === 'noball') {
+      setIsFreeHitActive(true);
+      if (type === 'noball') {
+        setActiveCricketRule('FREE_HIT');
+        setCricketRuleContext({
+          bowlerName: bowler?.name || 'Bowler',
+          strikerName: striker?.name || 'Striker',
+          nonStrikerName: nonStriker?.name || 'Non-Striker'
+        });
+      }
+    } else if (isFreeHitActive && type === 'normal') {
+      setIsFreeHitActive(false);
+    }
+
+    if (type === 'wide') {
+      const isConsecutive = (consecutiveWidesCount + 1 >= 2);
+      setActiveUmpireSignal({
+        type: isConsecutive ? 'CONSECUTIVE_WIDES' : 'WIDE',
+        batterName: striker?.name,
+        bowlerName: bowler?.name,
+        overText: `Over ${getOvers(newTotalBalls)}`,
+        extraDetails: isConsecutive
+          ? `Consecutive wide balls bowled by ${bowler?.name || 'Bowler'} • Standing umpire caution issued`
+          : '+1 Extra run added to team total • Ball must be re-bowled (MCC Law 22)'
+      });
+    } else if (type === 'noball') {
+      setActiveUmpireSignal({
+        type: 'NO_BALL',
+        batterName: striker?.name,
+        bowlerName: bowler?.name,
+        overText: `Over ${getOvers(newTotalBalls)}`,
+        extraDetails: '+1 Penalty run • Mandatory Free Hit awarded for next delivery (MCC Law 21)'
+      });
+    } else if ((type as string) === 'deadball') {
+      setActiveUmpireSignal({
+        type: 'DEAD_BALL',
+        batterName: striker?.name,
+        bowlerName: bowler?.name,
+        overText: `Over ${getOvers(newTotalBalls)}`,
+        extraDetails: 'Ball is dead • Delivery cancelled, ball does not count toward over (MCC Law 20)'
+      });
+    } else if (type === 'legbye') {
+      setActiveUmpireSignal({
+        type: 'LEG_BYE',
+        batterName: striker?.name,
+        bowlerName: bowler?.name,
+        runs: run,
+        overText: `Over ${getOvers(newTotalBalls)}`,
+        extraDetails: `${run} Leg Bye run(s) credited to extras • Signal to official scorer (MCC Law 23)`
+      });
+    } else if (type === 'bye') {
+      setActiveUmpireSignal({
+        type: 'BYE',
+        batterName: striker?.name,
+        bowlerName: bowler?.name,
+        runs: run,
+        overText: `Over ${getOvers(newTotalBalls)}`,
+        extraDetails: `${run} Bye run(s) credited to extras • Signal to official scorer (MCC Law 23)`
+      });
+    } else if (type === 'normal' && run === 4) {
+      setActiveUmpireSignal({
+        type: 'FOUR',
+        batterName: striker?.name,
+        bowlerName: bowler?.name,
+        runs: 4,
+        overText: `Over ${getOvers(newTotalBalls)}`,
+        extraDetails: `${striker?.name || 'Batter'} hits boundary four along the ground (MCC Law 19)`
+      });
+    } else if (type === 'normal' && run === 6) {
+      setActiveUmpireSignal({
+        type: 'SIX',
+        batterName: striker?.name,
+        bowlerName: bowler?.name,
+        runs: 6,
+        overText: `Over ${getOvers(newTotalBalls)}`,
+        extraDetails: `${striker?.name || 'Batter'} smashes massive six over the boundary rope (MCC Law 19)`
+      });
+    } else {
+      setActiveUmpireSignal(null);
+    }
+
+    if (type === 'wide') {
+      const nextWides = consecutiveWidesCount + 1;
+      setConsecutiveWidesCount(nextWides);
+      if (nextWides >= 2) {
+        setActiveCricketRule('CONSECUTIVE_WIDES');
+        setCricketRuleContext({
+          bowlerName: bowler?.name || 'Bowler',
+          count: nextWides,
+          overNumber: Math.floor(balls / 6) + 1
+        });
+      }
+    } else if (type === 'normal') {
+      setConsecutiveWidesCount(0);
+    }
+
+    const cwWarn = res?.consecutiveWidesWarning || res?.data?.consecutiveWidesWarning;
+    if (cwWarn) {
+      setActiveCricketRule('CONSECUTIVE_WIDES');
+      setCricketRuleContext({
+        bowlerName: cwWarn.bowlerName || bowler?.name || 'Bowler',
+        count: cwWarn.count || 2,
+        overNumber: cwWarn.overNumber
+      });
+    }
+
+    const bqWarn = res?.bowlerQuotaWarning || res?.data?.bowlerQuotaWarning;
+    if (bqWarn) {
+      setActiveCricketRule('OVER_QUOTA');
+      setCricketRuleContext({
+        bowlerName: bqWarn.bowlerName || bowler?.name || 'Bowler',
+        oversBowled: bqWarn.overs,
+        maxQuota: bqWarn.maxQuota
+      });
+    }
+
+    const nbWarn = res?.noBallWarning || res?.data?.noBallWarning;
+    const currentBowlerNoBalls = (bowler?.no_balls || bowler?.noBalls || 0) + (type === 'noball' ? 1 : 0);
+    const isSecondNoBall = (nbWarn && (nbWarn.noBallCount >= 2 || nbWarn.beamerCount >= 2)) || (type === 'noball' && currentBowlerNoBalls >= 2);
+    const targetBowlerId = nbWarn?.bowlerId || bowler?.id || 'B1';
+    if (isSecondNoBall && !dismissedNoBallBowlers.includes(targetBowlerId)) {
+      setNoBallAlert({
+        bowlerId: targetBowlerId,
+        bowlerName: nbWarn?.bowlerName || bowler?.name || 'Current Bowler',
+        count: nbWarn?.noBallCount || currentBowlerNoBalls || 2
+      });
+    }
+  };
+
+  const flushDeliveryQueue = async () => {
+    if (isFlushingQueueRef.current) return;
+    isFlushingQueueRef.current = true;
+    setSyncStatus('syncing');
+
+    try {
+      while (deliveryQueueRef.current.length > 0) {
+        const item = deliveryQueueRef.current[0];
+        let attempt = 0;
+        let sent = false;
+
+        while (attempt < 3 && !sent) {
+          try {
+            const res = await ScorerApi.recordDelivery(matchId, item.payload);
+            if (!res || !res.success) {
+              const errObj: any = new Error(res?.message || 'Failed to record delivery.');
+              errObj.status = res?.status || 400;
+              throw errObj;
+            }
+            deliveryQueueRef.current.shift();
+            setPendingSyncCount(deliveryQueueRef.current.length);
+            applyDeliveryServerDelta(res, item.meta);
+            sent = true;
+          } catch (err: any) {
+            const isNetworkErr = !err?.status && (err?.offlineQueued || String(err?.message || '').toLowerCase().includes('fetch') || String(err?.message || '').toLowerCase().includes('network'));
+            if (isNetworkErr && attempt < 2) {
+              attempt += 1;
+              await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt - 1)));
+              continue;
+            }
+            if (isNetworkErr || err?.offlineQueued) {
+              setSyncStatus('offline');
+              return;
+            }
+            deliveryQueueRef.current.shift();
+            setPendingSyncCount(deliveryQueueRef.current.length);
+            loadLiveState(false).catch(() => {});
+            const msg = err.message || 'Server rejected delivery. Reconciled with server state.';
+            Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Delivery Sync', msg);
+            sent = true;
+          }
+        }
+      }
+      setSyncStatus('synced');
+    } finally {
+      isFlushingQueueRef.current = false;
+    }
+  };
+
   const handleScore = async (run: number, type: 'normal' | 'wide' | 'noball' | 'bye' | 'legbye', customOpts: any = {}) => {
-    // Prevent accidental physical bounce, double-tap, or fast repeat while recording
+    const btnKey = `${type}:${run}:${customOpts.extraType || ''}`;
     const now = Date.now();
-    if (isRecordingRef.current || isSubmittingDelivery || now - lastScoreTapTimeRef.current < 500) {
+    if (now - (buttonTapTimeRef.current[btnKey] || 0) < 150) {
       return;
     }
-    lastScoreTapTimeRef.current = now;
+    buttonTapTimeRef.current[btnKey] = now;
 
     if (isOverComplete || showBowlerModal) {
       const msg = 'Over is complete! Please select the next bowler before scoring.';
@@ -1677,7 +1916,9 @@ export default function LiveScoringScreen() {
           ? undefined
           : (selectedWagonSector || selectedFieldPosition);
 
+    const clientDeliveryId = `cdel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const payload = {
+      clientDeliveryId,
       strikerId: striker?.id,
       nonStrikerId: nonStriker?.id,
       bowlerId: bowler?.id,
@@ -1812,193 +2053,20 @@ export default function LiveScoringScreen() {
     setIsBallInProgress(false);
 
     // =========================================================================
-    // ASYNCHRONOUS BACKGROUND SYNC: DISPATCH TO SERVER WITHOUT BLOCKING UI
+    // ORDERED SEQUENTIAL QUEUE SYNC: NEVER BLOCKS NEXT BALL TAP
     // =========================================================================
-    isRecordingRef.current = true;
-    setIsSubmittingDelivery(true);
-
-    try {
-      const res = await ScorerApi.recordDelivery(matchId, payload);
-      if (!res || !res.success) {
-        throw new Error(res?.message || 'Failed to record delivery.');
-      }
-
-      hasRecordedNewBallRef.current = true;
-      if (res.commentary) {
-        setAiCommentary(res.commentary);
-      }
-      if (currentBreak) {
-        setCurrentBreak(null);
-      }
-
-      // Check for Over Complete
-      if (res.isOverComplete || res.data?.isOverComplete) {
-        setIsOverComplete(true);
-        if (res.matchStatus === 'LIVE' && !res.data?.isMatchCompleted) {
-          setShowBowlerModal(true);
-        }
-      }
-
-      // Silent background state sync without freezing UI
-      loadLiveState(false).catch(() => {});
-
-      // Smart Rules Analysis: Free Hit status (Rule modal triggers ONCE per match)
-      if (res.isFreeHit || res.data?.isFreeHit || type === 'noball') {
-        setIsFreeHitActive(true);
-        if (type === 'noball') {
-          setActiveCricketRule('FREE_HIT');
-          setCricketRuleContext({
-            bowlerName: bowler?.name || 'Bowler',
-            strikerName: striker?.name || 'Striker',
-            nonStrikerName: nonStriker?.name || 'Non-Striker'
-          });
-        }
-      } else if (isFreeHitActive && type === 'normal') {
-        setIsFreeHitActive(false);
-      }
-
-      // ─── Broadcast Umpire Signal Trigger (Official Hand Signals & Broadcast HUD) ───
-      if (type === 'wide') {
-        const isConsecutive = (consecutiveWidesCount + 1 >= 2);
-        setActiveUmpireSignal({
-          type: isConsecutive ? 'CONSECUTIVE_WIDES' : 'WIDE',
-          batterName: striker?.name,
-          bowlerName: bowler?.name,
-          overText: `Over ${getOvers(newTotalBalls)}`,
-          extraDetails: isConsecutive
-            ? `Consecutive wide balls bowled by ${bowler?.name || 'Bowler'} • Standing umpire caution issued`
-            : '+1 Extra run added to team total • Ball must be re-bowled (MCC Law 22)'
-        });
-      } else if (type === 'noball') {
-        setActiveUmpireSignal({
-          type: 'NO_BALL',
-          batterName: striker?.name,
-          bowlerName: bowler?.name,
-          overText: `Over ${getOvers(newTotalBalls)}`,
-          extraDetails: '+1 Penalty run • Mandatory Free Hit awarded for next delivery (MCC Law 21)'
-        });
-      } else if ((type as string) === 'deadball') {
-        setActiveUmpireSignal({
-          type: 'DEAD_BALL',
-          batterName: striker?.name,
-          bowlerName: bowler?.name,
-          overText: `Over ${getOvers(newTotalBalls)}`,
-          extraDetails: 'Ball is dead • Delivery cancelled, ball does not count toward over (MCC Law 20)'
-        });
-      } else if (type === 'legbye') {
-        setActiveUmpireSignal({
-          type: 'LEG_BYE',
-          batterName: striker?.name,
-          bowlerName: bowler?.name,
-          runs: run,
-          overText: `Over ${getOvers(newTotalBalls)}`,
-          extraDetails: `${run} Leg Bye run(s) credited to extras • Signal to official scorer (MCC Law 23)`
-        });
-      } else if (type === 'bye') {
-        setActiveUmpireSignal({
-          type: 'BYE',
-          batterName: striker?.name,
-          bowlerName: bowler?.name,
-          runs: run,
-          overText: `Over ${getOvers(newTotalBalls)}`,
-          extraDetails: `${run} Bye run(s) credited to extras • Signal to official scorer (MCC Law 23)`
-        });
-      } else if (type === 'normal' && run === 4) {
-        setActiveUmpireSignal({
-          type: 'FOUR',
-          batterName: striker?.name,
-          bowlerName: bowler?.name,
-          runs: 4,
-          overText: `Over ${getOvers(newTotalBalls)}`,
-          extraDetails: `${striker?.name || 'Batter'} hits boundary four along the ground (MCC Law 19)`
-        });
-      } else if (type === 'normal' && run === 6) {
-        setActiveUmpireSignal({
-          type: 'SIX',
-          batterName: striker?.name,
-          bowlerName: bowler?.name,
-          runs: 6,
-          overText: `Over ${getOvers(newTotalBalls)}`,
-          extraDetails: `${striker?.name || 'Batter'} smashes massive six over the boundary rope (MCC Law 19)`
-        });
-      } else {
-        setActiveUmpireSignal(null);
-      }
-
-      // Smart Rules Analysis: Consecutive Wides
-      if (type === 'wide') {
-        const nextWides = consecutiveWidesCount + 1;
-        setConsecutiveWidesCount(nextWides);
-        if (nextWides >= 2) {
-          setActiveCricketRule('CONSECUTIVE_WIDES');
-          setCricketRuleContext({
-            bowlerName: bowler?.name || 'Bowler',
-            count: nextWides,
-            overNumber: Math.floor(balls / 6) + 1
-          });
-        }
-      } else if (type === 'normal') {
-        setConsecutiveWidesCount(0);
-      }
-
-      const cwWarn = res?.consecutiveWidesWarning || res?.data?.consecutiveWidesWarning;
-      if (cwWarn) {
-        setActiveCricketRule('CONSECUTIVE_WIDES');
-        setCricketRuleContext({
-          bowlerName: cwWarn.bowlerName || bowler?.name || 'Bowler',
-          count: cwWarn.count || 2,
-          overNumber: cwWarn.overNumber
-        });
-      }
-
-      // Smart Rules Analysis: Bowler Quota
-      const bqWarn = res?.bowlerQuotaWarning || res?.data?.bowlerQuotaWarning;
-      if (bqWarn) {
-        setActiveCricketRule('OVER_QUOTA');
-        setCricketRuleContext({
-          bowlerName: bqWarn.bowlerName || bowler?.name || 'Bowler',
-          oversBowled: bqWarn.overs,
-          maxQuota: bqWarn.maxQuota
-        });
-      }
-
-      // Check for 2 No-Balls dangerous bowling warning (MCC Law 41.7)
-      const nbWarn = res?.noBallWarning || res?.data?.noBallWarning;
-      const currentBowlerNoBalls = (bowler?.no_balls || bowler?.noBalls || 0) + (type === 'noball' ? 1 : 0);
-      const isSecondNoBall = (nbWarn && (nbWarn.noBallCount >= 2 || nbWarn.beamerCount >= 2)) || (type === 'noball' && currentBowlerNoBalls >= 2);
-      const targetBowlerId = nbWarn?.bowlerId || bowler?.id || 'B1';
-
-      if (isSecondNoBall && !dismissedNoBallBowlers.includes(targetBowlerId)) {
-        setNoBallAlert({
-          bowlerId: targetBowlerId,
-          bowlerName: nbWarn?.bowlerName || bowler?.name || 'Current Bowler',
-          count: nbWarn?.noBallCount || currentBowlerNoBalls || 2
-        });
-      }
-
-      // Trigger automatic Next Bowler popup after 6 legal deliveries (only if match is still LIVE)
-      if (res.isOverComplete || res.data?.isOverComplete) {
-        if (res.matchStatus === 'LIVE' && !res.data?.isMatchCompleted) {
-          setShowBowlerModal(true);
-        }
-      }
-    } catch (err: any) {
-      if (!err?.offlineQueued) {
-        console.error('recordDelivery error, rolling back:', err);
-        setRuns(snapshot.runs);
-        setBalls(snapshot.balls);
-        setStriker(snapshot.striker);
-        setNonStriker(snapshot.nonStriker);
-        setBowler(snapshot.bowler);
-        setRecentDeliveries(snapshot.recentDeliveries);
-        setIsOverComplete(snapshot.isOverComplete);
-        const msg = err.message || 'Error recording delivery. Score was restored.';
-        Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Error', msg);
-      }
-    } finally {
-      isRecordingRef.current = false;
-      setIsSubmittingDelivery(false);
+    if (isOverDone) {
+      setIsOverComplete(true);
     }
+    deliveryQueueRef.current.push({
+      id: clientDeliveryId,
+      payload,
+      snapshot,
+      meta: { run, type, newTotalBalls, tempId: optimisticDel.id }
+    });
+    setPendingSyncCount(deliveryQueueRef.current.length);
+    setSyncStatus('syncing');
+    flushDeliveryQueue();
   };
 
   const handleWagonWheelConfirm = async (result: ShotDirectionResult) => {
@@ -2745,6 +2813,14 @@ export default function LiveScoringScreen() {
       if (f) bwlName = f.name;
     }
 
+    const allowChain = Boolean(tournamentRules?.allow_chain_over);
+    const isPrevOverSelected = !allowChain && Boolean(previousBowlerId) && bwlId === previousBowlerId;
+    if (isPrevOverSelected) {
+      const msg = 'Bowler who bowled the previous over cannot bowl consecutive overs (Chain Over is disabled for this tournament).';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Ineligible Bowler', msg);
+      return;
+    }
+
     const oldBwlName = bowler?.name || 'Previous Bowler';
     const oldBwlBalls = Number(bowler?.balls || 0);
     const oldBwlOvers = `${Math.floor(oldBwlBalls / 6)}.${oldBwlBalls % 6}`;
@@ -3458,15 +3534,7 @@ export default function LiveScoringScreen() {
 
   // Initial Full Screen Loading (Only on first load)
   if (isInitialLoading) {
-    return (
-      <View style={[styles.container, styles.centerBox]}>
-        <ActivityIndicator size="large" color="#b45309" />
-        <Text style={styles.loadingTitle}>Connecting to MongoDB Live Scorecard...</Text>
-        <Text style={styles.loadingSubtitle}>
-          Fetching authentic match rosters, playing XI figures, and delivery records
-        </Text>
-      </View>
-    );
+    return <CricketLoader />;
   }
 
   // Error Screen with Retry
@@ -3529,12 +3597,14 @@ export default function LiveScoringScreen() {
 
   const selectedChangeBatterObj = rawAvailableList.find((p) => p.id === selectedChangeBatterId);
 
-  const filteredChangeBowlerSquad = changeBowlerSearch.trim()
-    ? (bowlingSquad || []).filter((p) => {
-      const q = changeBowlerSearch.trim().toLowerCase();
-      return p.name.toLowerCase().includes(q) || (p.role && p.role.toLowerCase().includes(q));
-    })
-    : (bowlingSquad || []);
+  const filteredChangeBowlerSquad = sortBowlersByRole(
+    changeBowlerSearch.trim()
+      ? (bowlingSquad || []).filter((p) => {
+        const q = changeBowlerSearch.trim().toLowerCase();
+        return p.name.toLowerCase().includes(q) || (p.role && p.role.toLowerCase().includes(q));
+      })
+      : (bowlingSquad || [])
+  );
 
   const selectedChangeBowlerObj = (bowlingSquad || []).find((p) => p.id === selectedChangeBowlerId);
 
@@ -8092,14 +8162,21 @@ export default function LiveScoringScreen() {
             </View>
           )}
 
-          {/* Offline Sync Queue Pill (When network was dropped or deliveries are queued) */}
-          {offlineQueueCount > 0 && (
+          {/* Compact Live Sync Indicator Pill */}
+          {(pendingSyncCount > 0 || offlineQueueCount > 0 || syncStatus === 'offline') && (
             <TouchableOpacity
               style={styles.offlineQueuePill}
-              onPress={handleSyncOfflineQueue}
+              onPress={() => {
+                if (deliveryQueueRef.current.length > 0) flushDeliveryQueue();
+                else handleSyncOfflineQueue();
+              }}
               activeOpacity={0.8}
             >
-              <Text style={styles.offlineQueuePillText}>🔄 {offlineQueueCount} Queued • Sync</Text>
+              <Text style={styles.offlineQueuePillText}>
+                {syncStatus === 'offline'
+                  ? `⚠️ Offline (${pendingSyncCount + offlineQueueCount})`
+                  : `🔄 Syncing (${pendingSyncCount + offlineQueueCount})`}
+              </Text>
             </TouchableOpacity>
           )}
 
@@ -8932,7 +9009,7 @@ export default function LiveScoringScreen() {
               }) : null;
 
               return (
-                <View style={{ position: 'relative', minHeight: 48, marginVertical: 4 }}>
+                <View style={{ position: 'relative', marginVertical: ballEvents ? 4 : 0 }}>
                   <VPLEventBanner
                     role="scorer"
                     events={ballEvents}
@@ -9196,18 +9273,20 @@ export default function LiveScoringScreen() {
                       flexDirection: 'row',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      flexWrap: 'wrap',
                       gap: 6,
-                      paddingHorizontal: 10,
-                      paddingVertical: 6,
-                      marginBottom: 8,
-                      borderRadius: 8,
+                      paddingHorizontal: isDesktop ? 10 : 7,
+                      paddingVertical: isDesktop ? 6 : 3.5,
+                      marginBottom: isDesktop ? 8 : 4,
+                      borderRadius: 6,
                       backgroundColor: inPP ? '#fef3c7' : '#f1f5f9',
                       borderWidth: 1,
                       borderColor: inPP ? '#f59e0b' : '#cbd5e1'
                     }}>
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: inPP ? '#92400e' : '#334155', flex: 1 }}>
-                        {inPP ? `⚡ POWERPLAY (Ov ${curOverNum}/${ppOvers})` : `🛡️ POST-PP (Ov ${curOverNum})`} • Max {maxOut} Outside • Max {maxLeg} Leg-Side • Max {maxCrease} Behind Crease{maxBowlerOv > 0 ? ` • Max ${maxBowlerOv} Ov/Bowler` : ''} • {chainOverOn ? '🔗 Chain Over: ON' : 'Chain Over: OFF'}
+                      <Text
+                        numberOfLines={isDesktop ? undefined : 2}
+                        style={{ fontSize: isDesktop ? 11 : 9.5, lineHeight: isDesktop ? 15 : 12.5, fontWeight: '800', color: inPP ? '#92400e' : '#334155', flex: 1, minWidth: 0 }}
+                      >
+                        {inPP ? `⚡ PP (${curOverNum}/${ppOvers})` : `🛡️ POST-PP (Ov ${curOverNum})`} • Out:{maxOut} • Leg:{maxLeg} • Behind:{maxCrease}{maxBowlerOv > 0 ? ` • Max ${maxBowlerOv}Ov` : ''} • {chainOverOn ? 'Chain:ON' : 'Chain:OFF'}
                       </Text>
                       <TouchableOpacity
                         disabled={matchStatus !== 'LIVE' || isInningsBreak || isMatchEnded}
@@ -9216,14 +9295,15 @@ export default function LiveScoringScreen() {
                           remarks: 'Rule 8 Fielding Restriction Violation — No Ball + Free Hit'
                         })}
                         style={{
-                          paddingHorizontal: 8,
-                          paddingVertical: 4,
-                          borderRadius: 6,
+                          paddingHorizontal: 7,
+                          paddingVertical: 3.5,
+                          borderRadius: 5,
                           backgroundColor: '#dc2626',
+                          flexShrink: 0,
                           opacity: (matchStatus !== 'LIVE' || isInningsBreak || isMatchEnded) ? 0.4 : 1
                         }}
                       >
-                        <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#ffffff' }}>
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#ffffff' }}>
                           🚫 Fielding NB
                         </Text>
                       </TouchableOpacity>
@@ -9506,7 +9586,7 @@ export default function LiveScoringScreen() {
               CHOOSE FROM BOWLING TEAM PLAYING XI{tournamentRules?.max_overs_per_bowler ? ` (MAX ${tournamentRules.max_overs_per_bowler} OV/BOWLER)` : ''}:
             </Text>
             <ScrollView style={{ maxHeight: 220, marginBottom: 14 }}>
-              {bowlingSquad.map((player) => {
+              {sortBowlersByRole(bowlingSquad).map((player) => {
                 const allowChain = Boolean(tournamentRules?.allow_chain_over);
                 const maxQuota = Number(player.maxQuota || tournamentRules?.max_overs_per_bowler || 0);
                 const completedOvers = Math.floor(parseFloat(String(player.overs || '0')));
@@ -10142,17 +10222,23 @@ export default function LiveScoringScreen() {
                     </View>
                   ) : (
                     filteredChangeBowlerSquad.map((player: any) => {
+                      const allowChain = Boolean(tournamentRules?.allow_chain_over);
+                      const isPrevOverBowler = !allowChain && Boolean(previousBowlerId) && (player.id === previousBowlerId || Boolean(player.isPreviousBowler));
+                      const isChainPrevAllowed = allowChain && Boolean(previousBowlerId) && player.id === previousBowlerId;
                       const isSelected = selectedChangeBowlerId === player.id && !customChangeBowlerName.trim();
                       const isCurrent = player.id === bowler?.id;
                       return (
                         <TouchableOpacity
                           key={player.id}
+                          disabled={isPrevOverBowler}
                           style={[
                             styles.fielderDropdownItem,
                             isSelected && styles.fielderDropdownItemSelected,
-                            isCurrent && { backgroundColor: '#f1f5f9' }
+                            isCurrent && { backgroundColor: '#f1f5f9' },
+                            isPrevOverBowler && { opacity: 0.5, backgroundColor: '#fef2f2' }
                           ]}
                           onPress={() => {
+                            if (isPrevOverBowler) return;
                             setSelectedChangeBowlerId(player.id);
                             setCustomChangeBowlerName('');
                             setIsChangeBowlerDropdownOpen(false);
@@ -10160,17 +10246,37 @@ export default function LiveScoringScreen() {
                           }}
                         >
                           <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                            <View style={[styles.radioDot, isSelected && styles.radioDotSelected]} />
+                            <View
+                              style={[
+                                styles.radioDot,
+                                isSelected && styles.radioDotSelected,
+                                isPrevOverBowler && styles.radioDotDisabled
+                              ]}
+                            />
                             <Text
-                              style={[styles.fielderDropdownItemName, isSelected && styles.fielderDropdownItemNameSelected]}
+                              style={[
+                                styles.fielderDropdownItemName,
+                                isSelected && styles.fielderDropdownItemNameSelected,
+                                isPrevOverBowler && { color: '#94a3b8' }
+                              ]}
                               numberOfLines={1}
                             >
                               {player.name} {isCurrent ? '(Current)' : ''}
                             </Text>
                           </View>
-                          <Text style={styles.fielderDropdownItemRole}>
-                            {player.overs > 0 ? `${player.overs} ov • ${player.wickets}w` : player.role || 'BOWLER'}
-                          </Text>
+                          {isPrevOverBowler ? (
+                            <View style={styles.ineligibleBadge}>
+                              <Text style={styles.ineligibleBadgeText}>Bowled Prev Over</Text>
+                            </View>
+                          ) : isChainPrevAllowed ? (
+                            <View style={[styles.ineligibleBadge, { backgroundColor: '#DCFCE7', borderColor: '#86EFAC' }]}>
+                              <Text style={[styles.ineligibleBadgeText, { color: '#166534' }]}>Chain Over OK</Text>
+                            </View>
+                          ) : (
+                            <Text style={styles.fielderDropdownItemRole}>
+                              {player.overs > 0 ? `${player.overs} ov • ${player.wickets}w` : player.role || 'BOWLER'}
+                            </Text>
+                          )}
                         </TouchableOpacity>
                       );
                     })
@@ -11521,7 +11627,7 @@ export default function LiveScoringScreen() {
 
 const getStyles = (isDesktop: boolean) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: 'transparent' },
+    container: { flex: 1, backgroundColor: 'transparent', width: '100%', maxWidth: '100%', overflow: 'hidden' },
     centerBox: {
       justifyContent: 'center',
       alignItems: 'center',
@@ -11933,13 +12039,14 @@ const getStyles = (isDesktop: boolean) =>
     },
     scroll: {
       flexGrow: 1,
-      paddingBottom: isDesktop ? 40 : 120
+      paddingBottom: isDesktop ? 40 : 8
     },
     mainLayout: {
       flex: 1,
       width: '100%',
-      padding: isDesktop ? 22 : 8,
-      justifyContent: isDesktop ? 'space-between' : 'flex-start'
+      maxWidth: '100%',
+      padding: isDesktop ? 22 : 6,
+      justifyContent: 'space-between'
     },
 
     inningsBreakBanner: {
@@ -12237,7 +12344,7 @@ const getStyles = (isDesktop: boolean) =>
     topSection: {
       flexDirection: isDesktop ? 'row' : 'column',
       gap: isDesktop ? 16 : 4,
-      marginBottom: isDesktop ? 16 : 4
+      marginBottom: isDesktop ? 16 : 3
     },
     previousInningsBanner: {
       backgroundColor: '#fef3c7',
@@ -12261,7 +12368,8 @@ const getStyles = (isDesktop: boolean) =>
     scoreBoardCard: {
       flex: isDesktop ? 1 : undefined,
       backgroundColor: '#ffffff',
-      padding: isDesktop ? 20 : 6,
+      paddingVertical: isDesktop ? 20 : 4,
+      paddingHorizontal: isDesktop ? 20 : 8,
       borderRadius: isDesktop ? 12 : 8,
       borderWidth: 1.5,
       borderColor: '#fde68a',
@@ -12275,20 +12383,20 @@ const getStyles = (isDesktop: boolean) =>
     },
     battingTeam: {
       color: '#005960',
-      fontSize: isDesktop ? 13 : 10.5,
+      fontSize: isDesktop ? 13 : 10,
       fontWeight: 'bold',
-      marginBottom: isDesktop ? 6 : 2,
+      marginBottom: isDesktop ? 6 : 1,
       textTransform: 'uppercase'
     },
     scoreRow: { flexDirection: 'row', alignItems: 'baseline' },
-    scoreText: { color: '#0f172a', fontSize: isDesktop ? 48 : 26, fontWeight: 'bold' },
+    scoreText: { color: '#0f172a', fontSize: isDesktop ? 48 : 23, fontWeight: 'bold' },
     oversText: {
       color: '#64748b',
-      fontSize: isDesktop ? 20 : 15,
+      fontSize: isDesktop ? 20 : 13.5,
       marginLeft: 6,
       fontWeight: '600'
     },
-    rrText: { color: '#475569', fontSize: isDesktop ? 13 : 10, marginTop: isDesktop ? 6 : 1, fontWeight: '600' },
+    rrText: { color: '#475569', fontSize: isDesktop ? 13 : 9.5, marginTop: isDesktop ? 6 : 1, fontWeight: '600' },
 
     playersContainer: {
       flex: isDesktop ? 1.5 : undefined,
@@ -12297,7 +12405,8 @@ const getStyles = (isDesktop: boolean) =>
     },
     playerCard: {
       backgroundColor: '#ffffff',
-      padding: isDesktop ? 16 : 6,
+      paddingVertical: isDesktop ? 16 : 4,
+      paddingHorizontal: isDesktop ? 16 : 8,
       borderRadius: isDesktop ? 12 : 8,
       borderWidth: 1.5,
       borderColor: '#fde68a',
@@ -12311,15 +12420,16 @@ const getStyles = (isDesktop: boolean) =>
     },
     playerRole: {
       color: '#64748b',
-      fontSize: isDesktop ? 11 : 9.5,
+      fontSize: isDesktop ? 11 : 9,
       fontWeight: 'bold',
-      marginBottom: isDesktop ? 10 : 2,
+      marginBottom: isDesktop ? 10 : 1,
       letterSpacing: 1
     },
     playerRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      marginBottom: isDesktop ? 6 : 2
+      alignItems: 'center',
+      marginBottom: isDesktop ? 6 : 1
     },
     playerName: { color: '#1e293b', fontSize: isDesktop ? 14 : 11.5, fontWeight: '600' },
     striker: { fontWeight: 'bold', color: '#b45309' },
@@ -12613,29 +12723,30 @@ const getStyles = (isDesktop: boolean) =>
 
     actionPanel: {
       flexDirection: 'row',
-      gap: isDesktop ? 10 : 5,
+      gap: isDesktop ? 10 : 4,
       marginTop: isDesktop ? 10 : 4,
       flexWrap: isDesktop ? 'wrap' : 'nowrap'
     },
     actionBtn: {
       flex: 1,
       minWidth: isDesktop ? 120 : 0,
-      minHeight: 44,
-      height: 44,
+      minHeight: isDesktop ? 44 : 36,
+      height: isDesktop ? 44 : 36,
+      paddingHorizontal: 4,
       borderRadius: 6,
       alignItems: 'center',
       justifyContent: 'center'
     },
     undoBtn: { backgroundColor: '#475569' },
-    actionBtnText: { fontSize: isDesktop ? 13 : 10.5, fontWeight: 'bold' },
+    actionBtnText: { fontSize: isDesktop ? 13 : 10, fontWeight: 'bold', textAlign: 'center' },
     scorecardBtn: {
       backgroundColor: '#f8fafc',
       borderWidth: 1,
       borderColor: '#cbd5e1'
     },
-    scorecardBtnText: { fontSize: 13, fontWeight: 'bold', color: '#334155' },
+    scorecardBtnText: { fontSize: isDesktop ? 13 : 10, fontWeight: 'bold', color: '#334155', textAlign: 'center' },
     endBtn: { backgroundColor: '#dc2626' },
-    endBtnText: { fontSize: 13, fontWeight: 'bold', color: '#ffffff' },
+    endBtnText: { fontSize: isDesktop ? 13 : 10.5, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' },
 
     btnDisabled: { opacity: 0.45 },
 
@@ -14560,9 +14671,9 @@ const getStyles = (isDesktop: boolean) =>
     },
     engineKeypadBtn: {
       flex: 1,
-      minHeight: isDesktop ? 54 : 44,
-      height: isDesktop ? 54 : 44,
-      borderRadius: isDesktop ? 10 : 8,
+      minHeight: isDesktop ? 54 : 36,
+      height: isDesktop ? 54 : 36,
+      borderRadius: isDesktop ? 10 : 7,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: '#ffffff',
@@ -14575,15 +14686,15 @@ const getStyles = (isDesktop: boolean) =>
       elevation: 2
     },
     engineKeypadText: {
-      fontSize: isDesktop ? 22 : 18,
+      fontSize: isDesktop ? 22 : 17,
       fontWeight: '900',
       color: '#0f172a'
     },
     engineAuxKeypadBtn: {
       backgroundColor: '#005960',
       borderColor: '#0d9488',
-      minHeight: 44,
-      height: isDesktop ? 54 : 44
+      minHeight: isDesktop ? 54 : 36,
+      height: isDesktop ? 54 : 36
     },
     engineAuxKeypadText: {
       fontSize: isDesktop ? 12 : 10,
@@ -15061,9 +15172,9 @@ const getStyles = (isDesktop: boolean) =>
     // Recent Deliveries Strip & Edit Mode Styling
     recentDeliveriesCard: {
       backgroundColor: '#ffffff',
-      borderRadius: 12,
-      padding: 12,
-      marginVertical: 8,
+      borderRadius: isDesktop ? 12 : 8,
+      padding: isDesktop ? 12 : 6,
+      marginVertical: isDesktop ? 8 : 3,
       borderWidth: 1,
       borderColor: '#e2e8f0',
       shadowColor: '#000',
@@ -15078,13 +15189,13 @@ const getStyles = (isDesktop: boolean) =>
       backgroundColor: '#fffdf5'
     },
     recentDeliveriesHeader: {
-      marginBottom: 8
+      marginBottom: isDesktop ? 8 : 3
     },
     recentDeliveriesTitle: {
-      fontSize: 12,
+      fontSize: isDesktop ? 12 : 10.5,
       fontWeight: '800',
       color: '#1e293b',
-      letterSpacing: 0.5,
+      letterSpacing: 0.4,
       textTransform: 'uppercase'
     },
     recentDeliveriesSub: {
@@ -15118,9 +15229,9 @@ const getStyles = (isDesktop: boolean) =>
       paddingVertical: 4
     },
     ballChip: {
-      width: 44,
-      height: 48,
-      borderRadius: 8,
+      width: isDesktop ? 44 : 38,
+      height: isDesktop ? 48 : 36,
+      borderRadius: 7,
       backgroundColor: '#f1f5f9',
       borderWidth: 1.5,
       borderColor: '#cbd5e1',

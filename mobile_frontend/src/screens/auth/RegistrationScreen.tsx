@@ -28,6 +28,7 @@ import {
 import { FontAwesome } from '@expo/vector-icons';
 import { useAppNavigation } from '../../navigation/AppNavigator';
 import { ScorerApi, fetchMasterSettings } from '../../services/api';
+import { TurnstileWidget } from '../../components/common/TurnstileWidget';
 import { showSuccess, showError, showWarning, showInfo } from '../../utils/sweetalert';
 import EmailDomainSuggestions from '../../components/common/EmailDomainSuggestions';
 
@@ -237,6 +238,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   // Global loading and status
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isSendingOtp, setIsSendingOtp] = useState<boolean>(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusType, setStatusType] = useState<'info' | 'success' | 'error' | null>(null);
@@ -843,7 +845,13 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     setStatusType('info');
 
     try {
-      await ScorerApi.sendRegistrationOtp(email, name, activeRole, activeRole === 'TEAM' ? teamName.trim() : undefined);
+      await ScorerApi.sendRegistrationOtp(
+        email,
+        name,
+        activeRole,
+        activeRole === 'TEAM' ? teamName.trim() : undefined,
+        turnstileToken || undefined
+      );
       setOtpSent(true);
       setResendCooldown(30);
       const okMsg = `✓ Verification code sent to ${email}! Enter the 6-digit code below.`;
@@ -1622,6 +1630,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
             <Text style={styles.verifHelpText}>
               Click below to send a 6-digit verification code to your email address before creating your password.
             </Text>
+
+            <TurnstileWidget onToken={setTurnstileToken} />
 
             <TouchableOpacity
               style={[styles.actionBtn, isSendingOtp && styles.btnDisabled]}

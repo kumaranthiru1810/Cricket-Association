@@ -8,6 +8,7 @@ const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const db = require('../config/db');
 const { cacheResponse } = require('../middleware/cacheMiddleware');
+const { requireTurnstile } = require('../middleware/turnstileMiddleware');
 
 const contactRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -17,6 +18,75 @@ const contactRateLimiter = rateLimit({
   message: {
     success: false,
     error: 'Too many contact form submissions from this IP. Please try again after 15 minutes.'
+  }
+});
+
+/**
+ * GET /api/portal/live
+ * Uncached lightweight endpoint for live match scorecards & home live cards
+ */
+router.get('/live', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  try {
+    const { Match, Innings, Team } = db.models;
+    const liveMatches = await Match.find({ status: { $in: ['LIVE', 'INNINGS_BREAK'] } })
+      .select('id team_a_id team_b_id team_a_name team_b_name status score_a score_b target_runs result_summary current_innings_number updatedAt')
+      .sort({ updatedAt: -1 })
+      .limit(20)
+      .lean();
+
+    if (liveMatches.length === 0) {
+      return res.json({ success: true, matches: [], updatedAt: Date.now() });
+    }
+
+    const matchIds = liveMatches.map(m => m.id);
+    const teamIds = Array.from(new Set(liveMatches.flatMap(m => [m.team_a_id, m.team_b_id]).filter(Boolean)));
+
+    const [inningsDocs, teamDocs] = await Promise.all([
+      Innings.find({ match_id: { $in: matchIds }, is_completed: { $ne: true } })
+        .select('match_id innings_number batting_team_id total_runs wickets overs balls target')
+        .lean(),
+      Team.find({ id: { $in: teamIds } }).select('id name short_name').lean()
+    ]);
+
+    const innByMatch = {};
+    for (const inn of inningsDocs) {
+      innByMatch[inn.match_id] = inn;
+    }
+    const teamNameById = {};
+    for (const t of teamDocs) {
+      teamNameById[t.id] = t.name;
+    }
+
+    const matches = liveMatches.map(m => {
+      const inn = innByMatch[m.id];
+      const oversStr = inn ? `${inn.overs || 0}.${inn.balls || 0}` : '0.0';
+      const scoreStr = inn
+        ? `${inn.total_runs || 0}/${inn.wickets || 0} (${oversStr} Ov)`
+        : (m.score_a || m.score_b || '0/0 (0.0 Ov)');
+      return {
+        matchId: m.id,
+        teams: {
+          teamA: m.team_a_name || teamNameById[m.team_a_id] || 'Team A',
+          teamB: m.team_b_name || teamNameById[m.team_b_id] || 'Team B'
+        },
+        score: scoreStr,
+        scoreA: m.score_a || null,
+        scoreB: m.score_b || null,
+        wickets: inn ? (inn.wickets || 0) : 0,
+        overs: oversStr,
+        status: m.status,
+        lastBall: null,
+        battingTeamId: inn?.batting_team_id || null,
+        target: inn?.target || m.target_runs || null,
+        result: m.result_summary || null,
+        updatedAt: m.updatedAt ? new Date(m.updatedAt).getTime() : Date.now()
+      };
+    });
+
+    res.json({ success: true, matches, updatedAt: Date.now() });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -1143,7 +1213,7 @@ router.get('/events', async (req, res) => {
  * POST /api/portal/contact
  * Handle Contact Form submission with rate limiting and length validation
  */
-router.post('/contact', contactRateLimiter, async (req, res) => {
+router.post('/contact', contactRateLimiter, requireTurnstile, async (req, res) => {
   try {
     const { name, email, subject, message } = req.body || {};
     if (!name || !email || !message) {

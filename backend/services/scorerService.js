@@ -78,13 +78,23 @@ class ScorerService {
     const teamMap = await this.getTeamMap();
     const team = teamMap[teamId] || {};
 
+    let match = matchContext;
+    if (typeof matchContext === 'string') {
+      match = await db.models.Match.findOne({ id: matchContext }).lean();
+    }
+
+    const matchNameAlias = match
+      ? (match.team_a_id === teamId ? match.team_a_name : (match.team_b_id === teamId ? match.team_b_name : null))
+      : null;
+
     // All possible aliases for this team
     const aliases = new Set([
       teamId,
       team.id,
       team.team_id,
       team.name,
-      team.team_name
+      team.team_name,
+      matchNameAlias
     ].filter(Boolean));
 
     const squadMap = {};
@@ -145,12 +155,7 @@ class ScorerService {
       });
     });
 
-    // 3. Match Context Check: If match is provided and team has allocated Playing XI
-    let match = matchContext;
-    if (typeof matchContext === 'string') {
-      match = await db.models.Match.findOne({ id: matchContext }).lean();
-    }
-
+    // 3. Match Context Check: If match is provided and team has allocated Playing XI / attendance
     if (match) {
       const teamNameLower = (team.name || team.team_name || '').toLowerCase().trim();
       const matchTeamAName = (match.team_a_name || '').toLowerCase().trim();
@@ -161,8 +166,16 @@ class ScorerService {
       const isTeamB = match.team_b_id === teamId ||
         (matchTeamBName && (matchTeamBName === String(teamId).toLowerCase() || (teamNameLower && matchTeamBName === teamNameLower)));
 
-      const allocatedXI = isTeamA ? match.team_a_playing_xi : (isTeamB ? match.team_b_playing_xi : null);
+      const rawXI = isTeamA ? match.team_a_playing_xi : (isTeamB ? match.team_b_playing_xi : null);
+      const rawAtt = isTeamA ? match.team_a_attendance : (isTeamB ? match.team_b_attendance : null);
       const lineup = (isTeamA ? match.team_a_lineup : (isTeamB ? match.team_b_lineup : [])) || [];
+      const allocatedXI = (Array.isArray(rawXI) && rawXI.length > 0)
+        ? rawXI
+        : ((Array.isArray(rawAtt) && rawAtt.length > 0)
+            ? rawAtt
+            : (Array.isArray(lineup) && lineup.length > 0
+                ? lineup.map(l => (typeof l === 'string' ? l : (l?.playerId || l?.id))).filter(Boolean)
+                : null));
 
       if (Array.isArray(allocatedXI) && allocatedXI.length > 0) {
         const xiPlayers = [];
@@ -974,21 +987,86 @@ class ScorerService {
         };
       });
 
-      // Deliveries for fall of wickets, extras, and wagon wheel
+      // Deliveries for fall of wickets, extras, bowler NB/WD, partnerships, and wagon wheel
       const delRows = await db.models.Delivery.find({
         $or: [{ match_id: matchId, innings_number: inn.innings_number }, { innings_id: inn.id }]
       }).sort({ over_number: 1, ball_number: 1 }).lean();
 
-      let wides = inn.extras?.wides || 0;
-      let noBalls = inn.extras?.no_balls || 0;
-      let byes = inn.extras?.byes || 0;
-      let legByes = inn.extras?.leg_byes || 0;
+      const bowlerNbMap = {};
+      const bowlerWdMap = {};
+      let delWides = 0;
+      let delNoBalls = 0;
+      let delByes = 0;
+      let delLegByes = 0;
+      let delPenalties = 0;
+
       const fallOfWickets = [];
       let runningScore = 0;
       let wicketCount = 0;
 
+      // Partnership tracking from deliveries
+      const computedPartnerships = [];
+      let curBat1 = battingCard[0]?.playerId || null;
+      let curBat2 = battingCard[1]?.playerId || null;
+      let nextBatIdx = 2;
+      let pRuns = 0;
+      let pBalls = 0;
+      let pStats = {};
+      const ensurePStat = (pid) => {
+        if (!pid) return { runs: 0, balls: 0 };
+        if (!pStats[pid]) pStats[pid] = { runs: 0, balls: 0 };
+        return pStats[pid];
+      };
+      const ordinal = (n) => {
+        const s = ['th', 'st', 'nd', 'rd'];
+        const v = n % 100;
+        return n + (s[(v - 20) % 10] || s[v] || s[0]);
+      };
+
       (delRows || []).forEach(d => {
-        runningScore += (d.total_runs || 0);
+        const exType = String(d.extra_type || '').toUpperCase();
+        const isWide = exType === 'WIDE';
+        const isNoBall = exType === 'NO_BALL' || exType === 'NOBALL' || exType === 'NO BALL';
+        const isBye = exType === 'BYE';
+        const isLegBye = exType === 'LEG_BYE' || exType === 'LEGBYE' || exType === 'LEG BYE';
+        const isPenalty = exType === 'PENALTY';
+        const isLegal = !isWide && !isNoBall;
+        const exRuns = Number(d.runs_extras || 0);
+
+        if (isWide) {
+          delWides += exRuns > 0 ? exRuns : 1;
+          if (d.bowler_id) bowlerWdMap[d.bowler_id] = (bowlerWdMap[d.bowler_id] || 0) + 1;
+        } else if (isNoBall) {
+          delNoBalls += exRuns > 0 ? exRuns : 1;
+          if (d.bowler_id) bowlerNbMap[d.bowler_id] = (bowlerNbMap[d.bowler_id] || 0) + 1;
+        } else if (isBye) {
+          delByes += exRuns;
+        } else if (isLegBye) {
+          delLegByes += exRuns;
+        } else if (isPenalty) {
+          delPenalties += exRuns;
+        }
+
+        const totalDelRuns = Number(d.total_runs || 0);
+        runningScore += totalDelRuns;
+
+        // Track partnership
+        if (d.striker_id && d.striker_id !== curBat1 && d.striker_id !== curBat2) {
+          if (!curBat1) curBat1 = d.striker_id;
+          else if (!curBat2) curBat2 = d.striker_id;
+        }
+        if (d.non_striker_id && d.non_striker_id !== curBat1 && d.non_striker_id !== curBat2) {
+          if (!curBat2) curBat2 = d.non_striker_id;
+        }
+
+        pRuns += totalDelRuns;
+        if (isLegal) pBalls += 1;
+        if (d.striker_id) {
+          const st = ensurePStat(d.striker_id);
+          st.runs += Number(d.runs_batter || 0);
+          if (!isWide) st.balls += 1;
+        }
+
         if (d.wicket) {
           wicketCount += 1;
           const dismissedName = (playerMap[d.dismissed_player_id] && playerMap[d.dismissed_player_id].name) || 'Batter';
@@ -999,10 +1077,76 @@ class ScorerService {
             over: `${d.over_number}.${d.ball_number}`,
             text: `${wicketCount}-${runningScore} (${dismissedName}, ${d.over_number}.${d.ball_number} ov)`
           });
+
+          const b1Id = curBat1 || d.striker_id;
+          const b2Id = curBat2 || d.non_striker_id;
+          const b1Name = (b1Id && playerMap[b1Id]?.name) || 'Batter 1';
+          const b2Name = (b2Id && playerMap[b2Id]?.name) || 'Batter 2';
+          const s1 = ensurePStat(b1Id);
+          const s2 = ensurePStat(b2Id);
+
+          computedPartnerships.push({
+            wicket: `${ordinal(wicketCount)} Wicket`,
+            runs: pRuns,
+            balls: pBalls,
+            batters: `${b1Name} & ${b2Name}`,
+            batter1Name: b1Name,
+            batter1Runs: s1.runs,
+            batter1Balls: s1.balls,
+            batter2Name: b2Name,
+            batter2Runs: s2.runs,
+            batter2Balls: s2.balls
+          });
+
+          // Reset for next partnership
+          pRuns = 0;
+          pBalls = 0;
+          pStats = {};
+          const nextBatId = battingCard[nextBatIdx]?.playerId || null;
+          nextBatIdx += 1;
+          if (d.dismissed_player_id && d.dismissed_player_id === curBat1) {
+            curBat1 = nextBatId;
+          } else {
+            curBat2 = nextBatId;
+          }
         }
       });
 
-      const totalExtras = (inn.extras && inn.extras.total) || (wides + noBalls + byes + legByes);
+      // Active / unbroken partnership
+      if (pRuns > 0 || pBalls > 0) {
+        const b1Id = curBat1;
+        const b2Id = curBat2;
+        const b1Name = (b1Id && playerMap[b1Id]?.name) || battingCard[0]?.name || 'Batter 1';
+        const b2Name = (b2Id && playerMap[b2Id]?.name) || battingCard[1]?.name || 'Batter 2';
+        const s1 = ensurePStat(b1Id);
+        const s2 = ensurePStat(b2Id);
+        computedPartnerships.push({
+          wicket: `${ordinal(wicketCount + 1)} Wicket`,
+          runs: pRuns,
+          balls: pBalls,
+          batters: `${b1Name} & ${b2Name}`,
+          batter1Name: b1Name,
+          batter1Runs: s1.runs,
+          batter1Balls: s1.balls,
+          batter2Name: b2Name,
+          batter2Runs: s2.runs,
+          batter2Balls: s2.balls
+        });
+      }
+
+      const wides = (delRows && delRows.length > 0) ? delWides : (inn.extras?.wides || 0);
+      const noBalls = (delRows && delRows.length > 0) ? delNoBalls : (inn.extras?.no_balls || 0);
+      const byes = (delRows && delRows.length > 0) ? delByes : (inn.extras?.byes || 0);
+      const legByes = (delRows && delRows.length > 0) ? delLegByes : (inn.extras?.leg_byes || 0);
+      const penalties = (delRows && delRows.length > 0) ? delPenalties : (inn.extras?.penalty || 0);
+      const totalExtras = byes + legByes + wides + noBalls + penalties;
+
+      // Enrich bowlingCard with NB and WD counts
+      bowlingCard.forEach(bw => {
+        bw.noBalls = bw.playerId ? (bowlerNbMap[bw.playerId] || 0) : 0;
+        bw.wides = bw.playerId ? (bowlerWdMap[bw.playerId] || 0) : 0;
+      });
+
       if (fallOfWickets.length === 0 && inn.wickets > 0) {
         fallOfWickets.push({
           wicket: 1,
@@ -1013,22 +1157,20 @@ class ScorerService {
         });
       }
 
-      // Partnerships
-      const partnerships = [];
-      if (battingCard.length >= 2) {
+      // Partnerships (prefer computed from deliveries, fallback to batter totals)
+      const partnerships = computedPartnerships.length > 0 ? computedPartnerships : [];
+      if (partnerships.length === 0 && battingCard.length >= 2) {
         partnerships.push({
           wicket: '1st Wicket',
           runs: (battingCard[0]?.runs || 0) + (battingCard[1]?.runs || 0),
           balls: (battingCard[0]?.balls || 0) + (battingCard[1]?.balls || 0),
-          batters: `${battingCard[0]?.name} & ${battingCard[1]?.name}`
-        });
-      }
-      if (battingCard.length >= 3) {
-        partnerships.push({
-          wicket: '2nd Wicket',
-          runs: (battingCard[1]?.runs || 0) + (battingCard[2]?.runs || 0),
-          balls: (battingCard[1]?.balls || 0) + (battingCard[2]?.balls || 0),
-          batters: `${battingCard[1]?.name} & ${battingCard[2]?.name}`
+          batters: `${battingCard[0]?.name} & ${battingCard[1]?.name}`,
+          batter1Name: battingCard[0]?.name,
+          batter1Runs: battingCard[0]?.runs || 0,
+          batter1Balls: battingCard[0]?.balls || 0,
+          batter2Name: battingCard[1]?.name,
+          batter2Runs: battingCard[1]?.runs || 0,
+          batter2Balls: battingCard[1]?.balls || 0
         });
       }
 
@@ -1054,6 +1196,7 @@ class ScorerService {
 
       const maxOvers = match.overs_per_side || 20;
       const bowledBalls = (inn.overs || 0) * 6 + (inn.balls || 0);
+      const runRate = bowledBalls > 0 ? ((inn.total_runs || 0) / (bowledBalls / 6)).toFixed(2) : '0.00';
       const remBalls = Math.max(0, maxOvers * 6 - bowledBalls);
       const remOv = Math.floor(remBalls / 6);
       const remB = remBalls % 6;
@@ -1069,6 +1212,7 @@ class ScorerService {
         overs: `${inn.overs}.${inn.balls}`,
         balls: inn.balls || 0,
         oversNum: inn.overs || 0,
+        runRate,
         currentOverNumber: (inn.balls > 0 ? (inn.overs || 0) + 1 : (inn.overs || 0)) || 1,
         totalOvers: maxOvers,
         oversRemaining: `${remOv}.${remB}`,
@@ -1091,7 +1235,8 @@ class ScorerService {
           noBall: noBalls,
           bye: byes,
           legBye: legByes,
-          breakdown: `wd ${wides}, nb ${noBalls}, b ${byes}, lb ${legByes}`
+          penalty: penalties,
+          breakdown: `b ${byes}, lb ${legByes}, w ${wides}, nb ${noBalls}, p ${penalties}`
         },
         batters: battingCard,
         bowlers: bowlingCard,
@@ -1110,6 +1255,48 @@ class ScorerService {
         : (statusUpper === 'POSTPONED'
           ? 'Match postponed'
           : 'Match scheduled — not started yet'));
+
+    const resolveSquadList = async (teamId, teamName) => {
+      const sq = await this.getSquadForTeam(teamId || teamName, match);
+      if (Array.isArray(sq) && sq.length > 0) {
+        return sq.map((p, idx) => ({
+          id: p.id,
+          name: p.name,
+          role: p.role || 'PLAYER',
+          isCaptain: Boolean(p.is_captain) || idx === 0,
+          isKeeper: Boolean(p.is_wicket_keeper) || p.role === 'WICKET_KEEPER'
+        }));
+      }
+      // Fallback: collect batters/bowlers from innings if squad lookup returned empty
+      const seen = new Map();
+      (formattedInnings || []).forEach((inn) => {
+        if (teamName && inn.battingTeam === teamName) {
+          (inn.batters || []).forEach((b) => {
+            const bid = b.playerId || b.id || b.name;
+            if (bid && !seen.has(bid)) {
+              seen.set(bid, { id: bid, name: b.name || bid, role: 'BATTER', isCaptain: seen.size === 0, isKeeper: false });
+            }
+          });
+        }
+        if (teamName && inn.bowlingTeam === teamName) {
+          (inn.bowlers || []).forEach((bw) => {
+            const bwid = bw.playerId || bw.id || bw.name;
+            if (bwid && !seen.has(bwid)) {
+              seen.set(bwid, { id: bwid, name: bw.name || bwid, role: 'BOWLER', isCaptain: seen.size === 0, isKeeper: false });
+            }
+          });
+        }
+      });
+      return Array.from(seen.values());
+    };
+
+    const teamANameResolved = (teamMap[match.team_a_id] && teamMap[match.team_a_id].name) || match.team_a_name || 'Team A';
+    const teamBNameResolved = (teamMap[match.team_b_id] && teamMap[match.team_b_id].name) || match.team_b_name || 'Team B';
+
+    const [squadA, squadB] = await Promise.all([
+      resolveSquadList(match.team_a_id, teamANameResolved),
+      resolveSquadList(match.team_b_id, teamBNameResolved)
+    ]);
 
     return {
       matchId: match.id,
@@ -1144,7 +1331,11 @@ class ScorerService {
       overs: match.overs_per_side || 20,
       status: statusLabel,
       result: match.result_summary || defaultResult,
-      innings: formattedInnings
+      innings: formattedInnings,
+      squads: {
+        teamA: squadA,
+        teamB: squadB
+      }
     };
   }
 

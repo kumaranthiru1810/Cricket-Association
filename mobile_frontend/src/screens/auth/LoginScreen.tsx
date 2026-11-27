@@ -45,6 +45,7 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showFindTeamModal, setShowFindTeamModal] = useState(false);
+  const [rememberDevice, setRememberDevice] = useState(true);
 
   // Loading & Feedback States
   const [isLoading, setIsLoading] = useState(false);
@@ -171,7 +172,7 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
     setStatusType('info');
 
     try {
-      const res = await ScorerApi.loginWithPassword(input, pass, activeRole);
+      const res = await ScorerApi.loginWithPassword(input, pass, activeRole, undefined, rememberDevice);
 
       if (res?.token) {
         setAuthToken(res.token, activeRole);
@@ -468,6 +469,29 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
                 ) : null}
               </>
             )}
+
+            <TouchableOpacity
+              onPress={() => setRememberDevice((v) => !v)}
+              style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 }}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: rememberDevice }}
+            >
+              <View style={{
+                width: 16,
+                height: 16,
+                borderRadius: 4,
+                borderWidth: 1.5,
+                borderColor: rememberDevice ? '#0f2452' : '#94a3b8',
+                backgroundColor: rememberDevice ? '#0f2452' : 'transparent',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                {rememberDevice ? <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>✓</Text> : null}
+              </View>
+              <Text style={{ fontSize: 12, color: '#475569', fontWeight: '500' }}>
+                Remember this device for 30 days
+              </Text>
+            </TouchableOpacity>
 
             {/* Action Button */}
             <TouchableOpacity

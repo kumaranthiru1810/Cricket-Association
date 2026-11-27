@@ -1174,5 +1174,16 @@ router.get('/security/admins', (req, res) => adminAccessController.getAdmins(req
 router.get('/security/requests', (req, res) => adminAccessController.getRequests(req, res));
 router.get('/security/audit-logs', (req, res) => adminAccessController.getAudit(req, res));
 
+// Email/OTP Quota & Delivery Status (Admin Only)
+router.get('/email-status', requireAdminAuth, async (req, res) => {
+  try {
+    const { getDailyEmailStatus } = require('../config/mailer');
+    const status = await getDailyEmailStatus();
+    res.json({ success: true, ...status });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;
 

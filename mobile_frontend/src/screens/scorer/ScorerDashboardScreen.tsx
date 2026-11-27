@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image, useWindowDimensions, Platform, ActivityIndicator, Modal } from 'react-native';
 import { useScorerNavigation } from '../../navigation/ScorerNavigationContext';
 import MatchCard from '../../components/scorer/MatchCard';
+import CricketLoader from '../../components/common/CricketLoader';
 import SharedFooter from '../../components/scorer/SharedFooter';
 import { ScorerApi, getCurrentUser, logoutAndClearAllSessions } from '../../services/api';
 import { showInfo, showConfirm } from '../../utils/sweetalert';
@@ -60,15 +61,21 @@ export default function ScorerDashboardScreen() {
     let loadedMatches: any[] = [];
     let dashboardApiSucceeded = false;
 
-    // 1. Try authenticated Scorer Dashboard API
-    try {
-      const res = await ScorerApi.getDashboard();
-      if (res && res.data && Array.isArray(res.data.matches)) {
-        loadedMatches = res.data.matches;
-        dashboardApiSucceeded = true;
+    const currentUser = getCurrentUser();
+    const roleUpper = String(params?.user?.role || currentUser?.role || '').toUpperCase();
+    const canCallScorerDashboard = roleUpper === 'SCORER' || roleUpper === 'ADMIN' || roleUpper === 'SUPER_ADMIN';
+
+    // 1. Try authenticated Scorer Dashboard API only when authorized as SCORER/ADMIN
+    if (canCallScorerDashboard) {
+      try {
+        const res = await ScorerApi.getDashboard();
+        if (res && res.data && Array.isArray(res.data.matches)) {
+          loadedMatches = res.data.matches;
+          dashboardApiSucceeded = true;
+        }
+      } catch (_e) {
+        // Auth or network error
       }
-    } catch (_e) {
-      // Auth or network error
     }
 
     // 2. Only fall back to public matches if the authenticated dashboard API failed
@@ -85,7 +92,6 @@ export default function ScorerDashboardScreen() {
     }
 
     // Strictly filter: Scorer sees ONLY matches assigned to them by Admin
-    const currentUser = getCurrentUser();
     const myId = (params?.user?.id || currentUser?.id || currentUser?.scorerId || '').toString().trim().toLowerCase();
     const myEmail = (params?.user?.email || currentUser?.email || '').toString().trim().toLowerCase();
     const myName = (params?.user?.name || currentUser?.name || '').toString().trim().toLowerCase();
@@ -392,12 +398,12 @@ export default function ScorerDashboardScreen() {
               onPress={() => navigate('LiveScoring', { matchId: liveMatches[0].id })}
               activeOpacity={0.85}
             >
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                   <View style={styles.livePulseDot} />
                   <Text style={styles.liveBannerOverline}>MATCH CURRENTLY IN PROGRESS</Text>
                 </View>
-                <Text style={styles.liveBannerTitle} numberOfLines={1}>
+                <Text style={styles.liveBannerTitle} numberOfLines={2}>
                   {liveMatches[0].teamA?.name || liveMatches[0].teamA || 'Team A'} vs {liveMatches[0].teamB?.name || liveMatches[0].teamB || 'Team B'}
                 </Text>
                 <Text style={styles.liveBannerSub}>
@@ -414,9 +420,9 @@ export default function ScorerDashboardScreen() {
               onPress={() => navigate('MatchSetup', { matchId: upcomingMatches[0].id })}
               activeOpacity={0.85}
             >
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.upcomingBannerOverline}>⚡ NEXT SCHEDULED FIXTURE</Text>
-                <Text style={styles.upcomingBannerTitle} numberOfLines={1}>
+                <Text style={styles.upcomingBannerTitle} numberOfLines={2}>
                   {upcomingMatches[0].teamA?.name || upcomingMatches[0].teamA || 'Team A'} vs {upcomingMatches[0].teamB?.name || upcomingMatches[0].teamB || 'Team B'}
                 </Text>
                 <Text style={styles.upcomingBannerSub}>
@@ -430,7 +436,12 @@ export default function ScorerDashboardScreen() {
           ) : null}
 
           {/* TABS ROW FOR MATCH FILTERING */}
-          <View style={styles.tabsRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.tabsScroll}
+            contentContainerStyle={styles.tabsRow}
+          >
             {liveMatches.length > 0 && (
               <TouchableOpacity
                 style={[styles.tabButton, effectiveFilter === 'Live' && styles.tabButtonLiveActive]}
@@ -486,15 +497,10 @@ export default function ScorerDashboardScreen() {
                 </Text>
               </TouchableOpacity>
             )}
-          </View>
+          </ScrollView>
 
           {isLoading ? (
-            <View style={{ paddingVertical: 40, alignItems: 'center' }}>
-              <ActivityIndicator size="large" color="#b45309" />
-              <Text style={{ marginTop: 12, color: '#64748b', fontSize: 14, fontWeight: '600' }}>
-                Loading Assigned Matches from Association Server...
-              </Text>
-            </View>
+            <CricketLoader fullScreen={false} />
           ) : effectiveFilter === 'Assigned' ? (
             /* ALL ASSIGNED MATCHES */
             <View style={{ width: '100%' }}>
@@ -759,13 +765,12 @@ const getStyles = (isDesktop: boolean) => StyleSheet.create({
 
   // HEADER
   header: {
-    padding: 12,
-    paddingHorizontal: isDesktop ? 24 : 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    flexDirection: 'row',
+    paddingVertical: isDesktop ? 12 : 10,
+    paddingHorizontal: isDesktop ? 24 : 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    flexDirection: isDesktop ? 'row' : 'column',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
+    alignItems: isDesktop ? 'center' : 'stretch',
     rowGap: 8,
     borderBottomColor: '#e2e8f0',
     borderBottomWidth: 1,
@@ -773,18 +778,28 @@ const getStyles = (isDesktop: boolean) => StyleSheet.create({
     width: '100%',
     maxWidth: '100%'
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: isDesktop ? 220 : 160 },
-  logo: { width: 32, height: 32, marginRight: 8, flexShrink: 0 },
-  title: { color: '#1e293b', fontSize: isDesktop ? 16 : 14, fontWeight: 'bold', letterSpacing: 0.5 },
-  subtitle: { color: '#b45309', fontSize: isDesktop ? 11 : 10, marginTop: 1, fontWeight: '600' },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', flex: isDesktop ? 1 : undefined, minWidth: 0 },
+  logo: { width: 32, height: 32, marginRight: 10, flexShrink: 0 },
+  title: { color: '#1e293b', fontSize: isDesktop ? 16 : 15, fontWeight: 'bold', letterSpacing: 0.4 },
+  subtitle: { color: '#b45309', fontSize: isDesktop ? 11 : 10.5, marginTop: 1, fontWeight: '600' },
 
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: isDesktop ? 12 : 8, flexShrink: 0 },
-  scorerInfo: { alignItems: 'flex-end' },
-  scorerName: { color: '#1e293b', fontSize: isDesktop ? 13 : 11.5, fontWeight: '700' },
-  scorerId: { color: '#64748b', fontSize: isDesktop ? 11 : 9.5 },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: isDesktop ? 'flex-end' : 'space-between',
+    gap: isDesktop ? 12 : 8,
+    flexShrink: 0,
+    paddingTop: isDesktop ? 0 : 8,
+    borderTopWidth: isDesktop ? 0 : 1,
+    borderTopColor: '#f1f5f9',
+    width: isDesktop ? 'auto' : '100%'
+  },
+  scorerInfo: { alignItems: isDesktop ? 'flex-end' : 'flex-start', flex: isDesktop ? undefined : 1, minWidth: 0 },
+  scorerName: { color: '#1e293b', fontSize: isDesktop ? 13 : 12, fontWeight: '700' },
+  scorerId: { color: '#64748b', fontSize: isDesktop ? 11 : 10 },
 
-  logoutBtn: { backgroundColor: '#fef2f2', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#fca5a5' },
-  logoutText: { color: '#dc2626', fontWeight: 'bold', fontSize: 11 },
+  logoutBtn: { backgroundColor: '#fef2f2', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#fca5a5', flexShrink: 0 },
+  logoutText: { color: '#dc2626', fontWeight: 'bold', fontSize: 11.5 },
 
   // LAYOUT
   scroll: { flexGrow: 1, width: '100%', maxWidth: '100%' },
@@ -849,20 +864,27 @@ const getStyles = (isDesktop: boolean) => StyleSheet.create({
   upcomingBannerBtnText: { color: '#ffffff', fontWeight: '800', fontSize: 12, letterSpacing: 0.5 },
 
   // TABS ROW
+  tabsScroll: {
+    width: '100%',
+    marginBottom: 16,
+    flexGrow: 0
+  },
   tabsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 16,
-    width: '100%'
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 2
   },
   tabButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
     borderWidth: 1,
     borderColor: '#cbd5e1',
-    borderRadius: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 10
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   tabButtonActive: {
     backgroundColor: '#0f172a',

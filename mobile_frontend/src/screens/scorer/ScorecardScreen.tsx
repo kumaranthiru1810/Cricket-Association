@@ -8,14 +8,18 @@ import { ScorerApi } from '../../services/api';
 import WagonWheel from '../../components/analytics/WagonWheel';
 import PitchMap from '../../components/analytics/PitchMap';
 import ErrorBoundary from '../../components/common/ErrorBoundary';
+import CricketLoader from '../../components/common/CricketLoader';
 import CricketRulesModal, { CricketRuleType } from '../../components/scorer/CricketRulesModal';
 import MatchHighlightsBanner, { HighlightItem } from '../../components/common/MatchHighlightsBanner';
 import UmpireSignalOverlay, { UmpireSignalEvent, UmpireSignalsGalleryModal, UmpireSignalType } from '../../components/common/UmpireSignalOverlay';
 import FieldingEventOverlay, { FieldingEventData, FieldingEventType } from '../../components/common/FieldingEventOverlay';
+import CricketFigurine3D from '../../components/common/CricketFigurine3D';
 
 const IMG_CHAMPIONS = require('../../../assets/cricket_champions.png');
 const IMG_MATCH_RESULT_TROPHY = require('../../../assets/cricket_match_result_trophy.png');
 const IMG_PARTNERSHIP = require('../../../assets/cricket_batting_partnership.png');
+const IMG_MILESTONE_BATTER = require('../../../assets/milestone_batsman.png');
+const IMG_CENTURY_BATTER = require('../../../assets/century_batsman.jpg');
 
 interface ScorecardScreenProps {
   onExit?: () => void;
@@ -48,6 +52,13 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [scorecardData, setScorecardData] = useState<any>(null);
   const [activeInningsTab, setActiveInningsTab] = useState<number>(0);
+  const [activeSectionTab, setActiveSectionTab] = useState<'SCORECARD' | 'SQUADS' | 'BALL_MAP' | 'HIGHLIGHTS'>('SCORECARD');
+  const [sectionDropdownOpen, setSectionDropdownOpen] = useState<boolean>(false);
+  const [ballMapBowlerId, setBallMapBowlerId] = useState<string>('ALL');
+  const [ballMapBatterId, setBallMapBatterId] = useState<string>('ALL');
+  const [bowlerDropdownOpen, setBowlerDropdownOpen] = useState<boolean>(false);
+  const [batterDropdownOpen, setBatterDropdownOpen] = useState<boolean>(false);
+  const [liveUpdatedAt, setLiveUpdatedAt] = useState<number>(Date.now());
   const [selectedWagonBatterId, setSelectedWagonBatterId] = useState<string>('');
   const [showRulesModal, setShowRulesModal] = useState<boolean>(false);
   const [activeRule, setActiveRule] = useState<CricketRuleType>('FREE_HIT');
@@ -93,17 +104,19 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
 
     try {
       socketRef = ScorerApi.connectSocket(matchId, (_payload) => {
+        setLiveUpdatedAt(Date.now());
         // Refresh scorecard on live ball update in match room
         loadScorecard(false);
       });
     } catch (_e) {}
 
-    // Polling fallback every 12 seconds ONLY if socket is disconnected / unavailable
+    // Polling fallback every 7 seconds ONLY if socket is disconnected / unavailable
     pollTimer = setInterval(() => {
       if (!socketRef || !socketRef.connected) {
+        setLiveUpdatedAt(Date.now());
         loadScorecard(false);
       }
-    }, 12000);
+    }, 7000);
 
     return () => {
       if (pollTimer) clearInterval(pollTimer);
@@ -532,12 +545,7 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
   }, [scorecardData, fieldingStats]);
 
   if (isLoading) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#eab308" />
-        <Text style={{ marginTop: 12, color: '#64748b', fontWeight: '600' }}>Loading Scorecard from Database...</Text>
-      </View>
-    );
+    return <CricketLoader />;
   }
 
   if (!scorecardData || !scorecardData.match) {
@@ -558,18 +566,37 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
   }
 
   if (!currentInnings) {
+    const isMatchCompleted = String(match.status || '').toUpperCase() === 'COMPLETED';
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
-        <Text style={{ fontSize: 18, fontWeight: '700', color: '#1e293b', marginBottom: 8 }}>Innings In Preparation</Text>
-        <Text style={{ fontSize: 14, color: '#64748b', textAlign: 'center', marginBottom: 20 }}>
-          Innings details have not been initialized yet for {match.teamA || 'Team A'} vs {match.teamB || 'Team B'}.
-        </Text>
-        <TouchableOpacity style={styles.actionBtn} onPress={() => loadScorecard()}>
-          <Text style={styles.actionBtnText}>Refresh</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.actionBtn, { marginTop: 12, backgroundColor: '#f1f5f9' }]} onPress={handleBack}>
-          <Text style={[styles.actionBtnText, { color: '#475569' }]}>Back to Previous</Text>
-        </TouchableOpacity>
+        <View style={{ maxWidth: 460, width: '100%', backgroundColor: '#ffffff', borderRadius: 14, padding: 22, borderWidth: 1.5, borderColor: isMatchCompleted ? '#86efac' : '#fde68a', alignItems: 'center' }}>
+          <Text style={{ fontSize: 12, fontWeight: '800', color: isMatchCompleted ? '#15803d' : '#b45309', letterSpacing: 0.8, marginBottom: 6 }}>
+            {isMatchCompleted ? '✓ MATCH COMPLETED' : 'MATCH PREPARATION'}
+          </Text>
+          <Text style={{ fontSize: 18, fontWeight: '800', color: '#0f172a', textAlign: 'center', marginBottom: 6 }}>
+            {match.teamA || 'Team A'} vs {match.teamB || 'Team B'}
+          </Text>
+          {isMatchCompleted && match.result ? (
+            <View style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 12, width: '100%' }}>
+              <Text style={{ fontSize: 14, fontWeight: '800', color: '#166534', textAlign: 'center' }}>
+                🏆 {match.result}
+              </Text>
+            </View>
+          ) : null}
+          <Text style={{ fontSize: 13, color: '#64748b', textAlign: 'center', marginBottom: 20, lineHeight: 19 }}>
+            {isMatchCompleted
+              ? 'This match was concluded without ball-by-ball innings data (e.g. walkover, admin result, or test fixture).'
+              : `Innings details have not been initialized yet for ${match.teamA || 'Team A'} vs ${match.teamB || 'Team B'}.`}
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => loadScorecard()}>
+              <Text style={styles.actionBtnText}>Refresh</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#f1f5f9' }]} onPress={handleBack}>
+              <Text style={[styles.actionBtnText, { color: '#475569' }]}>Back to Previous</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
     );
   }
@@ -592,16 +619,20 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
             <View style={[styles.badgeLive, { flexDirection: 'row', alignItems: 'center', gap: 5 }]}>
               <View style={[styles.championPulsingDot, { backgroundColor: '#10b981', width: 6, height: 6 }]} />
               <Text style={styles.badgeLiveText}>
-                {match.status === 'Live' || match.status === 'LIVE' ? 'LIVE' : (match.status || 'SCORECARD')}
+                {match.status === 'Live' || match.status === 'LIVE'
+                  ? `LIVE • ${new Date(liveUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+                  : (match.status || 'SCORECARD')}
               </Text>
             </View>
-            <TouchableOpacity
-              style={styles.exitScorerHeaderBtn}
-              onPress={() => setShowExitModal(true)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.exitScorerHeaderBtnText}>Exit Scorer</Text>
-            </TouchableOpacity>
+            {(params?.returnTo === 'LiveScoring' || params?.returnTo === 'Dashboard') && (
+              <TouchableOpacity
+                style={styles.exitScorerHeaderBtn}
+                onPress={() => setShowExitModal(true)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.exitScorerHeaderBtnText}>Exit Scorer</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -754,6 +785,130 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
             </View>
           </View>
 
+          {/* CFVD MATCH CENTRE NAVIGATION TABS (Dropdown on Mobile, Pill Tabs on Desktop) */}
+          {(() => {
+            const sectionTabs = [
+              { key: 'SCORECARD', label: '📋 Scorecard' },
+              { key: 'SQUADS', label: '👥 Squads (Playing XI)' },
+              { key: 'BALL_MAP', label: '🗺️ Ball Map & Overs' },
+              { key: 'HIGHLIGHTS', label: '✨ Highlights & 3D' }
+            ] as const;
+            const currentTabObj = sectionTabs.find((t) => t.key === activeSectionTab) || sectionTabs[0];
+
+            if (!isDesktop) {
+              return (
+                <View style={{ marginBottom: 14, position: 'relative', zIndex: 50 }}>
+                  <TouchableOpacity
+                    onPress={() => setSectionDropdownOpen((prev) => !prev)}
+                    activeOpacity={0.85}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      paddingHorizontal: 14,
+                      paddingVertical: 11,
+                      borderRadius: 10,
+                      backgroundColor: '#0f172a',
+                      borderWidth: 1.5,
+                      borderColor: '#f59e0b'
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#facc15' }}>
+                      {currentTabObj.label}
+                    </Text>
+                    <Text style={{ fontSize: 13, fontWeight: '900', color: '#facc15' }}>
+                      {sectionDropdownOpen ? '▲' : '▼'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {sectionDropdownOpen && (
+                    <View
+                      style={{
+                        marginTop: 6,
+                        backgroundColor: '#ffffff',
+                        borderRadius: 10,
+                        borderWidth: 1.5,
+                        borderColor: '#cbd5e1',
+                        overflow: 'hidden',
+                        shadowColor: '#0f172a',
+                        shadowOpacity: 0.12,
+                        shadowRadius: 8,
+                        elevation: 4
+                      }}
+                    >
+                      {sectionTabs.map((tab, idx) => {
+                        const active = activeSectionTab === tab.key;
+                        return (
+                          <TouchableOpacity
+                            key={tab.key}
+                            onPress={() => {
+                              setActiveSectionTab(tab.key);
+                              setSectionDropdownOpen(false);
+                            }}
+                            activeOpacity={0.8}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              paddingHorizontal: 14,
+                              paddingVertical: 11,
+                              backgroundColor: active ? '#0f172a' : '#ffffff',
+                              borderTopWidth: idx > 0 ? 1 : 0,
+                              borderTopColor: '#e2e8f0'
+                            }}
+                          >
+                            <Text style={{ fontSize: 13, fontWeight: '800', color: active ? '#facc15' : '#334155' }}>
+                              {tab.label}
+                            </Text>
+                            {active ? (
+                              <Text style={{ fontSize: 12, fontWeight: '900', color: '#facc15' }}>✓</Text>
+                            ) : null}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+              );
+            }
+
+            return (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ marginBottom: 14, flexGrow: 0 }}
+                contentContainerStyle={{ flexDirection: 'row', gap: 8, paddingVertical: 2 }}
+              >
+                {sectionTabs.map((tab) => {
+                  const active = activeSectionTab === tab.key;
+                  return (
+                    <TouchableOpacity
+                      key={tab.key}
+                      onPress={() => setActiveSectionTab(tab.key)}
+                      activeOpacity={0.8}
+                      style={{
+                        paddingHorizontal: 14,
+                        paddingVertical: 9,
+                        borderRadius: 10,
+                        backgroundColor: active ? '#0f172a' : '#ffffff',
+                        borderWidth: 1.5,
+                        borderColor: active ? '#f59e0b' : '#cbd5e1',
+                        flexShrink: 0
+                      }}
+                    >
+                      <Text style={{ fontSize: 12.5, fontWeight: '800', color: active ? '#facc15' : '#334155' }}>
+                        {tab.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            );
+          })()}
+
+          {activeSectionTab === 'SCORECARD' && (
+          <>
+
           {/* ─────────────────────────────────────────────────────────────
               OVERS & BOWLER LOGISTICS STATUS BAR
               ───────────────────────────────────────────────────────────── */}
@@ -807,24 +962,24 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                   ⭕ Powerplay: Overs 1-6 (Max 2 fielders outside 30y ring)
                 </Text>
               </View>
-              <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
+              <View style={{ flexDirection: 'column', gap: 8, width: '100%' }}>
                 <TouchableOpacity
-                  style={[styles.rulesGuideBtn, { flex: 1, minWidth: 200 }]}
+                  style={[styles.rulesGuideBtn, { width: '100%', alignItems: 'center', paddingVertical: 8 }]}
                   onPress={() => {
                     setActiveRule('FREE_HIT');
                     setShowRulesModal(true);
                   }}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.rulesGuideBtnText}>⚖️ View Cricket Rules Guide & Diagrams</Text>
+                  <Text style={[styles.rulesGuideBtnText, { textAlign: 'center' }]}>⚖️ View Cricket Rules Guide & Diagrams</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.rulesGuideBtn, { flex: 1, minWidth: 200, backgroundColor: '#0284c7', borderColor: '#0ea5e9' }]}
+                  style={[styles.rulesGuideBtn, { width: '100%', alignItems: 'center', paddingVertical: 8, backgroundColor: '#0284c7', borderColor: '#0ea5e9' }]}
                   onPress={() => setShowUmpireGallery(true)}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.rulesGuideBtnText, { color: '#ffffff' }]}>🏁 Umpire Hand Signals Guide & Animations</Text>
+                  <Text style={[styles.rulesGuideBtnText, { color: '#ffffff', textAlign: 'center' }]}>🏁 Umpire Hand Signals Guide & Animations</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -952,12 +1107,43 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                   );
                 })}
 
-                {/* Extras Row */}
-                <View style={styles.extrasRow}>
-                  <Text style={styles.extrasText}>
-                    Extras: {currentInnings.extras?.total || 0} ({currentInnings.extras?.breakdown || 'wides & no-balls'})
-                  </Text>
-                </View>
+                {/* Extras & Total Rows */}
+                {(() => {
+                  const ex = currentInnings.extras || {};
+                  const b = Number(ex.bye ?? ex.byes ?? 0);
+                  const lb = Number(ex.legBye ?? ex.leg_byes ?? 0);
+                  const w = Number(ex.wide ?? ex.wides ?? 0);
+                  const nb = Number(ex.noBall ?? ex.no_balls ?? 0);
+                  const p = Number(ex.penalty ?? 0);
+                  const exTotal = Number(ex.total ?? (b + lb + w + nb + p));
+
+                  const ovParts = String(currentInnings.overs || '0.0').split('.');
+                  const ovCompleted = parseInt(ovParts[0] || '0', 10) || 0;
+                  const ovBalls = parseInt(ovParts[1] || '0', 10) || 0;
+                  const totalBowledBalls = ovCompleted * 6 + ovBalls;
+                  const computedRR = currentInnings.runRate || (
+                    totalBowledBalls > 0
+                      ? ((Number(currentInnings.totalRuns || 0)) / (totalBowledBalls / 6)).toFixed(2)
+                      : '0.00'
+                  );
+
+                  return (
+                    <>
+                      <View style={[styles.extrasRow, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }]}>
+                        <Text style={styles.extrasText}>Extras</Text>
+                        <Text style={[styles.extrasText, { color: '#1e293b' }]}>
+                          {exTotal} (b {b}, lb {lb}, w {w}, nb {nb}, p {p})
+                        </Text>
+                      </View>
+                      <View style={[styles.extrasRow, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6, backgroundColor: '#f8fafc', borderTopWidth: 1, borderTopColor: '#e2e8f0' }]}>
+                        <Text style={[styles.extrasText, { color: '#0f172a', fontWeight: '800' }]}>Total</Text>
+                        <Text style={[styles.extrasText, { color: '#0f172a', fontWeight: '800' }]}>
+                          {currentInnings.totalRuns || 0}-{currentInnings.wickets || 0} ({currentInnings.overs || '0.0'} Overs, RR: {computedRR})
+                        </Text>
+                      </View>
+                    </>
+                  );
+                })()}
               </View>
             </ScrollView>
           </View>
@@ -1016,8 +1202,14 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                   <View style={[styles.colNum, styles.tableHeaderCell]}>
                     <Text style={[styles.cell, styles.tableHeaderText]}>W</Text>
                   </View>
+                  <View style={[styles.colNum, styles.tableHeaderCell]}>
+                    <Text style={[styles.cell, styles.tableHeaderText]}>NB</Text>
+                  </View>
+                  <View style={[styles.colNum, styles.tableHeaderCell]}>
+                    <Text style={[styles.cell, styles.tableHeaderText]}>WD</Text>
+                  </View>
                   <View style={[styles.colNumEcon, styles.tableHeaderCell, styles.tableCellLast]}>
-                    <Text style={[styles.cell, styles.tableHeaderText]}>ECON</Text>
+                    <Text style={[styles.cell, styles.tableHeaderText]}>ECO</Text>
                   </View>
                 </View>
 
@@ -1103,6 +1295,12 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                       <View style={[styles.colNum, styles.tableCell]}>
                         <Text style={[styles.cell, styles.wicketsText]}>{bw.wickets}</Text>
                       </View>
+                      <View style={[styles.colNum, styles.tableCell]}>
+                        <Text style={styles.cell}>{bw.noBalls ?? 0}</Text>
+                      </View>
+                      <View style={[styles.colNum, styles.tableCell]}>
+                        <Text style={styles.cell}>{bw.wides ?? 0}</Text>
+                      </View>
                       <View style={[styles.colNumEcon, styles.tableCell, styles.tableCellLast]}>
                         <Text style={[styles.cell, styles.econText]}>
                           {typeof bw.economy === 'number' ? bw.economy.toFixed(2) : (bw.economy ?? '0.00')}
@@ -1118,46 +1316,56 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
 
           {/* FALL OF WICKETS */}
           {Array.isArray(currentInnings.fallOfWickets) && currentInnings.fallOfWickets.length > 0 && (
-            <View style={styles.fowCard}>
-              <Text style={styles.fowTitle}>Fall of Wickets</Text>
-              <View style={styles.fowRow}>
-                {currentInnings.fallOfWickets.map((f: any, idx: number) => {
-                  let w = f?.wicket;
-                  let s = f?.score;
-                  let b = f?.batter;
-                  let o = f?.over;
-
-                  if (typeof f === 'string') {
-                    // Match pattern "1-24 (Vijay Anand, 3.2 ov)" or "24/1 (Vijay Anand, 3.2 ov)"
-                    const m1 = f.match(/^(\d+)-(\d+)\s*\((.*?),\s*([\d.]+)\s*ov\)/i);
-                    const m2 = f.match(/^(\d+)\/(\d+)\s*\((.*?),\s*([\d.]+)\s*ov\)/i);
-                    if (m1) {
-                      w = m1[1];
-                      s = m1[2];
-                      b = m1[3];
-                      o = m1[4];
-                    } else if (m2) {
-                      s = m2[1];
-                      w = m2[2];
-                      b = m2[3];
-                      o = m2[4];
-                    } else {
-                      return (
-                        <View key={idx} style={styles.fowPill}>
-                          <Text style={styles.fowPillScore}>{f}</Text>
-                        </View>
-                      );
-                    }
-                  }
-
-                  return (
-                    <View key={idx} style={styles.fowPill}>
-                      <Text style={styles.fowPillScore}>{s || '0'}/{w || (idx + 1)}</Text>
-                      <Text style={styles.fowPillSub}>({b || 'Batter'}, {o || '0.0'} ov)</Text>
-                    </View>
-                  );
-                })}
+            <View style={[styles.tableWrapper, { marginTop: 14, marginBottom: 14 }]}>
+              <View style={[styles.tableRow, styles.tableHeader]}>
+                <View style={[styles.colName, styles.tableHeaderCell, { alignItems: 'flex-start' }]}>
+                  <Text style={[styles.cell, styles.cellLeft, styles.tableHeaderText]}>Fall of Wickets</Text>
+                </View>
+                <View style={[styles.colNum, styles.tableHeaderCell, { flex: 1 }]}>
+                  <Text style={[styles.cell, styles.tableHeaderText]}>Score</Text>
+                </View>
+                <View style={[styles.colNumEcon, styles.tableHeaderCell, styles.tableCellLast, { flex: 1 }]}>
+                  <Text style={[styles.cell, styles.tableHeaderText]}>Over</Text>
+                </View>
               </View>
+              {currentInnings.fallOfWickets.map((f: any, idx: number) => {
+                let w = f?.wicket;
+                let s = f?.score;
+                let b = f?.batter;
+                let o = f?.over;
+
+                if (typeof f === 'string') {
+                  const m1 = f.match(/^(\d+)-(\d+)\s*\((.*?),\s*([\d.]+)\s*ov\)/i);
+                  const m2 = f.match(/^(\d+)\/(\d+)\s*\((.*?),\s*([\d.]+)\s*ov\)/i);
+                  if (m1) {
+                    w = m1[1];
+                    s = m1[2];
+                    b = m1[3];
+                    o = m1[4];
+                  } else if (m2) {
+                    s = m2[1];
+                    w = m2[2];
+                    b = m2[3];
+                    o = m2[4];
+                  }
+                }
+
+                return (
+                  <View key={idx} style={[styles.tableRow, idx % 2 === 1 && styles.tableRowAlt]}>
+                    <View style={[styles.colName, styles.tableCell, { alignItems: 'flex-start' }]}>
+                      <Text style={styles.playerName}>{b || f || 'Batter'}</Text>
+                    </View>
+                    <View style={[styles.colNum, styles.tableCell, { flex: 1 }]}>
+                      <Text style={[styles.cell, { fontWeight: '700', color: '#0f172a' }]}>
+                        {s !== undefined ? `${s}-${w || idx + 1}` : '-'}
+                      </Text>
+                    </View>
+                    <View style={[styles.colNumEcon, styles.tableCell, styles.tableCellLast, { flex: 1 }]}>
+                      <Text style={styles.cell}>{o || '-'}</Text>
+                    </View>
+                  </View>
+                );
+              })}
             </View>
           )}
 
@@ -1179,18 +1387,65 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                   </Text>
                 </View>
               </View>
-              <View style={styles.fowRow}>
+              <View style={{ gap: 6 }}>
                 {currentInnings.partnerships.map((p: any, idx: number) => {
-                  const runs = p.runs || 0;
-                  const balls = p.balls || 0;
-                  const batters = p.batters || 'Pair';
-                  const wicketLabel = p.wicket || `${idx + 1}th Wicket`;
+                  const pRuns = p.runs || 0;
+                  const pBalls = p.balls || 0;
+                  const hasSplit = Boolean(p.batter1Name && p.batter2Name);
                   return (
-                    <View key={`part-${idx}`} style={[styles.fowPill, { borderColor: '#f59e0b', backgroundColor: '#fffbeb' }]}>
-                      <Text style={[styles.fowPillScore, { color: '#b45309' }]}>
-                        {runs} runs <Text style={{ fontSize: 11, fontWeight: '600', color: '#78350f' }}>({balls}b)</Text>
-                      </Text>
-                      <Text style={styles.fowPillSub}>{wicketLabel} • {batters}</Text>
+                    <View
+                      key={`part-${idx}`}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingVertical: 8,
+                        paddingHorizontal: 10,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: '#fde68a',
+                        backgroundColor: '#fffbeb',
+                        gap: 8
+                      }}
+                    >
+                      {hasSplit ? (
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                            <Text style={{ flex: 1.2, fontSize: 12, fontWeight: '800', color: '#0f172a' }} numberOfLines={1}>
+                              {p.batter1Name} <Text style={{ color: '#475569', fontWeight: '600' }}>{p.batter1Runs ?? 0}({p.batter1Balls ?? 0})</Text>
+                            </Text>
+                            <Text style={{ fontSize: 12.5, fontWeight: '900', color: '#b45309', minWidth: 56, textAlign: 'center' }}>
+                              {pRuns}({pBalls})
+                            </Text>
+                            <Text style={{ flex: 1.2, fontSize: 12, fontWeight: '800', color: '#0f172a', textAlign: 'right' }} numberOfLines={1}>
+                              <Text style={{ color: '#475569', fontWeight: '600' }}>{p.batter2Runs ?? 0}({p.batter2Balls ?? 0})</Text> {p.batter2Name}
+                            </Text>
+                          </View>
+                          {(() => {
+                            const r1 = Number(p.batter1Runs || 0);
+                            const r2 = Number(p.batter2Runs || 0);
+                            const sumR = r1 + r2;
+                            const pct1 = sumR > 0 ? Math.round((r1 / sumR) * 100) : 50;
+                            const pct2 = 100 - pct1;
+                            return (
+                              <View style={{ flexDirection: 'row', height: 6, borderRadius: 4, overflow: 'hidden', backgroundColor: '#e2e8f0' }}>
+                                <View style={{ flex: Math.max(5, pct1), backgroundColor: '#0f172a' }} />
+                                <View style={{ width: 2, backgroundColor: '#ffffff' }} />
+                                <View style={{ flex: Math.max(5, pct2), backgroundColor: '#d97706' }} />
+                              </View>
+                            );
+                          })()}
+                        </View>
+                      ) : (
+                        <>
+                          <Text style={{ flex: 1, fontSize: 12, fontWeight: '700', color: '#0284c7' }} numberOfLines={1}>
+                            {p.batters || 'Pair'}
+                          </Text>
+                          <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#b45309' }}>
+                            {pRuns}({pBalls})
+                          </Text>
+                        </>
+                      )}
                     </View>
                   );
                 })}
@@ -1380,6 +1635,475 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
               </View>
             </View>
           )}
+          </>
+          )}
+
+          {/* ─────────────────────────────────────────────────────────────
+              TAB 2: SQUADS (PLAYING XI - CFVD NAVY & GOLD DESIGN)
+              ───────────────────────────────────────────────────────────── */}
+          {activeSectionTab === 'SQUADS' && (() => {
+            const sqA: any[] = scorecardData?.squads?.teamA || [];
+            const sqB: any[] = scorecardData?.squads?.teamB || [];
+            const getInitials = (name: string) => {
+              const parts = String(name || 'P').trim().split(/\s+/);
+              return parts.length >= 2
+                ? `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
+                : String(name || 'P').slice(0, 2).toUpperCase();
+            };
+            const renderSquadCol = (teamName: string, players: any[], accentColor: string) => (
+              <View style={{ flex: 1, backgroundColor: '#ffffff', borderRadius: 12, borderWidth: 1.5, borderColor: '#fde68a', overflow: 'hidden' }}>
+                <View style={{ backgroundColor: '#0f172a', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: accentColor }}>
+                  <Text style={{ color: '#facc15', fontSize: 13.5, fontWeight: '900' }} numberOfLines={1}>
+                    {teamName}
+                  </Text>
+                  <Text style={{ color: '#cbd5e1', fontSize: 11, fontWeight: '600', marginTop: 2 }}>
+                    Playing XI ({players.length} Players)
+                  </Text>
+                </View>
+                {players.length === 0 ? (
+                  <Text style={{ padding: 16, fontSize: 12.5, color: '#64748b', textAlign: 'center' }}>
+                    Playing XI squad not published yet.
+                  </Text>
+                ) : (
+                  players.map((pl: any, idx: number) => (
+                    <View
+                      key={pl.id || idx}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingHorizontal: 12,
+                        paddingVertical: 9,
+                        borderBottomWidth: idx < players.length - 1 ? 1 : 0,
+                        borderBottomColor: '#f1f5f9',
+                        backgroundColor: idx % 2 === 1 ? '#f8fafc' : '#ffffff',
+                        gap: 10
+                      }}
+                    >
+                      <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: accentColor, alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ color: '#ffffff', fontSize: 11.5, fontWeight: '900' }}>
+                          {getInitials(pl.name)}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }} numberOfLines={1}>
+                          {pl.name}{pl.isCaptain ? ' (C)' : ''}{pl.isKeeper ? ' (WK)' : ''}
+                        </Text>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748b', marginTop: 1 }}>
+                          {String(pl.role || 'PLAYER').replace(/_/g, ' ')}
+                        </Text>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </View>
+            );
+
+            return (
+              <View style={{ gap: 12 }}>
+                <View style={{ backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1.5, borderColor: '#f59e0b' }}>
+                  <Text style={{ color: '#facc15', fontSize: 14, fontWeight: '900', flex: 1 }} numberOfLines={1}>
+                    🛡️ {match.teamA || 'Team A'}
+                  </Text>
+                  <Text style={{ color: '#94a3b8', fontSize: 11, fontWeight: '800', marginHorizontal: 8 }}>VS</Text>
+                  <Text style={{ color: '#facc15', fontSize: 14, fontWeight: '900', flex: 1, textAlign: 'right' }} numberOfLines={1}>
+                    {match.teamB || 'Team B'} 🛡️
+                  </Text>
+                </View>
+                <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 12 }}>
+                  {renderSquadCol(match.teamA || 'Team A', sqA, '#0f172a')}
+                  {renderSquadCol(match.teamB || 'Team B', sqB, '#b45309')}
+                </View>
+              </View>
+            );
+          })()}
+
+          {/* ─────────────────────────────────────────────────────────────
+              TAB 3: BALL MAP & OVERS GRID WITH FILTERS
+              ───────────────────────────────────────────────────────────── */}
+          {activeSectionTab === 'BALL_MAP' && (() => {
+            const allDeliveries: any[] = currentInnings?.deliveries || [];
+            const bowlersList: any[] = currentInnings?.bowlers || [];
+            const battersList: any[] = currentInnings?.batters || [];
+
+            const filteredDeliveries = allDeliveries.filter((d: any) => {
+              if (ballMapBowlerId !== 'ALL' && d.bowlerId !== ballMapBowlerId) return false;
+              if (ballMapBatterId !== 'ALL' && d.strikerId !== ballMapBatterId) return false;
+              return true;
+            });
+
+            // Group by overNumber
+            const oversMap: Record<number, any[]> = {};
+            filteredDeliveries.forEach((d: any) => {
+              const ov = Number(d.overNumber ?? 0);
+              if (!oversMap[ov]) oversMap[ov] = [];
+              oversMap[ov].push(d);
+            });
+            const overNumbers = Object.keys(oversMap).map(Number).sort((a, b) => a - b);
+
+            return (
+              <View style={{ gap: 12 }}>
+                {/* Filters Card (Dropdowns for Bowlers & Batters) */}
+                <View style={{ backgroundColor: '#ffffff', borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: '#fde68a', gap: 10, zIndex: 40 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '900', color: '#0f172a' }}>
+                    🗺️ Ball-by-Ball Over Map &amp; Filters
+                  </Text>
+
+                  <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 10 }}>
+                    {/* Bowler Dropdown */}
+                    <View style={{ flex: 1, zIndex: bowlerDropdownOpen ? 50 : 20 }}>
+                      <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#64748b', marginBottom: 5 }}>FILTER BY BOWLER:</Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setBowlerDropdownOpen((prev) => !prev);
+                          setBatterDropdownOpen(false);
+                        }}
+                        activeOpacity={0.8}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          paddingHorizontal: 12,
+                          paddingVertical: 9,
+                          borderRadius: 8,
+                          backgroundColor: ballMapBowlerId === 'ALL' ? '#f8fafc' : '#0f172a',
+                          borderWidth: 1.2,
+                          borderColor: ballMapBowlerId === 'ALL' ? '#cbd5e1' : '#f59e0b'
+                        }}
+                      >
+                        <Text
+                          style={{ fontSize: 12.5, fontWeight: '700', color: ballMapBowlerId === 'ALL' ? '#0f172a' : '#facc15', flex: 1 }}
+                          numberOfLines={1}
+                        >
+                          {ballMapBowlerId === 'ALL'
+                            ? 'All Bowlers'
+                            : (bowlersList.find((bw: any) => (bw.playerId || bw.id) === ballMapBowlerId)?.name || 'Selected Bowler')}
+                        </Text>
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: ballMapBowlerId === 'ALL' ? '#64748b' : '#facc15', marginLeft: 6 }}>
+                          {bowlerDropdownOpen ? '▲' : '▼'}
+                        </Text>
+                      </TouchableOpacity>
+
+                      {bowlerDropdownOpen && (
+                        <View style={{ marginTop: 4, backgroundColor: '#ffffff', borderRadius: 8, borderWidth: 1, borderColor: '#cbd5e1', maxHeight: 210, overflow: 'hidden' }}>
+                          <ScrollView nestedScrollEnabled style={{ maxHeight: 210 }}>
+                            <TouchableOpacity
+                              onPress={() => {
+                                setBallMapBowlerId('ALL');
+                                setBowlerDropdownOpen(false);
+                              }}
+                              style={{ paddingHorizontal: 12, paddingVertical: 9, backgroundColor: ballMapBowlerId === 'ALL' ? '#0f172a' : '#ffffff', borderBottomWidth: 1, borderBottomColor: '#f1f5f9' }}
+                            >
+                              <Text style={{ fontSize: 12.5, fontWeight: '700', color: ballMapBowlerId === 'ALL' ? '#facc15' : '#334155' }}>
+                                All Bowlers
+                              </Text>
+                            </TouchableOpacity>
+                            {bowlersList.map((bw: any, i: number) => {
+                              const pid = bw.playerId || bw.id;
+                              const active = ballMapBowlerId === pid;
+                              return (
+                                <TouchableOpacity
+                                  key={pid || i}
+                                  onPress={() => {
+                                    setBallMapBowlerId(pid);
+                                    setBowlerDropdownOpen(false);
+                                  }}
+                                  style={{ paddingHorizontal: 12, paddingVertical: 9, backgroundColor: active ? '#0f172a' : '#ffffff', borderBottomWidth: i < bowlersList.length - 1 ? 1 : 0, borderBottomColor: '#f1f5f9' }}
+                                >
+                                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: active ? '#facc15' : '#334155' }} numberOfLines={1}>
+                                    {bw.name}
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </ScrollView>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Batter Dropdown */}
+                    <View style={{ flex: 1, zIndex: batterDropdownOpen ? 50 : 10 }}>
+                      <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#64748b', marginBottom: 5 }}>FILTER BY BATTER:</Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setBatterDropdownOpen((prev) => !prev);
+                          setBowlerDropdownOpen(false);
+                        }}
+                        activeOpacity={0.8}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          paddingHorizontal: 12,
+                          paddingVertical: 9,
+                          borderRadius: 8,
+                          backgroundColor: ballMapBatterId === 'ALL' ? '#f8fafc' : '#0f172a',
+                          borderWidth: 1.2,
+                          borderColor: ballMapBatterId === 'ALL' ? '#cbd5e1' : '#f59e0b'
+                        }}
+                      >
+                        <Text
+                          style={{ fontSize: 12.5, fontWeight: '700', color: ballMapBatterId === 'ALL' ? '#0f172a' : '#facc15', flex: 1 }}
+                          numberOfLines={1}
+                        >
+                          {ballMapBatterId === 'ALL'
+                            ? 'All Batters'
+                            : (battersList.find((bt: any) => (bt.playerId || bt.id) === ballMapBatterId)?.name || 'Selected Batter')}
+                        </Text>
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: ballMapBatterId === 'ALL' ? '#64748b' : '#facc15', marginLeft: 6 }}>
+                          {batterDropdownOpen ? '▲' : '▼'}
+                        </Text>
+                      </TouchableOpacity>
+
+                      {batterDropdownOpen && (
+                        <View style={{ marginTop: 4, backgroundColor: '#ffffff', borderRadius: 8, borderWidth: 1, borderColor: '#cbd5e1', maxHeight: 210, overflow: 'hidden' }}>
+                          <ScrollView nestedScrollEnabled style={{ maxHeight: 210 }}>
+                            <TouchableOpacity
+                              onPress={() => {
+                                setBallMapBatterId('ALL');
+                                setBatterDropdownOpen(false);
+                              }}
+                              style={{ paddingHorizontal: 12, paddingVertical: 9, backgroundColor: ballMapBatterId === 'ALL' ? '#0f172a' : '#ffffff', borderBottomWidth: 1, borderBottomColor: '#f1f5f9' }}
+                            >
+                              <Text style={{ fontSize: 12.5, fontWeight: '700', color: ballMapBatterId === 'ALL' ? '#facc15' : '#334155' }}>
+                                All Batters
+                              </Text>
+                            </TouchableOpacity>
+                            {battersList.map((bt: any, i: number) => {
+                              const pid = bt.playerId || bt.id;
+                              const active = ballMapBatterId === pid;
+                              return (
+                                <TouchableOpacity
+                                  key={pid || i}
+                                  onPress={() => {
+                                    setBallMapBatterId(pid);
+                                    setBatterDropdownOpen(false);
+                                  }}
+                                  style={{ paddingHorizontal: 12, paddingVertical: 9, backgroundColor: active ? '#0f172a' : '#ffffff', borderBottomWidth: i < battersList.length - 1 ? 1 : 0, borderBottomColor: '#f1f5f9' }}
+                                >
+                                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: active ? '#facc15' : '#334155' }} numberOfLines={1}>
+                                    {bt.name}
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </ScrollView>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                </View>
+
+                {/* Over-by-Over Ball Map Rows */}
+                <View style={{ backgroundColor: '#ffffff', borderRadius: 12, padding: 12, borderWidth: 1.5, borderColor: '#fde68a', gap: 8 }}>
+                  {overNumbers.length === 0 ? (
+                    <Text style={{ padding: 18, textAlign: 'center', fontSize: 13, color: '#64748b' }}>
+                      No deliveries match the selected filter.
+                    </Text>
+                  ) : (
+                    overNumbers.map((ovNum) => {
+                      const ballsInOv = oversMap[ovNum];
+                      const ovRuns = ballsInOv.reduce((sum: number, d: any) => sum + Number(d.totalRuns || 0), 0);
+                      return (
+                        <View
+                          key={`ov-map-${ovNum}`}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            paddingVertical: 8,
+                            paddingHorizontal: 8,
+                            borderRadius: 8,
+                            backgroundColor: ovNum % 2 === 0 ? '#f8fafc' : '#ffffff',
+                            borderWidth: 1,
+                            borderColor: '#e2e8f0',
+                            gap: 8
+                          }}
+                        >
+                          <View style={{ width: 46, alignItems: 'center', borderRightWidth: 1, borderRightColor: '#cbd5e1', paddingRight: 6 }}>
+                            <Text style={{ fontSize: 11, fontWeight: '900', color: '#0f172a' }}>Ov {ovNum + 1}</Text>
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#b45309' }}>{ovRuns}r</Text>
+                          </View>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                            {ballsInOv.map((d: any, bIdx: number) => {
+                              const isW = Boolean(d.wicket);
+                              const ex = String(d.extraType || '').toUpperCase();
+                              const isEx = Boolean(ex && ex !== 'NONE');
+                              const rBat = Number(d.runsBatter || 0);
+                              const tot = Number(d.totalRuns || 0);
+                              const label = isW
+                                ? 'W'
+                                : isEx
+                                  ? `${ex.startsWith('W') ? 'Wd' : ex.startsWith('N') ? 'Nb' : ex.startsWith('L') ? 'Lb' : 'B'}${tot > 1 ? tot : ''}`
+                                  : rBat === 0 ? '•' : String(rBat);
+                              const bg = isW ? '#dc2626' : rBat === 6 ? '#1d4ed8' : rBat === 4 ? '#059669' : isEx ? '#f59e0b' : rBat > 0 ? '#e0f2fe' : '#e2e8f0';
+                              const fg = (isW || rBat === 6 || rBat === 4 || isEx) ? '#ffffff' : '#0f172a';
+                              return (
+                                <View
+                                  key={d.id || bIdx}
+                                  style={{
+                                    minWidth: 30,
+                                    height: 30,
+                                    paddingHorizontal: 6,
+                                    borderRadius: 6,
+                                    backgroundColor: bg,
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 11.5, fontWeight: '900', color: fg }}>{label}</Text>
+                                </View>
+                              );
+                            })}
+                          </ScrollView>
+                        </View>
+                      );
+                    })
+                  )}
+                </View>
+              </View>
+            );
+          })()}
+
+          {/* ─────────────────────────────────────────────────────────────
+              TAB 4: HIGHLIGHTS (3D MILESTONES & FIELDING HEROICS)
+              ───────────────────────────────────────────────────────────── */}
+          {activeSectionTab === 'HIGHLIGHTS' && (() => {
+            const batters: any[] = currentInnings?.batters || [];
+            const bowlers: any[] = currentInnings?.bowlers || [];
+            const milestoneBatters = batters.filter((b: any) => Number(b.runs || 0) >= 50);
+            const topBatter = [...batters].sort((a: any, b: any) => Number(b.runs || 0) - Number(a.runs || 0))[0];
+            const milestoneBowlers = bowlers.filter((bw: any) => Number(bw.wickets || 0) >= 3);
+            const topBowler = [...bowlers].sort((a: any, b: any) => Number(b.wickets || 0) - Number(a.wickets || 0))[0];
+            const topFielders = [...(fieldingStats || [])].filter((f: any) => (f.catches > 0 || f.runOuts > 0 || f.boundarySaves > 0 || f.cleanCollects > 0)).slice(0, 6);
+
+            return (
+              <View style={{ gap: 14 }}>
+                {/* Automatic Match Highlights & Milestones (Centuries, Fifers, Player of the Match & Record Performances) */}
+                <View style={{ backgroundColor: '#ffffff', borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: '#f59e0b' }}>
+                  <Text style={{ fontSize: 15, fontWeight: '900', color: '#0f172a', marginBottom: 4 }}>
+                    ⚡ AUTOMATIC MATCH HIGHLIGHTS &amp; MILESTONES
+                  </Text>
+                  <Text style={{ fontSize: 11.5, color: '#64748b', marginBottom: 12 }}>
+                    Instant verified highlights: Centuries, Fifers, Player of the Match &amp; Record Performances
+                  </Text>
+                  {computedHighlights && computedHighlights.length > 0 ? (
+                    <MatchHighlightsBanner highlights={computedHighlights} />
+                  ) : (
+                    <Text style={{ fontSize: 12.5, color: '#64748b', textAlign: 'center', paddingVertical: 12 }}>
+                      Verified match highlights (Centuries, Fifers, Player of the Match &amp; Record Performances) will appear here as milestones are reached.
+                    </Text>
+                  )}
+                </View>
+
+                {/* 3D Batting Milestones */}
+                <View style={{ backgroundColor: '#0f172a', borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: '#f59e0b' }}>
+                  <Text style={{ fontSize: 15, fontWeight: '900', color: '#facc15', marginBottom: 4 }}>
+                    🏆 3D Batting &amp; Bowling Milestones
+                  </Text>
+                  <Text style={{ fontSize: 11.5, color: '#cbd5e1', marginBottom: 12 }}>
+                    Interactive 3D showcase of centuries, half-centuries, and match-turning spells
+                  </Text>
+
+                  {milestoneBatters.length > 0 ? (
+                    <View style={{ gap: 12 }}>
+                      {milestoneBatters.map((b: any, idx: number) => {
+                        const is100 = Number(b.runs || 0) >= 100;
+                        return (
+                          <CricketFigurine3D
+                            key={`3d-bat-${b.id || idx}`}
+                            imageSource={is100 ? IMG_CENTURY_BATTER : IMG_MILESTONE_BATTER}
+                            playerName={b.name}
+                            teamName={currentInnings?.battingTeam || 'Batting Team'}
+                            badgeText={is100 ? '👑 100 RUNS CENTURY' : '⭐ 50 RUNS MILESTONE'}
+                            milestoneTitle={is100 ? 'MAGNIFICENT CENTURY!' : 'HALF-CENTURY!'}
+                            scoreText={`${b.runs}${b.isOut ? '' : '*'}`}
+                            ballsText={`${b.balls || 0} Balls`}
+                            strikeRateText={String(b.strikeRate || '0.0')}
+                            fours={b.fours || 0}
+                            sixes={b.sixes || 0}
+                            height={280}
+                          />
+                        );
+                      })}
+                    </View>
+                  ) : topBatter ? (
+                    <CricketFigurine3D
+                      imageSource={IMG_MILESTONE_BATTER}
+                      playerName={topBatter.name}
+                      teamName={currentInnings?.battingTeam || 'Batting Team'}
+                      badgeText="🏏 TOP SCORER OF INNINGS"
+                      milestoneTitle="INNINGS LEADER"
+                      scoreText={`${topBatter.runs || 0}${topBatter.isOut ? '' : '*'}`}
+                      ballsText={`${topBatter.balls || 0} Balls`}
+                      strikeRateText={String(topBatter.strikeRate || '0.0')}
+                      fours={topBatter.fours || 0}
+                      sixes={topBatter.sixes || 0}
+                      height={260}
+                    />
+                  ) : null}
+
+                  {/* Bowling Milestones */}
+                  {(milestoneBowlers.length > 0 || topBowler) && (
+                    <View style={{ marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                      {(milestoneBowlers.length > 0 ? milestoneBowlers : [topBowler]).filter(Boolean).map((bw: any, idx: number) => (
+                        <View
+                          key={`bw-hl-${bw.id || idx}`}
+                          style={{ flex: 1, minWidth: 200, backgroundColor: '#1e293b', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#f59e0b' }}
+                        >
+                          <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#facc15' }}>
+                            {Number(bw.wickets || 0) >= 5 ? '🔥 5-WICKET HAUL' : Number(bw.wickets || 0) >= 3 ? '🎯 3-WICKET HAUL' : '🎳 LEAD BOWLER'}
+                          </Text>
+                          <Text style={{ fontSize: 15, fontWeight: '900', color: '#ffffff', marginTop: 2 }}>{bw.name}</Text>
+                          <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#38bdf8', marginTop: 4 }}>
+                            {bw.wickets || 0}/{bw.runs || 0} ({bw.overs || '0.0'} Ov • Econ: {typeof bw.economy === 'number' ? bw.economy.toFixed(2) : (bw.economy ?? '0.00')})
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+
+                {/* Fielding Highlights */}
+                <View style={{ backgroundColor: '#ffffff', borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: '#fde68a' }}>
+                  <Text style={{ fontSize: 15, fontWeight: '900', color: '#0f172a', marginBottom: 4 }}>
+                    🛡️ Best Fielding &amp; Match-Saving Highlights
+                  </Text>
+                  <Text style={{ fontSize: 11.5, color: '#64748b', marginBottom: 12 }}>
+                    Catches, run-outs, stumpings, boundary saves, and clean collects
+                  </Text>
+                  {topFielders.length === 0 ? (
+                    <Text style={{ fontSize: 12.5, color: '#64748b', textAlign: 'center', paddingVertical: 12 }}>
+                      No fielding highlights recorded in this innings yet.
+                    </Text>
+                  ) : (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                      {topFielders.map((f: any, idx: number) => (
+                        <View
+                          key={`fld-hl-${f.name}-${idx}`}
+                          style={{
+                            flex: 1,
+                            minWidth: isDesktop ? 220 : '100%',
+                            backgroundColor: '#fffbeb',
+                            borderRadius: 10,
+                            padding: 12,
+                            borderWidth: 1.5,
+                            borderColor: '#f59e0b'
+                          }}
+                        >
+                          <Text style={{ fontSize: 13.5, fontWeight: '900', color: '#0f172a' }}>{f.name}</Text>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#b45309', marginTop: 2 }}>
+                            {f.isKeeper ? '🧤 Wicketkeeper' : '⭐ Key Fielder'} • Rating: {f.rating}
+                          </Text>
+                          <Text style={{ fontSize: 11.5, color: '#334155', fontWeight: '600', marginTop: 6 }}>
+                            Catches: {f.catches} • Run Outs: {f.runOuts} • Saves: {f.boundarySaves} • Collects: {f.cleanCollects}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              </View>
+            );
+          })()}
 
           {/* ACTION BUTTONS */}
           <View style={{ gap: 10, marginTop: 16 }}>
