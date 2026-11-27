@@ -35,6 +35,7 @@ import {
   Linking
 } from 'react-native';
 import Svg, { Path, Circle, G, Text as SvgText } from 'react-native-svg';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ScorerApi, getCurrentUser, getAuthToken, setAuthToken, setCurrentUser } from '../../services/api';
 import { showSuccess, showError, showWarning, showConfirm, showInfo, swal } from '../../utils/sweetalert';
 import TournamentManagement from '../../admin/components/TournamentManagement';
@@ -43,7 +44,9 @@ import CricketLawsManagement from '../../admin/components/CricketLawsManagement'
 import CalculationSettingsManagement from '../../admin/components/CalculationSettingsManagement';
 import SettingsPage from '../../admin/pages/SettingsPage';
 import UsersPage from '../../admin/pages/UsersPage';
-import DualAdminSecurityModal from '../../components/admin/DualAdminSecurityModal';
+import AdminsPage from '../../admin/pages/AdminsPage';
+import { adminApi, getStoredAdminUser } from '../../admin/services/adminApi';
+// import DualAdminSecurityModal from '../../components/admin/DualAdminSecurityModal';
 import { HomePopupManagerModal } from '../../components/admin/HomePopupManagerModal';
 import {
   getKolkataNow,
@@ -67,20 +70,21 @@ const IMG_STADIUM = require('../../../assets/stadium.jpg');
 export interface AdminDashboardProps {
   onExit?: () => void;
   initialParams?: any;
+  isSuperAdminMode?: boolean;
 }
 
-type AdminTab = 'overview' | 'users' | 'teams' | 'scorers' | 'umpires' | 'content' | 'schedules' | 'tournaments' | 'records' | 'laws' | 'calculations' | 'master_settings' | 'settings';
+type AdminTab = 'overview' | 'users' | 'admins' | 'teams' | 'scorers' | 'umpires' | 'content' | 'schedules' | 'tournaments' | 'laws' | 'calculations' | 'master_settings' | 'settings';
 type FilterStatus = 'all' | 'Pending' | 'Approved' | 'Rejected';
 type MatchFilterStatus = 'all' | 'SCHEDULED' | 'LIVE' | 'COMPLETED' | 'CANCELLED' | 'POSTPONED' | 'REQUESTS';
 
 const SETTINGS_SUBCATEGORIES = [
-  { key: 'taluk_jurisdiction', label: 'Taluk Jurisdiction', icon: '📍' },
-  { key: 'playing_role', label: 'Playing Role', icon: '🏏' },
-  { key: 'batting_style', label: 'Batting Style', icon: '⚡' },
-  { key: 'age_category', label: 'Age Category', icon: '🏆' },
-  { key: 'certification_level', label: 'Certification Level', icon: '📝' },
-  { key: 'umpire_certification', label: 'Umpire Certification / Qualification', icon: '⚖️' },
-  { key: 'state', label: 'State', icon: '🌐' }
+  { key: 'taluk_jurisdiction', label: 'Taluk Jurisdiction', icon: 'location-outline', family: 'Ionicons' },
+  { key: 'playing_role', label: 'Playing Role', icon: 'cricket', family: 'MaterialCommunityIcons' },
+  { key: 'batting_style', label: 'Batting Style', icon: 'flash-outline', family: 'Ionicons' },
+  { key: 'age_category', label: 'Age Category', icon: 'trophy-outline', family: 'Ionicons' },
+  { key: 'certification_level', label: 'Certification Level', icon: 'document-text-outline', family: 'Ionicons' },
+  { key: 'umpire_certification', label: 'Umpire Certification / Qualification', icon: 'scale-balance', family: 'MaterialCommunityIcons' },
+  { key: 'state', label: 'State', icon: 'globe-outline', family: 'Ionicons' }
 ];
 
 // Fallback initial scorers data (matching exact counts: 2 Approved, 2 Pending, 1 Rejected = 5 Total)
@@ -209,14 +213,16 @@ const INITIAL_TEAMS_DATA = [
   }
 ];
 
-export default function AdminDashboardScreen({ onExit, initialParams }: AdminDashboardProps) {
+export default function AdminDashboardScreen({ onExit, initialParams, isSuperAdminMode = false }: AdminDashboardProps) {
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
   const insetsTop = Platform.OS === 'android' ? 40 : Platform.OS === 'ios' ? 50 : 0;
 
   const storedUser = getCurrentUser();
-  const currentUser = storedUser || initialParams?.user;
-  const isAdmin = (currentUser?.role || '').toUpperCase() === 'ADMIN';
+  const storedAdmin = getStoredAdminUser();
+  const currentUser = storedUser || storedAdmin || initialParams?.user;
+  const isSuperAdmin = Boolean(isSuperAdminMode || currentUser?.is_super_admin || storedAdmin?.is_super_admin);
+  const isAdmin = (currentUser?.role || '').toUpperCase() === 'ADMIN' || isSuperAdmin;
 
   useEffect(() => {
     const user = getCurrentUser() || initialParams?.user;
@@ -258,16 +264,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       try {
         const q = new URL(window.location.href).searchParams.get('tab') as AdminTab;
-        if (q && ['overview', 'users', 'teams', 'scorers', 'umpires', 'content', 'schedules', 'tournaments', 'records', 'laws', 'calculations', 'master_settings', 'settings'].includes(q)) {
+        if (q && ['overview', 'users', 'admins', 'teams', 'scorers', 'umpires', 'content', 'schedules', 'tournaments', 'laws', 'calculations', 'master_settings', 'settings'].includes(q)) {
           return q;
-        }
-        const saved = localStorage.getItem('cfvd_admin_active_tab') as AdminTab;
-        if (saved && ['overview', 'teams', 'scorers', 'umpires', 'content', 'schedules', 'tournaments', 'records', 'laws', 'calculations'].includes(saved)) {
-          return saved;
         }
       } catch (e) { }
     }
-    return 'scorers';
+    return 'overview';
   });
 
   useEffect(() => {
@@ -301,9 +303,93 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
   const adminEmail = initialParams?.adminEmail || currentUser?.email || 'admin@yourdomain.com';
 
-  // Dual-Admin Security Modal State (Promote / Add Admin, Remove / Demote Admin, Audit Log)
-  const [securityModalVisible, setSecurityModalVisible] = useState<boolean>(false);
-  const [securityModalTab, setSecurityModalTab] = useState<'promote' | 'remove' | 'audit'>('promote');
+  // Dual-Admin Security Modal State (Commented out - not needed)
+  // const [securityModalVisible, setSecurityModalVisible] = useState<boolean>(false);
+  // const [securityModalTab, setSecurityModalTab] = useState<'promote' | 'remove' | 'audit'>('promote');
+
+  // Edit Team Registration & Password Modal State
+  const [editingTeamModal, setEditingTeamModal] = useState<any | null>(null);
+  const [editTeamName, setEditTeamName] = useState<string>('');
+  const [editCoachName, setEditCoachName] = useState<string>('');
+  const [editCoachEmail, setEditCoachEmail] = useState<string>('');
+  const [editCoachPhone, setEditCoachPhone] = useState<string>('');
+  const [editTeamTaluk, setEditTeamTaluk] = useState<string>('');
+  const [editTeamPassword, setEditTeamPassword] = useState<string>('');
+  const [showEditTeamPassword, setShowEditTeamPassword] = useState<boolean>(false);
+  const [isSavingTeamEdit, setIsSavingTeamEdit] = useState<boolean>(false);
+  const [editTeamError, setEditTeamError] = useState<string | null>(null);
+
+  const handleOpenEditTeam = (team: any) => {
+    setEditingTeamModal(team);
+    setEditTeamName(team.teamName || '');
+    setEditCoachName(team.coach?.name || '');
+    setEditCoachEmail(team.coach?.email || '');
+    setEditCoachPhone(team.coach?.phone || team.coach?.mobile || team.coachPhone || team.phone || '');
+    setEditTeamTaluk(team.taluk || 'Virudhunagar');
+    setEditTeamPassword('');
+    setShowEditTeamPassword(false);
+    setEditTeamError(null);
+  };
+
+  const handleSaveTeamEdit = async () => {
+    if (!editingTeamModal) return;
+    if (!editTeamName.trim()) {
+      setEditTeamError('Team name is required.');
+      return;
+    }
+    if (!editCoachName.trim()) {
+      setEditTeamError('Coach name is required.');
+      return;
+    }
+    if (!editCoachEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editCoachEmail.trim())) {
+      setEditTeamError('Valid coach email is required.');
+      return;
+    }
+    if (editTeamPassword.trim().length > 0 && editTeamPassword.trim().length < 6) {
+      setEditTeamError('New password must be at least 6 characters.');
+      return;
+    }
+
+    setIsSavingTeamEdit(true);
+    setEditTeamError(null);
+    try {
+      const res = await adminApi.updateTeamRegistration(editingTeamModal.teamId, {
+        teamName: editTeamName.trim(),
+        coachName: editCoachName.trim(),
+        coachEmail: editCoachEmail.trim().toLowerCase(),
+        coachPhone: editCoachPhone.trim(),
+        taluk: editTeamTaluk.trim() || 'Virudhunagar',
+        ...(editTeamPassword.trim() ? { password: editTeamPassword.trim() } : {})
+      });
+      if (res?.success) {
+        setTeams(prev =>
+          prev.map(tm =>
+            tm.teamId === editingTeamModal.teamId
+              ? {
+                  ...tm,
+                  teamName: editTeamName.trim(),
+                  taluk: editTeamTaluk.trim() || tm.taluk,
+                  coach: {
+                    ...(tm.coach || {}),
+                    name: editCoachName.trim(),
+                    email: editCoachEmail.trim().toLowerCase(),
+                    phone: editCoachPhone.trim()
+                  }
+                }
+              : tm
+          )
+        );
+        showNotification(res.message || `✓ Team "${editTeamName.trim()}" updated successfully.`);
+        setEditingTeamModal(null);
+      } else {
+        setEditTeamError(res?.message || 'Failed to update team.');
+      }
+    } catch (err: any) {
+      setEditTeamError(err?.message || 'Failed to update team.');
+    } finally {
+      setIsSavingTeamEdit(false);
+    }
+  };
 
   // Seed initial registrations for district management
   const DEFAULT_CFVD_SCORERS = [
@@ -2378,15 +2464,23 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         >
           {/* Profile Card */}
           <View style={[styles.sidebarProfileCard, isCollapsed && styles.sidebarProfileCardCollapsed]}>
-            <View style={styles.sidebarAvatar}>
-              <Text style={styles.sidebarAvatarText}>AD</Text>
+            <View style={[styles.sidebarAvatar, isSuperAdmin && { backgroundColor: '#F59E0B' }]}>
+              <Text style={[styles.sidebarAvatarText, isSuperAdmin && { color: '#020612' }]}>
+                {isSuperAdmin ? 'SA' : 'AD'}
+              </Text>
             </View>
             {!isCollapsed && (
               <View style={styles.sidebarProfileInfo}>
-                <Text style={styles.sidebarProfileName} numberOfLines={1}>CFVD Admin</Text>
-                <Text style={styles.sidebarProfileRole} numberOfLines={1}>ADMIN • EXECUTIVE</Text>
+                <Text style={styles.sidebarProfileName} numberOfLines={1}>
+                  {isSuperAdmin ? 'CFVD Super Admin' : 'CFVD Admin'}
+                </Text>
+                <Text style={styles.sidebarProfileRole} numberOfLines={1}>
+                  {isSuperAdmin ? 'SUPER ADMIN • APEX' : 'ADMIN • EXECUTIVE'}
+                </Text>
                 <View style={styles.sidebarOfficialBadge}>
-                  <Text style={styles.sidebarOfficialBadgeText}>CFVD OFFICIAL</Text>
+                  <Text style={styles.sidebarOfficialBadgeText}>
+                    {isSuperAdmin ? 'SUPER ADMIN' : 'CFVD OFFICIAL'}
+                  </Text>
                 </View>
               </View>
             )}
@@ -2408,7 +2502,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             }}
             activeOpacity={0.8}
           >
-            <Text style={[styles.sidebarNavIcon, activeTab === 'overview' && styles.sidebarNavIconActive]}>⊞</Text>
+            <Ionicons name="grid-outline" size={18} color={activeTab === 'overview' ? '#ffffff' : '#475569'} />
             {!isCollapsed && (
               <Text style={[styles.sidebarNavLabel, activeTab === 'overview' && styles.sidebarNavLabelActive]}>
                 Overview
@@ -2416,7 +2510,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             )}
           </TouchableOpacity>
 
-          {/* Users & Dynamic Admins */}
+          {/* Users */}
           <TouchableOpacity
             style={[
               styles.sidebarNavItem,
@@ -2429,13 +2523,36 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             }}
             activeOpacity={0.8}
           >
-            <Text style={[styles.sidebarNavIcon, activeTab === 'users' && styles.sidebarNavIconActive]}>🛡️</Text>
+            <Ionicons name="person-outline" size={18} color={activeTab === 'users' ? '#ffffff' : '#475569'} />
             {!isCollapsed && (
               <Text style={[styles.sidebarNavLabel, activeTab === 'users' && styles.sidebarNavLabelActive]}>
-                Users & Admins
+                Players
               </Text>
             )}
           </TouchableOpacity>
+
+          {/* Admins (Super Admin Only) */}
+          {isSuperAdmin && (
+            <TouchableOpacity
+              style={[
+                styles.sidebarNavItem,
+                activeTab === 'admins' && styles.sidebarNavItemUsersActive,
+                isCollapsed && styles.sidebarNavItemCollapsed
+              ]}
+              onPress={() => {
+                setActiveTab('admins');
+                if (isMobileDrawer) setMobileSidebarOpen(false);
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="shield-checkmark-outline" size={18} color={activeTab === 'admins' ? '#ffffff' : '#475569'} />
+              {!isCollapsed && (
+                <Text style={[styles.sidebarNavLabel, activeTab === 'admins' && styles.sidebarNavLabelActive]}>
+                  Admins
+                </Text>
+              )}
+            </TouchableOpacity>
+          )}
 
           {/* Team Registrations */}
           <TouchableOpacity
@@ -2450,7 +2567,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             }}
             activeOpacity={0.8}
           >
-            <Text style={[styles.sidebarNavIcon, activeTab === 'teams' && styles.sidebarNavIconActive]}>👥</Text>
+            <Ionicons name="people-outline" size={18} color={activeTab === 'teams' ? '#ffffff' : '#475569'} />
             {!isCollapsed && (
               <Text style={[styles.sidebarNavLabel, activeTab === 'teams' && styles.sidebarNavLabelActive]}>
                 Team Registrations
@@ -2476,7 +2593,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             }}
             activeOpacity={0.8}
           >
-            <Text style={[styles.sidebarNavIcon, activeTab === 'scorers' && styles.sidebarNavIconActive]}>📋</Text>
+            <Ionicons name="clipboard-outline" size={18} color={activeTab === 'scorers' ? '#ffffff' : '#475569'} />
             {!isCollapsed && (
               <Text style={[styles.sidebarNavLabel, activeTab === 'scorers' && styles.sidebarNavLabelActive]}>
                 Scorer Management
@@ -2502,7 +2619,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             }}
             activeOpacity={0.8}
           >
-            <Text style={[styles.sidebarNavIcon, activeTab === 'umpires' && styles.sidebarNavIconActive]}>⚖️</Text>
+            <MaterialCommunityIcons name="scale-balance" size={18} color={activeTab === 'umpires' ? '#ffffff' : '#475569'} />
             {!isCollapsed && (
               <Text style={[styles.sidebarNavLabel, activeTab === 'umpires' && styles.sidebarNavLabelActive]}>
                 Umpires
@@ -2554,15 +2671,16 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             }}
             activeOpacity={0.8}
           >
-            <Text style={[styles.sidebarNavIcon, activeTab === 'schedules' && styles.sidebarNavIconActive]}>⚡</Text>
+            <Ionicons name="flash-outline" size={18} color={activeTab === 'schedules' ? '#ffffff' : '#475569'} />
             {!isCollapsed && (
               <Text style={[styles.sidebarNavLabel, activeTab === 'schedules' && styles.sidebarNavLabelActive]}>
                 Match Schedules
               </Text>
             )}
             {!isCollapsed && pendingPostponementCount > 0 ? (
-              <View style={[styles.sidebarBadgeOrange, { backgroundColor: '#dc2626' }]}>
-                <Text style={styles.sidebarBadgeText}>⚠️ {pendingPostponementCount}</Text>
+              <View style={[styles.sidebarBadgeOrange, { backgroundColor: '#dc2626', flexDirection: 'row', alignItems: 'center', gap: 3 }]}>
+                <Ionicons name="warning" size={10} color="#ffffff" />
+                <Text style={styles.sidebarBadgeText}>{pendingPostponementCount}</Text>
               </View>
             ) : (!isCollapsed && scheduledMatchesCount > 0 && (
               <View style={styles.sidebarBadgeGold}>
@@ -2584,7 +2702,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             }}
             activeOpacity={0.8}
           >
-            <Text style={[styles.sidebarNavIcon, activeTab === 'records' && styles.sidebarNavIconActive]}>📊</Text>
+            <Ionicons name="trophy-outline" size={18} color={activeTab === 'tournaments' ? '#ffffff' : '#475569'} />
             {!isCollapsed && (
               <Text style={[styles.sidebarNavLabel, activeTab === 'records' && styles.sidebarNavLabelActive]}>
                 Tournament Records
@@ -2605,7 +2723,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             }}
             activeOpacity={0.8}
           >
-            <Text style={[styles.sidebarNavIcon, activeTab === 'content' && styles.sidebarNavIconActive]}>📰</Text>
+            <Ionicons name="newspaper-outline" size={18} color={activeTab === 'content' ? '#ffffff' : '#475569'} />
             {!isCollapsed && (
               <Text style={[styles.sidebarNavLabel, activeTab === 'content' && styles.sidebarNavLabelActive]}>
                 News & Content
@@ -2632,7 +2750,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             }}
             activeOpacity={0.8}
           >
-            <Text style={[styles.sidebarNavIcon, (activeTab === 'settings' || activeTab === 'master_settings') && styles.sidebarNavIconActive]}>⚙️</Text>
+            <Ionicons name="settings-outline" size={18} color={(activeTab === 'settings' || activeTab === 'master_settings') ? '#ffffff' : '#475569'} />
             {!isCollapsed && (
               <Text style={[styles.sidebarNavLabel, (activeTab === 'settings' || activeTab === 'master_settings') && styles.sidebarNavLabelActive]}>
                 Settings
@@ -2640,7 +2758,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             )}
           </TouchableOpacity>
 
-          {/* Dual-Admin Security Protocol (Promote / Remove / Dual Approval) */}
+          {/* Dual-Admin Security Protocol (Commented out - not needed)
           <TouchableOpacity
             style={[
               styles.sidebarNavItem,
@@ -2654,7 +2772,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             }}
             activeOpacity={0.8}
           >
-            <Text style={[styles.sidebarNavIcon, { color: '#b91c1c' }]}>🛡️</Text>
+            <Ionicons name="shield-checkmark" size={18} color="#b91c1c" />
             {!isCollapsed && (
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>
                 <Text style={[styles.sidebarNavLabel, { color: '#b91c1c', fontWeight: '800' }]}>
@@ -2666,6 +2784,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               </View>
             )}
           </TouchableOpacity>
+          */}
         </ScrollView>
 
         {/* Sidebar Footer (Pinned at bottom) */}
@@ -2675,18 +2794,19 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             onPress={() => setLogoutModalOpen(true)}
             activeOpacity={0.8}
           >
-            <Text style={styles.sidebarLogoutIcon}>↪</Text>
+            <Ionicons name="log-out-outline" size={16} color="#dc2626" />
             {!isCollapsed && <Text style={styles.sidebarLogoutText}>Logout</Text>}
           </TouchableOpacity>
 
           {!isMobileDrawer && (
             <TouchableOpacity
-              style={styles.sidebarCollapseBtn}
+              style={[styles.sidebarCollapseBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }]}
               onPress={() => setSidebarCollapsed(!sidebarCollapsed)}
               activeOpacity={0.7}
             >
+              <Ionicons name={sidebarCollapsed ? 'chevron-forward' : 'chevron-back'} size={13} color="#64748b" />
               <Text style={styles.sidebarCollapseText}>
-                {sidebarCollapsed ? '> Expand' : '< Collapse Sidebar'}
+                {sidebarCollapsed ? 'Expand' : 'Collapse Sidebar'}
               </Text>
             </TouchableOpacity>
           )}
@@ -2698,7 +2818,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   if (!isAdmin) {
     return (
       <View style={{ flex: 1, backgroundColor: '#0B111E', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-        <Text style={{ fontSize: 22, fontWeight: '800', color: '#EF4444', marginBottom: 12 }}>🔒 Access Restricted</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <Ionicons name="lock-closed" size={22} color="#EF4444" />
+          <Text style={{ fontSize: 22, fontWeight: '800', color: '#EF4444' }}>Access Restricted</Text>
+        </View>
         <Text style={{ fontSize: 14, color: '#94A3B8', textAlign: 'center', marginBottom: 24, maxWidth: 400 }}>
           This administrative management console is strictly restricted to authorized Association Administrators.
         </Text>
@@ -2716,7 +2839,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
   return (
     <View style={styles.rootContainer}>
       {/* ─────────────────────────────────────────────────────────────
-          1. DEDICATED ADMIN TOP BAR WITH HAMBURGER (THREE DASHES ☰)
+          1. DEDICATED ADMIN TOP BAR WITH HAMBURGER
           ───────────────────────────────────────────────────────────── */}
       <View style={[styles.adminMinimalTopBar, { paddingTop: styles.adminMinimalTopBar.paddingVertical + insetsTop }]}>
         <View style={styles.adminMinimalBrandCol}>
@@ -2734,45 +2857,55 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             activeOpacity={0.7}
             accessibilityLabel="Toggle Admin Sidebar Menu"
           >
-            <Text style={styles.hamburgerIcon}>☰</Text>
+            <Ionicons name="menu" size={22} color="#fbbf24" />
           </TouchableOpacity>
           <Image source={IMG_LOGO} style={styles.adminMinimalLogo} resizeMode="contain" />
           <View style={{ marginLeft: 10, flex: 1, minWidth: 0 }}>
             <Text style={[styles.adminMinimalTitle, !isDesktop && { fontSize: 12 }]} numberOfLines={1} ellipsizeMode="tail">CRICKET FEDERATION OF VIRUDHUNAGAR</Text>
-            <Text style={[styles.adminMinimalSub, !isDesktop && { fontSize: 9.5 }]} numberOfLines={1} ellipsizeMode="tail">Official Admin Console</Text>
+            <Text style={[styles.adminMinimalSub, !isDesktop && { fontSize: 9.5 }]} numberOfLines={1} ellipsizeMode="tail">
+              {isSuperAdmin ? 'Official Super Admin Console' : 'Official Admin Console'}
+            </Text>
           </View>
         </View>
         {isDesktop ? (
           <View style={styles.adminMinimalActionRow}>
+            {/* Dual-Admin Security (Commented out - not needed)
             <TouchableOpacity
-              style={[styles.adminExitBtnPill, { backgroundColor: '#b91c1c', borderColor: '#ef4444', marginRight: 8 }]}
+              style={[styles.adminExitBtnPill, { backgroundColor: '#b91c1c', borderColor: '#ef4444', marginRight: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }]}
               onPress={() => {
                 setSecurityModalTab('promote');
                 setSecurityModalVisible(true);
               }}
               activeOpacity={0.8}
             >
-              <Text style={[styles.adminExitBtnPillText, { color: '#ffffff', fontWeight: '800' }]}>🛡️ Dual-Admin Security</Text>
+              <Ionicons name="shield-checkmark" size={14} color="#ffffff" />
+              <Text style={[styles.adminExitBtnPillText, { color: '#ffffff', fontWeight: '800' }]}>Dual-Admin Security</Text>
             </TouchableOpacity>
-            <View style={styles.adminUserBadgePill}>
-              <Text style={styles.adminUserBadgePillText}>👤 {adminEmail}</Text>
+            */}
+            <View style={[styles.adminUserBadgePill, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+              <Ionicons name="person-circle-outline" size={16} color="#fbbf24" />
+              <Text style={styles.adminUserBadgePillText}>{adminEmail}</Text>
             </View>
-            <TouchableOpacity style={styles.adminExitBtnPill} onPress={() => setLogoutModalOpen(true)} activeOpacity={0.8}>
-              <Text style={styles.adminExitBtnPillText}>← Exit</Text>
+            <TouchableOpacity style={[styles.adminExitBtnPill, { flexDirection: 'row', alignItems: 'center', gap: 5 }]} onPress={() => setLogoutModalOpen(true)} activeOpacity={0.8}>
+              <Ionicons name="log-out-outline" size={15} color="#ffffff" />
+              <Text style={styles.adminExitBtnPillText}>Exit</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {/* Dual-Admin Security (Commented out - not needed)
             <TouchableOpacity
-              style={[styles.adminExitBtnPill, { backgroundColor: '#b91c1c', borderColor: '#ef4444', paddingHorizontal: 8, paddingVertical: 5, marginLeft: 4 }]}
+              style={[styles.adminExitBtnPill, { backgroundColor: '#b91c1c', borderColor: '#ef4444', paddingHorizontal: 8, paddingVertical: 5, marginLeft: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }]}
               onPress={() => {
                 setSecurityModalTab('promote');
                 setSecurityModalVisible(true);
               }}
               activeOpacity={0.8}
             >
-              <Text style={[styles.adminExitBtnPillText, { color: '#ffffff', fontWeight: '800', fontSize: 10.5 }]}>🛡️ Security</Text>
+              <Ionicons name="shield-checkmark" size={13} color="#ffffff" />
+              <Text style={[styles.adminExitBtnPillText, { color: '#ffffff', fontWeight: '800', fontSize: 10.5 }]}>Security</Text>
             </TouchableOpacity>
+            */}
             <TouchableOpacity
               style={[styles.adminExitBtnPill, { paddingHorizontal: 10, paddingVertical: 5, marginLeft: 6 }]}
               onPress={() => setLogoutModalOpen(true)}
@@ -2805,9 +2938,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             />
             <View style={styles.mobileDrawerContent}>
               <View style={styles.mobileDrawerHeader}>
-                <Text style={styles.mobileDrawerTitle}>Admin Menu</Text>
+                <Text style={styles.mobileDrawerTitle}>{isSuperAdmin ? 'Super Admin Menu' : 'Admin Menu'}</Text>
                 <TouchableOpacity onPress={() => setMobileSidebarOpen(false)} style={styles.mobileDrawerCloseBtn}>
-                  <Text style={styles.mobileDrawerCloseText}>✕</Text>
+                  <Ionicons name="close" size={20} color="#475569" />
                 </TouchableOpacity>
               </View>
               {renderSidebarContent(true)}
@@ -2830,64 +2963,84 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             )}
 
             {/* MODERN PAGE HEADER ROW */}
+            {activeTab !== 'admins' && (
             <View style={styles.pageHeaderRow}>
               <View style={{ flex: 1, minWidth: 200 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <Text style={[styles.pageHeaderTitle, !isDesktop && { fontSize: 17 }]}>
-                    {activeTab === 'overview' && '⊞ Command Center Overview'}
-                    {activeTab === 'users' && '🛡️ Users & Dynamic Administrator Governance'}
-                    {activeTab === 'teams' && '👥 Team Registrations'}
-                    {activeTab === 'scorers' && '📋 Scorer Management'}
-                    {activeTab === 'umpires' && '⚖️ Umpires Management'}
-                    {activeTab === 'schedules' && '⚡ Match Schedules'}
-                    {activeTab === 'tournaments' && '🏆 Tournament Management & Approvals'}
-                    {activeTab === 'records' && '📊 Tournament Records, Awards & Exports'}
-                    {activeTab === 'content' && '📰 News & Content'}
-                    {activeTab === 'settings' && '⚙️ Settings & Dynamic Categories'}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    {activeTab === 'overview' && <Ionicons name="grid-outline" size={22} color="#0f172a" />}
+                    {activeTab === 'users' && <Ionicons name="person-outline" size={22} color="#0f172a" />}
+                    {activeTab === 'teams' && <Ionicons name="people-outline" size={22} color="#0f172a" />}
+                    {activeTab === 'scorers' && <Ionicons name="clipboard-outline" size={22} color="#0f172a" />}
+                    {activeTab === 'umpires' && <MaterialCommunityIcons name="scale-balance" size={22} color="#0f172a" />}
+                    {activeTab === 'schedules' && <Ionicons name="flash-outline" size={22} color="#0f172a" />}
+                    {activeTab === 'tournaments' && <Ionicons name="trophy-outline" size={22} color="#0f172a" />}
+                    {activeTab === 'content' && <Ionicons name="newspaper-outline" size={22} color="#0f172a" />}
+                    {activeTab === 'settings' && <Ionicons name="settings-outline" size={22} color="#0f172a" />}
+                    <Text style={[styles.pageHeaderTitle, !isDesktop && { fontSize: 17 }]}>
+                      {activeTab === 'overview' && 'Command Center Overview'}
+                      {activeTab === 'users' && 'Players Management'}
+                      {activeTab === 'teams' && 'Team Registrations'}
+                      {activeTab === 'scorers' && 'Scorer Management'}
+                      {activeTab === 'umpires' && 'Umpires Management'}
+                      {activeTab === 'schedules' && 'Match Schedules'}
+                      {activeTab === 'tournaments' && 'Tournament Management & Approvals'}
+                      {activeTab === 'content' && 'News & Content'}
+                      {activeTab === 'settings' && 'Settings & Dynamic Categories'}
+                    </Text>
+                  </View>
                   {activeTab === 'overview' && (
-                    <View style={[styles.pageThemeBadge, { backgroundColor: '#0f172a', borderColor: '#d4af37' }]}>
-                      <Text style={[styles.pageThemeBadgeText, { color: '#fbbf24' }]}>🏛️ MISSION CONTROL</Text>
+                    <View style={[styles.pageThemeBadge, { backgroundColor: '#0f172a', borderColor: '#d4af37', flexDirection: 'row', alignItems: 'center', gap: 5 }]}>
+                      <Ionicons name="business-outline" size={12} color="#fbbf24" />
+                      <Text style={[styles.pageThemeBadgeText, { color: '#fbbf24' }]}>MISSION CONTROL</Text>
                     </View>
                   )}
                   {activeTab === 'users' && (
-                    <View style={[styles.pageThemeBadge, { backgroundColor: '#eff6ff', borderColor: '#1e3a8a' }]}>
-                      <Text style={[styles.pageThemeBadgeText, { color: '#1e3a8a' }]}>🛡️ DYNAMIC ADMIN & OTP GOVERNANCE</Text>
+                    <View style={[styles.pageThemeBadge, { backgroundColor: '#eff6ff', borderColor: '#1e3a8a', flexDirection: 'row', alignItems: 'center', gap: 5 }]}>
+                      <Ionicons name="person" size={12} color="#1e3a8a" />
+                      <Text style={[styles.pageThemeBadgeText, { color: '#1e3a8a' }]}>FEDERATION PLAYERS</Text>
                     </View>
                   )}
                   {activeTab === 'teams' && (
-                    <View style={[styles.pageThemeBadge, { backgroundColor: '#ecfdf5', borderColor: '#10b981' }]}>
-                      <Text style={[styles.pageThemeBadgeText, { color: '#047857' }]}>⚽ ATHLETIC EMERALD</Text>
+                    <View style={[styles.pageThemeBadge, { backgroundColor: '#ecfdf5', borderColor: '#10b981', flexDirection: 'row', alignItems: 'center', gap: 5 }]}>
+                      <MaterialCommunityIcons name="cricket" size={12} color="#047857" />
+                      <Text style={[styles.pageThemeBadgeText, { color: '#047857' }]}>ATHLETIC EMERALD</Text>
                     </View>
                   )}
                   {activeTab === 'scorers' && (
-                    <View style={[styles.pageThemeBadge, { backgroundColor: '#eef2ff', borderColor: '#6366f1' }]}>
-                      <Text style={[styles.pageThemeBadgeText, { color: '#4338ca' }]}>📋 ROYAL VIOLET</Text>
+                    <View style={[styles.pageThemeBadge, { backgroundColor: '#eef2ff', borderColor: '#6366f1', flexDirection: 'row', alignItems: 'center', gap: 5 }]}>
+                      <Ionicons name="clipboard" size={12} color="#4338ca" />
+                      <Text style={[styles.pageThemeBadgeText, { color: '#4338ca' }]}>ROYAL VIOLET</Text>
                     </View>
                   )}
                   {activeTab === 'umpires' && (
-                    <View style={[styles.pageThemeBadge, { backgroundColor: '#f0f9ff', borderColor: '#0ea5e9' }]}>
-                      <Text style={[styles.pageThemeBadgeText, { color: '#0369a1' }]}>⚖️ OCEAN SAPPHIRE</Text>
+                    <View style={[styles.pageThemeBadge, { backgroundColor: '#f0f9ff', borderColor: '#0ea5e9', flexDirection: 'row', alignItems: 'center', gap: 5 }]}>
+                      <MaterialCommunityIcons name="scale-balance" size={12} color="#0369a1" />
+                      <Text style={[styles.pageThemeBadgeText, { color: '#0369a1' }]}>OCEAN SAPPHIRE</Text>
                     </View>
                   )}
                   {activeTab === 'schedules' && (
-                    <View style={[styles.pageThemeBadge, { backgroundColor: '#fff7ed', borderColor: '#f97316' }]}>
-                      <Text style={[styles.pageThemeBadgeText, { color: '#c2410c' }]}>⚡ SUNSET FLAME</Text>
+                    <View style={[styles.pageThemeBadge, { backgroundColor: '#fff7ed', borderColor: '#f97316', flexDirection: 'row', alignItems: 'center', gap: 5 }]}>
+                      <Ionicons name="flash" size={12} color="#c2410c" />
+                      <Text style={[styles.pageThemeBadgeText, { color: '#c2410c' }]}>SUNSET FLAME</Text>
                     </View>
                   )}
                   {activeTab === 'content' && (
-                    <View style={[styles.pageThemeBadge, { backgroundColor: '#fff1f2', borderColor: '#f43f5e' }]}>
-                      <Text style={[styles.pageThemeBadgeText, { color: '#be123c' }]}>📰 ROSE CORAL</Text>
+                    <View style={[styles.pageThemeBadge, { backgroundColor: '#fff1f2', borderColor: '#f43f5e', flexDirection: 'row', alignItems: 'center', gap: 5 }]}>
+                      <Ionicons name="newspaper" size={12} color="#be123c" />
+                      <Text style={[styles.pageThemeBadgeText, { color: '#be123c' }]}>ROSE CORAL</Text>
                     </View>
                   )}
                   {activeTab === 'tournaments' && (
-                    <View style={[styles.pageThemeBadge, { backgroundColor: '#fffbeb', borderColor: '#f59e0b' }]}>
-                      <Text style={[styles.pageThemeBadgeText, { color: '#b45309' }]}>🏆 GOLDEN CHAMPIONSHIP</Text>
+                    <View style={[styles.pageThemeBadge, { backgroundColor: '#fffbeb', borderColor: '#f59e0b', flexDirection: 'row', alignItems: 'center', gap: 5 }]}>
+                      <Ionicons name="trophy" size={12} color="#b45309" />
+                      <Text style={[styles.pageThemeBadgeText, { color: '#b45309' }]}>GOLDEN CHAMPIONSHIP</Text>
                     </View>
                   )}
                   {activeTab === 'settings' && (
-                    <View style={[styles.pageThemeBadge, { backgroundColor: '#eff6ff', borderColor: '#3b82f6' }]}>
-                      <Text style={[styles.pageThemeBadgeText, { color: '#1d4ed8' }]}>⚙️ DYNAMIC MASTER REGISTRY</Text>
+                    <View style={[styles.pageThemeBadge, { backgroundColor: '#eff6ff', borderColor: '#3b82f6', flexDirection: 'row', alignItems: 'center', gap: 5 }]}>
+                      <Ionicons name="settings" size={12} color="#1d4ed8" />
+                      <Text style={[styles.pageThemeBadgeText, { color: '#1d4ed8' }]}>DYNAMIC MASTER REGISTRY</Text>
                     </View>
                   )}
                 </View>
@@ -2908,17 +3061,13 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   activeOpacity={0.7}
                   accessibilityLabel="Dynamic Live Reload"
                 >
-                  <Animated.Text
-                    style={[
-                      styles.roundReloadIcon,
-                      { transform: [{ rotate: spinInterpolate }] }
-                    ]}
-                  >
-                    🔄
-                  </Animated.Text>
+                  <Animated.View style={{ transform: [{ rotate: spinInterpolate }] }}>
+                    <Ionicons name="sync" size={18} color="#0a1936" />
+                  </Animated.View>
                 </TouchableOpacity>
               </View>
             </View>
+            )}
 
             {/* ─────────────────────────────────────────────────────────────
               4. TAB CONTENT: SCORER MANAGEMENT (Exact Match to Screenshot)
@@ -2931,7 +3080,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   <View style={styles.scorerStatCard}>
                     <View style={styles.statCardHeader}>
                       <View style={styles.scorerIconBox}>
-                        <Text style={{ fontSize: 16 }}>📋</Text>
+                        <Ionicons name="clipboard" size={16} color="#4338ca" />
                       </View>
                       <View>
                         <Text style={styles.scorerCardTitle}>Scorer Management</Text>
@@ -2985,7 +3134,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   {/* Right Card: Status Distribution with Donut Chart */}
                   <View style={[styles.scorerStatCard, styles.donutCardAlign]}>
                     <View style={styles.donutHeader}>
-                      <Text style={{ fontSize: 16, marginRight: 6 }}>📊</Text>
+                      <Ionicons name="pie-chart-outline" size={16} color="#4338ca" style={{ marginRight: 6 }} />
                       <Text style={styles.scorerCardTitle}>Status Distribution</Text>
                     </View>
 
@@ -3060,7 +3209,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 {/* Dynamic Live Scorer Status Strip */}
                 <View style={[styles.dynamicRegistryStrip, { backgroundColor: '#f5f3ff', borderColor: '#ddd6fe' }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontSize: 16 }}>📋</Text>
+                    <Ionicons name="clipboard-outline" size={16} color="#4338ca" />
                     <Text style={[styles.dynamicRegistryText, { color: '#4338ca' }]}>
                       LIVE SCORER REGISTRY • {scorerTotal} Registered • {scorerApproved} Authorized • {scorerPending} Awaiting Review
                     </Text>
@@ -3078,9 +3227,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       activeOpacity={0.7}
                       accessibilityLabel="Reload live scorers"
                     >
-                      <Animated.Text style={[styles.roundReloadIconSm, { transform: [{ rotate: spinInterpolate }] }]}>
-                        🔄
-                      </Animated.Text>
+                      <Animated.View style={{ transform: [{ rotate: spinInterpolate }] }}>
+                        <Ionicons name="sync" size={14} color="#0a1936" />
+                      </Animated.View>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -3088,7 +3237,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 {/* SEARCH & FILTER TOOLBAR */}
                 <View style={styles.toolbarCard}>
                   <View style={styles.searchBox}>
-                    <Text style={styles.searchIcon}>🔍</Text>
+                    <Ionicons name="search" size={15} color="#64748b" style={{ marginRight: 8 }} />
                     <TextInput
                       style={styles.searchInput}
                       value={scorerSearchQuery}
@@ -3161,18 +3310,21 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               <View style={styles.itemTitleBadgeRow}>
                                 <Text style={styles.itemNameText}>{s.scorerName}</Text>
                                 {isApproved && (
-                                  <View style={styles.badgeConfirmed}>
-                                    <Text style={styles.badgeConfirmedText}>✔ Approved</Text>
+                                  <View style={[styles.badgeConfirmed, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                    <Ionicons name="checkmark" size={11} color="#047857" />
+                                    <Text style={styles.badgeConfirmedText}>Approved</Text>
                                   </View>
                                 )}
                                 {isPending && (
-                                  <View style={styles.badgePending}>
-                                    <Text style={styles.badgePendingText}>⏳ Pending</Text>
+                                  <View style={[styles.badgePending, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                    <Ionicons name="hourglass-outline" size={11} color="#b45309" />
+                                    <Text style={styles.badgePendingText}>Pending</Text>
                                   </View>
                                 )}
                                 {isRejected && (
-                                  <View style={styles.badgeRejected}>
-                                    <Text style={styles.badgeRejectedText}>🚫 Rejected</Text>
+                                  <View style={[styles.badgeRejected, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                    <Ionicons name="ban-outline" size={11} color="#dc2626" />
+                                    <Text style={styles.badgeRejectedText}>Rejected</Text>
                                   </View>
                                 )}
                               </View>
@@ -3182,14 +3334,17 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 <View style={styles.badgeCategoryIndigo}>
                                   <Text style={styles.badgeCategoryIndigoText}>ID: {s.scorerId}</Text>
                                 </View>
-                                <View style={styles.badgeCategoryPurple}>
-                                  <Text style={styles.badgeCategoryPurpleText}>🏅 {s.grade}</Text>
+                                <View style={[styles.badgeCategoryPurple, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                  <Ionicons name="ribbon-outline" size={11} color="#6d28d9" />
+                                  <Text style={styles.badgeCategoryPurpleText}>{s.grade}</Text>
                                 </View>
-                                <View style={styles.badgeCategoryRose}>
-                                  <Text style={styles.badgeCategoryRoseText}>📍 {s.taluk || 'Virudhunagar'}</Text>
+                                <View style={[styles.badgeCategoryRose, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                  <Ionicons name="location-outline" size={11} color="#be123c" />
+                                  <Text style={styles.badgeCategoryRoseText}>{s.taluk || 'Virudhunagar'}</Text>
                                 </View>
-                                <View style={styles.badgeCategoryAmber}>
-                                  <Text style={styles.badgeCategoryAmberText}>⏱️ {s.experienceYears != null ? `${s.experienceYears} Yr${s.experienceYears !== 1 ? 's' : ''}` : 'N/A'} Exp</Text>
+                                <View style={[styles.badgeCategoryAmber, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                  <Ionicons name="time-outline" size={11} color="#b45309" />
+                                  <Text style={styles.badgeCategoryAmberText}>{s.experienceYears != null ? `${s.experienceYears} Yr${s.experienceYears !== 1 ? 's' : ''}` : 'N/A'} Exp</Text>
                                 </View>
                               </View>
                             </View>
@@ -3198,76 +3353,84 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                             <View style={[styles.itemActionsRow, { flexWrap: 'wrap' }, !isDesktop && { width: '100%', marginTop: 4 }]}>
                               {s.phone && s.phone !== '—' && (
                                 <TouchableOpacity
-                                  style={styles.btnActionCall}
+                                  style={[styles.btnActionCall, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                   onPress={() => handleCallContact(s.phone, s.scorerName)}
                                   activeOpacity={0.8}
                                   accessibilityLabel="Call Scorer"
                                 >
-                                  <Text style={styles.btnActionCallText}>📞 Call</Text>
+                                  <Ionicons name="call-outline" size={12} color="#15803d" />
+                                  <Text style={styles.btnActionCallText}>Call</Text>
                                 </TouchableOpacity>
                               )}
 
                               {Boolean(s.email) && (
                                 <TouchableOpacity
-                                  style={styles.btnActionEmail}
+                                  style={[styles.btnActionEmail, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                   onPress={() => handleEmailContact(s.email, s.scorerName)}
                                   activeOpacity={0.8}
                                   accessibilityLabel="Email Scorer"
                                 >
-                                  <Text style={styles.btnActionEmailText}>✉️ Email</Text>
+                                  <Ionicons name="mail-outline" size={12} color="#0369a1" />
+                                  <Text style={styles.btnActionEmailText}>Email</Text>
                                 </TouchableOpacity>
                               )}
 
                               <TouchableOpacity
-                                style={styles.btnActionViewViolet}
+                                style={[styles.btnActionViewViolet, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                 onPress={() => setSelectedScorerModal(s)}
                                 activeOpacity={0.8}
                               >
-                                <Text style={styles.btnActionViewVioletText}>👁 View</Text>
+                                <Ionicons name="eye-outline" size={12} color="#4338ca" />
+                                <Text style={styles.btnActionViewVioletText}>View</Text>
                               </TouchableOpacity>
 
                               {isPending ? (
                                 <>
                                   <TouchableOpacity
-                                    style={styles.btnSuccessSm}
+                                    style={[styles.btnSuccessSm, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                     onPress={() => handleApproveScorer(s.scorerId)}
                                     activeOpacity={0.8}
                                   >
-                                    <Text style={styles.btnSuccessSmText}>✔ Approve</Text>
+                                    <Ionicons name="checkmark" size={12} color="#ffffff" />
+                                    <Text style={styles.btnSuccessSmText}>Approve</Text>
                                   </TouchableOpacity>
                                   <TouchableOpacity
-                                    style={styles.btnOutlineDanger}
+                                    style={[styles.btnOutlineDanger, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                     onPress={() => handleOpenRejectModal(s.scorerId, 'SCORER', s.scorerName)}
                                     activeOpacity={0.8}
                                   >
-                                    <Text style={styles.btnOutlineDangerText}>🚫 Reject</Text>
+                                    <Ionicons name="ban-outline" size={12} color="#dc2626" />
+                                    <Text style={styles.btnOutlineDangerText}>Reject</Text>
                                   </TouchableOpacity>
                                 </>
                               ) : isApproved ? (
                                 <TouchableOpacity
-                                  style={styles.btnOutlineDanger}
+                                  style={[styles.btnOutlineDanger, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                   onPress={() => handleOpenRejectModal(s.scorerId, 'SCORER', s.scorerName)}
                                   activeOpacity={0.8}
                                 >
-                                  <Text style={styles.btnOutlineDangerText}>🚫 Reject</Text>
+                                  <Ionicons name="ban-outline" size={12} color="#dc2626" />
+                                  <Text style={styles.btnOutlineDangerText}>Reject</Text>
                                 </TouchableOpacity>
                               ) : (
                                 <TouchableOpacity
-                                  style={styles.btnSuccessSm}
+                                  style={[styles.btnSuccessSm, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                   onPress={() => handleApproveScorer(s.scorerId)}
                                   activeOpacity={0.8}
                                 >
-                                  <Text style={styles.btnSuccessSmText}>✔ Approve</Text>
+                                  <Ionicons name="checkmark" size={12} color="#ffffff" />
+                                  <Text style={styles.btnSuccessSmText}>Approve</Text>
                                 </TouchableOpacity>
                               )}
 
                               <TouchableOpacity
-                                style={styles.btnActionDelete}
+                                style={[styles.btnActionDelete, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                 onPress={() => handleOpenDeleteModal(s.scorerId, 'SCORER', s.scorerName, s)}
                                 activeOpacity={0.8}
                                 accessibilityLabel="Delete Scorer"
                               >
-                                <Text style={styles.btnActionDeleteText}>🗑️ Delete</Text>
+                                <Ionicons name="trash-outline" size={12} color="#dc2626" />
+                                <Text style={styles.btnActionDeleteText}>Delete</Text>
                               </TouchableOpacity>
                             </View>
                           </View>
@@ -3317,7 +3480,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   <View style={styles.umpireStatCard}>
                     <View style={styles.statCardHeader}>
                       <View style={styles.umpireIconBox}>
-                        <Text style={{ fontSize: 16 }}>⚖️</Text>
+                        <MaterialCommunityIcons name="scale-balance" size={16} color="#0369a1" />
                       </View>
                       <View>
                         <Text style={styles.umpireCardTitle}>Umpire Accreditation</Text>
@@ -3371,7 +3534,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   {/* Right Card: Status Distribution with Donut Chart */}
                   <View style={[styles.umpireStatCard, styles.donutCardAlign]}>
                     <View style={styles.donutHeader}>
-                      <Text style={{ fontSize: 16, marginRight: 6 }}>📊</Text>
+                      <Ionicons name="pie-chart-outline" size={16} color="#0369a1" style={{ marginRight: 6 }} />
                       <Text style={styles.umpireCardTitle}>Status Distribution</Text>
                     </View>
 
@@ -3446,7 +3609,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 {/* Dynamic Live Umpire Status Strip */}
                 <View style={[styles.dynamicRegistryStrip, { backgroundColor: '#f0f9ff', borderColor: '#bae6fd' }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                    <Text style={{ fontSize: 16 }}>⚖️</Text>
+                    <MaterialCommunityIcons name="scale-balance" size={16} color="#0369a1" />
                     <Text style={[styles.dynamicRegistryText, { color: '#0369a1', flexShrink: 1 }]}>
                       LIVE UMPIRE REGISTRY • {umpireTotal} Officials • {umpireApproved} Accredited • {umpirePending} Pending Review
                     </Text>
@@ -3464,9 +3627,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       activeOpacity={0.7}
                       accessibilityLabel="Reload live umpires"
                     >
-                      <Animated.Text style={[styles.roundReloadIconSm, { transform: [{ rotate: spinInterpolate }] }]}>
-                        🔄
-                      </Animated.Text>
+                      <Animated.View style={{ transform: [{ rotate: spinInterpolate }] }}>
+                        <Ionicons name="sync" size={14} color="#0a1936" />
+                      </Animated.View>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -3474,7 +3637,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 {/* SEARCH & FILTER TOOLBAR */}
                 <View style={[styles.toolbarCard, { zIndex: 50, position: 'relative' }]}>
                   <View style={styles.searchBox}>
-                    <Text style={styles.searchIcon}>🔍</Text>
+                    <Ionicons name="search" size={15} color="#64748b" style={{ marginRight: 8 }} />
                     <TextInput
                       style={styles.searchInput}
                       value={umpireSearchQuery}
@@ -3566,7 +3729,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 <Text style={{ fontSize: 12.5, fontWeight: isSelected ? '800' : '600', color: isSelected ? '#0369a1' : '#334155' }}>
                                   {opt.label}
                                 </Text>
-                                {isSelected && <Text style={{ fontSize: 12, fontWeight: '800', color: '#0284c7' }}>✓</Text>}
+                                {isSelected && <Ionicons name="checkmark" size={14} color="#0284c7" />}
                               </TouchableOpacity>
                             );
                           })}
@@ -3580,7 +3743,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 <View style={styles.itemsListContainer}>
                   {filteredUmpires.length === 0 ? (
                     <View style={[styles.whiteItemCard, { alignItems: 'center', paddingVertical: 32 }]}>
-                      <Text style={{ fontSize: 24, marginBottom: 8 }}>⚖️</Text>
+                      <MaterialCommunityIcons name="scale-balance" size={28} color="#0284c7" style={{ marginBottom: 8 }} />
                       <Text style={{ fontSize: 16, fontWeight: '700', color: '#0f172a' }}>No Umpire Registrations Found</Text>
                       <Text style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
                         {umpireSearchQuery ? 'No umpires matched your search query.' : 'No umpires in this category.'}
@@ -3607,18 +3770,21 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               <View style={styles.itemTitleBadgeRow}>
                                 <Text style={[styles.itemNameText, { flexShrink: 1 }]}>{u.umpireName}</Text>
                                 {isApproved && (
-                                  <View style={styles.badgeConfirmed}>
-                                    <Text style={styles.badgeConfirmedText}>✔ Approved</Text>
+                                  <View style={[styles.badgeConfirmed, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                    <Ionicons name="checkmark" size={11} color="#047857" />
+                                    <Text style={styles.badgeConfirmedText}>Approved</Text>
                                   </View>
                                 )}
                                 {isPending && (
-                                  <View style={styles.badgePending}>
-                                    <Text style={styles.badgePendingText}>⏳ Pending</Text>
+                                  <View style={[styles.badgePending, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                    <Ionicons name="hourglass-outline" size={11} color="#b45309" />
+                                    <Text style={styles.badgePendingText}>Pending</Text>
                                   </View>
                                 )}
                                 {isRejected && (
-                                  <View style={styles.badgeRejected}>
-                                    <Text style={styles.badgeRejectedText}>🚫 Rejected</Text>
+                                  <View style={[styles.badgeRejected, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                    <Ionicons name="ban-outline" size={11} color="#dc2626" />
+                                    <Text style={styles.badgeRejectedText}>Rejected</Text>
                                   </View>
                                 )}
                               </View>
@@ -3628,18 +3794,22 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 <View style={styles.badgeCategoryCyan}>
                                   <Text style={styles.badgeCategoryCyanText}>ID: {u.umpireId}</Text>
                                 </View>
-                                <View style={styles.badgeCategoryPurple}>
-                                  <Text style={styles.badgeCategoryPurpleText}>⚖️ {u.qualification}</Text>
+                                <View style={[styles.badgeCategoryPurple, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                  <MaterialCommunityIcons name="scale-balance" size={11} color="#6d28d9" />
+                                  <Text style={styles.badgeCategoryPurpleText}>{u.qualification}</Text>
                                 </View>
-                                <View style={styles.badgeCategoryEmerald}>
-                                  <Text style={styles.badgeCategoryEmeraldText}>🎯 {u.specialization || 'On-field Official'}</Text>
+                                <View style={[styles.badgeCategoryEmerald, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                  <Ionicons name="radio-button-on-outline" size={11} color="#047857" />
+                                  <Text style={styles.badgeCategoryEmeraldText}>{u.specialization || 'On-field Official'}</Text>
                                 </View>
-                                <View style={styles.badgeCategoryAmber}>
-                                  <Text style={styles.badgeCategoryAmberText}>⏱️ {u.experience || `${u.experienceYears || 2} Yrs`}</Text>
+                                <View style={[styles.badgeCategoryAmber, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                  <Ionicons name="time-outline" size={11} color="#b45309" />
+                                  <Text style={styles.badgeCategoryAmberText}>{u.experience || `${u.experienceYears || 2} Yrs`}</Text>
                                 </View>
                                 {u.certificationNumber && u.certificationNumber !== '—' && (
-                                  <View style={styles.badgeCategoryRose}>
-                                    <Text style={styles.badgeCategoryRoseText}>📜 {u.certificationNumber}</Text>
+                                  <View style={[styles.badgeCategoryRose, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                    <Ionicons name="document-text-outline" size={11} color="#be123c" />
+                                    <Text style={styles.badgeCategoryRoseText}>{u.certificationNumber}</Text>
                                   </View>
                                 )}
                               </View>
@@ -3649,76 +3819,84 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                             <View style={[styles.itemActionsRow, { flexWrap: 'wrap' }, !isDesktop && { width: '100%', marginTop: 4 }]}>
                               {u.phone && u.phone !== '—' && (
                                 <TouchableOpacity
-                                  style={styles.btnActionCall}
+                                  style={[styles.btnActionCall, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                   onPress={() => handleCallContact(u.phone, u.umpireName)}
                                   activeOpacity={0.8}
                                   accessibilityLabel="Call Umpire"
                                 >
-                                  <Text style={styles.btnActionCallText}>📞 Call</Text>
+                                  <Ionicons name="call-outline" size={12} color="#15803d" />
+                                  <Text style={styles.btnActionCallText}>Call</Text>
                                 </TouchableOpacity>
                               )}
 
                               {u.email && u.email !== '—' && (
                                 <TouchableOpacity
-                                  style={styles.btnActionEmail}
+                                  style={[styles.btnActionEmail, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                   onPress={() => handleEmailContact(u.email, u.umpireName)}
                                   activeOpacity={0.8}
                                   accessibilityLabel="Email Umpire"
                                 >
-                                  <Text style={styles.btnActionEmailText}>✉️ Email</Text>
+                                  <Ionicons name="mail-outline" size={12} color="#0369a1" />
+                                  <Text style={styles.btnActionEmailText}>Email</Text>
                                 </TouchableOpacity>
                               )}
 
                               <TouchableOpacity
-                                style={styles.btnActionViewCyan}
+                                style={[styles.btnActionViewCyan, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                 onPress={() => setSelectedUmpireForView(u)}
                                 activeOpacity={0.8}
                               >
-                                <Text style={styles.btnActionViewCyanText}>👁 View</Text>
+                                <Ionicons name="eye-outline" size={12} color="#0369a1" />
+                                <Text style={styles.btnActionViewCyanText}>View</Text>
                               </TouchableOpacity>
 
                               {isPending ? (
                                 <>
                                   <TouchableOpacity
-                                    style={styles.btnSuccessSm}
+                                    style={[styles.btnSuccessSm, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                     onPress={() => handleApproveUmpire(u.umpireId)}
                                     activeOpacity={0.8}
                                   >
-                                    <Text style={styles.btnSuccessSmText}>✔ Approve</Text>
+                                    <Ionicons name="checkmark" size={12} color="#ffffff" />
+                                    <Text style={styles.btnSuccessSmText}>Approve</Text>
                                   </TouchableOpacity>
                                   <TouchableOpacity
-                                    style={styles.btnOutlineDanger}
+                                    style={[styles.btnOutlineDanger, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                     onPress={() => handleOpenRejectModal(u.umpireId, 'UMPIRE', u.umpireName)}
                                     activeOpacity={0.8}
                                   >
-                                    <Text style={styles.btnOutlineDangerText}>🚫 Reject</Text>
+                                    <Ionicons name="ban-outline" size={12} color="#dc2626" />
+                                    <Text style={styles.btnOutlineDangerText}>Reject</Text>
                                   </TouchableOpacity>
                                 </>
                               ) : isApproved ? (
                                 <TouchableOpacity
-                                  style={styles.btnOutlineDanger}
+                                  style={[styles.btnOutlineDanger, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                   onPress={() => handleOpenRejectModal(u.umpireId, 'UMPIRE', u.umpireName)}
                                   activeOpacity={0.8}
                                 >
-                                  <Text style={styles.btnOutlineDangerText}>🚫 Reject</Text>
+                                  <Ionicons name="ban-outline" size={12} color="#dc2626" />
+                                  <Text style={styles.btnOutlineDangerText}>Reject</Text>
                                 </TouchableOpacity>
                               ) : (
                                 <TouchableOpacity
-                                  style={styles.btnSuccessSm}
+                                  style={[styles.btnSuccessSm, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                   onPress={() => handleApproveUmpire(u.umpireId)}
                                   activeOpacity={0.8}
                                 >
-                                  <Text style={styles.btnSuccessSmText}>✔ Approve</Text>
+                                  <Ionicons name="checkmark" size={12} color="#ffffff" />
+                                  <Text style={styles.btnSuccessSmText}>Approve</Text>
                                 </TouchableOpacity>
                               )}
 
                               <TouchableOpacity
-                                style={styles.btnActionDelete}
+                                style={[styles.btnActionDelete, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                 onPress={() => handleOpenDeleteModal(u.umpireId, 'UMPIRE', u.umpireName, u)}
                                 activeOpacity={0.8}
                                 accessibilityLabel="Delete Umpire"
                               >
-                                <Text style={styles.btnActionDeleteText}>🗑️ Delete</Text>
+                                <Ionicons name="trash-outline" size={12} color="#dc2626" />
+                                <Text style={styles.btnActionDeleteText}>Delete</Text>
                               </TouchableOpacity>
                             </View>
                           </View>
@@ -3768,7 +3946,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   <View style={styles.teamStatCard}>
                     <View style={styles.statCardHeader}>
                       <View style={styles.teamIconBox}>
-                        <Text style={{ fontSize: 16 }}>🛡️</Text>
+                        <Ionicons name="shield-checkmark" size={16} color="#047857" />
                       </View>
                       <View>
                         <Text style={styles.teamCardTitle}>Team Registrations</Text>
@@ -3818,7 +3996,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   {/* Right Card: Teams Status Distribution Donut */}
                   <View style={[styles.teamStatCard, styles.donutCardAlign]}>
                     <View style={styles.donutHeader}>
-                      <Text style={{ fontSize: 16, marginRight: 6 }}>📊</Text>
+                      <Ionicons name="pie-chart-outline" size={16} color="#047857" style={{ marginRight: 6 }} />
                       <Text style={styles.teamCardTitle}>Status Distribution</Text>
                     </View>
 
@@ -3890,7 +4068,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 {/* Dynamic Live Team Status Strip */}
                 <View style={[styles.dynamicRegistryStrip, { backgroundColor: '#ecfdf5', borderColor: '#a7f3d0' }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontSize: 16 }}>🛡️</Text>
+                    <Ionicons name="shield-checkmark-outline" size={16} color="#065f46" />
                     <Text style={[styles.dynamicRegistryText, { color: '#065f46' }]}>
                       LIVE TEAM REGISTRY • {teamTotal} Clubs Registered • {teamApproved} Affiliated • {teamPending} Awaiting Clearance
                     </Text>
@@ -3908,9 +4086,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       activeOpacity={0.7}
                       accessibilityLabel="Reload live teams"
                     >
-                      <Animated.Text style={[styles.roundReloadIconSm, { transform: [{ rotate: spinInterpolate }] }]}>
-                        🔄
-                      </Animated.Text>
+                      <Animated.View style={{ transform: [{ rotate: spinInterpolate }] }}>
+                        <Ionicons name="sync" size={14} color="#0a1936" />
+                      </Animated.View>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -3918,7 +4096,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 {/* TEAMS TOOLBAR */}
                 <View style={[styles.toolbarCard, { zIndex: 50, position: 'relative' }]}>
                   <View style={styles.searchBox}>
-                    <Text style={styles.searchIcon}>🔍</Text>
+                    <Ionicons name="search" size={15} color="#64748b" style={{ marginRight: 8 }} />
                     <TextInput
                       style={styles.searchInput}
                       value={teamSearchQuery}
@@ -4010,7 +4188,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 <Text style={{ fontSize: 12.5, fontWeight: isSelected ? '800' : '600', color: isSelected ? '#065f46' : '#334155' }}>
                                   {opt.label}
                                 </Text>
-                                {isSelected && <Text style={{ fontSize: 12, fontWeight: '800', color: '#059669' }}>✓</Text>}
+                                {isSelected && <Ionicons name="checkmark" size={14} color="#059669" />}
                               </TouchableOpacity>
                             );
                           })}
@@ -4024,7 +4202,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 <View style={styles.itemsListContainer}>
                   {filteredTeams.length === 0 ? (
                     <View style={styles.emptyBox}>
-                      <Text style={{ fontSize: 28, marginBottom: 8 }}>👥</Text>
+                      <Ionicons name="people-outline" size={30} color="#059669" style={{ marginBottom: 8 }} />
                       <Text style={styles.emptyTitle}>No Teams Found</Text>
                       <Text style={styles.emptySubtitle}>No club applications match the current filter selection.</Text>
                     </View>
@@ -4064,18 +4242,21 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 <View style={styles.itemTitleBadgeRow}>
                                   <Text style={[styles.itemNameText, { flexShrink: 1 }]}>{t.teamName}</Text>
                                   {isApproved && (
-                                    <View style={styles.badgeConfirmed}>
-                                      <Text style={styles.badgeConfirmedText}>✔ Approved</Text>
+                                    <View style={[styles.badgeConfirmed, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                      <Ionicons name="checkmark" size={11} color="#047857" />
+                                      <Text style={styles.badgeConfirmedText}>Approved</Text>
                                     </View>
                                   )}
                                   {isPending && (
-                                    <View style={styles.badgePending}>
-                                      <Text style={styles.badgePendingText}>⏳ Pending</Text>
+                                    <View style={[styles.badgePending, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                      <Ionicons name="hourglass-outline" size={11} color="#b45309" />
+                                      <Text style={styles.badgePendingText}>Pending</Text>
                                     </View>
                                   )}
                                   {isRejected && (
-                                    <View style={styles.badgeRejected}>
-                                      <Text style={styles.badgeRejectedText}>🚫 Rejected</Text>
+                                    <View style={[styles.badgeRejected, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                      <Ionicons name="ban-outline" size={11} color="#dc2626" />
+                                      <Text style={styles.badgeRejectedText}>Rejected</Text>
                                     </View>
                                   )}
                                 </View>
@@ -4085,24 +4266,29 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                   <View style={styles.badgeCategoryEmerald}>
                                     <Text style={styles.badgeCategoryEmeraldText}>ID: {t.teamId}</Text>
                                   </View>
-                                  <View style={styles.badgeCategoryAmber}>
-                                    <Text style={styles.badgeCategoryAmberText}>👤 Coach: {t.coach?.name || 'Head Coach'}</Text>
+                                  <View style={[styles.badgeCategoryAmber, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                    <Ionicons name="person-outline" size={11} color="#b45309" />
+                                    <Text style={styles.badgeCategoryAmberText}>Coach: {t.coach?.name || 'Head Coach'}</Text>
                                   </View>
                                   {(t.coach?.phone || t.coach?.mobile || t.coachPhone || t.phone) && (
-                                    <View style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-                                      <Text style={{ color: '#166534', fontSize: 11, fontWeight: '700' }}>📞 {t.coach?.phone || t.coach?.mobile || t.coachPhone || t.phone}</Text>
+                                    <View style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                      <Ionicons name="call-outline" size={11} color="#166534" />
+                                      <Text style={{ color: '#166534', fontSize: 11, fontWeight: '700' }}>{t.coach?.phone || t.coach?.mobile || t.coachPhone || t.phone}</Text>
                                     </View>
                                   )}
                                   {(t.coach?.aadhaar || t.coach_aadhaar || t.coachAadhaar || t.aadhaar) && (
-                                    <View style={{ backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-                                      <Text style={{ color: '#991b1b', fontSize: 11, fontWeight: '700' }}>🆔 UIDAI: {t.coach?.aadhaar || t.coach_aadhaar || t.coachAadhaar || t.aadhaar}</Text>
+                                    <View style={{ backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                      <Ionicons name="card-outline" size={11} color="#991b1b" />
+                                      <Text style={{ color: '#991b1b', fontSize: 11, fontWeight: '700' }}>UIDAI: {t.coach?.aadhaar || t.coach_aadhaar || t.coachAadhaar || t.aadhaar}</Text>
                                     </View>
                                   )}
-                                  <View style={styles.badgeCategoryIndigo}>
-                                    <Text style={styles.badgeCategoryIndigoText}>🏏 {t.members?.length ?? 0} Players</Text>
+                                  <View style={[styles.badgeCategoryIndigo, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                    <MaterialCommunityIcons name="cricket" size={11} color="#3730a3" />
+                                    <Text style={styles.badgeCategoryIndigoText}>{t.members?.length ?? 0} Players</Text>
                                   </View>
-                                  <View style={styles.badgeCategoryPurple}>
-                                    <Text style={styles.badgeCategoryPurpleText}>📍 {t.taluk || 'Virudhunagar'}</Text>
+                                  <View style={[styles.badgeCategoryPurple, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                    <Ionicons name="location-outline" size={11} color="#6d28d9" />
+                                    <Text style={styles.badgeCategoryPurpleText}>{t.taluk || 'Virudhunagar'}</Text>
                                   </View>
                                 </View>
                               </View>
@@ -4110,67 +4296,72 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                             {/* Action Buttons */}
                             <View style={[styles.itemActionsRow, { flexWrap: 'wrap' }, !isDesktop && { width: '100%', marginTop: 4 }]}>
-                              {Boolean(t.coach?.email) && (
-                                <TouchableOpacity
-                                  style={styles.btnActionEmail}
-                                  onPress={() => handleEmailContact(t.coach.email, t.coach?.name || t.teamName)}
-                                  activeOpacity={0.8}
-                                  accessibilityLabel="Email Coach"
-                                >
-                                  <Text style={styles.btnActionEmailText}>✉️ Email Coach</Text>
-                                </TouchableOpacity>
-                              )}
+                              <TouchableOpacity
+                                style={[styles.btnOutlineEdit, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
+                                onPress={() => handleOpenEditTeam(t)}
+                                activeOpacity={0.8}
+                                accessibilityLabel="Edit Team"
+                              >
+                                <Ionicons name="create-outline" size={12} color="#1d4ed8" />
+                                <Text style={styles.btnOutlineEditText}>Edit</Text>
+                              </TouchableOpacity>
 
                               <TouchableOpacity
-                                style={styles.btnActionViewEmerald}
+                                style={[styles.btnActionViewEmerald, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                 onPress={() => setSelectedSquadModal(t)}
                                 activeOpacity={0.8}
                               >
-                                <Text style={styles.btnActionViewEmeraldText}>👁 View Team ({t.members?.length ?? 0})</Text>
+                                <Ionicons name="eye-outline" size={12} color="#047857" />
+                                <Text style={styles.btnActionViewEmeraldText}>View Team ({t.members?.length ?? 0})</Text>
                               </TouchableOpacity>
 
                               {isPending ? (
                                 <>
                                   <TouchableOpacity
-                                    style={styles.btnSuccessSm}
+                                    style={[styles.btnSuccessSm, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                     onPress={() => handleApproveTeam(t.teamId)}
                                     activeOpacity={0.8}
                                   >
-                                    <Text style={styles.btnSuccessSmText}>✔ Approve</Text>
+                                    <Ionicons name="checkmark" size={12} color="#ffffff" />
+                                    <Text style={styles.btnSuccessSmText}>Approve</Text>
                                   </TouchableOpacity>
                                   <TouchableOpacity
-                                    style={styles.btnOutlineDanger}
+                                    style={[styles.btnOutlineDanger, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                     onPress={() => handleOpenRejectModal(t.teamId, 'TEAM', t.teamName)}
                                     activeOpacity={0.8}
                                   >
-                                    <Text style={styles.btnOutlineDangerText}>🚫 Reject</Text>
+                                    <Ionicons name="ban-outline" size={12} color="#dc2626" />
+                                    <Text style={styles.btnOutlineDangerText}>Reject</Text>
                                   </TouchableOpacity>
                                 </>
                               ) : isApproved ? (
                                 <TouchableOpacity
-                                  style={styles.btnOutlineDanger}
+                                  style={[styles.btnOutlineDanger, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                   onPress={() => handleOpenRejectModal(t.teamId, 'TEAM', t.teamName)}
                                   activeOpacity={0.8}
                                 >
-                                  <Text style={styles.btnOutlineDangerText}>🚫 Reject</Text>
+                                  <Ionicons name="ban-outline" size={12} color="#dc2626" />
+                                  <Text style={styles.btnOutlineDangerText}>Reject</Text>
                                 </TouchableOpacity>
                               ) : (
                                 <TouchableOpacity
-                                  style={styles.btnSuccessSm}
+                                  style={[styles.btnSuccessSm, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                   onPress={() => handleApproveTeam(t.teamId)}
                                   activeOpacity={0.8}
                                 >
-                                  <Text style={styles.btnSuccessSmText}>✔ Approve</Text>
+                                  <Ionicons name="checkmark" size={12} color="#ffffff" />
+                                  <Text style={styles.btnSuccessSmText}>Approve</Text>
                                 </TouchableOpacity>
                               )}
 
                               <TouchableOpacity
-                                style={styles.btnActionDelete}
+                                style={[styles.btnActionDelete, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                 onPress={() => handleOpenDeleteModal(t.teamId, 'TEAM', t.teamName, t)}
                                 activeOpacity={0.8}
                                 accessibilityLabel="Delete Team"
                               >
-                                <Text style={styles.btnActionDeleteText}>🗑️ Delete</Text>
+                                <Ionicons name="trash-outline" size={12} color="#dc2626" />
+                                <Text style={styles.btnActionDeleteText}>Delete</Text>
                               </TouchableOpacity>
                             </View>
                           </View>
@@ -4212,99 +4403,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             )}
 
             {/* ─────────────────────────────────────────────────────────────
-              6. TAB CONTENT: OVERVIEW (EXECUTIVE MISSION CONTROL UI/UX)
+              6. TAB CONTENT: OVERVIEW
               ───────────────────────────────────────────────────────────── */}
             {activeTab === 'overview' && (
               <View style={{ gap: 20 }}>
-                {/* 1. EXECUTIVE COMMAND HERO BANNER */}
-                <View style={styles.overviewHeroCard}>
-                  <View style={styles.overviewHeroTop}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1, flexWrap: 'wrap' }}>
-                      <View style={styles.overviewHeroIconBox}>
-                        <Text style={{ fontSize: 24 }}>👑</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                          <Text style={styles.overviewHeroTitle}>Apex Council Governance Matrix</Text>
-                          <View style={styles.heroLiveStatusChip}>
-                            <View style={styles.pulsingLiveDot} />
-                            <Text style={styles.heroLiveStatusText}>SYSTEM ONLINE • 100% LIVE</Text>
-                          </View>
-                        </View>
-                        <Text style={styles.overviewHeroSubtitle}>
-                          Cricket Federation of Virudhunagar District (CFVD) • Central Executive Command Portal
-                        </Text>
-                      </View>
-                    </View>
-                    <TouchableOpacity
-                      style={[styles.roundReloadBtn, isLiveReloading && styles.roundReloadBtnSpinning]}
-                      onPress={handleLiveReload}
-                      activeOpacity={0.7}
-                      accessibilityLabel="Reload Complete Matrix"
-                    >
-                      <Animated.Text style={[styles.roundReloadIcon, { transform: [{ rotate: spinInterpolate }] }]}>
-                        🔄
-                      </Animated.Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Quick Action Launchpad */}
-                  <View style={styles.heroLaunchpadRow}>
-                    <Text style={styles.heroLaunchpadHeading}>QUICK LAUNCHPAD:</Text>
-                    {pendingPostponementCount > 0 && (
-                      <TouchableOpacity
-                        style={[styles.btnLaunchpadOrange, { backgroundColor: '#dc2626', borderColor: '#b91c1c' }]}
-                        onPress={() => {
-                          setMatchFilter('REQUESTS');
-                          setActiveTab('schedules');
-                        }}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={[styles.btnLaunchpadOrangeText, { color: '#ffffff', fontWeight: '800' }]}>
-                          ⚠️ Review Postponement Requests ({pendingPostponementCount} Pending)
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity
-                      style={styles.btnLaunchpadOrange}
-                      onPress={() => {
-                        setActiveTab('schedules');
-                        setScheduleModalOpen(true);
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.btnLaunchpadOrangeText}>⚡ + Schedule Match</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.btnLaunchpadEmerald}
-                      onPress={() => setActiveTab('teams')}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.btnLaunchpadEmeraldText}>🛡️ Review Clubs ({teamPending} Pending)</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.btnLaunchpadViolet}
-                      onPress={() => setActiveTab('scorers')}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.btnLaunchpadVioletText}>📋 Verify Scorers ({scorerPending} Pending)</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.btnLaunchpadCyan}
-                      onPress={() => setActiveTab('umpires')}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.btnLaunchpadCyanText}>⚖️ Accredit Umpires ({umpirePending} Pending)</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.btnLaunchpadRose}
-                      onPress={() => setActiveTab('content')}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.btnLaunchpadRoseText}>📰 Publish Notice</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                {/* 1. EXECUTIVE COMMAND HERO BANNER (Removed as requested) */}
 
                 {/* URGENT POSTPONEMENT REQUESTS BANNER (OVERVIEW) */}
                 {pendingPostponementCount > 0 && (
@@ -4312,7 +4415,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                         <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#ffe4e6', alignItems: 'center', justifyContent: 'center' }}>
-                          <Text style={{ fontSize: 18 }}>⚠️</Text>
+                          <Ionicons name="warning" size={19} color="#e11d48" />
                         </View>
                         <View>
                           <Text style={{ color: '#9f1239', fontWeight: '800', fontSize: 15, letterSpacing: 0.3 }}>
@@ -4341,9 +4444,16 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                             <Text style={{ fontWeight: '700', fontSize: 14, color: '#1e293b' }}>
                               {m.team_a_name || m.team_a_id} vs {m.team_b_name || m.team_b_id} (Match #{m.id})
                             </Text>
-                            <Text style={{ color: '#64748b', fontSize: 12, marginTop: 2 }}>
-                              📅 {m.match_date} at {m.match_time || '09:30 AM'} • 📍 {m.venue || 'District Stadium'}
-                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+                              <Ionicons name="calendar-outline" size={12} color="#64748b" />
+                              <Text style={{ color: '#64748b', fontSize: 12 }}>
+                                {m.match_date} at {m.match_time || '09:30 AM'}
+                              </Text>
+                              <Ionicons name="location-outline" size={12} color="#64748b" />
+                              <Text style={{ color: '#64748b', fontSize: 12 }}>
+                                {m.venue || 'District Stadium'}
+                              </Text>
+                            </View>
                             <Text style={{ color: '#9f1239', fontSize: 12, fontWeight: '600', marginTop: 4 }}>
                               Requested by: {m.umpire_postponement_request?.umpire_name || 'Assigned Umpire'}
                             </Text>
@@ -4353,18 +4463,20 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           </View>
                           <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
                             <TouchableOpacity
-                              style={{ backgroundColor: '#16a34a', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6 }}
+                              style={{ backgroundColor: '#16a34a', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 5 }}
                               onPress={() => handleReviewUmpirePostponement(m.id, 'APPROVE')}
                               activeOpacity={0.8}
                             >
-                              <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>✓ Approve & Postpone</Text>
+                              <Ionicons name="checkmark" size={13} color="#ffffff" />
+                              <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>Approve & Postpone</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                              style={{ backgroundColor: '#dc2626', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6 }}
+                              style={{ backgroundColor: '#dc2626', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 5 }}
                               onPress={() => handleReviewUmpirePostponement(m.id, 'REJECT')}
                               activeOpacity={0.8}
                             >
-                              <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>✕ Reject</Text>
+                              <Ionicons name="close" size={13} color="#ffffff" />
+                              <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>Reject</Text>
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -4382,26 +4494,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     activeOpacity={0.85}
                   >
                     <View style={styles.hubHeaderRow}>
+                      <Text style={[styles.hubCardTitle, { marginTop: 0, flex: 1 }]}>Registered Clubs</Text>
                       <View style={[styles.hubIconBox, { backgroundColor: '#059669' }]}>
-                        <Text style={{ fontSize: 18 }}>🛡️</Text>
-                      </View>
-                      <View style={styles.hubTagEmerald}>
-                        <Text style={styles.hubTagEmeraldText}>CLUB AFFILIATION</Text>
+                        <Ionicons name="shield-checkmark" size={18} color="#ffffff" />
                       </View>
                     </View>
-                    <Text style={styles.hubCardTitle}>Registered Clubs</Text>
                     <Text style={styles.hubCardBigCount}>{teamTotal}</Text>
-                    <View style={styles.hubMiniPillRow}>
-                      <View style={[styles.hubMiniPill, { backgroundColor: '#ecfdf5' }]}>
-                        <Text style={[styles.hubMiniPillText, { color: '#047857' }]}>✔ {teamApproved} Appr</Text>
-                      </View>
-                      <View style={[styles.hubMiniPill, { backgroundColor: '#fffbeb' }]}>
-                        <Text style={[styles.hubMiniPillText, { color: '#b45309' }]}>⏳ {teamPending} Pend</Text>
-                      </View>
-                      <View style={[styles.hubMiniPill, { backgroundColor: '#fff1f2' }]}>
-                        <Text style={[styles.hubMiniPillText, { color: '#dc2626' }]}>✕ {teamRejected} Rej</Text>
-                      </View>
-                    </View>
                     <Text style={styles.hubFooterLinkEmerald}>Open Team Registry →</Text>
                   </TouchableOpacity>
 
@@ -4412,26 +4510,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     activeOpacity={0.85}
                   >
                     <View style={styles.hubHeaderRow}>
+                      <Text style={[styles.hubCardTitle, { marginTop: 0, flex: 1 }]}>Scorer Guild</Text>
                       <View style={[styles.hubIconBox, { backgroundColor: '#4f46e5' }]}>
-                        <Text style={{ fontSize: 18 }}>📋</Text>
-                      </View>
-                      <View style={styles.hubTagViolet}>
-                        <Text style={styles.hubTagVioletText}>DIGITAL ARBITERS</Text>
+                        <Ionicons name="clipboard" size={18} color="#ffffff" />
                       </View>
                     </View>
-                    <Text style={styles.hubCardTitle}>Scorer Guild</Text>
                     <Text style={styles.hubCardBigCount}>{scorerTotal}</Text>
-                    <View style={styles.hubMiniPillRow}>
-                      <View style={[styles.hubMiniPill, { backgroundColor: '#ecfdf5' }]}>
-                        <Text style={[styles.hubMiniPillText, { color: '#047857' }]}>✔ {scorerApproved} Auth</Text>
-                      </View>
-                      <View style={[styles.hubMiniPill, { backgroundColor: '#fffbeb' }]}>
-                        <Text style={[styles.hubMiniPillText, { color: '#b45309' }]}>⏳ {scorerPending} Pend</Text>
-                      </View>
-                      <View style={[styles.hubMiniPill, { backgroundColor: '#fff1f2' }]}>
-                        <Text style={[styles.hubMiniPillText, { color: '#dc2626' }]}>✕ {scorerRejected} Rej</Text>
-                      </View>
-                    </View>
                     <Text style={styles.hubFooterLinkViolet}>Manage Scorer Cadre →</Text>
                   </TouchableOpacity>
 
@@ -4442,26 +4526,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     activeOpacity={0.85}
                   >
                     <View style={styles.hubHeaderRow}>
+                      <Text style={[styles.hubCardTitle, { marginTop: 0, flex: 1 }]}>Umpire Cadre</Text>
                       <View style={[styles.hubIconBox, { backgroundColor: '#0284c7' }]}>
-                        <Text style={{ fontSize: 18 }}>⚖️</Text>
-                      </View>
-                      <View style={styles.hubTagCyan}>
-                        <Text style={styles.hubTagCyanText}>BCCI & TNCA PANEL</Text>
+                        <MaterialCommunityIcons name="scale-balance" size={18} color="#ffffff" />
                       </View>
                     </View>
-                    <Text style={styles.hubCardTitle}>Umpire Cadre</Text>
                     <Text style={styles.hubCardBigCount}>{umpireTotal}</Text>
-                    <View style={styles.hubMiniPillRow}>
-                      <View style={[styles.hubMiniPill, { backgroundColor: '#ecfdf5' }]}>
-                        <Text style={[styles.hubMiniPillText, { color: '#047857' }]}>✔ {umpireApproved} Accr</Text>
-                      </View>
-                      <View style={[styles.hubMiniPill, { backgroundColor: '#fffbeb' }]}>
-                        <Text style={[styles.hubMiniPillText, { color: '#b45309' }]}>⏳ {umpirePending} Pend</Text>
-                      </View>
-                      <View style={[styles.hubMiniPill, { backgroundColor: '#fff1f2' }]}>
-                        <Text style={[styles.hubMiniPillText, { color: '#dc2626' }]}>✕ {umpireRejected} Rej</Text>
-                      </View>
-                    </View>
                     <Text style={styles.hubFooterLinkCyan}>Accredit Umpires →</Text>
                   </TouchableOpacity>
 
@@ -4472,26 +4542,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     activeOpacity={0.85}
                   >
                     <View style={styles.hubHeaderRow}>
+                      <Text style={[styles.hubCardTitle, { marginTop: 0, flex: 1 }]}>Championship Matches</Text>
                       <View style={[styles.hubIconBox, { backgroundColor: '#ea580c' }]}>
-                        <Text style={{ fontSize: 18 }}>⚡</Text>
-                      </View>
-                      <View style={styles.hubTagOrange}>
-                        <Text style={styles.hubTagOrangeText}>TOURNAMENT OPS</Text>
+                        <Ionicons name="flash" size={18} color="#ffffff" />
                       </View>
                     </View>
-                    <Text style={styles.hubCardTitle}>Championship Matches</Text>
                     <Text style={styles.hubCardBigCount}>{matchesList.length}</Text>
-                    <View style={styles.hubMiniPillRow}>
-                      <View style={[styles.hubMiniPill, { backgroundColor: '#fef2f2' }]}>
-                        <Text style={[styles.hubMiniPillText, { color: '#dc2626' }]}>● {liveMatchesCount} Live</Text>
-                      </View>
-                      <View style={[styles.hubMiniPill, { backgroundColor: '#eff6ff' }]}>
-                        <Text style={[styles.hubMiniPillText, { color: '#2563eb' }]}>📅 {scheduledMatchesCount} Sched</Text>
-                      </View>
-                      <View style={[styles.hubMiniPill, { backgroundColor: '#ecfdf5' }]}>
-                        <Text style={[styles.hubMiniPillText, { color: '#059669' }]}>🏆 {completedMatchesCount} Done</Text>
-                      </View>
-                    </View>
                     <Text style={styles.hubFooterLinkOrange}>Open Match Schedule →</Text>
                   </TouchableOpacity>
                 </View>
@@ -4502,7 +4558,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   <View style={[styles.whiteItemCard, { flex: 1.2 }]}>
                     <View style={styles.overviewSectionHeaderRow}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <Text style={{ fontSize: 18 }}>📋</Text>
+                        <Ionicons name="clipboard-outline" size={18} color="#4f46e5" />
                         <View>
                           <Text style={styles.overviewSectionTitle}>Live District Submissions Stream</Text>
                           <Text style={styles.overviewSectionSubtitle}>Real-time application feed across clubs & officials</Text>
@@ -4544,7 +4600,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               <Text style={styles.badgeCategoryPurpleText}>SCORER • AUTHORIZED</Text>
                             </View>
                           </View>
-                          <Text style={styles.overviewActivitySub}>Grade A Elite Panel • 5 Yrs Exp • 📞 +91 94431 82741</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                            <Text style={styles.overviewActivitySub}>Grade A Elite Panel • 5 Yrs Exp •</Text>
+                            <Ionicons name="call-outline" size={11} color="#64748b" />
+                            <Text style={styles.overviewActivitySub}>+91 94431 82741</Text>
+                          </View>
                         </View>
                         <TouchableOpacity
                           style={styles.btnActionViewViolet}
@@ -4600,7 +4660,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   <View style={[styles.whiteItemCard, styles.donutCardAlign, { flex: 1 }]}>
                     <View style={styles.overviewSectionHeaderRow}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <Text style={{ fontSize: 18 }}>📊</Text>
+                        <Ionicons name="pie-chart-outline" size={18} color="#0284c7" />
                         <View>
                           <Text style={styles.overviewSectionTitle}>District Accreditation Gauge</Text>
                           <Text style={styles.overviewSectionSubtitle}>Proportional clearance distribution</Text>
@@ -4685,7 +4745,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 <View style={[styles.contentTopCard, { flexWrap: 'wrap', gap: 12 }]}>
                   <View style={[styles.contentTopLeft, { flex: 1, minWidth: 240 }]}>
                     <View style={styles.goldIconBox}>
-                      <Text style={{ fontSize: 16 }}>📰</Text>
+                      <Ionicons name="newspaper" size={16} color="#92400e" />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.contentTopTitle}>Official News, Circulars & Media Management</Text>
@@ -4712,7 +4772,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       elevation: 3
                     }}
                   >
-                    <Text style={{ fontSize: 15 }}>📢</Text>
+                    <Ionicons name="megaphone" size={16} color="#0f172a" />
                     <Text style={{ color: '#0f172a', fontWeight: '900', fontSize: 13 }}>
                       Home Popup Alert
                     </Text>
@@ -4727,7 +4787,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 {/* Publish Form Box */}
                 <View style={styles.newsFormCard}>
                   <View style={styles.newsFormHeader}>
-                    <Text style={styles.newsFormTitle}>✏ Publish Official Article or Notice</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name="create-outline" size={16} color="#0f172a" />
+                      <Text style={styles.newsFormTitle}>Publish Official Article or Notice</Text>
+                    </View>
                     <View style={styles.tagDirectDispatch}>
                       <Text style={styles.tagDirectDispatchText}>DIRECT ADMIN DISPATCH</Text>
                     </View>
@@ -4768,8 +4831,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     </View>
                   </View>
 
-                  <TouchableOpacity style={styles.btnPublishNews} onPress={handlePublishNews} activeOpacity={0.8}>
-                    <Text style={styles.btnPublishNewsText}>🚀 Dispatch & Publish Notice</Text>
+                  <TouchableOpacity style={[styles.btnPublishNews, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]} onPress={handlePublishNews} activeOpacity={0.8}>
+                    <Ionicons name="send" size={14} color="#ffffff" />
+                    <Text style={styles.btnPublishNewsText}>Dispatch & Publish Notice</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -4792,11 +4856,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           </Text>
                         </View>
                         <TouchableOpacity
-                          style={styles.btnDeleteNews}
+                          style={[styles.btnDeleteNews, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                           onPress={() => handleDeleteNews(n.id || n._id)}
                           activeOpacity={0.8}
                         >
-                          <Text style={styles.btnDeleteNewsText}>🗑 Delete</Text>
+                          <Ionicons name="trash-outline" size={12} color="#dc2626" />
+                          <Text style={styles.btnDeleteNewsText}>Delete</Text>
                         </TouchableOpacity>
                       </View>
                     ))
@@ -4816,7 +4881,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   <View style={styles.schedulesStatCard}>
                     <View style={styles.statCardHeader}>
                       <View style={styles.schedulesIconBox}>
-                        <Text style={{ fontSize: 16 }}>🏏</Text>
+                        <MaterialCommunityIcons name="cricket" size={16} color="#ea580c" />
                       </View>
                       <View>
                         <Text style={styles.schedulesStatCardTitle}>Match Schedules & Live Tracking</Text>
@@ -4945,7 +5010,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   <View style={styles.schedulesOpsCard}>
                     <View style={styles.statCardHeader}>
                       <View style={styles.schedulesGoldIconBox}>
-                        <Text style={{ fontSize: 16 }}>⚙️</Text>
+                        <Ionicons name="settings-outline" size={16} color="#b45309" />
                       </View>
                       <View>
                         <Text style={styles.schedulesStatCardTitle}>Fixture Operations</Text>
@@ -4958,19 +5023,21 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                     <View style={{ marginTop: 14, gap: 10 }}>
                       <TouchableOpacity
-                        style={styles.btnScheduleGradient}
+                        style={[styles.btnScheduleGradient, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}
                         onPress={() => handleOpenScheduleModal()}
                         activeOpacity={0.8}
                       >
-                        <Text style={styles.btnScheduleGradientText}>➕ Schedule New Match</Text>
+                        <Ionicons name="add-circle-outline" size={16} color="#ffffff" />
+                        <Text style={styles.btnScheduleGradientText}>Schedule New Match</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={[styles.btnScheduleGradient, { backgroundColor: '#fffbeb', borderColor: '#f59e0b', borderWidth: 1.5 }]}
+                        style={[styles.btnScheduleGradient, { backgroundColor: '#fffbeb', borderColor: '#f59e0b', borderWidth: 1.5, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}
                         onPress={() => handleOpenPostponeModal()}
                         activeOpacity={0.8}
                       >
-                        <Text style={[styles.btnScheduleGradientText, { color: '#b45309' }]}>⏸️ Postpone a Match</Text>
+                        <Ionicons name="pause-circle-outline" size={16} color="#b45309" />
+                        <Text style={[styles.btnScheduleGradientText, { color: '#b45309' }]}>Postpone a Match</Text>
                       </TouchableOpacity>
 
                       <View style={styles.scheduleInfoBoxModern}>
@@ -4997,9 +5064,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   {pendingPostponementCount > 0 && (
                     <View style={{ backgroundColor: '#fff1f2', borderColor: '#f43f5e', borderWidth: 1.5, borderRadius: 10, padding: 12, marginBottom: 12, width: '100%' }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-                        <Text style={{ color: '#9f1239', fontWeight: '800', fontSize: 13 }}>
-                          ⚠️ {pendingPostponementCount} Umpire Postponement Request(s) Awaiting Admin Decision
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Ionicons name="warning" size={15} color="#9f1239" />
+                          <Text style={{ color: '#9f1239', fontWeight: '800', fontSize: 13 }}>
+                            {pendingPostponementCount} Umpire Postponement Request(s) Awaiting Admin Decision
+                          </Text>
+                        </View>
                         <TouchableOpacity
                           style={{ backgroundColor: '#e11d48', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 4 }}
                           onPress={() => setMatchFilter('REQUESTS')}
@@ -5012,7 +5082,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                   <View style={[styles.filterControlsRow, !isDesktop && { flexDirection: 'column', alignItems: 'stretch' }]}>
                     <View style={styles.searchBoxWrap}>
-                      <Text style={styles.searchIcon}>🔍</Text>
+                      <Ionicons name="search" size={15} color="#64748b" style={{ marginRight: 8 }} />
                       <TextInput
                         style={styles.searchInput}
                         placeholder="Search fixtures by team name, venue, tournament, or ID..."
@@ -5022,7 +5092,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       />
                       {matchSearchQuery ? (
                         <TouchableOpacity onPress={() => setMatchSearchQuery('')}>
-                          <Text style={{ color: '#94a3b8', fontSize: 16 }}>✕</Text>
+                          <Ionicons name="close" size={16} color="#94a3b8" />
                         </TouchableOpacity>
                       ) : null}
                     </View>
@@ -5030,15 +5100,15 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     {/* Status Filter Dropdown Selector & Refresh */}
                     {(() => {
                       const matchFilterOptions = [
-                        { key: 'all' as MatchFilterStatus, label: 'All Fixtures', count: matchesList.length, icon: '📋', color: '#0f172a' },
+                        { key: 'all' as MatchFilterStatus, label: 'All Fixtures', count: matchesList.length, icon: 'clipboard-outline' as const, color: '#0f172a' },
                         ...(pendingPostponementCount > 0
-                          ? [{ key: 'REQUESTS' as MatchFilterStatus, label: 'Postponement Requests', count: pendingPostponementCount, icon: '⚠️', color: '#b91c1c' }]
+                          ? [{ key: 'REQUESTS' as MatchFilterStatus, label: 'Postponement Requests', count: pendingPostponementCount, icon: 'warning-outline' as const, color: '#b91c1c' }]
                           : []),
-                        { key: 'SCHEDULED' as MatchFilterStatus, label: 'Scheduled Fixtures', count: scheduledMatchesCount, icon: '🗓️', color: '#2563eb' },
-                        { key: 'LIVE' as MatchFilterStatus, label: 'Live Matches', count: liveMatchesCount, icon: '🔴', color: '#dc2626' },
-                        { key: 'COMPLETED' as MatchFilterStatus, label: 'Completed Matches', count: completedMatchesCount, icon: '✓', color: '#16a34a' },
-                        { key: 'CANCELLED' as MatchFilterStatus, label: 'Cancelled Fixtures', count: cancelledMatchesCount, icon: '✕', color: '#64748b' },
-                        { key: 'POSTPONED' as MatchFilterStatus, label: 'Postponed Matches', count: postponedMatchesCount, icon: '⏸️', color: '#d97706' },
+                        { key: 'SCHEDULED' as MatchFilterStatus, label: 'Scheduled Fixtures', count: scheduledMatchesCount, icon: 'calendar-outline' as const, color: '#2563eb' },
+                        { key: 'LIVE' as MatchFilterStatus, label: 'Live Matches', count: liveMatchesCount, icon: 'radio-button-on' as const, color: '#dc2626' },
+                        { key: 'COMPLETED' as MatchFilterStatus, label: 'Completed Matches', count: completedMatchesCount, icon: 'checkmark-circle-outline' as const, color: '#16a34a' },
+                        { key: 'CANCELLED' as MatchFilterStatus, label: 'Cancelled Fixtures', count: cancelledMatchesCount, icon: 'close-circle-outline' as const, color: '#64748b' },
+                        { key: 'POSTPONED' as MatchFilterStatus, label: 'Postponed Matches', count: postponedMatchesCount, icon: 'pause-circle-outline' as const, color: '#d97706' },
                       ];
                       const activeMatchFilterOption = matchFilterOptions.find(o => o.key === matchFilter) || matchFilterOptions[0];
 
@@ -5061,7 +5131,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               activeOpacity={0.8}
                             >
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                                <Text style={{ fontSize: 15 }}>{activeMatchFilterOption.icon}</Text>
+                                <Ionicons name={activeMatchFilterOption.icon} size={15} color={activeMatchFilterOption.color} />
                                 <Text style={{ fontSize: 13, fontWeight: '700', color: activeMatchFilterOption.color }} numberOfLines={1}>
                                   {activeMatchFilterOption.label}
                                 </Text>
@@ -5072,9 +5142,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                     {activeMatchFilterOption.count}
                                   </Text>
                                 </View>
-                                <Text style={{ fontSize: 12, color: '#64748b', fontWeight: 'bold' }}>
-                                  {matchFilterDropdownOpen ? '▲' : '▼'}
-                                </Text>
+                                <Ionicons name={matchFilterDropdownOpen ? 'chevron-up' : 'chevron-down'} size={13} color="#64748b" />
                               </View>
                             </TouchableOpacity>
 
@@ -5119,7 +5187,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                       activeOpacity={0.7}
                                     >
                                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                        <Text style={{ fontSize: 15 }}>{opt.icon}</Text>
+                                        <Ionicons name={opt.icon} size={15} color={opt.color} />
                                         <Text style={{ fontSize: 13, fontWeight: isSelected ? '800' : '600', color: opt.color }}>
                                           {opt.label}
                                         </Text>
@@ -5151,11 +5219,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                           {/* Refresh Button */}
                           <TouchableOpacity
-                            style={[styles.refreshBtnSm, { height: 40, paddingHorizontal: 14, justifyContent: 'center' }]}
+                            style={[styles.refreshBtnSm, { height: 40, paddingHorizontal: 14, justifyContent: 'center', flexDirection: 'row', alignItems: 'center', gap: 5 }]}
                             onPress={loadMatchesAndLogistics}
                             activeOpacity={0.8}
                           >
-                            <Text style={styles.refreshBtnSmText}>🔄 Refresh</Text>
+                            <Ionicons name="sync" size={14} color="#0f172a" />
+                            <Text style={styles.refreshBtnSmText}>Refresh</Text>
                           </TouchableOpacity>
                         </View>
                       );
@@ -5172,7 +5241,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     </View>
                   ) : filteredMatches.length === 0 ? (
                     <View style={styles.emptyContainerBox}>
-                      <Text style={{ fontSize: 36, marginBottom: 8 }}>🏏</Text>
+                      <MaterialCommunityIcons name="cricket" size={38} color="#94a3b8" style={{ marginBottom: 8 }} />
                       <Text style={styles.emptyTitle}>
                         {matchFilter === 'CANCELLED' ? 'No Cancelled Matches' :
                          matchFilter === 'POSTPONED' ? 'No Postponed Matches' :
@@ -5189,10 +5258,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       </Text>
                       {(matchFilter === 'all' || matchFilter === 'SCHEDULED') && (
                         <TouchableOpacity
-                          style={[styles.btnPrimarySchedule, { marginTop: 16 }]}
+                          style={[styles.btnPrimarySchedule, { marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 6 }]}
                           onPress={() => handleOpenScheduleModal()}
                         >
-                          <Text style={styles.btnPrimaryScheduleText}>➕ Schedule Match</Text>
+                          <Ionicons name="add-circle-outline" size={16} color="#ffffff" />
+                          <Text style={styles.btnPrimaryScheduleText}>Schedule Match</Text>
                         </TouchableOpacity>
                       )}
                     </View>
@@ -5228,7 +5298,13 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 isCancelled && { backgroundColor: '#64748b' },
                                 isPostponed && { backgroundColor: '#f59e0b' }
                               ]}>
-                                <Text style={styles.itemCrestText}>{isLive ? '🔴' : (isPostponed ? '⏸️' : '🏏')}</Text>
+                                {isLive ? (
+                                  <Ionicons name="radio-button-on" size={18} color="#ffffff" />
+                                ) : isPostponed ? (
+                                  <Ionicons name="pause" size={18} color="#ffffff" />
+                                ) : (
+                                  <MaterialCommunityIcons name="cricket" size={18} color="#ffffff" />
+                                )}
                               </View>
                               <View style={[styles.itemTitleCol, { flex: 1, minWidth: 0 }]}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -5239,37 +5315,45 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                     <Text style={styles.matchIdBadgeText}>{m.id}</Text>
                                   </View>
                                 </View>
-                                <Text style={styles.itemSub} numberOfLines={2}>
-                                  🏆 {m.tournament_name || m.tournament_display_name || 'District Championship'} • {m.match_type || 'T20'} ({m.overs_per_side || 20} Overs)
-                                </Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 }}>
+                                  <Ionicons name="trophy-outline" size={12} color="#64748b" />
+                                  <Text style={[styles.itemSub, { flex: 1 }]} numberOfLines={2}>
+                                    {m.tournament_name || m.tournament_display_name || 'District Championship'} • {m.match_type || 'T20'} ({m.overs_per_side || 20} Overs)
+                                  </Text>
+                                </View>
                               </View>
                             </View>
 
                             {/* Status Badge */}
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: isDesktop ? 'auto' : 'flex-start' }}>
                               {isScheduled && (
-                                <View style={[styles.statusBadge, styles.badgeScheduled]}>
-                                  <Text style={styles.badgeScheduledText}>📅 SCHEDULED</Text>
+                                <View style={[styles.statusBadge, styles.badgeScheduled, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                  <Ionicons name="calendar-outline" size={11} color="#1d4ed8" />
+                                  <Text style={styles.badgeScheduledText}>SCHEDULED</Text>
                                 </View>
                               )}
                               {isPostponed && (
-                                <View style={[styles.statusBadge, { backgroundColor: '#fef3c7', borderColor: '#f59e0b', borderWidth: 1 }]}>
-                                  <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 11 }}>⏸️ POSTPONED</Text>
+                                <View style={[styles.statusBadge, { backgroundColor: '#fef3c7', borderColor: '#f59e0b', borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                  <Ionicons name="pause-circle-outline" size={11} color="#b45309" />
+                                  <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 11 }}>POSTPONED</Text>
                                 </View>
                               )}
                               {isLive && (
-                                <View style={[styles.statusBadge, styles.badgeLive]}>
-                                  <Text style={styles.badgeLiveText}>🔴 LIVE MATCH</Text>
+                                <View style={[styles.statusBadge, styles.badgeLive, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                  <Ionicons name="radio-button-on" size={11} color="#dc2626" />
+                                  <Text style={styles.badgeLiveText}>LIVE MATCH</Text>
                                 </View>
                               )}
                               {isCompleted && (
-                                <View style={[styles.statusBadge, styles.badgeCompleted]}>
-                                  <Text style={styles.badgeCompletedText}>✓ COMPLETED</Text>
+                                <View style={[styles.statusBadge, styles.badgeCompleted, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                  <Ionicons name="checkmark" size={11} color="#047857" />
+                                  <Text style={styles.badgeCompletedText}>COMPLETED</Text>
                                 </View>
                               )}
                               {isCancelled && (
-                                <View style={[styles.statusBadge, styles.badgeCancelled]}>
-                                  <Text style={styles.badgeCancelledText}>✕ CANCELLED</Text>
+                                <View style={[styles.statusBadge, styles.badgeCancelled, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                                  <Ionicons name="close" size={11} color="#475569" />
+                                  <Text style={styles.badgeCancelledText}>CANCELLED</Text>
                                 </View>
                               )}
                             </View>
@@ -5279,7 +5363,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           <View style={styles.itemMetaGrid}>
                             <View style={styles.metaCell}>
                               <Text style={styles.metaLabel}>Match Date & Time</Text>
-                              <Text style={styles.metaVal}>📅 {m.match_date} • ⏰ {m.match_time || '09:30 AM'}</Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Ionicons name="calendar-outline" size={12} color="#475569" />
+                                <Text style={styles.metaVal}>{m.match_date} •</Text>
+                                <Ionicons name="time-outline" size={12} color="#475569" />
+                                <Text style={styles.metaVal}>{m.match_time || '09:30 AM'}</Text>
+                              </View>
                             </View>
                             <TouchableOpacity
                               style={styles.metaCell}
@@ -5295,11 +5384,17 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               activeOpacity={0.7}
                             >
                               <Text style={styles.metaLabel}>Venue / Stadium</Text>
-                              <Text style={[styles.metaVal, { color: '#0284c7', textDecorationLine: 'underline' }]} numberOfLines={1}>📍 {m.venue || 'District Stadium'} ↗</Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Ionicons name="location-outline" size={12} color="#0284c7" />
+                                <Text style={[styles.metaVal, { color: '#0284c7', textDecorationLine: 'underline', flexShrink: 1 }]} numberOfLines={1}>{m.venue || 'District Stadium'} ↗</Text>
+                              </View>
                             </TouchableOpacity>
                             <View style={styles.metaCell}>
                               <Text style={styles.metaLabel}>Official Scorer</Text>
-                              <Text style={styles.metaVal}>👤 {m.scorer_name || m.assigned_scorer_id || 'SCR-101'}</Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Ionicons name="person-outline" size={12} color="#475569" />
+                                <Text style={styles.metaVal}>{m.scorer_name || m.assigned_scorer_id || 'SCR-101'}</Text>
+                              </View>
                             </View>
                             <View style={styles.metaCell}>
                               <Text style={styles.metaLabel}>Current Status</Text>
@@ -5311,28 +5406,40 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                           {/* Postponement Information Banner */}
                           {isPostponed && (
-                            <View style={{ backgroundColor: '#fffbeb', borderColor: '#fcd34d', borderWidth: 1, borderRadius: 8, padding: 10, marginTop: 10 }}>
-                              <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 12 }}>
-                                ⏸️ Match Postponed: {m.postponement?.reason || 'Reason not specified'}
-                              </Text>
-                              {Boolean(m.postponement?.postponed_score_display) && (
-                                <Text style={{ color: '#92400e', fontWeight: '700', fontSize: 11.5, marginTop: 3 }}>
-                                  📊 State at Postponement: {m.postponement.postponed_score_display}
+                            <View style={{ backgroundColor: '#fffbeb', borderColor: '#fcd34d', borderWidth: 1, borderRadius: 8, padding: 10, marginTop: 10, gap: 3 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                <Ionicons name="pause-circle-outline" size={13} color="#b45309" />
+                                <Text style={{ color: '#b45309', fontWeight: '700', fontSize: 12 }}>
+                                  Match Postponed: {m.postponement?.reason || 'Reason not specified'}
                                 </Text>
+                              </View>
+                              {Boolean(m.postponement?.postponed_score_display) && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                  <Ionicons name="stats-chart-outline" size={12} color="#92400e" />
+                                  <Text style={{ color: '#92400e', fontWeight: '700', fontSize: 11.5 }}>
+                                    State at Postponement: {m.postponement.postponed_score_display}
+                                  </Text>
+                                </View>
                               )}
                               {Boolean(m.postponement?.original_date) && (
-                                <Text style={{ color: '#78350f', fontSize: 11, marginTop: 3 }}>
+                                <Text style={{ color: '#78350f', fontSize: 11 }}>
                                   Original Schedule: {m.postponement.original_date} • {m.postponement.original_time || '09:30 AM'}
                                 </Text>
                               )}
                               {m.postponement?.rescheduled_date ? (
-                                <Text style={{ color: '#15803d', fontSize: 11, fontWeight: '700', marginTop: 3 }}>
-                                  📅 Rescheduled Date: {m.postponement.rescheduled_date} • {m.postponement.rescheduled_time || '09:30 AM'}
-                                </Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                  <Ionicons name="calendar-outline" size={12} color="#15803d" />
+                                  <Text style={{ color: '#15803d', fontSize: 11, fontWeight: '700' }}>
+                                    Rescheduled Date: {m.postponement.rescheduled_date} • {m.postponement.rescheduled_time || '09:30 AM'}
+                                  </Text>
+                                </View>
                               ) : (
-                                <Text style={{ color: '#92400e', fontSize: 11, fontStyle: 'italic', marginTop: 3 }}>
-                                  ⏳ Pending Reschedule: Please click "Reschedule Match" below to set a new date and time.
-                                </Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                  <Ionicons name="hourglass-outline" size={12} color="#92400e" />
+                                  <Text style={{ color: '#92400e', fontSize: 11, fontStyle: 'italic' }}>
+                                    Pending Reschedule: Please click "Reschedule Match" below to set a new date and time.
+                                  </Text>
+                                </View>
                               )}
                             </View>
                           )}
@@ -5340,9 +5447,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           {/* Umpire Postponement Request Banner */}
                           {m.umpire_postponement_request?.status === 'PENDING' && (
                             <View style={{ backgroundColor: '#fef2f2', borderColor: '#fca5a5', borderWidth: 1, borderRadius: 8, padding: 10, marginTop: 10 }}>
-                              <Text style={{ color: '#991b1b', fontWeight: '700', fontSize: 12 }}>
-                                ⚠️ Umpire Postponement Request Pending Review
-                              </Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                <Ionicons name="warning" size={13} color="#991b1b" />
+                                <Text style={{ color: '#991b1b', fontWeight: '700', fontSize: 12 }}>
+                                  Umpire Postponement Request Pending Review
+                                </Text>
+                              </View>
                               <Text style={{ color: '#7f1d1d', fontSize: 11, marginTop: 3 }}>
                                 Submitted by: <Text style={{ fontWeight: '600' }}>{m.umpire_postponement_request.umpire_name || 'Assigned Umpire'}</Text>
                               </Text>
@@ -5351,18 +5461,20 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               </Text>
                               <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
                                 <TouchableOpacity
-                                  style={{ backgroundColor: '#16a34a', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
+                                  style={{ backgroundColor: '#16a34a', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}
                                   onPress={() => handleReviewUmpirePostponement(m.id, 'APPROVE')}
                                   activeOpacity={0.8}
                                 >
-                                  <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>✓ Approve & Postpone</Text>
+                                  <Ionicons name="checkmark" size={12} color="#ffffff" />
+                                  <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>Approve & Postpone</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity
-                                  style={{ backgroundColor: '#dc2626', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
+                                  style={{ backgroundColor: '#dc2626', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}
                                   onPress={() => handleReviewUmpirePostponement(m.id, 'REJECT')}
                                   activeOpacity={0.8}
                                 >
-                                  <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>✕ Reject</Text>
+                                  <Ionicons name="close" size={12} color="#ffffff" />
+                                  <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>Reject</Text>
                                 </TouchableOpacity>
                               </View>
                             </View>
@@ -5370,8 +5482,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                           {/* Result / Score Note if present */}
                           {Boolean(m.result_summary) && (
-                            <View style={styles.resultNoticeBox}>
-                              <Text style={styles.resultNoticeText}>ℹ️ {m.result_summary}</Text>
+                            <View style={[styles.resultNoticeBox, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                              <Ionicons name="information-circle-outline" size={14} color="#0369a1" />
+                              <Text style={styles.resultNoticeText}>{m.result_summary}</Text>
                             </View>
                           )}
 
@@ -5394,10 +5507,18 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                     borderRadius: 4,
                                     backgroundColor: m.team_a_allocation_status === 'SUBMITTED' ? '#dcfce7' : '#fee2e2',
                                     borderWidth: 1,
-                                    borderColor: m.team_a_allocation_status === 'SUBMITTED' ? '#86efac' : '#fca5a5'
+                                    borderColor: m.team_a_allocation_status === 'SUBMITTED' ? '#86efac' : '#fca5a5',
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 4
                                   }}>
+                                    <Ionicons
+                                      name={m.team_a_allocation_status === 'SUBMITTED' ? 'checkmark' : 'hourglass-outline'}
+                                      size={11}
+                                      color={m.team_a_allocation_status === 'SUBMITTED' ? '#166534' : '#991b1b'}
+                                    />
                                     <Text style={{ fontSize: 11, fontWeight: '700', color: m.team_a_allocation_status === 'SUBMITTED' ? '#166534' : '#991b1b' }}>
-                                      {m.team_a_allocation_status === 'SUBMITTED' ? '✓' : '⏳'} {m.team_a_name || 'Team 1'}: {m.team_a_allocation_status === 'SUBMITTED' ? 'Playing XI Locked' : 'Pending'}
+                                      {m.team_a_name || 'Team 1'}: {m.team_a_allocation_status === 'SUBMITTED' ? 'Playing XI Locked' : 'Pending'}
                                     </Text>
                                   </View>
                                   <View style={{
@@ -5406,17 +5527,26 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                     borderRadius: 4,
                                     backgroundColor: m.team_b_allocation_status === 'SUBMITTED' ? '#dcfce7' : '#fee2e2',
                                     borderWidth: 1,
-                                    borderColor: m.team_b_allocation_status === 'SUBMITTED' ? '#86efac' : '#fca5a5'
+                                    borderColor: m.team_b_allocation_status === 'SUBMITTED' ? '#86efac' : '#fca5a5',
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 4
                                   }}>
+                                    <Ionicons
+                                      name={m.team_b_allocation_status === 'SUBMITTED' ? 'checkmark' : 'hourglass-outline'}
+                                      size={11}
+                                      color={m.team_b_allocation_status === 'SUBMITTED' ? '#166534' : '#991b1b'}
+                                    />
                                     <Text style={{ fontSize: 11, fontWeight: '700', color: m.team_b_allocation_status === 'SUBMITTED' ? '#166534' : '#991b1b' }}>
-                                      {m.team_b_allocation_status === 'SUBMITTED' ? '✓' : '⏳'} {m.team_b_name || 'Team 2'}: {m.team_b_allocation_status === 'SUBMITTED' ? 'Playing XI Locked' : 'Pending'}
+                                      {m.team_b_name || 'Team 2'}: {m.team_b_allocation_status === 'SUBMITTED' ? 'Playing XI Locked' : 'Pending'}
                                     </Text>
                                   </View>
                                 </View>
 
                                 {m.schedule_confirmation_status === 'CONFIRMED' ? (
-                                  <View style={{ backgroundColor: '#10b981', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}>
-                                    <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: '800' }}>✓ Confirmed & Live to Scorer</Text>
+                                  <View style={{ backgroundColor: '#10b981', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <Ionicons name="checkmark" size={12} color="#ffffff" />
+                                    <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: '800' }}>Confirmed & Live to Scorer</Text>
                                   </View>
                                 ) : (
                                   <TouchableOpacity
@@ -5436,11 +5566,18 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                     {isConfirmingScheduleId === m.id ? (
                                       <ActivityIndicator size="small" color="#ffffff" />
                                     ) : (
-                                      <Text style={{ color: '#ffffff', fontSize: 12, fontWeight: '800' }}>
-                                        {(m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED')
-                                          ? '✓ Confirm Match Schedule'
-                                          : '⏳ Confirm (Pending Squads)'}
-                                      </Text>
+                                      <>
+                                        <Ionicons
+                                          name={(m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? 'checkmark' : 'hourglass-outline'}
+                                          size={13}
+                                          color="#ffffff"
+                                        />
+                                        <Text style={{ color: '#ffffff', fontSize: 12, fontWeight: '800' }}>
+                                          {(m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED')
+                                            ? 'Confirm Match Schedule'
+                                            : 'Confirm (Pending Squads)'}
+                                        </Text>
+                                      </>
                                     )}
                                   </TouchableOpacity>
                                 )}
@@ -5451,11 +5588,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           {/* Action Buttons Row */}
                           <View style={styles.scheduleActionsRow}>
                             <TouchableOpacity
-                              style={styles.btnOutlineGold}
+                              style={[styles.btnOutlineGold, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                               onPress={() => setSelectedMatchModal(m)}
                               activeOpacity={0.8}
                             >
-                              <Text style={styles.btnOutlineGoldText}>👁 View Details</Text>
+                              <Ionicons name="eye-outline" size={13} color="#b45309" />
+                              <Text style={styles.btnOutlineGoldText}>View Details</Text>
                             </TouchableOpacity>
 
                             {isScheduled && (
@@ -5466,13 +5604,21 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                       styles.btnOutlineEdit,
                                       {
                                         borderColor: (m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#16a34a' : '#94a3b8',
-                                        backgroundColor: (m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#ecfdf5' : '#f1f5f9'
+                                        backgroundColor: (m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#ecfdf5' : '#f1f5f9',
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 4
                                       }
                                     ]}
                                     onPress={() => handleConfirmMatchSchedule(m)}
                                     activeOpacity={0.8}
                                     disabled={isConfirmingScheduleId === m.id}
                                   >
+                                    <Ionicons
+                                      name={(m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? 'checkmark' : 'hourglass-outline'}
+                                      size={12}
+                                      color={(m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '#16a34a' : '#64748b'}
+                                    />
                                     <Text style={[
                                       styles.btnOutlineEditText,
                                       {
@@ -5480,41 +5626,45 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                         fontWeight: '800'
                                       }
                                     ]}>
-                                      {(m.team_a_allocation_status === 'SUBMITTED' && m.team_b_allocation_status === 'SUBMITTED') ? '✓ Confirm' : '⏳ Confirm'}
+                                      Confirm
                                     </Text>
                                   </TouchableOpacity>
                                 )}
 
                                 <TouchableOpacity
-                                  style={styles.btnOutlineEdit}
+                                  style={[styles.btnOutlineEdit, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                   onPress={() => handleOpenScheduleModal(m)}
                                   activeOpacity={0.8}
                                 >
-                                  <Text style={styles.btnOutlineEditText}>✏️ Edit</Text>
+                                  <Ionicons name="create-outline" size={12} color="#1d4ed8" />
+                                  <Text style={styles.btnOutlineEditText}>Edit</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
-                                  style={[styles.btnOutlineEdit, { borderColor: '#d97706', backgroundColor: '#fffbeb' }]}
+                                  style={[styles.btnOutlineEdit, { borderColor: '#d97706', backgroundColor: '#fffbeb', flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                   onPress={() => handleOpenPostponeModal(m)}
                                   activeOpacity={0.8}
                                 >
-                                  <Text style={[styles.btnOutlineEditText, { color: '#d97706', fontWeight: '700' }]}>⏸️ Postpone</Text>
+                                  <Ionicons name="pause-circle-outline" size={12} color="#d97706" />
+                                  <Text style={[styles.btnOutlineEditText, { color: '#d97706', fontWeight: '700' }]}>Postpone</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
-                                  style={styles.btnOutlineDanger}
+                                  style={[styles.btnOutlineDanger, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                   onPress={() => setCancelMatchModal({ id: m.id, teamA: m.team_a_name || m.team_a_id, teamB: m.team_b_name || m.team_b_id })}
                                   activeOpacity={0.8}
                                 >
-                                  <Text style={styles.btnOutlineDangerText}>🚫 Cancel</Text>
+                                  <Ionicons name="ban-outline" size={12} color="#dc2626" />
+                                  <Text style={styles.btnOutlineDangerText}>Cancel</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
-                                  style={styles.btnOutlineDelete}
+                                  style={[styles.btnOutlineDelete, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                   onPress={() => handleDeleteMatch(m.id)}
                                   activeOpacity={0.8}
                                 >
-                                  <Text style={styles.btnOutlineDeleteText}>🗑 Delete</Text>
+                                  <Ionicons name="trash-outline" size={12} color="#dc2626" />
+                                  <Text style={styles.btnOutlineDeleteText}>Delete</Text>
                                 </TouchableOpacity>
                               </>
                             )}
@@ -5522,38 +5672,42 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                             {isPostponed && (
                               <>
                                 <TouchableOpacity
-                                  style={[styles.btnOutlineEdit, { borderColor: '#0284c7', backgroundColor: '#e0f2fe' }]}
+                                  style={[styles.btnOutlineEdit, { borderColor: '#0284c7', backgroundColor: '#e0f2fe', flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                   onPress={() => handleOpenRescheduleModal(m)}
                                   activeOpacity={0.8}
                                 >
-                                  <Text style={[styles.btnOutlineEditText, { color: '#0284c7', fontWeight: '700' }]}>📅 Reschedule Match</Text>
+                                  <Ionicons name="calendar-outline" size={12} color="#0284c7" />
+                                  <Text style={[styles.btnOutlineEditText, { color: '#0284c7', fontWeight: '700' }]}>Reschedule Match</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
-                                  style={styles.btnOutlineDanger}
+                                  style={[styles.btnOutlineDanger, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                   onPress={() => setCancelMatchModal({ id: m.id, teamA: m.team_a_name || m.team_a_id, teamB: m.team_b_name || m.team_b_id })}
                                   activeOpacity={0.8}
                                 >
-                                  <Text style={styles.btnOutlineDangerText}>🚫 Cancel</Text>
+                                  <Ionicons name="ban-outline" size={12} color="#dc2626" />
+                                  <Text style={styles.btnOutlineDangerText}>Cancel</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
-                                  style={styles.btnOutlineDelete}
+                                  style={[styles.btnOutlineDelete, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                   onPress={() => handleDeleteMatch(m.id)}
                                   activeOpacity={0.8}
                                 >
-                                  <Text style={styles.btnOutlineDeleteText}>🗑 Delete Fixture</Text>
+                                  <Ionicons name="trash-outline" size={12} color="#dc2626" />
+                                  <Text style={styles.btnOutlineDeleteText}>Delete Fixture</Text>
                                 </TouchableOpacity>
                               </>
                             )}
 
                             {isCancelled && (
                               <TouchableOpacity
-                                style={styles.btnOutlineDelete}
+                                style={[styles.btnOutlineDelete, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                 onPress={() => handleDeleteMatch(m.id)}
                                 activeOpacity={0.8}
                               >
-                                <Text style={styles.btnOutlineDeleteText}>🗑 Delete Fixture</Text>
+                                <Ionicons name="trash-outline" size={12} color="#dc2626" />
+                                <Text style={styles.btnOutlineDeleteText}>Delete Fixture</Text>
                               </TouchableOpacity>
                             )}
                           </View>
@@ -5571,6 +5725,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             {activeTab === 'users' && (
               <View style={{ flex: 1, width: '100%' }}>
                 <UsersPage />
+              </View>
+            )}
+
+            {activeTab === 'admins' && isSuperAdmin && (
+              <View style={{ flex: 1, width: '100%' }}>
+                <AdminsPage />
               </View>
             )}
 
@@ -5614,7 +5774,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setSelectedSquadModal(null)} style={styles.modalCloseBtn}>
-                <Text style={styles.modalCloseBtnText}>✕</Text>
+                <Ionicons name="close" size={18} color="#475569" />
               </TouchableOpacity>
             </View>
 
@@ -5633,9 +5793,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               }}>
                 <View style={{ flex: 1, minWidth: 130 }}>
                   <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Total Squad Players</Text>
-                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#059669', marginTop: 2 }}>
-                    🏏 {selectedSquadModal?.members?.length ?? 0} Players
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 }}>
+                    <MaterialCommunityIcons name="cricket" size={16} color="#059669" />
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: '#059669' }}>
+                      {selectedSquadModal?.members?.length ?? 0} Players
+                    </Text>
+                  </View>
                 </View>
                 <View style={{ flex: 1, minWidth: 150 }}>
                   <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Head Coach</Text>
@@ -5677,10 +5840,16 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       </View>
                       <View style={{ flex: 1.8, paddingVertical: 4, justifyContent: 'center' }}>
                         {(m.phone || m.mobile) && (
-                          <Text style={{ color: '#166534', fontSize: 11, fontWeight: '700' }}>📞 +91 {m.phone || m.mobile}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Ionicons name="call-outline" size={11} color="#166534" />
+                            <Text style={{ color: '#166534', fontSize: 11, fontWeight: '700' }}>+91 {m.phone || m.mobile}</Text>
+                          </View>
                         )}
                         {m.aadhaar && (
-                          <Text style={{ color: '#991b1b', fontSize: 11, fontWeight: '700', marginTop: 2 }}>🆔 UIDAI: {m.aadhaar}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                            <Ionicons name="card-outline" size={11} color="#991b1b" />
+                            <Text style={{ color: '#991b1b', fontSize: 11, fontWeight: '700' }}>UIDAI: {m.aadhaar}</Text>
+                          </View>
                         )}
                         {!m.phone && !m.mobile && !m.aadhaar && (
                           <Text style={{ color: '#94a3b8', fontSize: 11 }}>—</Text>
@@ -5710,13 +5879,14 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               </TouchableOpacity>
               {selectedSquadModal?.status === 'Pending' && (
                 <TouchableOpacity
-                  style={styles.modalApproveBtn}
+                  style={[styles.modalApproveBtn, { flexDirection: 'row', alignItems: 'center', gap: 5 }]}
                   onPress={() => {
                     handleApproveTeam(selectedSquadModal.teamId);
                     setSelectedSquadModal(null);
                   }}
                 >
-                  <Text style={styles.modalApproveBtnText}>✔ Approve Squad Registration</Text>
+                  <Ionicons name="checkmark" size={14} color="#ffffff" />
+                  <Text style={styles.modalApproveBtnText}>Approve Squad Registration</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -5741,7 +5911,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 <Text style={styles.modalSubtitle}>Certification ID: {selectedScorerModal?.scorerId}</Text>
               </View>
               <TouchableOpacity onPress={() => setSelectedScorerModal(null)} style={styles.modalCloseBtn}>
-                <Text style={styles.modalCloseBtnText}>✕</Text>
+                <Ionicons name="close" size={18} color="#475569" />
               </TouchableOpacity>
             </View>
 
@@ -5792,13 +5962,14 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               </TouchableOpacity>
               {selectedScorerModal?.status === 'Pending' && (
                 <TouchableOpacity
-                  style={styles.modalApproveBtn}
+                  style={[styles.modalApproveBtn, { flexDirection: 'row', alignItems: 'center', gap: 5 }]}
                   onPress={() => {
                     handleApproveScorer(selectedScorerModal.scorerId);
                     setSelectedScorerModal(null);
                   }}
                 >
-                  <Text style={styles.modalApproveBtnText}>✔ Authorize Scorer</Text>
+                  <Ionicons name="checkmark" size={14} color="#ffffff" />
+                  <Text style={styles.modalApproveBtnText}>Authorize Scorer</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -5823,7 +5994,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 <Text style={styles.modalSubtitle}>Accreditation ID: {selectedUmpireForView?.umpireId}</Text>
               </View>
               <TouchableOpacity onPress={() => setSelectedUmpireForView(null)} style={styles.modalCloseBtn}>
-                <Text style={styles.modalCloseBtnText}>✕</Text>
+                <Ionicons name="close" size={18} color="#475569" />
               </TouchableOpacity>
             </View>
 
@@ -5900,13 +6071,14 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               </TouchableOpacity>
               {selectedUmpireForView?.status === 'Pending' && (
                 <TouchableOpacity
-                  style={styles.modalApproveBtn}
+                  style={[styles.modalApproveBtn, { flexDirection: 'row', alignItems: 'center', gap: 5 }]}
                   onPress={() => {
                     handleApproveUmpire(selectedUmpireForView.umpireId);
                     setSelectedUmpireForView(null);
                   }}
                 >
-                  <Text style={styles.modalApproveBtnText}>✔ Authorize Umpire</Text>
+                  <Ionicons name="checkmark" size={14} color="#ffffff" />
+                  <Text style={styles.modalApproveBtnText}>Authorize Umpire</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -5955,7 +6127,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           <View style={styles.deleteModalDialog}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
               <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#fee2e2', justifyContent: 'center', alignItems: 'center' }}>
-                <Text style={{ fontSize: 20 }}>🗑️</Text>
+                <Ionicons name="trash-outline" size={20} color="#dc2626" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.deleteModalHeading}>
@@ -5992,9 +6164,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               </View>
             )}
 
-            <View style={styles.deleteModalWarningBox}>
-              <Text style={{ fontSize: 12, color: '#991b1b', fontWeight: '600', lineHeight: 18 }}>
-                ⚠️ This will remove this record from active match assignments and tournament fixtures. An immediate Undo option will appear on screen.
+            <View style={[styles.deleteModalWarningBox, { flexDirection: 'row', alignItems: 'flex-start', gap: 6 }]}>
+              <Ionicons name="warning" size={15} color="#991b1b" style={{ marginTop: 1 }} />
+              <Text style={{ fontSize: 12, color: '#991b1b', fontWeight: '600', lineHeight: 18, flex: 1 }}>
+                This will remove this record from active match assignments and tournament fixtures. An immediate Undo option will appear on screen.
               </Text>
             </View>
 
@@ -6003,10 +6176,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 <Text style={styles.modalCancelBtnText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.btnDangerConfirm, { backgroundColor: '#dc2626', borderColor: '#b91c1c' }]}
+                style={[styles.btnDangerConfirm, { backgroundColor: '#dc2626', borderColor: '#b91c1c', flexDirection: 'row', alignItems: 'center', gap: 5 }]}
                 onPress={handleConfirmDelete}
               >
-                <Text style={styles.btnDangerConfirmText}>🗑️ Yes, Delete</Text>
+                <Ionicons name="trash-outline" size={14} color="#ffffff" />
+                <Text style={styles.btnDangerConfirmText}>Yes, Delete</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -6041,6 +6215,153 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         </View>
       </Modal>
       {/* ─────────────────────────────────────────────────────────────
+          11B. EDIT TEAM REGISTRATION & COACH PASSWORD MODAL
+          ───────────────────────────────────────────────────────────── */}
+      <Modal
+        visible={!!editingTeamModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { if (!isSavingTeamEdit) setEditingTeamModal(null); }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalDialogMedium, { maxWidth: 480 }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                <Ionicons name="create-outline" size={20} color="#1d4ed8" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalTitle} numberOfLines={1}>Edit Team & Change Password</Text>
+                  <Text style={styles.modalSubtitle}>ID: {editingTeamModal?.teamId}</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => !isSavingTeamEdit && setEditingTeamModal(null)}
+                style={styles.modalCloseBtn}
+              >
+                <Ionicons name="close" size={18} color="#475569" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 440, padding: 18 }} showsVerticalScrollIndicator={false}>
+              {editTeamError ? (
+                <View style={{ backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca', borderRadius: 8, padding: 10, marginBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="warning" size={14} color="#dc2626" />
+                  <Text style={{ color: '#b91c1c', fontSize: 12, fontWeight: '600', flex: 1 }}>{editTeamError}</Text>
+                </View>
+              ) : null}
+
+              <View style={{ marginBottom: 12 }}>
+                <Text style={styles.formFieldLabel}>Team / Club Name *</Text>
+                <TextInput
+                  style={styles.formTextInputCompact}
+                  value={editTeamName}
+                  onChangeText={setEditTeamName}
+                  placeholder="Enter team name"
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
+
+              <View style={{ marginBottom: 12 }}>
+                <Text style={styles.formFieldLabel}>Coach Name *</Text>
+                <TextInput
+                  style={styles.formTextInputCompact}
+                  value={editCoachName}
+                  onChangeText={setEditCoachName}
+                  placeholder="Enter coach name"
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
+
+              <View style={{ marginBottom: 12 }}>
+                <Text style={styles.formFieldLabel}>Coach Email *</Text>
+                <TextInput
+                  style={styles.formTextInputCompact}
+                  value={editCoachEmail}
+                  onChangeText={setEditCoachEmail}
+                  placeholder="Enter coach email"
+                  placeholderTextColor="#94a3b8"
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.formFieldLabel}>Coach Mobile</Text>
+                  <TextInput
+                    style={styles.formTextInputCompact}
+                    value={editCoachPhone}
+                    onChangeText={setEditCoachPhone}
+                    placeholder="Phone number"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="phone-pad"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.formFieldLabel}>Taluk</Text>
+                  <TextInput
+                    style={styles.formTextInputCompact}
+                    value={editTeamTaluk}
+                    onChangeText={setEditTeamTaluk}
+                    placeholder="Taluk"
+                    placeholderTextColor="#94a3b8"
+                  />
+                </View>
+              </View>
+
+              <View style={{ marginBottom: 8, backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a', borderRadius: 10, padding: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <Ionicons name="key-outline" size={14} color="#b45309" />
+                  <Text style={[styles.formFieldLabel, { color: '#92400e', marginBottom: 0 }]}>
+                    Change Team / Coach Login Password (Optional)
+                  </Text>
+                </View>
+                <View style={{ position: 'relative' }}>
+                  <TextInput
+                    style={[styles.formTextInputCompact, { paddingRight: 42, backgroundColor: '#ffffff' }]}
+                    value={editTeamPassword}
+                    onChangeText={setEditTeamPassword}
+                    placeholder="Leave blank to keep existing password (min 6 chars)"
+                    placeholderTextColor="#94a3b8"
+                    secureTextEntry={!showEditTeamPassword}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowEditTeamPassword(prev => !prev)}
+                    style={{ position: 'absolute', right: 10, top: 10, padding: 4 }}
+                  >
+                    <Ionicons name={showEditTeamPassword ? 'eye-off-outline' : 'eye-outline'} size={16} color="#64748b" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setEditingTeamModal(null)}
+                disabled={isSavingTeamEdit}
+              >
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalApproveBtn, { flexDirection: 'row', alignItems: 'center', gap: 6 }, isSavingTeamEdit && { opacity: 0.6 }]}
+                onPress={handleSaveTeamEdit}
+                disabled={isSavingTeamEdit}
+              >
+                {isSavingTeamEdit ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark" size={15} color="#ffffff" />
+                    <Text style={styles.modalApproveBtnText}>Save Changes</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ─────────────────────────────────────────────────────────────
           12. ENHANCED SCHEDULE / RESCHEDULE MATCH MODAL
           ───────────────────────────────────────────────────────────── */}
       {/* Minimized Dock Bar at Bottom Right */}
@@ -6048,7 +6369,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         <View style={styles.minimizedDockBar}>
           <View style={styles.minimizedDockLeft}>
             <View style={styles.minimizedDockIconBox}>
-              <Text style={{ fontSize: 16 }}>🏏</Text>
+              <MaterialCommunityIcons name="cricket" size={16} color="#fbbf24" />
             </View>
             <View>
               <Text style={styles.minimizedDockTitle}>Match Fixture in Progress</Text>
@@ -6059,11 +6380,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           </View>
           <View style={styles.minimizedDockActions}>
             <TouchableOpacity
-              style={styles.minimizedRestoreBtn}
+              style={[styles.minimizedRestoreBtn, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
               onPress={() => setScheduleModalMinimized(false)}
               activeOpacity={0.8}
             >
-              <Text style={styles.minimizedRestoreBtnText}>🗖 Restore</Text>
+              <Ionicons name="expand-outline" size={13} color="#ffffff" />
+              <Text style={styles.minimizedRestoreBtnText}>Restore</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.minimizedCloseBtn}
@@ -6073,7 +6395,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               }}
               activeOpacity={0.8}
             >
-              <Text style={styles.minimizedCloseBtnText}>✕</Text>
+              <Ionicons name="close" size={15} color="#ffffff" />
             </TouchableOpacity>
           </View>
         </View>
@@ -6087,18 +6409,22 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalDialogLarge, styles.scheduleModalDialog, scheduleModalMaximized && styles.modalDialogMaximized]}>
-            {/* Modal Header with Icon and Top Controls: Minimize (-), Maximize (🗖), and Red Close (✕) */}
+            {/* Modal Header with Icon and Top Controls: Minimize, Maximize, and Red Close */}
             <View style={styles.modalHeader}>
               <View style={styles.scheduleModalHeaderLeft}>
                 <View style={styles.scheduleModalHeaderIconBox}>
-                  <Text style={{ fontSize: 20 }}>🏏</Text>
+                  <MaterialCommunityIcons name="cricket" size={20} color="#0f172a" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    {editingMatch ? (
+                      <Ionicons name="create-outline" size={18} color="#0f172a" />
+                    ) : (
+                      <MaterialCommunityIcons name="cricket" size={18} color="#0f172a" />
+                    )}
                     <Text style={styles.modalTitle}>
-                      {editingMatch ? '✏️ Edit Match Schedule' : '🏏 Schedule Match'}
+                      {editingMatch ? 'Edit Match Schedule' : 'Schedule Match'}
                     </Text>
-
                   </View>
                   {editingMatch ? (
                     <Text style={styles.modalSubtitle}>
@@ -6108,7 +6434,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 </View>
               </View>
 
-              {/* Window Controls: Minimize (-), Maximize (🗖), Red Close (✕) */}
+              {/* Window Controls: Minimize, Maximize, and Red Close */}
               <View style={styles.modalHeaderControls}>
                 {/* Minimize Button */}
                 <TouchableOpacity
@@ -6117,7 +6443,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   activeOpacity={0.7}
                   accessibilityLabel="Minimize Window"
                 >
-                  <Text style={styles.modalMinimizeText}>—</Text>
+                  <Ionicons name="remove" size={16} color="#475569" />
                 </TouchableOpacity>
 
                 {/* Maximize / Restore Button */}
@@ -6127,7 +6453,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   activeOpacity={0.7}
                   accessibilityLabel="Maximize Window"
                 >
-                  <Text style={styles.modalMaximizeText}>{scheduleModalMaximized ? '🗗' : '🗖'}</Text>
+                  <Ionicons name={scheduleModalMaximized ? 'contract-outline' : 'expand-outline'} size={15} color="#475569" />
                 </TouchableOpacity>
 
                 {/* Close Button: Red on top (Requirement 3.G: Checks unsaved changes) */}
@@ -6137,7 +6463,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   activeOpacity={0.7}
                   accessibilityLabel="Close Window"
                 >
-                  <Text style={styles.modalCloseRedText}>✕</Text>
+                  <Ionicons name="close" size={16} color="#ffffff" />
                 </TouchableOpacity>
               </View>
             </View>
@@ -6215,8 +6541,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             {/* Scrollable Form Body */}
             <ScrollView style={styles.scheduleModalBodyScroll} showsVerticalScrollIndicator={true}>
               {Boolean(scheduleFormError) && (
-                <View style={styles.formErrorBoxCompact}>
-                  <Text style={styles.formErrorText}>⚠️ {scheduleFormError}</Text>
+                <View style={[styles.formErrorBoxCompact, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                  <Ionicons name="warning" size={14} color="#dc2626" />
+                  <Text style={styles.formErrorText}>{scheduleFormError}</Text>
                 </View>
               )}
 
@@ -6226,8 +6553,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               {scheduleStep === 1 && (
                 <View style={styles.stepSectionContainer}>
                   <View style={styles.stepHeaderCard}>
-                    <View style={styles.stepHeaderCardLeft}>
-                      <Text style={styles.stepHeaderTitle}>🏆 Select Tournament Championship</Text>
+                    <View style={[styles.stepHeaderCardLeft, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                      <Ionicons name="trophy" size={16} color="#d97706" />
+                      <Text style={styles.stepHeaderTitle}>Select Tournament Championship</Text>
                     </View>
                     <View style={styles.stepTagPill}>
                       <Text style={styles.stepTagPillText}>AFFILIATED SEASON 2026</Text>
@@ -6290,13 +6618,19 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 }}
                               >
                                 <View style={{ flex: 1 }}>
-                                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>🏆 {t.name}</Text>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                    <Ionicons name="trophy-outline" size={13} color="#d97706" />
+                                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>{t.name}</Text>
+                                  </View>
                                   <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
                                     {t.format} ({t.overs || 20} Overs) • {t.season}
                                   </Text>
                                 </View>
                                 {scheduleForm.tournament_name === t.name && (
-                                  <Text style={{ fontSize: 12, color: '#16a34a', fontWeight: '800' }}>✓ Selected</Text>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                                    <Ionicons name="checkmark" size={13} color="#16a34a" />
+                                    <Text style={{ fontSize: 12, color: '#16a34a', fontWeight: '800' }}>Selected</Text>
+                                  </View>
                                 )}
                               </TouchableOpacity>
                             ))}
@@ -6314,9 +6648,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   {scheduleForm.tournament_name ? (
                     <View style={styles.tournamentAssignedBox}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
-                        <Text style={styles.tournamentAssignedTitle}>
-                          ✅ Assigned Championship: <Text style={{ color: '#166534', fontWeight: '800' }}>{scheduleForm.tournament_name}</Text>
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                          <Ionicons name="checkmark-circle" size={15} color="#16a34a" />
+                          <Text style={styles.tournamentAssignedTitle}>
+                            Assigned Championship: <Text style={{ color: '#166534', fontWeight: '800' }}>{scheduleForm.tournament_name}</Text>
+                          </Text>
+                        </View>
                         <TouchableOpacity
                           style={styles.eligibleTeamsPill}
                           onPress={() => setEligibleClubsDropdownOpen(prev => !prev)}
@@ -6345,9 +6682,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       {/* Dropdown Expanded View */}
                       {eligibleClubsDropdownOpen ? (
                         <View style={styles.eligibleClubsDropdownContainer}>
-                          <View style={styles.eligibleClubsDropdownHeader}>
+                          <View style={[styles.eligibleClubsDropdownHeader, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                            <MaterialCommunityIcons name="cricket" size={14} color="#0f172a" />
                             <Text style={styles.eligibleClubsDropdownHeaderText}>
-                              🏏 All Eligible Clubs for {scheduleForm.tournament_name} ({availableTeams.length}):
+                              All Eligible Clubs for {scheduleForm.tournament_name} ({availableTeams.length}):
                             </Text>
                           </View>
                           <ScrollView style={styles.eligibleClubsDropdownScroll} nestedScrollEnabled={true}>
@@ -6355,7 +6693,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               <View key={`all-team-${tm.id || idx}`} style={styles.eligibleClubRow}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
                                   <Text style={styles.eligibleClubIndex}>{idx + 1}.</Text>
-                                  <Text style={styles.eligibleClubName}>🏏 {tm.name}</Text>
+                                  <MaterialCommunityIcons name="cricket" size={13} color="#059669" />
+                                  <Text style={styles.eligibleClubName}>{tm.name}</Text>
                                 </View>
                                 {tm.taluk ? (
                                   <View style={styles.eligibleClubTalukBadge}>
@@ -6370,8 +6709,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                         /* Compact Preview Chips when collapsed */
                         <View style={styles.teamBadgePreviewRow}>
                           {availableTeams.slice(0, 5).map(tm => (
-                            <View key={tm.id} style={styles.teamMiniChip}>
-                              <Text style={styles.teamMiniChipText}>🏏 {tm.name}</Text>
+                            <View key={tm.id} style={[styles.teamMiniChip, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                              <MaterialCommunityIcons name="cricket" size={11} color="#059669" />
+                              <Text style={styles.teamMiniChipText}>{tm.name}</Text>
                             </View>
                           ))}
                           {availableTeams.length > 5 && (
@@ -6389,9 +6729,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       )}
                     </View>
                   ) : (
-                    <View style={styles.inlineWarningAlert}>
+                    <View style={[styles.inlineWarningAlert, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                      <Ionicons name="warning" size={15} color="#b45309" />
                       <Text style={styles.inlineWarningAlertText}>
-                        ⚠️ Please select or type a tournament above to proceed to team and venue selection.
+                        Please select or type a tournament above to proceed to team and venue selection.
                       </Text>
                     </View>
                   )}
@@ -6404,8 +6745,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               {scheduleStep === 2 && (
                 <View style={styles.stepSectionContainer}>
                   <View style={styles.stepHeaderCard}>
-                    <View style={styles.stepHeaderCardLeft}>
-                      <Text style={styles.stepHeaderTitle}>🏏 Teams & Venue</Text>
+                    <View style={[styles.stepHeaderCardLeft, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                      <MaterialCommunityIcons name="cricket" size={16} color="#059669" />
+                      <Text style={styles.stepHeaderTitle}>Teams & Venue</Text>
                     </View>
                     <View style={styles.stepTagPill}>
                       <Text style={styles.stepTagPillText}>STEP 2 OF 3</Text>
@@ -6697,19 +7039,20 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     {/* Google Maps Actions Row */}
                     <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                       <TouchableOpacity
-                        style={styles.mapsPickerTriggerBtn}
+                        style={[styles.mapsPickerTriggerBtn, { flexDirection: 'row', alignItems: 'center', gap: 5 }]}
                         onPress={() => {
                           setMapsSearchQuery(scheduleForm.venue || '');
                           setGoogleMapsModalOpen(true);
                         }}
                         activeOpacity={0.8}
                       >
-                        <Text style={styles.mapsPickerTriggerBtnText}>📍 Set Location via Google Maps (GPS)</Text>
+                        <Ionicons name="location-outline" size={14} color="#ffffff" />
+                        <Text style={styles.mapsPickerTriggerBtnText}>Set Location via Google Maps (GPS)</Text>
                       </TouchableOpacity>
 
                       {scheduleForm.venue ? (
                         <TouchableOpacity
-                          style={styles.mapsPreviewTriggerBtn}
+                          style={[styles.mapsPreviewTriggerBtn, { flexDirection: 'row', alignItems: 'center', gap: 5 }]}
                           onPress={() => {
                             const url = scheduleForm.venue_maps_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(scheduleForm.venue)}`;
                             if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -6720,7 +7063,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           }}
                           activeOpacity={0.8}
                         >
-                          <Text style={styles.mapsPreviewTriggerBtnText}>🗺️ View on Google Maps ↗</Text>
+                          <Ionicons name="map-outline" size={14} color="#0369a1" />
+                          <Text style={styles.mapsPreviewTriggerBtnText}>View on Google Maps ↗</Text>
                         </TouchableOpacity>
                       ) : null}
                     </View>
@@ -6736,8 +7080,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               {scheduleStep === 3 && (
                 <View style={styles.stepSectionContainer}>
                   <View style={styles.stepHeaderCard}>
-                    <View style={styles.stepHeaderCardLeft}>
-                      <Text style={styles.stepHeaderTitle}>⚙️ Match Details & Officials</Text>
+                    <View style={[styles.stepHeaderCardLeft, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                      <Ionicons name="settings-outline" size={16} color="#0f172a" />
+                      <Text style={styles.stepHeaderTitle}>Match Details & Officials</Text>
                     </View>
                     <View style={styles.stepTagPill}>
                       <Text style={styles.stepTagPillText}>STEP 3 OF 3</Text>
@@ -6765,14 +7110,17 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           onPress={() => setCalendarModalVisible(true)}
                           activeOpacity={0.7}
                         >
-                          <Text style={{ fontSize: 13 }}>📅</Text>
+                          <Ionicons name="calendar-outline" size={13} color="#0f172a" />
                           <Text style={styles.fieldClockBtnText}>Calendar</Text>
                         </TouchableOpacity>
                       </View>
                       {currentDateTimeVal.dateError ? (
-                        <Text style={{ fontSize: 11, color: '#dc2626', marginTop: 4, fontWeight: '600' }}>
-                          ⚠️ {currentDateTimeVal.dateError}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                          <Ionicons name="warning" size={12} color="#dc2626" />
+                          <Text style={{ fontSize: 11, color: '#dc2626', fontWeight: '600' }}>
+                            {currentDateTimeVal.dateError}
+                          </Text>
+                        </View>
                       ) : null}
                     </View>
 
@@ -6798,14 +7146,17 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                           }}
                           activeOpacity={0.7}
                         >
-                          <Text style={{ fontSize: 13 }}>🕒</Text>
+                          <Ionicons name="time-outline" size={13} color="#0f172a" />
                           <Text style={styles.fieldClockBtnText}>Clock</Text>
                         </TouchableOpacity>
                       </View>
                       {currentDateTimeVal.timeError ? (
-                        <Text style={{ fontSize: 11, color: '#dc2626', marginTop: 4, fontWeight: '600' }}>
-                          ⚠️ {currentDateTimeVal.timeError}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                          <Ionicons name="warning" size={12} color="#dc2626" />
+                          <Text style={{ fontSize: 11, color: '#dc2626', fontWeight: '600' }}>
+                            {currentDateTimeVal.timeError}
+                          </Text>
+                        </View>
                       ) : null}
                     </View>
                   </View>
@@ -6814,23 +7165,29 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   {editingMatch && (
                     <View style={styles.weatherQuickRowCompact}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                        <Text style={{ fontSize: 12, color: '#dc2626', fontWeight: '800' }}>🌧 Weather / Rain Delay Adjustments</Text>
+                        <Ionicons name="rainy-outline" size={14} color="#dc2626" />
+                        <Text style={{ fontSize: 12, color: '#dc2626', fontWeight: '800' }}>Weather / Rain Delay Adjustments</Text>
                       </View>
                       <View style={styles.dynamicRescheduleGrid}>
-                        <TouchableOpacity style={styles.dynamicRescheduleBox} onPress={() => applyDynamicTimeDelay(30)} activeOpacity={0.8}>
-                          <Text style={styles.dynamicRescheduleBoxTitle}>🌧 +30m Delay</Text>
+                        <TouchableOpacity style={[styles.dynamicRescheduleBox, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={() => applyDynamicTimeDelay(30)} activeOpacity={0.8}>
+                          <Ionicons name="rainy-outline" size={12} color="#0f172a" />
+                          <Text style={styles.dynamicRescheduleBoxTitle}>+30m Delay</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.dynamicRescheduleBox} onPress={() => applyDynamicTimeDelay(60)} activeOpacity={0.8}>
-                          <Text style={styles.dynamicRescheduleBoxTitle}>🌧 +1 Hour Delay</Text>
+                        <TouchableOpacity style={[styles.dynamicRescheduleBox, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={() => applyDynamicTimeDelay(60)} activeOpacity={0.8}>
+                          <Ionicons name="rainy-outline" size={12} color="#0f172a" />
+                          <Text style={styles.dynamicRescheduleBoxTitle}>+1 Hour Delay</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.dynamicRescheduleBox} onPress={() => applyDynamicTimeDelay(120)} activeOpacity={0.8}>
-                          <Text style={styles.dynamicRescheduleBoxTitle}>🌧 +2 Hours Delay</Text>
+                        <TouchableOpacity style={[styles.dynamicRescheduleBox, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={() => applyDynamicTimeDelay(120)} activeOpacity={0.8}>
+                          <Ionicons name="rainy-outline" size={12} color="#0f172a" />
+                          <Text style={styles.dynamicRescheduleBoxTitle}>+2 Hours Delay</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.dynamicRescheduleBox} onPress={() => setScheduleForm(prev => ({ ...prev, match_time: '02:00 PM' }))} activeOpacity={0.8}>
-                          <Text style={styles.dynamicRescheduleBoxTitle}>☀️ 02:00 PM</Text>
+                        <TouchableOpacity style={[styles.dynamicRescheduleBox, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={() => setScheduleForm(prev => ({ ...prev, match_time: '02:00 PM' }))} activeOpacity={0.8}>
+                          <Ionicons name="sunny-outline" size={12} color="#d97706" />
+                          <Text style={styles.dynamicRescheduleBoxTitle}>02:00 PM</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.dynamicRescheduleBox} onPress={() => setScheduleForm(prev => ({ ...prev, match_time: '06:00 PM' }))} activeOpacity={0.8}>
-                          <Text style={styles.dynamicRescheduleBoxTitle}>💡 06:00 PM D/N</Text>
+                        <TouchableOpacity style={[styles.dynamicRescheduleBox, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={() => setScheduleForm(prev => ({ ...prev, match_time: '06:00 PM' }))} activeOpacity={0.8}>
+                          <Ionicons name="bulb-outline" size={12} color="#d97706" />
+                          <Text style={styles.dynamicRescheduleBoxTitle}>06:00 PM D/N</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -6838,7 +7195,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                   {/* DYNAMIC MATCH SCORER SELECTION */}
                   <View style={[styles.formSectionCard, { marginTop: 14 }]}>
-                    <Text style={styles.formFieldLabel}>👤 Official Match Scorer (Dynamic Selection) *</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+                      <Ionicons name="person-outline" size={14} color="#0f172a" />
+                      <Text style={[styles.formFieldLabel, { marginBottom: 0 }]}>Official Match Scorer (Dynamic Selection) *</Text>
+                    </View>
                     <View style={styles.timeInputContainer}>
                       <TextInput
                         style={[styles.formTextInputCompact, { paddingRight: 40 }]}
@@ -6879,7 +7239,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                   setScorerSearch('');
                                 }}
                               >
-                                <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>👤 {sc.name}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                  <Ionicons name="person-outline" size={13} color="#0f172a" />
+                                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>{sc.name}</Text>
+                                </View>
                                 <Text style={{ fontSize: 11, color: '#64748b' }}>{sc.id} • {sc.email || sc.phone || sc.role || 'Certified Scorer'}</Text>
                               </TouchableOpacity>
                             ))}
@@ -6900,21 +7263,25 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                       <View style={styles.scorerInfoCard}>
                         <View style={styles.scorerInfoHeaderRow}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={{ fontSize: 16 }}>📋</Text>
+                            <Ionicons name="clipboard-outline" size={16} color="#0f172a" />
                             <Text style={styles.scorerInfoTitle}>Scorer Information & Match Timings</Text>
                           </View>
-                          <View style={styles.scorerInfoBadge}>
+                          <View style={[styles.scorerInfoBadge, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                            <Ionicons name={scheduleForm.timing_mode === 'MANUAL' ? 'create-outline' : 'flash'} size={12} color="#1e293b" />
                             <Text style={styles.scorerInfoBadgeText}>
-                              {scheduleForm.timing_mode === 'MANUAL' ? '✏️ Custom Timings' : '⚡ Auto Calculated'}
+                              {scheduleForm.timing_mode === 'MANUAL' ? 'Custom Timings' : 'Auto Calculated'}
                             </Text>
                           </View>
                         </View>
 
                         {/* Scorer Details */}
                         <View style={styles.scorerDetailsRow}>
-                          <Text style={styles.scorerNameText}>
-                            👤 {scheduleForm.assigned_scorer_name || scheduleForm.assigned_scorer_id || 'Athi Lingam'}
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                            <Ionicons name="person-outline" size={14} color="#0f172a" />
+                            <Text style={styles.scorerNameText}>
+                              {scheduleForm.assigned_scorer_name || scheduleForm.assigned_scorer_id || 'Athi Lingam'}
+                            </Text>
+                          </View>
                           <Text style={styles.scorerRoleSubtext}>
                             Official Match Scorer • Virudhunagar District Cricket Panel
                           </Text>
@@ -6941,7 +7308,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               {/* Header & Mode Switcher */}
                               <View style={styles.timingModeHeaderRow}>
                                 <View style={{ flex: 1 }}>
-                                  <Text style={styles.timingSectionTitle}>🕒 Match Timings & Schedule Directives</Text>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Ionicons name="time-outline" size={15} color="#0f172a" />
+                                    <Text style={styles.timingSectionTitle}>Match Timings & Schedule Directives</Text>
+                                  </View>
                                   <Text style={styles.timingSectionSubtitle}>
                                     Configure toss window, first ball delivery deadline, and scorer reporting
                                   </Text>
@@ -6950,7 +7320,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 {/* Mode Selector Buttons */}
                                 <View style={styles.timingModeToggleGroup}>
                                   <TouchableOpacity
-                                    style={[styles.timingModeBtn, isAuto && styles.timingModeBtnActive]}
+                                    style={[styles.timingModeBtn, isAuto && styles.timingModeBtnActive, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                     onPress={() => {
                                       setScheduleForm(prev => ({
                                         ...prev,
@@ -6962,13 +7332,14 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                     }}
                                     activeOpacity={0.8}
                                   >
+                                    <Ionicons name="flash" size={12} color={isAuto ? '#ffffff' : '#475569'} />
                                     <Text style={[styles.timingModeBtnText, isAuto && styles.timingModeBtnTextActive]}>
-                                      ⚡ Auto Calculate
+                                      Auto Calculate
                                     </Text>
                                   </TouchableOpacity>
 
                                   <TouchableOpacity
-                                    style={[styles.timingModeBtn, !isAuto && styles.timingModeBtnActive]}
+                                    style={[styles.timingModeBtn, !isAuto && styles.timingModeBtnActive, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                     onPress={() => {
                                       setScheduleForm(prev => ({
                                         ...prev,
@@ -6980,8 +7351,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                     }}
                                     activeOpacity={0.8}
                                   >
+                                    <Ionicons name="create-outline" size={12} color={!isAuto ? '#ffffff' : '#475569'} />
                                     <Text style={[styles.timingModeBtnText, !isAuto && styles.timingModeBtnTextActive]}>
-                                      ✏️ Manual Custom
+                                      Manual Custom
                                     </Text>
                                   </TouchableOpacity>
                                 </View>
@@ -6992,11 +7364,14 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                 <View style={styles.timingsGrid}>
                                   {/* Auto Mode Info Banner */}
                                   <View style={styles.timingAutoBanner}>
-                                    <Text style={styles.timingAutoBannerText}>
-                                      ⚡ <Text style={{ fontWeight: '700' }}>Auto Mode Active:</Text> Timings calculated from Match Start Time ({scheduleForm.match_time || '12:45 PM'}).
-                                    </Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1 }}>
+                                      <Ionicons name="flash" size={13} color="#0369a1" />
+                                      <Text style={[styles.timingAutoBannerText, { flex: 1 }]}>
+                                        <Text style={{ fontWeight: '700' }}>Auto Mode Active:</Text> Timings calculated from Match Start Time ({scheduleForm.match_time || '12:45 PM'}).
+                                      </Text>
+                                    </View>
                                     <TouchableOpacity
-                                      style={styles.timingRecalcBtn}
+                                      style={[styles.timingRecalcBtn, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                       onPress={() => {
                                         const recomputed = calculateOfficialMatchTimings(scheduleForm.match_time);
                                         setScheduleForm(prev => ({
@@ -7008,14 +7383,18 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                         }));
                                       }}
                                     >
-                                      <Text style={styles.timingRecalcBtnText}>🔄 Recalculate</Text>
+                                      <Ionicons name="sync" size={12} color="#0369a1" />
+                                      <Text style={styles.timingRecalcBtnText}>Recalculate</Text>
                                     </TouchableOpacity>
                                   </View>
 
                                   {/* Toss Timing Box */}
                                   <View style={styles.timingCardItem}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                                      <Text style={styles.timingLabelTamil}>🪙 Toss Window</Text>
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                        <MaterialCommunityIcons name="circle-multiple-outline" size={13} color="#475569" />
+                                        <Text style={styles.timingLabelTamil}>Toss Window</Text>
+                                      </View>
                                       <Text style={styles.timingTagText}>Toss Window</Text>
                                     </View>
                                     <Text style={styles.timingValueText}>{displayToss}</Text>
@@ -7025,7 +7404,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                   {/* First Ball Throw Time Box */}
                                   <View style={[styles.timingCardItem, { borderColor: '#f59e0b', backgroundColor: '#fffbeb' }]}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                                      <Text style={[styles.timingLabelTamil, { color: '#b45309' }]}>🏏 First Ball Delivery</Text>
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                        <MaterialCommunityIcons name="cricket" size={13} color="#b45309" />
+                                        <Text style={[styles.timingLabelTamil, { color: '#b45309' }]}>First Ball Delivery</Text>
+                                      </View>
                                       <Text style={[styles.timingTagText, { backgroundColor: '#fef3c7', color: '#b45309' }]}>First Ball</Text>
                                     </View>
                                     <Text style={[styles.timingValueText, { color: '#92400e' }]}>{displayFirstBall}</Text>
@@ -7035,7 +7417,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                   {/* Scorer Reporting Time */}
                                   <View style={[styles.timingCardItem, { borderColor: '#3b82f6', backgroundColor: '#eff6ff' }]}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                                      <Text style={[styles.timingLabelTamil, { color: '#1d4ed8' }]}>⏰ Scorer Reporting</Text>
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                        <Ionicons name="alarm-outline" size={13} color="#1d4ed8" />
+                                        <Text style={[styles.timingLabelTamil, { color: '#1d4ed8' }]}>Scorer Reporting</Text>
+                                      </View>
                                       <Text style={[styles.timingTagText, { backgroundColor: '#dbeafe', color: '#1d4ed8' }]}>Reporting</Text>
                                     </View>
                                     <Text style={styles.timingValueText}>{displayReporting}</Text>
@@ -7045,16 +7430,20 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                               ) : (
                                 /* Manual Mode Input Fields */
                                 <View style={styles.timingManualContainer}>
-                                  <View style={styles.timingManualBanner}>
-                                    <Text style={styles.timingManualBannerText}>
-                                      ✏️ <Text style={{ fontWeight: '700' }}>Manual Entry Active:</Text> Type or edit custom timings below, or click preset chips for quick setup.
+                                  <View style={[styles.timingManualBanner, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                                    <Ionicons name="create-outline" size={14} color="#92400e" />
+                                    <Text style={[styles.timingManualBannerText, { flex: 1 }]}>
+                                      <Text style={{ fontWeight: '700' }}>Manual Entry Active:</Text> Type or edit custom timings below, or click preset chips for quick setup.
                                     </Text>
                                   </View>
 
                                   {/* 1. Toss Time Window Input */}
                                   <View style={styles.timingInputCard}>
                                     <View style={styles.fieldLabelRow}>
-                                      <Text style={styles.formFieldLabel}>🪙 Toss Window *</Text>
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                        <MaterialCommunityIcons name="circle-multiple-outline" size={13} color="#0f172a" />
+                                        <Text style={styles.formFieldLabel}>Toss Window *</Text>
+                                      </View>
                                       <Text style={styles.fieldSubBadge}>Manual</Text>
                                     </View>
                                     <View style={styles.timeInputContainer}>
@@ -7170,7 +7559,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                   {/* 3. Scorer Reporting Time Input */}
                                   <View style={styles.timingInputCard}>
                                     <View style={styles.fieldLabelRow}>
-                                      <Text style={styles.formFieldLabel}>⏰ Scorer Reporting Time *</Text>
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                        <Ionicons name="alarm-outline" size={13} color="#0f172a" />
+                                        <Text style={styles.formFieldLabel}>Scorer Reporting Time *</Text>
+                                      </View>
                                       <Text style={[styles.fieldSubBadge, { borderColor: '#bfdbfe', backgroundColor: '#eff6ff', color: '#1d4ed8' }]}>Reporting</Text>
                                     </View>
                                     <View style={styles.timeInputContainer}>
@@ -7193,14 +7585,17 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                         }}
                                         activeOpacity={0.7}
                                       >
-                                        <Text style={{ fontSize: 13 }}>🕒</Text>
+                                        <Ionicons name="time-outline" size={13} color="#0f172a" />
                                         <Text style={styles.fieldClockBtnText}>Clock</Text>
                                       </TouchableOpacity>
                                     </View>
                                     {manualTimingsVal.reportingError ? (
-                                      <Text style={{ fontSize: 11, color: '#dc2626', marginTop: 4, fontWeight: '600' }}>
-                                        ⚠️ {manualTimingsVal.reportingError}
-                                      </Text>
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                        <Ionicons name="warning" size={12} color="#dc2626" />
+                                        <Text style={{ fontSize: 11, color: '#dc2626', fontWeight: '600' }}>
+                                          {manualTimingsVal.reportingError}
+                                        </Text>
+                                      </View>
                                     ) : null}
                                     {/* Preset Chips */}
                                     <View style={styles.timingPresetChipsRow}>
@@ -7217,10 +7612,11 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                         <Text style={styles.timingPresetChipText}>01:00 PM</Text>
                                       </TouchableOpacity>
                                       <TouchableOpacity
-                                        style={[styles.timingPresetChip, { backgroundColor: '#f1f5f9' }]}
+                                        style={[styles.timingPresetChip, { backgroundColor: '#f1f5f9', flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                                         onPress={() => setScheduleForm(prev => ({ ...prev, scorer_reporting_time: autoTimings.reportingTime }))}
                                       >
-                                        <Text style={[styles.timingPresetChipText, { color: '#475569' }]}>⚡ Auto: {autoTimings.reportingTime}</Text>
+                                        <Ionicons name="flash" size={12} color="#475569" />
+                                        <Text style={[styles.timingPresetChipText, { color: '#475569' }]}>Auto: {autoTimings.reportingTime}</Text>
                                       </TouchableOpacity>
                                     </View>
                                   </View>
@@ -7232,12 +7628,18 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                         {/* Official Association Rules Notice */}
                         <View style={styles.scorerRuleNotice}>
-                          <Text style={styles.scorerRuleNoticeText}>
-                            📜 <Text style={{ fontWeight: '700' }}>Association Timings Rule:</Text> Toss window: 08:00 AM to 08:15 AM (Morning) & 01:00 PM to 01:15 PM (Afternoon). First ball: 08:30 AM & 01:30 PM.
-                          </Text>
-                          <Text style={[styles.scorerRuleNoticeText, { marginTop: 4, color: '#0369a1' }]}>
-                            🔔 When the Scorer logs in, these mandatory timings will appear as an acknowledgement popup before portal entry.
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
+                            <Ionicons name="document-text-outline" size={14} color="#475569" style={{ marginTop: 1 }} />
+                            <Text style={[styles.scorerRuleNoticeText, { flex: 1 }]}>
+                              <Text style={{ fontWeight: '700' }}>Association Timings Rule:</Text> Toss window: 08:00 AM to 08:15 AM (Morning) & 01:00 PM to 01:15 PM (Afternoon). First ball: 08:30 AM & 01:30 PM.
+                            </Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 4 }}>
+                            <Ionicons name="notifications-outline" size={14} color="#0369a1" style={{ marginTop: 1 }} />
+                            <Text style={[styles.scorerRuleNoticeText, { color: '#0369a1', flex: 1 }]}>
+                              When the Scorer logs in, these mandatory timings will appear as an acknowledgement popup before portal entry.
+                            </Text>
+                          </View>
                         </View>
                       </View>
                     )}
@@ -7249,7 +7651,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     <View style={styles.twoColFormGrid}>
                       {/* Field Umpire 1 */}
                       <View style={styles.colFormCard}>
-                        <Text style={[styles.formFieldLabel, { fontSize: 11.5, color: '#475569' }]}>⚖️ Field Umpire 1 (Lead)</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                          <MaterialCommunityIcons name="scale-balance" size={13} color="#475569" />
+                          <Text style={[styles.formFieldLabel, { fontSize: 11.5, color: '#475569', marginBottom: 0 }]}>Field Umpire 1 (Lead)</Text>
+                        </View>
                         <View style={styles.timeInputContainer}>
                           <TextInput
                             style={[styles.formTextInputCompact, { paddingRight: 40 }]}
@@ -7298,7 +7703,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                       setUmpireSearch1('');
                                     }}
                                   >
-                                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>⚖️ {u.name}</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                      <MaterialCommunityIcons name="scale-balance" size={13} color="#0f172a" />
+                                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>{u.name}</Text>
+                                    </View>
                                     <Text style={{ fontSize: 11, color: '#64748b' }}>{u.role || 'Official Umpire'} • {u.id}</Text>
                                   </TouchableOpacity>
                                 ))}
@@ -7319,7 +7727,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                       {/* Field Umpire 2 */}
                       <View style={styles.colFormCard}>
-                        <Text style={[styles.formFieldLabel, { fontSize: 11.5, color: '#475569' }]}>⚖️ Field Umpire 2 (Square Leg)</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                          <MaterialCommunityIcons name="scale-balance" size={13} color="#475569" />
+                          <Text style={[styles.formFieldLabel, { fontSize: 11.5, color: '#475569', marginBottom: 0 }]}>Field Umpire 2 (Square Leg)</Text>
+                        </View>
                         <View style={styles.timeInputContainer}>
                           <TextInput
                             style={[styles.formTextInputCompact, { paddingRight: 40 }]}
@@ -7368,7 +7779,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                                       setUmpireSearch2('');
                                     }}
                                   >
-                                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>⚖️ {u.name}</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                      <MaterialCommunityIcons name="scale-balance" size={13} color="#0f172a" />
+                                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>{u.name}</Text>
+                                    </View>
                                     <Text style={{ fontSize: 11, color: '#64748b' }}>{u.role || 'Official Umpire'} • {u.id}</Text>
                                   </TouchableOpacity>
                                 ))}
@@ -7391,9 +7805,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     {/* Duplicate Umpire Validation Banner */}
                     {scheduleForm.umpire1_name && scheduleForm.umpire2_name &&
                      scheduleForm.umpire1_name.trim().toLowerCase() === scheduleForm.umpire2_name.trim().toLowerCase() && (
-                      <View style={{ backgroundColor: '#fee2e2', padding: 8, borderRadius: 6, borderWidth: 1, borderColor: '#fca5a5', marginTop: 8 }}>
-                        <Text style={{ fontSize: 11.5, color: '#991b1b', fontWeight: '700' }}>
-                          ⚠️ Field Umpire 1 and Field Umpire 2 cannot be the same official. Please assign two different umpires.
+                      <View style={{ backgroundColor: '#fee2e2', padding: 8, borderRadius: 6, borderWidth: 1, borderColor: '#fca5a5', marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="warning" size={14} color="#991b1b" />
+                        <Text style={{ fontSize: 11.5, color: '#991b1b', fontWeight: '700', flex: 1 }}>
+                          Field Umpire 1 and Field Umpire 2 cannot be the same official. Please assign two different umpires.
                         </Text>
                       </View>
                     )}
@@ -7431,7 +7846,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   {/* Clean Match Summary Card */}
                   <View style={styles.matchSummaryCard}>
                     <View style={styles.summaryCardHeader}>
-                      <Text style={styles.summaryCardHeaderTitle}>📋 Match Summary</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="clipboard-outline" size={15} color="#0f172a" />
+                        <Text style={styles.summaryCardHeaderTitle}>Match Summary</Text>
+                      </View>
                       <View style={styles.summaryCardBadge}>
                         <Text style={styles.summaryCardBadgeText}>{scheduleForm.match_type || 'T20'} • {scheduleForm.overs} OVERS</Text>
                       </View>
@@ -7441,7 +7859,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     <View style={styles.summaryMatchupRow}>
                       <View style={styles.summaryTeamBox}>
                         <View style={[styles.teamCrestMini, { backgroundColor: '#1e3a8a' }]}>
-                          <Text style={{ fontSize: 13 }}>🏏</Text>
+                          <MaterialCommunityIcons name="cricket" size={14} color="#ffffff" />
                         </View>
                         <Text style={styles.summaryTeamName} numberOfLines={1}>
                           {scheduleForm.team_a_name || 'Team 1'}
@@ -7455,7 +7873,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
 
                       <View style={styles.summaryTeamBox}>
                         <View style={[styles.teamCrestMini, { backgroundColor: '#d97706' }]}>
-                          <Text style={{ fontSize: 13 }}>🏏</Text>
+                          <MaterialCommunityIcons name="cricket" size={14} color="#ffffff" />
                         </View>
                         <Text style={styles.summaryTeamName} numberOfLines={1}>
                           {scheduleForm.team_b_name || 'Team 2'}
@@ -7467,26 +7885,41 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     {/* Logistics Breakdown Table */}
                     <View style={styles.summaryDetailsGrid}>
                       <View style={styles.summaryDetailItem}>
-                        <Text style={styles.summaryDetailKey}>🏆 Tournament</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name="trophy-outline" size={12} color="#64748b" />
+                          <Text style={styles.summaryDetailKey}>Tournament</Text>
+                        </View>
                         <Text style={styles.summaryDetailVal} numberOfLines={1}>{scheduleForm.tournament_name || 'Tournament'}</Text>
                       </View>
                       <View style={styles.summaryDetailItem}>
-                        <Text style={styles.summaryDetailKey}>📅 Date & Time</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name="calendar-outline" size={12} color="#64748b" />
+                          <Text style={styles.summaryDetailKey}>Date & Time</Text>
+                        </View>
                         <Text style={styles.summaryDetailVal}>{scheduleForm.match_date} • {scheduleForm.match_time}</Text>
                       </View>
                       <View style={styles.summaryDetailItem}>
-                        <Text style={styles.summaryDetailKey}>📍 Venue</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name="location-outline" size={12} color="#64748b" />
+                          <Text style={styles.summaryDetailKey}>Venue</Text>
+                        </View>
                         <Text style={styles.summaryDetailVal} numberOfLines={1}>{scheduleForm.venue || 'Ground TBD'}</Text>
                       </View>
                       <View style={styles.summaryDetailItem}>
-                        <Text style={styles.summaryDetailKey}>👤 Scorer</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name="person-outline" size={12} color="#64748b" />
+                          <Text style={styles.summaryDetailKey}>Scorer</Text>
+                        </View>
                         <Text style={styles.summaryDetailVal} numberOfLines={1}>
                           {scheduleForm.assigned_scorer_name || availableScorers.find(o => o.id === scheduleForm.assigned_scorer_id)?.name || officialsList.find(o => o.id === scheduleForm.assigned_scorer_id)?.name || scheduleForm.assigned_scorer_id || 'Assigned'}
                         </Text>
                       </View>
                       {(scheduleForm.umpire1_name || scheduleForm.umpire2_name) ? (
                         <View style={[styles.summaryDetailItem, { width: '100%' }]}>
-                          <Text style={styles.summaryDetailKey}>⚖️ Umpires</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <MaterialCommunityIcons name="scale-balance" size={12} color="#64748b" />
+                            <Text style={styles.summaryDetailKey}>Umpires</Text>
+                          </View>
                           <Text style={styles.summaryDetailVal} numberOfLines={1}>
                             {[scheduleForm.umpire1_name, scheduleForm.umpire2_name].filter(Boolean).join(' • ')}
                           </Text>
@@ -7689,7 +8122,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           <View style={styles.mapsPickerModalDialog}>
             <View style={styles.mapsModalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={{ fontSize: 20 }}>📍</Text>
+                <Ionicons name="location" size={20} color="#dc2626" />
                 <View>
                   <Text style={styles.mapsModalTitle}>Select Match Venue on Google Maps</Text>
                   <Text style={styles.mapsModalSubtitle}>Search or enter the ground / turf name or paste Google Maps location</Text>
@@ -7699,15 +8132,18 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 onPress={() => setGoogleMapsModalOpen(false)}
                 style={styles.modalCloseBtn}
               >
-                <Text style={styles.modalCloseBtnText}>✕</Text>
+                <Ionicons name="close" size={18} color="#475569" />
               </TouchableOpacity>
             </View>
 
             <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={{ padding: 18 }} showsVerticalScrollIndicator={true}>
               {/* Popular Virudhunagar Grounds & Turfs Quick Select */}
-              <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155', marginBottom: 6 }}>
-                ⚡ Quick Select Popular District Turfs & Grounds:
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+                <Ionicons name="flash" size={13} color="#d97706" />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>
+                  Quick Select Popular District Turfs & Grounds:
+                </Text>
+              </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 10 }}>
                 {[
                   { name: 'King Turf', sub: 'Virudhunagar' },
@@ -7736,8 +8172,13 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                         gap: 4
                       }}
                     >
+                      {item.name === 'King Turf' ? (
+                        <MaterialCommunityIcons name="crown" size={13} color={isCur ? '#1d4ed8' : '#d97706'} />
+                      ) : (
+                        <Ionicons name="location-outline" size={13} color={isCur ? '#1d4ed8' : '#64748b'} />
+                      )}
                       <Text style={{ fontSize: 12, fontWeight: isCur ? '700' : '600', color: isCur ? '#1d4ed8' : '#1e293b' }}>
-                        {item.name === 'King Turf' ? '👑' : '📍'} {item.name}
+                        {item.name}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -7747,7 +8188,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               {/* Search Input */}
               <Text style={styles.formFieldLabel}>Ground Name / Location / Turf *</Text>
               <View style={styles.mapsSearchInputWrap}>
-                <Text style={{ fontSize: 16, marginRight: 8 }}>🔍</Text>
+                <Ionicons name="search" size={16} color="#64748b" style={{ marginRight: 8 }} />
                 <TextInput
                   style={styles.mapsSearchInput}
                   placeholder="e.g. King Turf, The Arasan Turf Court, Sivakasi..."
@@ -7760,7 +8201,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               {/* Action Buttons: Open Maps & GPS */}
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
                 <TouchableOpacity
-                  style={styles.btnOpenMapsExternal}
+                  style={[styles.btnOpenMapsExternal, { flexDirection: 'row', alignItems: 'center', gap: 5 }]}
                   onPress={() => {
                     const query = encodeURIComponent(mapsSearchQuery || 'Cricket Ground Virudhunagar');
                     const url = `https://www.google.com/maps/search/?api=1&query=${query}`;
@@ -7772,11 +8213,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   }}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.btnOpenMapsExternalText}>🌐 Open in Google Maps ↗ (Search / View)</Text>
+                  <Ionicons name="globe-outline" size={14} color="#0369a1" />
+                  <Text style={styles.btnOpenMapsExternalText}>Open in Google Maps ↗ (Search / View)</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.btnGpsLocation}
+                  style={[styles.btnGpsLocation, { flexDirection: 'row', alignItems: 'center', gap: 5 }]}
                   onPress={() => {
                     if (typeof navigator !== 'undefined' && navigator.geolocation) {
                       navigator.geolocation.getCurrentPosition(
@@ -7795,7 +8237,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   }}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.btnGpsLocationText}>🎯 Get Current GPS Location</Text>
+                  <Ionicons name="locate" size={14} color="#0f172a" />
+                  <Text style={styles.btnGpsLocationText}>Get Current GPS Location</Text>
                 </TouchableOpacity>
               </View>
 
@@ -7803,7 +8246,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               {mapsSearchQuery ? (
                 <View style={styles.mapsPreviewCard}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <Text style={{ fontSize: 16 }}>📍</Text>
+                    <Ionicons name="location" size={16} color="#dc2626" />
                     <Text style={styles.mapsPreviewTitle} numberOfLines={1}>
                       {mapsSearchQuery}
                     </Text>
@@ -7842,7 +8285,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.btnPrimaryGreenCompact, !mapsSearchQuery.trim() && { opacity: 0.5 }]}
+                style={[styles.btnPrimaryGreenCompact, !mapsSearchQuery.trim() && { opacity: 0.5 }, { flexDirection: 'row', alignItems: 'center', gap: 5 }]}
                 disabled={!mapsSearchQuery.trim()}
                 onPress={() => {
                   const vName = mapsSearchQuery.trim();
@@ -7856,7 +8299,8 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                   showNotification(`✓ Venue updated to "${vName}" with Google Maps link!`);
                 }}
               >
-                <Text style={styles.btnPrimaryGreenCompactText}>✅ Set Venue & Return to Match</Text>
+                <Ionicons name="checkmark-circle" size={15} color="#ffffff" />
+                <Text style={styles.btnPrimaryGreenCompactText}>Set Venue & Return to Match</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -7874,7 +8318,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalDialogSmall}>
-            <Text style={styles.rejectModalHeading}>🚫 Cancel Scheduled Match</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <Ionicons name="ban-outline" size={18} color="#dc2626" />
+              <Text style={[styles.rejectModalHeading, { marginBottom: 0 }]}>Cancel Scheduled Match</Text>
+            </View>
             <Text style={styles.rejectModalSubtitle}>
               Are you sure you want to cancel the match fixture between{' '}
               <Text style={{ fontWeight: '700' }}>{cancelMatchModal?.teamA}</Text> and{' '}
@@ -7930,7 +8377,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalDialogSmall, { maxWidth: 520, width: '92%' }]}>
-            <Text style={[styles.rejectModalHeading, { color: '#d97706' }]}>⏸️ Postpone Match Fixture</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <Ionicons name="pause-circle-outline" size={18} color="#d97706" />
+              <Text style={[styles.rejectModalHeading, { color: '#d97706', marginBottom: 0 }]}>Postpone Match Fixture</Text>
+            </View>
             <Text style={styles.rejectModalSubtitle}>
               Select the match to freeze and provide a mandatory official reason for postponement.
             </Text>
@@ -7954,12 +8404,21 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 activeOpacity={0.8}
               >
                 <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }} numberOfLines={1}>
-                    🏏 {postponeMatchModal?.teamA} vs {postponeMatchModal?.teamB}
-                  </Text>
-                  <Text style={{ fontSize: 11, color: '#64748b' }}>
-                    ID: {postponeMatchModal?.id} • 📅 {postponeMatchModal?.date}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    <MaterialCommunityIcons name="cricket" size={13} color="#0f172a" />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a', flexShrink: 1 }} numberOfLines={1}>
+                      {postponeMatchModal?.teamA} vs {postponeMatchModal?.teamB}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                    <Text style={{ fontSize: 11, color: '#64748b' }}>
+                      ID: {postponeMatchModal?.id} •
+                    </Text>
+                    <Ionicons name="calendar-outline" size={11} color="#64748b" />
+                    <Text style={{ fontSize: 11, color: '#64748b' }}>
+                      {postponeMatchModal?.date}
+                    </Text>
+                  </View>
                 </View>
                 <Text style={{ fontSize: 12, color: '#64748b', fontWeight: 'bold' }}>
                   {postponeMatchSelectOpen ? '▲' : '▼'}
@@ -8126,7 +8585,10 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalDialogSmall, { maxWidth: 520, width: '92%' }]}>
-            <Text style={[styles.rejectModalHeading, { color: '#0284c7' }]}>📅 Reschedule Match Fixture</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <Ionicons name="calendar-outline" size={18} color="#0284c7" />
+              <Text style={[styles.rejectModalHeading, { color: '#0284c7', marginBottom: 0 }]}>Reschedule Match Fixture</Text>
+            </View>
             <Text style={styles.rejectModalSubtitle}>
               Reschedule fixture between{' '}
               <Text style={{ fontWeight: '700' }}>{rescheduleModalMatch?.teamA}</Text> and{' '}
@@ -8134,8 +8596,9 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
             </Text>
 
             {Boolean(rescheduleErrors.generalError) && (
-              <View style={{ backgroundColor: '#fee2e2', borderColor: '#ef4444', borderWidth: 1, padding: 8, borderRadius: 6, marginVertical: 8 }}>
-                <Text style={{ color: '#b91c1c', fontSize: 12 }}>⚠️ {rescheduleErrors.generalError}</Text>
+              <View style={{ backgroundColor: '#fee2e2', borderColor: '#ef4444', borderWidth: 1, padding: 8, borderRadius: 6, marginVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="warning" size={14} color="#b91c1c" />
+                <Text style={{ color: '#b91c1c', fontSize: 12, flex: 1 }}>{rescheduleErrors.generalError}</Text>
               </View>
             )}
 
@@ -8261,18 +8724,24 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setSelectedMatchModal(null)} style={styles.modalCloseBtn}>
-                <Text style={styles.modalCloseBtnText}>✕</Text>
+                <Ionicons name="close" size={18} color="#475569" />
               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.modalBodyScroll} showsVerticalScrollIndicator={true}>
               <View style={styles.detailsGridBox}>
                 <View style={styles.detailsRow}>
-                  <Text style={styles.detailsKey}>🏆 Tournament:</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    <Ionicons name="trophy-outline" size={13} color="#64748b" />
+                    <Text style={styles.detailsKey}>Tournament:</Text>
+                  </View>
                   <Text style={styles.detailsVal}>{selectedMatchModal?.tournament_name || 'Virudhunagar Premier League 2026'}</Text>
                 </View>
                 <View style={styles.detailsRow}>
-                  <Text style={styles.detailsKey}>📍 Venue / Ground:</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    <Ionicons name="location-outline" size={13} color="#64748b" />
+                    <Text style={styles.detailsKey}>Venue / Ground:</Text>
+                  </View>
                   <TouchableOpacity
                     onPress={() => {
                       const v = selectedMatchModal?.venue || 'Kamarajar District Stadium';
@@ -8292,37 +8761,58 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                 </View>
                 {Boolean(selectedMatchModal?.umpire1_name || selectedMatchModal?.umpire2_name) && (
                   <View style={styles.detailsRow}>
-                    <Text style={styles.detailsKey}>⚖️ Match Umpires:</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <MaterialCommunityIcons name="scale-balance" size={13} color="#64748b" />
+                      <Text style={styles.detailsKey}>Match Umpires:</Text>
+                    </View>
                     <Text style={styles.detailsVal}>
                       {[selectedMatchModal?.umpire1_name, selectedMatchModal?.umpire2_name].filter(Boolean).join(' • ')}
                     </Text>
                   </View>
                 )}
                 <View style={styles.detailsRow}>
-                  <Text style={styles.detailsKey}>📅 Date & Time:</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    <Ionicons name="calendar-outline" size={13} color="#64748b" />
+                    <Text style={styles.detailsKey}>Date & Time:</Text>
+                  </View>
                   <Text style={styles.detailsVal}>{selectedMatchModal?.match_date} at {selectedMatchModal?.match_time || '09:30 AM'}</Text>
                 </View>
                 <View style={styles.detailsRow}>
-                  <Text style={styles.detailsKey}>🏏 Format & Overs:</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    <MaterialCommunityIcons name="cricket" size={13} color="#64748b" />
+                    <Text style={styles.detailsKey}>Format & Overs:</Text>
+                  </View>
                   <Text style={styles.detailsVal}>{selectedMatchModal?.match_type || 'T20'} • {selectedMatchModal?.overs_per_side || 20} Overs Per Side</Text>
                 </View>
                 <View style={styles.detailsRow}>
-                  <Text style={styles.detailsKey}>👤 Official Scorer:</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    <Ionicons name="person-outline" size={13} color="#64748b" />
+                    <Text style={styles.detailsKey}>Official Scorer:</Text>
+                  </View>
                   <Text style={styles.detailsVal}>{selectedMatchModal?.scorer_name || selectedMatchModal?.assigned_scorer_id || 'SCR-101'}</Text>
                 </View>
                 <View style={styles.detailsRow}>
-                  <Text style={styles.detailsKey}>📊 Current Status:</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    <Ionicons name="stats-chart-outline" size={13} color="#64748b" />
+                    <Text style={styles.detailsKey}>Current Status:</Text>
+                  </View>
                   <Text style={[styles.detailsVal, { fontWeight: '700', color: '#1e3a8a' }]}>{selectedMatchModal?.status || 'SCHEDULED'}</Text>
                 </View>
                 {Boolean(selectedMatchModal?.toss_winner_id) && (
                   <View style={styles.detailsRow}>
-                    <Text style={styles.detailsKey}>🪙 Toss Decision:</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <MaterialCommunityIcons name="circle-multiple-outline" size={13} color="#64748b" />
+                      <Text style={styles.detailsKey}>Toss Decision:</Text>
+                    </View>
                     <Text style={styles.detailsVal}>Toss won by {selectedMatchModal.toss_winner_id}, elected to {selectedMatchModal.toss_decision}</Text>
                   </View>
                 )}
                 {Boolean(selectedMatchModal?.result_summary) && (
                   <View style={styles.detailsRow}>
-                    <Text style={styles.detailsKey}>🏁 Result / Notes:</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <Ionicons name="flag-outline" size={13} color="#64748b" />
+                      <Text style={styles.detailsKey}>Result / Notes:</Text>
+                    </View>
                     <Text style={[styles.detailsVal, { color: '#b45309', fontWeight: '700' }]}>{selectedMatchModal.result_summary}</Text>
                   </View>
                 )}
@@ -8337,9 +8827,12 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
                     borderWidth: 1.5,
                     borderColor: selectedMatchModal?.schedule_confirmation_status === 'CONFIRMED' ? '#86efac' : '#cbd5e1'
                   }}>
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#1e293b', marginBottom: 6 }}>
-                      📋 Squad Allocation & Scorer Release Status
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+                      <Ionicons name="clipboard-outline" size={13} color="#1e293b" />
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: '#1e293b' }}>
+                        Squad Allocation & Scorer Release Status
+                      </Text>
+                    </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
                       <Text style={{ fontSize: 11, color: '#475569' }}>
                         {selectedMatchModal?.team_a_name || 'Team 1'}:{' '}
@@ -8398,14 +8891,15 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
               )}
               {(selectedMatchModal?.status || '').toUpperCase() === 'SCHEDULED' && (
                 <TouchableOpacity
-                  style={styles.modalApproveBtn}
+                  style={[styles.modalApproveBtn, { flexDirection: 'row', alignItems: 'center', gap: 5 }]}
                   onPress={() => {
                     const m = selectedMatchModal;
                     setSelectedMatchModal(null);
                     handleOpenScheduleModal(m);
                   }}
                 >
-                  <Text style={styles.modalApproveBtnText}>✏️ Edit Schedule</Text>
+                  <Ionicons name="create-outline" size={14} color="#ffffff" />
+                  <Text style={styles.modalApproveBtnText}>Edit Schedule</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -8413,7 +8907,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         </View>
       </Modal>
 
-      {/* Dual-Admin Security Approval & Revocation Modal (CFVD Apex Protocol) */}
+      {/* Dual-Admin Security Approval & Revocation Modal (Commented out - not needed)
       <DualAdminSecurityModal
         visible={securityModalVisible}
         onClose={() => setSecurityModalVisible(false)}
@@ -8422,6 +8916,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
           showSuccess('Security Action Authorized', 'Dual-admin cryptographic verification was successful.');
         }}
       />
+      */}
 
       {/* ─────────────────────────────────────────────────────────────
           13. RESPONSIVE FLOATING UNDO TOAST
@@ -8430,7 +8925,7 @@ export default function AdminDashboardScreen({ onExit, initialParams }: AdminDas
         <View style={styles.floatingUndoToast}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 200 }}>
             <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#334155', justifyContent: 'center', alignItems: 'center' }}>
-              <Text style={{ fontSize: 13 }}>🗑️</Text>
+              <Ionicons name="trash-outline" size={14} color="#ffffff" />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.floatingUndoText} numberOfLines={1}>

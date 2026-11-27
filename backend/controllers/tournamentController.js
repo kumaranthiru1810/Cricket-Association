@@ -6,6 +6,7 @@
 
 const tournamentService = require('../services/tournamentService');
 const db = require('../config/db');
+const { sendListResponse } = require('../utils/responseHelper');
 
 class TournamentController {
   /**
@@ -20,9 +21,7 @@ class TournamentController {
         await db.initDb();
         tournaments = await db.models.Tournament.find({}).sort({ start_date: -1 }).lean();
       }
-      res.json({
-        success: true,
-        count: (tournaments || []).length,
+      return sendListResponse(res, tournaments || [], {
         tournaments: tournaments || [],
         data: tournaments || [] // support both access patterns
       });
@@ -30,9 +29,7 @@ class TournamentController {
       try {
         await db.initDb();
         const fallback = await db.models.Tournament.find({}).sort({ start_date: -1 }).lean();
-        return res.json({
-          success: true,
-          count: fallback.length,
+        return sendListResponse(res, fallback, {
           tournaments: fallback,
           data: fallback
         });
@@ -261,13 +258,12 @@ class TournamentController {
   async getSchedule(req, res) {
     try {
       const tournament = await tournamentService.getTournamentById(req.params.id);
-      res.json({
-        success: true,
+      const schedule = tournament.matches || [];
+      return sendListResponse(res, schedule, {
         tournament_id: tournament.id,
         tournament_name: tournament.name,
-        count: (tournament.matches || []).length,
-        schedule: tournament.matches || [],
-        data: tournament.matches || []
+        schedule,
+        data: schedule
       });
     } catch (err) {
       res.status(err.status || 500).json({
@@ -284,10 +280,8 @@ class TournamentController {
   async getPointsTable(req, res) {
     try {
       const pointsTable = await tournamentService.getPointsTable(req.params.id);
-      res.json({
-        success: true,
+      return sendListResponse(res, pointsTable, {
         tournament_id: req.params.id,
-        count: pointsTable.length,
         points_table: pointsTable,
         data: pointsTable
       });
@@ -393,9 +387,7 @@ class TournamentController {
       const teamId = req.query.teamId || requesterUser.teamId || requesterUser.id;
 
       const registrations = await tournamentService.getTeamRegistrations(coachEmail, teamId);
-      res.json({
-        success: true,
-        count: registrations.length,
+      return sendListResponse(res, registrations, {
         registrations,
         data: registrations
       });
@@ -417,9 +409,7 @@ class TournamentController {
       const tournamentId = req.params.id || req.query.tournamentId;
       const { status, search } = req.query;
       const registrations = await tournamentService.getTournamentRegistrations({ tournamentId, status, search });
-      res.json({
-        success: true,
-        count: registrations.length,
+      return sendListResponse(res, registrations, {
         registrations,
         data: registrations
       });
@@ -485,10 +475,8 @@ class TournamentController {
   async getApprovedTeams(req, res) {
     try {
       const teams = await tournamentService.getApprovedTeams(req.params.id);
-      res.json({
-        success: true,
+      return sendListResponse(res, teams, {
         tournament_id: req.params.id,
-        count: teams.length,
         teams,
         data: teams
       });

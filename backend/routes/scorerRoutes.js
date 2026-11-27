@@ -14,6 +14,7 @@ const scoringEngine = require('../services/scoringEngine');
 const matchService = require('../services/matchService');
 const adminService = require('../services/adminService');
 const { requireScorerAuth, verifyMatchPermission } = require('../middleware/authMiddleware');
+const { sendListResponse } = require('../utils/responseHelper');
 const { acquireMatchLock } = require('../middleware/concurrencyLock');
 const { broadcastScoreUpdate } = require('../services/socketService');
 const { invalidateCache } = require('../middleware/cacheMiddleware');
@@ -133,7 +134,7 @@ router.get('/matches', async (req, res) => {
     if (filter) {
       list = list.filter(m => m.status.toLowerCase() === filter.toLowerCase());
     }
-    res.json({ success: true, data: list });
+    return sendListResponse(res, list);
   } catch (err) {
     res.status(err.status || 500).json({ success: false, error: err.message });
   }
@@ -557,7 +558,7 @@ router.get('/officials', async (req, res) => {
   try {
     const adminService = require('../services/adminService');
     const officials = await adminService.getOfficials();
-    res.json({ success: true, officials });
+    return sendListResponse(res, officials, { officials });
   } catch (err) {
     res.status(err.status || 500).json({ success: false, error: err.message });
   }
@@ -584,8 +585,7 @@ router.get('/matches/:matchId/umpire-decisions', async (req, res) => {
     const innings = await db.models.Innings.findOne({ match_id: req.params.matchId, is_completed: false })
       .sort({ innings_number: -1 })
       .lean();
-    res.json({
-      success: true,
+    return sendListResponse(res, decisions || [], {
       decisions: decisions || [],
       suspendedBowlers: innings?.suspended_bowler_ids || []
     });
@@ -660,7 +660,7 @@ router.get('/officials', async (req, res) => {
   try {
     const adminService = require('../services/adminService');
     const officials = await adminService.getOfficials();
-    res.json({ success: true, officials });
+    return sendListResponse(res, officials, { officials });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -670,7 +670,7 @@ router.get('/venues', async (req, res) => {
   try {
     const adminService = require('../services/adminService');
     const venues = await adminService.getVenues();
-    res.json({ success: true, venues });
+    return sendListResponse(res, venues, { venues });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

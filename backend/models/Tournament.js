@@ -106,6 +106,9 @@ const TournamentSchema = new mongoose.Schema({
     allow_grand_final_reset: { type: Boolean, default: true },
     playoffs_format: { type: String, enum: ['STANDARD', 'IPL'], default: 'STANDARD' },
     min_rest_hours: { type: Number, default: 4 },
+    matches_per_day: { type: Number, default: 1 },
+    time_slots: [{ type: String }],
+    venues: [{ type: String }],
     max_squad_size: { type: Number, default: 18 },
     min_squad_size: { type: Number, default: 11 },
     age_limit: { type: Number, default: null }

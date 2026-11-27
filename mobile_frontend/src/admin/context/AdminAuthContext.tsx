@@ -18,6 +18,8 @@ export interface AdminUser {
   email: string;
   role: string;
   status?: string;
+  is_super_admin?: boolean;
+  admin_level?: string;
 }
 
 interface AdminAuthContextType {

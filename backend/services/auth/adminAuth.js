@@ -219,6 +219,9 @@ class AdminAuth {
     if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN')) {
       throw { status: 401, message: 'Invalid administrator credentials.' };
     }
+    if (user.status && user.status.toUpperCase() !== 'ACTIVE') {
+      throw { status: 403, message: `Administrator account is ${user.status}. Access denied.` };
+    }
 
     const bcrypt = require('bcryptjs');
     let isPasswordValid = false;

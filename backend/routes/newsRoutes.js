@@ -8,6 +8,7 @@ const router = express.Router();
 const db = require('../config/db');
 const { verifyToken } = require('../middleware/authMiddleware');
 const { cacheResponse, invalidateCache } = require('../middleware/cacheMiddleware');
+const { sendListResponse } = require('../utils/responseHelper');
 
 function escapeRegex(str) {
   if (typeof str !== 'string') return '';
@@ -50,10 +51,8 @@ router.get('/', cacheResponse(30, 'news'), async (req, res) => {
         .lean()
     ]);
 
-    res.json({
-      success: true,
+    return sendListResponse(res, newsList, {
       data: newsList,
-      count: newsList.length,
       total,
       page,
       limit,

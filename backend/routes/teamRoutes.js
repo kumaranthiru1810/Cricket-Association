@@ -10,6 +10,7 @@ const teamService = require('../services/teamService');
 const scorerService = require('../services/scorerService');
 const { requireTeamAuth, requireAdminAuth } = require('../middleware/authMiddleware');
 const { uploadLogo, processImageUpload } = require('../middleware/uploadMiddleware');
+const { sendListResponse } = require('../utils/responseHelper');
 
 // ──────────────────────────────────────────────
 // PUBLIC ROUTES (no auth required)
@@ -22,7 +23,7 @@ const { uploadLogo, processImageUpload } = require('../middleware/uploadMiddlewa
 router.get('/districts', async (req, res) => {
   try {
     const districts = await teamService.getDistricts();
-    res.json({ success: true, districts });
+    return sendListResponse(res, districts, { districts });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -542,7 +543,7 @@ router.get('/squad', requireTeamAuth, async (req, res) => {
         stats: p.stats || { runs: 0, balls: 0, wickets: 0 }
       };
     });
-    res.json({ success: true, squad });
+    return sendListResponse(res, squad, { squad });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -701,7 +702,7 @@ router.get('/matches', requireTeamAuth, async (req, res) => {
       };
     }));
 
-    res.json({ success: true, matches: formattedMatches });
+    return sendListResponse(res, formattedMatches, { matches: formattedMatches });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -982,7 +983,7 @@ router.get('/players/statistics', requireTeamAuth, async (req, res) => {
         runsConceded: p.stats?.runs_conceded || 0
       }
     }));
-    res.json({ success: true, statistics: stats });
+    return sendListResponse(res, stats, { statistics: stats });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -999,7 +1000,7 @@ router.get('/players/statistics', requireTeamAuth, async (req, res) => {
 router.get('/admin/teams', requireAdminAuth, async (req, res) => {
   try {
     const teams = await teamService.getAllTeams();
-    res.json({ success: true, teams });
+    return sendListResponse(res, teams, { teams });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1125,8 +1126,7 @@ router.get('/notifications', requireTeamAuth, async (req, res) => {
       });
     }
 
-    res.json({
-      success: true,
+    return sendListResponse(res, mappedNotifs, {
       notifications: mappedNotifs
     });
   } catch (err) {

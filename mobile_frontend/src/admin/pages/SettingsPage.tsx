@@ -39,24 +39,36 @@ import {
   RefreshIcon,
   CloseIcon
 } from '../components/Icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { adminApi } from '../services/adminApi';
 import { useAdminLayout } from '../components/AdminLayout';
 
 export interface DynamicCategoryDef {
   key: string;
   label: string;
-  iconText: string;
+  iconName: string;
+  iconFamily: 'Ionicons' | 'MaterialCommunityIcons';
   singular: string;
   description: string;
   placeholder: string;
   defaultSeedCount?: number;
 }
 
+const renderCategoryIcon = (cat?: DynamicCategoryDef, size = 16, color = '#0f172a') => {
+  const family = cat?.iconFamily || 'Ionicons';
+  const name = cat?.iconName || 'location-outline';
+  if (family === 'MaterialCommunityIcons') {
+    return <MaterialCommunityIcons name={name as any} size={size} color={color} />;
+  }
+  return <Ionicons name={name as any} size={size} color={color} />;
+};
+
 export const DYNAMIC_CATEGORIES: DynamicCategoryDef[] = [
   {
     key: 'taluk_jurisdiction',
     label: 'Taluk Jurisdiction',
-    iconText: '📍',
+    iconName: 'location-outline',
+    iconFamily: 'Ionicons',
     singular: 'Taluk',
     description: 'Manage geographical taluks and administrative jurisdictions within the district.',
     placeholder: 'e.g. Sivakasi, Virudhunagar, Kariapatti'
@@ -64,7 +76,8 @@ export const DYNAMIC_CATEGORIES: DynamicCategoryDef[] = [
   {
     key: 'playing_role',
     label: 'Playing Role',
-    iconText: '🏏',
+    iconName: 'cricket',
+    iconFamily: 'MaterialCommunityIcons',
     singular: 'Playing Role',
     description: 'Configure official playing roles and on-field player specializations.',
     placeholder: 'e.g. Batsman, Bowler, All-Rounder, Wicket Keeper'
@@ -72,7 +85,8 @@ export const DYNAMIC_CATEGORIES: DynamicCategoryDef[] = [
   {
     key: 'batting_style',
     label: 'Batting Style',
-    iconText: '⚡',
+    iconName: 'flash-outline',
+    iconFamily: 'Ionicons',
     singular: 'Batting Style',
     description: 'Configure recognized batting stances and techniques.',
     placeholder: 'e.g. Right-Handed Batsman, Left-Handed Batsman'
@@ -80,7 +94,8 @@ export const DYNAMIC_CATEGORIES: DynamicCategoryDef[] = [
   {
     key: 'age_category',
     label: 'Age Category',
-    iconText: '🏆',
+    iconName: 'trophy-outline',
+    iconFamily: 'Ionicons',
     singular: 'Age Category',
     description: 'Official age brackets for tournaments, matches, and player rosters.',
     placeholder: 'e.g. Under-19, Under-16, Senior Men, Under-23'
@@ -88,7 +103,8 @@ export const DYNAMIC_CATEGORIES: DynamicCategoryDef[] = [
   {
     key: 'certification_level',
     label: 'Certification Level',
-    iconText: '📝',
+    iconName: 'document-text-outline',
+    iconFamily: 'Ionicons',
     singular: 'Scorer Level',
     description: 'Accreditation tiers and federation certifications for official match scorers.',
     placeholder: 'e.g. District Certified, State Panel, Club Scorer'
@@ -96,7 +112,8 @@ export const DYNAMIC_CATEGORIES: DynamicCategoryDef[] = [
   {
     key: 'umpire_certification',
     label: 'Umpire Certification / Qualification',
-    iconText: '⚖️',
+    iconName: 'scale-balance',
+    iconFamily: 'MaterialCommunityIcons',
     singular: 'Umpire Qualification',
     description: 'Official match umpire panel tiers, badges, and federation qualifications.',
     placeholder: 'e.g. State Panel A (Senior), BCCI Level 1 Certified'
@@ -104,15 +121,26 @@ export const DYNAMIC_CATEGORIES: DynamicCategoryDef[] = [
   {
     key: 'state',
     label: 'State',
-    iconText: '🌐',
+    iconName: 'globe-outline',
+    iconFamily: 'Ionicons',
     singular: 'State',
     description: 'Affiliated states and regional territories for match and player origin.',
     placeholder: 'e.g. Tamil Nadu, Kerala, Karnataka'
   },
   {
+    key: 'ground',
+    label: 'Ground',
+    iconName: 'stadium-variant',
+    iconFamily: 'MaterialCommunityIcons',
+    singular: 'Ground',
+    description: 'Add and manage official cricket grounds stored in the database for match scheduling.',
+    placeholder: 'e.g. Kamarajar District Stadium, Sivakasi Cricket Ground'
+  },
+  {
     key: 'district_venue',
     label: 'Primary District Venue / Stadium',
-    iconText: '🏟️',
+    iconName: 'stadium-variant',
+    iconFamily: 'MaterialCommunityIcons',
     singular: 'Venue / Stadium',
     description: 'Configure and manage official district stadiums, grounds, and match venues.',
     placeholder: 'e.g. Kamarajar District Stadium, Sivakasi Cricket Ground'
@@ -641,9 +669,12 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
           <View style={{ flex: 1, minWidth: 220 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <Text style={{ fontSize: 15, fontWeight: '900', color: '#0f172a' }}>
-                🔐 Home Emblem Admin Login Trigger
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="lock-closed" size={16} color="#0f172a" />
+                <Text style={{ fontSize: 15, fontWeight: '900', color: '#0f172a' }}>
+                  Home Emblem Admin Login Trigger
+                </Text>
+              </View>
               <View style={{
                 backgroundColor: emblemEnabled ? '#dcfce7' : '#fee2e2',
                 paddingHorizontal: 8,
@@ -679,11 +710,15 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
                 borderRadius: 8,
                 backgroundColor: emblemExpanded ? '#fef3c7' : '#f8fafc',
                 borderWidth: 1,
-                borderColor: emblemExpanded ? '#f59e0b' : '#cbd5e1'
+                borderColor: emblemExpanded ? '#f59e0b' : '#cbd5e1',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5
               }}
             >
+              <Ionicons name={emblemExpanded ? 'chevron-up' : 'settings-outline'} size={13} color={emblemExpanded ? '#92400e' : '#334155'} />
               <Text style={{ fontSize: 12, fontWeight: '700', color: emblemExpanded ? '#92400e' : '#334155' }}>
-                {emblemExpanded ? '▲ Hide Sequence' : '⚙️ Configure Sequence'}
+                {emblemExpanded ? 'Hide Sequence' : 'Configure Sequence'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -757,10 +792,18 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
                       paddingVertical: 5
                     }}
                   >
-                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0f172a' }}>
-                      {idx + 1}. {ball === 'LEFT' ? '◀ Left' : ball === 'RIGHT' ? '▶ Right' : '🎯 Center'}
-                    </Text>
-                    <Text style={{ fontSize: 11, color: '#ef4444', fontWeight: '800' }}>✕</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0f172a' }}>{idx + 1}.</Text>
+                      <Ionicons
+                        name={ball === 'LEFT' ? 'arrow-back' : ball === 'RIGHT' ? 'arrow-forward' : 'locate'}
+                        size={12}
+                        color="#0f172a"
+                      />
+                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0f172a' }}>
+                        {ball === 'LEFT' ? 'Left' : ball === 'RIGHT' ? 'Right' : 'Center'}
+                      </Text>
+                    </View>
+                    <Ionicons name="close" size={12} color="#ef4444" />
                   </TouchableOpacity>
                 ))
               )}
@@ -813,11 +856,15 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
                     paddingVertical: 8,
                     borderRadius: 8,
                     backgroundColor: '#d97706',
-                    opacity: emblemSaving ? 0.6 : 1
+                    opacity: emblemSaving ? 0.6 : 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 5
                   }}
                 >
+                  {!emblemSaving && <Ionicons name="checkmark" size={14} color="#ffffff" />}
                   <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#ffffff' }}>
-                    {emblemSaving ? 'Saving...' : '✓ Save Sequence'}
+                    {emblemSaving ? 'Saving...' : 'Save Sequence'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -854,9 +901,12 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
         >
           <View style={{ flex: 1, marginRight: 12 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <Text style={{ fontSize: 15, fontWeight: '800', color: '#0f172a' }}>
-                📜 Association Rule 15 • Match Attendance
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="document-text-outline" size={16} color="#0f172a" />
+                <Text style={{ fontSize: 15, fontWeight: '800', color: '#0f172a' }}>
+                  Association Rule 15 • Match Attendance
+                </Text>
+              </View>
               <View style={{
                 paddingHorizontal: 8,
                 paddingVertical: 2,
@@ -1024,11 +1074,15 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
                     paddingVertical: 8,
                     borderRadius: 8,
                     backgroundColor: '#d97706',
-                    opacity: rule15Saving ? 0.6 : 1
+                    opacity: rule15Saving ? 0.6 : 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 5
                   }}
                 >
+                  {!rule15Saving && <Ionicons name="checkmark" size={14} color="#ffffff" />}
                   <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#ffffff' }}>
-                    {rule15Saving ? 'Saving...' : '✓ Save Rule 15'}
+                    {rule15Saving ? 'Saving...' : 'Save Rule 15'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1065,9 +1119,12 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
         >
           <View style={{ flex: 1, marginRight: 12 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <Text style={{ fontSize: 15, fontWeight: '800', color: '#0f172a' }}>
-                👥 Office Bearers & Ground In-Charges
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="people-outline" size={16} color="#0f172a" />
+                <Text style={{ fontSize: 15, fontWeight: '800', color: '#0f172a' }}>
+                  Office Bearers & Ground In-Charges
+                </Text>
+              </View>
               <View style={{
                 paddingHorizontal: 8,
                 paddingVertical: 2,
@@ -1305,11 +1362,15 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
                   paddingVertical: 9,
                   borderRadius: 8,
                   backgroundColor: '#2563eb',
-                  opacity: committeeSaving ? 0.6 : 1
+                  opacity: committeeSaving ? 0.6 : 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 5
                 }}
               >
+                {!committeeSaving && <Ionicons name="checkmark" size={14} color="#ffffff" />}
                 <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#ffffff' }}>
-                  {committeeSaving ? 'Saving...' : '✓ Save Office Bearers'}
+                  {committeeSaving ? 'Saving...' : 'Save Office Bearers'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1390,7 +1451,7 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
               }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                <Text style={{ fontSize: 15 }}>{activeCategoryDef?.iconText || '📍'}</Text>
+                {renderCategoryIcon(activeCategoryDef, 16, '#0f172a')}
                 <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0f172a' }} numberOfLines={1}>
                   {activeCategoryDef?.label || 'Select Category'}
                 </Text>
@@ -1443,7 +1504,7 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
                       }}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                        <Text style={{ fontSize: 15 }}>{cat.iconText}</Text>
+                        {renderCategoryIcon(cat, 16, isActive ? '#92400e' : '#475569')}
                         <Text style={{
                           fontSize: 13.5,
                           fontWeight: isActive ? '800' : '600',
@@ -1453,7 +1514,7 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
                         </Text>
                       </View>
                       {isActive && (
-                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#d97706' }}>✓</Text>
+                        <Ionicons name="checkmark" size={14} color="#d97706" />
                       )}
                     </TouchableOpacity>
                   );
@@ -1470,7 +1531,7 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
           <View style={[styles.categoryBanner, isMobile && { padding: 14, gap: 10 }]}>
             <View style={[styles.bannerLeft, isMobile && { width: '100%', minWidth: 0, gap: 10 }]}>
               <View style={styles.bannerIconBox}>
-                <Text style={styles.bannerEmoji}>{activeCategoryDef?.iconText || '🏏'}</Text>
+                {renderCategoryIcon(activeCategoryDef, 22, '#d97706')}
               </View>
               <View style={styles.bannerText}>
                 <View style={styles.bannerTitleRow}>
@@ -1661,7 +1722,7 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
             {/* Modal Header */}
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderLeft}>
-                <Text style={styles.modalEmoji}>{activeCategoryDef?.iconText || '✨'}</Text>
+                {renderCategoryIcon(activeCategoryDef, 20, '#d97706')}
                 <Text style={styles.modalTitle}>
                   Add New {activeCategoryDef?.singular || 'Item'}
                 </Text>

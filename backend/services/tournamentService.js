@@ -350,6 +350,10 @@ class TournamentService {
       throw { status: 400, message: `Selected teams count (${teams.length}) exceeds the maximum team limit of ${maxTeams}.` };
     }
 
+    if (teams.length >= 2) {
+      await this.validateNoDuplicatePlayerMobilesInTournament(teams);
+    }
+
     // Determine initial status & tournament type
     const todayStr = new Date().toISOString().split('T')[0];
     let initialStatus = payload.status ? String(payload.status).toUpperCase() : 'UPCOMING';
@@ -511,6 +515,10 @@ class TournamentService {
       }
     }
 
+    if (Array.isArray(payload.teams) && payload.teams.length >= 2) {
+      await this.validateNoDuplicatePlayerMobilesInTournament(payload.teams);
+    }
+
     const updateFields = {
       ...(payload.name && { name: payload.name.trim() }),
       ...(payload.short_name !== undefined && { short_name: String(payload.short_name).trim() }),
@@ -566,6 +574,82 @@ class TournamentService {
     );
 
     return updated;
+  }
+
+  /**
+   * Ensure no player (identified by normalized mobile number) appears in more than one team
+   * within the same tournament. Players are allowed to play for different teams in other tournaments.
+   */
+  async validateNoDuplicatePlayerMobilesInTournament(teamIds = []) {
+    const uniqueTeamIds = [...new Set((teamIds || []).map(id => String(id || '').trim()).filter(Boolean))];
+    if (uniqueTeamIds.length < 2) return;
+
+    await db.initDb();
+    const normalizeMobile = (val) => {
+      const digits = String(val || '').replace(/\D/g, '');
+      return digits.length >= 10 ? digits.slice(-10) : digits;
+    };
+
+    const [teamsDocs, regDocs, playerDocs, teamPlayerDocs] = await Promise.all([
+      db.models.Team.find({ $or: [{ id: { $in: uniqueTeamIds } }, { team_id: { $in: uniqueTeamIds } }] })
+        .select('id team_id name team_name')
+        .lean(),
+      db.models.TeamRegistration.find({ id: { $in: uniqueTeamIds } })
+        .select('id team_name players')
+        .lean(),
+      db.models.Player.find({ team_id: { $in: uniqueTeamIds } })
+        .select('team_id name phone mobile')
+        .lean(),
+      db.models.TeamPlayer
+        ? db.models.TeamPlayer.find({ team_id: { $in: uniqueTeamIds } })
+            .select('team_id name phone mobile')
+            .lean()
+        : Promise.resolve([])
+    ]);
+
+    const teamNameById = {};
+    (teamsDocs || []).forEach(t => {
+      const label = t.name || t.team_name || t.id;
+      if (t.id) teamNameById[t.id] = label;
+      if (t.team_id) teamNameById[t.team_id] = label;
+    });
+    (regDocs || []).forEach(r => {
+      if (r.id && !teamNameById[r.id]) {
+        teamNameById[r.id] = r.team_name || r.id;
+      }
+    });
+
+    const seenMobile = new Map(); // mobile -> { teamId, teamName, playerName }
+    const checkPlayer = (teamId, playerName, rawPhone) => {
+      const mob = normalizeMobile(rawPhone);
+      if (!mob || mob.length < 6) return;
+      const existing = seenMobile.get(mob);
+      if (existing && existing.teamId !== teamId) {
+        const currentTeamName = teamNameById[teamId] || teamId;
+        throw {
+          status: 400,
+          code: 'DUPLICATE_PLAYER_IN_TOURNAMENT',
+          message: `Duplicate player detected: "${playerName || 'Player'}" (Mobile: ${mob}) is in both "${existing.teamName}" and "${currentTeamName}". A player cannot represent multiple teams in the same tournament.`
+        };
+      }
+      if (!existing) {
+        seenMobile.set(mob, {
+          teamId,
+          teamName: teamNameById[teamId] || teamId,
+          playerName: playerName || 'Player'
+        });
+      }
+    };
+
+    (regDocs || []).forEach(r => {
+      (r.players || []).forEach(p => checkPlayer(r.id, p.name, p.phone || p.mobile));
+    });
+    (playerDocs || []).forEach(p => {
+      checkPlayer(p.team_id, p.name, p.mobile || p.phone);
+    });
+    (teamPlayerDocs || []).forEach(p => {
+      checkPlayer(p.team_id, p.name, p.mobile || p.phone);
+    });
   }
 
   /**
@@ -2828,6 +2912,12 @@ class TournamentService {
       throw { status: 400, message: `Cannot approve registration: Tournament max team limit of ${maxTeams} has been reached.` };
     }
 
+    // Ensure no player in this team (by mobile number) is already in another team in this tournament
+    const existingTeams = tournament.teams || [];
+    if (!existingTeams.includes(registration.team_id)) {
+      await this.validateNoDuplicatePlayerMobilesInTournament([...existingTeams, registration.team_id]);
+    }
+
     // Update registration to APPROVED
     const updated = await tournamentRegistrationModel.updateStatus(registration.id, {
       status: 'APPROVED',
@@ -2835,7 +2925,6 @@ class TournamentService {
     });
 
     // Add team to tournament.teams array if not present
-    const existingTeams = tournament.teams || [];
     if (!existingTeams.includes(registration.team_id)) {
       await db.models.Tournament.findOneAndUpdate(
         { id: tournament.id },

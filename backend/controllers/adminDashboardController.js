@@ -10,6 +10,7 @@ const bcrypt = require('bcryptjs');
 const db = require('../config/db');
 const adminService = require('../services/adminService');
 const { validateScheduleDateTime } = require('../utils/dateTimeValidation');
+const { sendListResponse } = require('../utils/responseHelper');
 
 const { JWT_SECRET } = require('../config/env');
 
@@ -108,6 +109,116 @@ class AdminDashboardController {
       });
     } catch (err) {
       console.error('Admin Login Error:', err);
+      return res.status(500).json({
+        success: false,
+        message: 'Internal server error during authentication.'
+      });
+    }
+  }
+
+  /**
+   * POST /api/auth/super-admin/login
+   * Dedicated Super Administrator authentication endpoint.
+   */
+  async superAdminLogin(req, res) {
+    try {
+      const { email, password } = req.body;
+      if (!email || !password) {
+        return res.status(400).json({
+          success: false,
+          message: 'Both Super Administrator Email and Master Password are required.'
+        });
+      }
+
+      const cleanEmail = email.trim().toLowerCase();
+      const cleanPass = password.trim();
+
+      const [users] = await db.query('SELECT * FROM users WHERE LOWER(email) = ?', [cleanEmail]);
+      let adminUser = users && users.length > 0 ? users[0] : null;
+
+      const env = require('../config/env');
+      let isAuthenticated = false;
+
+      if (env.isDevelopment && env.DEV_ADMIN_BYPASS && cleanEmail === env.DEV_ADMIN_EMAIL && env.DEV_ADMIN_OTP && cleanPass === env.DEV_ADMIN_OTP) {
+        isAuthenticated = true;
+        if (!adminUser) {
+          adminUser = {
+            id: 'ADM-DEV',
+            name: 'Development Super Administrator',
+            email: env.DEV_ADMIN_EMAIL,
+            role: 'ADMIN',
+            is_super_admin: true,
+            admin_level: 'Permanent Super Administrator',
+            status: 'ACTIVE'
+          };
+        }
+      } else if (adminUser && (adminUser.role === 'ADMIN' || adminUser.role === 'SUPER_ADMIN')) {
+        if (!adminUser.is_super_admin && adminUser.role !== 'SUPER_ADMIN') {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied. This login portal is restricted to Super Administrators only.'
+          });
+        }
+        if (adminUser.password_hash) {
+          try {
+            isAuthenticated = await bcrypt.compare(cleanPass, adminUser.password_hash);
+          } catch (_e) {
+            isAuthenticated = false;
+          }
+        }
+      }
+
+      if (!isAuthenticated || !adminUser) {
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid Super Administrator credentials or unauthorized account.'
+        });
+      }
+
+      const token = jwt.sign(
+        {
+          id: adminUser.id,
+          name: adminUser.name,
+          email: adminUser.email,
+          role: 'ADMIN',
+          is_super_admin: true,
+          tv: adminUser.token_version || 0,
+          association: 'Cricket Federation of Virudhunagar District'
+        },
+        JWT_SECRET,
+        { expiresIn: '12h' }
+      );
+
+      try {
+        await db.query(
+          `INSERT INTO audit_logs (id, action, initiated_by, details, timestamp, ip_address)
+           VALUES (?, ?, ?, ?, NOW(), ?)`,
+          [
+            'LOG-' + Date.now(),
+            'SUPER_ADMIN_LOGIN',
+            adminUser.email,
+            'Super Administrator logged into dedicated portal',
+            req.ip || '127.0.0.1'
+          ]
+        );
+      } catch (_e) {}
+
+      return res.status(200).json({
+        success: true,
+        message: 'Super Administrator authenticated successfully.',
+        token,
+        user: {
+          id: adminUser.id,
+          name: adminUser.name,
+          email: adminUser.email,
+          role: 'ADMIN',
+          is_super_admin: true,
+          admin_level: adminUser.admin_level || 'Permanent Super Administrator',
+          status: adminUser.status || 'ACTIVE'
+        }
+      });
+    } catch (err) {
+      console.error('Super Admin Login Error:', err);
       return res.status(500).json({
         success: false,
         message: 'Internal server error during authentication.'
@@ -316,8 +427,7 @@ class AdminDashboardController {
           .lean()
       ]);
 
-      return res.status(200).json({
-        success: true,
+      return sendListResponse(res, users, {
         data: users,
         users,
         total,
@@ -457,8 +567,7 @@ class AdminDashboardController {
       const skip = (page - 1) * limit;
       const paginated = filtered.slice(skip, skip + limit);
 
-      return res.status(200).json({
-        success: true,
+      return sendListResponse(res, paginated, {
         data: paginated,
         players: paginated,
         total: filtered.length,
@@ -556,8 +665,7 @@ class AdminDashboardController {
       const skip = (page - 1) * limit;
       const paginated = list.slice(skip, skip + limit);
 
-      return res.status(200).json({
-        success: true,
+      return sendListResponse(res, paginated, {
         data: paginated,
         teams: paginated,
         total: list.length,
@@ -640,7 +748,7 @@ class AdminDashboardController {
   async getTournaments(req, res) {
     try {
       const [rows] = await db.query('SELECT * FROM tournaments ORDER BY start_date DESC');
-      return res.status(200).json({ success: true, tournaments: rows || [] });
+      return sendListResponse(res, rows || [], { tournaments: rows || [], data: rows || [] });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -754,8 +862,7 @@ class AdminDashboardController {
         };
       });
 
-      return res.status(200).json({
-        success: true,
+      return sendListResponse(res, formatted, {
         data: formatted,
         matches: formatted,
         total,
@@ -850,7 +957,7 @@ class AdminDashboardController {
   async getPostponementRequests(req, res) {
     try {
       const requests = await adminService.getPostponementRequests();
-      return res.status(200).json({ success: true, requests });
+      return sendListResponse(res, requests || [], { requests: requests || [], data: requests || [] });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message, error: err.message });
     }
@@ -1046,8 +1153,7 @@ class AdminDashboardController {
       const skip = (page - 1) * limit;
       const paginated = items.slice(skip, skip + limit);
 
-      return res.status(200).json({
-        success: true,
+      return sendListResponse(res, paginated, {
         data: paginated,
         approvals: paginated,
         total: items.length,
@@ -1254,7 +1360,7 @@ class AdminDashboardController {
         };
       });
 
-      return res.status(200).json({ success: true, liveMatches: liveList });
+      return sendListResponse(res, liveList, { liveMatches: liveList, data: liveList });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -1333,8 +1439,7 @@ class AdminDashboardController {
         target_audience: r.reference_id || 'ALL'
       }));
 
-      return res.status(200).json({
-        success: true,
+      return sendListResponse(res, formatted, {
         data: formatted,
         notifications: formatted,
         total,
@@ -1406,7 +1511,7 @@ class AdminDashboardController {
   async getContent(req, res) {
     try {
       const [rows] = await db.query('SELECT * FROM content ORDER BY created_at DESC');
-      return res.status(200).json({ success: true, content: rows || [] });
+      return sendListResponse(res, rows || [], { content: rows || [], data: rows || [] });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }

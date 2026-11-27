@@ -9,6 +9,7 @@ const rateLimit = require('express-rate-limit');
 const db = require('../config/db');
 const { cacheResponse } = require('../middleware/cacheMiddleware');
 const { requireTurnstile } = require('../middleware/turnstileMiddleware');
+const { withEmptyDataMessage } = require('../utils/responseHelper');
 
 const contactRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -460,7 +461,7 @@ router.get('/home', cacheResponse(30, 'portal-home'), async (req, res) => {
     // allPlayers sent to portal now contains ONLY verified milestone performers from Database
     const allPlayers = milestonePlayers;
 
-    res.json({
+    res.json(withEmptyDataMessage({
       success: true,
       data: {
         association: {
@@ -482,7 +483,7 @@ router.get('/home', cacheResponse(30, 'portal-home'), async (req, res) => {
         allPlayers,
         news: newsList
       }
-    });
+    }, tournaments, liveMatches, upcomingMatches, recentMatches, topBatsmen, topBowlers, pointsTable, topFielders, allPlayers, newsList));
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -586,7 +587,7 @@ router.get('/stats', cacheResponse(30, 'portal-stats'), async (req, res) => {
         nrr: t.stats?.nrr || 0.0
       }));
 
-    res.json({
+    res.json(withEmptyDataMessage({
       success: true,
       data: {
         batting,
@@ -594,7 +595,7 @@ router.get('/stats', cacheResponse(30, 'portal-stats'), async (req, res) => {
         fielding,
         standings
       }
-    });
+    }, batting, bowling, fielding, standings));
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -715,16 +716,18 @@ router.get('/search', async (req, res) => {
       });
     });
 
-    res.json({
+    const resultsPlayers = [...playerMap.values()].slice(0, 20);
+    const resultsTeams = [...teamMap.values()].slice(0, 15);
+    res.json(withEmptyDataMessage({
       success: true,
       query,
       results: {
-        players: [...playerMap.values()].slice(0, 20),
-        teams: [...teamMap.values()].slice(0, 15),
+        players: resultsPlayers,
+        teams: resultsTeams,
         matches,
         news
       }
-    });
+    }, resultsPlayers, resultsTeams, matches, news));
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -1194,16 +1197,17 @@ router.get('/events', async (req, res) => {
     const tournaments = await db.models.Tournament.find({}).lean();
     const matches = await db.models.Match.find({ status: 'SCHEDULED' }).lean();
 
-    res.json({
+    const events = [
+      { id: 'EV-01', title: 'VPL 2026 Opening Ceremony', date: '2026-10-01', venue: 'Kamarajar Stadium' },
+      { id: 'EV-02', title: 'District Team Squad Final Verification', date: '2026-10-25', venue: 'Association HQ' },
+      { id: 'EV-03', title: 'Junior U-19 Championship Player Trials', date: '2026-11-01', venue: 'Sivakasi Ground' }
+    ];
+    res.json(withEmptyDataMessage({
       success: true,
-      events: [
-        { id: 'EV-01', title: 'VPL 2026 Opening Ceremony', date: '2026-10-01', venue: 'Kamarajar Stadium' },
-        { id: 'EV-02', title: 'District Team Squad Final Verification', date: '2026-10-25', venue: 'Association HQ' },
-        { id: 'EV-03', title: 'Junior U-19 Championship Player Trials', date: '2026-11-01', venue: 'Sivakasi Ground' }
-      ],
+      events,
       tournaments,
       upcomingFixtures: matches
-    });
+    }, tournaments, matches));
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

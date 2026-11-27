@@ -12,6 +12,7 @@ import {
   Alert
 } from 'react-native';
 import { AdminSecurityApi, getCurrentUser } from '../../services/api';
+import { Ionicons } from '@expo/vector-icons';
 
 export interface DualAdminSecurityModalProps {
   visible: boolean;
@@ -422,34 +423,37 @@ export default function DualAdminSecurityModal({
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.navTabBtn, activeTab === 'audit' && styles.navTabBtnActive]}
+                style={[styles.navTabBtn, activeTab === 'audit' && styles.navTabBtnActive, { flexDirection: 'row', alignItems: 'center', gap: 5 }]}
                 onPress={() => {
                   setActiveTab('audit');
                   resetFlows();
                 }}
               >
+                <Ionicons name="shield-checkmark-outline" size={14} color={activeTab === 'audit' ? '#ffffff' : '#475569'} />
                 <Text style={[styles.navTabBtnText, activeTab === 'audit' && styles.navTabBtnTextActive]}>
-                  🛡️ Security Audit
+                  Security Audit
                 </Text>
               </TouchableOpacity>
             </ScrollView>
 
             <TouchableOpacity style={styles.closeBtn} onPress={onClose} accessibilityLabel="Close Security Modal">
-              <Text style={styles.closeBtnText}>✕</Text>
+              <Ionicons name="close" size={18} color="#475569" />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.scrollBody} contentContainerStyle={styles.scrollBodyContent} keyboardShouldPersistTaps="handled">
             {/* ERROR / SUCCESS ALERTS */}
             {errorMessage ? (
-              <View style={styles.errorAlertBox}>
-                <Text style={styles.errorAlertText}>⚠️ {errorMessage}</Text>
+              <View style={[styles.errorAlertBox, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                <Ionicons name="warning" size={15} color="#dc2626" />
+                <Text style={[styles.errorAlertText, { flex: 1 }]}>{errorMessage}</Text>
               </View>
             ) : null}
 
             {successMessage ? (
-              <View style={styles.successAlertBox}>
-                <Text style={styles.successAlertText}>✅ {successMessage}</Text>
+              <View style={[styles.successAlertBox, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                <Ionicons name="checkmark-circle" size={15} color="#16a34a" />
+                <Text style={[styles.successAlertText, { flex: 1 }]}>{successMessage}</Text>
               </View>
             ) : null}
 
@@ -459,7 +463,7 @@ export default function DualAdminSecurityModal({
                 {/* Title & Subtitle */}
                 <View style={styles.titleSection}>
                   <View style={styles.titleIconBadge}>
-                    <Text style={styles.titleIconText}>👤⁺</Text>
+                    <Ionicons name="person-add-outline" size={18} color="#1d4ed8" />
                   </View>
                   <View style={styles.titleTextContainer}>
                     <Text style={styles.modalTitle}>Promote / Add Administrator</Text>
@@ -492,7 +496,7 @@ export default function DualAdminSecurityModal({
                     {/* High Security Access Delegation Warning */}
                     <View style={styles.redNoticeCard}>
                       <View style={styles.noticeIconCol}>
-                        <Text style={styles.shieldIcon}>🛡️</Text>
+                        <Ionicons name="shield-checkmark" size={20} color="#dc2626" />
                       </View>
                       <View style={styles.noticeTextCol}>
                         <Text style={styles.noticeTitle}>High Security Access Delegation</Text>
@@ -519,13 +523,22 @@ export default function DualAdminSecurityModal({
                         <Text style={styles.fieldHelper}>Checking account registry...</Text>
                       )}
                       {candidateCheckStatus === 'found' && (
-                        <Text style={[styles.fieldHelper, { color: '#16a34a' }]}>✓ {candidateCheckMessage}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                          <Ionicons name="checkmark" size={13} color="#16a34a" />
+                          <Text style={[styles.fieldHelper, { color: '#16a34a', marginTop: 0 }]}>{candidateCheckMessage}</Text>
+                        </View>
                       )}
                       {candidateCheckStatus === 'not_found' && (
-                        <Text style={[styles.fieldHelper, { color: '#0284c7' }]}>ℹ {candidateCheckMessage}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                          <Ionicons name="information-circle-outline" size={13} color="#0284c7" />
+                          <Text style={[styles.fieldHelper, { color: '#0284c7', marginTop: 0 }]}>{candidateCheckMessage}</Text>
+                        </View>
                       )}
                       {candidateCheckStatus === 'already_admin' && (
-                        <Text style={[styles.fieldHelper, { color: '#dc2626' }]}>⚠️ {candidateCheckMessage}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                          <Ionicons name="warning" size={13} color="#dc2626" />
+                          <Text style={[styles.fieldHelper, { color: '#dc2626', marginTop: 0 }]}>{candidateCheckMessage}</Text>
+                        </View>
                       )}
                     </View>
 
@@ -544,7 +557,7 @@ export default function DualAdminSecurityModal({
 
                     {/* Authorization Requirement Info Box */}
                     <View style={styles.infoBoxCard}>
-                      <Text style={styles.infoBoxIcon}>🛡️</Text>
+                      <Ionicons name="shield-checkmark-outline" size={16} color="#1d4ed8" />
                       <Text style={styles.infoBoxText}>
                         Authorization Required From Existing Admins ({Math.max(activeCount, 2)}):
                       </Text>
@@ -582,8 +595,9 @@ export default function DualAdminSecurityModal({
 
                     {/* Countdown Timer & Resend Row */}
                     <View style={styles.timerResendRow}>
-                      <View style={styles.timerBadge}>
-                        <Text style={styles.timerBadgeText}>⏱ Valid for: {formatTimer(countdown)}</Text>
+                      <View style={[styles.timerBadge, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                        <Ionicons name="time-outline" size={13} color="#0369a1" />
+                        <Text style={styles.timerBadgeText}>Valid for: {formatTimer(countdown)}</Text>
                       </View>
                       <TouchableOpacity onPress={handleResendCodes} disabled={submitting}>
                         <Text style={styles.resendTextBtn}>Resend Codes</Text>
@@ -636,7 +650,7 @@ export default function DualAdminSecurityModal({
 
                     {/* Security Footnote */}
                     <View style={styles.securityFootnoteRow}>
-                      <Text style={styles.lockFootnoteIcon}>🔒</Text>
+                      <Ionicons name="lock-closed" size={14} color="#64748b" />
                       <Text style={styles.lockFootnoteText}>
                         If either OTP is incorrect or rejected, candidate promotion will NOT proceed.
                       </Text>
@@ -647,7 +661,8 @@ export default function DualAdminSecurityModal({
                       style={[
                         styles.primaryActionBtn,
                         styles.confirmBtn,
-                        (otp1.length !== 6 || otp2.length !== 6 || submitting) && styles.btnDisabled
+                        (otp1.length !== 6 || otp2.length !== 6 || submitting) && styles.btnDisabled,
+                        { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }
                       ]}
                       onPress={handleVerifyDualPromote}
                       disabled={otp1.length !== 6 || otp2.length !== 6 || submitting}
@@ -655,7 +670,10 @@ export default function DualAdminSecurityModal({
                       {submitting ? (
                         <ActivityIndicator color="#ffffff" />
                       ) : (
-                        <Text style={styles.primaryActionBtnText}>✓ Verify Dual Codes & Continue</Text>
+                        <>
+                          <Ionicons name="checkmark" size={15} color="#ffffff" />
+                          <Text style={styles.primaryActionBtnText}>Verify Dual Codes & Continue</Text>
+                        </>
                       )}
                     </TouchableOpacity>
                   </View>
@@ -665,7 +683,7 @@ export default function DualAdminSecurityModal({
                 {promoteStep === 3 && (
                   <View style={styles.step3Container}>
                     <View style={styles.step3SuccessCard}>
-                      <Text style={styles.step3SuccessIcon}>🎉</Text>
+                      <Ionicons name="checkmark-circle" size={32} color="#16a34a" style={{ marginBottom: 6 }} />
                       <Text style={styles.step3SuccessTitle}>Dual Administrator Authorization Verified!</Text>
                       <Text style={styles.step3SuccessDesc}>
                         Both administrators have approved promoting{' '}
@@ -690,14 +708,17 @@ export default function DualAdminSecurityModal({
                           editable={!submitting}
                         />
                         <TouchableOpacity
-                          style={[styles.primaryActionBtn, styles.grantBtn, (candidateCode.length !== 6 || submitting) && styles.btnDisabled]}
+                          style={[styles.primaryActionBtn, styles.grantBtn, (candidateCode.length !== 6 || submitting) && styles.btnDisabled, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}
                           onPress={handleFinalizeCandidateGrant}
                           disabled={candidateCode.length !== 6 || submitting}
                         >
                           {submitting ? (
                             <ActivityIndicator color="#ffffff" />
                           ) : (
-                            <Text style={styles.primaryActionBtnText}>✓ Finalize & Grant Administrator Access</Text>
+                            <>
+                              <Ionicons name="checkmark" size={15} color="#ffffff" />
+                              <Text style={styles.primaryActionBtnText}>Finalize & Grant Administrator Access</Text>
+                            </>
                           )}
                         </TouchableOpacity>
                       </View>
@@ -717,7 +738,7 @@ export default function DualAdminSecurityModal({
                 {/* Title & Subtitle */}
                 <View style={styles.titleSection}>
                   <View style={[styles.titleIconBadge, { backgroundColor: '#fee2e2' }]}>
-                    <Text style={[styles.titleIconText, { color: '#dc2626' }]}>👤⁻</Text>
+                    <Ionicons name="person-remove-outline" size={18} color="#dc2626" />
                   </View>
                   <View style={styles.titleTextContainer}>
                     <Text style={styles.modalTitle}>Remove / Demote Administrator</Text>
@@ -745,7 +766,7 @@ export default function DualAdminSecurityModal({
                     {/* High Security Role Revocation Notice */}
                     <View style={styles.redNoticeCard}>
                       <View style={styles.noticeIconCol}>
-                        <Text style={styles.shieldIcon}>🛡️</Text>
+                        <Ionicons name="shield-checkmark" size={20} color="#dc2626" />
                       </View>
                       <View style={styles.noticeTextCol}>
                         <Text style={styles.noticeTitle}>High Security Role Revocation</Text>
@@ -758,7 +779,7 @@ export default function DualAdminSecurityModal({
                     {/* Removal Protection Active Card */}
                     <View style={styles.removalProtectionCard}>
                       <View style={styles.protectionIconRow}>
-                        <Text style={styles.lockRedIcon}>🔒</Text>
+                        <Ionicons name="lock-closed" size={14} color="#dc2626" />
                         <Text style={styles.protectionHeaderTitle}>Removal Protection Active</Text>
                       </View>
                       <Text style={styles.protectionDesc}>
@@ -807,7 +828,7 @@ export default function DualAdminSecurityModal({
                               </View>
 
                               <View style={styles.adminCardAvatar}>
-                                <Text style={styles.adminCardAvatarText}>🛡️</Text>
+                                <Ionicons name="shield-checkmark" size={16} color="#1d4ed8" />
                               </View>
 
                               <View style={styles.adminCardInfo}>
@@ -829,7 +850,7 @@ export default function DualAdminSecurityModal({
 
                               {isSelected && (
                                 <View style={styles.selectedCheckBadge}>
-                                  <Text style={styles.selectedCheckText}>✓</Text>
+                                  <Ionicons name="checkmark" size={13} color="#ffffff" />
                                 </View>
                               )}
                             </TouchableOpacity>
@@ -876,8 +897,9 @@ export default function DualAdminSecurityModal({
 
                     {/* Countdown & Resend */}
                     <View style={styles.timerResendRow}>
-                      <View style={styles.timerBadge}>
-                        <Text style={styles.timerBadgeText}>⏱ Valid for: {formatTimer(countdown)}</Text>
+                      <View style={[styles.timerBadge, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                        <Ionicons name="time-outline" size={13} color="#0369a1" />
+                        <Text style={styles.timerBadgeText}>Valid for: {formatTimer(countdown)}</Text>
                       </View>
                       <TouchableOpacity onPress={handleResendCodes} disabled={submitting}>
                         <Text style={styles.resendTextBtn}>Resend Codes</Text>
@@ -929,7 +951,7 @@ export default function DualAdminSecurityModal({
                     </View>
 
                     <View style={styles.securityFootnoteRow}>
-                      <Text style={styles.lockFootnoteIcon}>⚠️</Text>
+                      <Ionicons name="warning" size={14} color="#b91c1c" />
                       <Text style={[styles.lockFootnoteText, { color: '#b91c1c' }]}>
                         Revoking will immediately invalidate existing JWT sessions and revert this account to USER.
                       </Text>
@@ -939,7 +961,8 @@ export default function DualAdminSecurityModal({
                       style={[
                         styles.primaryActionBtn,
                         styles.revokeBtn,
-                        (otp1.length !== 6 || otp2.length !== 6 || submitting) && styles.btnDisabled
+                        (otp1.length !== 6 || otp2.length !== 6 || submitting) && styles.btnDisabled,
+                        { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }
                       ]}
                       onPress={handleVerifyDualRemoval}
                       disabled={otp1.length !== 6 || otp2.length !== 6 || submitting}
@@ -947,7 +970,10 @@ export default function DualAdminSecurityModal({
                       {submitting ? (
                         <ActivityIndicator color="#ffffff" />
                       ) : (
-                        <Text style={styles.primaryActionBtnText}>⚠️ Verify Both Codes & Revoke Administrator</Text>
+                        <>
+                          <Ionicons name="warning" size={15} color="#ffffff" />
+                          <Text style={styles.primaryActionBtnText}>Verify Both Codes & Revoke Administrator</Text>
+                        </>
                       )}
                     </TouchableOpacity>
                   </View>
@@ -960,7 +986,7 @@ export default function DualAdminSecurityModal({
               <View style={styles.tabContent}>
                 <View style={styles.titleSection}>
                   <View style={[styles.titleIconBadge, { backgroundColor: '#eff6ff' }]}>
-                    <Text style={[styles.titleIconText, { color: '#1d4ed8' }]}>📜</Text>
+                    <Ionicons name="document-text-outline" size={18} color="#1d4ed8" />
                   </View>
                   <View style={styles.titleTextContainer}>
                     <Text style={styles.modalTitle}>Security Audit & Action History</Text>
