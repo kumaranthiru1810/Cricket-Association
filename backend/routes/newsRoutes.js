@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 const { verifyToken } = require('../middleware/authMiddleware');
+const { attachSuperAdminNotificationHook } = require('../services/superAdminNotificationService');
 const { cacheResponse, invalidateCache } = require('../middleware/cacheMiddleware');
 const { sendListResponse } = require('../utils/responseHelper');
 
@@ -103,6 +104,7 @@ router.post('/', verifyToken, async (req, res) => {
     if (userRole !== 'CONTENT' && userRole !== 'CONTENT_CREATOR' && userRole !== 'ADMIN') {
       return res.status(403).json({ success: false, message: 'Forbidden: Only Content Staff or Admin can publish news.' });
     }
+    if (userRole === 'ADMIN') attachSuperAdminNotificationHook(req, res, req.user);
 
     const { title, summary, content, category, imageUrl } = req.body;
     if (!title || !summary || !content) {
@@ -139,6 +141,7 @@ router.put('/:id', verifyToken, async (req, res) => {
     if (userRole !== 'CONTENT' && userRole !== 'CONTENT_CREATOR' && userRole !== 'ADMIN') {
       return res.status(403).json({ success: false, message: 'Forbidden' });
     }
+    if (userRole === 'ADMIN') attachSuperAdminNotificationHook(req, res, req.user);
 
     const updated = await db.models.News.findOneAndUpdate(
       { id: req.params.id },
@@ -164,6 +167,7 @@ router.delete('/:id', verifyToken, async (req, res) => {
     if (userRole !== 'ADMIN' && userRole !== 'CONTENT' && userRole !== 'CONTENT_CREATOR') {
       return res.status(403).json({ success: false, message: 'Forbidden: Only Admin can delete news articles.' });
     }
+    if (userRole === 'ADMIN') attachSuperAdminNotificationHook(req, res, req.user);
 
     const deleted = await db.models.News.findOneAndDelete({ id: req.params.id });
     if (!deleted) return res.status(404).json({ success: false, error: 'Article not found' });

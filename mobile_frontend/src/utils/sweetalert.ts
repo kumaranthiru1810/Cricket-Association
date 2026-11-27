@@ -38,8 +38,8 @@ export const showAlert = async (
 /**
  * Show a success alert (Native fallback)
  */
-export const showSuccess = async (title: string, text?: string, _timer: number = 2500) => {
-  return showAlert(title, text, 'success');
+export const showSuccess = async (title: string, _text?: string, _timer: number = 2500) => {
+  return showAlert(title, undefined, 'success');
 };
 
 /**

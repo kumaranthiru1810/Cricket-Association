@@ -3100,7 +3100,9 @@ class TournamentService {
           db.models.InningsBatter.find({ match_id: { $in: matchIds } }).lean(),
           db.models.InningsBowler.find({ match_id: { $in: matchIds } }).lean(),
           db.models.Innings.find({ match_id: { $in: matchIds } }).lean(),
-          db.models.BallEvent.find({ match_id: { $in: matchIds }, is_wicket: true }).lean()
+          db.models.Delivery
+            ? db.models.Delivery.find({ match_id: { $in: matchIds }, is_wicket: true }).lean()
+            : Promise.resolve([])
         ])
       : [[], [], [], []];
 

@@ -67,6 +67,19 @@ function initSocket(server) {
       if (eventCount > 30) return;
       socket.leave('live');
     });
+
+    // Super Admin real-time notification room
+    if (socket.user && (socket.user.is_super_admin || socket.user.role === 'SUPER_ADMIN')) {
+      socket.join('super-admin');
+    }
+
+    socket.on('join:super-admin', () => {
+      eventCount += 1;
+      if (eventCount > 30) return;
+      if (socket.user && (socket.user.is_super_admin || socket.user.role === 'SUPER_ADMIN')) {
+        socket.join('super-admin');
+      }
+    });
   });
 
   return io;
@@ -79,9 +92,15 @@ function broadcastScoreUpdate(matchId, payload) {
   io.to(`match:${matchId}`).to('live').emit('score:update', payload);
 }
 
+function broadcastSuperAdminNotification(notification) {
+  if (!io || !notification) return;
+  io.to('super-admin').emit('super-admin:notification', notification);
+}
+
 module.exports = {
   initSocket,
   broadcastScoreUpdate,
   emitScoreUpdate: broadcastScoreUpdate,
+  broadcastSuperAdminNotification,
   getIO: () => io
 };

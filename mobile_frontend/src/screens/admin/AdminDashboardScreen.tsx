@@ -36,7 +36,8 @@ import {
 } from 'react-native';
 import Svg, { Path, Circle, G, Text as SvgText } from 'react-native-svg';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { ScorerApi, getCurrentUser, getAuthToken, setAuthToken, setCurrentUser } from '../../services/api';
+import { io } from 'socket.io-client';
+import { ScorerApi, SOCKET_URL, getCurrentUser, getAuthToken, setAuthToken, setCurrentUser } from '../../services/api';
 import { showSuccess, showError, showWarning, showConfirm, showInfo, swal } from '../../utils/sweetalert';
 import TournamentManagement from '../../admin/components/TournamentManagement';
 import TournamentRecordsPanel from '../../admin/components/TournamentRecordsPanel';
@@ -45,7 +46,7 @@ import CalculationSettingsManagement from '../../admin/components/CalculationSet
 import SettingsPage from '../../admin/pages/SettingsPage';
 import UsersPage from '../../admin/pages/UsersPage';
 import AdminsPage from '../../admin/pages/AdminsPage';
-import { adminApi, getStoredAdminUser } from '../../admin/services/adminApi';
+import { adminApi, getStoredAdminUser, getStoredAdminToken, getStoredSuperAdminToken } from '../../admin/services/adminApi';
 // import DualAdminSecurityModal from '../../components/admin/DualAdminSecurityModal';
 import { HomePopupManagerModal } from '../../components/admin/HomePopupManagerModal';
 import {
@@ -804,6 +805,100 @@ export default function AdminDashboardScreen({ onExit, initialParams, isSuperAdm
   const [rejectionModal, setRejectionModal] = useState<{ id: string; type: 'SCORER' | 'TEAM' | 'UMPIRE'; name: string } | null>(null);
   const [rejectionReasonInput, setRejectionReasonInput] = useState<string>('Documents incomplete or credentials not fulfilled');
   const [logoutModalOpen, setLogoutModalOpen] = useState<boolean>(false);
+
+  // Super Admin Activity Notifications (Database-backed)
+  const [saNotifModalOpen, setSaNotifModalOpen] = useState<boolean>(false);
+  const [saNotifications, setSaNotifications] = useState<any[]>([]);
+  const [saUnreadCount, setSaUnreadCount] = useState<number>(0);
+  const [saNotifLoading, setSaNotifLoading] = useState<boolean>(false);
+  const [saNotifError, setSaNotifError] = useState<string | null>(null);
+
+  const loadSuperAdminNotifications = async (silent = false) => {
+    if (!isSuperAdmin) return;
+    if (!silent) setSaNotifLoading(true);
+    try {
+      const res = await adminApi.getSuperAdminNotifications(50);
+      if (res && res.success) {
+        const list = Array.isArray(res.notifications) ? res.notifications : (Array.isArray(res.data) ? res.data : []);
+        setSaNotifications(list);
+        setSaUnreadCount(typeof res.unreadCount === 'number' ? res.unreadCount : list.filter((n: any) => n.status === 'UNREAD').length);
+        setSaNotifError(null);
+      }
+    } catch (e: any) {
+      if (!silent) {
+        setSaNotifError(e?.message || 'Unable to load notifications. Please sign in as Super Admin again.');
+      }
+    } finally {
+      if (!silent) setSaNotifLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    loadSuperAdminNotifications(true);
+
+    const token = getStoredSuperAdminToken() || getStoredAdminToken() || getAuthToken();
+    const socket = io(SOCKET_URL, {
+      transports: ['websocket', 'polling'],
+      ...(token ? { auth: { token } } : {})
+    });
+
+    socket.on('connect', () => {
+      socket.emit('join:super-admin');
+    });
+
+    socket.on('super-admin:notification', (newNotif: any) => {
+      if (!newNotif) return;
+      const newId = newNotif.id || newNotif._id;
+      setSaNotifications(prev => {
+        if (newId && prev.some(n => (n.id || n._id) === newId)) return prev;
+        return [newNotif, ...prev];
+      });
+      if (newNotif.status !== 'READ') {
+        setSaUnreadCount(prev => prev + 1);
+      }
+      setSaNotifError(null);
+    });
+
+    const interval = setInterval(() => {
+      loadSuperAdminNotifications(true);
+    }, 30000);
+
+    return () => {
+      clearInterval(interval);
+      socket.disconnect();
+    };
+  }, [isSuperAdmin]);
+
+  const handleMarkSaNotifRead = async (notif: any) => {
+    const targetId = notif?.id || notif?._id;
+    if (!targetId || notif?.status === 'READ') return;
+    try {
+      await adminApi.markSuperAdminNotificationRead(targetId);
+      setSaNotifications(prev => prev.map(n => ((n.id || n._id) === targetId ? { ...n, status: 'READ' } : n)));
+      setSaUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (_e) {}
+  };
+
+  const handleMarkAllSaNotifsRead = async () => {
+    try {
+      await adminApi.markAllSuperAdminNotificationsRead();
+      setSaNotifications(prev => prev.map(n => ({ ...n, status: 'READ' })));
+      setSaUnreadCount(0);
+    } catch (_e) {}
+  };
+
+  const handleDeleteSaNotif = async (notif: any) => {
+    const targetId = notif?.id || notif?._id;
+    if (!targetId) return;
+    try {
+      await adminApi.deleteSuperAdminNotification(targetId);
+      setSaNotifications(prev => prev.filter(n => (n.id || n._id) !== targetId));
+      if (notif?.status === 'UNREAD') {
+        setSaUnreadCount(prev => Math.max(0, prev - 1));
+      }
+    } catch (_e) {}
+  };
 
   // Delete Confirmation & Floating Undo Toast State
   const [deleteConfirmModal, setDeleteConfirmModal] = useState<{
@@ -2645,7 +2740,7 @@ export default function AdminDashboardScreen({ onExit, initialParams, isSuperAdm
             }}
             activeOpacity={0.8}
           >
-            <Text style={[styles.sidebarNavIcon, activeTab === 'tournaments' && styles.sidebarNavIconActive]}>🏆</Text>
+            <Ionicons name="trophy-outline" size={18} color={activeTab === 'tournaments' ? '#ffffff' : '#475569'} />
             {!isCollapsed && (
               <Text style={[styles.sidebarNavLabel, activeTab === 'tournaments' && styles.sidebarNavLabelActive]}>
                 Tournaments
@@ -2702,7 +2797,7 @@ export default function AdminDashboardScreen({ onExit, initialParams, isSuperAdm
             }}
             activeOpacity={0.8}
           >
-            <Ionicons name="trophy-outline" size={18} color={activeTab === 'tournaments' ? '#ffffff' : '#475569'} />
+            <Ionicons name="trophy-outline" size={18} color={activeTab === 'records' ? '#ffffff' : '#475569'} />
             {!isCollapsed && (
               <Text style={[styles.sidebarNavLabel, activeTab === 'records' && styles.sidebarNavLabelActive]}>
                 Tournament Records
@@ -2882,17 +2977,54 @@ export default function AdminDashboardScreen({ onExit, initialParams, isSuperAdm
               <Text style={[styles.adminExitBtnPillText, { color: '#ffffff', fontWeight: '800' }]}>Dual-Admin Security</Text>
             </TouchableOpacity>
             */}
-            <View style={[styles.adminUserBadgePill, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
-              <Ionicons name="person-circle-outline" size={16} color="#fbbf24" />
-              <Text style={styles.adminUserBadgePillText}>{adminEmail}</Text>
-            </View>
+            {isSuperAdmin ? (
+              <TouchableOpacity
+                style={styles.saBellBtn}
+                onPress={() => {
+                  setSaNotifModalOpen(true);
+                  loadSuperAdminNotifications();
+                }}
+                activeOpacity={0.8}
+                accessibilityLabel="Super Admin Notifications"
+              >
+                <Ionicons name="notifications-outline" size={19} color="#fbbf24" />
+                {saUnreadCount > 0 && (
+                  <View style={styles.saBellBadge}>
+                    <Text style={styles.saBellBadgeText}>{saUnreadCount > 99 ? '99+' : saUnreadCount}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ) : (
+              <View style={[styles.adminUserBadgePill, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                <Ionicons name="person-circle-outline" size={16} color="#fbbf24" />
+                <Text style={styles.adminUserBadgePillText}>{adminEmail}</Text>
+              </View>
+            )}
             <TouchableOpacity style={[styles.adminExitBtnPill, { flexDirection: 'row', alignItems: 'center', gap: 5 }]} onPress={() => setLogoutModalOpen(true)} activeOpacity={0.8}>
               <Ionicons name="log-out-outline" size={15} color="#ffffff" />
               <Text style={styles.adminExitBtnPillText}>Exit</Text>
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {isSuperAdmin && (
+              <TouchableOpacity
+                style={[styles.saBellBtn, { width: 34, height: 34 }]}
+                onPress={() => {
+                  setSaNotifModalOpen(true);
+                  loadSuperAdminNotifications();
+                }}
+                activeOpacity={0.8}
+                accessibilityLabel="Super Admin Notifications"
+              >
+                <Ionicons name="notifications-outline" size={18} color="#fbbf24" />
+                {saUnreadCount > 0 && (
+                  <View style={styles.saBellBadge}>
+                    <Text style={styles.saBellBadgeText}>{saUnreadCount > 99 ? '99+' : saUnreadCount}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            )}
             {/* Dual-Admin Security (Commented out - not needed)
             <TouchableOpacity
               style={[styles.adminExitBtnPill, { backgroundColor: '#b91c1c', borderColor: '#ef4444', paddingHorizontal: 8, paddingVertical: 5, marginLeft: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }]}
@@ -2963,7 +3095,7 @@ export default function AdminDashboardScreen({ onExit, initialParams, isSuperAdm
             )}
 
             {/* MODERN PAGE HEADER ROW */}
-            {activeTab !== 'admins' && (
+            {!isSuperAdmin && activeTab !== 'admins' && (
             <View style={styles.pageHeaderRow}>
               <View style={{ flex: 1, minWidth: 200 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -6214,6 +6346,151 @@ export default function AdminDashboardScreen({ onExit, initialParams, isSuperAdm
           </View>
         </View>
       </Modal>
+      {/* ─────────────────────────────────────────────────────────────
+          11A. SUPER ADMIN ACTIVITY NOTIFICATIONS MODAL (DB-BACKED)
+          ───────────────────────────────────────────────────────────── */}
+      {isSuperAdmin && (
+        <Modal
+          visible={saNotifModalOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSaNotifModalOpen(false)}
+        >
+          <View style={styles.saNotifOverlay}>
+            <View style={styles.saNotifModal}>
+              <View style={styles.saNotifHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                  <View style={styles.saNotifHeaderIcon}>
+                    <Ionicons name="notifications" size={18} color="#fbbf24" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.saNotifTitle}>Admin Activity Notifications</Text>
+                    <Text style={styles.saNotifSub}>
+                      {saUnreadCount > 0 ? `${saUnreadCount} unread change(s)` : 'All caught up'} • Stored in Database
+                    </Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  {saUnreadCount > 0 && (
+                    <TouchableOpacity
+                      style={styles.saNotifActionBtn}
+                      onPress={handleMarkAllSaNotifsRead}
+                      activeOpacity={0.75}
+                    >
+                      <Ionicons name="checkmark-done-outline" size={14} color="#0f172a" />
+                      <Text style={styles.saNotifActionBtnText}>Mark all read</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={styles.saNotifRefreshBtn}
+                    onPress={() => loadSuperAdminNotifications(false)}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons name="refresh-outline" size={16} color="#475569" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.saNotifCloseBtn}
+                    onPress={() => setSaNotifModalOpen(false)}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons name="close" size={18} color="#475569" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <ScrollView style={styles.saNotifList} contentContainerStyle={{ padding: 14, gap: 10 }}>
+                {saNotifLoading ? (
+                  <View style={{ paddingVertical: 40, alignItems: 'center', gap: 10 }}>
+                    <ActivityIndicator size="small" color="#d97706" />
+                    <Text style={{ fontSize: 12.5, color: '#64748b' }}>Loading notifications from database...</Text>
+                  </View>
+                ) : saNotifError ? (
+                  <View style={{ paddingVertical: 36, alignItems: 'center', gap: 8, paddingHorizontal: 16 }}>
+                    <Ionicons name="alert-circle-outline" size={32} color="#dc2626" />
+                    <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#991b1b', textAlign: 'center' }}>{saNotifError}</Text>
+                  </View>
+                ) : saNotifications.length === 0 ? (
+                  <View style={{ paddingVertical: 44, alignItems: 'center', gap: 8 }}>
+                    <Ionicons name="notifications-off-outline" size={34} color="#cbd5e1" />
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#334155' }}>No Admin Changes Yet</Text>
+                    <Text style={{ fontSize: 12, color: '#64748b', textAlign: 'center', maxWidth: 280 }}>
+                      When an Admin adds, edits, approves, or deletes any record, it will appear here with their name, email, and phone number.
+                    </Text>
+                  </View>
+                ) : (
+                  saNotifications.map((n: any, idx: number) => {
+                    const isUnread = n.status === 'UNREAD';
+                    const actionUpper = String(n.action || '').toUpperCase();
+                    const badgeStyle =
+                      actionUpper === 'DELETE'
+                        ? { bg: '#fee2e2', text: '#b91c1c' }
+                        : actionUpper === 'ADD' || actionUpper === 'CREATE' || actionUpper === 'APPROVE'
+                        ? { bg: '#dcfce7', text: '#15803d' }
+                        : actionUpper === 'REJECT'
+                        ? { bg: '#ffedd5', text: '#c2410c' }
+                        : { bg: '#dbeafe', text: '#1d4ed8' };
+
+                    return (
+                      <TouchableOpacity
+                        key={n.id || n._id || String(idx)}
+                        style={[styles.saNotifCard, isUnread && styles.saNotifCardUnread]}
+                        onPress={() => handleMarkSaNotifRead(n)}
+                        activeOpacity={0.85}
+                      >
+                        <View style={styles.saNotifCardTop}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                            {isUnread && <View style={styles.saNotifUnreadDot} />}
+                            <View style={[styles.saNotifBadge, { backgroundColor: badgeStyle.bg }]}>
+                              <Text style={[styles.saNotifBadgeText, { color: badgeStyle.text }]}>{actionUpper || 'UPDATE'}</Text>
+                            </View>
+                            <Text style={styles.saNotifCardTitle} numberOfLines={1}>
+                              {n.title || 'Admin Activity'}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => handleDeleteSaNotif(n)}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            <Ionicons name="trash-outline" size={14} color="#94a3b8" />
+                          </TouchableOpacity>
+                        </View>
+
+                        <Text style={styles.saNotifCardMsg}>{n.message}</Text>
+
+                        {/* Admin Person Details: Name, Email, Phone Number */}
+                        <View style={styles.saNotifPersonBox}>
+                          <View style={styles.saNotifPersonRow}>
+                            <Ionicons name="person-outline" size={13} color="#475569" />
+                            <Text style={styles.saNotifPersonLabel}>By:</Text>
+                            <Text style={styles.saNotifPersonValue}>{n.admin_name || 'Admin'}</Text>
+                          </View>
+                          <View style={styles.saNotifPersonRow}>
+                            <Ionicons name="mail-outline" size={13} color="#475569" />
+                            <Text style={styles.saNotifPersonLabel}>Email:</Text>
+                            <Text style={styles.saNotifPersonValue}>{n.admin_email || 'N/A'}</Text>
+                          </View>
+                          <View style={styles.saNotifPersonRow}>
+                            <Ionicons name="call-outline" size={13} color="#475569" />
+                            <Text style={styles.saNotifPersonLabel}>Phone:</Text>
+                            <Text style={styles.saNotifPersonValue}>{n.admin_phone || 'Not provided'}</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.saNotifCardFooter}>
+                          <Text style={styles.saNotifTime}>
+                            {n.created_at ? new Date(n.created_at).toLocaleString() : ''}
+                          </Text>
+                          {isUnread && <Text style={styles.saNotifTapHint}>Tap to mark read</Text>}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      )}
       {/* ─────────────────────────────────────────────────────────────
           11B. EDIT TEAM REGISTRATION & COACH PASSWORD MODAL
           ───────────────────────────────────────────────────────────── */}
@@ -10935,6 +11212,196 @@ const styles: any = StyleSheet.create({
     color: '#fbbf24',
     fontSize: 11.5,
     fontWeight: '600'
+  },
+  saBellBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(251, 191, 36, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative'
+  },
+  saBellBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#ef4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#0f172a'
+  },
+  saBellBadgeText: {
+    color: '#ffffff',
+    fontSize: 9.5,
+    fontWeight: '800'
+  },
+  saNotifOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16
+  },
+  saNotifModal: {
+    width: '100%',
+    maxWidth: 540,
+    maxHeight: '85%',
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  saNotifHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#0f172a',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+    gap: 10
+  },
+  saNotifHeaderIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  saNotifTitle: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '800'
+  },
+  saNotifSub: {
+    color: '#94a3b8',
+    fontSize: 11,
+    marginTop: 1
+  },
+  saNotifActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#fbbf24',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 6
+  },
+  saNotifActionBtnText: {
+    color: '#0f172a',
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  saNotifRefreshBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  saNotifCloseBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  saNotifList: {
+    maxHeight: 500,
+    backgroundColor: '#f8fafc'
+  },
+  saNotifCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 8
+  },
+  saNotifCardUnread: {
+    borderColor: '#f59e0b',
+    backgroundColor: '#fffbeb'
+  },
+  saNotifCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8
+  },
+  saNotifUnreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#d97706'
+  },
+  saNotifBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5
+  },
+  saNotifBadgeText: {
+    fontSize: 10,
+    fontWeight: '800'
+  },
+  saNotifCardTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0f172a',
+    flex: 1
+  },
+  saNotifCardMsg: {
+    fontSize: 12.5,
+    color: '#334155',
+    lineHeight: 18
+  },
+  saNotifPersonBox: {
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    padding: 9,
+    gap: 4
+  },
+  saNotifPersonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6
+  },
+  saNotifPersonLabel: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#475569'
+  },
+  saNotifPersonValue: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#0f172a',
+    flex: 1
+  },
+  saNotifCardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  saNotifTime: {
+    fontSize: 11,
+    color: '#64748b'
+  },
+  saNotifTapHint: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#b45309'
   },
   adminExitBtnPill: {
     backgroundColor: '#dc2626',

@@ -1506,6 +1506,96 @@ class AdminDashboardController {
   }
 
   /**
+   * GET /api/admin/super-admin-notifications
+   * Fetch database-stored notifications of all Admin actions for Super Admin
+   */
+  async getSuperAdminNotifications(req, res) {
+    try {
+      await db.initDb();
+      const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+      const skip = (page - 1) * limit;
+
+      const [total, unreadCount, notifications] = await Promise.all([
+        db.models.SuperAdminNotification.countDocuments(),
+        db.models.SuperAdminNotification.countDocuments({ status: 'UNREAD' }),
+        db.models.SuperAdminNotification.find()
+          .sort({ created_at: -1 })
+          .skip(skip)
+          .limit(limit)
+          .lean()
+      ]);
+
+      return sendListResponse(res, notifications || [], {
+        notifications: notifications || [],
+        unreadCount: unreadCount || 0,
+        total: total || 0,
+        page,
+        limit,
+        totalPages: Math.ceil((total || 0) / limit)
+      });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * PATCH /api/admin/super-admin-notifications/:id/read
+   */
+  async markSuperAdminNotificationRead(req, res) {
+    try {
+      await db.initDb();
+      const mongoose = require('mongoose');
+      const isMongoId = mongoose.Types.ObjectId.isValid(req.params.id);
+      const query = isMongoId ? { $or: [{ id: req.params.id }, { _id: req.params.id }] } : { id: req.params.id };
+      const updated = await db.models.SuperAdminNotification.findOneAndUpdate(
+        query,
+        { $set: { status: 'READ', read_at: new Date() } },
+        { returnDocument: 'after' }
+      ).lean();
+
+      if (!updated) {
+        return res.status(404).json({ success: false, message: 'Notification not found.' });
+      }
+      return res.status(200).json({ success: true, notification: updated });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * PATCH /api/admin/super-admin-notifications/read-all
+   */
+  async markAllSuperAdminNotificationsRead(req, res) {
+    try {
+      await db.initDb();
+      await db.models.SuperAdminNotification.updateMany(
+        { status: 'UNREAD' },
+        { $set: { status: 'READ', read_at: new Date() } }
+      );
+      return res.status(200).json({ success: true, message: 'All notifications marked as read.' });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * DELETE /api/admin/super-admin-notifications/:id
+   */
+  async deleteSuperAdminNotification(req, res) {
+    try {
+      await db.initDb();
+      const mongoose = require('mongoose');
+      const isMongoId = mongoose.Types.ObjectId.isValid(req.params.id);
+      const query = isMongoId ? { $or: [{ id: req.params.id }, { _id: req.params.id }] } : { id: req.params.id };
+      await db.models.SuperAdminNotification.deleteOne(query);
+      return res.status(200).json({ success: true, message: 'Notification deleted.' });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
    * GET /api/admin/content
    */
   async getContent(req, res) {

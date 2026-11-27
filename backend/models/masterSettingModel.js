@@ -22,7 +22,8 @@ const VALID_CATEGORIES = [
   'certification_level',
   'umpire_certification',
   'state',
-  'district_venue'
+  'district_venue',
+  'ground'
 ];
 
 const CATEGORY_META = {
@@ -57,6 +58,10 @@ const CATEGORY_META = {
   district_venue: {
     label: 'Primary District Venue / Stadium',
     description: 'Official match stadiums, grounds, and playing venues in the district'
+  },
+  ground: {
+    label: 'Ground',
+    description: 'Official match grounds and playing venues'
   }
 };
 
@@ -382,7 +387,7 @@ class MasterSettingModel {
     } catch (fileErr) {}
 
     // 4. If creating a venue, sync directly to Venue model
-    if (cleanCategory === 'district_venue') {
+    if (cleanCategory === 'district_venue' || cleanCategory === 'ground') {
       try {
         await venueModel.save({
           id: newObj.id,

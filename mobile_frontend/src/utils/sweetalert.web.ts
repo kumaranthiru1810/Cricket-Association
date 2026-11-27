@@ -56,7 +56,7 @@ if (typeof document !== 'undefined') {
       }
       .swal2-popup.cric-swal-popup,
       .swal2-popup {
-        border-radius: 20px !important;
+        border-radius: 0 !important;
         background: #ffffff !important;
         color: #0f172a !important;
         border: 1px solid rgba(226, 232, 240, 0.9) !important;
@@ -97,7 +97,7 @@ if (typeof document !== 'undefined') {
         color: #020612 !important;
         font-weight: 800 !important;
         font-size: 15px !important;
-        border-radius: 12px !important;
+        border-radius: 0 !important;
         padding: 12px 36px !important;
         border: none !important;
         box-shadow: 0 6px 18px rgba(234, 179, 8, 0.38) !important;
@@ -116,7 +116,7 @@ if (typeof document !== 'undefined') {
         color: #475569 !important;
         font-weight: 700 !important;
         font-size: 14.5px !important;
-        border-radius: 12px !important;
+        border-radius: 0 !important;
         padding: 12px 28px !important;
         border: 1px solid #cbd5e1 !important;
         cursor: pointer !important;
@@ -142,19 +142,18 @@ export const showAlert = async (
 ) => {
   return CricSwal.fire({
     title,
-    text,
+    ...(icon === 'success' ? {} : { text }),
     icon,
     confirmButtonText: 'OK',
   });
 };
 
 /**
- * Show a success alert (with OK button matching screenshot)
+ * Show a success alert (only title, no below message)
  */
-export const showSuccess = async (title: string, text?: string, timer?: number) => {
+export const showSuccess = async (title: string, _text?: string, timer?: number) => {
   return CricSwal.fire({
     title,
-    text,
     icon: 'success',
     ...(timer ? { timer, timerProgressBar: true } : {}),
     confirmButtonText: 'OK',
