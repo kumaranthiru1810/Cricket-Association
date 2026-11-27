@@ -607,48 +607,79 @@ export default function HomeScreen() {
     }
   };
 
+  const [liveUpdatedAt, setLiveUpdatedAt] = useState<number>(Date.now());
+
   useEffect(() => {
     loadPublicMatches(true);
     loadPortalData();
     loadRatingsLeaderboard();
 
-    // Real-time Socket.IO Live Score Synchronization (Zero-Flicker targeted updates)
     let socket: any = null;
-    try {
-      socket = io(SOCKET_URL, { timeout: 5000, reconnectionAttempts: 3 });
-      socket.on('score:update', (payload: any) => {
-        // Targeted in-place update without re-fetching entire portal
-        if (payload?.matchId) {
-          setPublicMatches(prev => prev.map(m => {
-            if (m.id === payload.matchId) {
-              const latestDelivery = payload.lastDelivery || payload.lastEvent || m.lastDelivery;
-              return {
-                ...m,
-                scoreA: payload.scoreA !== undefined ? payload.scoreA : (payload.battingTeamId === m.teamAId ? payload.score : m.scoreA),
-                scoreB: payload.scoreB !== undefined ? payload.scoreB : (payload.battingTeamId === m.teamBId ? payload.score : m.scoreB),
-                lastDelivery: latestDelivery,
-                lastEvent: latestDelivery,
-                currentInnings: payload.currentInnings || m.currentInnings,
-                status: payload.status || m.status,
-                rawStatus: payload.status || m.rawStatus,
-                statusText: payload.statusText || m.statusText,
-                liveText: payload.liveText || m.liveText
-              };
-            }
-            return m;
-          }));
-        } else {
-          loadPublicMatches(false);
+    let isSocketConnected = false;
+
+    const applyLiveDelta = (payload: any) => {
+      if (!payload?.matchId) return;
+      setLiveUpdatedAt(Date.now());
+      setPublicMatches(prev => prev.map(m => {
+        if (m.id === payload.matchId) {
+          const latestDelivery = payload.lastDelivery || payload.lastEvent || m.lastDelivery;
+          return {
+            ...m,
+            scoreA: payload.scoreA !== undefined ? payload.scoreA : (payload.battingTeamId === m.teamAId ? payload.score : m.scoreA),
+            scoreB: payload.scoreB !== undefined ? payload.scoreB : (payload.battingTeamId === m.teamBId ? payload.score : m.scoreB),
+            lastDelivery: latestDelivery,
+            lastEvent: latestDelivery,
+            currentInnings: payload.currentInnings || m.currentInnings,
+            status: payload.status || m.status,
+            rawStatus: payload.status || m.rawStatus,
+            statusText: payload.statusText || m.statusText,
+            liveText: payload.liveText || m.liveText
+          };
         }
+        return m;
+      }));
+    };
+
+    try {
+      socket = io(SOCKET_URL, {
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 10000
       });
-    } catch (e) {
-      // Fallback to active interval
+      socket.on('connect', () => {
+        isSocketConnected = true;
+        socket.emit('join:live');
+      });
+      socket.on('disconnect', () => {
+        isSocketConnected = false;
+      });
+      socket.on('score:update', applyLiveDelta);
+    } catch (_e) {
+      isSocketConnected = false;
     }
 
-    // Background match sync poll (Socket.IO already handles real-time live events)
-    const matchTimer = setInterval(() => {
-      loadPublicMatches(false);
-    }, 20000);
+    // Fallback polling to /api/portal/live every 7s ONLY while socket is disconnected
+    const matchTimer = setInterval(async () => {
+      if (isSocketConnected || socket?.connected) return;
+      try {
+        const liveRes = await ScorerApi.getPortalLive();
+        if (liveRes?.matches && Array.isArray(liveRes.matches)) {
+          setLiveUpdatedAt(liveRes.updatedAt || Date.now());
+          setPublicMatches(prev => prev.map(m => {
+            const lm = liveRes.matches.find((x: any) => x.matchId === m.id);
+            if (!lm) return m;
+            return {
+              ...m,
+              scoreA: lm.scoreA !== undefined ? lm.scoreA : m.scoreA,
+              scoreB: lm.scoreB !== undefined ? lm.scoreB : m.scoreB,
+              status: lm.status || m.status
+            };
+          }));
+        }
+      } catch (_e) {}
+    }, 7000);
 
     const portalTimer = setInterval(() => {
       loadPortalData();
@@ -657,7 +688,11 @@ export default function HomeScreen() {
     return () => {
       clearInterval(matchTimer);
       clearInterval(portalTimer);
-      if (socket) socket.disconnect();
+      if (socket) {
+        socket.emit('leave:live');
+        socket.off('score:update', applyLiveDelta);
+        socket.disconnect();
+      }
     };
   }, []);
 
@@ -3922,23 +3957,22 @@ export default function HomeScreen() {
         )}
 
         {/* ─── 15. MAIN FOOTER ───────────────────────────────────────────── */}
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingTop: 22, paddingBottom: 16 }]}>
           <View style={[styles.container, containerResponsiveStyle]}>
-            <View style={[styles.footerGrid, isMobile && { flexDirection: 'column', gap: 18 }]}>
+            <View style={[styles.footerGrid, { gap: 16 }, isMobile && { flexDirection: 'column', gap: 14 }]}>
               <View style={[styles.footerColBrand, isMobile && { width: '100%', minWidth: '100%' }]}>
                 <View style={styles.footerBrandRow}>
                   <Image source={IMG_LOGO} style={styles.footerLogo} resizeMode="contain" />
                   <View style={{ flex: 1, marginLeft: 10 }}>
                     <Text style={styles.footerBrandTitle}>Cricket Federation of Virudhunagar District</Text>
-                    <Text style={styles.footerMotto}>"Enjoy the game and chase your dreams"</Text>
+                    <Text style={styles.footerMotto}>&quot;Enjoy the game and chase your dreams&quot;</Text>
                   </View>
                 </View>
-                <Text style={styles.footerDesc}>
-                  The recognized governing cricket administration for Virudhunagar district. Dedicated to preserving
-                  the spirit of cricket, promoting collegiate competitions, and nurturing state and national champions.
+                <Text style={[styles.footerDesc, { fontSize: 11.5, lineHeight: 16 }]}>
+                  The recognized governing cricket administration for Virudhunagar district, dedicated to competitive excellence and player development.
                 </Text>
                 <View style={styles.footerAffilBadge}>
-                  <Ionicons name="shield-checkmark" size={14} color="#b45309" style={{ marginRight: 5 }} />
+                  <Ionicons name="shield-checkmark" size={13} color="#b45309" style={{ marginRight: 5 }} />
                   <Text style={styles.footerAffilText}>Recognized District Cricket Governing Body</Text>
                 </View>
               </View>
@@ -3949,44 +3983,26 @@ export default function HomeScreen() {
                   <Text style={styles.footerLink}>› Live Scores</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => scrollToSection('matchCentre')}>
-                  <Text style={styles.footerLink}>› Season Fixtures</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => scrollToSection('matchCentre')}>
-                  <Text style={styles.footerLink}>› Recent Results</Text>
+                  <Text style={styles.footerLink}>› Fixtures &amp; Results</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => scrollToSection('pointsTable')}>
-                  <Text style={styles.footerLink}>› Standings & Points Table</Text>
+                  <Text style={styles.footerLink}>› Points Table</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => scrollToSection('stats')}>
-                  <Text style={styles.footerLink}>› Player Performance Records</Text>
+                  <Text style={styles.footerLink}>› Player Records</Text>
                 </TouchableOpacity>
               </View>
 
               <View style={styles.footerCol}>
-                <Text style={styles.footerColHeading}>Operations Hub</Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    setActiveOpTab('institutions');
-                    navigate('Admin');
-                  }}
-                >
-                  <Text style={styles.footerLink}>› Clubs, Schools & Colleges</Text>
+                <Text style={styles.footerColHeading}>Portal &amp; Access</Text>
+                <TouchableOpacity onPress={() => navigate('Registration')}>
+                  <Text style={styles.footerLink}>› Player Registration</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    setActiveOpTab('teams');
-                    navigate('Admin');
-                  }}
-                >
-                  <Text style={styles.footerLink}>› Team Management</Text>
+                <TouchableOpacity onPress={() => navigate('Registration', { initialRole: 'TEAM' })}>
+                  <Text style={styles.footerLink}>› Team Affiliation</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    setActiveOpTab('tournaments');
-                    navigate('Admin');
-                  }}
-                >
-                  <Text style={styles.footerLink}>› Format & Division Setup</Text>
+                <TouchableOpacity onPress={() => navigate('Login', { initialRole: 'SCORER' })}>
+                  <Text style={styles.footerLink}>› Match Scorer Portal</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => {
@@ -3994,34 +4010,140 @@ export default function HomeScreen() {
                     navigate('Admin');
                   }}
                 >
-                  <Text style={styles.footerLink}>› Register Officials</Text>
+                  <Text style={styles.footerLink}>› Admin &amp; Officials</Text>
                 </TouchableOpacity>
               </View>
 
+              {/* APPS (Android & iOS) */}
               <View style={styles.footerCol}>
-                <Text style={styles.footerColHeading}>Integrity & Access</Text>
-                <TouchableOpacity onPress={() => navigate('Registration')}>
-                  <Text style={styles.footerLink}>› Player Registration</Text>
+                <Text style={styles.footerColHeading}>APPS</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    const androidUrl = process.env.EXPO_PUBLIC_ANDROID_APP_URL || '';
+                    if (androidUrl) {
+                      Linking.openURL(androidUrl);
+                    } else if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                      window.alert('Android app download link will be available shortly!');
+                    } else {
+                      Alert.alert('Android App', 'Android app download link will be available shortly!');
+                    }
+                  }}
+                  activeOpacity={0.75}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}
+                >
+                  <Ionicons name="logo-android" size={16} color="#e2e8f0" />
+                  <Text style={[styles.footerLink, { marginBottom: 0 }]}>Android</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => navigate('Registration', { initialRole: 'TEAM' })}>
-                  <Text style={styles.footerLink}>› Team / Club Affiliation</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    const iosUrl = process.env.EXPO_PUBLIC_IOS_APP_URL || '';
+                    if (iosUrl) {
+                      Linking.openURL(iosUrl);
+                    } else if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                      window.alert('iOS app download link will be available shortly!');
+                    } else {
+                      Alert.alert('iOS App', 'iOS app download link will be available shortly!');
+                    }
+                  }}
+                  activeOpacity={0.75}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}
+                >
+                  <Ionicons name="logo-apple" size={16} color="#e2e8f0" />
+                  <Text style={[styles.footerLink, { marginBottom: 0 }]}>iOS</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => navigate('Login', { initialRole: 'SCORER' })}>
-                  <Text style={styles.footerLink}>› Match Scorer Portal</Text>
+              </View>
+
+              {/* COMPANY (Project Developed By Anjana Infotech) */}
+              <View style={styles.footerCol}>
+                <Text style={styles.footerColHeading}>COMPANY</Text>
+                <Text style={{ color: '#ffffff', fontSize: 13.5, fontWeight: '900', letterSpacing: 0.4, marginBottom: 2 }}>
+                  ANJANA INFOTECH
+                </Text>
+                <Text style={{ color: '#cbd5e1', fontSize: 11.5, lineHeight: 16, marginBottom: 6 }}>
+                  Project Developed &amp; Engineered By
+                </Text>
+                <TouchableOpacity
+                  onPress={() => Linking.openURL('https://anjanainfotech.in')}
+                  activeOpacity={0.75}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}
+                >
+                  <Ionicons name="globe-outline" size={14} color="#facc15" />
+                  <Text style={{ color: '#facc15', fontSize: 12, fontWeight: '700', textDecorationLine: 'underline' }}>
+                    anjanainfotech.in
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            <View style={styles.footerBottom}>
+            {/* Prominent Developed By Section with Company & Capitalized Team Names */}
+            <View style={{
+              marginTop: 16,
+              paddingTop: 14,
+              borderTopWidth: 1,
+              borderTopColor: 'rgba(148, 163, 184, 0.25)',
+              gap: 10
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                <Text style={{ color: '#facc15', fontSize: 12.5, fontWeight: '900', letterSpacing: 1 }}>
+                  DEVELOPED BY ANJANA INFOTECH &amp; TEAM
+                </Text>
+                <TouchableOpacity onPress={() => Linking.openURL('https://anjanainfotech.in')} activeOpacity={0.75}>
+                  <Text style={{ color: '#93c5fd', fontSize: 11.5, fontWeight: '700', textDecorationLine: 'underline' }}>
+                    (anjanainfotech.in)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' }}>
+                {[
+                  { name: 'M. ATHI LINGAM', email: 'athilingam3336@gmail.com' },
+                  { name: 'S. PON RAMANAN', email: 'ponramanan21@gmail.com' },
+                  { name: 'M. THIRUKUMARAN', email: 'thirukumaran18102006@gmail.com' },
+                  { name: 'K. MATHANKUMAR', email: 'mathan33msd@gmail.com' }
+                ].map((dev) => {
+                  const gmailUrl =
+                    Platform.OS === 'web'
+                      ? `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(dev.email)}`
+                      : `mailto:${dev.email}`;
+                  return (
+                    <View
+                      key={dev.email}
+                      style={{
+                        flexDirection: 'column',
+                        alignItems: 'flex-start',
+                        gap: 3,
+                        minWidth: isMobile ? '100%' : '22%',
+                        backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                        borderWidth: 1,
+                        borderColor: 'rgba(250, 204, 21, 0.25)',
+                        borderRadius: 8,
+                        paddingHorizontal: 12,
+                        paddingVertical: 8
+                      }}
+                    >
+                      <Text style={{ color: '#ffffff', fontSize: 13.5, fontWeight: '900', letterSpacing: 0.5 }}>
+                        {dev.name}
+                      </Text>
+                      <TouchableOpacity onPress={() => Linking.openURL(gmailUrl)} activeOpacity={0.7}>
+                        <Text style={{ color: '#93c5fd', fontSize: 12.5, fontWeight: '600', textDecorationLine: 'underline' }}>
+                          {dev.email}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={[styles.footerBottom, { marginTop: 12, paddingTop: 10 }]}>
               <Text style={styles.copyrightText}>
-                © 2026 Cricket Federation of Virudhunagar District. All Rights Reserved. Official District Cricket Body.
+                © 2026 Cricket Federation of Virudhunagar District. All Rights Reserved.
               </Text>
               <View style={styles.legalLinksRow}>
                 <Text style={styles.legalLink}>Privacy Policy</Text>
                 <Text style={styles.legalDot}>•</Text>
                 <Text style={styles.legalLink}>Terms of Use</Text>
                 <Text style={styles.legalDot}>•</Text>
-                <Text style={styles.legalLink}>Constitution & Ethics</Text>
+                <Text style={styles.legalLink}>Constitution &amp; Ethics</Text>
               </View>
             </View>
           </View>

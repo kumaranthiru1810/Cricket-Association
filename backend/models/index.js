@@ -64,6 +64,7 @@ const {
   AdminRequest,
   AdminRequestSchema
 } = require('./AdminSecurity');
+const { EmailDailyCounter, EmailDailyCounterSchema } = require('./EmailDailyCounter');
 
 const models = {
   User,
@@ -93,7 +94,8 @@ const models = {
   PlayerMatchRating,
   MasterSetting,
   AdminActionOtp,
-  AdminRequest
+  AdminRequest,
+  EmailDailyCounter
 };
 
 module.exports = {
@@ -126,6 +128,7 @@ module.exports = {
   PlayerMatchRatingSchema,
   MasterSettingSchema,
   AdminActionOtpSchema,
-  AdminRequestSchema
+  AdminRequestSchema,
+  EmailDailyCounterSchema
 };
 

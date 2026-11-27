@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ScorerApi, resolveImageUrl } from '../../services/api';
 import { useAppNavigation } from '../../navigation/AppNavigator';
+import CricketLoader from '../../components/common/CricketLoader';
 
 interface TeamPublicProfileProps {
   initialTeamId?: string;
@@ -281,10 +282,7 @@ export default function TeamPublicProfileScreen({
         </View>
 
         {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#d97706" />
-            <Text style={styles.loadingText}>Loading team performance data & scorecards...</Text>
-          </View>
+          <CricketLoader fullScreen={false} />
         ) : activeTab === 'history' ? (
           <View style={styles.sectionBody}>
             <View style={styles.sectionHeaderRow}>

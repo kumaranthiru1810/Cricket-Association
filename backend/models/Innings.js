@@ -32,6 +32,10 @@ const InningsSchema = new mongoose.Schema({
   is_free_hit: { type: Boolean, default: false },
   penalty_runs: { type: Number, default: 0 },
   short_runs: { type: Number, default: 0 },
+  bowler_no_balls: { type: mongoose.Schema.Types.Mixed, default: {} },
+  last_wide_over: { type: Number, default: -1 },
+  over_wide_count: { type: Number, default: 0 },
+  prev_ball_was_wide: { type: Boolean, default: false },
   extras: {
     wides: { type: Number, default: 0 },
     no_balls: { type: Number, default: 0 },
@@ -111,14 +115,19 @@ const DeliverySchema = new mongoose.Schema({
   fielding_action: { type: String, default: null },
   reason: { type: String, default: null },
   replacement_batter_id: { type: String, default: null },
+  client_delivery_id: { type: String, default: null },
   commentary: { type: String, default: '' },
   created_by: { type: String, default: 'SCR-101' },
   timestamp: { type: Date, default: Date.now },
   created_at: { type: Date, default: Date.now }
 }, { timestamps: true, strict: false });
 
+InningsBatterSchema.index({ innings_id: 1, player_id: 1 });
+InningsBowlerSchema.index({ innings_id: 1, player_id: 1 });
+DeliverySchema.index({ match_id: 1, innings_id: 1, over_number: 1, ball_number: 1 });
 DeliverySchema.index({ innings_id: 1, over_number: 1, ball_number: 1 });
 DeliverySchema.index({ match_id: 1, innings_number: 1 });
+DeliverySchema.index({ match_id: 1, client_delivery_id: 1 }, { sparse: true });
 
 const Innings = mongoose.models.Innings || mongoose.model('Innings', InningsSchema);
 const InningsBatter = mongoose.models.InningsBatter || mongoose.model('InningsBatter', InningsBatterSchema);

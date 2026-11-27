@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
+import CricketLoader from '../../components/common/CricketLoader';
 import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { PlayerApi, ScorerApi, getCurrentUser, setCurrentUser, setAuthToken, SOCKET_URL, resolveImageUrl } from '../../services/api';
 import {
@@ -924,10 +925,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
             </View>
 
             {isLoading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#d4af37" />
-                <Text style={styles.loadingText}>Connecting to MongoDB &amp; Loading Player Profile...</Text>
-              </View>
+              <CricketLoader fullScreen={false} />
             ) : null}
           {!isLoading && activeTab === 'overview' && (
             <View>
@@ -2851,7 +2849,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
             <View style={styles.cropViewportWrapper}>
               <View
                 style={styles.cropContainer}
-                {...panResponder.panHandlers}
+                {...(Platform.OS !== 'web' ? panResponder.panHandlers : {})}
               >
                 {/* Scaled & Positioned Image */}
                 {rawImageToCrop ? (

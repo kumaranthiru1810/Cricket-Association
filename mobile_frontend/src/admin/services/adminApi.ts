@@ -751,5 +751,9 @@ export const adminApi = {
       method: 'PUT',
       body: JSON.stringify(config)
     });
+  },
+
+  getEmailStatus: async () => {
+    return adminRequest('/admin/email-status');
   }
 };

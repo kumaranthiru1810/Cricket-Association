@@ -55,6 +55,18 @@ function initSocket(server) {
       if (eventCount > 30 || !isValidMatchId(matchId)) return;
       socket.leave(`match:${matchId}`);
     });
+
+    socket.on('join:live', () => {
+      eventCount += 1;
+      if (eventCount > 30) return;
+      socket.join('live');
+    });
+
+    socket.on('leave:live', () => {
+      eventCount += 1;
+      if (eventCount > 30) return;
+      socket.leave('live');
+    });
   });
 
   return io;
@@ -62,9 +74,9 @@ function initSocket(server) {
 
 function broadcastScoreUpdate(matchId, payload) {
   if (!io || !isValidMatchId(matchId)) return;
-  
-  // Minimal payload optimization: emit strictly to clients in room match:<id>
-  io.to(`match:${matchId}`).emit('score:update', payload);
+
+  // Emit minimal delta to match:<id> and public 'live' room (deduplicated by Socket.IO)
+  io.to(`match:${matchId}`).to('live').emit('score:update', payload);
 }
 
 module.exports = {

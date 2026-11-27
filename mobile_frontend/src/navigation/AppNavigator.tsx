@@ -182,7 +182,7 @@ export const useAppNavigation = () => {
           break;
         case 'Scorecard':
           if (screenParams?.matchId) {
-            router.push({ pathname: `/scorecard/${screenParams.matchId}` as any, params: screenParams });
+            router.push({ pathname: '/scorecard/[matchId]', params: screenParams });
           } else {
             router.push({ pathname: '/scorecard', params: screenParams });
           }

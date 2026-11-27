@@ -49,6 +49,7 @@ const {
   MasterSetting,
   AdminActionOtp,
   AdminRequest,
+  EmailDailyCounter,
   models
 } = require('../models');
 
@@ -1482,6 +1483,7 @@ module.exports = {
     PlayerMatchRating,
     MasterSetting,
     AdminActionOtp,
-    AdminRequest
+    AdminRequest,
+    EmailDailyCounter
   }
 };

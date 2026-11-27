@@ -13,6 +13,14 @@ const COOKIE_OPTIONS = {
   maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days in ms
 };
 
+const REMEMBER_DEVICE_COOKIE = 'remember_device';
+const REMEMBER_DEVICE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax',
+  maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days in ms
+};
+
 function setAuthCookies(res, token) {
   if (token) {
     res.cookie('auth_token', token, COOKIE_OPTIONS);
@@ -23,6 +31,63 @@ function setAuthCookies(res, token) {
 function clearAuthCookies(res) {
   res.clearCookie('auth_token', { httpOnly: true, sameSite: 'lax' });
   res.clearCookie('token', { httpOnly: true, sameSite: 'lax' });
+}
+
+function setRememberDeviceCookie(res, user) {
+  if (!user || !user.id || !user.email) return;
+  const roleUpper = String(user.role || '').toUpperCase();
+  if (roleUpper === 'ADMIN' || roleUpper === 'SUPER_ADMIN') return; // OTP mandatory for admin login
+  const jwt = require('jsonwebtoken');
+  const env = require('../config/env');
+  const deviceToken = jwt.sign(
+    {
+      purpose: 'remember_device',
+      userId: user.id,
+      email: String(user.email).trim().toLowerCase(),
+      tokenVersion: user.token_version ?? 0
+    },
+    env.JWT_SECRET,
+    { expiresIn: '30d' }
+  );
+  res.cookie(REMEMBER_DEVICE_COOKIE, deviceToken, REMEMBER_DEVICE_OPTIONS);
+}
+
+async function verifyRememberDeviceCookie(req, cleanEmail) {
+  const raw = req.cookies?.[REMEMBER_DEVICE_COOKIE];
+  if (!raw || !cleanEmail) return null;
+  try {
+    const jwt = require('jsonwebtoken');
+    const env = require('../config/env');
+    const decoded = jwt.verify(raw, env.JWT_SECRET);
+    if (!decoded || decoded.purpose !== 'remember_device') return null;
+    if (String(decoded.email || '').toLowerCase() !== cleanEmail) return null;
+
+    const db = require('../config/db');
+    await db.initDb();
+    const user = await db.models.User.findOne({ email: cleanEmail })
+      .select('id name email role status token_version')
+      .lean();
+    if (!user) return null;
+    const roleUpper = String(user.role || '').toUpperCase();
+    if (roleUpper === 'ADMIN' || roleUpper === 'SUPER_ADMIN') return null;
+    if (user.status !== 'ACTIVE' && user.status !== 'APPROVED') return null;
+    if ((user.token_version ?? 0) !== (decoded.tokenVersion ?? 0)) return null;
+
+    const sessionToken = jwt.sign(
+      {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        name: user.name,
+        tokenVersion: user.token_version ?? 0
+      },
+      env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    return { user, token: sessionToken };
+  } catch (_e) {
+    return null;
+  }
 }
 
 class AuthController {
@@ -141,12 +206,15 @@ class AuthController {
   // Unified Password-Based Login (Sets JWT Cookie)
   async login(req, res) {
     try {
-      const { email, emailOrPhone, name, username, password, otp, role, teamName, identifier: bodyId } = req.body;
+      const { email, emailOrPhone, name, username, password, otp, role, teamName, identifier: bodyId, rememberDevice } = req.body;
       const identifier = email || emailOrPhone || username || name || bodyId;
       const credential = password || otp;
       const result = await authService.login(identifier, credential, role, teamName);
       if (result.token) {
         setAuthCookies(res, result.token);
+      }
+      if (rememberDevice === true && result.user) {
+        setRememberDeviceCookie(res, result.user);
       }
       res.status(200).json(result);
     } catch (err) {
@@ -254,6 +322,21 @@ class AuthController {
     try {
       const { email, role } = req.body;
       const cleanEmail = (email || '').trim().toLowerCase();
+      const roleUpper = String(role || '').toUpperCase();
+      if (roleUpper !== 'ADMIN' && roleUpper !== 'SUPER_ADMIN') {
+        const trusted = await verifyRememberDeviceCookie(req, cleanEmail);
+        if (trusted) {
+          setAuthCookies(res, trusted.token);
+          return res.status(200).json({
+            success: true,
+            otpBypassed: true,
+            trustedDevice: true,
+            token: trusted.token,
+            user: trusted.user,
+            message: 'Trusted device verified. Signed in without OTP.'
+          });
+        }
+      }
       if (role === 'SCORER') {
         const result = await authService.requestScorerOtp(cleanEmail);
         return res.status(200).json(result);
@@ -273,7 +356,7 @@ class AuthController {
 
   async verifyOtp(req, res) {
     try {
-      const { email, otp, role } = req.body;
+      const { email, otp, role, rememberDevice } = req.body;
       const cleanEmail = (email || '').trim().toLowerCase();
       let result;
       if (role === 'SCORER') {
@@ -283,6 +366,9 @@ class AuthController {
       }
       if (result && result.token) {
         setAuthCookies(res, result.token);
+      }
+      if (rememberDevice === true && result && result.user) {
+        setRememberDeviceCookie(res, result.user);
       }
       return res.status(200).json(result);
     } catch (err) {
