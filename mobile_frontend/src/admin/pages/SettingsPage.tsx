@@ -972,17 +972,15 @@ export const SettingsPage: React.FC<Props> = ({ initialCategory, onNavigate }) =
             </View>
 
             <View style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
+              flexDirection: 'column',
+              alignItems: 'stretch',
               gap: 10,
               paddingTop: 4
             }}>
-              <Text style={{ fontSize: 11.5, color: '#64748b', flex: 1 }}>
+              <Text style={{ fontSize: 12, color: '#64748b', lineHeight: 17, width: '100%' }}>
                 Preview: &quot;{rule15Text.trim() || `Rule 15: A minimum of ${rule15MinPlayers} players must be present at the start of each innings.`}&quot;
               </Text>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ flexDirection: 'row', justifyContent: isMobile ? 'flex-start' : 'flex-end', flexWrap: 'wrap', gap: 8 }}>
                 <TouchableOpacity
                   onPress={() => {
                     setRule15Enabled(true);

@@ -13,6 +13,8 @@ const PlayerSchema = new mongoose.Schema({
   phone: { type: String, default: null },
   mobile: { type: String, default: null },
   aadhaar: { type: String, default: null },
+  age: { type: Number, default: null },
+  date_of_birth: { type: String, default: '' },
   password_hash: { type: String, default: null },
   role: { type: String, enum: ['BATTER', 'BOWLER', 'ALL_ROUNDER', 'WICKET_KEEPER'], default: 'BATTER' },
   jersey_number: { type: Number, default: 0 },
