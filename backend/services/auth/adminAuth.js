@@ -11,8 +11,7 @@ const otpService = require('../otpService');
 const { sendOtpEmail } = require('../../config/mailer');
 const db = require('../../config/db');
 
-const env = require('../../config/env');
-const { JWT_SECRET } = env;
+const { JWT_SECRET } = require('../../config/env');
 
 class AdminAuth {
   /**
@@ -217,37 +216,6 @@ class AdminAuth {
     await db.initDb();
 
     const user = await userModel.findByEmail(cleanEmail);
-
-    // Development-only convenience credentials when running locally (blocked in test & production)
-    if (env.isDevelopment) {
-      const devAdmins = {
-        'admin@example.com': { id: 'ADM-1001', name: 'System Administrator', passwords: ['1234'] },
-        'admin@cfvd.org': { id: 'ADM-1002', name: 'Chief Administrator', passwords: ['CFVD@Admin2026', 'admin123'] },
-        'athilingam3336@gmail.com': { id: 'ADM-1004', name: 'Athi Lingam', passwords: ['athi1833@@'] }
-      };
-      const devMatch = devAdmins[cleanEmail];
-      if (devMatch && devMatch.passwords.includes(cleanPass)) {
-        const adminId = user?.id || devMatch.id;
-        const adminName = user?.name || devMatch.name;
-        const token = jwt.sign(
-          { id: adminId, name: adminName, email: cleanEmail, role: 'ADMIN', tv: user?.token_version || 0 },
-          JWT_SECRET,
-          { expiresIn: '12h' }
-        );
-        return {
-          success: true,
-          message: 'Administrator authentication successful.',
-          user: {
-            id: adminId,
-            name: adminName,
-            email: cleanEmail,
-            role: 'ADMIN'
-          },
-          token
-        };
-      }
-    }
-
     if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN')) {
       throw { status: 401, message: 'Invalid administrator credentials.' };
     }
