@@ -18,7 +18,9 @@ const MasterSettingSchema = new mongoose.Schema({
       'age_category',
       'certification_level',
       'umpire_certification',
-      'state'
+      'state',
+      'district_venue',
+      'ground'
     ]
   },
   name: { type: String, required: true, trim: true },

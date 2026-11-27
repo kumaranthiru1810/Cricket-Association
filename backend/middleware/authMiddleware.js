@@ -72,6 +72,7 @@ function verifyToken(req, res, next) {
 }
 
 const db = require('../config/db');
+const { attachSuperAdminNotificationHook } = require('../services/superAdminNotificationService');
 
 // Scorer authorization middleware enforcing active approval
 async function requireScorerAuth(req, res, next) {
@@ -266,6 +267,7 @@ function requireAdminAuth(req, res, next) {
         role: user.is_super_admin ? 'SUPER_ADMIN' : 'ADMIN'
       };
       req.adminUser = req.user;
+      attachSuperAdminNotificationHook(req, res, req.adminUser);
       return next();
     } catch (_err) {
       return res.status(500).json({ success: false, message: 'Admin authentication check failed.' });

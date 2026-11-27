@@ -10,9 +10,63 @@ export { API_URL };
 
 const ADMIN_TOKEN_KEY = 'cfvd_admin_token';
 const ADMIN_USER_KEY = 'cfvd_admin_user';
+const SUPER_ADMIN_TOKEN_KEY = 'cfvd_super_admin_token';
+const SUPER_ADMIN_USER_KEY = 'cfvd_super_admin_user';
 
 let memoryAdminToken: string | null = null;
 let memoryAdminUser: any | null = null;
+let memorySuperAdminToken: string | null = null;
+let memorySuperAdminUser: any | null = null;
+
+export const getStoredSuperAdminToken = (): string | null => {
+  if (memorySuperAdminToken) return memorySuperAdminToken;
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+    try {
+      return (
+        localStorage.getItem(SUPER_ADMIN_TOKEN_KEY) ||
+        (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(SUPER_ADMIN_TOKEN_KEY) : null)
+      );
+    } catch (_e) {
+      return null;
+    }
+  }
+  return null;
+};
+
+export const setStoredSuperAdminToken = (token: string | null, remember = true) => {
+  memorySuperAdminToken = token;
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+    try {
+      if (!token) {
+        localStorage.removeItem(SUPER_ADMIN_TOKEN_KEY);
+        if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(SUPER_ADMIN_TOKEN_KEY);
+      } else if (remember) {
+        localStorage.setItem(SUPER_ADMIN_TOKEN_KEY, token);
+      } else if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem(SUPER_ADMIN_TOKEN_KEY, token);
+      }
+    } catch (_e) {}
+  }
+};
+
+export const setStoredSuperAdminUser = (user: any | null, remember = true) => {
+  memorySuperAdminUser = user;
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+    try {
+      if (!user) {
+        localStorage.removeItem(SUPER_ADMIN_USER_KEY);
+        if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(SUPER_ADMIN_USER_KEY);
+      } else {
+        const str = JSON.stringify(user);
+        if (remember) {
+          localStorage.setItem(SUPER_ADMIN_USER_KEY, str);
+        } else if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem(SUPER_ADMIN_USER_KEY, str);
+        }
+      }
+    } catch (_e) {}
+  }
+};
 
 export const getStoredAdminToken = (): string | null => {
   if (memoryAdminToken) return memoryAdminToken;
@@ -616,6 +670,38 @@ export const adminApi = {
   deleteNotification: async (id: string) => {
     return adminRequest(`/admin/notifications/${id}`, {
       method: 'DELETE'
+    });
+  },
+
+  // 11B. Super Admin Activity Notifications (DB-persisted Admin audit notifications)
+  getSuperAdminNotifications: async (limit = 50) => {
+    const saToken = getStoredSuperAdminToken();
+    return adminRequest(`/admin/super-admin-notifications?limit=${limit}`, {
+      ...(saToken ? { headers: { Authorization: `Bearer ${saToken}` } } : {})
+    });
+  },
+
+  markSuperAdminNotificationRead: async (id: string) => {
+    const saToken = getStoredSuperAdminToken();
+    return adminRequest(`/admin/super-admin-notifications/${id}/read`, {
+      method: 'PATCH',
+      ...(saToken ? { headers: { Authorization: `Bearer ${saToken}` } } : {})
+    });
+  },
+
+  markAllSuperAdminNotificationsRead: async () => {
+    const saToken = getStoredSuperAdminToken();
+    return adminRequest('/admin/super-admin-notifications/read-all', {
+      method: 'PATCH',
+      ...(saToken ? { headers: { Authorization: `Bearer ${saToken}` } } : {})
+    });
+  },
+
+  deleteSuperAdminNotification: async (id: string) => {
+    const saToken = getStoredSuperAdminToken();
+    return adminRequest(`/admin/super-admin-notifications/${id}`, {
+      method: 'DELETE',
+      ...(saToken ? { headers: { Authorization: `Bearer ${saToken}` } } : {})
     });
   },
 

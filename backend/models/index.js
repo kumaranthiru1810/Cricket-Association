@@ -65,6 +65,7 @@ const {
   AdminRequestSchema
 } = require('./AdminSecurity');
 const { EmailDailyCounter, EmailDailyCounterSchema } = require('./EmailDailyCounter');
+const { SuperAdminNotification, SuperAdminNotificationSchema } = require('./SuperAdminNotification');
 
 const models = {
   User,
@@ -95,7 +96,8 @@ const models = {
   MasterSetting,
   AdminActionOtp,
   AdminRequest,
-  EmailDailyCounter
+  EmailDailyCounter,
+  SuperAdminNotification
 };
 
 module.exports = {
@@ -129,6 +131,7 @@ module.exports = {
   MasterSettingSchema,
   AdminActionOtpSchema,
   AdminRequestSchema,
-  EmailDailyCounterSchema
+  EmailDailyCounterSchema,
+  SuperAdminNotificationSchema
 };
 

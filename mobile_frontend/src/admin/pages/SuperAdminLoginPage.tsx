@@ -18,7 +18,7 @@ import {
   useWindowDimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { adminApi, setStoredAdminToken, setStoredAdminUser } from '../services/adminApi';
+import { adminApi, setStoredAdminToken, setStoredAdminUser, setStoredSuperAdminToken, setStoredSuperAdminUser } from '../services/adminApi';
 import { setAuthToken, setCurrentUser } from '../../services/api';
 import { showSuccess, showError, showWarning } from '../../utils/sweetalert';
 import ForgotPasswordModal from '../../components/auth/ForgotPasswordModal';
@@ -71,6 +71,8 @@ export const SuperAdminLoginPage: React.FC<SuperAdminLoginProps> = ({
     try {
       const apiRes = await adminApi.superAdminLogin(cleanEmail, cleanPass);
       if (apiRes && apiRes.success && apiRes.token) {
+        setStoredSuperAdminToken(apiRes.token, rememberMe);
+        setStoredSuperAdminUser(apiRes.user, rememberMe);
         setStoredAdminToken(apiRes.token, rememberMe);
         setStoredAdminUser(apiRes.user, rememberMe);
         setAuthToken(apiRes.token);

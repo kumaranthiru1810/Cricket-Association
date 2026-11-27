@@ -9,7 +9,7 @@ const adminService = require('../services/adminService');
 const authService = require('../services/authService');
 const tournamentController = require('../controllers/tournamentController');
 const adminDashboardController = require('../controllers/adminDashboardController');
-const { requireAdminAuth } = require('../middleware/authMiddleware');
+const { requireAdminAuth, requireSuperAdmin } = require('../middleware/authMiddleware');
 
 const masterSettingController = require('../controllers/masterSettingController');
 const { sendListResponse } = require('../utils/responseHelper');
@@ -1097,6 +1097,12 @@ router.get('/notifications', (req, res) => adminDashboardController.getNotificat
 router.post('/notifications', (req, res) => adminDashboardController.createNotification(req, res));
 router.patch('/notifications/:id/read', (req, res) => adminDashboardController.markNotificationRead(req, res));
 router.delete('/notifications/:id', (req, res) => adminDashboardController.deleteNotification(req, res));
+
+// Super Admin Activity Notifications (DB-persisted audit of all Admin add/edit/delete changes)
+router.get('/super-admin-notifications', requireSuperAdmin, (req, res) => adminDashboardController.getSuperAdminNotifications(req, res));
+router.patch('/super-admin-notifications/read-all', requireSuperAdmin, (req, res) => adminDashboardController.markAllSuperAdminNotificationsRead(req, res));
+router.patch('/super-admin-notifications/:id/read', requireSuperAdmin, (req, res) => adminDashboardController.markSuperAdminNotificationRead(req, res));
+router.delete('/super-admin-notifications/:id', requireSuperAdmin, (req, res) => adminDashboardController.deleteSuperAdminNotification(req, res));
 
 router.get('/teams-list', (req, res) => adminDashboardController.getTeams(req, res));
 router.get('/teams-list/:id', (req, res) => adminDashboardController.getTeamById(req, res));

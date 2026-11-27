@@ -49,6 +49,7 @@ const {
   AdminActionOtp,
   AdminRequest,
   EmailDailyCounter,
+  SuperAdminNotification,
   models
 } = require('../models');
 
@@ -708,6 +709,7 @@ module.exports = {
     MasterSetting,
     AdminActionOtp,
     AdminRequest,
-    EmailDailyCounter
+    EmailDailyCounter,
+    SuperAdminNotification
   }
 };
