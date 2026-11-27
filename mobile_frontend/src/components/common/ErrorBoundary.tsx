@@ -1,5 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 
 interface Props {
   children?: ReactNode;
@@ -27,9 +27,36 @@ export default class ErrorBoundary extends Component<Props, State> {
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
     this.setState({ error, errorInfo });
+
+    // Auto-recover from stale JS chunk errors after a fresh deployment on web
+    const isChunkError =
+      error?.name === 'AsyncRequireError' ||
+      /loading (module|chunk)|dynamically imported module/i.test(error?.message || '');
+
+    if (Platform.OS === 'web' && isChunkError && typeof window !== 'undefined') {
+      try {
+        const lastReload = sessionStorage.getItem('cfvd_chunk_reload');
+        const now = Date.now();
+        if (!lastReload || now - Number(lastReload) > 15000) {
+          sessionStorage.setItem('cfvd_chunk_reload', String(now));
+          window.location.reload();
+        }
+      } catch (_e) {
+        window.location.reload();
+      }
+    }
   }
 
   private handleReset = () => {
+    const isChunkError =
+      this.state.error?.name === 'AsyncRequireError' ||
+      /loading (module|chunk)|dynamically imported module/i.test(this.state.error?.message || '');
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && (isChunkError || !this.props.onReset)) {
+      window.location.reload();
+      return;
+    }
+
     this.setState({ hasError: false, error: null, errorInfo: null });
     if (this.props.onReset) {
       this.props.onReset();

@@ -104,7 +104,7 @@ async function runAudit() {
     overs_per_match: 20,
     teams: frTeams
   });
-  await tournamentService.generateMatches(frTour.id, { tournament_type: 'SINGLE_ELIMINATION' });
+  await tournamentService.generateMatches(frTour.id, { tournament_type: 'SINGLE_ELIMINATION', ignoreConflicts: true });
   const frMatches = await db.models.Match.find({ tournament_id: frTour.id, round_number: 1 }).sort({ fixture_seq: 1 }).lean();
 
   // 1a. Failure after Match stats processing is claimed (before Team stats)
@@ -193,7 +193,7 @@ async function runAudit() {
     teams: rcTeams,
     format_config: { group_count: 1, teams_per_group: 4, qualifiers_per_group: 2, best_runners_up_count: 0 }
   });
-  await tournamentService.generateMatches(rcTour.id, { tournament_type: 'GROUP_KNOCKOUT', round_robin_type: 'SINGLE' });
+  await tournamentService.generateMatches(rcTour.id, { tournament_type: 'GROUP_KNOCKOUT', round_robin_type: 'SINGLE', ignoreConflicts: true });
   const rcGroupMatches = await db.models.Match.find({ tournament_id: rcTour.id }).sort({ fixture_seq: 1 }).lean();
   assert.strictEqual(rcGroupMatches.length, 6);
 

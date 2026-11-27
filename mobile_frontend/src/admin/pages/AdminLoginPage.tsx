@@ -336,6 +336,7 @@ const getStyles = (isDesktop: boolean): any => StyleSheet.create({
   },
   cardWrapper: {
     width: '100%',
+
     maxWidth: isDesktop ? 440 : 400,
     alignItems: 'center',
     zIndex: 1
