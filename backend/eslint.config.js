@@ -37,6 +37,8 @@ module.exports = [
         Promise: 'readonly',
         fetch: 'readonly',
         URL: 'readonly',
+        URLSearchParams: 'readonly',
+        setImmediate: 'readonly',
         Set: 'readonly',
         Map: 'readonly',
         parseInt: 'readonly',

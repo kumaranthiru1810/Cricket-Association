@@ -40,6 +40,47 @@ async function runAllTests() {
   await db.initDb();
 
   // Idempotent test fixture reset before each run
+  await db.models.User.findOneAndUpdate(
+    { email: 'ramesh@gmail.com' },
+    {
+      $setOnInsert: {
+        id: 'SCR-101-TEST',
+        name: 'S. Ramesh',
+        email: 'ramesh@gmail.com',
+        mobile: '9876543213',
+        role: 'SCORER',
+        status: 'ACTIVE'
+      }
+    },
+    { upsert: true }
+  );
+  await db.models.Scorer.findOneAndUpdate(
+    { email: 'ramesh@gmail.com' },
+    {
+      $setOnInsert: {
+        id: 'SCR-101-TEST',
+        full_name: 'S. Ramesh',
+        email: 'ramesh@gmail.com',
+        mobile: '9876543213',
+        status: 'APPROVED'
+      }
+    },
+    { upsert: true }
+  );
+  await db.models.User.findOneAndUpdate(
+    { email: 'scorer@cfvd.org' },
+    {
+      $setOnInsert: {
+        id: 'SCR-CFVD-TEST',
+        name: 'CFVD Scorer',
+        email: 'scorer@cfvd.org',
+        mobile: '9876543215',
+        role: 'SCORER',
+        status: 'ACTIVE'
+      }
+    },
+    { upsert: true }
+  );
   await db.models.Match.deleteMany({ id: { $nin: ['M001', 'M002', 'M003'] } });
   await db.models.Match.updateOne({ id: 'M001' }, { status: 'SCHEDULED', schedule_confirmation_status: 'CONFIRMED', team_a_id: 'TM-01', team_b_id: 'TM-02', current_innings_number: 1, result_summary: null, assigned_scorer_id: 'SCR-101' });
   await db.models.Match.updateOne({ id: 'M002' }, { status: 'LIVE', schedule_confirmation_status: 'CONFIRMED', team_a_id: 'TM-01', team_b_id: 'TM-02', current_innings_number: 1, result_summary: null, assigned_scorer_id: 'SCR-101' });
