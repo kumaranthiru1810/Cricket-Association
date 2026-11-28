@@ -742,6 +742,27 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
                         🏏 {match.tournament || 'Virudhunagar District Cricket'} • {match.venue || 'CFVD Ground'}
                       </Text>
                     </View>
+
+                    {/* Man of the Match Badge */}
+                    {Boolean(match.playerOfTheMatch || match.player_of_match) && (
+                      <View style={{
+                        marginTop: 10,
+                        paddingHorizontal: 12,
+                        paddingVertical: 7,
+                        borderRadius: 10,
+                        backgroundColor: 'rgba(250, 204, 21, 0.16)',
+                        borderWidth: 1,
+                        borderColor: 'rgba(250, 204, 21, 0.45)',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6
+                      }}>
+                        <Text style={{ fontSize: 13 }}>⭐</Text>
+                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#fef08a' }}>
+                          Man of the Match: {match.playerOfTheMatch || match.player_of_match}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 </View>
               </View>
