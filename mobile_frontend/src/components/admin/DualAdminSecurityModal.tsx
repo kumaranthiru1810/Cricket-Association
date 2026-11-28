@@ -61,6 +61,8 @@ export default function DualAdminSecurityModal({
   const [activeAdmins, setActiveAdmins] = useState<AdminItem[]>([]);
   const [activeCount, setActiveCount] = useState<number>(0);
   const [minRequired, setMinRequired] = useState<number>(3);
+  const [selectedApprover1Id, setSelectedApprover1Id] = useState<string>('');
+  const [selectedApprover2Id, setSelectedApprover2Id] = useState<string>('');
 
   // PROMOTE STATE
   const [promoteStep, setPromoteStep] = useState<1 | 2 | 3>(1);
@@ -87,6 +89,23 @@ export default function DualAdminSecurityModal({
   // AUDIT LOGS STATE
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [securityRequests, setSecurityRequests] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (activeAdmins.length >= 2) {
+      const sorted = [...activeAdmins].sort((a, b) => {
+        const aDemo = /@(example\.com|localhost\.test)$/i.test(a.email || '') ? 1 : 0;
+        const bDemo = /@(example\.com|localhost\.test)$/i.test(b.email || '') ? 1 : 0;
+        return aDemo - bDemo;
+      });
+      if (!selectedApprover1Id || !activeAdmins.some(a => a.id === selectedApprover1Id)) {
+        setSelectedApprover1Id(sorted[0]?.id || '');
+      }
+      if (!selectedApprover2Id || !activeAdmins.some(a => a.id === selectedApprover2Id) || selectedApprover2Id === selectedApprover1Id) {
+        const second = sorted.find(a => a.id !== (selectedApprover1Id || sorted[0]?.id));
+        setSelectedApprover2Id(second?.id || sorted[1]?.id || '');
+      }
+    }
+  }, [activeAdmins]);
 
   // Reset modal state on open
   useEffect(() => {
@@ -246,9 +265,18 @@ export default function DualAdminSecurityModal({
       return;
     }
 
+    if (selectedApprover1Id && selectedApprover2Id && selectedApprover1Id === selectedApprover2Id) {
+      setErrorMessage('Please select two different administrators to receive dual-admin OTPs.');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const res = await AdminSecurityApi.requestPromote({
+        email: candidateEmail.trim(),
+        name: candidateName.trim() || undefined,
+        approver1Id: selectedApprover1Id || undefined,
+        approver2Id: selectedApprover2Id || undefined
         email: candidateEmail.trim().toLowerCase(),
         name: cleanName || undefined
       });
@@ -364,9 +392,18 @@ export default function DualAdminSecurityModal({
       return;
     }
 
+    if (selectedApprover1Id && selectedApprover2Id && selectedApprover1Id === selectedApprover2Id) {
+      setErrorMessage('Please select two different administrators to approve revocation.');
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const res = await AdminSecurityApi.requestRemove(selectedAdminId);
+      const res = await AdminSecurityApi.requestRemove(
+        selectedAdminId,
+        selectedApprover1Id || undefined,
+        selectedApprover2Id || undefined
+      );
       if (!res.success) {
         throw new Error(res.message || 'Failed to initiate administrator removal.');
       }
@@ -622,12 +659,72 @@ export default function DualAdminSecurityModal({
                       )}
                     </View>
 
-                    {/* Authorization Requirement Info Box */}
-                    <View style={styles.infoBoxCard}>
-                      <Ionicons name="shield-checkmark-outline" size={16} color="#1d4ed8" />
-                      <Text style={styles.infoBoxText}>
-                        Authorization Required From Existing Admins ({Math.max(activeCount, 2)}):
-                      </Text>
+                    {/* Dynamic Approver Selection (Choose which 2 admins receive OTPs) */}
+                    <View style={[styles.infoBoxCard, { flexDirection: 'column', alignItems: 'stretch', gap: 8 }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="shield-checkmark-outline" size={16} color="#1d4ed8" />
+                        <Text style={styles.infoBoxText}>
+                          Select 2 Admins to Receive OTPs ({activeAdmins.length} Active):
+                        </Text>
+                      </View>
+                      {activeAdmins.length > 0 && (
+                        <View style={{ gap: 8 }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#1e3a8a' }}>Approver 1 (OTP 1):</Text>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                            {activeAdmins.map(a => {
+                              const active = selectedApprover1Id === a.id;
+                              const disabled = selectedApprover2Id === a.id;
+                              return (
+                                <TouchableOpacity
+                                  key={`p-a1-${a.id}`}
+                                  disabled={disabled}
+                                  onPress={() => setSelectedApprover1Id(a.id)}
+                                  style={{
+                                    paddingHorizontal: 10,
+                                    paddingVertical: 6,
+                                    borderRadius: 999,
+                                    borderWidth: 1,
+                                    borderColor: active ? '#1d4ed8' : '#cbd5e1',
+                                    backgroundColor: active ? '#1d4ed8' : '#ffffff',
+                                    opacity: disabled ? 0.45 : 1
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 11.5, fontWeight: '700', color: active ? '#ffffff' : '#0f172a' }}>
+                                    {a.name || a.email} ({a.email})
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </ScrollView>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#1e3a8a' }}>Approver 2 (OTP 2):</Text>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                            {activeAdmins.map(a => {
+                              const active = selectedApprover2Id === a.id;
+                              const disabled = selectedApprover1Id === a.id;
+                              return (
+                                <TouchableOpacity
+                                  key={`p-a2-${a.id}`}
+                                  disabled={disabled}
+                                  onPress={() => setSelectedApprover2Id(a.id)}
+                                  style={{
+                                    paddingHorizontal: 10,
+                                    paddingVertical: 6,
+                                    borderRadius: 999,
+                                    borderWidth: 1,
+                                    borderColor: active ? '#1d4ed8' : '#cbd5e1',
+                                    backgroundColor: active ? '#1d4ed8' : '#ffffff',
+                                    opacity: disabled ? 0.45 : 1
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 11.5, fontWeight: '700', color: active ? '#ffffff' : '#0f172a' }}>
+                                    {a.name || a.email} ({a.email})
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </ScrollView>
+                        </View>
+                      )}
                     </View>
 
                     {/* Action Button */}
@@ -923,6 +1020,67 @@ export default function DualAdminSecurityModal({
                             </TouchableOpacity>
                           );
                         })}
+                      </View>
+                    )}
+
+                    {/* Dynamic Approver Selection for Removal */}
+                    {selectedAdminId && activeAdmins.filter(a => a.id !== selectedAdminId).length >= 2 && (
+                      <View style={[styles.infoBoxCard, { flexDirection: 'column', alignItems: 'stretch', gap: 8, marginTop: 10 }]}>
+                        <Text style={styles.infoBoxText}>Select 2 Authorizing Admins (OTPs sent to both):</Text>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#1e3a8a' }}>Approver 1 (OTP 1):</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                          {activeAdmins.filter(a => a.id !== selectedAdminId).map(a => {
+                            const active = selectedApprover1Id === a.id;
+                            const disabled = selectedApprover2Id === a.id;
+                            return (
+                              <TouchableOpacity
+                                key={`r-a1-${a.id}`}
+                                disabled={disabled}
+                                onPress={() => setSelectedApprover1Id(a.id)}
+                                style={{
+                                  paddingHorizontal: 10,
+                                  paddingVertical: 6,
+                                  borderRadius: 999,
+                                  borderWidth: 1,
+                                  borderColor: active ? '#dc2626' : '#cbd5e1',
+                                  backgroundColor: active ? '#dc2626' : '#ffffff',
+                                  opacity: disabled ? 0.45 : 1
+                                }}
+                              >
+                                <Text style={{ fontSize: 11.5, fontWeight: '700', color: active ? '#ffffff' : '#0f172a' }}>
+                                  {a.name || a.email} ({a.email})
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#1e3a8a' }}>Approver 2 (OTP 2):</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                          {activeAdmins.filter(a => a.id !== selectedAdminId).map(a => {
+                            const active = selectedApprover2Id === a.id;
+                            const disabled = selectedApprover1Id === a.id;
+                            return (
+                              <TouchableOpacity
+                                key={`r-a2-${a.id}`}
+                                disabled={disabled}
+                                onPress={() => setSelectedApprover2Id(a.id)}
+                                style={{
+                                  paddingHorizontal: 10,
+                                  paddingVertical: 6,
+                                  borderRadius: 999,
+                                  borderWidth: 1,
+                                  borderColor: active ? '#dc2626' : '#cbd5e1',
+                                  backgroundColor: active ? '#dc2626' : '#ffffff',
+                                  opacity: disabled ? 0.45 : 1
+                                }}
+                              >
+                                <Text style={{ fontSize: 11.5, fontWeight: '700', color: active ? '#ffffff' : '#0f172a' }}>
+                                  {a.name || a.email} ({a.email})
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
                       </View>
                     )}
 

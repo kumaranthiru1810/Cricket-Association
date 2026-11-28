@@ -156,7 +156,7 @@ class AdminAccessService {
   /**
    * 3. Request Administrator Promotion (Step 1 -> generates Dual-Admin OTPs)
    */
-  async requestPromote({ email, name, requestedBy, ip }) {
+  async requestPromote({ email, name, approver1Id = null, approver2Id = null, requestedBy, ip }) {
     if (!email || typeof email !== 'string') {
       throw { status: 400, message: 'Candidate email address is required.' };
     }
@@ -193,25 +193,49 @@ class AdminAccessService {
     const requesterEmail = String(requestedBy?.email || '').toLowerCase();
 
     const primaryAdminEmail = env.ADMIN_INITIAL_EMAIL || requestedBy?.email;
-    const potentialApprovers = await db.models.User.find({
+    const allActiveAdmins = await db.models.User.find({
       $or: [
         { role: { $in: ['ADMIN', 'SUPER_ADMIN'] } },
         { is_super_admin: true }
       ],
-      status: 'ACTIVE',
-      id: { $ne: requestedBy?.id },
-      email: { $ne: requesterEmail }
+      status: 'ACTIVE'
     }).lean();
 
-    let approver1, approver2;
-    if (potentialApprovers.length >= 2) {
-      approver1 = potentialApprovers[0];
-      approver2 = potentialApprovers[1];
-    } else if (potentialApprovers.length === 1) {
-      approver1 = potentialApprovers[0];
-      approver2 = { id: requestedBy?.id || 'admin-super', name: requestedBy?.name || 'Super Administrator', email: requestedBy?.email || primaryAdminEmail };
+    const potentialApprovers = allActiveAdmins.filter(
+      a => a.id !== requestedBy?.id && String(a.email || '').toLowerCase() !== requesterEmail
+    );
+
+    const findAdminByIdOrEmail = (key) => {
+      if (!key) return null;
+      const cleanKey = String(key).trim().toLowerCase();
+      return allActiveAdmins.find(
+        a => String(a.id || '').toLowerCase() === cleanKey || String(a.email || '').toLowerCase() === cleanKey
+      ) || null;
+    };
+
+    let approver1 = findAdminByIdOrEmail(approver1Id);
+    let approver2 = findAdminByIdOrEmail(approver2Id);
+
+    if (approver1 && approver2) {
+      if (String(approver1.email || '').toLowerCase() === String(approver2.email || '').toLowerCase()) {
+        throw { status: 400, message: 'Please select two different administrators to receive dual-admin OTPs.' };
+      }
     } else {
-      throw { status: 400, message: 'At least two active administrators are required to initiate dual-admin approval.' };
+      // Prioritize real email addresses over placeholder test domains
+      const sorted = [...potentialApprovers].sort((a, b) => {
+        const aDemo = /@(example\.com|localhost\.test)$/i.test(a.email || '') ? 1 : 0;
+        const bDemo = /@(example\.com|localhost\.test)$/i.test(b.email || '') ? 1 : 0;
+        return aDemo - bDemo;
+      });
+      if (sorted.length >= 2) {
+        approver1 = approver1 || sorted[0];
+        approver2 = approver2 || sorted.find(a => a.email !== approver1.email) || sorted[1];
+      } else if (sorted.length === 1) {
+        approver1 = approver1 || sorted[0];
+        approver2 = approver2 || { id: requestedBy?.id || 'admin-super', name: requestedBy?.name || 'Super Administrator', email: requestedBy?.email || primaryAdminEmail };
+      } else {
+        throw { status: 400, message: 'At least two active administrators are required to initiate dual-admin approval.' };
+      }
     }
 
     const requestId = `REQ-PROMOTE-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
@@ -248,8 +272,8 @@ class AdminAccessService {
       console.log(`[DUAL-ADMIN SECURITY] Promotion OTPs generated for Request ID: ${requestId} (Candidate: ${cleanEmail})`);
     }
 
-    // Send emails in background without blocking response
-    Promise.all([
+    // Send both emails independently so one transient error never blocks the second email
+    Promise.allSettled([
       sendDualAdminApprovalEmail({
         toEmail: approver1.email,
         approverName: approver1.name,
@@ -268,8 +292,12 @@ class AdminAccessService {
         requestedByEmail: requestedBy?.email || primaryAdminEmail,
         otp: otp2
       })
-    ]).catch(err => {
-      console.warn('⚠️ Non-blocking email dispatch warning:', err.message);
+    ]).then(results => {
+      results.forEach((r, idx) => {
+        if (r.status === 'rejected') {
+          console.warn(`⚠️ Dual-Admin email #${idx + 1} dispatch failed:`, r.reason?.message || r.reason);
+        }
+      });
     });
 
     await writeAudit({
@@ -457,7 +485,7 @@ class AdminAccessService {
       console.log(`[DUAL-ADMIN SECURITY] Security OTPs re-generated for Request ID: ${requestId}`);
     }
 
-    await Promise.all([
+    const emailResults = await Promise.allSettled([
       sendDualAdminApprovalEmail({
         toEmail: reqDoc.approver1_email,
         actionType: reqDoc.type,
@@ -475,6 +503,13 @@ class AdminAccessService {
         otp: otp2
       })
     ]);
+
+    emailResults.forEach((res, idx) => {
+      if (res.status === 'rejected') {
+        const target = idx === 0 ? reqDoc.approver1_email : reqDoc.approver2_email;
+        console.error(`[DUAL-ADMIN SECURITY] Failed to resend OTP to ${target}:`, res.reason?.message || res.reason);
+      }
+    });
 
     await writeAudit({
       action: 'DUAL_ADMIN_CODES_RESENT',
@@ -601,7 +636,7 @@ class AdminAccessService {
   /**
    * 7. Request Administrator Removal (Step 1 -> generates Dual-Admin OTPs)
    */
-  async requestRemove({ targetAdminId, requestedBy, ip }) {
+  async requestRemove({ targetAdminId, approver1Id = null, approver2Id = null, requestedBy, ip }) {
     if (!targetAdminId) {
       throw { status: 400, message: 'Target administrator ID is required.' };
     }
@@ -659,8 +694,25 @@ class AdminAccessService {
       };
     }
 
-    const approver1 = availableApprovers[0];
-    const approver2 = availableApprovers[1];
+    const pickApprover = (key) => {
+      if (!key) return null;
+      const cleanKey = String(key).trim().toLowerCase();
+      return availableApprovers.find(
+        a => String(a.id || '').toLowerCase() === cleanKey || String(a.email || '').toLowerCase() === cleanKey
+      ) || null;
+    };
+
+    const sortedAvail = [...availableApprovers].sort((a, b) => {
+      const aDemo = /@(example\.com|localhost\.test)$/i.test(a.email || '') ? 1 : 0;
+      const bDemo = /@(example\.com|localhost\.test)$/i.test(b.email || '') ? 1 : 0;
+      return aDemo - bDemo;
+    });
+
+    const approver1 = pickApprover(approver1Id) || sortedAvail[0];
+    const approver2 = pickApprover(approver2Id) || sortedAvail.find(a => a.email !== approver1.email) || sortedAvail[1];
+    if (!approver1 || !approver2 || String(approver1.email || '').toLowerCase() === String(approver2.email || '').toLowerCase()) {
+      throw { status: 400, message: 'Please select two different active administrators to approve revocation.' };
+    }
 
     const requestId = `REQ-REMOVE-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
     const otp1 = generate6DigitOtp();
@@ -694,7 +746,7 @@ class AdminAccessService {
       console.log(`[DUAL-ADMIN SECURITY] Revocation OTPs generated for Request ID: ${requestId}`);
     }
 
-    await Promise.all([
+    await Promise.allSettled([
       sendDualAdminApprovalEmail({
         toEmail: approver1.email,
         approverName: approver1.name,

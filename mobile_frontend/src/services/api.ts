@@ -2152,7 +2152,7 @@ export const AdminSecurityApi = {
   searchCandidate: async (email: string) => {
     return request(`/admin/access/candidates?email=${encodeURIComponent(email)}`);
   },
-  requestPromote: async (payload: { email: string; name?: string }) => {
+  requestPromote: async (payload: { email: string; name?: string; approver1Id?: string; approver2Id?: string }) => {
     return request('/admin/access/promote/request', {
       method: 'POST',
       body: JSON.stringify(payload)
@@ -2175,10 +2175,10 @@ export const AdminSecurityApi = {
       body: JSON.stringify({ code })
     });
   },
-  requestRemove: async (targetAdminId: string) => {
+  requestRemove: async (targetAdminId: string, approver1Id?: string, approver2Id?: string) => {
     return request('/admin/access/remove/request', {
       method: 'POST',
-      body: JSON.stringify({ targetAdminId })
+      body: JSON.stringify({ targetAdminId, approver1Id, approver2Id })
     });
   },
   verifyRemove: async (requestId: string, otp1: string, otp2: string) => {
