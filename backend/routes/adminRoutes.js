@@ -1773,12 +1773,35 @@ router.get('/reports', async (req, res) => {
         : `${now.getFullYear()}`);
     const dateParam = String(req.query.date || defaultDate).trim();
 
-    const matchesPrefix = (dateStr) => {
-      if (!dateStr) return false;
-      const s = String(dateStr).slice(0, 10);
-      if (period === 'day') return s === dateParam.slice(0, 10);
-      if (period === 'month') return s.startsWith(dateParam.slice(0, 7));
-      return s.startsWith(dateParam.slice(0, 4));
+    const normalizeDateYMD = (val) => {
+      if (!val) return '';
+      if (val instanceof Date && !isNaN(val.getTime())) {
+        return `${val.getFullYear()}-${pad2(val.getMonth() + 1)}-${pad2(val.getDate())}`;
+      }
+      const raw = String(val).trim();
+      let m = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+      if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+      m = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+      if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+      const parsed = new Date(raw);
+      if (!isNaN(parsed.getTime())) {
+        return `${parsed.getFullYear()}-${pad2(parsed.getMonth() + 1)}-${pad2(parsed.getDate())}`;
+      }
+      return '';
+    };
+
+    const normalizedParam = period === 'year'
+      ? dateParam.slice(0, 4)
+      : (period === 'month'
+        ? (normalizeDateYMD(`${dateParam}-01`).slice(0, 7) || dateParam.slice(0, 7))
+        : (normalizeDateYMD(dateParam) || dateParam.slice(0, 10)));
+
+    const matchesPrefix = (dateVal) => {
+      const ymd = normalizeDateYMD(dateVal);
+      if (!ymd) return false;
+      if (period === 'day') return ymd === normalizedParam;
+      if (period === 'month') return ymd.startsWith(normalizedParam);
+      return ymd.startsWith(normalizedParam);
     };
 
     const [allTournaments, allMatches, allTeams] = await Promise.all([
@@ -1799,22 +1822,21 @@ router.get('/reports', async (req, res) => {
     });
 
     const filteredMatches = (allMatches || []).filter(m => {
-      const d = m.match_date || (m.created_at ? new Date(m.created_at).toISOString().slice(0, 10) : '');
+      const d = m.match_date || m.date || m.created_at;
       return matchesPrefix(d);
     });
 
     const matchTourIds = new Set(filteredMatches.map(m => m.tournament_id).filter(Boolean));
     const filteredTournaments = (allTournaments || []).filter(t => {
-      const start = t.start_date ? String(t.start_date).slice(0, 10) : '';
-      const end = t.end_date ? String(t.end_date).slice(0, 10) : '';
-      const created = t.created_at ? new Date(t.created_at).toISOString().slice(0, 10) : '';
+      const start = normalizeDateYMD(t.start_date);
+      const end = normalizeDateYMD(t.end_date);
+      const created = normalizeDateYMD(t.created_at);
       if (matchesPrefix(start) || matchesPrefix(end) || matchesPrefix(created)) return true;
       if (matchTourIds.has(t.id)) return true;
       if (start && end) {
-        const key = period === 'day' ? dateParam.slice(0, 10) : (period === 'month' ? dateParam.slice(0, 7) : dateParam.slice(0, 4));
         const sCmp = period === 'day' ? start : (period === 'month' ? start.slice(0, 7) : start.slice(0, 4));
         const eCmp = period === 'day' ? end : (period === 'month' ? end.slice(0, 7) : end.slice(0, 4));
-        if (sCmp <= key && key <= eCmp) return true;
+        if (sCmp <= normalizedParam && normalizedParam <= eCmp) return true;
       }
       return false;
     });
