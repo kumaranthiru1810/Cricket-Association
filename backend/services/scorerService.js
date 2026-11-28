@@ -397,7 +397,17 @@ class ScorerService {
     }
 
     const allMatches = await db.models.Match.find(query).sort({ match_date: -1 }).lean();
-    const teamMap = await this.getTeamMap();
+    const [teamMap, tournamentsList] = await Promise.all([
+      this.getTeamMap(),
+      db.models.Tournament.find({}).select('id name overs_per_match').lean()
+    ]);
+    const tournamentOversMap = {};
+    (tournamentsList || []).forEach(t => {
+      if (t.overs_per_match) {
+        if (t.id) tournamentOversMap[t.id] = Number(t.overs_per_match);
+        if (t.name) tournamentOversMap[String(t.name).toLowerCase().trim()] = Number(t.overs_per_match);
+      }
+    });
 
     let liveCount = 0;
     let upcomingCount = 0;
@@ -489,7 +499,7 @@ class ScorerService {
         venue: m.venue || 'Kamarajar Stadium, Virudhunagar',
         venue_maps_url: m.venue_maps_url || (m.venue ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.venue + (m.venue.toLowerCase().includes('virudhunagar') ? '' : ', Virudhunagar'))}` : 'https://www.google.com/maps/search/?api=1&query=Kamarajar+District+Stadium+Virudhunagar'),
         format: m.match_type || 'T20',
-        overs: m.overs_per_side || 20,
+        overs: tournamentOversMap[m.tournament_id] || tournamentOversMap[String(m.tournament_name || '').toLowerCase().trim()] || m.overs_per_side || 20,
         rawStatus: statusUpper,
         status: isLive ? 'Live' : (isCompleted ? 'Completed' : (isFinished ? 'Finished' : (isCancelled ? 'Cancelled' : (isPostponed ? 'Postponed' : 'Upcoming')))),
         isPostponed,
@@ -739,7 +749,8 @@ class ScorerService {
     );
 
     // Enriched bowling squad
-    const matchOvers = currentInnings.revised_overs || match.revised_overs || match.overs_per_side || 20;
+    const baseMatchOvers = Number(tournamentDoc?.overs_per_match || match.overs_per_side || 20);
+    const matchOvers = currentInnings.revised_overs || match.revised_overs || baseMatchOvers;
     const maxQuota = customBowlerMax > 0 ? customBowlerMax : (Math.ceil(matchOvers / 5) || 4);
 
     const enrichedBowlingSquad = bowlingSquad.map(p => {
@@ -833,8 +844,8 @@ class ScorerService {
         tournament: match.tournament_name || 'VPL 2026',
         venue: match.venue || 'Kamarajar Stadium, Virudhunagar',
         venue_maps_url: match.venue_maps_url || (match.venue ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(match.venue + (match.venue.toLowerCase().includes('virudhunagar') ? '' : ', Virudhunagar'))}` : 'https://www.google.com/maps/search/?api=1&query=Kamarajar+District+Stadium+Virudhunagar'),
-        overs: currentInnings.revised_overs || match.revised_overs || match.overs_per_side || 20,
-        originalOvers: match.overs_per_side || 20,
+        overs: currentInnings.revised_overs || match.revised_overs || baseMatchOvers,
+        originalOvers: baseMatchOvers,
         revisedOvers: currentInnings.revised_overs || match.revised_overs || null,
         revisedTarget: match.revised_target || null,
         revisedComments: match.revised_comments || '',

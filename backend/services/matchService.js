@@ -109,7 +109,7 @@ class MatchService {
       matchId: match.id,
       tournament: match.tournament_name || 'VPL 2026',
       venue: match.venue || 'Kamarajar Stadium, Virudhunagar',
-      overs: match.overs_per_side || tournamentDoc?.overs_per_match || 20,
+      overs: Number(tournamentDoc?.overs_per_match || match.overs_per_side || 20),
       rule15,
       tournamentRules,
       teamA,
