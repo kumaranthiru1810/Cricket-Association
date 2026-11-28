@@ -9,7 +9,7 @@
     "migrate": "node migrations/migrate.js",
     "seed": "node seeds/seed.js",
     "seed:settings": "node scripts/importMasterSettings.js",
-    "test": "NODE_ENV=test node tests/runTests.js && NODE_ENV=test node tests/test_cricket_logic_fixes.js && NODE_ENV=test node tests/test_security_audit.js && NODE_ENV=test node tests/test_phase3_speed.js && NODE_ENV=test node tests/test_validation_errors.js",
+    "test": "NODE_ENV=test ALLOW_TEST_KEYS=true node tests/runTests.js && NODE_ENV=test ALLOW_TEST_KEYS=true node tests/test_cricket_logic_fixes.js && NODE_ENV=test ALLOW_TEST_KEYS=true node tests/test_security_audit.js && NODE_ENV=test ALLOW_TEST_KEYS=true node tests/test_phase3_speed.js && NODE_ENV=test ALLOW_TEST_KEYS=true node tests/test_validation_errors.js && NODE_ENV=test ALLOW_TEST_KEYS=true node tests/test_player_ratings_pipeline.js && NODE_ENV=test ALLOW_TEST_KEYS=true node tests/test_photo_reupload_workflow.js",
     "lint": "eslint .",
     "format": "prettier --write .",
     "test:rules": "node tests/test_cricket_rules_engine.js",

@@ -8,6 +8,12 @@
 
 const nodemailer = require('nodemailer');
 
+function getBrevoSenderEmail() {
+  const raw = process.env.BREVO_SENDER_EMAIL || process.env.SMTP_USER || '';
+  const cleaned = raw.replace(/^"|"$/g, '').trim();
+  return cleaned || 'noreply@localhost.invalid';
+}
+
 function getSmtpConfig() {
   const host = process.env.SMTP_HOST || 'smtp.gmail.com';
   const port = parseInt(process.env.SMTP_PORT || '587', 10);
@@ -106,7 +112,7 @@ async function sendViaProvider(providerName, { toEmail, toName, subject, textCon
         Accept: 'application/json'
       },
       body: JSON.stringify({
-        sender: { name: 'Cricket Federation', email: process.env.BREVO_SENDER_EMAIL || '24ucs021@anjaconline.org' },
+        sender: { name: 'Cricket Federation', email: getBrevoSenderEmail() },
         to: [{ email: toEmail, name: toName || 'User' }],
         subject,
         textContent,
@@ -733,7 +739,7 @@ async function sendSuperAdminVerificationEmail({
           'Accept': 'application/json'
         },
         body: JSON.stringify({
-          sender: { name: 'Cricket Federation', email: process.env.BREVO_SENDER_EMAIL || '24ucs021@anjaconline.org' },
+          sender: { name: 'Cricket Federation', email: getBrevoSenderEmail() },
           to: [{ email: toEmail, name: userName || 'User' }],
           subject,
           htmlContent
@@ -926,7 +932,7 @@ async function sendAdminApprovalEmail({
           'Accept': 'application/json'
         },
         body: JSON.stringify({
-          sender: { name: 'Cricket Federation', email: process.env.BREVO_SENDER_EMAIL || '24ucs021@anjaconline.org' },
+          sender: { name: 'Cricket Federation', email: getBrevoSenderEmail() },
           to: [{ email: toEmail, name: userName || 'User' }],
           subject,
           htmlContent
@@ -1012,7 +1018,7 @@ async function sendOtpEmail({ toEmail, userName, otp, priority = 'OTP' }) {
     `Cricket Federation of Virudhunagar District\n\n` +
     `Hello ${userName || 'Member'},\n\n` +
     `Your verification code is: ${otp}\n` +
-    `This code expires in 10 minutes.\n\n` +
+    `This code expires in 5 minutes.\n\n` +
     `Ignore if you did not request this.`;
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff;">
@@ -1022,7 +1028,7 @@ async function sendOtpEmail({ toEmail, userName, otp, priority = 'OTP' }) {
       <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">
         <span style="font-size: 30px; font-weight: bold; letter-spacing: 6px; color: #0f2452;">${safeOtp}</span>
       </div>
-      <p style="font-size: 13px; color: #475569;">This code is valid for 10 minutes.</p>
+      <p style="font-size: 13px; color: #475569;">This code is valid for 5 minutes.</p>
       <p style="font-size: 12px; color: #64748b; margin-bottom: 0;">Ignore if you did not request this.</p>
     </div>
   `;
@@ -1039,7 +1045,7 @@ async function sendOtpEmail({ toEmail, userName, otp, priority = 'OTP' }) {
   if (!result.success) {
     return {
       ...result,
-      ...(!result.quotaExceeded && process.env.NODE_ENV !== 'production' ? attachDevOtp(otp) : {})
+      ...(!result.quotaExceeded ? attachDevOtp(otp) : {})
     };
   }
   return result;
@@ -1080,7 +1086,7 @@ async function sendPlayerTeamEmail({ toEmail, playerName, teamNames }) {
           'Accept': 'application/json'
         },
         body: JSON.stringify({
-          sender: { name: 'Cricket Federation', email: process.env.BREVO_SENDER_EMAIL || '24ucs021@anjaconline.org' },
+          sender: { name: 'Cricket Federation', email: getBrevoSenderEmail() },
           to: [{ email: toEmail, name: userName || 'User' }],
           subject,
           htmlContent
@@ -1274,7 +1280,7 @@ async function sendDualAdminApprovalEmail({
           'Accept': 'application/json'
         },
         body: JSON.stringify({
-          sender: { name: 'Cricket Federation', email: process.env.BREVO_SENDER_EMAIL || '24ucs021@anjaconline.org' },
+          sender: { name: 'Cricket Federation', email: getBrevoSenderEmail() },
           to: [{ email: toEmail, name: userName || 'User' }],
           subject,
           htmlContent
@@ -1392,7 +1398,7 @@ async function sendCandidateVerificationEmail({
           'Accept': 'application/json'
         },
         body: JSON.stringify({
-          sender: { name: 'Cricket Federation', email: process.env.BREVO_SENDER_EMAIL || '24ucs021@anjaconline.org' },
+          sender: { name: 'Cricket Federation', email: getBrevoSenderEmail() },
           to: [{ email: toEmail, name: userName || 'User' }],
           subject,
           htmlContent

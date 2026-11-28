@@ -24,6 +24,24 @@ import {
   validateName,
   validateTeamName,
   validateExperience,
+  validateAddress,
+  normalizeAddress,
+  sanitizeAddressInput,
+  preventSpaceKey,
+  preventLeadingSpaceKey,
+  preventNonDigitKey,
+  normalizeSpaces,
+  sanitizeSpaceCollapsedInput,
+  validateClubOrAcademyName,
+  validateStudyingInstitution,
+  validateStudyLevel,
+  validateStudyBranchOrClass,
+  validateWorkingInstitution,
+  validateDeclarationDate,
+  validateDeclarationPlace,
+  ddmmyyyyToYyyyMmDd,
+  yyyyMmDdToDdMmYyyy,
+  getTodayYyyyMmDd,
 } from '../../utils/validation';
 import { FontAwesome } from '@expo/vector-icons';
 import { useAppNavigation } from '../../navigation/AppNavigator';
@@ -459,7 +477,7 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
   const [pBowlerType, setPBowlerType] = useState<'MEDIUM' | 'OFF_SPIN' | 'LEG_SPINNER' | 'ORTHODOX' | 'CHINAMAN' | ''>('MEDIUM');
   const [pIsWicketKeeper, setPIsWicketKeeper] = useState<boolean>(false);
   const [pDeclarationPlace, setPDeclarationPlace] = useState<string>('Virudhunagar');
-  const [pDeclarationDate, setPDeclarationDate] = useState<string>(() => new Date().toLocaleDateString('en-GB'));
+  const [pDeclarationDate, setPDeclarationDate] = useState<string>('');
   const [pPhoto, setPPhoto] = useState<string>('');
   const [pPhotoClientAnalysis, setPPhotoClientAnalysis] = useState<ClientFaceAnalysis | null>(null);
   const [pPhotoCheckMsg, setPPhotoCheckMsg] = useState<string>('');
@@ -629,10 +647,8 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
   };
 
   const validateMobileValue = (val: string): string | null => {
-    const clean = (val || '').trim().replace(/\D/g, '');
-    if (!clean) return 'Mobile number is required.';
-    if (clean.length !== 10) return 'Mobile number must be exactly 10 digits.';
-    return null;
+    const res = validatePhone(val, 'Mobile Number');
+    return res.isValid ? null : (res.error || 'Mobile number is required.');
   };
 
   const getTargetEmail = (): string => {
@@ -780,7 +796,7 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
       setPBowlerType('MEDIUM');
       setPIsWicketKeeper(false);
       setPDeclarationPlace('VIRUDHUNAGAR');
-      setPDeclarationDate(new Date().toLocaleDateString('en-GB'));
+      setPDeclarationDate(getTodayYyyyMmDd());
       setPAgreed(true);
       setStatusMessage('⚡ Demo Player form filled for preview! Clicking "Send Verification OTP" will clear demo data.');
       setStatusType('success');
@@ -1067,7 +1083,7 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
     setStatusMessage(null);
     setStatusType(null);
 
-    const name = pName.trim();
+    const name = normalizeSpaces(pName);
     const email = pEmail.trim().toLowerCase();
     const mobile = pMobile.trim();
     const cleanPhone = mobile.replace(/\D/g, '');
@@ -1089,11 +1105,36 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
     if (mobileErr) errs.mobile = mobileErr;
     if (aadhaarErr) errs.aadhaar = aadhaarErr;
     if (talukErr) errs.taluk = talukErr;
-    if (!pFatherName.trim()) errs.fatherName = "Father's Name is required.";
+    const fatherNameRes = validateName(pFatherName, 'Father Name');
+    if (!fatherNameRes.isValid) errs.fatherName = fatherNameRes.error || 'Father Name is required.';
     if (!pDob.trim()) errs.dob = 'Date of Birth is required.';
     else if (!pAge || Number(pAge) < 5) errs.dob = 'Player must be at least 5 years old.';
     if (!pPlaceOfBirth.trim()) errs.placeOfBirth = 'Place of Birth is required.';
-    if (!pAddress.trim()) errs.address = 'Address for Communication is required.';
+    const clubRes = validateClubOrAcademyName(pClub);
+    if (!clubRes.isValid) errs.club = clubRes.error || 'Club / School / College / Academy name is required.';
+    const addressRes = validateAddress(pAddress);
+    if (!addressRes.isValid) errs.address = addressRes.error || 'Address for Communication is required.';
+
+    if (pOccupationType === 'STUDYING') {
+      const studyInstRes = validateStudyingInstitution(pStudyingInstitution);
+      if (!studyInstRes.isValid) errs.studyingInstitution = studyInstRes.error || 'School or College name is required.';
+      const studyLvlRes = validateStudyLevel(pStudyLevel);
+      if (!studyLvlRes.isValid) errs.studyLevel = studyLvlRes.error || 'Please select either COLLEGE or SCHOOL.';
+      if (pStudyLevel === 'COLLEGE') {
+        const branchRes = validateStudyBranchOrClass(pBranchYearSec, 'COLLEGE');
+        if (!branchRes.isValid) errs.branchYearSec = branchRes.error || 'Branch, Year and Section is required.';
+      } else if (pStudyLevel === 'SCHOOL') {
+        const classRes = validateStudyBranchOrClass(pClassSection, 'SCHOOL');
+        if (!classRes.isValid) errs.classSection = classRes.error || 'Class and Section is required.';
+      }
+    } else if (pOccupationType === 'WORKING') {
+      const workInstRes = validateWorkingInstitution(pWorkingInstitution);
+      if (!workInstRes.isValid) errs.workingInstitution = workInstRes.error || 'Institution / Bank / Government Office name is required.';
+    }
+    const declPlaceRes = validateDeclarationPlace(pDeclarationPlace);
+    if (!declPlaceRes.isValid) errs.declarationPlace = declPlaceRes.error || 'Declaration Place is required.';
+    const declDateRes = validateDeclarationDate(pDeclarationDate);
+    if (!declDateRes.isValid) errs.declarationDate = declDateRes.error || 'Declaration Date is required.';
 
     if (Object.keys(errs).length > 0) {
       setFieldErrors((prev) => ({ ...prev, ...errs }));
@@ -1102,15 +1143,19 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
       return;
     }
 
-    // Check if player email or user is already registered before OTP or submit
+    // Check if player email or mobile is already registered before OTP or submit
     try {
       const checkRes = await ScorerApi.checkRegistrationExists({
         role: 'PLAYER',
         email,
-        name
+        name,
+        mobile: cleanPhone
       });
       if (checkRes?.exists) {
         const existMsg = checkRes.message || `Player with email "${email}" is already registered. Please login directly.`;
+        if (checkRes.field === 'mobile') {
+          setFieldErrors((prev) => ({ ...prev, mobile: existMsg }));
+        }
         setStatusMessage(existMsg);
         setStatusType('error');
         await showError('Already Registered', existMsg);
@@ -1185,24 +1230,24 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
         bowlingArm: (isBowler || isAllRounder) ? pBowlingArm : undefined,
         bowlingCategory: (isBowler || isAllRounder) ? pBowlingCategory : undefined,
         bowlingAction: (isBowler || isAllRounder) ? pBowlingAction : undefined,
-        clubChoice: pClub.trim() || undefined,
-        fatherName: pFatherName.trim(),
+        clubChoice: normalizeSpaces(pClub),
+        fatherName: normalizeSpaces(pFatherName),
         dateOfBirth: pDob.trim(),
         age: pAge.trim(),
         placeOfBirth: pPlaceOfBirth.trim(),
-        address: pAddress.trim(),
+        address: normalizeAddress(pAddress),
         occupationType: pOccupationType,
-        workingInstitution: pWorkingInstitution.trim(),
-        studyingInstitution: pStudyingInstitution.trim(),
-        studyLevel: pStudyLevel,
-        branchYearSec: pBranchYearSec.trim(),
-        classSection: pClassSection.trim(),
+        workingInstitution: pOccupationType === 'WORKING' ? normalizeSpaces(pWorkingInstitution) : '',
+        studyingInstitution: pOccupationType === 'STUDYING' ? normalizeSpaces(pStudyingInstitution) : '',
+        studyLevel: pOccupationType === 'STUDYING' ? pStudyLevel : '',
+        branchYearSec: pOccupationType === 'STUDYING' && pStudyLevel === 'COLLEGE' ? normalizeSpaces(pBranchYearSec) : '',
+        classSection: pOccupationType === 'STUDYING' && pStudyLevel === 'SCHOOL' ? normalizeSpaces(pClassSection) : '',
         batterHand: pBatterHand,
         batterPosition: pBatterPosition,
         bowlerHand: pBowlerHand,
         bowlerType: pBowlerType,
         isWicketKeeper: pIsWicketKeeper,
-        declarationPlace: pDeclarationPlace.trim(),
+        declarationPlace: normalizeSpaces(pDeclarationPlace),
         declarationDate: pDeclarationDate.trim(),
         declarationAgreed: pAgreed,
         photo: pPhoto || undefined,
@@ -2152,14 +2197,21 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                         style={[styles.input, fieldErrors.name && styles.inputError]}
                         value={pName}
                         onChangeText={(val) => {
-                          const sanitized = val.replace(/\t/g, '').replace(/[^a-zA-Z. ]/g, '').toUpperCase();
+                          const sanitized = sanitizeSpaceCollapsedInput(val);
                           setPName(sanitized);
-                          const err = validateNameValue(sanitized, 'Player Name');
+                          const err = validateNameValue(sanitized, 'Player Full Name');
                           setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
                         }}
-                        placeholder="e.g. M. SARAVANAN"
+                        onBlur={() => {
+                          const normalized = normalizeSpaces(pName);
+                          if (normalized !== pName) setPName(normalized);
+                          const err = validateNameValue(normalized, 'Player Full Name');
+                          setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
+                        }}
+                        onKeyPress={(e) => preventLeadingSpaceKey(e, pName)}
+                        placeholder="e.g. M. Athi Lingam"
                         placeholderTextColor="#94a3b8"
-                        autoCapitalize="characters"
+                        autoCapitalize="words"
                       />
                       {fieldErrors.name && (
                         <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.name}</Text>
@@ -2171,7 +2223,7 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                         style={[styles.input, fieldErrors.email && styles.inputError]}
                         value={pEmail}
                         onChangeText={(val) => {
-                          const sanitized = val.replace(/[^a-zA-Z0-9_.@]/g, '');
+                          const sanitized = val.replace(/\s+/g, '').replace(/[^a-zA-Z0-9_.@+-]/g, '').toLowerCase();
                           setPEmail(sanitized);
                           if (isEmailVerified) {
                             setIsEmailVerified(false);
@@ -2186,7 +2238,8 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                             setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
                           }
                         }}
-                        placeholder="e.g. saravanan@example.com"
+                        placeholder="e.g. athilingam3336@gmail.com"
+                        onKeyPress={preventSpaceKey}
                         keyboardType="email-address"
                         autoComplete="email"
                         placeholderTextColor="#94a3b8"
@@ -2224,37 +2277,48 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                           {pMobile.replace(/\D/g, '').length === 10 ? '✓ 10/10 Digits' : `(${pMobile.replace(/\D/g, '').length}/10)`}
                         </Text>
                       </View>
-                      <View style={[styles.dynamicInputWrap, fieldErrors.mobile ? styles.inputError : (pMobile.replace(/\D/g, '').length === 10 ? styles.dynamicInputSuccess : null)]}>
+                      <View style={[styles.dynamicInputWrap, fieldErrors.mobile ? styles.inputError : (validatePhone(pMobile).isValid ? styles.dynamicInputSuccess : null)]}>
                         <View style={styles.phonePrefixBox}>
                           <Text style={styles.phonePrefixText}>🇮🇳 +91</Text>
                         </View>
                         <TextInput
                           style={styles.dynamicInputCore}
                           value={pMobile}
+                          onKeyPress={preventNonDigitKey}
+                          onChange={(e: any) => {
+                            if (Platform.OS === 'web' && e?.target && typeof e.target.value === 'string') {
+                              const cleanedDom = formatPhone(e.target.value);
+                              if (e.target.value !== cleanedDom) {
+                                e.target.value = cleanedDom;
+                              }
+                            }
+                          }}
                           onChangeText={(val) => {
                             const cleaned = formatPhone(val);
                             setPMobile(cleaned);
-                            if (cleaned.length === 10) {
+                            if (cleaned.length > 0 && !/^[6-9]/.test(cleaned)) {
+                              setFieldErrors((prev) => ({ ...prev, mobile: 'Indian mobile number must start with 6, 7, 8, or 9.' }));
+                            } else if (cleaned.length === 10) {
                               const res = validatePhone(cleaned, 'Player Phone Number');
                               setFieldErrors((prev) => ({ ...prev, mobile: res.isValid ? undefined : res.error }));
+                            } else if (/[^0-9]/.test(val)) {
+                              setFieldErrors((prev) => ({ ...prev, mobile: 'Mobile number must contain digits only (0-9).' }));
                             } else {
                               setFieldErrors((prev) => ({ ...prev, mobile: undefined }));
                             }
                           }}
                           onBlur={() => {
-                            if (pMobile.trim()) {
-                              const res = validatePhone(pMobile, 'Player Phone Number');
-                              setFieldErrors((prev) => ({ ...prev, mobile: res.isValid ? undefined : res.error }));
-                            }
+                            const res = validatePhone(pMobile, 'Player Phone Number');
+                            setFieldErrors((prev) => ({ ...prev, mobile: res.isValid ? undefined : res.error }));
                           }}
                           placeholder="9876543210"
-                          keyboardType="phone-pad"
+                          keyboardType="number-pad"
                           autoComplete="tel"
                           placeholderTextColor="#94a3b8"
                           maxLength={10}
                           accessibilityLabel="Player 10-digit phone number"
                         />
-                        {pMobile.replace(/\D/g, '').length === 10 && (
+                        {validatePhone(pMobile).isValid && (
                           <View style={styles.validCheckBadge}>
                             <Text style={styles.validCheckText}>✓</Text>
                           </View>
@@ -2352,7 +2416,7 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                           style={[styles.input, fieldErrors.taluk && styles.inputError]}
                           value={pCustomTaluk}
                           onChangeText={(val) => {
-                            const sanitized = val.replace(/\t/g, '').replace(/[^a-zA-Z ]/g, '').toUpperCase();
+                            const sanitized = val.replace(/\t/g, '').replace(/[^a-zA-Z ]/g, '').replace(/^\s+/, '').toUpperCase();
                             setPCustomTaluk(sanitized);
                             setFieldErrors((prev) => ({ ...prev, taluk: sanitized.trim() ? undefined : 'Please enter your Taluk name.' }));
                           }}
@@ -2460,18 +2524,28 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
 
                     <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.label}>Name of Club / School / College / Academy</Text>
+                        <Text style={styles.label}>Name of Club / School / College / Academy *</Text>
                         <TextInput
-                          style={styles.input}
+                          style={[styles.input, fieldErrors.club && styles.inputError]}
                           value={pClub}
                           onChangeText={(val) => {
-                            const sanitized = val.replace(/\t/g, '').replace(/[^a-zA-Z0-9 ]/g, '').toUpperCase();
+                            const sanitized = sanitizeSpaceCollapsedInput(val);
                             setPClub(sanitized);
+                            const res = validateClubOrAcademyName(sanitized);
+                            setFieldErrors((prev) => ({ ...prev, club: res.isValid ? undefined : res.error }));
                           }}
+                          onBlur={() => {
+                            const normalized = normalizeSpaces(pClub);
+                            if (normalized !== pClub) setPClub(normalized);
+                            const res = validateClubOrAcademyName(normalized);
+                            setFieldErrors((prev) => ({ ...prev, club: res.isValid ? undefined : res.error }));
+                          }}
+                          onKeyPress={(e) => preventLeadingSpaceKey(e, pClub)}
                           placeholder="E.G. VIRUDHUNAGAR CRICKET CLUB"
                           placeholderTextColor="#94a3b8"
-                          autoCapitalize="characters"
+                          autoCapitalize="words"
                         />
+                        {fieldErrors.club ? <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.club}</Text> : null}
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.label}>Father&apos;s Name *</Text>
@@ -2479,13 +2553,21 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                           style={[styles.input, fieldErrors.fatherName && styles.inputError]}
                           value={pFatherName}
                           onChangeText={(val) => {
-                            const sanitized = val.replace(/\t/g, '').replace(/[^a-zA-Z. ]/g, '').toUpperCase();
+                            const sanitized = sanitizeSpaceCollapsedInput(val);
                             setPFatherName(sanitized);
-                            setFieldErrors((prev) => ({ ...prev, fatherName: sanitized.trim() ? undefined : "Father's Name is required." }));
+                            const res = validateName(sanitized, 'Father Name');
+                            setFieldErrors((prev) => ({ ...prev, fatherName: res.isValid ? undefined : res.error }));
                           }}
-                          placeholder="E.G. K. RAMESH"
+                          onBlur={() => {
+                            const normalized = normalizeSpaces(pFatherName);
+                            if (normalized !== pFatherName) setPFatherName(normalized);
+                            const res = validateName(normalized, 'Father Name');
+                            setFieldErrors((prev) => ({ ...prev, fatherName: res.isValid ? undefined : res.error }));
+                          }}
+                          onKeyPress={(e) => preventLeadingSpaceKey(e, pFatherName)}
+                          placeholder="e.g. R. Mahalingam"
                           placeholderTextColor="#94a3b8"
-                          autoCapitalize="characters"
+                          autoCapitalize="words"
                         />
                         {fieldErrors.fatherName ? <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.fatherName}</Text> : null}
                       </View>
@@ -2526,7 +2608,7 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                           style={[styles.input, fieldErrors.placeOfBirth && styles.inputError]}
                           value={pPlaceOfBirth}
                           onChangeText={(val) => {
-                            const sanitized = val.replace(/\t/g, '').replace(/[^a-zA-Z ]/g, '').toUpperCase();
+                            const sanitized = val.replace(/\t/g, '').replace(/[^a-zA-Z ]/g, '').replace(/^\s+/, '').toUpperCase();
                             setPPlaceOfBirth(sanitized);
                             setFieldErrors((prev) => ({ ...prev, placeOfBirth: sanitized.trim() ? undefined : 'Place of Birth is required.' }));
                           }}
@@ -2544,10 +2626,18 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                         style={[styles.input, { minHeight: 58, textAlignVertical: 'top' }, fieldErrors.address && styles.inputError]}
                         value={pAddress}
                         onChangeText={(val) => {
-                          const sanitized = val.replace(/\t/g, ' ').replace(/[^a-zA-Z0-9,/. \n]/g, '');
+                          const sanitized = sanitizeAddressInput(val);
                           setPAddress(sanitized);
-                          setFieldErrors((prev) => ({ ...prev, address: sanitized.trim() ? undefined : 'Address for Communication is required.' }));
+                          const res = validateAddress(sanitized);
+                          setFieldErrors((prev) => ({ ...prev, address: res.isValid ? undefined : res.error }));
                         }}
+                        onBlur={() => {
+                          const normalized = normalizeAddress(pAddress);
+                          if (normalized !== pAddress) setPAddress(normalized);
+                          const res = validateAddress(normalized);
+                          setFieldErrors((prev) => ({ ...prev, address: res.isValid ? undefined : res.error }));
+                        }}
+                        onKeyPress={(e) => preventLeadingSpaceKey(e, pAddress)}
                         placeholder="Door No, Street, Area, District, PIN Code"
                         multiline
                         placeholderTextColor="#94a3b8"
@@ -2566,7 +2656,37 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                         ] as const).map((opt) => (
                           <TouchableOpacity
                             key={opt.key}
-                            onPress={() => setPOccupationType(opt.key)}
+                            onPress={() => {
+                              setPOccupationType(opt.key);
+                              if (opt.key === 'STUDYING') {
+                                setPWorkingInstitution('');
+                                setFieldErrors((prev) => ({ ...prev, workingInstitution: undefined }));
+                              } else if (opt.key === 'WORKING') {
+                                setPStudyingInstitution('');
+                                setPBranchYearSec('');
+                                setPClassSection('');
+                                setFieldErrors((prev) => ({
+                                  ...prev,
+                                  studyingInstitution: undefined,
+                                  studyLevel: undefined,
+                                  branchYearSec: undefined,
+                                  classSection: undefined,
+                                }));
+                              } else {
+                                setPWorkingInstitution('');
+                                setPStudyingInstitution('');
+                                setPBranchYearSec('');
+                                setPClassSection('');
+                                setFieldErrors((prev) => ({
+                                  ...prev,
+                                  workingInstitution: undefined,
+                                  studyingInstitution: undefined,
+                                  studyLevel: undefined,
+                                  branchYearSec: undefined,
+                                  classSection: undefined,
+                                }));
+                              }
+                            }}
                             style={{
                               paddingHorizontal: 10,
                               paddingVertical: 7,
@@ -2585,19 +2705,42 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
 
                       {pOccupationType === 'STUDYING' && (
                         <View style={{ gap: 8 }}>
-                          <TextInput
-                            style={styles.input}
-                            value={pStudyingInstitution}
-                            onChangeText={(val) => setPStudyingInstitution(val.replace(/\t/g, '').replace(/[^a-zA-Z ]/g, '').toUpperCase())}
-                            placeholder="NAME OF SCHOOL OR COLLEGE"
-                            placeholderTextColor="#94a3b8"
-                            autoCapitalize="characters"
-                          />
+                          <View>
+                            <TextInput
+                              style={[styles.input, fieldErrors.studyingInstitution && styles.inputError]}
+                              value={pStudyingInstitution}
+                              onChangeText={(val) => {
+                                const sanitized = sanitizeSpaceCollapsedInput(val);
+                                setPStudyingInstitution(sanitized);
+                                const res = validateStudyingInstitution(sanitized);
+                                setFieldErrors((prev) => ({ ...prev, studyingInstitution: res.isValid ? undefined : res.error }));
+                              }}
+                              onBlur={() => {
+                                const normalized = normalizeSpaces(pStudyingInstitution);
+                                if (normalized !== pStudyingInstitution) setPStudyingInstitution(normalized);
+                                const res = validateStudyingInstitution(normalized);
+                                setFieldErrors((prev) => ({ ...prev, studyingInstitution: res.isValid ? undefined : res.error }));
+                              }}
+                              onKeyPress={(e) => preventLeadingSpaceKey(e, pStudyingInstitution)}
+                              placeholder="NAME OF SCHOOL OR COLLEGE *"
+                              placeholderTextColor="#94a3b8"
+                              autoCapitalize="words"
+                            />
+                            {fieldErrors.studyingInstitution ? <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.studyingInstitution}</Text> : null}
+                          </View>
                           <View style={{ flexDirection: 'row', gap: 8 }}>
                             {(['COLLEGE', 'SCHOOL'] as const).map((lvl) => (
                               <TouchableOpacity
                                 key={lvl}
-                                onPress={() => setPStudyLevel(lvl)}
+                                onPress={() => {
+                                  setPStudyLevel(lvl);
+                                  setFieldErrors((prev) => ({
+                                    ...prev,
+                                    studyLevel: undefined,
+                                    branchYearSec: lvl === 'SCHOOL' ? undefined : prev.branchYearSec,
+                                    classSection: lvl === 'COLLEGE' ? undefined : prev.classSection,
+                                  }));
+                                }}
                                 style={{
                                   paddingHorizontal: 12,
                                   paddingVertical: 6,
@@ -2613,37 +2756,83 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                               </TouchableOpacity>
                             ))}
                           </View>
+                          {fieldErrors.studyLevel ? <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.studyLevel}</Text> : null}
                           {pStudyLevel === 'COLLEGE' ? (
-                            <TextInput
-                              style={styles.input}
-                              value={pBranchYearSec}
-                              onChangeText={(val) => setPBranchYearSec(val.replace(/\t/g, '').replace(/[^a-zA-Z ]/g, '').toUpperCase())}
-                              placeholder="COLLEGE BRANCH YEAR AND SECTION"
-                              placeholderTextColor="#94a3b8"
-                              autoCapitalize="characters"
-                            />
+                            <View>
+                              <TextInput
+                                style={[styles.input, fieldErrors.branchYearSec && styles.inputError]}
+                                value={pBranchYearSec}
+                                onChangeText={(val) => {
+                                  const sanitized = sanitizeSpaceCollapsedInput(val);
+                                  setPBranchYearSec(sanitized);
+                                  const res = validateStudyBranchOrClass(sanitized, 'COLLEGE');
+                                  setFieldErrors((prev) => ({ ...prev, branchYearSec: res.isValid ? undefined : res.error }));
+                                }}
+                                onBlur={() => {
+                                  const normalized = normalizeSpaces(pBranchYearSec);
+                                  if (normalized !== pBranchYearSec) setPBranchYearSec(normalized);
+                                  const res = validateStudyBranchOrClass(normalized, 'COLLEGE');
+                                  setFieldErrors((prev) => ({ ...prev, branchYearSec: res.isValid ? undefined : res.error }));
+                                }}
+                                onKeyPress={(e) => preventLeadingSpaceKey(e, pBranchYearSec)}
+                                placeholder="e.g. B.Sc Computer Science - III Year - A"
+                                placeholderTextColor="#94a3b8"
+                                autoCapitalize="words"
+                              />
+                              {fieldErrors.branchYearSec ? <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.branchYearSec}</Text> : null}
+                            </View>
                           ) : (
-                            <TextInput
-                              style={styles.input}
-                              value={pClassSection}
-                              onChangeText={(val) => setPClassSection(val.replace(/\t/g, '').replace(/[^a-zA-Z ]/g, '').toUpperCase())}
-                              placeholder="SCHOOL CLASS AND SECTION"
-                              placeholderTextColor="#94a3b8"
-                              autoCapitalize="characters"
-                            />
+                            <View>
+                              <TextInput
+                                style={[styles.input, fieldErrors.classSection && styles.inputError]}
+                                value={pClassSection}
+                                onChangeText={(val) => {
+                                  const sanitized = sanitizeSpaceCollapsedInput(val);
+                                  setPClassSection(sanitized);
+                                  const res = validateStudyBranchOrClass(sanitized, 'SCHOOL');
+                                  setFieldErrors((prev) => ({ ...prev, classSection: res.isValid ? undefined : res.error }));
+                                }}
+                                onBlur={() => {
+                                  const normalized = normalizeSpaces(pClassSection);
+                                  if (normalized !== pClassSection) setPClassSection(normalized);
+                                  const res = validateStudyBranchOrClass(normalized, 'SCHOOL');
+                                  setFieldErrors((prev) => ({ ...prev, classSection: res.isValid ? undefined : res.error }));
+                                }}
+                                onKeyPress={(e) => preventLeadingSpaceKey(e, pClassSection)}
+                                placeholder="e.g. 10th Standard - A Section"
+                                placeholderTextColor="#94a3b8"
+                                autoCapitalize="words"
+                              />
+                              {fieldErrors.classSection ? <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.classSection}</Text> : null}
+                            </View>
                           )}
                         </View>
                       )}
 
                       {pOccupationType === 'WORKING' && (
-                        <TextInput
-                          style={styles.input}
-                          value={pWorkingInstitution}
-                          onChangeText={(val) => setPWorkingInstitution(val.replace(/\t/g, '').replace(/[^a-zA-Z ]/g, '').toUpperCase())}
-                          placeholder="NAME OF INSTITUTION OR BANK OR GOVT OFFICE"
-                          placeholderTextColor="#94a3b8"
-                          autoCapitalize="characters"
-                        />
+                        <View>
+                          <TextInput
+                            style={[styles.input, fieldErrors.workingInstitution && styles.inputError]}
+                            value={pWorkingInstitution}
+                            onChangeText={(val) => {
+                              const sanitized = sanitizeSpaceCollapsedInput(val);
+                              setPWorkingInstitution(sanitized);
+                              const res = validateWorkingInstitution(sanitized);
+                              setFieldErrors((prev) => ({ ...prev, workingInstitution: res.isValid ? undefined : res.error }));
+                            }}
+                            onBlur={() => {
+                              const normalized = normalizeSpaces(pWorkingInstitution);
+                              if (normalized !== pWorkingInstitution) setPWorkingInstitution(normalized);
+                              const res = validateWorkingInstitution(normalized);
+                              setFieldErrors((prev) => ({ ...prev, workingInstitution: res.isValid ? undefined : res.error }));
+                            }}
+                            onKeyPress={(e) => preventLeadingSpaceKey(e, pWorkingInstitution)}
+                            placeholder="NAME OF INSTITUTION OR BANK OR GOVT OFFICE *"
+                            placeholderTextColor="#94a3b8"
+                            autoCapitalize="words"
+                          />
+                          {fieldErrors.workingInstitution ? <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.workingInstitution}</Text> : null}
+                        </View>
                       )}
                     </View>
 
@@ -2819,28 +3008,46 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
 
                     <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.label}>Declaration Place</Text>
+                        <Text style={styles.label}>Declaration Place *</Text>
                         <TextInput
-                          style={styles.input}
+                          style={[styles.input, fieldErrors.declarationPlace && styles.inputError]}
                           value={pDeclarationPlace}
-                          onChangeText={(val) => setPDeclarationPlace(val.replace(/\t/g, '').replace(/[^a-zA-Z ]/g, '').toUpperCase())}
-                          placeholder="VIRUDHUNAGAR"
+                          onChangeText={(val) => {
+                            const sanitized = sanitizeSpaceCollapsedInput(val);
+                            setPDeclarationPlace(sanitized);
+                            const res = validateDeclarationPlace(sanitized);
+                            setFieldErrors((prev) => ({ ...prev, declarationPlace: res.isValid ? undefined : res.error }));
+                          }}
+                          onBlur={() => {
+                            const normalized = normalizeSpaces(pDeclarationPlace);
+                            if (normalized !== pDeclarationPlace) setPDeclarationPlace(normalized);
+                            const res = validateDeclarationPlace(normalized);
+                            setFieldErrors((prev) => ({ ...prev, declarationPlace: res.isValid ? undefined : res.error }));
+                          }}
+                          onKeyPress={(e) => preventLeadingSpaceKey(e, pDeclarationPlace)}
+                          placeholder="Virudhunagar"
                           placeholderTextColor="#94a3b8"
-                          autoCapitalize="characters"
+                          autoCapitalize="words"
                         />
+                        {fieldErrors.declarationPlace ? <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.declarationPlace}</Text> : null}
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.label}>Declaration Date</Text>
+                        <Text style={styles.label}>Declaration Date *</Text>
                         <TouchableOpacity
                           onPress={() => setCalendarTarget('DECLARATION')}
                           activeOpacity={0.8}
-                          style={[styles.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                          style={[
+                            styles.input,
+                            { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+                            fieldErrors.declarationDate && styles.inputError
+                          ]}
                         >
                           <Text style={{ fontSize: 13.5, color: pDeclarationDate ? '#0f172a' : '#94a3b8', fontWeight: pDeclarationDate ? '700' : '400' }}>
-                            {pDeclarationDate || 'Select Declaration Date'}
+                            {pDeclarationDate || 'Select Declaration Date (YYYY-MM-DD)'}
                           </Text>
                           <FontAwesome name="calendar" size={15} color="#0f2452" />
                         </TouchableOpacity>
+                        {fieldErrors.declarationDate ? <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.declarationDate}</Text> : null}
                       </View>
                     </View>
                   </View>
@@ -2848,7 +3055,7 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                   <CalendarPickerModal
                     visible={calendarTarget !== null}
                     title={calendarTarget === 'DOB' ? 'Select Date of Birth (Min Age 5+)' : 'Select Declaration Date'}
-                    value={calendarTarget === 'DOB' ? pDob : pDeclarationDate}
+                    value={calendarTarget === 'DOB' ? pDob : yyyyMmDdToDdMmYyyy(pDeclarationDate)}
                     showToday={calendarTarget !== 'DOB'}
                     maxDate={
                       calendarTarget === 'DOB'
@@ -2870,7 +3077,10 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                         }
                         setFieldErrors((prev) => ({ ...prev, dob: undefined }));
                       } else if (calendarTarget === 'DECLARATION') {
-                        setPDeclarationDate(ddmmyyyy);
+                        const isoDate = ddmmyyyyToYyyyMmDd(ddmmyyyy);
+                        setPDeclarationDate(isoDate);
+                        const res = validateDeclarationDate(isoDate);
+                        setFieldErrors((prev) => ({ ...prev, declarationDate: res.isValid ? undefined : res.error }));
                       }
                     }}
                   />
@@ -2948,7 +3158,7 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                         style={[styles.input, fieldErrors.teamName && styles.inputError]}
                         value={teamName}
                         onChangeText={(val) => {
-                          const sanitized = val.replace(/[^a-zA-Z0-9_\s]/g, '');
+                          const sanitized = val.replace(/[^a-zA-Z0-9_\s]/g, '').replace(/^\s+/, '');
                           setTeamName(sanitized);
                           const err = validateTeamNameValue(sanitized, 'Team Name');
                           setFieldErrors((prev) => ({ ...prev, teamName: err || undefined }));
@@ -2966,12 +3176,12 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                         style={[styles.input, fieldErrors.name && styles.inputError]}
                         value={coachName}
                         onChangeText={(val) => {
-                          const sanitized = val.replace(/[^a-zA-Z\s]/g, '');
+                          const sanitized = val.replace(/[^a-zA-Z.\s]/g, '').replace(/^\s+/, '').toUpperCase();
                           setCoachName(sanitized);
                           const err = validateNameValue(sanitized, 'Coach Name');
                           setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
                         }}
-                        placeholder="e.g. Murugan"
+                        placeholder="e.g. M. THIRUKUMARAN"
                         placeholderTextColor="#94a3b8"
                       />
                       {fieldErrors.name && (
@@ -2988,7 +3198,7 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                         style={[styles.input, fieldErrors.email && styles.inputError]}
                         value={coachEmail}
                         onChangeText={(val) => {
-                          const sanitized = val.replace(/[^a-zA-Z0-9_.@]/g, '');
+                          const sanitized = val.replace(/\s+/g, '').replace(/[^a-zA-Z0-9_.@+-]/g, '').toLowerCase();
                           setCoachEmail(sanitized);
                           if (isEmailVerified) {
                             setIsEmailVerified(false);
@@ -3003,7 +3213,8 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                             setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
                           }
                         }}
-                        placeholder="e.g. coach@strikerscc.org"
+                        placeholder="e.g. thirukumaran18102006@gmail.com"
+                        onKeyPress={preventSpaceKey}
                         keyboardType="email-address"
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="none"
@@ -3198,7 +3409,7 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                           style={[styles.input, { marginBottom: 0 }, fieldErrors.squadPlayerName && styles.inputError]}
                           value={squadPlayerName}
                           onChangeText={(val) => {
-                            const sanitized = val.replace(/[^a-zA-Z\s]/g, '');
+                            const sanitized = val.replace(/[^a-zA-Z.\s]/g, '').replace(/^\s+/, '').toUpperCase();
                             setSquadPlayerName(sanitized);
                             const err = validateNameValue(sanitized, 'Squad Player Name');
                             setFieldErrors((prev) => ({ ...prev, squadPlayerName: err || undefined }));
@@ -3215,7 +3426,7 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                           style={[styles.input, { marginBottom: 0 }, fieldErrors.squadPlayerEmail && styles.inputError]}
                           value={squadPlayerEmail}
                           onChangeText={(val) => {
-                            const sanitized = val.replace(/[^a-zA-Z0-9_.@]/g, '');
+                            const sanitized = val.replace(/\s+/g, '').replace(/[^a-zA-Z0-9_.@+-]/g, '').toLowerCase();
                             setSquadPlayerEmail(sanitized);
                             const err = validateEmailOnType(sanitized, 'Squad Player Email');
                             setFieldErrors((prev) => ({ ...prev, squadPlayerEmail: err }));
@@ -3227,6 +3438,7 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                             }
                           }}
                           placeholder="Player Email Address *"
+                          onKeyPress={preventSpaceKey}
                           keyboardType="email-address"
                           placeholderTextColor="#94a3b8"
                           autoCapitalize="none"
@@ -3440,12 +3652,12 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                         style={[styles.input, fieldErrors.name && styles.inputError]}
                         value={sName}
                         onChangeText={(val) => {
-                          const sanitized = val.replace(/[^a-zA-Z\s]/g, '');
+                          const sanitized = val.replace(/[^a-zA-Z.\s]/g, '').replace(/^\s+/, '').toUpperCase();
                           setSName(sanitized);
                           const err = validateNameValue(sanitized, 'Scorer Name');
                           setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
                         }}
-                        placeholder="e.g. Ramesh"
+                        placeholder="e.g. M. Athi Lingam"
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="words"
                       />
@@ -3458,13 +3670,35 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                       <TextInput
                         style={[styles.input, fieldErrors.mobile && styles.inputError]}
                         value={sMobile}
+                        onKeyPress={preventNonDigitKey}
+                        onChange={(e: any) => {
+                          if (Platform.OS === 'web' && e?.target && typeof e.target.value === 'string') {
+                            const cleanedDom = formatPhone(e.target.value);
+                            if (e.target.value !== cleanedDom) {
+                              e.target.value = cleanedDom;
+                            }
+                          }
+                        }}
                         onChangeText={(val) => {
-                          setSMobile(val);
-                          const err = validateMobileValue(val);
-                          setFieldErrors((prev) => ({ ...prev, mobile: err || undefined }));
+                          const cleaned = formatPhone(val);
+                          setSMobile(cleaned);
+                          if (cleaned.length > 0 && !/^[6-9]/.test(cleaned)) {
+                            setFieldErrors((prev) => ({ ...prev, mobile: 'Indian mobile number must start with 6, 7, 8, or 9.' }));
+                          } else if (cleaned.length === 10) {
+                            const res = validatePhone(cleaned, 'Mobile Number');
+                            setFieldErrors((prev) => ({ ...prev, mobile: res.isValid ? undefined : res.error }));
+                          } else if (/[^0-9]/.test(val)) {
+                            setFieldErrors((prev) => ({ ...prev, mobile: 'Mobile number must contain digits only (0-9).' }));
+                          } else {
+                            setFieldErrors((prev) => ({ ...prev, mobile: undefined }));
+                          }
+                        }}
+                        onBlur={() => {
+                          const res = validatePhone(sMobile, 'Mobile Number');
+                          setFieldErrors((prev) => ({ ...prev, mobile: res.isValid ? undefined : res.error }));
                         }}
                         placeholder="e.g. 9876543210"
-                        keyboardType="phone-pad"
+                        keyboardType="number-pad"
                         placeholderTextColor="#94a3b8"
                         maxLength={10}
                       />
@@ -3482,7 +3716,7 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                         style={[styles.input, fieldErrors.email && styles.inputError]}
                         value={sEmail}
                         onChangeText={(val) => {
-                          const sanitized = val.replace(/[^a-zA-Z0-9_.@]/g, '');
+                          const sanitized = val.replace(/\s+/g, '').replace(/[^a-zA-Z0-9_.@+-]/g, '').toLowerCase();
                           setSEmail(sanitized);
                           if (isEmailVerified) {
                             setIsEmailVerified(false);
@@ -3497,7 +3731,8 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                             setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
                           }
                         }}
-                        placeholder="e.g. ramesh.scorer@cfvd.org"
+                        placeholder="e.g. athilingam3336@gmail.com"
+                        onKeyPress={preventSpaceKey}
                         keyboardType="email-address"
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="none"
@@ -3624,7 +3859,7 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                         style={[styles.input, fieldErrors.name && styles.inputError]}
                         value={uName}
                         onChangeText={(val) => {
-                          const sanitized = val.replace(/[^a-zA-Z\s]/g, '');
+                          const sanitized = val.replace(/[^a-zA-Z.\s]/g, '').replace(/^\s+/, '').toUpperCase();
                           setUName(sanitized);
                           const err = validateNameValue(sanitized, 'Umpire Name');
                           setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
@@ -3642,13 +3877,35 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                       <TextInput
                         style={[styles.input, fieldErrors.mobile && styles.inputError]}
                         value={uMobile}
+                        onKeyPress={preventNonDigitKey}
+                        onChange={(e: any) => {
+                          if (Platform.OS === 'web' && e?.target && typeof e.target.value === 'string') {
+                            const cleanedDom = formatPhone(e.target.value);
+                            if (e.target.value !== cleanedDom) {
+                              e.target.value = cleanedDom;
+                            }
+                          }
+                        }}
                         onChangeText={(val) => {
-                          setUMobile(val);
-                          const err = validateMobileValue(val);
-                          setFieldErrors((prev) => ({ ...prev, mobile: err || undefined }));
+                          const cleaned = formatPhone(val);
+                          setUMobile(cleaned);
+                          if (cleaned.length > 0 && !/^[6-9]/.test(cleaned)) {
+                            setFieldErrors((prev) => ({ ...prev, mobile: 'Indian mobile number must start with 6, 7, 8, or 9.' }));
+                          } else if (cleaned.length === 10) {
+                            const res = validatePhone(cleaned, 'Mobile Number');
+                            setFieldErrors((prev) => ({ ...prev, mobile: res.isValid ? undefined : res.error }));
+                          } else if (/[^0-9]/.test(val)) {
+                            setFieldErrors((prev) => ({ ...prev, mobile: 'Mobile number must contain digits only (0-9).' }));
+                          } else {
+                            setFieldErrors((prev) => ({ ...prev, mobile: undefined }));
+                          }
+                        }}
+                        onBlur={() => {
+                          const res = validatePhone(uMobile, 'Mobile Number');
+                          setFieldErrors((prev) => ({ ...prev, mobile: res.isValid ? undefined : res.error }));
                         }}
                         placeholder="e.g. 9876543210"
-                        keyboardType="phone-pad"
+                        keyboardType="number-pad"
                         placeholderTextColor="#94a3b8"
                         maxLength={10}
                       />
@@ -3666,7 +3923,7 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                         style={[styles.input, fieldErrors.email && styles.inputError]}
                         value={uEmail}
                         onChangeText={(val) => {
-                          const sanitized = val.replace(/[^a-zA-Z0-9_.@]/g, '');
+                          const sanitized = val.replace(/\s+/g, '').replace(/[^a-zA-Z0-9_.@+-]/g, '').toLowerCase();
                           setUEmail(sanitized);
                           if (isEmailVerified) {
                             setIsEmailVerified(false);
@@ -3682,6 +3939,7 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                           }
                         }}
                         placeholder="e.g. sundararajan.umpire@cfvd.org"
+                        onKeyPress={preventSpaceKey}
                         keyboardType="email-address"
                         placeholderTextColor="#94a3b8"
                         autoCapitalize="none"
@@ -4017,12 +4275,13 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                           style={styles.popupEmailInput}
                           value={popupEmail}
                           onChangeText={(val) => {
-                            const sanitized = val.replace(/[^a-zA-Z0-9_.@]/g, '');
+                            const sanitized = val.replace(/\s+/g, '').replace(/[^a-zA-Z0-9_.@+-]/g, '').toLowerCase();
                             setPopupEmail(sanitized);
                             setTargetEmail(sanitized);
                           }}
                           placeholder="your.email@example.com"
                           placeholderTextColor="#94a3b8"
+                          onKeyPress={preventSpaceKey}
                           keyboardType="email-address"
                           autoCapitalize="none"
                         />
@@ -4146,12 +4405,13 @@ export default function RegistrationScreen({ onExit, adminMode = false, initialR
                           style={styles.popupEmailInput}
                           value={popupEmail}
                           onChangeText={(val) => {
-                            const sanitized = val.replace(/[^a-zA-Z0-9_.@]/g, '');
+                            const sanitized = val.replace(/\s+/g, '').replace(/[^a-zA-Z0-9_.@+-]/g, '').toLowerCase();
                             setPopupEmail(sanitized);
                             setTargetEmail(sanitized);
                           }}
                           placeholder="your.email@example.com"
                           placeholderTextColor="#94a3b8"
+                          onKeyPress={preventSpaceKey}
                           keyboardType="email-address"
                           autoCapitalize="none"
                         />

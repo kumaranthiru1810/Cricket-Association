@@ -110,8 +110,8 @@ class AuthController {
   // Pre-Registration check if Team, Player, Scorer, Umpire or User already exists
   async checkRegistrationExists(req, res) {
     try {
-      const { role, email, name, teamName } = req.body;
-      const result = await authService.checkRegistrationExists({ role, email, name, teamName });
+      const { role, email, name, teamName, mobile, phone } = req.body;
+      const result = await authService.checkRegistrationExists({ role, email, name, teamName, mobile, phone });
       res.status(200).json({ success: true, ...result });
     } catch (err) {
       const status = err.status || 500;

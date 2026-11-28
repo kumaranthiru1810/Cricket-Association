@@ -3,6 +3,7 @@
  * Handles OTP issuance, verification, and password reset flows for all roles.
  */
 
+const mongoose = require('mongoose');
 const userModel = require('../../models/userModel');
 const teamRegistrationModel = require('../../models/teamRegistrationModel');
 const scorerModel = require('../../models/scorerModel');
@@ -10,10 +11,22 @@ const otpService = require('../otpService');
 const { sendOtpEmail } = require('../../config/mailer');
 const db = require('../../config/db');
 
-// In-memory registration OTP cache: email -> { otp, hash, expiresAt, name, role, verified }
-const registrationOtpMap = new Map();
+// MongoDB-backed OTP store (survives restarts & works across multiple instances)
+const PendingOtpSchema = new mongoose.Schema({
+  email: { type: String, required: true, lowercase: true, trim: true },
+  purpose: { type: String, enum: ['REGISTRATION', 'PASSWORD_RESET'], required: true },
+  hash: { type: String, required: true },
+  expiresAt: { type: Date, required: true, index: { expires: 0 } },
+  name: { type: String, default: '' },
+  role: { type: String, default: 'USER' },
+  attempts: { type: Number, default: 0 },
+  verified: { type: Boolean, default: false }
+}, { timestamps: true });
+PendingOtpSchema.index({ email: 1, purpose: 1 }, { unique: true });
+const PendingOtp = mongoose.models.PendingOtp || mongoose.model('PendingOtp', PendingOtpSchema);
 
-// In-memory password reset OTP cache: email -> { otp, hash, expiresAt, name, role, verified }
+// In-memory sync cache for legacy synchronous callers (e.g. getRegistrationOtpMap)
+const registrationOtpMap = new Map();
 const forgotPasswordOtpMap = new Map();
 
 class PasswordResetAuth {
@@ -55,13 +68,22 @@ class PasswordResetAuth {
     const otpHash = otpService.hashOtp(rawOtp);
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    registrationOtpMap.set(cleanEmail, {
+    const otpEntry = {
       hash: otpHash,
       expiresAt,
       name: name || 'Applicant',
       role: role || 'USER',
+      attempts: 0,
       verified: false
-    });
+    };
+    registrationOtpMap.set(cleanEmail, otpEntry);
+    try {
+      await PendingOtp.findOneAndUpdate(
+        { email: cleanEmail, purpose: 'REGISTRATION' },
+        { $set: { ...otpEntry, email: cleanEmail, purpose: 'REGISTRATION' } },
+        { upsert: true, returnDocument: 'after' }
+      );
+    } catch (_e) {}
 
     const emailResult = await sendOtpEmail({
       toEmail: cleanEmail,
@@ -98,7 +120,12 @@ class PasswordResetAuth {
 
     const cleanEmail = email.trim().toLowerCase();
     const cleanOtp = String(otp).trim();
-    const record = registrationOtpMap.get(cleanEmail);
+    await db.initDb();
+    let dbRecord = null;
+    try {
+      dbRecord = await PendingOtp.findOne({ email: cleanEmail, purpose: 'REGISTRATION' }).lean();
+    } catch (_e) {}
+    const record = dbRecord || registrationOtpMap.get(cleanEmail);
 
     if (!record) {
       throw {
@@ -109,22 +136,48 @@ class PasswordResetAuth {
 
     if (new Date() > new Date(record.expiresAt)) {
       registrationOtpMap.delete(cleanEmail);
+      try { await PendingOtp.deleteOne({ email: cleanEmail, purpose: 'REGISTRATION' }); } catch (_e) {}
       throw { status: 400, message: 'Verification code has expired. Please request a new code.' };
     }
 
-    record.attempts = (record.attempts || 0) + 1;
-    if (record.attempts > 5) {
+    if (Number(record.attempts || 0) >= 5) {
       registrationOtpMap.delete(cleanEmail);
+      try { await PendingOtp.deleteOne({ email: cleanEmail, purpose: 'REGISTRATION' }); } catch (_e) {}
       throw { status: 429, message: 'Too many invalid OTP attempts. Please request a new code.' };
     }
 
     const isMatch = otpService.verifyOtpCode(cleanOtp, record.hash);
     if (!isMatch) {
-      if (record.attempts >= 5) registrationOtpMap.delete(cleanEmail);
+      let nextAttempts = (record.attempts || 0) + 1;
+      try {
+        const incDoc = await PendingOtp.findOneAndUpdate(
+          { email: cleanEmail, purpose: 'REGISTRATION' },
+          { $inc: { attempts: 1 } },
+          { returnDocument: 'after' }
+        ).lean();
+        if (incDoc) nextAttempts = incDoc.attempts;
+      } catch (_e) {}
+      if (registrationOtpMap.has(cleanEmail)) {
+        registrationOtpMap.get(cleanEmail).attempts = nextAttempts;
+      }
+      if (nextAttempts >= 5) {
+        registrationOtpMap.delete(cleanEmail);
+        try { await PendingOtp.deleteOne({ email: cleanEmail, purpose: 'REGISTRATION' }); } catch (_e) {}
+      }
       throw { status: 400, message: 'Invalid verification code. Please check your email and try again.' };
     }
 
-    record.verified = true;
+    try {
+      await PendingOtp.updateOne(
+        { email: cleanEmail, purpose: 'REGISTRATION' },
+        { $set: { verified: true } }
+      );
+    } catch (_e) {}
+    if (registrationOtpMap.has(cleanEmail)) {
+      registrationOtpMap.get(cleanEmail).verified = true;
+    } else {
+      registrationOtpMap.set(cleanEmail, { ...record, verified: true });
+    }
 
     return {
       success: true,
@@ -197,18 +250,27 @@ class PasswordResetAuth {
       };
     }
 
-    // 2. Generate 4-digit OTP
-    const rawOtp = otpService.generate4DigitOtpCode();
+    // 2. Generate 6-digit OTP
+    const rawOtp = otpService.generateOtpCode();
     const otpHash = otpService.hashOtp(rawOtp);
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    forgotPasswordOtpMap.set(cleanEmail, {
+    const resetEntry = {
       hash: otpHash,
       expiresAt,
       name: user.name || 'Member',
       role: user.role || role || 'USER',
+      attempts: 0,
       verified: false
-    });
+    };
+    forgotPasswordOtpMap.set(cleanEmail, resetEntry);
+    try {
+      await PendingOtp.findOneAndUpdate(
+        { email: cleanEmail, purpose: 'PASSWORD_RESET' },
+        { $set: { ...resetEntry, email: cleanEmail, purpose: 'PASSWORD_RESET' } },
+        { upsert: true, returnDocument: 'after' }
+      );
+    } catch (_e) {}
 
     try {
       await userModel.updateOtp(cleanEmail, {
@@ -244,11 +306,11 @@ class PasswordResetAuth {
   }
 
   /**
-   * Step 2: Verify 4-digit OTP for Password Reset
+   * Step 2: Verify 6-digit OTP for Password Reset
    */
   async verifyForgotPasswordOtp(email, otp) {
     if (!email || !otp) {
-      throw { status: 400, message: 'Email address and 4-digit OTP code are required.' };
+      throw { status: 400, message: 'Email address and 6-digit OTP code are required.' };
     }
 
     const cleanEmail = email.trim().toLowerCase();
@@ -286,11 +348,17 @@ class PasswordResetAuth {
       }
       isMatch = otpService.verifyOtpCode(cleanOtp, dbUser.otp_hash);
       if (!isMatch) {
-        const nextAttempts = attempts + 1;
-        await db.models.User.updateOne(
+        const incUser = await db.models.User.findOneAndUpdate(
           { email: cleanEmail },
-          { $set: nextAttempts >= 5 ? { otp_attempts: nextAttempts, otp_hash: null, otp_expires_at: null } : { otp_attempts: nextAttempts } }
-        );
+          { $inc: { otp_attempts: 1 } },
+          { returnDocument: 'after' }
+        ).lean();
+        if ((incUser?.otp_attempts || 0) >= 5) {
+          await db.models.User.updateOne(
+            { email: cleanEmail },
+            { $set: { otp_hash: null, otp_expires_at: null } }
+          );
+        }
       }
     }
 

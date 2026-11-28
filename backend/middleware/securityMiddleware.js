@@ -80,6 +80,19 @@ const authRateLimiter = rateLimit({
   }
 });
 
+function extractAccountIdentifier(req) {
+  return String(
+    req.body?.email ||
+    req.body?.coachEmail ||
+    req.body?.playerName ||
+    req.body?.nameOrEmail ||
+    req.body?.emailOrPhone ||
+    req.body?.input ||
+    req.body?.name ||
+    ''
+  ).trim().toLowerCase();
+}
+
 // Strict OTP Request & Verification Rate Limiter (max 5 per 15 min per IP+account)
 const otpRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -88,8 +101,8 @@ const otpRateLimiter = rateLimit({
   legacyHeaders: false,
   skip: (req) => req.method === 'OPTIONS',
   keyGenerator: (req) => {
-    const email = String(req.body?.email || req.body?.coachEmail || '').trim().toLowerCase();
-    return `${ipKeyGenerator(req.ip)}:${email}`;
+    const account = extractAccountIdentifier(req);
+    return `${ipKeyGenerator(req.ip)}:${account}`;
   },
   message: {
     success: false,
@@ -120,8 +133,8 @@ const otpEmailRateLimiter = rateLimit({
   legacyHeaders: false,
   skip: (req) => req.method === 'OPTIONS',
   keyGenerator: (req) => {
-    const email = String(req.body?.email || req.body?.coachEmail || '').trim().toLowerCase();
-    return email ? `email:${email}` : `ip:${ipKeyGenerator(req.ip)}`;
+    const account = extractAccountIdentifier(req);
+    return account ? `email:${account}` : `ip:${ipKeyGenerator(req.ip)}`;
   },
   message: {
     success: false,
@@ -139,7 +152,7 @@ function otpResendCooldown(req, res, next) {
   if (env.isDevelopment && process.env.ENFORCE_OTP_LIMITS !== 'true') {
     return next();
   }
-  const email = String(req.body?.email || req.body?.coachEmail || '').trim().toLowerCase();
+  const email = extractAccountIdentifier(req);
   if (!email) return next();
 
   const now = Date.now();

@@ -21,6 +21,7 @@ import { useAdminAuth } from '../context/AdminAuthContext';
 import { adminApi, setStoredAdminToken, setStoredAdminUser, getStoredAdminToken, getStoredAdminUser } from '../services/adminApi';
 import { setAuthToken, setCurrentUser } from '../../services/api';
 import { showSuccess, showError, showWarning } from '../../utils/sweetalert';
+import { preventSpaceKey } from '../../utils/validation';
 import ForgotPasswordModal from '../../components/auth/ForgotPasswordModal';
 
 export interface Props {
@@ -176,9 +177,10 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
               <TextInput
                 style={styles.input}
                 value={email}
-                onChangeText={setEmail}
-                placeholder="e.g. admin@yourdomain.com"
+                onChangeText={(text) => setEmail(text.replace(/\s+/g, '').toLowerCase())}
+                placeholder="e.g. mathan33msd@gmail.com"
                 placeholderTextColor="#64748b"
+                onKeyPress={preventSpaceKey}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 editable={!loading}
@@ -195,7 +197,7 @@ export const AdminLoginPage: React.FC<Props> = ({ onLoginSuccess, onBackToHome, 
               <TextInput
                 style={styles.input}
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(text) => setPassword(text.replace(/^\s+/, ''))}
                 secureTextEntry={!showPassword}
                 placeholder="Enter administrator password"
                 placeholderTextColor="#64748b"

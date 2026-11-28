@@ -3378,20 +3378,23 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                         <View style={{ marginTop: 10 }}>
                           <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>🏏 Leading Run Scorer:</Text>
-                            <Text style={styles.detailValueBold}>R. Saravanan (342 runs, Avg 48.8)</Text>
+                            <Text style={styles.detailValueBold}>—</Text>
                           </View>
                           <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>⚡ Leading Wicket Taker:</Text>
-                            <Text style={styles.detailValueBold}>K. Vimal (16 wkts, Eco 6.2)</Text>
+                            <Text style={styles.detailValueBold}>—</Text>
                           </View>
                           <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>🌟 Best All-Rounder:</Text>
-                            <Text style={styles.detailValueBold}>M. Karthi (218 runs, 9 wkts)</Text>
+                            <Text style={styles.detailValueBold}>—</Text>
                           </View>
                           <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>🧤 Most Dismissals:</Text>
-                            <Text style={styles.detailValueBold}>T. Dinesh (11 catches, 3 stumpings)</Text>
+                            <Text style={styles.detailValueBold}>—</Text>
                           </View>
+                          <Text style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}>
+                            No completed match statistics recorded yet.
+                          </Text>
                         </View>
                       ) : (
                         playerStats.map((p, idx) => (

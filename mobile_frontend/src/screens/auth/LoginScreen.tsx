@@ -15,7 +15,7 @@ import {
 import { useAppNavigation } from '../../navigation/AppNavigator';
 import { ScorerApi, setAuthToken, setCurrentUser } from '../../services/api';
 import { showSuccess, showError, showWarning } from '../../utils/sweetalert';
-import { validateEmail } from '../../utils/validation';
+import { validateEmail, preventLeadingSpaceKey } from '../../utils/validation';
 import ForgotPasswordModal from '../../components/auth/ForgotPasswordModal';
 import FindTeamModal from '../../components/auth/FindTeamModal';
 import EmailDomainSuggestions from '../../components/common/EmailDomainSuggestions';
@@ -309,21 +309,20 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
               ]}
               value={emailOrUser}
               onChangeText={(text) => {
-                setEmailOrUser(text);
+                setEmailOrUser(text.replace(/^\s+/, '').toLowerCase());
                 if (fieldErrors.identifier) {
                   setFieldErrors((prev) => ({ ...prev, identifier: undefined }));
                 }
               }}
               placeholder={
-                activeRole === 'PLAYER'
-                  ? 'e.g. saravanan.r@strikerscc.org'
+                activeRole === 'PLAYER' || activeRole === 'SCORER'
+                  ? 'e.g. athilingam3336@gmail.com'
                   : activeRole === 'TEAM'
-                    ? 'e.g. kannan.coach@strikerscc.org'
-                    : activeRole === 'SCORER'
-                      ? 'e.g. ramesh@gmail.com'
-                      : 'e.g. sundaram.umpire@cfvd.org'
+                    ? 'e.g. thirukumaran18102006@gmail.com'
+                    : 'e.g. ponramanan21@gmail.com'
               }
               placeholderTextColor="#94a3b8"
+              onKeyPress={(e) => preventLeadingSpaceKey(e, emailOrUser)}
               keyboardType="email-address"
               autoComplete="email"
               autoCapitalize="none"
@@ -365,7 +364,7 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
                     style={styles.passwordInput}
                     value={password}
                     onChangeText={(text) => {
-                      setPassword(text);
+                      setPassword(text.replace(/^\s+/, ''));
                       if (fieldErrors.password) {
                         setFieldErrors((prev) => ({ ...prev, password: undefined }));
                       }

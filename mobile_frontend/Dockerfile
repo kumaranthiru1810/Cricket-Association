@@ -12,8 +12,10 @@ RUN npm ci
 COPY . .
 
 # Build production web bundle
+ARG EXPO_PUBLIC_TURNSTILE_SITE_KEY=""
 ENV CI=true \
-    NODE_ENV=production
+    NODE_ENV=production \
+    EXPO_PUBLIC_TURNSTILE_SITE_KEY=$EXPO_PUBLIC_TURNSTILE_SITE_KEY
 RUN npx expo export -p web
 
 # Runner stage: Production Nginx web server
@@ -26,6 +28,6 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 80 443
 
 HEALTHCHECK --interval=20s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:80/ || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:80/nginx-health || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

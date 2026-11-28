@@ -6,6 +6,19 @@
  */
 
 const { z } = require('zod');
+const { normalizeAddress, validateAddress } = require('../utils/addressValidation');
+const {
+  normalizeSpaces,
+  validatePersonName,
+  validateClubOrAcademyName,
+  validateStudyingInstitution,
+  validateStudyLevel,
+  validateStudyBranchOrClass,
+  validateWorkingInstitution,
+  validateDeclarationDate,
+  validateDeclarationPlace,
+  validateIndianMobile
+} = require('../utils/playerDetailsValidation');
 
 /**
  * Higher-order middleware to validate request bodies against a Zod schema.
@@ -134,7 +147,18 @@ const scorerRegistrationSchema = z.object({
 }).passthrough();
 
 const playerRegistrationSchema = z.object({
-  name: z.string().min(1, 'Player full name is required.').max(100),
+  name: z.any().superRefine((val, ctx) => {
+    const res = validatePersonName(val, 'Player Full Name');
+    if (!res.isValid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: res.error });
+    }
+  }).transform((val) => normalizeSpaces(val)),
+  fatherName: z.any().superRefine((val, ctx) => {
+    const res = validatePersonName(val, 'Father Name');
+    if (!res.isValid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: res.error });
+    }
+  }).transform((val) => normalizeSpaces(val)),
   email: z.string().email('Valid email address is required.').max(100),
   mobile: z.string().max(25).optional(),
   phone: z.string().max(25).optional(),
@@ -146,7 +170,65 @@ const playerRegistrationSchema = z.object({
   taluk: z.string().max(100).optional(),
   battingStyle: z.string().max(50).optional(),
   bowlingStyle: z.string().max(50).optional(),
-  clubChoice: z.string().max(100).optional()
+  clubChoice: z.any().superRefine((val, ctx) => {
+    const res = validateClubOrAcademyName(val);
+    if (!res.isValid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: res.error });
+    }
+  }).transform((val) => normalizeSpaces(val)),
+  address: z.any().superRefine((val, ctx) => {
+    const res = validateAddress(val);
+    if (!res.isValid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: res.error
+      });
+    }
+  }).transform((val) => normalizeAddress(val)),
+  declarationPlace: z.any().superRefine((val, ctx) => {
+    const res = validateDeclarationPlace(val);
+    if (!res.isValid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: res.error });
+    }
+  }).transform((val) => normalizeSpaces(val)),
+  declarationDate: z.any().superRefine((val, ctx) => {
+    const res = validateDeclarationDate(val);
+    if (!res.isValid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: res.error });
+    }
+  }).transform((val) => String(val || '').trim())
+}).superRefine((data, ctx) => {
+  const rawMobile = data.mobile !== undefined ? data.mobile : data.phone;
+  const mobileRes = validateIndianMobile(rawMobile);
+  if (!mobileRes.isValid) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['mobile'], message: mobileRes.error });
+  }
+  const occ = String(data.occupationType || '').trim().toUpperCase();
+  if (occ === 'STUDYING') {
+    const instRes = validateStudyingInstitution(data.studyingInstitution);
+    if (!instRes.isValid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['studyingInstitution'], message: instRes.error });
+    }
+    const lvlRes = validateStudyLevel(data.studyLevel);
+    if (!lvlRes.isValid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['studyLevel'], message: lvlRes.error });
+    } else if (lvlRes.normalized === 'COLLEGE') {
+      const brRes = validateStudyBranchOrClass(data.branchYearSec, 'COLLEGE');
+      if (!brRes.isValid) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['branchYearSec'], message: brRes.error });
+      }
+    } else if (lvlRes.normalized === 'SCHOOL') {
+      const clsRes = validateStudyBranchOrClass(data.classSection, 'SCHOOL');
+      if (!clsRes.isValid) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['classSection'], message: clsRes.error });
+      }
+    }
+  } else if (occ === 'WORKING') {
+    const workRes = validateWorkingInstitution(data.workingInstitution);
+    if (!workRes.isValid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['workingInstitution'], message: workRes.error });
+    }
+  }
 }).passthrough();
 
 const teamRegistrationSchema = z.object({
