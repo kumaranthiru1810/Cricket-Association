@@ -498,6 +498,30 @@ async function dispatchMatchScheduleNotifications(db, match, { isRescheduled = f
   }
 }
 
+/**
+ * Prevent double-booking the same ground on the same date and time.
+ */
+async function checkVenueScheduleConflict({ venue, matchDate, matchTime, excludeMatchId = null }) {
+  const cleanVenue = (venue && String(venue).trim()) || '';
+  if (!cleanVenue || !matchDate || !matchTime) return;
+
+  const escapedVenue = cleanVenue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const query = {
+    status: { $nin: ['CANCELLED', 'POSTPONED', 'ABANDONED'] },
+    venue: { $regex: new RegExp(`^${escapedVenue}$`, 'i') },
+    match_date: matchDate,
+    match_time: matchTime
+  };
+  if (excludeMatchId) {
+    query.id = { $ne: excludeMatchId };
+  }
+
+  const venueConflict = await db.models.Match.findOne(query).lean();
+  if (venueConflict) {
+    throw new Error(`Venue '${cleanVenue}' is already booked on ${matchDate} at ${matchTime} for fixture #${venueConflict.id} (${venueConflict.team_a_name || 'Team A'} vs ${venueConflict.team_b_name || 'Team B'}).`);
+  }
+}
+
 async function scheduleMatch(fixtureData, adminEmail) {
   await db.initDb();
 
@@ -537,6 +561,14 @@ async function scheduleMatch(fixtureData, adminEmail) {
 
   const cleanDate = dtValidation.cleanDate;
   const cleanTime = dtValidation.parsedTime.formatted12;
+  const cleanVenue = (venue && String(venue).trim()) || 'Kamarajar District Stadium';
+
+  // Prevent scheduling two matches at the same ground, date, and time
+  await checkVenueScheduleConflict({
+    venue: cleanVenue,
+    matchDate: cleanDate,
+    matchTime: cleanTime
+  });
 
   // Prevent duplicate umpire assignment in the same fixture
   if (umpire1_id && umpire2_id && umpire1_id === umpire2_id) {
@@ -632,7 +664,7 @@ async function scheduleMatch(fixtureData, adminEmail) {
     team_b_id,
     team_a_name: resolvedTeamAName || team_a_name || team_a_id,
     team_b_name: resolvedTeamBName || team_b_name || team_b_id,
-    venue: venue || 'Kamarajar District Stadium',
+    venue: cleanVenue,
     venue_maps_url: venue_maps_url || (venue ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue + (venue.toLowerCase().includes('virudhunagar') ? '' : ', Virudhunagar'))}` : 'https://www.google.com/maps/search/?api=1&query=Kamarajar+District+Stadium+Virudhunagar'),
     match_date: cleanDate,
     match_time: cleanTime,
@@ -1011,16 +1043,12 @@ async function rescheduleMatch(matchId, { newDate, newTime, reason }, adminEmail
   }
 
   // Check venue availability conflict
-  const venueConflict = await db.models.Match.findOne({
-    id: { $ne: matchId },
-    status: { $nin: ['CANCELLED', 'POSTPONED'] },
+  await checkVenueScheduleConflict({
     venue: match.venue,
-    match_date: cleanDate,
-    match_time: cleanTime
+    matchDate: cleanDate,
+    matchTime: cleanTime,
+    excludeMatchId: matchId
   });
-  if (venueConflict) {
-    throw new Error(`Venue '${match.venue}' is already booked on ${cleanDate} at ${cleanTime} for fixture #${venueConflict.id} (${venueConflict.team_a_name || 'Team A'} vs ${venueConflict.team_b_name || 'Team B'}).`);
-  }
 
   const prevDate = match.match_date;
   const prevTime = match.match_time;

@@ -9,6 +9,7 @@ const { invalidateCache } = require('../../middleware/cacheMiddleware');
 const {
   broadcastScoreUpdate,
   getMaxWicketsForInnings,
+  computeAutoBonusWinner,
   buildDismissalText,
   generateCommentary
 } = require('./deliveryHelpers');
@@ -511,10 +512,14 @@ class DeliveryService {
     if (innings.innings_number === 2 && innings.target && innings.total_runs >= innings.target) {
       match.status = 'COMPLETED';
       isMatchCompleted = true;
-      const winnerTeam = await db.models.Team.findOne({ id: innings.batting_team_id }, 'name').lean();
+      const [winnerTeam, inn1] = await Promise.all([
+        db.models.Team.findOne({ id: innings.batting_team_id }, 'name').lean(),
+        db.models.Innings.findOne({ match_id: matchId, innings_number: 1 }, 'total_runs batting_team_id overs balls wickets').lean()
+      ]);
       const wicketsRemaining = Math.max(0, maxWickets - innings.wickets);
       match.result_summary = `${winnerTeam?.name || 'Chasing Team'} won by ${wicketsRemaining} wicket${wicketsRemaining > 1 ? 's' : ''}`;
       match.winner_id = innings.batting_team_id;
+      match.bonus_point_winner = computeAutoBonusWinner(match, inn1, innings, match.winner_id);
       innings.is_completed = true;
       innings.is_over_complete = false;
     } else if (innings.wickets >= maxWickets || (inningsMaxOvers && overNumber >= inningsMaxOvers)) {
@@ -555,15 +560,17 @@ class DeliveryService {
         innings.is_over_complete = false;
         match.status = 'COMPLETED';
         isMatchCompleted = true;
-        const inn1 = await db.models.Innings.findOne({ match_id: matchId, innings_number: 1 }, 'total_runs batting_team_id').lean();
+        const inn1 = await db.models.Innings.findOne({ match_id: matchId, innings_number: 1 }, 'total_runs batting_team_id overs balls wickets').lean();
         const runsDiff = (inn1?.total_runs || 0) - innings.total_runs;
         if (runsDiff > 0) {
           const winnerTeam = await db.models.Team.findOne({ id: inn1.batting_team_id }, 'name').lean();
           match.result_summary = `${winnerTeam?.name || 'Defending Team'} won by ${runsDiff} runs`;
           match.winner_id = inn1.batting_team_id;
+          match.bonus_point_winner = computeAutoBonusWinner(match, inn1, innings, match.winner_id);
         } else if (runsDiff === 0) {
           match.result_summary = 'Match Tied';
           match.winner_id = 'TIE';
+          match.bonus_point_winner = false;
         }
       }
     }
@@ -583,6 +590,9 @@ class DeliveryService {
       result_summary: match.result_summary,
       winner_id: match.winner_id
     };
+    if (isMatchCompleted) {
+      matchUpdateFields.bonus_point_winner = Boolean(match.bonus_point_winner);
+    }
     if (match.current_break) {
       matchUpdateFields.current_break = null;
       matchUpdateFields.status_comment = '';

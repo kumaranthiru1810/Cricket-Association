@@ -5,7 +5,7 @@
 
 const db = require('../../config/db');
 const socketService = require('../socketService');
-const { broadcastScoreUpdate, getFullPlayerMap, getMaxWicketsForInnings } = require('./deliveryHelpers');
+const { broadcastScoreUpdate, getFullPlayerMap, getMaxWicketsForInnings, computeAutoBonusWinner } = require('./deliveryHelpers');
 
 class InningsService {
   /**
@@ -191,6 +191,9 @@ class InningsService {
         match.result_summary = 'Match Tied';
         match.winner_id = 'TIE';
       }
+      match.bonus_point_winner = (match.winner_id && match.winner_id !== 'TIE')
+        ? computeAutoBonusWinner(match, inn1, currentInnings, match.winner_id)
+        : false;
       await match.save();
 
       try {
@@ -442,8 +445,15 @@ class InningsService {
     if (payload.walkoverForfeitedTeamId !== undefined && !payload.isWalkover) {
       match.walkover_forfeited_team_id = payload.walkoverForfeitedTeamId;
     }
-    if (payload.bonusPointWinner !== undefined) {
+    if (payload.bonusPointWinner !== undefined && payload.bonusPointWinner !== null) {
       match.bonus_point_winner = Boolean(payload.bonusPointWinner);
+    } else if (!match.is_walkover && validTeams.includes(requestedWinnerId)) {
+      const inns = await db.models.Innings.find({ match_id: matchId }).sort({ innings_number: 1 }).lean();
+      const inn1 = inns.find(i => i.innings_number === 1);
+      const inn2 = inns.find(i => i.innings_number === 2);
+      match.bonus_point_winner = computeAutoBonusWinner(match, inn1, inn2, requestedWinnerId);
+    } else {
+      match.bonus_point_winner = false;
     }
     if (payload.bonusPointLoserPenalty !== undefined) {
       match.bonus_point_loser_penalty = Boolean(payload.bonusPointLoserPenalty);
