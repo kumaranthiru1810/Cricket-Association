@@ -86,6 +86,11 @@ router.post('/login', authRateLimiter, async (req, res) => {
 // DYNAMIC TEAM STATS CALCULATION HELPER
 // ──────────────────────────────────────────────
 async function calculateTeamStatistics(db, teamDoc, teamReg, reqUser, reqTeam) {
+  const teamIds = new Set(
+    [teamDoc?.id, teamDoc?.team_id, teamReg?.id, reqTeam?.id, reqUser?.teamId, reqUser?.team_id]
+      .filter(Boolean)
+      .map(id => String(id).trim())
+  );
   const teamId = teamDoc?.id || teamDoc?.team_id || teamReg?.id || reqTeam?.id || reqUser?.teamId || reqUser?.team_id;
   const teamName = teamDoc?.name || teamDoc?.team_name || teamReg?.team_name || reqTeam?.name || '';
   const teamNameLower = teamName.toLowerCase().trim();
@@ -120,7 +125,7 @@ async function calculateTeamStatistics(db, teamDoc, teamReg, reqUser, reqTeam) {
 
   // Filter matches involving this team
   const myMatches = allMatches.filter(m => {
-    if (teamId && (m.team_a_id === teamId || m.team_b_id === teamId)) return true;
+    if (teamIds.has(String(m.team_a_id || '').trim()) || teamIds.has(String(m.team_b_id || '').trim())) return true;
     const tA = (m.team_a_name || '').toLowerCase();
     const tB = (m.team_b_name || '').toLowerCase();
     return teamNameLower && (tA.includes(teamNameLower) || tB.includes(teamNameLower));
@@ -184,7 +189,7 @@ async function calculateTeamStatistics(db, teamDoc, teamReg, reqUser, reqTeam) {
     let didTie = false;
 
     if (m.winner_id) {
-      if (teamId && m.winner_id === teamId) didWin = true;
+      if (teamIds.has(String(m.winner_id).trim())) didWin = true;
       else didLose = true;
     } else if (resSummary.includes('tied') || resSummary.includes('match tied')) {
       didTie = true;
