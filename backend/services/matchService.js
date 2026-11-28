@@ -40,9 +40,11 @@ class MatchService {
     const teamA = teamMap[match.team_a_id] || { id: match.team_a_id, name: match.team_a_id };
     const teamB = teamMap[match.team_b_id] || { id: match.team_b_id, name: match.team_b_id };
 
-    const [teamAPlayers, teamBPlayers, rule15, tournamentDoc] = await Promise.all([
+    const [teamAPlayers, teamBPlayers, teamASubstitutePlayers, teamBSubstitutePlayers, rule15, tournamentDoc] = await Promise.all([
       scorerService.getSquadForTeam(match.team_a_id, match),
       scorerService.getSquadForTeam(match.team_b_id, match),
+      scorerService.getSubstitutesForTeam(match.team_a_id, match),
+      scorerService.getSubstitutesForTeam(match.team_b_id, match),
       this.getRule15Config(),
       db.models.Tournament.findOne({
         $or: [
@@ -114,6 +116,8 @@ class MatchService {
       teamB,
       teamAPlayers,
       teamBPlayers,
+      teamASubstitutePlayers,
+      teamBSubstitutePlayers,
       teamAPlayingXI: match.team_a_playing_xi || [],
       teamBPlayingXI: match.team_b_playing_xi || [],
       teamASubstitutes: match.team_a_substitutes || [],

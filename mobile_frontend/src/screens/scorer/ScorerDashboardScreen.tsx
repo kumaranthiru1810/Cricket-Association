@@ -251,11 +251,32 @@ export default function ScorerDashboardScreen() {
     return s === 'postponed' || r === 'POSTPONED' || !!m.postponement?.is_postponed || !!m.isPostponed;
   };
 
+  const todayKolkata = getTodayKolkata();
+  const isMatchDatePassed = (m: any) => {
+    const rawD = String(m.match_date || m.date || '').trim();
+    const isoDate = rawD.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+    return Boolean(isoDate && isoDate < todayKolkata);
+  };
+
+  const isFinishedMatch = (m: any) => {
+    if (isPostponedMatch(m)) return false;
+    const s = (m.status || '').toLowerCase();
+    const r = (m.rawStatus || '').toUpperCase();
+    if (s === 'completed' || r === 'COMPLETED' || s === 'cancelled' || r === 'CANCELLED' || s === 'abandoned' || r === 'ABANDONED') {
+      return false;
+    }
+    if (s === 'finished' || r === 'FINISHED') return true;
+    const isActiveOrScheduled =
+      s === 'upcoming' || s === 'scheduled' || r === 'SCHEDULED' ||
+      s === 'live' || s === 'innings_break' || r === 'LIVE' || r === 'INNINGS_BREAK';
+    return isActiveOrScheduled && isMatchDatePassed(m);
+  };
+
   // Categorized matches sorted by Date & Time:
   // 1. Live matches: currently active, sorted by most recent
   const liveMatches = matches
     .filter(m => {
-      if (isPostponedMatch(m)) return false;
+      if (isPostponedMatch(m) || isFinishedMatch(m)) return false;
       const s = (m.status || '').toLowerCase();
       const r = (m.rawStatus || '').toUpperCase();
       return s === 'live' || s === 'innings_break' || r === 'LIVE' || r === 'INNINGS_BREAK';
@@ -265,20 +286,20 @@ export default function ScorerDashboardScreen() {
   // 2. Upcoming matches: sorted ascending by date and time (nearest upcoming match first!)
   const upcomingMatches = matches
     .filter(m => {
-      if (isPostponedMatch(m)) return false;
+      if (isPostponedMatch(m) || isFinishedMatch(m)) return false;
       const s = (m.status || '').toLowerCase();
       const r = (m.rawStatus || '').toUpperCase();
       return s === 'upcoming' || s === 'scheduled' || r === 'SCHEDULED';
     })
     .sort((a, b) => parseMatchTimestamp(a) - parseMatchTimestamp(b));
 
-  // 3. Completed matches: sorted descending by date and time (most recently finished match first!)
+  // 3. Completed / Finished matches: sorted descending by date and time (most recently finished match first!)
   const completedMatches = matches
     .filter(m => {
       if (isPostponedMatch(m)) return false;
       const s = (m.status || '').toLowerCase();
       const r = (m.rawStatus || '').toUpperCase();
-      return s === 'completed' || r === 'COMPLETED';
+      return s === 'completed' || r === 'COMPLETED' || isFinishedMatch(m);
     })
     .sort((a, b) => parseMatchTimestamp(b) - parseMatchTimestamp(a));
 

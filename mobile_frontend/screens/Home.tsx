@@ -1310,12 +1310,15 @@ export default function HomeScreen() {
                 const s = (m.status || '').toLowerCase();
                 const raw = (m.rawStatus || '').toUpperCase();
                 const isPostponed = s === 'postponed' || raw === 'POSTPONED' || !!m.isPostponed || !!m.postponement?.is_postponed;
-                const isLive = !isPostponed && (s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK');
                 const isCompleted = !isPostponed && (s === 'completed' || raw === 'COMPLETED');
                 const isCancelled = !isPostponed && (s === 'cancelled' || raw === 'CANCELLED' || raw === 'ABANDONED');
-                const isFinished = !isPostponed && !isLive && !isCompleted && !isCancelled &&
-                  (s === 'finished' || raw === 'FINISHED' || ((s === 'upcoming' || raw === 'SCHEDULED') && isMatchDatePassed(m)));
-                const isUpcoming = !isPostponed && !isFinished && (s === 'upcoming' || raw === 'SCHEDULED');
+                const isFinished = !isPostponed && !isCompleted && !isCancelled && (
+                  s === 'finished' ||
+                  raw === 'FINISHED' ||
+                  ((s === 'upcoming' || s === 'scheduled' || raw === 'SCHEDULED' || s === 'live' || s === 'innings_break' || raw === 'LIVE' || raw === 'INNINGS_BREAK') && isMatchDatePassed(m))
+                );
+                const isLive = !isPostponed && !isFinished && (s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK');
+                const isUpcoming = !isPostponed && !isFinished && (s === 'upcoming' || s === 'scheduled' || raw === 'SCHEDULED');
                 return { isPostponed, isLive, isCompleted, isCancelled, isFinished, isUpcoming };
               };
 
@@ -1436,12 +1439,15 @@ export default function HomeScreen() {
                 const s = (m.status || '').toLowerCase();
                 const raw = (m.rawStatus || '').toUpperCase();
                 const isPostponed = s === 'postponed' || raw === 'POSTPONED' || !!m.isPostponed || !!m.postponement?.is_postponed;
-                const isLive = !isPostponed && (s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK');
                 const isCompleted = !isPostponed && (s === 'completed' || raw === 'COMPLETED');
                 const isCancelled = !isPostponed && (s === 'cancelled' || raw === 'CANCELLED' || raw === 'ABANDONED');
-                const isFinished = !isPostponed && !isLive && !isCompleted && !isCancelled &&
-                  (s === 'finished' || raw === 'FINISHED' || ((s === 'upcoming' || raw === 'SCHEDULED') && isMatchDatePassed(m)));
-                const isUpcoming = !isPostponed && !isFinished && (s === 'upcoming' || raw === 'SCHEDULED');
+                const isFinished = !isPostponed && !isCompleted && !isCancelled && (
+                  s === 'finished' ||
+                  raw === 'FINISHED' ||
+                  ((s === 'upcoming' || s === 'scheduled' || raw === 'SCHEDULED' || s === 'live' || s === 'innings_break' || raw === 'LIVE' || raw === 'INNINGS_BREAK') && isMatchDatePassed(m))
+                );
+                const isLive = !isPostponed && !isFinished && (s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK');
+                const isUpcoming = !isPostponed && !isFinished && (s === 'upcoming' || s === 'scheduled' || raw === 'SCHEDULED');
 
                 if (matchFilter === 'live') return isLive;
                 if (matchFilter === 'upcoming') return isUpcoming;
@@ -1489,12 +1495,15 @@ export default function HomeScreen() {
                     const s = (m.status || '').toLowerCase();
                     const raw = (m.rawStatus || '').toUpperCase();
                     const isPostponed = s === 'postponed' || raw === 'POSTPONED' || !!m.isPostponed || !!m.postponement?.is_postponed;
-                    const isLive = !isPostponed && (s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK');
                     const isCompleted = !isPostponed && (s === 'completed' || raw === 'COMPLETED');
                     const isCancelled = !isPostponed && (s === 'cancelled' || raw === 'CANCELLED' || raw === 'ABANDONED');
-                    const isFinished = !isPostponed && !isLive && !isCompleted && !isCancelled &&
-                      (s === 'finished' || raw === 'FINISHED' || ((s === 'upcoming' || raw === 'SCHEDULED') && isMatchDatePassed(m)));
-                    const isUpcoming = !isPostponed && !isFinished && (s === 'upcoming' || raw === 'SCHEDULED');
+                    const isFinished = !isPostponed && !isCompleted && !isCancelled && (
+                      s === 'finished' ||
+                      raw === 'FINISHED' ||
+                      ((s === 'upcoming' || s === 'scheduled' || raw === 'SCHEDULED' || s === 'live' || s === 'innings_break' || raw === 'LIVE' || raw === 'INNINGS_BREAK') && isMatchDatePassed(m))
+                    );
+                    const isLive = !isPostponed && !isFinished && (s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK');
+                    const isUpcoming = !isPostponed && !isFinished && (s === 'upcoming' || s === 'scheduled' || raw === 'SCHEDULED');
 
                     const teamAShort = m.teamAShort || (m.teamA ? m.teamA.slice(0, 3).toUpperCase() : 'TMA');
                     const teamBShort = m.teamBShort || (m.teamB ? m.teamB.slice(0, 3).toUpperCase() : 'TMB');

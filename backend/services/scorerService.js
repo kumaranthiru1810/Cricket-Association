@@ -244,6 +244,87 @@ class ScorerService {
   }
 
   /**
+   * Resolves allocated substitute players for a team in a match
+   */
+  async getSubstitutesForTeam(teamId, match) {
+    if (!match) return [];
+    await db.initDb();
+
+    const fullSquad = await this.getSquadForTeam(teamId, null);
+    const squadMap = {};
+    (fullSquad || []).forEach(p => {
+      if (p.id) squadMap[p.id] = p;
+      if (p._id) squadMap[p._id] = p;
+    });
+
+    const teamMap = await this.getTeamMap();
+    const team = teamMap[teamId] || { id: teamId, name: teamId };
+    const teamNameLower = (team.name || team.team_name || '').toLowerCase().trim();
+    const matchTeamAName = (match.team_a_name || '').toLowerCase().trim();
+    const matchTeamBName = (match.team_b_name || '').toLowerCase().trim();
+
+    const isTeamA = match.team_a_id === teamId ||
+      (matchTeamAName && (matchTeamAName === String(teamId).toLowerCase() || (teamNameLower && matchTeamAName === teamNameLower)));
+    const isTeamB = match.team_b_id === teamId ||
+      (matchTeamBName && (matchTeamBName === String(teamId).toLowerCase() || (teamNameLower && matchTeamBName === teamNameLower)));
+
+    const rawSubs = isTeamA ? match.team_a_substitutes : (isTeamB ? match.team_b_substitutes : []);
+    if (!Array.isArray(rawSubs) || rawSubs.length === 0) return [];
+
+    const subPlayers = [];
+    for (let i = 0; i < rawSubs.length; i++) {
+      const pId = rawSubs[i];
+      let found = squadMap[pId] || Object.values(squadMap).find(p =>
+        p.id === pId ||
+        String(p.id) === String(pId) ||
+        p._id === pId ||
+        String(p._id) === String(pId) ||
+        (p.name && p.name.toLowerCase() === String(pId).toLowerCase())
+      );
+
+      if (!found) {
+        const query = [{ id: pId }];
+        if (pId && /^[0-9a-fA-F]{24}$/.test(pId)) {
+          query.push({ _id: pId });
+        }
+        const extraP = await db.models.Player.findOne({ $or: query }).lean();
+        if (extraP) {
+          found = {
+            id: extraP.id || pId,
+            _id: extraP._id ? extraP._id.toString() : pId,
+            name: extraP.name,
+            role: extraP.role || 'BATTER',
+            jersey_number: extraP.jersey_number || extraP.jerseyNumber || (12 + i),
+            batting_style: extraP.batting_style || extraP.battingStyle || '',
+            bowling_style: extraP.bowling_style || extraP.bowlingStyle || '',
+            team_id: teamId
+          };
+        }
+      }
+
+      if (found) {
+        subPlayers.push({
+          ...found,
+          is_playing_xi: false,
+          is_substitute: true
+        });
+      } else {
+        subPlayers.push({
+          id: pId,
+          name: `Substitute ${i + 1}`,
+          role: 'SUBSTITUTE',
+          jersey_number: 12 + i,
+          is_playing_xi: false,
+          is_substitute: true,
+          team_id: teamId
+        });
+      }
+    }
+
+    return subPlayers;
+  }
+
+  /**
    * Calculates dashboard summary counts from MongoDB
    */
   async getDashboardStats(scorerId = null, userEmail = null, userRole = null) {
@@ -329,10 +410,13 @@ class ScorerService {
       const matchDateStr = typeof m.match_date === 'string'
         ? (m.match_date.match(/^\d{4}-\d{2}-\d{2}/)?.[0] || '')
         : '';
-      const isDatePassedScheduled = (rawStatusUpper === 'SCHEDULED' || rawStatusUpper === 'UPCOMING') &&
-        Boolean(matchDateStr) &&
-        matchDateStr < todayKolkata;
-      const statusUpper = isDatePassedScheduled ? 'FINISHED' : rawStatusUpper;
+      const isActiveOrScheduled =
+        rawStatusUpper === 'SCHEDULED' ||
+        rawStatusUpper === 'UPCOMING' ||
+        rawStatusUpper === 'LIVE' ||
+        rawStatusUpper === 'INNINGS_BREAK';
+      const isDatePassed = isActiveOrScheduled && Boolean(matchDateStr) && matchDateStr < todayKolkata;
+      const statusUpper = isDatePassed ? 'FINISHED' : rawStatusUpper;
 
       if (statusUpper === 'LIVE' || statusUpper === 'INNINGS_BREAK') liveCount++;
       else if (statusUpper === 'SCHEDULED' || statusUpper === 'UPCOMING') upcomingCount++;

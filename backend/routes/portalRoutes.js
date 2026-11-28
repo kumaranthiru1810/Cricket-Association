@@ -31,11 +31,17 @@ router.get('/live', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
   try {
     const { Match, Innings, Team } = db.models;
-    const liveMatches = await Match.find({ status: { $in: ['LIVE', 'INNINGS_BREAK'] } })
-      .select('id team_a_id team_b_id team_a_name team_b_name status score_a score_b target_runs result_summary current_innings_number updatedAt')
+    const todayKolkata = getTodayKolkata();
+    const rawLiveMatches = await Match.find({ status: { $in: ['LIVE', 'INNINGS_BREAK'] } })
+      .select('id team_a_id team_b_id team_a_name team_b_name match_date status score_a score_b target_runs result_summary current_innings_number updatedAt')
       .sort({ updatedAt: -1 })
       .limit(20)
       .lean();
+
+    const liveMatches = rawLiveMatches.filter(m => {
+      const d = typeof m.match_date === 'string' ? (m.match_date.match(/^\d{4}-\d{2}-\d{2}/)?.[0] || '') : '';
+      return !(d && d < todayKolkata);
+    });
 
     if (liveMatches.length === 0) {
       return res.json({ success: true, matches: [], updatedAt: Date.now() });
@@ -150,7 +156,13 @@ router.get('/home', cacheResponse(30, 'portal-home'), async (req, res) => {
     });
 
     // Live, Upcoming, Completed
-    const liveMatches = matches.filter(m => m.status === 'LIVE').map(m => {
+    const todayKolkata = getTodayKolkata();
+    const isMatchDatePassed = (m) => {
+      const d = typeof m.match_date === 'string' ? (m.match_date.match(/^\d{4}-\d{2}-\d{2}/)?.[0] || '') : '';
+      return Boolean(d) && d < todayKolkata;
+    };
+
+    const liveMatches = matches.filter(m => m.status === 'LIVE' && !isMatchDatePassed(m)).map(m => {
       const tA = teamMap[m.team_a_id] || (m.team_a_name ? teamMap[m.team_a_name.toLowerCase()] : null);
       const tB = teamMap[m.team_b_id] || (m.team_b_name ? teamMap[m.team_b_name.toLowerCase()] : null);
       return {
@@ -164,14 +176,8 @@ router.get('/home', cacheResponse(30, 'portal-home'), async (req, res) => {
       };
     });
 
-    const todayKolkata = getTodayKolkata();
-    const isScheduledDatePassed = (m) => {
-      const d = typeof m.match_date === 'string' ? (m.match_date.match(/^\d{4}-\d{2}-\d{2}/)?.[0] || '') : '';
-      return Boolean(d) && d < todayKolkata;
-    };
-
     const upcomingMatches = matches
-      .filter(m => m.status === 'SCHEDULED' && !isScheduledDatePassed(m))
+      .filter(m => m.status === 'SCHEDULED' && !isMatchDatePassed(m))
       .map(m => {
         const tA = teamMap[m.team_a_id] || (m.team_a_name ? teamMap[m.team_a_name.toLowerCase()] : null);
         const tB = teamMap[m.team_b_id] || (m.team_b_name ? teamMap[m.team_b_name.toLowerCase()] : null);
@@ -185,14 +191,14 @@ router.get('/home', cacheResponse(30, 'portal-home'), async (req, res) => {
       });
 
     const recentMatches = matches
-      .filter(m => m.status === 'COMPLETED' || (m.status === 'SCHEDULED' && isScheduledDatePassed(m)))
+      .filter(m => m.status === 'COMPLETED' || ((m.status === 'SCHEDULED' || m.status === 'LIVE' || m.status === 'INNINGS_BREAK') && isMatchDatePassed(m)))
       .map(m => {
         const tA = teamMap[m.team_a_id] || (m.team_a_name ? teamMap[m.team_a_name.toLowerCase()] : null);
         const tB = teamMap[m.team_b_id] || (m.team_b_name ? teamMap[m.team_b_name.toLowerCase()] : null);
-        const isExpiredScheduled = m.status === 'SCHEDULED' && isScheduledDatePassed(m);
+        const isExpired = (m.status === 'SCHEDULED' || m.status === 'LIVE' || m.status === 'INNINGS_BREAK') && isMatchDatePassed(m);
         return {
           ...m,
-          status: isExpiredScheduled ? 'FINISHED' : m.status,
+          status: isExpired ? 'FINISHED' : m.status,
           teamA: tA?.name || m.team_a_name || 'Team A',
           teamB: tB?.name || m.team_b_name || 'Team B',
           teamALogo: tA?.logo || tA?.photo || null,
