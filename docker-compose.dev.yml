@@ -1,10 +1,12 @@
+# Local Development Docker Compose Configuration
+# For production, use: docker compose -f docker-compose.prod.yml up -d
 services:
   mongodb:
     image: mongo:7.0
-    container_name: cricket-mongodb
+    container_name: cricket-mongodb-dev
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
     environment:
       MONGO_INITDB_DATABASE: cricket_db
     volumes:
@@ -21,15 +23,15 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: cricket-backend
+    container_name: cricket-backend-dev
     restart: unless-stopped
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     environment:
       - PORT=5000
-      - NODE_ENV=production
+      - NODE_ENV=development
       - MONGODB_URI=mongodb://mongodb:27017/cricket_db
-      - JWT_SECRET=${JWT_SECRET:-super_secret_cricket_federation_jwt_token_2026}
+      - JWT_SECRET=${JWT_SECRET}
     depends_on:
       mongodb:
         condition: service_healthy
@@ -40,10 +42,10 @@ services:
     build:
       context: ./mobile_frontend
       dockerfile: Dockerfile
-    container_name: cricket-frontend
+    container_name: cricket-frontend-dev
     restart: unless-stopped
     ports:
-      - "3000:80"
+      - "127.0.0.1:3000:80"
     depends_on:
       - backend
     networks:

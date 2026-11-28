@@ -146,13 +146,17 @@ class AdminAuth {
     const isNotExpired = user.otp_expires_at && new Date() < new Date(user.otp_expires_at);
 
     if (!isOtpValid || !isNotExpired) {
-      const nextAttempts = attempts + 1;
-      const update = { otp_attempts: nextAttempts };
-      if (nextAttempts >= 5) {
-        update.otp_hash = null;
-        update.otp_expires_at = null;
+      const updatedUser = await db.models.User.findOneAndUpdate(
+        { email: cleanEmail },
+        { $inc: { otp_attempts: 1 } },
+        { returnDocument: 'after' }
+      ).lean();
+      if ((updatedUser?.otp_attempts || 0) >= 5) {
+        await db.models.User.updateOne(
+          { email: cleanEmail },
+          { $set: { otp_hash: null, otp_expires_at: null } }
+        );
       }
-      await db.models.User.updateOne({ email: cleanEmail }, { $set: update });
       throw { status: 401, message: 'Invalid or expired OTP code.' };
     }
 
@@ -426,9 +430,48 @@ class AdminAuth {
     };
   }
 
-  async checkRegistrationExists({ role, email, name, teamName } = {}) {
+  async checkRegistrationExists({ role, email, name, teamName, mobile, phone } = {}) {
     await db.initDb();
     const escapeRegex = (s) => String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    const rawMob = mobile || phone;
+    if (rawMob && typeof rawMob === 'string') {
+      const cleanMob = rawMob.replace(/\D/g, '');
+      if (cleanMob.length === 10) {
+        if (db.models && db.models.User) {
+          const existingPhoneUser = await db.models.User.findOne({
+            $or: [
+              { mobile: cleanMob },
+              { phone: cleanMob },
+              { 'player_details.mobile': cleanMob },
+              { 'player_details.phone': cleanMob }
+            ],
+            status: { $ne: 'REJECTED' }
+          }).lean();
+          if (existingPhoneUser) {
+            return {
+              exists: true,
+              type: existingPhoneUser.role || role || 'USER',
+              field: 'mobile',
+              message: `Mobile number "${cleanMob}" is already registered. Please login directly or use another number.`
+            };
+          }
+        }
+        if (role === 'PLAYER' && db.models && db.models.Player) {
+          const existingPhonePlayer = await db.models.Player.findOne({
+            $or: [{ phone: cleanMob }, { mobile: cleanMob }]
+          }).lean();
+          if (existingPhonePlayer) {
+            return {
+              exists: true,
+              type: 'PLAYER',
+              field: 'mobile',
+              message: `Mobile number "${cleanMob}" is already registered for a player. Please login directly.`
+            };
+          }
+        }
+      }
+    }
 
     if (role === 'TEAM' || teamName) {
       const cleanTeamName = String(teamName || '').trim();

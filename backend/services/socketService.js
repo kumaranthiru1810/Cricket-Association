@@ -23,13 +23,23 @@ function initSocket(server) {
     pingInterval: 25000
   });
 
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     const rawToken =
       socket.handshake.auth?.token ||
       (socket.handshake.headers?.authorization || '').replace(/^Bearer\s+/i, '');
     if (rawToken) {
       try {
-        socket.user = jwt.verify(rawToken, env.JWT_SECRET);
+        const decoded = jwt.verify(rawToken, env.JWT_SECRET, { algorithms: ['HS256'] });
+        if (decoded?.id && decoded.tv !== undefined) {
+          const db = require('../config/db');
+          if (db.models?.User) {
+            const u = await db.models.User.findOne({ id: decoded.id }).select('token_version status').lean();
+            if (u && (u.status === 'SUSPENDED' || u.status === 'DELETED' || Number(u.token_version || 0) !== Number(decoded.tv))) {
+              return next(new Error('Unauthorized socket token'));
+            }
+          }
+        }
+        socket.user = decoded;
       } catch (_err) {
         return next(new Error('Unauthorized socket token'));
       }

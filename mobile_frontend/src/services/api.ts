@@ -536,7 +536,7 @@ export const ScorerApi = {
     return currentUser;
   },
 
-  checkRegistrationExists: async (params: { role?: string; email?: string; name?: string; teamName?: string }) => {
+  checkRegistrationExists: async (params: { role?: string; email?: string; name?: string; teamName?: string; mobile?: string }) => {
     return request('/auth/check-registration-exists', {
       method: 'POST',
       body: JSON.stringify(params)
@@ -1106,6 +1106,11 @@ export const ScorerApi = {
     return request(`/admin/matches/${matchId}/confirm-schedule`, {
       method: 'POST'
     });
+  },
+
+  getReports: async (period: 'day' | 'month' | 'year', date: string) => {
+    const q = new URLSearchParams({ period, date }).toString();
+    return request(`/admin/reports?${q}`);
   },
 
   cancelMatch: async (matchId: string, reason?: string) => {

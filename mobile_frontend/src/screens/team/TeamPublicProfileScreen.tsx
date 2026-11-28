@@ -412,6 +412,25 @@ export default function TeamPublicProfileScreen({
                       <Ionicons name="arrow-forward" size={14} color="#081225" style={{ marginLeft: 4 }} />
                     </TouchableOpacity>
                   </View>
+                  {Boolean(m.playerOfTheMatch || m.player_of_match) && (
+                    <View style={{
+                      marginTop: 8,
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      borderRadius: 8,
+                      backgroundColor: '#fffbeb',
+                      borderWidth: 1,
+                      borderColor: '#fde68a',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6
+                    }}>
+                      <Ionicons name="star" size={13} color="#d97706" />
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#92400e' }}>
+                        Man of the Match: {m.playerOfTheMatch || m.player_of_match}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               ))
             )}

@@ -10,6 +10,7 @@ const db = require('../config/db');
 const { cacheResponse } = require('../middleware/cacheMiddleware');
 const { requireTurnstile } = require('../middleware/turnstileMiddleware');
 const { withEmptyDataMessage } = require('../utils/responseHelper');
+const { getTodayKolkata } = require('../utils/dateTimeValidation');
 
 const contactRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -30,11 +31,17 @@ router.get('/live', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
   try {
     const { Match, Innings, Team } = db.models;
-    const liveMatches = await Match.find({ status: { $in: ['LIVE', 'INNINGS_BREAK'] } })
-      .select('id team_a_id team_b_id team_a_name team_b_name status score_a score_b target_runs result_summary current_innings_number updatedAt')
+    const todayKolkata = getTodayKolkata();
+    const rawLiveMatches = await Match.find({ status: { $in: ['LIVE', 'INNINGS_BREAK'] } })
+      .select('id team_a_id team_b_id team_a_name team_b_name match_date status score_a score_b target_runs result_summary current_innings_number updatedAt')
       .sort({ updatedAt: -1 })
       .limit(20)
       .lean();
+
+    const liveMatches = rawLiveMatches.filter(m => {
+      const d = typeof m.match_date === 'string' ? (m.match_date.match(/^\d{4}-\d{2}-\d{2}/)?.[0] || '') : '';
+      return !(d && d < todayKolkata);
+    });
 
     if (liveMatches.length === 0) {
       return res.json({ success: true, matches: [], updatedAt: Date.now() });
@@ -149,7 +156,13 @@ router.get('/home', cacheResponse(30, 'portal-home'), async (req, res) => {
     });
 
     // Live, Upcoming, Completed
-    const liveMatches = matches.filter(m => m.status === 'LIVE').map(m => {
+    const todayKolkata = getTodayKolkata();
+    const isMatchDatePassed = (m) => {
+      const d = typeof m.match_date === 'string' ? (m.match_date.match(/^\d{4}-\d{2}-\d{2}/)?.[0] || '') : '';
+      return Boolean(d) && d < todayKolkata;
+    };
+
+    const liveMatches = matches.filter(m => m.status === 'LIVE' && !isMatchDatePassed(m)).map(m => {
       const tA = teamMap[m.team_a_id] || (m.team_a_name ? teamMap[m.team_a_name.toLowerCase()] : null);
       const tB = teamMap[m.team_b_id] || (m.team_b_name ? teamMap[m.team_b_name.toLowerCase()] : null);
       return {
@@ -163,29 +176,35 @@ router.get('/home', cacheResponse(30, 'portal-home'), async (req, res) => {
       };
     });
 
-    const upcomingMatches = matches.filter(m => m.status === 'SCHEDULED').map(m => {
-      const tA = teamMap[m.team_a_id] || (m.team_a_name ? teamMap[m.team_a_name.toLowerCase()] : null);
-      const tB = teamMap[m.team_b_id] || (m.team_b_name ? teamMap[m.team_b_name.toLowerCase()] : null);
-      return {
-        ...m,
-        teamA: tA?.name || m.team_a_name || 'Team A',
-        teamB: tB?.name || m.team_b_name || 'Team B',
-        teamALogo: tA?.logo || tA?.photo || null,
-        teamBLogo: tB?.logo || tB?.photo || null
-      };
-    });
+    const upcomingMatches = matches
+      .filter(m => m.status === 'SCHEDULED' && !isMatchDatePassed(m))
+      .map(m => {
+        const tA = teamMap[m.team_a_id] || (m.team_a_name ? teamMap[m.team_a_name.toLowerCase()] : null);
+        const tB = teamMap[m.team_b_id] || (m.team_b_name ? teamMap[m.team_b_name.toLowerCase()] : null);
+        return {
+          ...m,
+          teamA: tA?.name || m.team_a_name || 'Team A',
+          teamB: tB?.name || m.team_b_name || 'Team B',
+          teamALogo: tA?.logo || tA?.photo || null,
+          teamBLogo: tB?.logo || tB?.photo || null
+        };
+      });
 
-    const recentMatches = matches.filter(m => m.status === 'COMPLETED').map(m => {
-      const tA = teamMap[m.team_a_id] || (m.team_a_name ? teamMap[m.team_a_name.toLowerCase()] : null);
-      const tB = teamMap[m.team_b_id] || (m.team_b_name ? teamMap[m.team_b_name.toLowerCase()] : null);
-      return {
-        ...m,
-        teamA: tA?.name || m.team_a_name || 'Team A',
-        teamB: tB?.name || m.team_b_name || 'Team B',
-        teamALogo: tA?.logo || tA?.photo || null,
-        teamBLogo: tB?.logo || tB?.photo || null
-      };
-    });
+    const recentMatches = matches
+      .filter(m => m.status === 'COMPLETED' || ((m.status === 'SCHEDULED' || m.status === 'LIVE' || m.status === 'INNINGS_BREAK') && isMatchDatePassed(m)))
+      .map(m => {
+        const tA = teamMap[m.team_a_id] || (m.team_a_name ? teamMap[m.team_a_name.toLowerCase()] : null);
+        const tB = teamMap[m.team_b_id] || (m.team_b_name ? teamMap[m.team_b_name.toLowerCase()] : null);
+        const isExpired = (m.status === 'SCHEDULED' || m.status === 'LIVE' || m.status === 'INNINGS_BREAK') && isMatchDatePassed(m);
+        return {
+          ...m,
+          status: isExpired ? 'FINISHED' : m.status,
+          teamA: tA?.name || m.team_a_name || 'Team A',
+          teamB: tB?.name || m.team_b_name || 'Team B',
+          teamALogo: tA?.logo || tA?.photo || null,
+          teamBLogo: tB?.logo || tB?.photo || null
+        };
+      });
 
     // Top Batting Leaders
     const topBatsmen = [...players]
@@ -411,7 +430,7 @@ router.get('/home', cacheResponse(30, 'portal-home'), async (req, res) => {
         role: roleCat,
         roleLabel,
         playingRole: p.role,
-        battingStyle: p.batting_style || 'Right Hand Bat',
+        battingStyle: p.batting_style || null,
         bowlingStyle: p.bowling_style || 'Right Arm Medium',
         team: team?.name || 'District Club',
         teamShort: team?.short_name || 'VND',
@@ -638,7 +657,6 @@ router.get('/search', async (req, res) => {
           city: t.city || 'Virudhunagar',
           taluk: t.taluk || t.city || 'Virudhunagar',
           coach_name: t.coach_name || 'Team Coach',
-          coach_email: t.coach_email || '',
           matches: t.stats?.matches || 0,
           won: t.stats?.won || 0,
           points: t.stats?.points || 0,
@@ -660,7 +678,6 @@ router.get('/search', async (req, res) => {
           city: reg.city || 'Virudhunagar',
           taluk: reg.taluk || reg.city || 'Virudhunagar',
           coach_name: reg.coach_name || 'Team Coach',
-          coach_email: reg.coach_email || '',
           matches: 0,
           won: 0,
           points: 0,
@@ -684,7 +701,7 @@ router.get('/search', async (req, res) => {
           role: p.role || 'All-Rounder',
           team_id: p.team_id || parentTeam?.id || '',
           team_name: parentTeam?.name || p.team_name || 'District Affiliated Club',
-          batting_style: p.batting_style || 'Right Hand Bat',
+          batting_style: p.batting_style || null,
           bowling_style: p.bowling_style || 'Right Arm Medium',
           jersey_number: p.jersey_number || p.jerseyNumber || 10,
           photo: p.photo || p.image_path || p.profile_photo || null,
@@ -705,7 +722,7 @@ router.get('/search', async (req, res) => {
               role: p.role || 'Player',
               team_id: reg.id || reg.teamId,
               team_name: reg.team_name,
-              batting_style: p.batting_style || p.battingStyle || 'Right Hand Bat',
+              batting_style: p.batting_style || p.battingStyle || null,
               bowling_style: p.bowling_style || p.bowlingStyle || 'Right Arm Medium',
               jersey_number: p.jerseyNumber || p.jersey_number || '-',
               photo: p.photo || p.image_path || p.profile_photo || null,
@@ -771,8 +788,16 @@ router.get('/teams/:teamId', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Team not found in CFVD registry.' });
     }
 
-    const teamName = teamDoc?.name || teamRegDoc?.team_name;
+    const rawNameQuery = (req.query.teamName || '').toString().trim();
+    const teamName = teamDoc?.name || teamRegDoc?.team_name || rawNameQuery || rawId;
     const teamId = teamDoc?.id || teamRegDoc?.id || rawId;
+    const matchNameRegex = new RegExp('^' + escapeRegex(teamName) + '$', 'i');
+
+    if (!teamRegDoc && teamName) {
+      teamRegDoc = await TeamRegistration.findOne({
+        $or: [{ id: teamId }, { teamId: teamId }, { team_name: matchNameRegex }]
+      }).lean();
+    }
 
     const teamProfile = {
       id: teamId,
@@ -781,7 +806,6 @@ router.get('/teams/:teamId', async (req, res) => {
       city: teamDoc?.city || teamRegDoc?.city || 'Virudhunagar',
       taluk: teamDoc?.taluk || teamRegDoc?.taluk || teamDoc?.city || 'Virudhunagar',
       coach_name: teamDoc?.coach_name || teamRegDoc?.coach_name || 'Staff Coach',
-      coach_email: teamDoc?.coach_email || teamRegDoc?.coach_email || '',
       photo: teamDoc?.photo || teamDoc?.logo || teamDoc?.image_path || teamRegDoc?.photo || teamRegDoc?.logo || teamRegDoc?.image_path || null,
       logo: teamDoc?.logo || teamDoc?.photo || teamDoc?.image_path || teamRegDoc?.logo || teamRegDoc?.photo || teamRegDoc?.image_path || null,
       image: teamDoc?.logo || teamDoc?.photo || teamDoc?.image_path || teamRegDoc?.logo || teamRegDoc?.photo || teamRegDoc?.image_path || null,
@@ -799,7 +823,7 @@ router.get('/teams/:teamId', async (req, res) => {
             name: p.name,
             role: p.role || 'Player',
             jerseyNumber: p.jerseyNumber || p.jersey_number || '',
-            batting_style: p.batting_style || p.battingStyle || 'Right Hand Bat',
+            batting_style: p.batting_style || p.battingStyle || null,
             bowling_style: p.bowling_style || p.bowlingStyle || 'Right Arm Medium',
             photo: p.photo || p.image_path || p.profile_photo || p.avatar || null,
             image: p.photo || p.image_path || p.profile_photo || p.avatar || null,
@@ -823,7 +847,7 @@ router.get('/teams/:teamId', async (req, res) => {
             name: p.name,
             role: p.role || 'Player',
             jerseyNumber: p.jersey_number || p.jerseyNumber || '',
-            batting_style: p.batting_style || 'Right Hand Bat',
+            batting_style: p.batting_style || null,
             bowling_style: p.bowling_style || 'Right Arm Medium',
             photo: p.photo || p.image_path || p.profile_photo || p.avatar || null,
             image: p.photo || p.image_path || p.profile_photo || p.avatar || null,
@@ -838,36 +862,65 @@ router.get('/teams/:teamId', async (req, res) => {
 
     // 3. Load Matches directly from MongoDB using indexes
     let formattedMatches = [];
+    const allTeamIds = Array.from(new Set([teamDoc?.id, teamRegDoc?.id, teamId].filter(Boolean)));
+    const tournamentIdsSet = new Set();
+    let rawMatches = [];
     try {
-      const allMatches = await Match.find({
+      rawMatches = await Match.find({
         $or: [
-          { team_a_id: teamId },
-          { team_b_id: teamId },
-          { team_a_name: teamName },
-          { team_b_name: teamName }
+          { team_a_id: { $in: allTeamIds } },
+          { team_b_id: { $in: allTeamIds } },
+          { team_a_name: matchNameRegex },
+          { team_b_name: matchNameRegex }
         ]
       })
-      .select('id tournament_name match_date match_time venue status team_a_id team_b_id team_a_name team_b_name score_a score_b result_summary winner_id overs_per_side')
+      .select('id tournament_id tournament_name match_date match_time venue status team_a_id team_b_id team_a_name team_b_name score_a score_b result_summary winner_id overs_per_side bonus_point_winner bonus_point_loser_penalty is_walkover player_of_match')
       .sort({ match_date: -1 })
-      .limit(30)
+      .limit(50)
       .lean();
 
-      formattedMatches = (allMatches || []).map(m => {
-        const isTeamA = m.team_a_id === teamId || (m.team_a_name || '').toLowerCase().trim() === teamName.toLowerCase().trim();
+      const matchIdsList = (rawMatches || []).map(m => m.id).filter(Boolean);
+      const inningsDocs = (matchIdsList.length > 0 && Innings)
+        ? await Innings.find({ match_id: { $in: matchIdsList } }).lean()
+        : [];
+      const inningsByMatchMap = {};
+      (inningsDocs || []).forEach(inn => {
+        if (!inningsByMatchMap[inn.match_id]) inningsByMatchMap[inn.match_id] = [];
+        inningsByMatchMap[inn.match_id].push(inn);
+      });
+
+      (rawMatches || []).forEach(m => {
+        if (m.tournament_id) tournamentIdsSet.add(m.tournament_id);
+      });
+
+      formattedMatches = (rawMatches || []).map(m => {
+        const isTeamA = allTeamIds.includes(m.team_a_id) || (m.team_a_name || '').toLowerCase().trim() === teamName.toLowerCase().trim();
         const opponentName = isTeamA ? (m.team_b_name || m.team_b_id) : (m.team_a_name || m.team_a_id);
         const opponentId = isTeamA ? m.team_b_id : m.team_a_id;
-        const teamScore = isTeamA ? m.score_a : m.score_b;
-        const opponentScore = isTeamA ? m.score_b : m.score_a;
+
+        const mInns = inningsByMatchMap[m.id] || [];
+        const teamInn = mInns.find(i => allTeamIds.includes(i.batting_team_id) || (isTeamA ? i.batting_team_id === m.team_a_id : i.batting_team_id === m.team_b_id));
+        const oppInn = mInns.find(i => i !== teamInn);
+
+        const fmtInnScore = (inn) => inn ? `${inn.total_runs || 0}/${inn.wickets || 0} (${inn.overs || 0}.${inn.balls || 0} Ov)` : null;
+        const teamScore = fmtInnScore(teamInn) || (isTeamA ? m.score_a : m.score_b);
+        const opponentScore = fmtInnScore(oppInn) || (isTeamA ? m.score_b : m.score_a);
 
         // Check if winner
         const resText = (m.result_summary || '').toLowerCase();
-        const isWinner = m.winner_id === teamId || (resText.includes(teamName.toLowerCase()) && (resText.includes('won') || resText.includes('win')));
-        const isLoser = (m.winner_id && m.winner_id !== teamId && m.winner_id !== 'TIE' && m.winner_id !== 'NO_RESULT') ||
-                        ((resText.includes('won') || resText.includes('win')) && !isWinner);
+        const isWinner = allTeamIds.includes(m.winner_id) || (resText.includes(teamName.toLowerCase()) && (resText.includes('won') || resText.includes('win')));
+        const isNoResult = m.winner_id === 'NO_RESULT' || m.winner_id === 'ABANDONED' || resText.includes('no result') || resText.includes('abandoned');
+        const isTie = m.winner_id === 'TIE' || m.winner_id === 'MATCH_TIED' || resText.includes('tied');
+        const isLoser = !isWinner && !isNoResult && !isTie && (
+          (m.winner_id && !allTeamIds.includes(m.winner_id)) ||
+          resText.includes('won') ||
+          resText.includes('win')
+        );
 
         return {
           id: m.id,
           matchId: m.id,
+          tournamentId: m.tournament_id || null,
           tournament: m.tournament_name || 'District Championship',
           date: m.match_date || '2026-10-06',
           venue: m.venue || 'Kamarajar District Stadium',
@@ -878,8 +931,14 @@ router.get('/teams/:teamId', async (req, res) => {
           teamScore: teamScore || 'Yet to bat',
           opponentScore: opponentScore || 'Yet to bat',
           result: m.result_summary || (m.status === 'LIVE' ? 'Match Live in Progress' : 'Match Scheduled'),
+          playerOfTheMatch: m.player_of_match || null,
           isWinner,
           isLoser,
+          isTie,
+          isNoResult,
+          isWalkover: Boolean(m.is_walkover),
+          bonusPointWinner: Boolean(m.bonus_point_winner),
+          bonusPointLoserPenalty: Boolean(m.bonus_point_loser_penalty),
           overs: m.overs_per_side || 20
         };
       });
@@ -887,11 +946,24 @@ router.get('/teams/:teamId', async (req, res) => {
       console.warn('Unable to load matches for team:', _mErr.message);
     }
 
+    // Load Tournament Points Rules for accurate points calculation
+    const tourRulesMap = {};
+    if (tournamentIdsSet.size > 0 && db.models.Tournament) {
+      const tours = await db.models.Tournament.find({ id: { $in: Array.from(tournamentIdsSet) } })
+        .select('id points_win points_loss points_tie points_no_result points_bonus_win points_bonus_loss points_walkover_win points_walkover_loss')
+        .lean();
+      (tours || []).forEach(t => {
+        tourRulesMap[t.id] = t;
+      });
+    }
+
     // 4. Calculate Stats
     let played = 0;
     let won = 0;
     let lost = 0;
     let tied = 0;
+    let noResult = 0;
+    let calculatedPoints = 0;
     let totalRunsScored = 0;
     let totalBallsFaced = 0;
     let totalRunsConceded = 0;
@@ -900,9 +972,29 @@ router.get('/teams/:teamId', async (req, res) => {
     formattedMatches.forEach(m => {
       if ((m.status || '').toUpperCase() === 'COMPLETED') {
         played++;
-        if (m.isWinner) won++;
-        else if (m.isLoser) lost++;
-        else tied++;
+        const tr = (m.tournamentId && tourRulesMap[m.tournamentId]) || {};
+        const pWin = Number(tr.points_win ?? 4);
+        const pLoss = Number(tr.points_loss ?? 0);
+        const pTie = Number(tr.points_tie ?? (pWin / 2));
+        const pNR = Number(tr.points_no_result ?? (pWin / 2));
+        const pBonusWin = Number(tr.points_bonus_win ?? 1);
+        const pBonusLoss = Number(tr.points_bonus_loss ?? -1);
+        const pWoWin = Number(tr.points_walkover_win ?? pWin);
+        const pWoLoss = Number(tr.points_walkover_loss ?? pLoss);
+
+        if (m.isWinner) {
+          won++;
+          calculatedPoints += m.isWalkover ? pWoWin : (pWin + (m.bonusPointWinner ? pBonusWin : 0));
+        } else if (m.isLoser) {
+          lost++;
+          calculatedPoints += m.isWalkover ? pWoLoss : (pLoss + (m.bonusPointLoserPenalty ? pBonusLoss : 0));
+        } else if (m.isNoResult) {
+          noResult++;
+          calculatedPoints += pNR;
+        } else {
+          tied++;
+          calculatedPoints += pTie;
+        }
 
         // Parse runs and overs from scores e.g. "172/5 (20.0 Ov)"
         if (m.teamScore && m.teamScore !== 'Yet to bat') {
@@ -941,13 +1033,13 @@ router.get('/teams/:teamId', async (req, res) => {
       tied = teamDoc.stats.tied || 0;
     }
 
-    const points = (won * 2) + (tied * 1);
+    const points = played > 0 ? calculatedPoints : ((won * 4) + (tied * 2));
     const winPercentage = played > 0 ? Math.round((won / played) * 100) : 0;
 
     // Run Rate: Runs per Over scored
     const teamOversFaced = totalBallsFaced > 0 ? (totalBallsFaced / 6) : 0;
     const oppOversBowled = totalBallsBowled > 0 ? (totalBallsBowled / 6) : 0;
-    const runRate = teamOversFaced > 0 ? (totalRunsScored / teamOversFaced).toFixed(2) : (teamDoc?.stats?.runRate || '7.85');
+    const runRate = teamOversFaced > 0 ? (totalRunsScored / teamOversFaced).toFixed(2) : (played > 0 && teamDoc?.stats?.runRate ? teamDoc.stats.runRate : '0.00');
 
     // Net Run Rate: (Runs Scored / Overs Faced) - (Runs Conceded / Overs Bowled)
     let nrrStr = '+0.000';
@@ -1021,8 +1113,8 @@ router.get('/players/:playerId', async (req, res) => {
             role: matchPlayer.role || 'Player',
             team_id: foundInRegistration.id || foundInRegistration.teamId,
             team_name: foundInRegistration.team_name,
-            jersey_number: matchPlayer.jerseyNumber || matchPlayer.jersey_number || 10,
-            batting_style: matchPlayer.batting_style || matchPlayer.battingStyle || 'Right Hand Bat',
+            jersey_number: matchPlayer.jerseyNumber || matchPlayer.jersey_number || null,
+            batting_style: matchPlayer.batting_style || matchPlayer.battingStyle || null,
             bowling_style: matchPlayer.bowling_style || matchPlayer.bowlingStyle || 'Right Arm Medium',
             photo: matchPlayer.photo || matchPlayer.image_path || matchPlayer.profile_photo || matchPlayer.avatar || null,
             image: matchPlayer.photo || matchPlayer.image_path || matchPlayer.profile_photo || matchPlayer.avatar || null,
@@ -1146,7 +1238,7 @@ router.get('/players/:playerId', async (req, res) => {
         team_name: teamName,
         taluk: teamTaluk,
         jersey_number: playerDoc.jersey_number || playerDoc.jerseyNumber || 10,
-        batting_style: playerDoc.batting_style || 'Right Hand Bat',
+        batting_style: playerDoc.batting_style || null,
         bowling_style: playerDoc.bowling_style || 'Right Arm Medium',
         photo: ['PENDING_REVIEW', 'REJECTED'].includes(String(playerDoc.photo_verification_status || '').toUpperCase())
           ? null

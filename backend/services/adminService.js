@@ -613,9 +613,15 @@ async function scheduleMatch(fixtureData, adminEmail) {
   }
 
   let finalTourName = tournament_name;
-  if (!finalTourName && tournament_id) {
-    const tour = await db.models.Tournament.findOne({ id: tournament_id }).lean();
-    if (tour) finalTourName = tour.name;
+  let tour = null;
+  if (tournament_id || finalTourName) {
+    tour = await db.models.Tournament.findOne({
+      $or: [
+        ...(tournament_id ? [{ id: tournament_id }] : []),
+        ...(finalTourName ? [{ name: finalTourName }] : [])
+      ]
+    }).lean();
+    if (tour && !finalTourName) finalTourName = tour.name;
   }
 
   // Resolve dynamic team names if not provided
@@ -669,7 +675,7 @@ async function scheduleMatch(fixtureData, adminEmail) {
     match_date: cleanDate,
     match_time: cleanTime,
     match_type: match_type || 'T20',
-    overs_per_side: Number(overs_per_side || overs || 20),
+    overs_per_side: Number(overs_per_side || overs || tour?.overs_per_match || 20),
     stage: stage || 'LEAGUE',
     status: 'SCHEDULED',
     assigned_scorer_id: assigned_scorer_id || 'SCR-101',
@@ -678,7 +684,7 @@ async function scheduleMatch(fixtureData, adminEmail) {
     toss_time_window,
     first_ball_time,
     scorer_reporting_time,
-    schedule_confirmation_status: 'CONFIRMED',
+    schedule_confirmation_status: 'PENDING',
     umpire1_id: umpire1_id || null,
     umpire2_id: umpire2_id || null,
     umpire1_name: resolvedUmpire1Name || (umpire1_id ? 'Official Umpire 1' : null),

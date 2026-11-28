@@ -926,8 +926,22 @@ export const UsersPage: React.FC = () => {
         columns={columns}
         keyExtractor={item => item.id}
         loading={loading}
-        searchPlaceholder="Search by name, Player ID, email, or mobile..."
+        searchPlaceholder="Search by name, Player ID, email, mobile, club, or role..."
         searchFields={['id', 'player_id', 'playerId', 'name', 'email', 'mobile', 'role', 'admin_level']}
+        filterKey={(u) => [
+          u.id,
+          u.player_id,
+          u.playerId,
+          u.name,
+          u.email,
+          u.mobile,
+          u.role,
+          u.player_details?.club_choice,
+          u.player_details?.taluk,
+          u.player_details?.playing_role,
+          u.player_details?.phone,
+          u.player_details?.mobile
+        ].filter(Boolean).join(' ')}
         emptyTitle="No accounts found"
         emptyDescription="No registered users or administrators match the specified search or filter criteria."
       />

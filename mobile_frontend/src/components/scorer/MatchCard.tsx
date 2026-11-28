@@ -203,18 +203,21 @@ export default function MatchCard({ match, variant = 'upcoming' }: Props) {
   const isMobile = width < 640;
   const styles = getStyles(isMobile);
 
+  const isFinished = match.status === 'Finished' || (match as any).rawStatus === 'FINISHED';
+  const isCompleted = variant === 'completed' || match.status === 'Completed' || isFinished;
+  const isLive = !isCompleted && (variant === 'live' || match.status === 'Live');
+
   const handleAction = () => {
-    if (match.status === 'Upcoming' || variant === 'upcoming') {
+    if (isCompleted) {
+      navigate('Scorecard', { matchId: match.id, returnTo: 'Dashboard', status: match.status });
+    } else if (match.status === 'Upcoming' || variant === 'upcoming') {
       navigate('MatchSetup', { matchId: match.id });
-    } else if (match.status === 'Live' || variant === 'live') {
+    } else if (isLive) {
       navigate('LiveScoring', { matchId: match.id });
     } else {
       navigate('Scorecard', { matchId: match.id, returnTo: 'Dashboard', status: match.status });
     }
   };
-
-  const isLive = variant === 'live' || match.status === 'Live';
-  const isCompleted = variant === 'completed' || match.status === 'Completed';
 
   // Match officials resolution
   const umpire1 = match.umpire1_name || match.umpire1 || 'Thiru. K. Sundaram';
@@ -357,7 +360,7 @@ export default function MatchCard({ match, variant = 'upcoming' }: Props) {
             </TouchableOpacity>
           </View>
           <View style={styles.completedBadgeGreen}>
-            <Text style={styles.completedBadgeGreenText}>✓ COMPLETED</Text>
+            <Text style={styles.completedBadgeGreenText}>{isFinished ? '✓ FINISHED' : '✓ COMPLETED'}</Text>
           </View>
         </View>
 

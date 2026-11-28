@@ -157,12 +157,20 @@ class ScorerAuth {
 
     const isOtpValid = otpService.verifyOtpCode(cleanOtp, user.otp_hash);
     if (!isOtpValid) {
-      const nextAttempts = attempts + 1;
       try {
-        const User = db.models.User;
-        await User.updateOne({ email: cleanEmail }, { $set: nextAttempts >= 5 ? { otp_attempts: nextAttempts, otp_hash: null, otp_expires_at: null } : { otp_attempts: nextAttempts } });
+        const updatedUser = await db.models.User.findOneAndUpdate(
+          { email: cleanEmail },
+          { $inc: { otp_attempts: 1 } },
+          { returnDocument: 'after' }
+        ).lean();
         await scorerModel.incrementOtpAttempts(user.id || cleanEmail);
-        if (nextAttempts >= 5) await scorerModel.clearOtp(user.id || cleanEmail);
+        if ((updatedUser?.otp_attempts || 0) >= 5) {
+          await db.models.User.updateOne(
+            { email: cleanEmail },
+            { $set: { otp_hash: null, otp_expires_at: null } }
+          );
+          await scorerModel.clearOtp(user.id || cleanEmail);
+        }
       } catch (e) { }
       throw { status: 401, message: 'Invalid or expired OTP code.' };
     }

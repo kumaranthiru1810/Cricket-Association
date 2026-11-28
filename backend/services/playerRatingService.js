@@ -791,6 +791,15 @@ class PlayerRatingService {
       .sort({ innings_number: 1 })
       .lean();
     const inningsMap = new Map(inningsList.map(i => [i.id, i]));
+    const teamTotalRunsMap = new Map();
+    for (const inn of inningsList) {
+      if (inn?.batting_team_id) {
+        teamTotalRunsMap.set(
+          inn.batting_team_id,
+          (teamTotalRunsMap.get(inn.batting_team_id) || 0) + Number(inn.total_runs || 0)
+        );
+      }
+    }
     const inningsIds = inningsList.map(i => i.id).filter(Boolean);
     const inningScope = inningsIds.length > 0
       ? { $or: [{ match_id: matchId }, { innings_id: { $in: inningsIds } }] }
@@ -994,7 +1003,7 @@ class PlayerRatingService {
         bowlingStats: didBowl ? bwStat : null,
         fieldingStats: didField ? fStat : null,
         matchContext: {
-          team_total_runs: 160,
+          team_total_runs: (matchTeamId && teamTotalRunsMap.get(matchTeamId)) || 0,
           overs_per_side: match.overs_per_side || null,
           team_won: isWinner,
           player_of_the_match: Boolean(isPOTM)
@@ -1160,7 +1169,7 @@ class PlayerRatingService {
           latestMatchDate: { $max: '$match_date' }
         }
       },
-      { $match: { matchesCount: { $gte: 3 } } },
+      { $match: { matchesCount: { $gte: 1 } } },
       {
         $project: {
           playerId: '$_id',
@@ -1198,7 +1207,13 @@ class PlayerRatingService {
     pipeline.push({ $sort: { [sortField]: -1, matchesCount: -1 } });
     pipeline.push({ $limit: Math.min(50, Math.max(1, Number(limit || 10))) });
 
-    const leaders = await db.models.PlayerMatchRating.aggregate(pipeline);
+    let leaders = await db.models.PlayerMatchRating.aggregate(pipeline);
+    if (!leaders || leaders.length === 0) {
+      const recon = await this.reconcileCompletedMatchRatings().catch(() => ({ recalculated: 0 }));
+      if (recon && recon.recalculated > 0) {
+        leaders = await db.models.PlayerMatchRating.aggregate(pipeline);
+      }
+    }
     return leaders || [];
   }
 }

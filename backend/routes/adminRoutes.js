@@ -1754,5 +1754,195 @@ router.patch('/users/:id/photo-verification', requireAdminAuth, async (req, res)
   }
 });
 
+/**
+ * GET /api/admin/reports
+ * Day / Month / Year wise report of Tournaments and Matches (with Man of the Match & Points)
+ */
+router.get('/reports', async (req, res) => {
+  try {
+    await db.initDb();
+    const period = ['day', 'month', 'year'].includes(String(req.query.period || '').toLowerCase())
+      ? String(req.query.period).toLowerCase()
+      : 'month';
+    const now = new Date();
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const defaultDate = period === 'day'
+      ? `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`
+      : (period === 'month'
+        ? `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`
+        : `${now.getFullYear()}`);
+    const dateParam = String(req.query.date || defaultDate).trim();
+
+    const normalizeDateYMD = (val) => {
+      if (!val) return '';
+      if (val instanceof Date && !isNaN(val.getTime())) {
+        return `${val.getFullYear()}-${pad2(val.getMonth() + 1)}-${pad2(val.getDate())}`;
+      }
+      const raw = String(val).trim();
+      let m = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+      if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+      m = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+      if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+      const parsed = new Date(raw);
+      if (!isNaN(parsed.getTime())) {
+        return `${parsed.getFullYear()}-${pad2(parsed.getMonth() + 1)}-${pad2(parsed.getDate())}`;
+      }
+      return '';
+    };
+
+    const normalizedParam = period === 'year'
+      ? dateParam.slice(0, 4)
+      : (period === 'month'
+        ? (normalizeDateYMD(`${dateParam}-01`).slice(0, 7) || dateParam.slice(0, 7))
+        : (normalizeDateYMD(dateParam) || dateParam.slice(0, 10)));
+
+    const matchesPrefix = (dateVal) => {
+      const ymd = normalizeDateYMD(dateVal);
+      if (!ymd) return false;
+      if (period === 'day') return ymd === normalizedParam;
+      if (period === 'month') return ymd.startsWith(normalizedParam);
+      return ymd.startsWith(normalizedParam);
+    };
+
+    const [allTournaments, allMatches, allTeams] = await Promise.all([
+      db.models.Tournament.find({}).sort({ start_date: -1, created_at: -1 }).lean(),
+      db.models.Match.find({}).sort({ match_date: -1, created_at: -1 }).lean(),
+      db.models.Team.find({}).select('id name short_name').lean()
+    ]);
+
+    const teamNameMap = {};
+    (allTeams || []).forEach(t => {
+      if (t.id) teamNameMap[t.id] = t.name;
+    });
+
+    const tourMap = {};
+    (allTournaments || []).forEach(t => {
+      if (t.id) tourMap[t.id] = t;
+      if (t.name) tourMap[String(t.name).toLowerCase().trim()] = t;
+    });
+
+    const filteredMatches = (allMatches || []).filter(m => {
+      const d = m.match_date || m.date || m.created_at;
+      return matchesPrefix(d);
+    });
+
+    const matchTourIds = new Set(filteredMatches.map(m => m.tournament_id).filter(Boolean));
+    const filteredTournaments = (allTournaments || []).filter(t => {
+      const start = normalizeDateYMD(t.start_date);
+      const end = normalizeDateYMD(t.end_date);
+      const created = normalizeDateYMD(t.created_at);
+      if (matchesPrefix(start) || matchesPrefix(end) || matchesPrefix(created)) return true;
+      if (matchTourIds.has(t.id)) return true;
+      if (start && end) {
+        const sCmp = period === 'day' ? start : (period === 'month' ? start.slice(0, 7) : start.slice(0, 4));
+        const eCmp = period === 'day' ? end : (period === 'month' ? end.slice(0, 7) : end.slice(0, 4));
+        if (sCmp <= normalizedParam && normalizedParam <= eCmp) return true;
+      }
+      return false;
+    });
+
+    const matchCountByTour = {};
+    filteredMatches.forEach(m => {
+      if (m.tournament_id) matchCountByTour[m.tournament_id] = (matchCountByTour[m.tournament_id] || 0) + 1;
+    });
+
+    const reportTournaments = filteredTournaments.map(t => ({
+      id: t.id,
+      name: t.name,
+      short_name: t.short_name || '',
+      format: t.tournament_type || t.format || 'LEAGUE',
+      status: t.status || 'ACTIVE',
+      start_date: t.start_date || '—',
+      end_date: t.end_date || '—',
+      venue: t.venue || '—',
+      teams_count: Array.isArray(t.teams) ? t.teams.length : 0,
+      matches_in_period: matchCountByTour[t.id] || 0,
+      champion: t.champion_team_name || t.winner_team_name || '—',
+      points_win: t.points_win ?? 4,
+      points_bonus_win: t.points_bonus_win ?? 1
+    }));
+
+    const reportMatches = filteredMatches.map(m => {
+      const tr = (m.tournament_id && tourMap[m.tournament_id])
+        || (m.tournament_name && tourMap[String(m.tournament_name).toLowerCase().trim()])
+        || {};
+      const teamAName = m.team_a_name || teamNameMap[m.team_a_id] || m.team_a_id || 'Team A';
+      const teamBName = m.team_b_name || teamNameMap[m.team_b_id] || m.team_b_id || 'Team B';
+      const st = String(m.status || 'SCHEDULED').toUpperCase();
+
+      const pWin = Number(tr.points_win ?? 4);
+      const pLoss = Number(tr.points_loss ?? 0);
+      const pTie = Number(tr.points_tie ?? (pWin / 2));
+      const pNR = Number(tr.points_no_result ?? (pWin / 2));
+      const pBonusWin = Number(tr.points_bonus_win ?? 1);
+      const pBonusLoss = Number(tr.points_bonus_loss ?? -1);
+      const pWoWin = Number(tr.points_walkover_win ?? pWin);
+      const pWoLoss = Number(tr.points_walkover_loss ?? pLoss);
+
+      let teamAPoints = 0;
+      let teamBPoints = 0;
+      let pointsSummary = '—';
+
+      if (st === 'COMPLETED') {
+        if (m.winner_id === 'TIE' || m.winner_id === 'MATCH_TIED') {
+          teamAPoints = pTie;
+          teamBPoints = pTie;
+          pointsSummary = `${teamAName}: ${pTie} pts | ${teamBName}: ${pTie} pts`;
+        } else if (m.winner_id === 'NO_RESULT' || m.winner_id === 'ABANDONED') {
+          teamAPoints = pNR;
+          teamBPoints = pNR;
+          pointsSummary = `${teamAName}: ${pNR} pts | ${teamBName}: ${pNR} pts`;
+        } else if (m.winner_id === m.team_a_id || m.winner_id === m.team_b_id) {
+          const aWon = m.winner_id === m.team_a_id;
+          const winPts = m.is_walkover ? pWoWin : (pWin + (m.bonus_point_winner ? pBonusWin : 0));
+          const losePts = m.is_walkover ? pWoLoss : (pLoss + (m.bonus_point_loser_penalty ? pBonusLoss : 0));
+          teamAPoints = aWon ? winPts : losePts;
+          teamBPoints = aWon ? losePts : winPts;
+          const bonusTag = (!m.is_walkover && m.bonus_point_winner) ? ` (+${pBonusWin} Bonus)` : '';
+          pointsSummary = aWon
+            ? `${teamAName}: ${winPts} pts${bonusTag} | ${teamBName}: ${losePts} pts`
+            : `${teamBName}: ${winPts} pts${bonusTag} | ${teamAName}: ${losePts} pts`;
+        }
+      }
+
+      return {
+        id: m.id,
+        match_date: m.match_date || (m.created_at ? new Date(m.created_at).toISOString().slice(0, 10) : '—'),
+        match_time: m.match_time || '—',
+        tournament_id: m.tournament_id || null,
+        tournament_name: m.tournament_name || tr.name || 'District Match',
+        venue: m.venue || '—',
+        status: st,
+        team_a_name: teamAName,
+        team_b_name: teamBName,
+        score_a: m.score_a || '—',
+        score_b: m.score_b || '—',
+        result_summary: m.result_summary || (st === 'COMPLETED' ? 'Completed' : st),
+        player_of_match: m.player_of_match || m.man_of_the_match || '—',
+        team_a_points: teamAPoints,
+        team_b_points: teamBPoints,
+        points_summary: pointsSummary
+      };
+    });
+
+    return res.json({
+      success: true,
+      period,
+      date: dateParam,
+      summary: {
+        totalTournaments: reportTournaments.length,
+        totalMatches: reportMatches.length,
+        completedMatches: reportMatches.filter(m => m.status === 'COMPLETED').length,
+        liveMatches: reportMatches.filter(m => m.status === 'LIVE' || m.status === 'INNINGS_BREAK').length,
+        scheduledMatches: reportMatches.filter(m => m.status === 'SCHEDULED').length
+      },
+      tournaments: reportTournaments,
+      matches: reportMatches
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;
 

@@ -1825,10 +1825,10 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                         </View>
                         <View style={styles.kpiInfo}>
                           <Text style={styles.kpiVal}>
-                            {teamStats?.matchesWon ?? 5} / {matches.length || 8}
+                            {teamStats?.matchesWon ?? 0} / {teamStats?.matchesPlayed ?? 0}
                           </Text>
                           <Text style={styles.kpiLabel}>
-                            Won ({teamStats?.winRate ? `${teamStats.winRate}%` : '62.5%'})
+                            Won ({teamStats?.winRate !== undefined && teamStats?.winRate !== null ? `${teamStats.winRate}%` : '0%'})
                           </Text>
                         </View>
                       </TouchableOpacity>
@@ -1882,19 +1882,21 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                       {/* Squad & Record snapshot */}
                       <View style={styles.heroStatsGrid}>
                         <View style={styles.heroStatCol}>
-                          <Text style={styles.heroStatValue}>{squad.length || 15}</Text>
+                          <Text style={styles.heroStatValue}>{squad.length}</Text>
                           <Text style={styles.heroStatLabel}>Squad Players</Text>
                         </View>
                         <View style={styles.heroStatCol}>
-                          <Text style={styles.heroStatValue}>{teamStats?.matchesPlayed ?? matches.length ?? 8}</Text>
+                          <Text style={styles.heroStatValue}>{teamStats?.matchesPlayed ?? 0}</Text>
                           <Text style={styles.heroStatLabel}>Played</Text>
                         </View>
                         <View style={styles.heroStatCol}>
-                          <Text style={[styles.heroStatValue, { color: '#10b981' }]}>{teamStats?.matchesWon ?? 5}</Text>
+                          <Text style={[styles.heroStatValue, { color: '#10b981' }]}>{teamStats?.matchesWon ?? 0}</Text>
                           <Text style={styles.heroStatLabel}>Won</Text>
                         </View>
                         <View style={styles.heroStatCol}>
-                          <Text style={[styles.heroStatValue, { color: '#f59e0b' }]}>{teamStats?.winRate ? `${teamStats.winRate}%` : '62.5%'}</Text>
+                          <Text style={[styles.heroStatValue, { color: '#f59e0b' }]}>
+                            {teamStats?.winRate !== undefined && teamStats?.winRate !== null ? `${teamStats.winRate}%` : '0%'}
+                          </Text>
                           <Text style={styles.heroStatLabel}>Win Rate</Text>
                         </View>
                       </View>
@@ -3331,37 +3333,41 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
 
                       <View style={styles.statsGrid}>
                         <View style={styles.statBox}>
-                          <Text style={styles.statBoxVal}>{teamStats?.matchesPlayed ?? matches.length ?? 8}</Text>
+                          <Text style={styles.statBoxVal}>{teamStats?.matchesPlayed ?? 0}</Text>
                           <Text style={styles.statBoxLbl}>Matches</Text>
                         </View>
                         <View style={styles.statBox}>
-                          <Text style={[styles.statBoxVal, { color: '#10b981' }]}>{teamStats?.matchesWon ?? 5}</Text>
+                          <Text style={[styles.statBoxVal, { color: '#10b981' }]}>{teamStats?.matchesWon ?? 0}</Text>
                           <Text style={styles.statBoxLbl}>Won</Text>
                         </View>
                         <View style={styles.statBox}>
-                          <Text style={[styles.statBoxVal, { color: '#ef4444' }]}>{teamStats?.matchesLost ?? 3}</Text>
+                          <Text style={[styles.statBoxVal, { color: '#ef4444' }]}>{teamStats?.matchesLost ?? 0}</Text>
                           <Text style={styles.statBoxLbl}>Lost</Text>
                         </View>
                         <View style={styles.statBox}>
                           <Text style={[styles.statBoxVal, { color: '#f59e0b' }]}>
-                            {teamStats?.winRate ? `${teamStats.winRate}%` : '62.5%'}
+                            {teamStats?.winRate !== undefined && teamStats?.winRate !== null ? `${teamStats.winRate}%` : '0%'}
                           </Text>
                           <Text style={styles.statBoxLbl}>Win Rate</Text>
                         </View>
                         <View style={styles.statBox}>
-                          <Text style={styles.statBoxVal}>{teamStats?.totalRunsScored ?? 1420}</Text>
+                          <Text style={[styles.statBoxVal, { color: '#d97706' }]}>{teamStats?.points ?? 0}</Text>
+                          <Text style={styles.statBoxLbl}>Points</Text>
+                        </View>
+                        <View style={styles.statBox}>
+                          <Text style={styles.statBoxVal}>{teamStats?.totalRunsScored ?? 0}</Text>
                           <Text style={styles.statBoxLbl}>Total Runs</Text>
                         </View>
                         <View style={styles.statBox}>
-                          <Text style={styles.statBoxVal}>{teamStats?.totalWicketsTaken ?? 54}</Text>
+                          <Text style={styles.statBoxVal}>{teamStats?.totalWicketsTaken ?? 0}</Text>
                           <Text style={styles.statBoxLbl}>Wickets</Text>
                         </View>
                         <View style={styles.statBox}>
-                          <Text style={[styles.statBoxVal, { color: '#38bdf8' }]}>{teamStats?.highestScore ?? 214}</Text>
+                          <Text style={[styles.statBoxVal, { color: '#38bdf8' }]}>{teamStats?.highestScore ?? 0}</Text>
                           <Text style={styles.statBoxLbl}>Highest Total</Text>
                         </View>
                         <View style={styles.statBox}>
-                          <Text style={styles.statBoxVal}>{teamStats?.lowestScore ?? 138}</Text>
+                          <Text style={styles.statBoxVal}>{teamStats?.lowestScore ?? 0}</Text>
                           <Text style={styles.statBoxLbl}>Lowest Total</Text>
                         </View>
                       </View>
@@ -3376,20 +3382,23 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                         <View style={{ marginTop: 10 }}>
                           <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>🏏 Leading Run Scorer:</Text>
-                            <Text style={styles.detailValueBold}>R. Saravanan (342 runs, Avg 48.8)</Text>
+                            <Text style={styles.detailValueBold}>—</Text>
                           </View>
                           <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>⚡ Leading Wicket Taker:</Text>
-                            <Text style={styles.detailValueBold}>K. Vimal (16 wkts, Eco 6.2)</Text>
+                            <Text style={styles.detailValueBold}>—</Text>
                           </View>
                           <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>🌟 Best All-Rounder:</Text>
-                            <Text style={styles.detailValueBold}>M. Karthi (218 runs, 9 wkts)</Text>
+                            <Text style={styles.detailValueBold}>—</Text>
                           </View>
                           <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>🧤 Most Dismissals:</Text>
-                            <Text style={styles.detailValueBold}>T. Dinesh (11 catches, 3 stumpings)</Text>
+                            <Text style={styles.detailValueBold}>—</Text>
                           </View>
+                          <Text style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}>
+                            No completed match statistics recorded yet.
+                          </Text>
                         </View>
                       ) : (
                         playerStats.map((p, idx) => (
@@ -4379,6 +4388,11 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                         {isLive ? '🔴 LIVE: ' : isCompleted ? '🏆 ' : '⏳ '}
                         {scorecardData.result || (isLive ? 'Match in progress' : 'Match scheduled — not started yet')}
                       </Text>
+                      {Boolean(scorecardData.playerOfTheMatch || scorecardData.match?.playerOfTheMatch || scorecardData.player_of_match) && (
+                        <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#b45309', marginTop: 6 }}>
+                          ⭐ Man of the Match: {scorecardData.playerOfTheMatch || scorecardData.match?.playerOfTheMatch || scorecardData.player_of_match}
+                        </Text>
+                      )}
                     </View>
                   );
                 })()}

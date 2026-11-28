@@ -5,6 +5,7 @@
  */
 
 const db = require('../config/db');
+const { getTodayKolkata } = require('../utils/dateTimeValidation');
 
 class ScorerService {
   /**
@@ -243,6 +244,87 @@ class ScorerService {
   }
 
   /**
+   * Resolves allocated substitute players for a team in a match
+   */
+  async getSubstitutesForTeam(teamId, match) {
+    if (!match) return [];
+    await db.initDb();
+
+    const fullSquad = await this.getSquadForTeam(teamId, null);
+    const squadMap = {};
+    (fullSquad || []).forEach(p => {
+      if (p.id) squadMap[p.id] = p;
+      if (p._id) squadMap[p._id] = p;
+    });
+
+    const teamMap = await this.getTeamMap();
+    const team = teamMap[teamId] || { id: teamId, name: teamId };
+    const teamNameLower = (team.name || team.team_name || '').toLowerCase().trim();
+    const matchTeamAName = (match.team_a_name || '').toLowerCase().trim();
+    const matchTeamBName = (match.team_b_name || '').toLowerCase().trim();
+
+    const isTeamA = match.team_a_id === teamId ||
+      (matchTeamAName && (matchTeamAName === String(teamId).toLowerCase() || (teamNameLower && matchTeamAName === teamNameLower)));
+    const isTeamB = match.team_b_id === teamId ||
+      (matchTeamBName && (matchTeamBName === String(teamId).toLowerCase() || (teamNameLower && matchTeamBName === teamNameLower)));
+
+    const rawSubs = isTeamA ? match.team_a_substitutes : (isTeamB ? match.team_b_substitutes : []);
+    if (!Array.isArray(rawSubs) || rawSubs.length === 0) return [];
+
+    const subPlayers = [];
+    for (let i = 0; i < rawSubs.length; i++) {
+      const pId = rawSubs[i];
+      let found = squadMap[pId] || Object.values(squadMap).find(p =>
+        p.id === pId ||
+        String(p.id) === String(pId) ||
+        p._id === pId ||
+        String(p._id) === String(pId) ||
+        (p.name && p.name.toLowerCase() === String(pId).toLowerCase())
+      );
+
+      if (!found) {
+        const query = [{ id: pId }];
+        if (pId && /^[0-9a-fA-F]{24}$/.test(pId)) {
+          query.push({ _id: pId });
+        }
+        const extraP = await db.models.Player.findOne({ $or: query }).lean();
+        if (extraP) {
+          found = {
+            id: extraP.id || pId,
+            _id: extraP._id ? extraP._id.toString() : pId,
+            name: extraP.name,
+            role: extraP.role || 'BATTER',
+            jersey_number: extraP.jersey_number || extraP.jerseyNumber || (12 + i),
+            batting_style: extraP.batting_style || extraP.battingStyle || '',
+            bowling_style: extraP.bowling_style || extraP.bowlingStyle || '',
+            team_id: teamId
+          };
+        }
+      }
+
+      if (found) {
+        subPlayers.push({
+          ...found,
+          is_playing_xi: false,
+          is_substitute: true
+        });
+      } else {
+        subPlayers.push({
+          id: pId,
+          name: `Substitute ${i + 1}`,
+          role: 'SUBSTITUTE',
+          jersey_number: 12 + i,
+          is_playing_xi: false,
+          is_substitute: true,
+          team_id: teamId
+        });
+      }
+    }
+
+    return subPlayers;
+  }
+
+  /**
    * Calculates dashboard summary counts from MongoDB
    */
   async getDashboardStats(scorerId = null, userEmail = null, userRole = null) {
@@ -315,18 +397,40 @@ class ScorerService {
     }
 
     const allMatches = await db.models.Match.find(query).sort({ match_date: -1 }).lean();
-    const teamMap = await this.getTeamMap();
+    const [teamMap, tournamentsList] = await Promise.all([
+      this.getTeamMap(),
+      db.models.Tournament.find({}).select('id name overs_per_match').lean()
+    ]);
+    const tournamentOversMap = {};
+    (tournamentsList || []).forEach(t => {
+      if (t.overs_per_match) {
+        if (t.id) tournamentOversMap[t.id] = Number(t.overs_per_match);
+        if (t.name) tournamentOversMap[String(t.name).toLowerCase().trim()] = Number(t.overs_per_match);
+      }
+    });
 
     let liveCount = 0;
     let upcomingCount = 0;
     let completedCount = 0;
     let postponedCount = 0;
 
+    const todayKolkata = getTodayKolkata();
     const formattedMatches = await Promise.all(allMatches.map(async (m) => {
-      const statusUpper = (m.status || 'SCHEDULED').toUpperCase();
+      const rawStatusUpper = (m.status || 'SCHEDULED').toUpperCase();
+      const matchDateStr = typeof m.match_date === 'string'
+        ? (m.match_date.match(/^\d{4}-\d{2}-\d{2}/)?.[0] || '')
+        : '';
+      const isActiveOrScheduled =
+        rawStatusUpper === 'SCHEDULED' ||
+        rawStatusUpper === 'UPCOMING' ||
+        rawStatusUpper === 'LIVE' ||
+        rawStatusUpper === 'INNINGS_BREAK';
+      const isDatePassed = isActiveOrScheduled && Boolean(matchDateStr) && matchDateStr < todayKolkata;
+      const statusUpper = isDatePassed ? 'FINISHED' : rawStatusUpper;
+
       if (statusUpper === 'LIVE' || statusUpper === 'INNINGS_BREAK') liveCount++;
-      else if (statusUpper === 'SCHEDULED') upcomingCount++;
-      else if (statusUpper === 'COMPLETED') completedCount++;
+      else if (statusUpper === 'SCHEDULED' || statusUpper === 'UPCOMING') upcomingCount++;
+      else if (statusUpper === 'COMPLETED' || statusUpper === 'FINISHED') completedCount++;
       else if (statusUpper === 'POSTPONED') postponedCount++;
 
       const teamA = teamMap[m.team_a_id] || { name: m.team_a_id, short_name: 'TMA' };
@@ -347,6 +451,7 @@ class ScorerService {
 
       const isLive = statusUpper === 'LIVE' || statusUpper === 'INNINGS_BREAK';
       const isCompleted = statusUpper === 'COMPLETED';
+      const isFinished = statusUpper === 'FINISHED';
       const isCancelled = statusUpper === 'CANCELLED' || statusUpper === 'ABANDONED';
       const isPostponed = statusUpper === 'POSTPONED';
 
@@ -394,9 +499,9 @@ class ScorerService {
         venue: m.venue || 'Kamarajar Stadium, Virudhunagar',
         venue_maps_url: m.venue_maps_url || (m.venue ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.venue + (m.venue.toLowerCase().includes('virudhunagar') ? '' : ', Virudhunagar'))}` : 'https://www.google.com/maps/search/?api=1&query=Kamarajar+District+Stadium+Virudhunagar'),
         format: m.match_type || 'T20',
-        overs: m.overs_per_side || 20,
+        overs: tournamentOversMap[m.tournament_id] || tournamentOversMap[String(m.tournament_name || '').toLowerCase().trim()] || m.overs_per_side || 20,
         rawStatus: statusUpper,
-        status: isLive ? 'Live' : (isCompleted ? 'Completed' : (isCancelled ? 'Cancelled' : (isPostponed ? 'Postponed' : 'Upcoming'))),
+        status: isLive ? 'Live' : (isCompleted ? 'Completed' : (isFinished ? 'Finished' : (isCancelled ? 'Cancelled' : (isPostponed ? 'Postponed' : 'Upcoming')))),
         isPostponed,
         postponement: m.postponement || null,
         postponementReason: m.postponement?.reason || null,
@@ -413,6 +518,8 @@ class ScorerService {
         lastDelivery,
         lastEvent: lastDelivery,
         result: m.result_summary,
+        playerOfTheMatch: m.player_of_match || m.man_of_the_match || null,
+        player_of_match: m.player_of_match || m.man_of_match || null,
         assigned_scorer_id: m.assigned_scorer_id || '',
         assigned_scorer_name: m.assigned_scorer_name || m.scorer_name || m.assigned_scorer || '',
         assigned_scorer: m.assigned_scorer_name || m.scorer_name || m.assigned_scorer || (m.assigned_scorer_id === 'OFF-02' ? 'K. Murugan' : (m.assigned_scorer_id === 'OFF-01' ? 'S. Ramesh' : m.assigned_scorer_id || 'Official Scorer')),
@@ -644,7 +751,8 @@ class ScorerService {
     );
 
     // Enriched bowling squad
-    const matchOvers = currentInnings.revised_overs || match.revised_overs || match.overs_per_side || 20;
+    const baseMatchOvers = Number(tournamentDoc?.overs_per_match || match.overs_per_side || 20);
+    const matchOvers = currentInnings.revised_overs || match.revised_overs || baseMatchOvers;
     const maxQuota = customBowlerMax > 0 ? customBowlerMax : (Math.ceil(matchOvers / 5) || 4);
 
     const enrichedBowlingSquad = bowlingSquad.map(p => {
@@ -738,8 +846,8 @@ class ScorerService {
         tournament: match.tournament_name || 'VPL 2026',
         venue: match.venue || 'Kamarajar Stadium, Virudhunagar',
         venue_maps_url: match.venue_maps_url || (match.venue ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(match.venue + (match.venue.toLowerCase().includes('virudhunagar') ? '' : ', Virudhunagar'))}` : 'https://www.google.com/maps/search/?api=1&query=Kamarajar+District+Stadium+Virudhunagar'),
-        overs: currentInnings.revised_overs || match.revised_overs || match.overs_per_side || 20,
-        originalOvers: match.overs_per_side || 20,
+        overs: currentInnings.revised_overs || match.revised_overs || baseMatchOvers,
+        originalOvers: baseMatchOvers,
         revisedOvers: currentInnings.revised_overs || match.revised_overs || null,
         revisedTarget: match.revised_target || null,
         revisedComments: match.revised_comments || '',
@@ -1312,6 +1420,8 @@ class ScorerService {
         overs: match.overs_per_side || 20,
         status: statusLabel,
         result: match.result_summary || defaultResult,
+        playerOfTheMatch: match.player_of_match || match.man_of_the_match || null,
+        player_of_match: match.player_of_match || match.man_of_the_match || null,
         umpire1_id: match.umpire1_id || null,
         umpire2_id: match.umpire2_id || null,
         umpire1_name: match.umpire1_name || null,
@@ -1331,6 +1441,8 @@ class ScorerService {
       overs: match.overs_per_side || 20,
       status: statusLabel,
       result: match.result_summary || defaultResult,
+      playerOfTheMatch: match.player_of_match || match.man_of_the_match || null,
+      player_of_match: match.player_of_match || match.man_of_match || null,
       innings: formattedInnings,
       squads: {
         teamA: squadA,

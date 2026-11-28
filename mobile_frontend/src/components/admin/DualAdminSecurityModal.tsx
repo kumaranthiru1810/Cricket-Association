@@ -12,6 +12,14 @@ import {
   Alert
 } from 'react-native';
 import { AdminSecurityApi, getCurrentUser } from '../../services/api';
+import {
+  validateEmail,
+  validateName,
+  normalizeSpaces,
+  sanitizeSpaceCollapsedInput,
+  preventSpaceKey,
+  preventLeadingSpaceKey
+} from '../../utils/validation';
 import { Ionicons } from '@expo/vector-icons';
 
 export interface DualAdminSecurityModalProps {
@@ -42,6 +50,8 @@ export default function DualAdminSecurityModal({
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [candidateEmailError, setCandidateEmailError] = useState<string | undefined>(undefined);
+  const [candidateNameError, setCandidateNameError] = useState<string | undefined>(undefined);
 
   // Current logged in user
   const currentUser = getCurrentUser();
@@ -193,9 +203,18 @@ export default function DualAdminSecurityModal({
 
   // Handle Candidate Email Lookup
   const handleCheckCandidate = async (email: string) => {
-    const trimmed = email.trim();
-    setCandidateEmail(trimmed);
-    if (!trimmed || !trimmed.includes('@') || trimmed.length < 5) {
+    const sanitized = (email || '').replace(/\s+/g, '').replace(/[^a-zA-Z0-9_.@+-]/g, '').toLowerCase();
+    setCandidateEmail(sanitized);
+    if (!sanitized) {
+      setCandidateEmailError('Candidate Email Address is required.');
+    } else if (sanitized.includes('@') && !sanitized.endsWith('@')) {
+      const emailRes = validateEmail(sanitized, 'Candidate Email Address is required.');
+      setCandidateEmailError(emailRes.isValid ? undefined : emailRes.error);
+    } else {
+      setCandidateEmailError(undefined);
+    }
+
+    if (!sanitized || !sanitized.includes('@') || sanitized.length < 5) {
       setCandidateCheckStatus('idle');
       setCandidateCheckMessage('');
       return;
@@ -203,14 +222,14 @@ export default function DualAdminSecurityModal({
 
     setCandidateCheckStatus('checking');
     try {
-      const res = await AdminSecurityApi.searchCandidate(trimmed);
+      const res = await AdminSecurityApi.searchCandidate(sanitized);
       if (res && res.is_admin) {
         setCandidateCheckStatus('already_admin');
         setCandidateCheckMessage('Account already possesses Administrator privileges.');
       } else if (res && (res.exists || res.found)) {
         const candidateUser = res.candidate || res.user;
         setCandidateCheckStatus('found');
-        setCandidateCheckMessage(`Found existing account: ${candidateUser?.name || trimmed} (${candidateUser?.role || 'USER'})`);
+        setCandidateCheckMessage(`Found existing account: ${candidateUser?.name || sanitized} (${candidateUser?.role || 'USER'})`);
         if (!candidateName && candidateUser?.name) {
           setCandidateName(candidateUser.name);
         }
@@ -226,9 +245,20 @@ export default function DualAdminSecurityModal({
   // Step 1: Submit Promote Request
   const handleInitiatePromote = async () => {
     setErrorMessage('');
-    if (!candidateEmail || !candidateEmail.includes('@')) {
-      setErrorMessage('Please enter a valid candidate Gmail address.');
+    const emailRes = validateEmail(candidateEmail, 'Candidate Email Address is required.');
+    if (!emailRes.isValid) {
+      setCandidateEmailError(emailRes.error);
+      setErrorMessage(emailRes.error || 'Please enter a valid candidate email address.');
       return;
+    }
+    const cleanName = normalizeSpaces(candidateName);
+    if (cleanName) {
+      const nameRes = validateName(cleanName, 'Administrator Full Name');
+      if (!nameRes.isValid) {
+        setCandidateNameError(nameRes.error);
+        setErrorMessage(nameRes.error || 'Please enter a valid administrator name.');
+        return;
+      }
     }
     if (candidateCheckStatus === 'already_admin') {
       setErrorMessage('This user already possesses Administrator privileges.');
@@ -247,6 +277,8 @@ export default function DualAdminSecurityModal({
         name: candidateName.trim() || undefined,
         approver1Id: selectedApprover1Id || undefined,
         approver2Id: selectedApprover2Id || undefined
+        email: candidateEmail.trim().toLowerCase(),
+        name: cleanName || undefined
       });
 
       if (!res.success) {
@@ -545,15 +577,29 @@ export default function DualAdminSecurityModal({
                     <View style={styles.formGroup}>
                       <Text style={styles.fieldLabel}>Candidate Email Address *</Text>
                       <TextInput
-                        style={styles.textInput}
-                        placeholder="e.g. partner@gmail.com"
+                        style={[styles.textInput, candidateEmailError ? { borderColor: '#dc2626', backgroundColor: '#fef2f2' } : null]}
+                        placeholder="e.g. mathan33msd@gmail.com"
                         placeholderTextColor="#94a3b8"
                         keyboardType="email-address"
                         autoCapitalize="none"
                         value={candidateEmail}
+                        onKeyPress={preventSpaceKey}
+                        onChange={(e: any) => {
+                          if (Platform.OS === 'web' && e?.target && typeof e.target.value === 'string') {
+                            const cleanedDom = e.target.value.replace(/\s+/g, '').replace(/[^a-zA-Z0-9_.@+-]/g, '').toLowerCase();
+                            if (e.target.value !== cleanedDom) e.target.value = cleanedDom;
+                          }
+                        }}
                         onChangeText={handleCheckCandidate}
+                        onBlur={() => {
+                          const emailRes = validateEmail(candidateEmail, 'Candidate Email Address is required.');
+                          setCandidateEmailError(emailRes.isValid ? undefined : emailRes.error);
+                        }}
                         editable={!submitting}
                       />
+                      {candidateEmailError && (
+                        <Text style={[styles.fieldHelper, { color: '#dc2626' }]}>⚠️ {candidateEmailError}</Text>
+                      )}
                       {candidateCheckStatus === 'checking' && (
                         <Text style={styles.fieldHelper}>Checking account registry...</Text>
                       )}
@@ -581,13 +627,36 @@ export default function DualAdminSecurityModal({
                     <View style={styles.formGroup}>
                       <Text style={styles.fieldLabel}>Administrator Full Name (Optional)</Text>
                       <TextInput
-                        style={styles.textInput}
-                        placeholder="e.g. Athi Partner"
+                        style={[styles.textInput, candidateNameError ? { borderColor: '#dc2626', backgroundColor: '#fef2f2' } : null]}
+                        placeholder="e.g. K. MATHANKUMAR"
                         placeholderTextColor="#94a3b8"
                         value={candidateName}
-                        onChangeText={setCandidateName}
+                        onKeyPress={(e) => preventLeadingSpaceKey(e, candidateName)}
+                        onChangeText={(val) => {
+                          const sanitized = sanitizeSpaceCollapsedInput(val);
+                          setCandidateName(sanitized);
+                          if (!sanitized.trim()) {
+                            setCandidateNameError(undefined);
+                          } else {
+                            const res = validateName(sanitized, 'Administrator Full Name');
+                            setCandidateNameError(res.isValid ? undefined : res.error);
+                          }
+                        }}
+                        onBlur={() => {
+                          const normalized = normalizeSpaces(candidateName);
+                          if (normalized !== candidateName) setCandidateName(normalized);
+                          if (!normalized) {
+                            setCandidateNameError(undefined);
+                          } else {
+                            const res = validateName(normalized, 'Administrator Full Name');
+                            setCandidateNameError(res.isValid ? undefined : res.error);
+                          }
+                        }}
                         editable={!submitting}
                       />
+                      {candidateNameError && (
+                        <Text style={[styles.fieldHelper, { color: '#dc2626' }]}>⚠️ {candidateNameError}</Text>
+                      )}
                     </View>
 
                     {/* Dynamic Approver Selection (Choose which 2 admins receive OTPs) */}

@@ -12,6 +12,18 @@ const { sendOtpEmail, sendPlayerTeamEmail } = require('../../config/mailer');
 const db = require('../../config/db');
 
 const { JWT_SECRET } = require('../../config/env');
+const { normalizeAddress, validateAddress } = require('../../utils/addressValidation');
+const {
+  validatePersonName,
+  validateClubOrAcademyName,
+  validateStudyingInstitution,
+  validateStudyLevel,
+  validateStudyBranchOrClass,
+  validateWorkingInstitution,
+  validateDeclarationDate,
+  validateDeclarationPlace,
+  validateIndianMobile
+} = require('../../utils/playerDetailsValidation');
 
 class PlayerAuth {
   /**
@@ -157,21 +169,15 @@ class PlayerAuth {
     if (!playerInfo) {
       return {
         success: true,
-        message: 'If an eligible player account exists, an OTP has been dispatched.'
+        message: 'If an eligible account exists, an OTP has been sent.'
       };
     }
 
     const teamStatus = (playerInfo.team_status || 'PENDING').toUpperCase();
-    if (teamStatus === 'PENDING') {
-      throw {
-        status: 403,
-        message: `⏳ Team "${playerInfo.team_name}" is currently PENDING admin approval. Players can log in once the admin approves the team squad.`
-      };
-    }
-    if (teamStatus === 'REJECTED') {
-      throw {
-        status: 403,
-        message: `❌ Team "${playerInfo.team_name}" was REJECTED by administrator.`
+    if (teamStatus === 'PENDING' || teamStatus === 'REJECTED') {
+      return {
+        success: true,
+        message: 'If an eligible account exists, an OTP has been sent.'
       };
     }
 
@@ -210,14 +216,9 @@ class PlayerAuth {
       otp: rawOtp
     });
 
-    console.log(`\n🏏 [PLAYER OTP DISPATCH] Player: ${playerInfo.name} | Email: ${cleanEmail} | Team: ${playerInfo.team_name} | Status: Dispatched securely via email\n`);
-
     return {
       success: true,
-      message: `OTP sent to ${cleanEmail} via Nodemailer.`,
-      playerName: playerInfo.name,
-      teamName: playerInfo.team_name,
-      email: cleanEmail
+      message: 'If an eligible account exists, an OTP has been sent.'
     };
   }
 
@@ -301,6 +302,18 @@ class PlayerAuth {
       throw { status: 400, message: 'Player name and email are required.' };
     }
 
+    const playerNameCheck = validatePersonName(name, 'Player Full Name');
+    if (!playerNameCheck.isValid) {
+      throw { status: 400, message: playerNameCheck.error };
+    }
+    const cleanPlayerName = playerNameCheck.normalized;
+
+    const fatherNameCheck = validatePersonName(fatherName, 'Father Name');
+    if (!fatherNameCheck.isValid) {
+      throw { status: 400, message: fatherNameCheck.error };
+    }
+    const cleanFatherName = fatherNameCheck.normalized;
+
     const cleanEmail = email.trim().toLowerCase();
     const existing = await userModel.findByEmail(cleanEmail);
     if (existing) {
@@ -312,9 +325,95 @@ class PlayerAuth {
       throw { status: 409, message: 'A player with this email address is already registered. Two players cannot use the same email.' };
     }
 
-    const cleanPhone = (phone || mobile) ? String(phone || mobile).replace(/\D/g, '') : null;
-    if (!cleanPhone || cleanPhone.length !== 10) {
-      throw { status: 400, message: 'A valid 10-digit contact phone number is required.' };
+    const rawPhone = mobile !== undefined && mobile !== null && String(mobile) !== '' ? mobile : phone;
+    const phoneCheck = validateIndianMobile(rawPhone);
+    if (!phoneCheck.isValid) {
+      throw { status: 400, message: phoneCheck.error };
+    }
+    const cleanPhone = phoneCheck.normalized;
+
+    const existingPhoneUser = await db.models.User.findOne({
+      $or: [
+        { mobile: cleanPhone },
+        { phone: cleanPhone },
+        { 'player_details.mobile': cleanPhone },
+        { 'player_details.phone': cleanPhone }
+      ],
+      status: { $ne: 'REJECTED' }
+    }).lean();
+    if (existingPhoneUser) {
+      throw { status: 409, message: 'This mobile number is already registered. Please use another mobile number or login directly.' };
+    }
+
+    const existingPhonePlayer = await db.models.Player.findOne({
+      $or: [{ phone: cleanPhone }, { mobile: cleanPhone }]
+    }).lean();
+    if (existingPhonePlayer) {
+      throw { status: 409, message: 'A player with this mobile number is already registered. Please use another mobile number.' };
+    }
+    const addressCheck = validateAddress(address);
+    if (!addressCheck.isValid) {
+      throw { status: 400, message: addressCheck.error };
+    }
+    const cleanAddress = addressCheck.normalized;
+
+    const clubCheck = validateClubOrAcademyName(clubChoice);
+    if (!clubCheck.isValid) {
+      throw { status: 400, message: clubCheck.error };
+    }
+    const cleanClubChoice = clubCheck.normalized;
+
+    const declPlaceCheck = validateDeclarationPlace(declarationPlace);
+    if (!declPlaceCheck.isValid) {
+      throw { status: 400, message: declPlaceCheck.error };
+    }
+    const cleanDeclarationPlace = declPlaceCheck.normalized;
+
+    const declDateCheck = validateDeclarationDate(declarationDate);
+    if (!declDateCheck.isValid) {
+      throw { status: 400, message: declDateCheck.error };
+    }
+    const cleanDeclarationDate = declDateCheck.normalized;
+
+    const cleanOccupationType = occupationType ? String(occupationType).trim().toUpperCase() : '';
+    let cleanStudyingInstitution = '';
+    let cleanStudyLevel = '';
+    let cleanBranchYearSec = '';
+    let cleanClassSection = '';
+    let cleanWorkingInstitution = '';
+
+    if (cleanOccupationType === 'STUDYING') {
+      const studyInstCheck = validateStudyingInstitution(studyingInstitution);
+      if (!studyInstCheck.isValid) {
+        throw { status: 400, message: studyInstCheck.error };
+      }
+      cleanStudyingInstitution = studyInstCheck.normalized;
+
+      const studyLvlCheck = validateStudyLevel(studyLevel);
+      if (!studyLvlCheck.isValid) {
+        throw { status: 400, message: studyLvlCheck.error };
+      }
+      cleanStudyLevel = studyLvlCheck.normalized;
+
+      if (cleanStudyLevel === 'COLLEGE') {
+        const branchCheck = validateStudyBranchOrClass(branchYearSec, 'COLLEGE');
+        if (!branchCheck.isValid) {
+          throw { status: 400, message: branchCheck.error };
+        }
+        cleanBranchYearSec = branchCheck.normalized;
+      } else {
+        const classCheck = validateStudyBranchOrClass(classSection, 'SCHOOL');
+        if (!classCheck.isValid) {
+          throw { status: 400, message: classCheck.error };
+        }
+        cleanClassSection = classCheck.normalized;
+      }
+    } else if (cleanOccupationType === 'WORKING') {
+      const workInstCheck = validateWorkingInstitution(workingInstitution);
+      if (!workInstCheck.isValid) {
+        throw { status: 400, message: workInstCheck.error };
+      }
+      cleanWorkingInstitution = workInstCheck.normalized;
     }
     const cleanAadhaar = (aadhaar || aadhaarNumber || aadhaar_number) ? String(aadhaar || aadhaarNumber || aadhaar_number).replace(/\D/g, '') : null;
 
@@ -359,7 +458,7 @@ class PlayerAuth {
 
     const user = await userModel.create({
       id: playerId,
-      name: name.trim(),
+      name: cleanPlayerName,
       email: cleanEmail,
       mobile: cleanPhone,
       phone: cleanPhone,
@@ -387,31 +486,32 @@ class PlayerAuth {
         bowling_arm: bowlingArm || '',
         bowling_category: bowlingCategory || '',
         bowling_action: bowlingAction || '',
-        club_choice: clubChoice || '',
+        club_choice: cleanClubChoice,
         photo: storedPhoto,
         image_path: storedPhoto,
         photo_phash: photoPhash,
         photo_verification_status: photoVerificationStatus,
         photo_verification_reason: photoVerificationReason,
         photo_metadata: photoMetadata,
-        father_name: fatherName ? String(fatherName).trim() : '',
+        consent_at: (payload.photoConsent || payload.guardianConsent || payload.declarationAgreed) ? new Date() : null,
+        father_name: cleanFatherName,
         date_of_birth: dateOfBirth ? String(dateOfBirth).trim() : '',
         age: age ? String(age).trim() : '',
         place_of_birth: placeOfBirth ? String(placeOfBirth).trim() : '',
-        address: address ? String(address).trim() : '',
-        occupation_type: occupationType ? String(occupationType).trim() : '',
-        working_institution: workingInstitution ? String(workingInstitution).trim() : '',
-        studying_institution: studyingInstitution ? String(studyingInstitution).trim() : '',
-        study_level: studyLevel ? String(studyLevel).trim() : '',
-        branch_year_sec: branchYearSec ? String(branchYearSec).trim() : '',
-        class_section: classSection ? String(classSection).trim() : '',
+        address: cleanAddress,
+        occupation_type: cleanOccupationType,
+        working_institution: cleanOccupationType === 'WORKING' ? cleanWorkingInstitution : (cleanOccupationType === 'STUDYING' ? '' : (workingInstitution ? String(workingInstitution).trim() : '')),
+        studying_institution: cleanOccupationType === 'STUDYING' ? cleanStudyingInstitution : (cleanOccupationType === 'WORKING' ? '' : (studyingInstitution ? String(studyingInstitution).trim() : '')),
+        study_level: cleanOccupationType === 'STUDYING' ? cleanStudyLevel : (cleanOccupationType === 'WORKING' ? '' : (studyLevel ? String(studyLevel).trim() : '')),
+        branch_year_sec: cleanOccupationType === 'STUDYING' ? cleanBranchYearSec : (cleanOccupationType === 'WORKING' ? '' : (branchYearSec ? String(branchYearSec).trim() : '')),
+        class_section: cleanOccupationType === 'STUDYING' ? cleanClassSection : (cleanOccupationType === 'WORKING' ? '' : (classSection ? String(classSection).trim() : '')),
         batter_hand: batterHand ? String(batterHand).trim() : '',
         batter_position: batterPosition ? String(batterPosition).trim() : '',
         bowler_hand: bowlerHand ? String(bowlerHand).trim() : '',
         bowler_type: bowlerType ? String(bowlerType).trim() : '',
         is_wicket_keeper: Boolean(isWicketKeeper),
-        declaration_place: declarationPlace ? String(declarationPlace).trim() : '',
-        declaration_date: declarationDate ? String(declarationDate).trim() : '',
+        declaration_place: cleanDeclarationPlace,
+        declaration_date: cleanDeclarationDate,
         declaration_agreed: Boolean(declarationAgreed)
       }
     });

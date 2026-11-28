@@ -998,7 +998,7 @@ export default function LiveScoringScreen() {
             title: 'MAN OF THE MATCH!',
             badge: '🏆 OFFICIAL PLAYER OF THE MATCH 🏆',
             subtitle: 'Spectacular match-winning all-round performance on the big stage!',
-            playerName: matchInfo?.playerOfTheMatch || 'N. Jagadeesan',
+            playerName: matchInfo?.playerOfTheMatch || 'To be announced',
             teamName: matchInfo?.battingTeam || 'Virudhunagar Spartans',
             scoreText: '86* (48b)',
             ballsText: 'Match Winner',
@@ -1919,6 +1919,8 @@ export default function LiveScoringScreen() {
     const clientDeliveryId = `cdel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const payload = {
       clientDeliveryId,
+      expectedOver: Math.floor(balls / 6),
+      expectedBall: balls % 6,
       strikerId: striker?.id,
       nonStrikerId: nonStriker?.id,
       bowlerId: bowler?.id,
@@ -8720,7 +8722,7 @@ export default function LiveScoringScreen() {
                           </View>
                           <View style={styles.motmInfoCol}>
                             <Text style={styles.motmPlayerTitle}>
-                              {matchInfo?.playerOfTheMatch || playerOfMatchInput || 'N. Jagadeesan'}
+                              {matchInfo?.playerOfTheMatch || playerOfMatchInput || 'To be announced'}
                             </Text>
                             <Text style={styles.motmTeamSubtitle}>
                               {winnerName || matchInfo?.teamA} • Match Winning Performance

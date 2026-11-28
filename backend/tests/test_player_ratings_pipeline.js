@@ -313,12 +313,43 @@ async function runTests() {
     });
     assert(Math.abs(handBat.batting_rating - 7.4) <= 0.1, `Expected batting 40(25) 4x4 2x6 ~7.4, got ${handBat.batting_rating}`);
 
+    const handBat180 = playerRatingService.calculateMatchRating({
+      battingStats: { runs: 40, balls: 25, fours: 4, sixes: 2, is_out: true },
+      matchContext: { team_total_runs: 180 },
+      role: 'BATSMAN',
+      format: 'T20'
+    });
+    assert(Math.abs(handBat180.batting_rating - 7.4) <= 0.1, `Expected batting 40(25) in 180 team total ~7.4, got ${handBat180.batting_rating}`);
+
     const handBowl = playerRatingService.calculateMatchRating({
       bowlingStats: { overs: 4, balls_bowled: 24, runs_conceded: 28, wickets: 2, maidens: 0, dot_balls: 10, has_delivery_dots: true },
       role: 'BOWLER',
       format: 'T20'
     });
     assert(Math.abs(handBowl.bowling_rating - 6.7) <= 0.1, `Expected bowling 4-0-28-2 (10 dots) ~6.7, got ${handBowl.bowling_rating}`);
+
+    // 16. Real innings total_runs used for team share bonus (40/180 < 25% -> no +0.4 bonus, vs 40/100 = 40% -> +0.8 bonus)
+    const mHighTotal = `${prefix}-TT-HIGH`;
+    const mLowTotal = `${prefix}-TT-LOW`;
+    const ttPlayer = `${prefix}-TT-P1`;
+    await db.models.Match.create([
+      { id: mHighTotal, team_a_id: 'TA', team_b_id: 'TB', status: 'COMPLETED', match_type: 'T20', overs_per_side: 20, match_date: new Date() },
+      { id: mLowTotal, team_a_id: 'TA', team_b_id: 'TB', status: 'COMPLETED', match_type: 'T20', overs_per_side: 20, match_date: new Date() }
+    ]);
+    await db.models.Innings.create([
+      { id: `${prefix}-TT-I1`, match_id: mHighTotal, innings_number: 1, batting_team_id: 'TA', bowling_team_id: 'TB', total_runs: 200 },
+      { id: `${prefix}-TT-I2`, match_id: mLowTotal, innings_number: 1, batting_team_id: 'TA', bowling_team_id: 'TB', total_runs: 100 }
+    ]);
+    await db.models.InningsBatter.create([
+      { id: `${prefix}-TT-B1`, innings_id: `${prefix}-TT-I1`, player_id: ttPlayer, player_name: 'TT Batter', runs: 40, balls: 25, fours: 4, sixes: 2, is_out: true },
+      { id: `${prefix}-TT-B2`, innings_id: `${prefix}-TT-I2`, player_id: ttPlayer, player_name: 'TT Batter', runs: 40, balls: 25, fours: 4, sixes: 2, is_out: true }
+    ]);
+    const highTotalRes = await playerRatingService.recalculateMatchRatings(mHighTotal);
+    const lowTotalRes = await playerRatingService.recalculateMatchRatings(mLowTotal);
+    assert(
+      lowTotalRes.ratings[0].batting_rating > highTotalRes.ratings[0].batting_rating,
+      `40/100 (40% share) must rate higher than 40/200 (20% share): got ${lowTotalRes.ratings[0].batting_rating} vs ${highTotalRes.ratings[0].batting_rating}`
+    );
 
     console.log('✅ All Dynamic Player Rating Pipeline tests passed!');
   } finally {

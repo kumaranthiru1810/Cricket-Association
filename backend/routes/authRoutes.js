@@ -7,7 +7,7 @@ const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
 const { verifyToken, requireAdminAuth } = require('../middleware/authMiddleware');
-const { otpRateLimiter, otpRequestRateLimiter, registerRateLimiter } = require('../middleware/securityMiddleware');
+const { authRateLimiter, otpRateLimiter, otpRequestRateLimiter, registerRateLimiter } = require('../middleware/securityMiddleware');
 const { requireTurnstile } = require('../middleware/turnstileMiddleware');
 const {
   validateBody,
@@ -25,9 +25,9 @@ const {
 // 1. Email OTP Verification for Registration
 router.post('/send-registration-otp', requireTurnstile, otpRequestRateLimiter, validateBody(otpRequestSchema), (req, res) => authController.requestRegistrationOtp(req, res));
 router.post('/verify-registration-otp', otpRateLimiter, validateBody(otpVerifySchema), (req, res) => authController.verifyRegistrationOtp(req, res));
-router.post('/check-registration-exists', (req, res) => authController.checkRegistrationExists(req, res));
-router.post('/check-team-exists', (req, res) => authController.checkTeamExists(req, res));
-router.post('/check-player-email', (req, res) => authController.checkPlayerEmail(req, res));
+router.post('/check-registration-exists', requireTurnstile, authRateLimiter, (req, res) => authController.checkRegistrationExists(req, res));
+router.post('/check-team-exists', requireTurnstile, authRateLimiter, (req, res) => authController.checkTeamExists(req, res));
+router.post('/check-player-email', requireTurnstile, authRateLimiter, (req, res) => authController.checkPlayerEmail(req, res));
 
 // 1.1. Multi-Step Forgot Password Flow (4-Digit OTP & Bcrypt Password Reset)
 router.post('/forgot-password/request-otp', requireTurnstile, otpRequestRateLimiter, validateBody(otpRequestSchema), (req, res) => authController.requestForgotPasswordOtp(req, res));
@@ -49,7 +49,7 @@ router.post('/team/request-otp', requireTurnstile, otpRequestRateLimiter, (req, 
 router.post('/team/verify-otp', otpRateLimiter, (req, res) => authController.verifyTeamOtp(req, res));
 router.post('/player/request-otp', requireTurnstile, otpRequestRateLimiter, (req, res) => authController.requestPlayerOtp(req, res));
 router.post('/player/verify-otp', otpRateLimiter, (req, res) => authController.verifyPlayerOtp(req, res));
-router.post('/player/find-team', (req, res) => authController.findPlayerTeam(req, res));
+router.post('/player/find-team', requireTurnstile, authRateLimiter, (req, res) => authController.findPlayerTeam(req, res));
 
 // 4. Registration Endpoints by Role (With Password)
 router.post('/register', registerRateLimiter, requireTurnstile, (req, res) => authController.register(req, res));

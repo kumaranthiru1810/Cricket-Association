@@ -912,57 +912,87 @@ export default function HomeScreen() {
         setMobileNavOpen={setMobileNavOpen}
       />
 
-      {/* ─── LIVE TICKER BAR (DIRECTLY BELOW NAVBAR) ────────────────────── */}
-      <View style={styles.liveTickerBar}>
-        <View style={styles.liveTickerInner}>
-          {/* Crimson Live Ticker Badge */}
-          <View style={styles.liveTickerBadge}>
-            <View style={styles.liveTickerDot} />
-            <Text style={styles.liveTickerBadgeText}>LIVE TICKER</Text>
-          </View>
+      {/* ─── LIVE / HIGHLIGHTS TICKER BAR (DIRECTLY BELOW NAVBAR) ────────────────────── */}
+      {(() => {
+        let todayStr = '';
+        try {
+          todayStr = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Kolkata',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          }).format(new Date());
+        } catch {
+          const d = new Date();
+          todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+        const liveM = publicMatches.find(m => {
+          const s = (m.status || '').toLowerCase();
+          const raw = (m.rawStatus || '').toUpperCase();
+          const isPostponed = s === 'postponed' || raw === 'POSTPONED' || !!m.isPostponed || !!m.postponement?.is_postponed;
+          if (isPostponed) return false;
+          const rawD = String(m.match_date || m.date || '').trim();
+          const isoDate = rawD.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+          if (isoDate && isoDate < todayStr) return false;
+          return s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK';
+        });
+        const compM = publicMatches
+          .filter(m => (m.status || '').toLowerCase() === 'completed' || (m.rawStatus || '').toUpperCase() === 'COMPLETED')
+          .sort((a, b) => {
+            const dA = String(a.match_date || a.date || '');
+            const dB = String(b.match_date || b.date || '');
+            if (dA !== dB) return dB.localeCompare(dA);
+            const tA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+            const tB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+            return tB - tA;
+          });
+        const lastCompletedMatch = compM[0] || null;
 
-          {/* Marquee Updates Content */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.liveTickerScrollView}
-            contentContainerStyle={styles.liveTickerScrollContent}
-          >
-            {(() => {
-              const liveM = publicMatches.find(m => (m.status || '').toLowerCase() === 'live' || (m.rawStatus || '').toUpperCase() === 'LIVE');
-              const compM = publicMatches.filter(m => (m.status || '').toLowerCase() === 'completed' || (m.rawStatus || '').toUpperCase() === 'COMPLETED');
-              return (
+        return (
+          <View style={styles.liveTickerBar}>
+            <View style={styles.liveTickerInner}>
+              {/* Live Ticker Badge when live match exists; Highlights Badge otherwise */}
+              <View style={[styles.liveTickerBadge, !liveM && { backgroundColor: '#b45309' }]}>
+                {liveM ? (
+                  <View style={styles.liveTickerDot} />
+                ) : (
+                  <Ionicons name="trophy" size={11} color="#ffffff" style={{ marginRight: 4 }} />
+                )}
+                <Text style={styles.liveTickerBadgeText}>{liveM ? 'LIVE TICKER' : 'HIGHLIGHTS'}</Text>
+              </View>
+
+              {/* Marquee Updates Content */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.liveTickerScrollView}
+                contentContainerStyle={styles.liveTickerScrollContent}
+              >
                 <TouchableOpacity
                   onPress={() => {
                     if (liveM) handleOpenScorecard(liveM);
+                    else if (lastCompletedMatch) handleOpenScorecard(lastCompletedMatch);
                     else if (publicMatches[0]) handleOpenScorecard(publicMatches[0]);
                   }}
                   activeOpacity={0.8}
                 >
                   <Text style={styles.liveTickerText}>
                     {liveM ? (
+                      <Text style={styles.tickerMatchHighlight}>
+                        {`LIVE: ${liveM.teamA} ${liveM.scoreA || ''} vs ${liveM.teamB}${liveM.scoreB && liveM.scoreB !== 'Yet to bat' ? ' ' + liveM.scoreB : ' (Yet to bat)'} — ${liveM.current_innings_number === 2 ? '2nd Innings in Progress' : '1st Innings in Progress'}`}
+                      </Text>
+                    ) : lastCompletedMatch ? (
                       <>
-                        <Text style={styles.tickerMatchHighlight}>
-                          {`LIVE: ${liveM.teamA} ${liveM.scoreA || ''} vs ${liveM.teamB}${liveM.scoreB && liveM.scoreB !== 'Yet to bat' ? ' ' + liveM.scoreB : ' (Yet to bat)'} — ${liveM.current_innings_number === 2 ? '2nd Innings in Progress' : '1st Innings in Progress'}`}
-                        </Text>
-                        {'   •   '}
+                        <Text style={styles.tickerPrefix}>{lastCompletedMatch.teamA} vs {lastCompletedMatch.teamB}:</Text>
+                        <Text style={styles.tickerMatchHighlight}>{` ${lastCompletedMatch.scoreA || ''} vs ${lastCompletedMatch.scoreB || ''}`}</Text>
+                        {` — ${lastCompletedMatch.result || lastCompletedMatch.result_summary || 'Match Concluded'}`}
                       </>
-                    ) : null}
-                    {compM.map((cm, i) => (
-                      <React.Fragment key={cm.id || i}>
-                        <Text style={styles.tickerPrefix}>{cm.teamA} vs {cm.teamB}:</Text>
-                        <Text style={styles.tickerMatchHighlight}>{` ${cm.scoreA || ''} vs ${cm.scoreB || ''}`}</Text>
-                        {` — ${cm.result || cm.result_summary || 'Match Concluded'}${i < compM.length - 1 ? '   •   ' : ''}`}
-                      </React.Fragment>
-                    ))}
-                    {publicMatches.length === 0 && (
-                      <Text style={styles.tickerPrefix}>Cricket Federation of Virudhunagar District • Official Match Centre</Text>
+                    ) : (
+                      <Text style={styles.tickerPrefix}>Official Match Highlights • Cricket Federation of Virudhunagar District</Text>
                     )}
                   </Text>
                 </TouchableOpacity>
-              );
-            })()}
-          </ScrollView>
+              </ScrollView>
 
           {/* Right Links */}
           {!isMobile && (
@@ -996,9 +1026,11 @@ export default function HomeScreen() {
                 <Text style={styles.tickerLinkText}>Sports Integrity</Text>
               </TouchableOpacity>
             </View>
-          )}
-        </View>
-      </View>
+              )}
+            </View>
+          </View>
+        );
+      })()}
 
       {/* MAIN SCROLLABLE CONTENT */}
       <ScrollView
@@ -1287,29 +1319,47 @@ export default function HomeScreen() {
 
             {/* Filter Tabs */}
             {(() => {
-              const liveCount = publicMatches.filter(m => {
-                const s = (m.status || '').toLowerCase();
-                const raw = (m.rawStatus || '').toUpperCase();
-                return s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK';
-              }).length;
-
-              const upcomingCount = publicMatches.filter(m => {
+              const getTodayDateStr = () => {
+                try {
+                  return new Intl.DateTimeFormat('en-CA', {
+                    timeZone: 'Asia/Kolkata',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit'
+                  }).format(new Date());
+                } catch {
+                  const d = new Date();
+                  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                }
+              };
+              const todayStr = getTodayDateStr();
+              const isMatchDatePassed = (m: any) => {
+                const rawD = String(m.match_date || m.date || '').trim();
+                const isoDate = rawD.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+                return Boolean(isoDate && isoDate < todayStr);
+              };
+              const getMatchFlags = (m: any) => {
                 const s = (m.status || '').toLowerCase();
                 const raw = (m.rawStatus || '').toUpperCase();
                 const isPostponed = s === 'postponed' || raw === 'POSTPONED' || !!m.isPostponed || !!m.postponement?.is_postponed;
-                return !isPostponed && (s === 'upcoming' || raw === 'SCHEDULED');
-              }).length;
+                const isCompleted = !isPostponed && (s === 'completed' || raw === 'COMPLETED');
+                const isCancelled = !isPostponed && (s === 'cancelled' || raw === 'CANCELLED' || raw === 'ABANDONED');
+                const isFinished = !isPostponed && !isCompleted && !isCancelled && (
+                  s === 'finished' ||
+                  raw === 'FINISHED' ||
+                  ((s === 'upcoming' || s === 'scheduled' || raw === 'SCHEDULED' || s === 'live' || s === 'innings_break' || raw === 'LIVE' || raw === 'INNINGS_BREAK') && isMatchDatePassed(m))
+                );
+                const isLive = !isPostponed && !isFinished && (s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK');
+                const isUpcoming = !isPostponed && !isFinished && (s === 'upcoming' || s === 'scheduled' || raw === 'SCHEDULED');
+                return { isPostponed, isLive, isCompleted, isCancelled, isFinished, isUpcoming };
+              };
 
-              const postponedCount = publicMatches.filter(m => {
-                const s = (m.status || '').toLowerCase();
-                const raw = (m.rawStatus || '').toUpperCase();
-                return s === 'postponed' || raw === 'POSTPONED' || !!m.isPostponed || !!m.postponement?.is_postponed;
-              }).length;
-
+              const liveCount = publicMatches.filter(m => getMatchFlags(m).isLive).length;
+              const upcomingCount = publicMatches.filter(m => getMatchFlags(m).isUpcoming).length;
+              const postponedCount = publicMatches.filter(m => getMatchFlags(m).isPostponed).length;
               const resultsCount = publicMatches.filter(m => {
-                const s = (m.status || '').toLowerCase();
-                const raw = (m.rawStatus || '').toUpperCase();
-                return s === 'completed' || raw === 'COMPLETED' || s === 'cancelled' || raw === 'CANCELLED';
+                const f = getMatchFlags(m);
+                return f.isCompleted || f.isCancelled || f.isFinished;
               }).length;
 
               return (
@@ -1397,14 +1447,44 @@ export default function HomeScreen() {
 
             {/* Matches List Filtering and Reusable Pagination (8 matches per page) */}
             {!isLoadingMatches && !matchesError && (() => {
+              const getTodayDateStr = () => {
+                try {
+                  return new Intl.DateTimeFormat('en-CA', {
+                    timeZone: 'Asia/Kolkata',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit'
+                  }).format(new Date());
+                } catch {
+                  const d = new Date();
+                  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                }
+              };
+              const todayStr = getTodayDateStr();
+              const isMatchDatePassed = (m: any) => {
+                const rawD = String(m.match_date || m.date || '').trim();
+                const isoDate = rawD.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+                return Boolean(isoDate && isoDate < todayStr);
+              };
+
               const filteredList = publicMatches.filter(m => {
                 const s = (m.status || '').toLowerCase();
                 const raw = (m.rawStatus || '').toUpperCase();
                 const isPostponed = s === 'postponed' || raw === 'POSTPONED' || !!m.isPostponed || !!m.postponement?.is_postponed;
-                if (matchFilter === 'live') return !isPostponed && (s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK');
-                if (matchFilter === 'upcoming') return !isPostponed && (s === 'upcoming' || raw === 'SCHEDULED');
+                const isCompleted = !isPostponed && (s === 'completed' || raw === 'COMPLETED');
+                const isCancelled = !isPostponed && (s === 'cancelled' || raw === 'CANCELLED' || raw === 'ABANDONED');
+                const isFinished = !isPostponed && !isCompleted && !isCancelled && (
+                  s === 'finished' ||
+                  raw === 'FINISHED' ||
+                  ((s === 'upcoming' || s === 'scheduled' || raw === 'SCHEDULED' || s === 'live' || s === 'innings_break' || raw === 'LIVE' || raw === 'INNINGS_BREAK') && isMatchDatePassed(m))
+                );
+                const isLive = !isPostponed && !isFinished && (s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK');
+                const isUpcoming = !isPostponed && !isFinished && (s === 'upcoming' || s === 'scheduled' || raw === 'SCHEDULED');
+
+                if (matchFilter === 'live') return isLive;
+                if (matchFilter === 'upcoming') return isUpcoming;
                 if (matchFilter === 'postponed') return isPostponed;
-                if (matchFilter === 'results') return !isPostponed && (s === 'completed' || raw === 'COMPLETED' || s === 'cancelled' || raw === 'CANCELLED');
+                if (matchFilter === 'results') return isCompleted || isCancelled || isFinished;
                 return true;
               });
 
@@ -1447,10 +1527,15 @@ export default function HomeScreen() {
                     const s = (m.status || '').toLowerCase();
                     const raw = (m.rawStatus || '').toUpperCase();
                     const isPostponed = s === 'postponed' || raw === 'POSTPONED' || !!m.isPostponed || !!m.postponement?.is_postponed;
-                    const isLive = !isPostponed && (s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK');
-                    const isUpcoming = !isPostponed && (s === 'upcoming' || raw === 'SCHEDULED');
                     const isCompleted = !isPostponed && (s === 'completed' || raw === 'COMPLETED');
                     const isCancelled = !isPostponed && (s === 'cancelled' || raw === 'CANCELLED' || raw === 'ABANDONED');
+                    const isFinished = !isPostponed && !isCompleted && !isCancelled && (
+                      s === 'finished' ||
+                      raw === 'FINISHED' ||
+                      ((s === 'upcoming' || s === 'scheduled' || raw === 'SCHEDULED' || s === 'live' || s === 'innings_break' || raw === 'LIVE' || raw === 'INNINGS_BREAK') && isMatchDatePassed(m))
+                    );
+                    const isLive = !isPostponed && !isFinished && (s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK');
+                    const isUpcoming = !isPostponed && !isFinished && (s === 'upcoming' || s === 'scheduled' || raw === 'SCHEDULED');
 
                     const teamAShort = m.teamAShort || (m.teamA ? m.teamA.slice(0, 3).toUpperCase() : 'TMA');
                     const teamBShort = m.teamBShort || (m.teamB ? m.teamB.slice(0, 3).toUpperCase() : 'TMB');
@@ -1472,7 +1557,7 @@ export default function HomeScreen() {
                           styles.matchCard,
                           isLive && styles.matchCardLive,
                           isUpcoming && styles.matchCardUpcoming,
-                          isCompleted && styles.matchCardResult,
+                          (isCompleted || isFinished) && styles.matchCardResult,
                           isPostponed && { borderColor: '#f59e0b', backgroundColor: '#fffdf5' },
                           !isMobile && { flex: 1 },
                           isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' },
@@ -1501,6 +1586,11 @@ export default function HomeScreen() {
                               <View style={[styles.resultIndicatorPill, isSmallMobile && { paddingHorizontal: 7, paddingVertical: 2.5 }, { flexDirection: 'row', alignItems: 'center' }]}>
                                 <Ionicons name="flag-outline" size={11} color="#059669" style={{ marginRight: 3 }} />
                                 <Text style={[styles.resultIndicatorText, isSmallMobile && { fontSize: 9.5 }]}>RESULT</Text>
+                              </View>
+                            ) : isFinished ? (
+                              <View style={[styles.resultIndicatorPill, isSmallMobile && { paddingHorizontal: 7, paddingVertical: 2.5 }, { flexDirection: 'row', alignItems: 'center' }]}>
+                                <Ionicons name="checkmark-done-outline" size={11} color="#059669" style={{ marginRight: 3 }} />
+                                <Text style={[styles.resultIndicatorText, isSmallMobile && { fontSize: 9.5 }]}>FINISHED</Text>
                               </View>
                             ) : (
                               <View
@@ -1597,7 +1687,7 @@ export default function HomeScreen() {
                               ]}
                               numberOfLines={1}
                             >
-                              {m.scoreA || (isUpcoming ? 'Upcoming' : 'Yet to bat')}
+                              {m.scoreA || (isUpcoming ? 'Upcoming' : (isFinished ? 'Not Played' : 'Yet to bat'))}
                             </Text>
                           </View>
 
@@ -1643,7 +1733,7 @@ export default function HomeScreen() {
                               ]}
                               numberOfLines={1}
                             >
-                              {m.scoreB || (isUpcoming ? 'Upcoming' : 'Yet to bat')}
+                              {m.scoreB || (isUpcoming ? 'Upcoming' : (isFinished ? 'Not Played' : 'Yet to bat'))}
                             </Text>
                           </View>
                         </View>
@@ -1720,6 +1810,13 @@ export default function HomeScreen() {
                             <Ionicons name="calendar-outline" size={12} color="#475569" style={{ marginRight: 4 }} />
                             <Text style={[styles.matchStatusNote, isSmallMobile && { fontSize: 11 }]}>
                               Match Scheduled: {cleanDate} {cleanTime}
+                            </Text>
+                          </View>
+                        ) : isFinished ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Ionicons name="checkmark-done-outline" size={12} color="#059669" style={{ marginRight: 4 }} />
+                            <Text style={[styles.matchStatusNote, { color: '#059669' }, isSmallMobile && { fontSize: 11 }]}>
+                              Match Finished • Scheduled date ({cleanDate}) ended
                             </Text>
                           </View>
                         ) : isCancelled ? (

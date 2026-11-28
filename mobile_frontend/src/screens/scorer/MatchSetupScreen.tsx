@@ -34,6 +34,8 @@ export default function MatchSetupScreen() {
   // Attendance state (Player ID -> boolean)
   const [attendanceA, setAttendanceA] = useState<Record<string, boolean>>({});
   const [attendanceB, setAttendanceB] = useState<Record<string, boolean>>({});
+  const [subAttendanceA, setSubAttendanceA] = useState<Record<string, boolean>>({});
+  const [subAttendanceB, setSubAttendanceB] = useState<Record<string, boolean>>({});
 
   // Toss state
   const [tossWinner, setTossWinner] = useState<string>('');
@@ -178,6 +180,15 @@ export default function MatchSetupScreen() {
           attB[p.id] = hasAllocatedB ? Boolean(p.is_playing_xi) : idx < 11;
         });
         setAttendanceB(attB);
+
+        // Initialize Substitute Attendance (all unselected by default)
+        const subAttA: Record<string, boolean> = {};
+        (res.data.teamASubstitutePlayers || []).forEach((p: any) => { subAttA[p.id] = false; });
+        setSubAttendanceA(subAttA);
+
+        const subAttB: Record<string, boolean> = {};
+        (res.data.teamBSubstitutePlayers || []).forEach((p: any) => { subAttB[p.id] = false; });
+        setSubAttendanceB(subAttB);
       }
     } catch (err: any) {
       console.warn('Failed to load match setup:', err.message);
@@ -227,14 +238,18 @@ export default function MatchSetupScreen() {
   const handleCompleteTeamAttendance = (team: 'A' | 'B') => {
     const minReq = getMinRequiredPlayers();
     const players = team === 'A' ? (setupData?.teamAPlayers || []) : (setupData?.teamBPlayers || []);
+    const subPlayers = team === 'A' ? (setupData?.teamASubstitutePlayers || []) : (setupData?.teamBSubstitutePlayers || []);
     const att = team === 'A' ? attendanceA : attendanceB;
-    const presentCount = players.filter((p: any) => att[p.id]).length;
+    const subAtt = team === 'A' ? subAttendanceA : subAttendanceB;
+    const presentMain = players.filter((p: any) => att[p.id]);
+    const selectedSubs = subPlayers.filter((p: any) => subAtt[p.id]);
+    const presentCount = presentMain.length + selectedSubs.length;
     const tName = team === 'A' ? (setupData?.teamA?.name || 'Team A') : (setupData?.teamB?.name || 'Team B');
 
     if (presentCount < minReq) {
       showWarning(
         `Rule 15: Minimum ${minReq} Players Required`,
-        `${tName} has only ${presentCount} player(s) marked Present. At least ${minReq} players must be present to mark Attendance Completed and stop their over-reduction timer.`
+        `${tName} has only ${presentCount} player(s) marked Present. At least ${minReq} players must be present to mark Attendance Completed.`
       );
       return;
     }
@@ -332,8 +347,13 @@ export default function MatchSetupScreen() {
 
   const handleProceedToToss = () => {
     const minReq = getMinRequiredPlayers();
-    const presentA = (setupData?.teamAPlayers || []).filter((p: any) => attendanceA[p.id]);
-    const presentB = (setupData?.teamBPlayers || []).filter((p: any) => attendanceB[p.id]);
+    const presentMainA = (setupData?.teamAPlayers || []).filter((p: any) => attendanceA[p.id]);
+    const selectedSubsA = (setupData?.teamASubstitutePlayers || []).filter((p: any) => subAttendanceA[p.id]);
+    const presentA = [...presentMainA, ...selectedSubsA];
+
+    const presentMainB = (setupData?.teamBPlayers || []).filter((p: any) => attendanceB[p.id]);
+    const selectedSubsB = (setupData?.teamBSubstitutePlayers || []).filter((p: any) => subAttendanceB[p.id]);
+    const presentB = [...presentMainB, ...selectedSubsB];
 
     if (presentA.length < minReq) {
       showWarning(
@@ -351,23 +371,19 @@ export default function MatchSetupScreen() {
       return;
     }
 
-    const tr = setupData?.tournamentRules || {};
-    const rule5Enabled = tr.delay_penalty_enabled !== false;
-    if (rule5Enabled && !delayPenaltySkipped && (delayTimerRunning || delayElapsedSeconds > 0)) {
-      if (!teamACompleted) {
-        showWarning(
-          'Stop Team Timer First',
-          `Please mark "${setupData?.teamA?.name || 'Team A'} Attendance Completed" (Stop Timer) before proceeding to Toss.`
-        );
-        return;
-      }
-      if (!teamBCompleted) {
-        showWarning(
-          'Stop Team Timer First',
-          `Please mark "${setupData?.teamB?.name || 'Team B'} Attendance Completed" (Stop Timer) before proceeding to Toss.`
-        );
-        return;
-      }
+    if (!teamACompleted) {
+      showWarning(
+        'Complete Team A Attendance First',
+        `Please complete attendance for ${setupData?.teamA?.name || 'Team A'} before proceeding to Toss.`
+      );
+      return;
+    }
+    if (!teamBCompleted) {
+      showWarning(
+        'Complete Team B Attendance First',
+        `Please complete attendance for ${setupData?.teamB?.name || 'Team B'} before proceeding to Toss.`
+      );
+      return;
     }
 
     const effElapsedA = teamACompleted && teamAStoppedElapsed !== null ? teamAStoppedElapsed : delayElapsedSeconds;
@@ -404,10 +420,22 @@ export default function MatchSetupScreen() {
 
   // Quick Attendance Actions
   const toggleAttendanceA = (pid: string) => {
+    const mainPlayers = setupData?.teamAPlayers || [];
+    const subPlayers = setupData?.teamASubstitutePlayers || [];
     setAttendanceA(prev => {
       const next = { ...prev, [pid]: !prev[pid] };
-      const count = (setupData?.teamAPlayers || []).filter((p: any) => next[p.id]).length;
-      if (teamACompleted && count < getMinRequiredPlayers()) {
+      const presentMainCount = mainPlayers.filter((p: any) => next[p.id]).length;
+      const newAbsentCount = Math.max(0, mainPlayers.length - presentMainCount);
+      setSubAttendanceA(prevSub => {
+        const tickedSubs = subPlayers.filter((s: any) => prevSub[s.id]);
+        if (tickedSubs.length <= newAbsentCount) return prevSub;
+        const trimmed = { ...prevSub };
+        for (let i = newAbsentCount; i < tickedSubs.length; i++) {
+          trimmed[tickedSubs[i].id] = false;
+        }
+        return trimmed;
+      });
+      if (teamACompleted) {
         setTeamACompleted(false);
         setTeamAStoppedElapsed(null);
         persistDelayState({ teamACompleted: false, teamAStoppedElapsed: null });
@@ -417,10 +445,22 @@ export default function MatchSetupScreen() {
   };
 
   const toggleAttendanceB = (pid: string) => {
+    const mainPlayers = setupData?.teamBPlayers || [];
+    const subPlayers = setupData?.teamBSubstitutePlayers || [];
     setAttendanceB(prev => {
       const next = { ...prev, [pid]: !prev[pid] };
-      const count = (setupData?.teamBPlayers || []).filter((p: any) => next[p.id]).length;
-      if (teamBCompleted && count < getMinRequiredPlayers()) {
+      const presentMainCount = mainPlayers.filter((p: any) => next[p.id]).length;
+      const newAbsentCount = Math.max(0, mainPlayers.length - presentMainCount);
+      setSubAttendanceB(prevSub => {
+        const tickedSubs = subPlayers.filter((s: any) => prevSub[s.id]);
+        if (tickedSubs.length <= newAbsentCount) return prevSub;
+        const trimmed = { ...prevSub };
+        for (let i = newAbsentCount; i < tickedSubs.length; i++) {
+          trimmed[tickedSubs[i].id] = false;
+        }
+        return trimmed;
+      });
+      if (teamBCompleted) {
         setTeamBCompleted(false);
         setTeamBStoppedElapsed(null);
         persistDelayState({ teamBCompleted: false, teamBStoppedElapsed: null });
@@ -429,20 +469,81 @@ export default function MatchSetupScreen() {
     });
   };
 
+  const toggleSubAttendanceA = (pid: string) => {
+    const mainPlayers = setupData?.teamAPlayers || [];
+    const subPlayers = setupData?.teamASubstitutePlayers || [];
+    const absentCount = mainPlayers.filter((p: any) => !attendanceA[p.id]).length;
+    const isCurrentlyChecked = Boolean(subAttendanceA[pid]);
+    if (!isCurrentlyChecked) {
+      if (absentCount === 0) {
+        showWarning('No Absent Player', 'All Playing XI players are marked Present. Mark an absent player first before ticking a substitute.');
+        return;
+      }
+      const selectedSubCount = subPlayers.filter((s: any) => subAttendanceA[s.id]).length;
+      if (selectedSubCount >= absentCount) {
+        showWarning('Substitute Limit Reached', `Only ${absentCount} player(s) are marked Absent. You can tick at most ${absentCount} substitute(s).`);
+        return;
+      }
+    }
+    setSubAttendanceA(prev => ({ ...prev, [pid]: !prev[pid] }));
+    if (teamACompleted) {
+      setTeamACompleted(false);
+      setTeamAStoppedElapsed(null);
+      persistDelayState({ teamACompleted: false, teamAStoppedElapsed: null });
+    }
+  };
+
+  const toggleSubAttendanceB = (pid: string) => {
+    const mainPlayers = setupData?.teamBPlayers || [];
+    const subPlayers = setupData?.teamBSubstitutePlayers || [];
+    const absentCount = mainPlayers.filter((p: any) => !attendanceB[p.id]).length;
+    const isCurrentlyChecked = Boolean(subAttendanceB[pid]);
+    if (!isCurrentlyChecked) {
+      if (absentCount === 0) {
+        showWarning('No Absent Player', 'All Playing XI players are marked Present. Mark an absent player first before ticking a substitute.');
+        return;
+      }
+      const selectedSubCount = subPlayers.filter((s: any) => subAttendanceB[s.id]).length;
+      if (selectedSubCount >= absentCount) {
+        showWarning('Substitute Limit Reached', `Only ${absentCount} player(s) are marked Absent. You can tick at most ${absentCount} substitute(s).`);
+        return;
+      }
+    }
+    setSubAttendanceB(prev => ({ ...prev, [pid]: !prev[pid] }));
+    if (teamBCompleted) {
+      setTeamBCompleted(false);
+      setTeamBStoppedElapsed(null);
+      persistDelayState({ teamBCompleted: false, teamBStoppedElapsed: null });
+    }
+  };
+
   const selectAllA = () => {
     const next: Record<string, boolean> = {};
     (setupData?.teamAPlayers || []).forEach((p: any) => { next[p.id] = true; });
     setAttendanceA(next);
+    setSubAttendanceA({});
+    if (teamACompleted) {
+      setTeamACompleted(false);
+      setTeamAStoppedElapsed(null);
+      persistDelayState({ teamACompleted: false, teamAStoppedElapsed: null });
+    }
   };
 
   const select11A = () => {
     const next: Record<string, boolean> = {};
     (setupData?.teamAPlayers || []).forEach((p: any, idx: number) => { next[p.id] = idx < 11; });
     setAttendanceA(next);
+    setSubAttendanceA({});
+    if (teamACompleted) {
+      setTeamACompleted(false);
+      setTeamAStoppedElapsed(null);
+      persistDelayState({ teamACompleted: false, teamAStoppedElapsed: null });
+    }
   };
 
   const clearA = () => {
     setAttendanceA({});
+    setSubAttendanceA({});
     if (teamACompleted) {
       setTeamACompleted(false);
       setTeamAStoppedElapsed(null);
@@ -454,16 +555,29 @@ export default function MatchSetupScreen() {
     const next: Record<string, boolean> = {};
     (setupData?.teamBPlayers || []).forEach((p: any) => { next[p.id] = true; });
     setAttendanceB(next);
+    setSubAttendanceB({});
+    if (teamBCompleted) {
+      setTeamBCompleted(false);
+      setTeamBStoppedElapsed(null);
+      persistDelayState({ teamBCompleted: false, teamBStoppedElapsed: null });
+    }
   };
 
   const select11B = () => {
     const next: Record<string, boolean> = {};
     (setupData?.teamBPlayers || []).forEach((p: any, idx: number) => { next[p.id] = idx < 11; });
     setAttendanceB(next);
+    setSubAttendanceB({});
+    if (teamBCompleted) {
+      setTeamBCompleted(false);
+      setTeamBStoppedElapsed(null);
+      persistDelayState({ teamBCompleted: false, teamBStoppedElapsed: null });
+    }
   };
 
   const clearB = () => {
     setAttendanceB({});
+    setSubAttendanceB({});
     if (teamBCompleted) {
       setTeamBCompleted(false);
       setTeamBStoppedElapsed(null);
@@ -483,11 +597,24 @@ export default function MatchSetupScreen() {
       return;
     }
 
+    if (!teamACompleted || !teamBCompleted) {
+      showWarning(
+        'Both Teams Attendance Required',
+        'Please complete attendance for both Team A and Team B before starting the match.'
+      );
+      return;
+    }
+
     // Association Rule 15: Dynamic minimum players configured by Admin
     const rule15Enabled = setupData?.rule15?.enabled !== false;
     const minRequiredPlayers = rule15Enabled ? (setupData?.rule15?.minPlayers ?? 9) : 1;
-    const presentA = (setupData?.teamAPlayers || []).filter((p: any) => attendanceA[p.id]);
-    const presentB = (setupData?.teamBPlayers || []).filter((p: any) => attendanceB[p.id]);
+    const presentMainA = (setupData?.teamAPlayers || []).filter((p: any) => attendanceA[p.id]);
+    const selectedSubsA = (setupData?.teamASubstitutePlayers || []).filter((p: any) => subAttendanceA[p.id]);
+    const presentA = [...presentMainA, ...selectedSubsA];
+
+    const presentMainB = (setupData?.teamBPlayers || []).filter((p: any) => attendanceB[p.id]);
+    const selectedSubsB = (setupData?.teamBSubstitutePlayers || []).filter((p: any) => subAttendanceB[p.id]);
+    const presentB = [...presentMainB, ...selectedSubsB];
 
     if (presentA.length < minRequiredPlayers) {
       showWarning(
@@ -560,6 +687,80 @@ export default function MatchSetupScreen() {
   const teamB = setupData?.teamB || { id: 'T002', name: 'Team B' };
   const teamAPlayers = setupData?.teamAPlayers || [];
   const teamBPlayers = setupData?.teamBPlayers || [];
+  const teamASubstitutePlayers = setupData?.teamASubstitutePlayers || [];
+  const teamBSubstitutePlayers = setupData?.teamBSubstitutePlayers || [];
+
+  const renderSubstituteSection = (team: 'A' | 'B') => {
+    const mainPlayers = team === 'A' ? teamAPlayers : teamBPlayers;
+    const subPlayers = team === 'A' ? teamASubstitutePlayers : teamBSubstitutePlayers;
+    const att = team === 'A' ? attendanceA : attendanceB;
+    const subAtt = team === 'A' ? subAttendanceA : subAttendanceB;
+    const toggleSub = team === 'A' ? toggleSubAttendanceA : toggleSubAttendanceB;
+
+    if (!subPlayers || subPlayers.length === 0) return null;
+
+    const absentCount = mainPlayers.filter((p: any) => !att[p.id]).length;
+    const selectedSubCount = subPlayers.filter((p: any) => subAtt[p.id]).length;
+
+    return (
+      <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#cbd5e1', borderStyle: 'dashed' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, paddingHorizontal: 4 }}>
+          <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0f172a' }}>
+            🔄 Substitutes ({selectedSubCount}/{absentCount} Used)
+          </Text>
+          <Text style={{ fontSize: 10.5, fontWeight: '700', color: absentCount > 0 ? '#b45309' : '#64748b' }}>
+            {absentCount === 0
+              ? 'No absent player'
+              : selectedSubCount < Math.min(absentCount, subPlayers.length)
+                ? `Tick ${Math.min(absentCount, subPlayers.length) - selectedSubCount} sub(s)`
+                : 'Substitute(s) matched'}
+          </Text>
+        </View>
+        {subPlayers.map((p: any, idx: number) => {
+          const isSubSelected = Boolean(subAtt[p.id]);
+          const isLocked = !isSubSelected && (absentCount === 0 || selectedSubCount >= absentCount);
+          return (
+            <TouchableOpacity
+              key={p.id || `sub-${idx}`}
+              style={[
+                styles.playerItem,
+                isSubSelected ? styles.playerItemPresent : { backgroundColor: '#f8fafc', borderRadius: 4, paddingHorizontal: 6, opacity: isLocked ? 0.55 : 0.95 }
+              ]}
+              onPress={() => toggleSub(p.id)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.checkboxBox, isSubSelected && styles.checkboxBoxChecked]}>
+                <Text style={[styles.checkboxCheck, isSubSelected && styles.checkboxCheckChecked]}>
+                  {isSubSelected ? '✓' : ''}
+                </Text>
+              </View>
+
+              <View style={[styles.playerNumBadge, isSubSelected && styles.playerNumBadgePresent]}>
+                <Text style={[styles.playerNumber, isSubSelected && styles.playerNumberPresent]}>
+                  SUB
+                </Text>
+              </View>
+
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.playerName} numberOfLines={1}>
+                  {p.name}
+                </Text>
+                <Text style={styles.playerRoleSub}>{p.role || 'Substitute'}</Text>
+              </View>
+
+              <View style={styles.playerBadgesRow}>
+                <View style={[styles.statusPill, isSubSelected ? styles.statusPillPresent : { backgroundColor: '#e2e8f0' }]}>
+                  <Text style={[styles.statusPillText, isSubSelected ? styles.statusPillTextPresent : { color: '#475569' }]}>
+                    {isSubSelected ? 'SUB IN' : 'BENCH'}
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    );
+  };
 
   const oversNum = Number(setupData?.overs || 20);
   const matchFormat = oversNum <= 20 ? 'T20' : oversNum <= 50 ? 'One Day' : 'Multi-Day';
@@ -570,6 +771,10 @@ export default function MatchSetupScreen() {
     const isWk = Boolean(p.is_wicket_keeper) || p.role === 'WICKET_KEEPER' || p.role === 'Wicket Keeper';
     const isCap = Boolean(p.is_captain) || (idx === 0 && p.is_captain === undefined);
     const isPresent = team === 'A' ? Boolean(attendanceA[p.id]) : Boolean(attendanceB[p.id]);
+    const teamList = team === 'A' ? teamAPlayers : teamBPlayers;
+    const teamAtt = team === 'A' ? attendanceA : attendanceB;
+    const presentTeamCount = teamList.filter((pl: any) => Boolean(teamAtt[pl.id])).length;
+    const isSubstitute = !isPresent && presentTeamCount >= 11;
     const toggle = team === 'A' ? () => toggleAttendanceA(p.id) : () => toggleAttendanceB(p.id);
 
     return (
@@ -593,7 +798,7 @@ export default function MatchSetupScreen() {
         </View>
 
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[styles.playerName, !isPresent && styles.playerNameAbsent]} numberOfLines={1}>
+          <Text style={[styles.playerName, !isPresent && (isSubstitute ? styles.playerNameSub : styles.playerNameAbsent)]} numberOfLines={1}>
             {p.name}
           </Text>
           <Text style={styles.playerRoleSub}>{p.role || 'Batter'}</Text>
@@ -602,9 +807,9 @@ export default function MatchSetupScreen() {
         <View style={styles.playerBadgesRow}>
           {isCap && <View style={styles.cBadge}><Text style={styles.cBadgeText}>C</Text></View>}
           {isWk && <View style={styles.wkBadge}><Text style={styles.wkBadgeText}>WK</Text></View>}
-          <View style={[styles.statusPill, isPresent ? styles.statusPillPresent : styles.statusPillAbsent]}>
-            <Text style={[styles.statusPillText, isPresent ? styles.statusPillTextPresent : styles.statusPillTextAbsent]}>
-              {isPresent ? 'Present' : 'Absent'}
+          <View style={[styles.statusPill, isPresent ? styles.statusPillPresent : (isSubstitute ? styles.statusPillSub : styles.statusPillAbsent)]}>
+            <Text style={[styles.statusPillText, isPresent ? styles.statusPillTextPresent : (isSubstitute ? styles.statusPillTextSub : styles.statusPillTextAbsent)]}>
+              {isPresent ? 'Present' : (isSubstitute ? 'Substitute' : 'Absent')}
             </Text>
           </View>
         </View>
@@ -972,7 +1177,7 @@ export default function MatchSetupScreen() {
                   </View>
                   <View style={styles.xiMainBadge}>
                     <Text style={styles.xiMainBadgeText}>
-                      {teamAPlayers.filter((p: any) => attendanceA[p.id]).length} Present vs {teamBPlayers.filter((p: any) => attendanceB[p.id]).length} Present
+                      {teamAPlayers.filter((p: any) => attendanceA[p.id]).length + teamASubstitutePlayers.filter((p: any) => subAttendanceA[p.id]).length} Present vs {teamBPlayers.filter((p: any) => attendanceB[p.id]).length + teamBSubstitutePlayers.filter((p: any) => subAttendanceB[p.id]).length} Present
                     </Text>
                   </View>
                 </View>
@@ -1015,7 +1220,7 @@ export default function MatchSetupScreen() {
                       onPress={() => setMobileSquadTab('TEAM_A')}
                     >
                       <Text style={[styles.mobileTabText, mobileSquadTab === 'TEAM_A' && styles.mobileTabTextActive]} numberOfLines={1}>
-                        {teamA.name} ({teamAPlayers.filter((p: any) => attendanceA[p.id]).length}/{teamAPlayers.length})
+                        {teamA.name} ({teamAPlayers.filter((p: any) => attendanceA[p.id]).length + teamASubstitutePlayers.filter((p: any) => subAttendanceA[p.id]).length}/{teamAPlayers.length})
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -1023,7 +1228,7 @@ export default function MatchSetupScreen() {
                       onPress={() => setMobileSquadTab('TEAM_B')}
                     >
                       <Text style={[styles.mobileTabText, mobileSquadTab === 'TEAM_B' && styles.mobileTabTextActive]} numberOfLines={1}>
-                        {teamB.name} ({teamBPlayers.filter((p: any) => attendanceB[p.id]).length}/{teamBPlayers.length})
+                        {teamB.name} ({teamBPlayers.filter((p: any) => attendanceB[p.id]).length + teamBSubstitutePlayers.filter((p: any) => subAttendanceB[p.id]).length}/{teamBPlayers.length})
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -1040,7 +1245,7 @@ export default function MatchSetupScreen() {
                           <Text style={styles.teamColSub}>
                             {(() => {
                               const minReq = setupData?.rule15?.enabled === false ? 1 : (setupData?.rule15?.minPlayers ?? 9);
-                              const countA = teamAPlayers.filter((p: any) => attendanceA[p.id]).length;
+                              const countA = teamAPlayers.filter((p: any) => attendanceA[p.id]).length + teamASubstitutePlayers.filter((p: any) => subAttendanceA[p.id]).length;
                               return countA >= minReq
                                 ? `✅ ${countA} Present (Min ${minReq} Met)`
                                 : `⚠️ Only ${countA} Present (Rule 15: Need ${minReq})`;
@@ -1068,10 +1273,11 @@ export default function MatchSetupScreen() {
                             No registered players found for {teamA.name}.
                           </Text>
                         )}
+                        {renderSubstituteSection('A')}
                       </View>
                       {(() => {
                         const minReq = getMinRequiredPlayers();
-                        const countA = teamAPlayers.filter((p: any) => attendanceA[p.id]).length;
+                        const countA = teamAPlayers.filter((p: any) => attendanceA[p.id]).length + teamASubstitutePlayers.filter((p: any) => subAttendanceA[p.id]).length;
                         const canStop = countA >= minReq;
                         return (
                           <View style={{ padding: 8, borderTopWidth: 1, borderTopColor: '#e2e8f0', backgroundColor: teamACompleted ? '#f0fdf4' : '#f8fafc', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -1120,7 +1326,7 @@ export default function MatchSetupScreen() {
                           <Text style={styles.teamColSub}>
                             {(() => {
                               const minReq = setupData?.rule15?.enabled === false ? 1 : (setupData?.rule15?.minPlayers ?? 9);
-                              const countB = teamBPlayers.filter((p: any) => attendanceB[p.id]).length;
+                              const countB = teamBPlayers.filter((p: any) => attendanceB[p.id]).length + teamBSubstitutePlayers.filter((p: any) => subAttendanceB[p.id]).length;
                               return countB >= minReq
                                 ? `✅ ${countB} Present (Min ${minReq} Met)`
                                 : `⚠️ Only ${countB} Present (Rule 15: Need ${minReq})`;
@@ -1148,10 +1354,11 @@ export default function MatchSetupScreen() {
                             No registered players found for {teamB.name}.
                           </Text>
                         )}
+                        {renderSubstituteSection('B')}
                       </View>
                       {(() => {
                         const minReq = getMinRequiredPlayers();
-                        const countB = teamBPlayers.filter((p: any) => attendanceB[p.id]).length;
+                        const countB = teamBPlayers.filter((p: any) => attendanceB[p.id]).length + teamBSubstitutePlayers.filter((p: any) => subAttendanceB[p.id]).length;
                         const canStop = countB >= minReq;
                         return (
                           <View style={{ padding: 8, borderTopWidth: 1, borderTopColor: '#e2e8f0', backgroundColor: teamBCompleted ? '#f0fdf4' : '#f8fafc', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -1207,12 +1414,17 @@ export default function MatchSetupScreen() {
             {/* STEP 1 PROCEED BUTTON */}
             <View style={{ marginTop: 14 }}>
               <TouchableOpacity
-                style={[styles.startMatchBtn, { backgroundColor: '#0f766e' }]}
+                style={[
+                  styles.startMatchBtn,
+                  { backgroundColor: teamACompleted && teamBCompleted ? '#0f766e' : '#94a3b8' }
+                ]}
                 onPress={handleProceedToToss}
                 activeOpacity={0.85}
               >
                 <Text style={[styles.startMatchText, { color: '#ffffff' }]}>
-                  ✓ APPLY ATTENDANCE &amp; PROCEED TO TOSS &rarr;
+                  {teamACompleted && teamBCompleted
+                    ? '✓ APPLY ATTENDANCE & PROCEED TO TOSS →'
+                    : `⚠️ COMPLETE BOTH TEAMS' ATTENDANCE FIRST (${teamACompleted ? '✓' : '○'} ${teamA.name} • ${teamBCompleted ? '✓' : '○'} ${teamB.name})`}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1903,6 +2115,9 @@ function getStyles(isDesktop: boolean) {
       color: '#64748b',
       textDecorationLine: 'line-through'
     },
+    playerNameSub: {
+      color: '#475569'
+    },
     statusPill: {
       paddingHorizontal: 5,
       paddingVertical: 1,
@@ -1910,6 +2125,9 @@ function getStyles(isDesktop: boolean) {
     },
     statusPillPresent: {
       backgroundColor: '#dcfce7'
+    },
+    statusPillSub: {
+      backgroundColor: '#e0f2fe'
     },
     statusPillAbsent: {
       backgroundColor: '#fee2e2'
@@ -1920,6 +2138,9 @@ function getStyles(isDesktop: boolean) {
     },
     statusPillTextPresent: {
       color: '#15803d'
+    },
+    statusPillTextSub: {
+      color: '#0369a1'
     },
     statusPillTextAbsent: {
       color: '#b91c1c'

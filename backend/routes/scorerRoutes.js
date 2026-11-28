@@ -44,7 +44,9 @@ const {
 // 1. PUBLIC AUTH ROUTES
 // ==========================================
 
-const { registerRateLimiter, otpRateLimiter } = require('../middleware/securityMiddleware');
+const { registerRateLimiter, otpRateLimiter, otpRequestRateLimiter } = require('../middleware/securityMiddleware');
+const { requireTurnstile } = require('../middleware/turnstileMiddleware');
+const { otpVerifySchema } = require('../middleware/validationMiddleware');
 
 // Scorer Registration (Requirement 1 & 12)
 router.post('/register', registerRateLimiter, async (req, res) => {
@@ -57,7 +59,7 @@ router.post('/register', registerRateLimiter, async (req, res) => {
 });
 
 // Scorer Login - Step 1: Request OTP or Direct Verify (Requirement 2 & 12)
-router.post('/login', otpRateLimiter, async (req, res) => {
+router.post('/login', requireTurnstile, ...otpRequestRateLimiter, otpRateLimiter, async (req, res) => {
   try {
     const { email, otp, password } = req.body;
     if (!email) {
@@ -78,7 +80,7 @@ router.post('/login', otpRateLimiter, async (req, res) => {
 });
 
 // Scorer Login - Request OTP explicitly
-router.post('/request-otp', async (req, res) => {
+router.post('/request-otp', requireTurnstile, ...otpRequestRateLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     const result = await authService.requestOtp(email, 'SCORER');
@@ -89,7 +91,7 @@ router.post('/request-otp', async (req, res) => {
 });
 
 // Scorer Login - Step 2: Verify OTP (Requirement 3 & 12)
-router.post('/verify-otp', async (req, res) => {
+router.post('/verify-otp', otpRateLimiter, validateBody(otpVerifySchema), async (req, res) => {
   try {
     const { email, otp } = req.body;
     const result = await authService.verifyOtp(email, otp);
@@ -151,7 +153,7 @@ router.get('/matches/:matchId', async (req, res) => {
 });
 
 // Scorer Match Timing & Protocol Acknowledgement
-router.post('/matches/:matchId/acknowledge-protocol', async (req, res) => {
+router.post('/matches/:matchId/acknowledge-protocol', verifyMatchPermission, async (req, res) => {
   try {
     await db.initDb();
     const match = await db.models.Match.findOne({ id: req.params.matchId });
@@ -244,7 +246,7 @@ router.get('/matches/:matchId/scorecard', async (req, res) => {
 });
 
 // AI Fielding Commentary Integration (Requirement 9)
-router.post('/matches/:matchId/fielding-commentary', async (req, res) => {
+router.post('/matches/:matchId/fielding-commentary', verifyMatchPermission, async (req, res) => {
   try {
     const result = await scorerService.generateFieldingCommentary(req.params.matchId, req.body);
     res.json(result);
