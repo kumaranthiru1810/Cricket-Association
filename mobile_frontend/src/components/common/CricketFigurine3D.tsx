@@ -97,26 +97,39 @@ export const CricketFigurine3D: React.FC<CricketFigurine3DProps> = ({
     });
   }, []);
 
-  // Web interactive mouse hover tilt
-  const handleMouseMove = (e: any) => {
-    if (!interactive || Platform.OS !== 'web') return;
-    try {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = e.clientX - rect.left - rect.width / 2;
-      const y = e.clientY - rect.top - rect.height / 2;
-      const degX = -(y / (rect.height / 2)) * 14;
-      const degY = (x / (rect.width / 2)) * 18;
-      setRotateX(degX);
-      setRotateY(degY);
-    } catch (_err) {}
-  };
+  // Web interactive mouse hover tilt (attached via DOM ref to avoid RN-Web unknown event handler warnings)
+  const containerRef = useRef<any>(null);
 
-  const handleMouseLeave = () => {
-    if (Platform.OS === 'web') {
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !interactive) return;
+    const el = containerRef.current;
+    if (!el || typeof el.addEventListener !== 'function') return;
+
+    const onMove = (e: MouseEvent) => {
+      try {
+        const rect = el.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        const x = e.clientX - rect.left - rect.width / 2;
+        const y = e.clientY - rect.top - rect.height / 2;
+        const degX = -(y / (rect.height / 2)) * 14;
+        const degY = (x / (rect.width / 2)) * 18;
+        setRotateX(degX);
+        setRotateY(degY);
+      } catch (_err) { }
+    };
+
+    const onLeave = () => {
       setRotateX(0);
       setRotateY(0);
-    }
-  };
+    };
+
+    el.addEventListener('mousemove', onMove);
+    el.addEventListener('mouseleave', onLeave);
+    return () => {
+      el.removeEventListener('mousemove', onMove);
+      el.removeEventListener('mouseleave', onLeave);
+    };
+  }, [interactive]);
 
   // Mobile PanResponder for touch drag
   const panResponder = useRef(
@@ -138,12 +151,9 @@ export const CricketFigurine3D: React.FC<CricketFigurine3DProps> = ({
 
   return (
     <View
+      ref={containerRef}
       style={[styles.container, { height }]}
       {...(Platform.OS !== 'web' ? panResponder.panHandlers : {})}
-      // @ts-ignore
-      onMouseMove={handleMouseMove}
-      // @ts-ignore
-      onMouseLeave={handleMouseLeave}
     >
       {/* 3D Atmosphere Spotlight Cone */}
       <View style={styles.spotlightCone} pointerEvents="none" />

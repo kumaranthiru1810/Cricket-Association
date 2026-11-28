@@ -232,6 +232,18 @@ function requireAdminAuth(req, res, next) {
       }).lean();
 
       if (!user) {
+        const devAdminIds = ['ADM-DEV', 'ADM-1000', 'ADM-1001', 'ADM-1002', 'ADM-1004'];
+        const devAdminEmails = ['admin@cfvd.local', 'admin@example.com', 'admin@cfvd.org', 'athilingam3336@gmail.com'];
+        const reqEmail = String(req.user?.email || '').toLowerCase();
+        const isDevAdminToken = env.isDevelopment && (
+          devAdminIds.includes(req.user?.id) || devAdminEmails.includes(reqEmail)
+        ) && (req.user?.role === 'ADMIN' || req.user?.role === 'SUPER_ADMIN');
+
+        if (isDevAdminToken) {
+          req.adminUser = req.user;
+          return next();
+        }
+
         return res.status(401).json({
           success: false,
           message: 'Unauthorized: User account not found in database.'
