@@ -1169,7 +1169,7 @@ class PlayerRatingService {
           latestMatchDate: { $max: '$match_date' }
         }
       },
-      { $match: { matchesCount: { $gte: 3 } } },
+      { $match: { matchesCount: { $gte: 1 } } },
       {
         $project: {
           playerId: '$_id',
@@ -1207,7 +1207,13 @@ class PlayerRatingService {
     pipeline.push({ $sort: { [sortField]: -1, matchesCount: -1 } });
     pipeline.push({ $limit: Math.min(50, Math.max(1, Number(limit || 10))) });
 
-    const leaders = await db.models.PlayerMatchRating.aggregate(pipeline);
+    let leaders = await db.models.PlayerMatchRating.aggregate(pipeline);
+    if (!leaders || leaders.length === 0) {
+      const recon = await this.reconcileCompletedMatchRatings().catch(() => ({ recalculated: 0 }));
+      if (recon && recon.recalculated > 0) {
+        leaders = await db.models.PlayerMatchRating.aggregate(pipeline);
+      }
+    }
     return leaders || [];
   }
 }
