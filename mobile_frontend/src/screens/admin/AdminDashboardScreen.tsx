@@ -818,7 +818,7 @@ export default function AdminDashboardScreen({ onExit, initialParams, isSuperAdm
     if (!isSuperAdmin) return;
     if (!silent) setSaNotifLoading(true);
     try {
-      const res = await adminApi.getSuperAdminNotifications(50);
+      const res = await adminApi.getSuperAdminNotifications(100);
       if (res && res.success) {
         const list = Array.isArray(res.notifications) ? res.notifications : (Array.isArray(res.data) ? res.data : []);
         setSaNotifications(list);

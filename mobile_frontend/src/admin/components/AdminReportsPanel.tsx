@@ -225,7 +225,11 @@ export default function AdminReportsPanel() {
               <input
                 type={period === 'day' ? 'date' : 'month'}
                 value={dateValue}
-                onChange={(e: any) => setDateValue(e.target.value)}
+                onChange={(e: any) => {
+                  const val = e.target.value;
+                  setDateValue(val);
+                  if (val) loadReport(period, val);
+                }}
                 style={{
                   height: 36,
                   padding: '0 10px',

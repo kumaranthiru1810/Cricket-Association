@@ -788,8 +788,16 @@ router.get('/teams/:teamId', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Team not found in CFVD registry.' });
     }
 
-    const teamName = teamDoc?.name || teamRegDoc?.team_name;
+    const rawNameQuery = (req.query.teamName || '').toString().trim();
+    const teamName = teamDoc?.name || teamRegDoc?.team_name || rawNameQuery || rawId;
     const teamId = teamDoc?.id || teamRegDoc?.id || rawId;
+    const matchNameRegex = new RegExp('^' + escapeRegex(teamName) + '$', 'i');
+
+    if (!teamRegDoc && teamName) {
+      teamRegDoc = await TeamRegistration.findOne({
+        $or: [{ id: teamId }, { teamId: teamId }, { team_name: matchNameRegex }]
+      }).lean();
+    }
 
     const teamProfile = {
       id: teamId,
@@ -862,14 +870,24 @@ router.get('/teams/:teamId', async (req, res) => {
         $or: [
           { team_a_id: { $in: allTeamIds } },
           { team_b_id: { $in: allTeamIds } },
-          { team_a_name: nameRegex },
-          { team_b_name: nameRegex }
+          { team_a_name: matchNameRegex },
+          { team_b_name: matchNameRegex }
         ]
       })
       .select('id tournament_id tournament_name match_date match_time venue status team_a_id team_b_id team_a_name team_b_name score_a score_b result_summary winner_id overs_per_side bonus_point_winner bonus_point_loser_penalty is_walkover player_of_match')
       .sort({ match_date: -1 })
       .limit(50)
       .lean();
+
+      const matchIdsList = (rawMatches || []).map(m => m.id).filter(Boolean);
+      const inningsDocs = (matchIdsList.length > 0 && Innings)
+        ? await Innings.find({ match_id: { $in: matchIdsList } }).lean()
+        : [];
+      const inningsByMatchMap = {};
+      (inningsDocs || []).forEach(inn => {
+        if (!inningsByMatchMap[inn.match_id]) inningsByMatchMap[inn.match_id] = [];
+        inningsByMatchMap[inn.match_id].push(inn);
+      });
 
       (rawMatches || []).forEach(m => {
         if (m.tournament_id) tournamentIdsSet.add(m.tournament_id);
@@ -879,8 +897,14 @@ router.get('/teams/:teamId', async (req, res) => {
         const isTeamA = allTeamIds.includes(m.team_a_id) || (m.team_a_name || '').toLowerCase().trim() === teamName.toLowerCase().trim();
         const opponentName = isTeamA ? (m.team_b_name || m.team_b_id) : (m.team_a_name || m.team_a_id);
         const opponentId = isTeamA ? m.team_b_id : m.team_a_id;
-        const teamScore = isTeamA ? m.score_a : m.score_b;
-        const opponentScore = isTeamA ? m.score_b : m.score_a;
+
+        const mInns = inningsByMatchMap[m.id] || [];
+        const teamInn = mInns.find(i => allTeamIds.includes(i.batting_team_id) || (isTeamA ? i.batting_team_id === m.team_a_id : i.batting_team_id === m.team_b_id));
+        const oppInn = mInns.find(i => i !== teamInn);
+
+        const fmtInnScore = (inn) => inn ? `${inn.total_runs || 0}/${inn.wickets || 0} (${inn.overs || 0}.${inn.balls || 0} Ov)` : null;
+        const teamScore = fmtInnScore(teamInn) || (isTeamA ? m.score_a : m.score_b);
+        const opponentScore = fmtInnScore(oppInn) || (isTeamA ? m.score_b : m.score_a);
 
         // Check if winner
         const resText = (m.result_summary || '').toLowerCase();
@@ -1015,7 +1039,7 @@ router.get('/teams/:teamId', async (req, res) => {
     // Run Rate: Runs per Over scored
     const teamOversFaced = totalBallsFaced > 0 ? (totalBallsFaced / 6) : 0;
     const oppOversBowled = totalBallsBowled > 0 ? (totalBallsBowled / 6) : 0;
-    const runRate = teamOversFaced > 0 ? (totalRunsScored / teamOversFaced).toFixed(2) : (teamDoc?.stats?.runRate || '7.85');
+    const runRate = teamOversFaced > 0 ? (totalRunsScored / teamOversFaced).toFixed(2) : (played > 0 && teamDoc?.stats?.runRate ? teamDoc.stats.runRate : '0.00');
 
     // Net Run Rate: (Runs Scored / Overs Faced) - (Runs Conceded / Overs Bowled)
     let nrrStr = '+0.000';
