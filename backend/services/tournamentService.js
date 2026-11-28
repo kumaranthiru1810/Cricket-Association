@@ -1080,9 +1080,7 @@ class TournamentService {
           round_number: p.round_number,
           fixture_seq: matchCounter,
           status: 'SCHEDULED',
-          schedule_confirmation_status: 'CONFIRMED',
-          schedule_confirmed_at: new Date(),
-          schedule_confirmed_by: adminEmail || 'system-admin',
+          schedule_confirmation_status: 'PENDING',
           rules_snapshot: rulesSnapshot,
           assigned_scorer_id: defaultScorerId,
           assigned_scorer_name: defaultScorerName,
@@ -1215,9 +1213,7 @@ class TournamentService {
           round_number: p.round,
           fixture_seq: seq,
           status: 'SCHEDULED',
-          schedule_confirmation_status: 'CONFIRMED',
-          schedule_confirmed_at: new Date(),
-          schedule_confirmed_by: adminEmail || 'system-admin',
+          schedule_confirmation_status: 'PENDING',
           rules_snapshot: rulesSnapshot,
           assigned_scorer_id: defaultScorerId,
           assigned_scorer_name: defaultScorerName,
@@ -1272,9 +1268,7 @@ class TournamentService {
           fixture_seq: seq,
           bracket: p.bracket,
           status: 'SCHEDULED',
-          schedule_confirmation_status: 'CONFIRMED',
-          schedule_confirmed_at: new Date(),
-          schedule_confirmed_by: adminEmail || 'system-admin',
+          schedule_confirmation_status: 'PENDING',
           rules_snapshot: rulesSnapshot,
           assigned_scorer_id: defaultScorerId,
           assigned_scorer_name: defaultScorerName,
@@ -1399,6 +1393,7 @@ class TournamentService {
         lost: 0,
         tied: 0,
         no_result: 0,
+        bonus: 0,
         points: 0,
         runs_scored: 0,
         overs_faced: 0,
@@ -1442,7 +1437,7 @@ class TournamentService {
         standings[teamA] = {
           team_id: teamA,
           team_name: m.team_a_name || teamA,
-          played: 0, won: 0, lost: 0, tied: 0, no_result: 0, points: 0,
+          played: 0, won: 0, lost: 0, tied: 0, no_result: 0, bonus: 0, points: 0,
           runs_scored: 0, overs_faced: 0, runs_conceded: 0, overs_bowled: 0, nrr: 0.00, form: []
         };
       }
@@ -1450,7 +1445,7 @@ class TournamentService {
         standings[teamB] = {
           team_id: teamB,
           team_name: m.team_b_name || teamB,
-          played: 0, won: 0, lost: 0, tied: 0, no_result: 0, points: 0,
+          played: 0, won: 0, lost: 0, tied: 0, no_result: 0, bonus: 0, points: 0,
           runs_scored: 0, overs_faced: 0, runs_conceded: 0, overs_bowled: 0, nrr: 0.00, form: []
         };
       }
@@ -1534,8 +1529,12 @@ class TournamentService {
           standings[winner].points += pointsWalkoverWin;
           standings[loser].points += pointsWalkoverLoss;
         } else {
-          standings[winner].points += pointsWin + (m.bonus_point_winner ? pointsBonusWin : 0);
-          standings[loser].points += pointsLoss + (m.bonus_point_loser_penalty ? pointsBonusLoss : 0);
+          const winBonus = m.bonus_point_winner ? pointsBonusWin : 0;
+          const lossBonus = m.bonus_point_loser_penalty ? pointsBonusLoss : 0;
+          standings[winner].bonus += winBonus;
+          standings[loser].bonus += lossBonus;
+          standings[winner].points += pointsWin + winBonus;
+          standings[loser].points += pointsLoss + lossBonus;
         }
         standings[winner].form.push('W');
         standings[loser].form.push('L');
@@ -2331,8 +2330,8 @@ class TournamentService {
             bracket: p.bracket || 'MAIN',
             qualification_source: p.qualification_source || null,
             status: 'SCHEDULED',
-            schedule_confirmation_status: 'CONFIRMED',
-            schedule_confirmed_at: new Date(),
+            schedule_confirmation_status: 'PENDING',
+            schedule_confirmed_at: null,
             schedule_confirmed_by: 'SYSTEM_QUALIFICATION',
             rules_snapshot: rulesSnapshot,
             assigned_scorer_id: 'SCR-101',

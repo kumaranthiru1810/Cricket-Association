@@ -771,6 +771,10 @@ export default function MatchSetupScreen() {
     const isWk = Boolean(p.is_wicket_keeper) || p.role === 'WICKET_KEEPER' || p.role === 'Wicket Keeper';
     const isCap = Boolean(p.is_captain) || (idx === 0 && p.is_captain === undefined);
     const isPresent = team === 'A' ? Boolean(attendanceA[p.id]) : Boolean(attendanceB[p.id]);
+    const teamList = team === 'A' ? teamAPlayers : teamBPlayers;
+    const teamAtt = team === 'A' ? attendanceA : attendanceB;
+    const presentTeamCount = teamList.filter((pl: any) => Boolean(teamAtt[pl.id])).length;
+    const isSubstitute = !isPresent && presentTeamCount >= 11;
     const toggle = team === 'A' ? () => toggleAttendanceA(p.id) : () => toggleAttendanceB(p.id);
 
     return (
@@ -794,7 +798,7 @@ export default function MatchSetupScreen() {
         </View>
 
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[styles.playerName, !isPresent && styles.playerNameAbsent]} numberOfLines={1}>
+          <Text style={[styles.playerName, !isPresent && (isSubstitute ? styles.playerNameSub : styles.playerNameAbsent)]} numberOfLines={1}>
             {p.name}
           </Text>
           <Text style={styles.playerRoleSub}>{p.role || 'Batter'}</Text>
@@ -803,9 +807,9 @@ export default function MatchSetupScreen() {
         <View style={styles.playerBadgesRow}>
           {isCap && <View style={styles.cBadge}><Text style={styles.cBadgeText}>C</Text></View>}
           {isWk && <View style={styles.wkBadge}><Text style={styles.wkBadgeText}>WK</Text></View>}
-          <View style={[styles.statusPill, isPresent ? styles.statusPillPresent : styles.statusPillAbsent]}>
-            <Text style={[styles.statusPillText, isPresent ? styles.statusPillTextPresent : styles.statusPillTextAbsent]}>
-              {isPresent ? 'Present' : 'Absent'}
+          <View style={[styles.statusPill, isPresent ? styles.statusPillPresent : (isSubstitute ? styles.statusPillSub : styles.statusPillAbsent)]}>
+            <Text style={[styles.statusPillText, isPresent ? styles.statusPillTextPresent : (isSubstitute ? styles.statusPillTextSub : styles.statusPillTextAbsent)]}>
+              {isPresent ? 'Present' : (isSubstitute ? 'Substitute' : 'Absent')}
             </Text>
           </View>
         </View>
@@ -2111,6 +2115,9 @@ function getStyles(isDesktop: boolean) {
       color: '#64748b',
       textDecorationLine: 'line-through'
     },
+    playerNameSub: {
+      color: '#475569'
+    },
     statusPill: {
       paddingHorizontal: 5,
       paddingVertical: 1,
@@ -2118,6 +2125,9 @@ function getStyles(isDesktop: boolean) {
     },
     statusPillPresent: {
       backgroundColor: '#dcfce7'
+    },
+    statusPillSub: {
+      backgroundColor: '#e0f2fe'
     },
     statusPillAbsent: {
       backgroundColor: '#fee2e2'
@@ -2128,6 +2138,9 @@ function getStyles(isDesktop: boolean) {
     },
     statusPillTextPresent: {
       color: '#15803d'
+    },
+    statusPillTextSub: {
+      color: '#0369a1'
     },
     statusPillTextAbsent: {
       color: '#b91c1c'
