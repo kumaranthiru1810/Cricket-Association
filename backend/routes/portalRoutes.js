@@ -10,6 +10,7 @@ const db = require('../config/db');
 const { cacheResponse } = require('../middleware/cacheMiddleware');
 const { requireTurnstile } = require('../middleware/turnstileMiddleware');
 const { withEmptyDataMessage } = require('../utils/responseHelper');
+const { getTodayKolkata } = require('../utils/dateTimeValidation');
 
 const contactRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -163,29 +164,41 @@ router.get('/home', cacheResponse(30, 'portal-home'), async (req, res) => {
       };
     });
 
-    const upcomingMatches = matches.filter(m => m.status === 'SCHEDULED').map(m => {
-      const tA = teamMap[m.team_a_id] || (m.team_a_name ? teamMap[m.team_a_name.toLowerCase()] : null);
-      const tB = teamMap[m.team_b_id] || (m.team_b_name ? teamMap[m.team_b_name.toLowerCase()] : null);
-      return {
-        ...m,
-        teamA: tA?.name || m.team_a_name || 'Team A',
-        teamB: tB?.name || m.team_b_name || 'Team B',
-        teamALogo: tA?.logo || tA?.photo || null,
-        teamBLogo: tB?.logo || tB?.photo || null
-      };
-    });
+    const todayKolkata = getTodayKolkata();
+    const isScheduledDatePassed = (m) => {
+      const d = typeof m.match_date === 'string' ? (m.match_date.match(/^\d{4}-\d{2}-\d{2}/)?.[0] || '') : '';
+      return Boolean(d) && d < todayKolkata;
+    };
 
-    const recentMatches = matches.filter(m => m.status === 'COMPLETED').map(m => {
-      const tA = teamMap[m.team_a_id] || (m.team_a_name ? teamMap[m.team_a_name.toLowerCase()] : null);
-      const tB = teamMap[m.team_b_id] || (m.team_b_name ? teamMap[m.team_b_name.toLowerCase()] : null);
-      return {
-        ...m,
-        teamA: tA?.name || m.team_a_name || 'Team A',
-        teamB: tB?.name || m.team_b_name || 'Team B',
-        teamALogo: tA?.logo || tA?.photo || null,
-        teamBLogo: tB?.logo || tB?.photo || null
-      };
-    });
+    const upcomingMatches = matches
+      .filter(m => m.status === 'SCHEDULED' && !isScheduledDatePassed(m))
+      .map(m => {
+        const tA = teamMap[m.team_a_id] || (m.team_a_name ? teamMap[m.team_a_name.toLowerCase()] : null);
+        const tB = teamMap[m.team_b_id] || (m.team_b_name ? teamMap[m.team_b_name.toLowerCase()] : null);
+        return {
+          ...m,
+          teamA: tA?.name || m.team_a_name || 'Team A',
+          teamB: tB?.name || m.team_b_name || 'Team B',
+          teamALogo: tA?.logo || tA?.photo || null,
+          teamBLogo: tB?.logo || tB?.photo || null
+        };
+      });
+
+    const recentMatches = matches
+      .filter(m => m.status === 'COMPLETED' || (m.status === 'SCHEDULED' && isScheduledDatePassed(m)))
+      .map(m => {
+        const tA = teamMap[m.team_a_id] || (m.team_a_name ? teamMap[m.team_a_name.toLowerCase()] : null);
+        const tB = teamMap[m.team_b_id] || (m.team_b_name ? teamMap[m.team_b_name.toLowerCase()] : null);
+        const isExpiredScheduled = m.status === 'SCHEDULED' && isScheduledDatePassed(m);
+        return {
+          ...m,
+          status: isExpiredScheduled ? 'FINISHED' : m.status,
+          teamA: tA?.name || m.team_a_name || 'Team A',
+          teamB: tB?.name || m.team_b_name || 'Team B',
+          teamALogo: tA?.logo || tA?.photo || null,
+          teamBLogo: tB?.logo || tB?.photo || null
+        };
+      });
 
     // Top Batting Leaders
     const topBatsmen = [...players]

@@ -5,6 +5,7 @@
  */
 
 const db = require('../config/db');
+const { getTodayKolkata } = require('../utils/dateTimeValidation');
 
 class ScorerService {
   /**
@@ -322,11 +323,20 @@ class ScorerService {
     let completedCount = 0;
     let postponedCount = 0;
 
+    const todayKolkata = getTodayKolkata();
     const formattedMatches = await Promise.all(allMatches.map(async (m) => {
-      const statusUpper = (m.status || 'SCHEDULED').toUpperCase();
+      const rawStatusUpper = (m.status || 'SCHEDULED').toUpperCase();
+      const matchDateStr = typeof m.match_date === 'string'
+        ? (m.match_date.match(/^\d{4}-\d{2}-\d{2}/)?.[0] || '')
+        : '';
+      const isDatePassedScheduled = (rawStatusUpper === 'SCHEDULED' || rawStatusUpper === 'UPCOMING') &&
+        Boolean(matchDateStr) &&
+        matchDateStr < todayKolkata;
+      const statusUpper = isDatePassedScheduled ? 'FINISHED' : rawStatusUpper;
+
       if (statusUpper === 'LIVE' || statusUpper === 'INNINGS_BREAK') liveCount++;
-      else if (statusUpper === 'SCHEDULED') upcomingCount++;
-      else if (statusUpper === 'COMPLETED') completedCount++;
+      else if (statusUpper === 'SCHEDULED' || statusUpper === 'UPCOMING') upcomingCount++;
+      else if (statusUpper === 'COMPLETED' || statusUpper === 'FINISHED') completedCount++;
       else if (statusUpper === 'POSTPONED') postponedCount++;
 
       const teamA = teamMap[m.team_a_id] || { name: m.team_a_id, short_name: 'TMA' };
@@ -347,6 +357,7 @@ class ScorerService {
 
       const isLive = statusUpper === 'LIVE' || statusUpper === 'INNINGS_BREAK';
       const isCompleted = statusUpper === 'COMPLETED';
+      const isFinished = statusUpper === 'FINISHED';
       const isCancelled = statusUpper === 'CANCELLED' || statusUpper === 'ABANDONED';
       const isPostponed = statusUpper === 'POSTPONED';
 
@@ -396,7 +407,7 @@ class ScorerService {
         format: m.match_type || 'T20',
         overs: m.overs_per_side || 20,
         rawStatus: statusUpper,
-        status: isLive ? 'Live' : (isCompleted ? 'Completed' : (isCancelled ? 'Cancelled' : (isPostponed ? 'Postponed' : 'Upcoming'))),
+        status: isLive ? 'Live' : (isCompleted ? 'Completed' : (isFinished ? 'Finished' : (isCancelled ? 'Cancelled' : (isPostponed ? 'Postponed' : 'Upcoming')))),
         isPostponed,
         postponement: m.postponement || null,
         postponementReason: m.postponement?.reason || null,

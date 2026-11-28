@@ -1825,10 +1825,10 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                         </View>
                         <View style={styles.kpiInfo}>
                           <Text style={styles.kpiVal}>
-                            {teamStats?.matchesWon ?? 5} / {matches.length || 8}
+                            {teamStats?.matchesWon ?? 0} / {teamStats?.matchesPlayed ?? 0}
                           </Text>
                           <Text style={styles.kpiLabel}>
-                            Won ({teamStats?.winRate ? `${teamStats.winRate}%` : '62.5%'})
+                            Won ({teamStats?.winRate !== undefined && teamStats?.winRate !== null ? `${teamStats.winRate}%` : '0%'})
                           </Text>
                         </View>
                       </TouchableOpacity>
@@ -1882,19 +1882,21 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                       {/* Squad & Record snapshot */}
                       <View style={styles.heroStatsGrid}>
                         <View style={styles.heroStatCol}>
-                          <Text style={styles.heroStatValue}>{squad.length || 15}</Text>
+                          <Text style={styles.heroStatValue}>{squad.length}</Text>
                           <Text style={styles.heroStatLabel}>Squad Players</Text>
                         </View>
                         <View style={styles.heroStatCol}>
-                          <Text style={styles.heroStatValue}>{teamStats?.matchesPlayed ?? matches.length ?? 8}</Text>
+                          <Text style={styles.heroStatValue}>{teamStats?.matchesPlayed ?? 0}</Text>
                           <Text style={styles.heroStatLabel}>Played</Text>
                         </View>
                         <View style={styles.heroStatCol}>
-                          <Text style={[styles.heroStatValue, { color: '#10b981' }]}>{teamStats?.matchesWon ?? 5}</Text>
+                          <Text style={[styles.heroStatValue, { color: '#10b981' }]}>{teamStats?.matchesWon ?? 0}</Text>
                           <Text style={styles.heroStatLabel}>Won</Text>
                         </View>
                         <View style={styles.heroStatCol}>
-                          <Text style={[styles.heroStatValue, { color: '#f59e0b' }]}>{teamStats?.winRate ? `${teamStats.winRate}%` : '62.5%'}</Text>
+                          <Text style={[styles.heroStatValue, { color: '#f59e0b' }]}>
+                            {teamStats?.winRate !== undefined && teamStats?.winRate !== null ? `${teamStats.winRate}%` : '0%'}
+                          </Text>
                           <Text style={styles.heroStatLabel}>Win Rate</Text>
                         </View>
                       </View>
@@ -3331,37 +3333,37 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
 
                       <View style={styles.statsGrid}>
                         <View style={styles.statBox}>
-                          <Text style={styles.statBoxVal}>{teamStats?.matchesPlayed ?? matches.length ?? 8}</Text>
+                          <Text style={styles.statBoxVal}>{teamStats?.matchesPlayed ?? 0}</Text>
                           <Text style={styles.statBoxLbl}>Matches</Text>
                         </View>
                         <View style={styles.statBox}>
-                          <Text style={[styles.statBoxVal, { color: '#10b981' }]}>{teamStats?.matchesWon ?? 5}</Text>
+                          <Text style={[styles.statBoxVal, { color: '#10b981' }]}>{teamStats?.matchesWon ?? 0}</Text>
                           <Text style={styles.statBoxLbl}>Won</Text>
                         </View>
                         <View style={styles.statBox}>
-                          <Text style={[styles.statBoxVal, { color: '#ef4444' }]}>{teamStats?.matchesLost ?? 3}</Text>
+                          <Text style={[styles.statBoxVal, { color: '#ef4444' }]}>{teamStats?.matchesLost ?? 0}</Text>
                           <Text style={styles.statBoxLbl}>Lost</Text>
                         </View>
                         <View style={styles.statBox}>
                           <Text style={[styles.statBoxVal, { color: '#f59e0b' }]}>
-                            {teamStats?.winRate ? `${teamStats.winRate}%` : '62.5%'}
+                            {teamStats?.winRate !== undefined && teamStats?.winRate !== null ? `${teamStats.winRate}%` : '0%'}
                           </Text>
                           <Text style={styles.statBoxLbl}>Win Rate</Text>
                         </View>
                         <View style={styles.statBox}>
-                          <Text style={styles.statBoxVal}>{teamStats?.totalRunsScored ?? 1420}</Text>
+                          <Text style={styles.statBoxVal}>{teamStats?.totalRunsScored ?? 0}</Text>
                           <Text style={styles.statBoxLbl}>Total Runs</Text>
                         </View>
                         <View style={styles.statBox}>
-                          <Text style={styles.statBoxVal}>{teamStats?.totalWicketsTaken ?? 54}</Text>
+                          <Text style={styles.statBoxVal}>{teamStats?.totalWicketsTaken ?? 0}</Text>
                           <Text style={styles.statBoxLbl}>Wickets</Text>
                         </View>
                         <View style={styles.statBox}>
-                          <Text style={[styles.statBoxVal, { color: '#38bdf8' }]}>{teamStats?.highestScore ?? 214}</Text>
+                          <Text style={[styles.statBoxVal, { color: '#38bdf8' }]}>{teamStats?.highestScore ?? 0}</Text>
                           <Text style={styles.statBoxLbl}>Highest Total</Text>
                         </View>
                         <View style={styles.statBox}>
-                          <Text style={styles.statBoxVal}>{teamStats?.lowestScore ?? 138}</Text>
+                          <Text style={styles.statBoxVal}>{teamStats?.lowestScore ?? 0}</Text>
                           <Text style={styles.statBoxLbl}>Lowest Total</Text>
                         </View>
                       </View>

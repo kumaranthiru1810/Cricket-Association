@@ -1287,29 +1287,44 @@ export default function HomeScreen() {
 
             {/* Filter Tabs */}
             {(() => {
-              const liveCount = publicMatches.filter(m => {
-                const s = (m.status || '').toLowerCase();
-                const raw = (m.rawStatus || '').toUpperCase();
-                return s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK';
-              }).length;
-
-              const upcomingCount = publicMatches.filter(m => {
+              const getTodayDateStr = () => {
+                try {
+                  return new Intl.DateTimeFormat('en-CA', {
+                    timeZone: 'Asia/Kolkata',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit'
+                  }).format(new Date());
+                } catch {
+                  const d = new Date();
+                  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                }
+              };
+              const todayStr = getTodayDateStr();
+              const isMatchDatePassed = (m: any) => {
+                const rawD = String(m.match_date || m.date || '').trim();
+                const isoDate = rawD.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+                return Boolean(isoDate && isoDate < todayStr);
+              };
+              const getMatchFlags = (m: any) => {
                 const s = (m.status || '').toLowerCase();
                 const raw = (m.rawStatus || '').toUpperCase();
                 const isPostponed = s === 'postponed' || raw === 'POSTPONED' || !!m.isPostponed || !!m.postponement?.is_postponed;
-                return !isPostponed && (s === 'upcoming' || raw === 'SCHEDULED');
-              }).length;
+                const isLive = !isPostponed && (s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK');
+                const isCompleted = !isPostponed && (s === 'completed' || raw === 'COMPLETED');
+                const isCancelled = !isPostponed && (s === 'cancelled' || raw === 'CANCELLED' || raw === 'ABANDONED');
+                const isFinished = !isPostponed && !isLive && !isCompleted && !isCancelled &&
+                  (s === 'finished' || raw === 'FINISHED' || ((s === 'upcoming' || raw === 'SCHEDULED') && isMatchDatePassed(m)));
+                const isUpcoming = !isPostponed && !isFinished && (s === 'upcoming' || raw === 'SCHEDULED');
+                return { isPostponed, isLive, isCompleted, isCancelled, isFinished, isUpcoming };
+              };
 
-              const postponedCount = publicMatches.filter(m => {
-                const s = (m.status || '').toLowerCase();
-                const raw = (m.rawStatus || '').toUpperCase();
-                return s === 'postponed' || raw === 'POSTPONED' || !!m.isPostponed || !!m.postponement?.is_postponed;
-              }).length;
-
+              const liveCount = publicMatches.filter(m => getMatchFlags(m).isLive).length;
+              const upcomingCount = publicMatches.filter(m => getMatchFlags(m).isUpcoming).length;
+              const postponedCount = publicMatches.filter(m => getMatchFlags(m).isPostponed).length;
               const resultsCount = publicMatches.filter(m => {
-                const s = (m.status || '').toLowerCase();
-                const raw = (m.rawStatus || '').toUpperCase();
-                return s === 'completed' || raw === 'COMPLETED' || s === 'cancelled' || raw === 'CANCELLED';
+                const f = getMatchFlags(m);
+                return f.isCompleted || f.isCancelled || f.isFinished;
               }).length;
 
               return (
@@ -1397,14 +1412,41 @@ export default function HomeScreen() {
 
             {/* Matches List Filtering and Reusable Pagination (8 matches per page) */}
             {!isLoadingMatches && !matchesError && (() => {
+              const getTodayDateStr = () => {
+                try {
+                  return new Intl.DateTimeFormat('en-CA', {
+                    timeZone: 'Asia/Kolkata',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit'
+                  }).format(new Date());
+                } catch {
+                  const d = new Date();
+                  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                }
+              };
+              const todayStr = getTodayDateStr();
+              const isMatchDatePassed = (m: any) => {
+                const rawD = String(m.match_date || m.date || '').trim();
+                const isoDate = rawD.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+                return Boolean(isoDate && isoDate < todayStr);
+              };
+
               const filteredList = publicMatches.filter(m => {
                 const s = (m.status || '').toLowerCase();
                 const raw = (m.rawStatus || '').toUpperCase();
                 const isPostponed = s === 'postponed' || raw === 'POSTPONED' || !!m.isPostponed || !!m.postponement?.is_postponed;
-                if (matchFilter === 'live') return !isPostponed && (s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK');
-                if (matchFilter === 'upcoming') return !isPostponed && (s === 'upcoming' || raw === 'SCHEDULED');
+                const isLive = !isPostponed && (s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK');
+                const isCompleted = !isPostponed && (s === 'completed' || raw === 'COMPLETED');
+                const isCancelled = !isPostponed && (s === 'cancelled' || raw === 'CANCELLED' || raw === 'ABANDONED');
+                const isFinished = !isPostponed && !isLive && !isCompleted && !isCancelled &&
+                  (s === 'finished' || raw === 'FINISHED' || ((s === 'upcoming' || raw === 'SCHEDULED') && isMatchDatePassed(m)));
+                const isUpcoming = !isPostponed && !isFinished && (s === 'upcoming' || raw === 'SCHEDULED');
+
+                if (matchFilter === 'live') return isLive;
+                if (matchFilter === 'upcoming') return isUpcoming;
                 if (matchFilter === 'postponed') return isPostponed;
-                if (matchFilter === 'results') return !isPostponed && (s === 'completed' || raw === 'COMPLETED' || s === 'cancelled' || raw === 'CANCELLED');
+                if (matchFilter === 'results') return isCompleted || isCancelled || isFinished;
                 return true;
               });
 
@@ -1448,9 +1490,11 @@ export default function HomeScreen() {
                     const raw = (m.rawStatus || '').toUpperCase();
                     const isPostponed = s === 'postponed' || raw === 'POSTPONED' || !!m.isPostponed || !!m.postponement?.is_postponed;
                     const isLive = !isPostponed && (s === 'live' || raw === 'LIVE' || raw === 'INNINGS_BREAK');
-                    const isUpcoming = !isPostponed && (s === 'upcoming' || raw === 'SCHEDULED');
                     const isCompleted = !isPostponed && (s === 'completed' || raw === 'COMPLETED');
                     const isCancelled = !isPostponed && (s === 'cancelled' || raw === 'CANCELLED' || raw === 'ABANDONED');
+                    const isFinished = !isPostponed && !isLive && !isCompleted && !isCancelled &&
+                      (s === 'finished' || raw === 'FINISHED' || ((s === 'upcoming' || raw === 'SCHEDULED') && isMatchDatePassed(m)));
+                    const isUpcoming = !isPostponed && !isFinished && (s === 'upcoming' || raw === 'SCHEDULED');
 
                     const teamAShort = m.teamAShort || (m.teamA ? m.teamA.slice(0, 3).toUpperCase() : 'TMA');
                     const teamBShort = m.teamBShort || (m.teamB ? m.teamB.slice(0, 3).toUpperCase() : 'TMB');
@@ -1472,7 +1516,7 @@ export default function HomeScreen() {
                           styles.matchCard,
                           isLive && styles.matchCardLive,
                           isUpcoming && styles.matchCardUpcoming,
-                          isCompleted && styles.matchCardResult,
+                          (isCompleted || isFinished) && styles.matchCardResult,
                           isPostponed && { borderColor: '#f59e0b', backgroundColor: '#fffdf5' },
                           !isMobile && { flex: 1 },
                           isMobile && { width: '100%', minWidth: '100%', maxWidth: '100%' },
@@ -1501,6 +1545,11 @@ export default function HomeScreen() {
                               <View style={[styles.resultIndicatorPill, isSmallMobile && { paddingHorizontal: 7, paddingVertical: 2.5 }, { flexDirection: 'row', alignItems: 'center' }]}>
                                 <Ionicons name="flag-outline" size={11} color="#059669" style={{ marginRight: 3 }} />
                                 <Text style={[styles.resultIndicatorText, isSmallMobile && { fontSize: 9.5 }]}>RESULT</Text>
+                              </View>
+                            ) : isFinished ? (
+                              <View style={[styles.resultIndicatorPill, isSmallMobile && { paddingHorizontal: 7, paddingVertical: 2.5 }, { flexDirection: 'row', alignItems: 'center' }]}>
+                                <Ionicons name="checkmark-done-outline" size={11} color="#059669" style={{ marginRight: 3 }} />
+                                <Text style={[styles.resultIndicatorText, isSmallMobile && { fontSize: 9.5 }]}>FINISHED</Text>
                               </View>
                             ) : (
                               <View
@@ -1597,7 +1646,7 @@ export default function HomeScreen() {
                               ]}
                               numberOfLines={1}
                             >
-                              {m.scoreA || (isUpcoming ? 'Upcoming' : 'Yet to bat')}
+                              {m.scoreA || (isUpcoming ? 'Upcoming' : (isFinished ? 'Not Played' : 'Yet to bat'))}
                             </Text>
                           </View>
 
@@ -1643,7 +1692,7 @@ export default function HomeScreen() {
                               ]}
                               numberOfLines={1}
                             >
-                              {m.scoreB || (isUpcoming ? 'Upcoming' : 'Yet to bat')}
+                              {m.scoreB || (isUpcoming ? 'Upcoming' : (isFinished ? 'Not Played' : 'Yet to bat'))}
                             </Text>
                           </View>
                         </View>
@@ -1720,6 +1769,13 @@ export default function HomeScreen() {
                             <Ionicons name="calendar-outline" size={12} color="#475569" style={{ marginRight: 4 }} />
                             <Text style={[styles.matchStatusNote, isSmallMobile && { fontSize: 11 }]}>
                               Match Scheduled: {cleanDate} {cleanTime}
+                            </Text>
+                          </View>
+                        ) : isFinished ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Ionicons name="checkmark-done-outline" size={12} color="#059669" style={{ marginRight: 4 }} />
+                            <Text style={[styles.matchStatusNote, { color: '#059669' }, isSmallMobile && { fontSize: 11 }]}>
+                              Match Finished • Scheduled date ({cleanDate}) ended
                             </Text>
                           </View>
                         ) : isCancelled ? (
