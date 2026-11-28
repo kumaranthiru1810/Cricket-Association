@@ -124,9 +124,68 @@ function generateCommentary(strikerName, bowlerName, runsBatter, runsExtras, ext
   return `Dot ball. Good bowling by ${bowlerName}, solid defense${posText}.`;
 }
 
+function toDecimalOvers(oversVal, ballsVal = 0, isAllOut = false, maxOvers = 20) {
+  if (isAllOut && maxOvers > 0) return maxOvers;
+  const o = typeof oversVal === 'number' ? oversVal : parseFloat(oversVal || 0);
+  const b = typeof ballsVal === 'number' ? ballsVal : parseFloat(ballsVal || 0);
+  const wholeOvers = Math.floor(o);
+  const remainderBalls = Math.round((o - wholeOvers) * 10) || b;
+  return wholeOvers + (remainderBalls / 6);
+}
+
+/**
+ * Auto-calculate winner bonus point:
+ * Winning team's run rate >= 1.25 * losing team's run rate.
+ */
+function computeAutoBonusWinner(match, inn1, inn2, winnerId) {
+  if (!match || !inn1 || !inn2 || !winnerId || match.is_walkover) return false;
+  if (winnerId !== match.team_a_id && winnerId !== match.team_b_id) return false;
+
+  const standardMaxOvers = match.overs_per_side || 20;
+  const isDlsOrRevised = Boolean(match.revised_target || match.revised_overs || inn2?.revised_overs);
+  const revisedOvers = match.revised_overs || inn2?.revised_overs || null;
+  const revisedTarget = match.revised_target || inn2?.target || null;
+
+  const maxW1 = getMaxWicketsForInnings(inn1, match);
+  const allOut1 = (inn1.wickets || 0) >= maxW1;
+  const runs1 = (isDlsOrRevised && revisedOvers && revisedTarget)
+    ? Math.max(0, revisedTarget - 1)
+    : (inn1.total_runs || 0);
+  const overs1 = (isDlsOrRevised && revisedOvers)
+    ? revisedOvers
+    : toDecimalOvers(inn1.overs, inn1.balls, allOut1, standardMaxOvers);
+
+  const maxW2 = getMaxWicketsForInnings(inn2, match);
+  const allOut2 = (inn2.wickets || 0) >= maxW2;
+  const runs2 = inn2.total_runs || 0;
+  const maxO2 = (isDlsOrRevised && revisedOvers) ? revisedOvers : standardMaxOvers;
+  const overs2 = toDecimalOvers(inn2.overs, inn2.balls, allOut2, maxO2);
+
+  const rr1 = overs1 > 0 ? runs1 / overs1 : 0;
+  const rr2 = overs2 > 0 ? runs2 / overs2 : 0;
+
+  let winnerRR = 0;
+  let loserRR = 0;
+  if (winnerId === inn1.batting_team_id) {
+    winnerRR = rr1;
+    loserRR = rr2;
+  } else if (winnerId === inn2.batting_team_id) {
+    winnerRR = rr2;
+    loserRR = rr1;
+  } else {
+    return false;
+  }
+
+  if (winnerRR <= 0) return false;
+  if (loserRR <= 0) return true;
+  return winnerRR >= (loserRR * 1.25) - 1e-9;
+}
+
 module.exports = {
   broadcastScoreUpdate,
   getMaxWicketsForInnings,
+  toDecimalOvers,
+  computeAutoBonusWinner,
   getFullPlayerMap,
   buildDismissalText,
   generateCommentary

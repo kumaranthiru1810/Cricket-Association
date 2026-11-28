@@ -6,6 +6,7 @@
 
 const db = require('../config/db');
 const { broadcastScoreUpdate, emitScoreUpdate } = require('./socketService');
+const { computeAutoBonusWinner } = require('./scoring/deliveryHelpers');
 
 class UmpireService {
   /**
@@ -801,6 +802,7 @@ class UmpireService {
     const notes = resultPayload.notes || 'Official Result certified by Lead Match Umpires.';
     const playerOfMatch = resultPayload.playerOfMatch || match.player_of_match;
 
+    const wasAlreadyCompleted = match.status === 'COMPLETED';
     match.status = 'COMPLETED';
     match.result_summary = resultSummary;
     if (playerOfMatch) match.player_of_match = playerOfMatch;
@@ -808,6 +810,15 @@ class UmpireService {
     match.umpire_confirmed_by = umpireUser ? (umpireUser.name || umpireUser.id) : 'Lead Umpire';
     match.umpire_confirmation_notes = notes;
     match.umpire_confirmed_at = new Date();
+
+    if (!wasAlreadyCompleted && !match.is_walkover && (match.winner_id === match.team_a_id || match.winner_id === match.team_b_id)) {
+      const inns = await db.models.Innings.find({ match_id: matchId }).sort({ innings_number: 1 }).lean();
+      const inn1 = inns.find(i => i.innings_number === 1);
+      const inn2 = inns.find(i => i.innings_number === 2);
+      if (inn1 && inn2) {
+        match.bonus_point_winner = computeAutoBonusWinner(match, inn1, inn2, match.winner_id);
+      }
+    }
 
     await match.save();
 

@@ -746,7 +746,7 @@ export default function LiveScoringScreen() {
   const [endMatchResult, setEndMatchResult] = useState<'WIN' | 'TIE' | 'NO_RESULT' | 'ABANDONED'>('WIN');
   const [winnerTeamId, setWinnerTeamId] = useState<string>('');
   const [isWalkover, setIsWalkover] = useState<boolean>(false);
-  const [bonusPointWinner, setBonusPointWinner] = useState<boolean>(false);
+  const [bonusPointWinner, setBonusPointWinner] = useState<boolean | undefined>(undefined);
   const [bonusPointLoserPenalty, setBonusPointLoserPenalty] = useState<boolean>(false);
   const [tournamentRules, setTournamentRules] = useState<any>({
     powerplay_overs: 5,
@@ -6210,7 +6210,7 @@ export default function LiveScoringScreen() {
                     onPress={() => {
                       setIsWalkover(w => !w);
                       if (!isWalkover) {
-                        setBonusPointWinner(false);
+                        setBonusPointWinner(undefined);
                         setBonusPointLoserPenalty(false);
                       }
                     }}
@@ -6232,18 +6232,22 @@ export default function LiveScoringScreen() {
                   {!isWalkover && (
                     <>
                       <TouchableOpacity
-                        onPress={() => setBonusPointWinner(b => !b)}
+                        onPress={() => setBonusPointWinner(b => b === undefined ? true : (b ? false : undefined))}
                         style={{
                           paddingHorizontal: 10,
                           paddingVertical: 7,
                           borderRadius: 8,
                           borderWidth: 1,
-                          borderColor: bonusPointWinner ? '#059669' : '#cbd5e1',
-                          backgroundColor: bonusPointWinner ? '#ecfdf5' : '#f8fafc'
+                          borderColor: bonusPointWinner === true ? '#059669' : bonusPointWinner === false ? '#dc2626' : '#0284c7',
+                          backgroundColor: bonusPointWinner === true ? '#ecfdf5' : bonusPointWinner === false ? '#fef2f2' : '#f0f9ff'
                         }}
                       >
-                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: bonusPointWinner ? '#065f46' : '#334155' }}>
-                          {bonusPointWinner ? `✅ Bonus Win (+${tournamentRules?.points_bonus_win ?? 1})` : `Bonus Win (+${tournamentRules?.points_bonus_win ?? 1})`}
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: bonusPointWinner === true ? '#065f46' : bonusPointWinner === false ? '#991b1b' : '#0369a1' }}>
+                          {bonusPointWinner === true
+                            ? `✅ Bonus Win (+${tournamentRules?.points_bonus_win ?? 1})`
+                            : bonusPointWinner === false
+                              ? `❌ Bonus Win (Off)`
+                              : `⚡ Bonus Win (+${tournamentRules?.points_bonus_win ?? 1} Auto 1.25x RR)`}
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
