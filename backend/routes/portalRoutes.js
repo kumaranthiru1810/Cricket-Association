@@ -854,22 +854,29 @@ router.get('/teams/:teamId', async (req, res) => {
 
     // 3. Load Matches directly from MongoDB using indexes
     let formattedMatches = [];
+    const allTeamIds = Array.from(new Set([teamDoc?.id, teamRegDoc?.id, teamId].filter(Boolean)));
+    const tournamentIdsSet = new Set();
+    let rawMatches = [];
     try {
-      const allMatches = await Match.find({
+      rawMatches = await Match.find({
         $or: [
-          { team_a_id: teamId },
-          { team_b_id: teamId },
-          { team_a_name: teamName },
-          { team_b_name: teamName }
+          { team_a_id: { $in: allTeamIds } },
+          { team_b_id: { $in: allTeamIds } },
+          { team_a_name: nameRegex },
+          { team_b_name: nameRegex }
         ]
       })
-      .select('id tournament_name match_date match_time venue status team_a_id team_b_id team_a_name team_b_name score_a score_b result_summary winner_id overs_per_side')
+      .select('id tournament_id tournament_name match_date match_time venue status team_a_id team_b_id team_a_name team_b_name score_a score_b result_summary winner_id overs_per_side bonus_point_winner bonus_point_loser_penalty is_walkover player_of_match')
       .sort({ match_date: -1 })
-      .limit(30)
+      .limit(50)
       .lean();
 
-      formattedMatches = (allMatches || []).map(m => {
-        const isTeamA = m.team_a_id === teamId || (m.team_a_name || '').toLowerCase().trim() === teamName.toLowerCase().trim();
+      (rawMatches || []).forEach(m => {
+        if (m.tournament_id) tournamentIdsSet.add(m.tournament_id);
+      });
+
+      formattedMatches = (rawMatches || []).map(m => {
+        const isTeamA = allTeamIds.includes(m.team_a_id) || (m.team_a_name || '').toLowerCase().trim() === teamName.toLowerCase().trim();
         const opponentName = isTeamA ? (m.team_b_name || m.team_b_id) : (m.team_a_name || m.team_a_id);
         const opponentId = isTeamA ? m.team_b_id : m.team_a_id;
         const teamScore = isTeamA ? m.score_a : m.score_b;
@@ -877,13 +884,19 @@ router.get('/teams/:teamId', async (req, res) => {
 
         // Check if winner
         const resText = (m.result_summary || '').toLowerCase();
-        const isWinner = m.winner_id === teamId || (resText.includes(teamName.toLowerCase()) && (resText.includes('won') || resText.includes('win')));
-        const isLoser = (m.winner_id && m.winner_id !== teamId && m.winner_id !== 'TIE' && m.winner_id !== 'NO_RESULT') ||
-                        ((resText.includes('won') || resText.includes('win')) && !isWinner);
+        const isWinner = allTeamIds.includes(m.winner_id) || (resText.includes(teamName.toLowerCase()) && (resText.includes('won') || resText.includes('win')));
+        const isNoResult = m.winner_id === 'NO_RESULT' || m.winner_id === 'ABANDONED' || resText.includes('no result') || resText.includes('abandoned');
+        const isTie = m.winner_id === 'TIE' || m.winner_id === 'MATCH_TIED' || resText.includes('tied');
+        const isLoser = !isWinner && !isNoResult && !isTie && (
+          (m.winner_id && !allTeamIds.includes(m.winner_id)) ||
+          resText.includes('won') ||
+          resText.includes('win')
+        );
 
         return {
           id: m.id,
           matchId: m.id,
+          tournamentId: m.tournament_id || null,
           tournament: m.tournament_name || 'District Championship',
           date: m.match_date || '2026-10-06',
           venue: m.venue || 'Kamarajar District Stadium',
@@ -894,8 +907,14 @@ router.get('/teams/:teamId', async (req, res) => {
           teamScore: teamScore || 'Yet to bat',
           opponentScore: opponentScore || 'Yet to bat',
           result: m.result_summary || (m.status === 'LIVE' ? 'Match Live in Progress' : 'Match Scheduled'),
+          playerOfTheMatch: m.player_of_match || null,
           isWinner,
           isLoser,
+          isTie,
+          isNoResult,
+          isWalkover: Boolean(m.is_walkover),
+          bonusPointWinner: Boolean(m.bonus_point_winner),
+          bonusPointLoserPenalty: Boolean(m.bonus_point_loser_penalty),
           overs: m.overs_per_side || 20
         };
       });
@@ -903,11 +922,24 @@ router.get('/teams/:teamId', async (req, res) => {
       console.warn('Unable to load matches for team:', _mErr.message);
     }
 
+    // Load Tournament Points Rules for accurate points calculation
+    const tourRulesMap = {};
+    if (tournamentIdsSet.size > 0 && db.models.Tournament) {
+      const tours = await db.models.Tournament.find({ id: { $in: Array.from(tournamentIdsSet) } })
+        .select('id points_win points_loss points_tie points_no_result points_bonus_win points_bonus_loss points_walkover_win points_walkover_loss')
+        .lean();
+      (tours || []).forEach(t => {
+        tourRulesMap[t.id] = t;
+      });
+    }
+
     // 4. Calculate Stats
     let played = 0;
     let won = 0;
     let lost = 0;
     let tied = 0;
+    let noResult = 0;
+    let calculatedPoints = 0;
     let totalRunsScored = 0;
     let totalBallsFaced = 0;
     let totalRunsConceded = 0;
@@ -916,9 +948,29 @@ router.get('/teams/:teamId', async (req, res) => {
     formattedMatches.forEach(m => {
       if ((m.status || '').toUpperCase() === 'COMPLETED') {
         played++;
-        if (m.isWinner) won++;
-        else if (m.isLoser) lost++;
-        else tied++;
+        const tr = (m.tournamentId && tourRulesMap[m.tournamentId]) || {};
+        const pWin = Number(tr.points_win ?? 4);
+        const pLoss = Number(tr.points_loss ?? 0);
+        const pTie = Number(tr.points_tie ?? (pWin / 2));
+        const pNR = Number(tr.points_no_result ?? (pWin / 2));
+        const pBonusWin = Number(tr.points_bonus_win ?? 1);
+        const pBonusLoss = Number(tr.points_bonus_loss ?? -1);
+        const pWoWin = Number(tr.points_walkover_win ?? pWin);
+        const pWoLoss = Number(tr.points_walkover_loss ?? pLoss);
+
+        if (m.isWinner) {
+          won++;
+          calculatedPoints += m.isWalkover ? pWoWin : (pWin + (m.bonusPointWinner ? pBonusWin : 0));
+        } else if (m.isLoser) {
+          lost++;
+          calculatedPoints += m.isWalkover ? pWoLoss : (pLoss + (m.bonusPointLoserPenalty ? pBonusLoss : 0));
+        } else if (m.isNoResult) {
+          noResult++;
+          calculatedPoints += pNR;
+        } else {
+          tied++;
+          calculatedPoints += pTie;
+        }
 
         // Parse runs and overs from scores e.g. "172/5 (20.0 Ov)"
         if (m.teamScore && m.teamScore !== 'Yet to bat') {
@@ -957,7 +1009,7 @@ router.get('/teams/:teamId', async (req, res) => {
       tied = teamDoc.stats.tied || 0;
     }
 
-    const points = (won * 2) + (tied * 1);
+    const points = played > 0 ? calculatedPoints : ((won * 4) + (tied * 2));
     const winPercentage = played > 0 ? Math.round((won / played) * 100) : 0;
 
     // Run Rate: Runs per Over scored

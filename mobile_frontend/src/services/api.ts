@@ -1108,6 +1108,11 @@ export const ScorerApi = {
     });
   },
 
+  getReports: async (period: 'day' | 'month' | 'year', date: string) => {
+    const q = new URLSearchParams({ period, date }).toString();
+    return request(`/admin/reports?${q}`);
+  },
+
   cancelMatch: async (matchId: string, reason?: string) => {
     return request(`/admin/matches/${matchId}/cancel`, {
       method: 'PATCH',

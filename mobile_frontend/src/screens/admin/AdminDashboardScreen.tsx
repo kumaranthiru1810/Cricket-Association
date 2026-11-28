@@ -41,6 +41,7 @@ import { ScorerApi, SOCKET_URL, getCurrentUser, getAuthToken, setAuthToken, setC
 import { showSuccess, showError, showWarning, showConfirm, showInfo, swal } from '../../utils/sweetalert';
 import TournamentManagement from '../../admin/components/TournamentManagement';
 import TournamentRecordsPanel from '../../admin/components/TournamentRecordsPanel';
+import AdminReportsPanel from '../../admin/components/AdminReportsPanel';
 import CricketLawsManagement from '../../admin/components/CricketLawsManagement';
 import CalculationSettingsManagement from '../../admin/components/CalculationSettingsManagement';
 import SettingsPage from '../../admin/pages/SettingsPage';
@@ -74,7 +75,7 @@ export interface AdminDashboardProps {
   isSuperAdminMode?: boolean;
 }
 
-type AdminTab = 'overview' | 'users' | 'admins' | 'teams' | 'scorers' | 'umpires' | 'content' | 'schedules' | 'tournaments' | 'records' | 'laws' | 'calculations' | 'master_settings' | 'settings';
+type AdminTab = 'overview' | 'users' | 'admins' | 'teams' | 'scorers' | 'umpires' | 'content' | 'schedules' | 'tournaments' | 'records' | 'reports' | 'laws' | 'calculations' | 'master_settings' | 'settings';
 type FilterStatus = 'all' | 'Pending' | 'Approved' | 'Rejected';
 type MatchFilterStatus = 'all' | 'SCHEDULED' | 'LIVE' | 'COMPLETED' | 'CANCELLED' | 'POSTPONED' | 'REQUESTS';
 
@@ -265,7 +266,7 @@ export default function AdminDashboardScreen({ onExit, initialParams, isSuperAdm
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       try {
         const q = new URL(window.location.href).searchParams.get('tab') as AdminTab;
-        if (q && ['overview', 'users', 'admins', 'teams', 'scorers', 'umpires', 'content', 'schedules', 'tournaments', 'laws', 'calculations', 'master_settings', 'settings'].includes(q)) {
+        if (q && ['overview', 'users', 'admins', 'teams', 'scorers', 'umpires', 'content', 'schedules', 'tournaments', 'records', 'reports', 'laws', 'calculations', 'master_settings', 'settings'].includes(q)) {
           return q;
         }
       } catch (e) { }
@@ -2801,6 +2802,27 @@ export default function AdminDashboardScreen({ onExit, initialParams, isSuperAdm
             {!isCollapsed && (
               <Text style={[styles.sidebarNavLabel, activeTab === 'records' && styles.sidebarNavLabelActive]}>
                 Tournament Records
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Activity Reports (Day / Month / Year) */}
+          <TouchableOpacity
+            style={[
+              styles.sidebarNavItem,
+              activeTab === 'reports' && styles.sidebarNavItemTournamentsActive,
+              isCollapsed && styles.sidebarNavItemCollapsed
+            ]}
+            onPress={() => {
+              setActiveTab('reports');
+              if (isMobileDrawer) setMobileSidebarOpen(false);
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="document-text-outline" size={18} color={activeTab === 'reports' ? '#ffffff' : '#475569'} />
+            {!isCollapsed && (
+              <Text style={[styles.sidebarNavLabel, activeTab === 'reports' && styles.sidebarNavLabelActive]}>
+                Reports
               </Text>
             )}
           </TouchableOpacity>
@@ -5875,6 +5897,10 @@ export default function AdminDashboardScreen({ onExit, initialParams, isSuperAdm
 
             {activeTab === 'records' && (
               <TournamentRecordsPanel tournaments={tournamentsList} />
+            )}
+
+            {activeTab === 'reports' && (
+              <AdminReportsPanel />
             )}
 
             {/* ─────────────────────────────────────────────────────────────

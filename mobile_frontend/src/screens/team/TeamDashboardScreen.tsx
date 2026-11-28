@@ -3351,6 +3351,10 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                           <Text style={styles.statBoxLbl}>Win Rate</Text>
                         </View>
                         <View style={styles.statBox}>
+                          <Text style={[styles.statBoxVal, { color: '#d97706' }]}>{teamStats?.points ?? 0}</Text>
+                          <Text style={styles.statBoxLbl}>Points</Text>
+                        </View>
+                        <View style={styles.statBox}>
                           <Text style={styles.statBoxVal}>{teamStats?.totalRunsScored ?? 0}</Text>
                           <Text style={styles.statBoxLbl}>Total Runs</Text>
                         </View>
@@ -4384,6 +4388,11 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                         {isLive ? '🔴 LIVE: ' : isCompleted ? '🏆 ' : '⏳ '}
                         {scorecardData.result || (isLive ? 'Match in progress' : 'Match scheduled — not started yet')}
                       </Text>
+                      {Boolean(scorecardData.playerOfTheMatch || scorecardData.match?.playerOfTheMatch || scorecardData.player_of_match) && (
+                        <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#b45309', marginTop: 6 }}>
+                          ⭐ Man of the Match: {scorecardData.playerOfTheMatch || scorecardData.match?.playerOfTheMatch || scorecardData.player_of_match}
+                        </Text>
+                      )}
                     </View>
                   );
                 })()}

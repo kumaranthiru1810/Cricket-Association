@@ -240,7 +240,7 @@ async function calculateTeamStatistics(db, teamDoc, teamReg, reqUser, reqTeam) {
     totalWicketsTaken,
     highestScore,
     lowestScore,
-    points: (matchesWon * 2) + (matchesTied * 1),
+    points: (matchesWon * 4) + (matchesTied * 2),
     nrr: teamDoc?.stats?.nrr || 0.0
   };
 }

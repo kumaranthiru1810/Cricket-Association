@@ -5121,6 +5121,18 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
                     👑 {viewTeamModal?.captain || '—'}
                   </Text>
                 </View>
+                <View style={{ flex: 1, minWidth: 110 }}>
+                  <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Points</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#d97706', marginTop: 2 }}>
+                    🏆 {(() => {
+                      const ptRow = (selectedTournament?.points_table || []).find((r: any) =>
+                        r.team_id === viewTeamModal?.teamId ||
+                        (r.team_name && viewTeamModal?.teamName && String(r.team_name).toLowerCase() === String(viewTeamModal.teamName).toLowerCase())
+                      );
+                      return ptRow ? ptRow.points : 0;
+                    })()} PTS
+                  </Text>
+                </View>
               </View>
 
               {/* Players List */}
