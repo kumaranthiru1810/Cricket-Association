@@ -684,7 +684,7 @@ async function scheduleMatch(fixtureData, adminEmail) {
     toss_time_window,
     first_ball_time,
     scorer_reporting_time,
-    schedule_confirmation_status: 'CONFIRMED',
+    schedule_confirmation_status: 'PENDING',
     umpire1_id: umpire1_id || null,
     umpire2_id: umpire2_id || null,
     umpire1_name: resolvedUmpire1Name || (umpire1_id ? 'Official Umpire 1' : null),

@@ -2495,6 +2495,7 @@ function computeStandings(teams = [], matches = [], inningsByMatch = {}, tournam
       lost: 0,
       tied: 0,
       no_result: 0,
+      bonus: 0,
       points: 0,
       runs_scored: 0,
       runs_for: 0,
@@ -2531,7 +2532,7 @@ function computeStandings(teams = [], matches = [], inningsByMatch = {}, tournam
     if (!standings[teamA]) {
       standings[teamA] = {
         team_id: teamA, team_name: m.team_a_name || teamA,
-        played: 0, won: 0, lost: 0, tied: 0, no_result: 0, points: 0,
+        played: 0, won: 0, lost: 0, tied: 0, no_result: 0, bonus: 0, points: 0,
         runs_scored: 0, runs_for: 0, overs_faced: 0,
         runs_conceded: 0, runs_against: 0, overs_bowled: 0, nrr: 0.000, form: []
       };
@@ -2539,7 +2540,7 @@ function computeStandings(teams = [], matches = [], inningsByMatch = {}, tournam
     if (!standings[teamB]) {
       standings[teamB] = {
         team_id: teamB, team_name: m.team_b_name || teamB,
-        played: 0, won: 0, lost: 0, tied: 0, no_result: 0, points: 0,
+        played: 0, won: 0, lost: 0, tied: 0, no_result: 0, bonus: 0, points: 0,
         runs_scored: 0, runs_for: 0, overs_faced: 0,
         runs_conceded: 0, runs_against: 0, overs_bowled: 0, nrr: 0.000, form: []
       };
@@ -2612,8 +2613,12 @@ function computeStandings(teams = [], matches = [], inningsByMatch = {}, tournam
         standings[winner].points += pointsWalkoverWin;
         standings[loser].points += pointsWalkoverLoss;
       } else {
-        standings[winner].points += pointsWin + (m.bonus_point_winner ? pointsBonusWin : 0);
-        standings[loser].points += pointsLoss + (m.bonus_point_loser_penalty ? pointsBonusLoss : 0);
+        const winBonus = m.bonus_point_winner ? pointsBonusWin : 0;
+        const lossBonus = m.bonus_point_loser_penalty ? pointsBonusLoss : 0;
+        standings[winner].bonus += winBonus;
+        standings[loser].bonus += lossBonus;
+        standings[winner].points += pointsWin + winBonus;
+        standings[loser].points += pointsLoss + lossBonus;
       }
       standings[winner].form.push('W');
       standings[loser].form.push('L');
