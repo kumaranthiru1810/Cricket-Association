@@ -343,7 +343,16 @@ class PlayerService {
       ];
       for (const key of allowedDetailKeys) {
         if (updates.player_details[key] !== undefined) {
-          userUpdates[`player_details.${key}`] = updates.player_details[key];
+          if (key === 'address') {
+            const { validateAddress } = require('../utils/addressValidation');
+            const addrRes = validateAddress(updates.player_details.address);
+            if (!addrRes.isValid) {
+              throw { status: 400, message: addrRes.error };
+            }
+            userUpdates['player_details.address'] = addrRes.normalized;
+          } else {
+            userUpdates[`player_details.${key}`] = updates.player_details[key];
+          }
         }
       }
     }

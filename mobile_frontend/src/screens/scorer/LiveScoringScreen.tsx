@@ -1919,6 +1919,8 @@ export default function LiveScoringScreen() {
     const clientDeliveryId = `cdel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const payload = {
       clientDeliveryId,
+      expectedOver: Math.floor(balls / 6),
+      expectedBall: balls % 6,
       strikerId: striker?.id,
       nonStrikerId: nonStriker?.id,
       bowlerId: bowler?.id,

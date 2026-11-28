@@ -791,6 +791,15 @@ class PlayerRatingService {
       .sort({ innings_number: 1 })
       .lean();
     const inningsMap = new Map(inningsList.map(i => [i.id, i]));
+    const teamTotalRunsMap = new Map();
+    for (const inn of inningsList) {
+      if (inn?.batting_team_id) {
+        teamTotalRunsMap.set(
+          inn.batting_team_id,
+          (teamTotalRunsMap.get(inn.batting_team_id) || 0) + Number(inn.total_runs || 0)
+        );
+      }
+    }
     const inningsIds = inningsList.map(i => i.id).filter(Boolean);
     const inningScope = inningsIds.length > 0
       ? { $or: [{ match_id: matchId }, { innings_id: { $in: inningsIds } }] }
@@ -994,7 +1003,7 @@ class PlayerRatingService {
         bowlingStats: didBowl ? bwStat : null,
         fieldingStats: didField ? fStat : null,
         matchContext: {
-          team_total_runs: 160,
+          team_total_runs: (matchTeamId && teamTotalRunsMap.get(matchTeamId)) || 0,
           overs_per_side: match.overs_per_side || null,
           team_won: isWinner,
           player_of_the_match: Boolean(isPOTM)

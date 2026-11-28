@@ -48,8 +48,23 @@ let otpHmacSecret = process.env.OTP_HMAC_SECRET;
 let webhookSecret = process.env.WEBHOOK_SECRET;
 let encryptionKey = process.env.ENCRYPTION_KEY;
 
-// In development or test, provide deterministic keys only if not set
-if (isDevelopment || isTest) {
+// In development or local-only test, provide deterministic keys only if not set.
+// If NODE_ENV=test is combined with a public HOST or PaaS runtime, require real JWT_SECRET.
+const hostEnv = (process.env.HOST || '').trim();
+const isPublicHostInTest = isTest && (
+  (hostEnv && !['127.0.0.1', 'localhost', '::1'].includes(hostEnv)) ||
+  Boolean(process.env.RENDER || process.env.RAILWAY_ENVIRONMENT || process.env.FLY_APP_NAME || process.env.HEROKU_APP_NAME)
+);
+
+if (isPublicHostInTest) {
+  const testJwtErr = isWeakSecret(jwtSecret, 32);
+  if (testJwtErr) {
+    console.error(`FATAL CONFIGURATION ERROR: NODE_ENV=test on public host requires strong JWT_SECRET (${testJwtErr}).`);
+    process.exit(1);
+  }
+}
+
+if (isDevelopment || (isTest && process.env.ALLOW_TEST_KEYS === 'true')) {
   if (!jwtSecret) jwtSecret = 'dev_only_jwt_signing_key_9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c';
   if (!otpHmacSecret) otpHmacSecret = 'dev_only_otp_hmac_key_1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d';
   if (!webhookSecret) webhookSecret = 'dev_only_webhook_key_4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b';
@@ -92,6 +107,13 @@ if (isProduction) {
   const hasSmtp = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD);
   if (!hasBrevo && !hasResend && !hasSmtp) {
     missing.push('A working email provider config (BREVO_API_KEY, RESEND_API_KEY, or SMTP_HOST/SMTP_USER/SMTP_PASSWORD) is required');
+  }
+  if (hasBrevo && (!process.env.BREVO_SENDER_EMAIL || !String(process.env.BREVO_SENDER_EMAIL).trim())) {
+    missing.push('BREVO_SENDER_EMAIL is required when BREVO_API_KEY is configured in production');
+  }
+
+  if (!process.env.TURNSTILE_SECRET || !String(process.env.TURNSTILE_SECRET).trim()) {
+    missing.push('TURNSTILE_SECRET is required outside development/test');
   }
 
   if (missing.length > 0) {

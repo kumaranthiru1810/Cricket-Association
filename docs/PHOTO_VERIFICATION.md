@@ -31,7 +31,7 @@ All thresholds live in `backend/config/photoVerification.js`:
 ## Calibration & Privacy Scripts
 - **Calibration**: `node backend/scripts/photo-calibration.js <folder>` prints blur, brightness, and flat-ratio distributions.
 - **Privacy Deletion**: `node backend/scripts/delete-player-photo.js <id_or_email>` clears stored photo URLs, `photo_phash`, `photo_checks`, and `face_embedding`.
-- **Rejected Retention Cleanup**: `passportPhotoService.cleanupExpiredRejectedPhotos(30)` clears rejected photo metadata older than 30 days.
+- **Rejected Retention Cleanup**: `passportPhotoService.cleanupExpiredRejectedPhotos(30)` runs nightly via `server.js` to clear rejected photo metadata older than 30 days.
 
 ## Performance
 On a typical 2 vCPU Node.js server, Sharp decoding + Laplacian/brightness signal analysis + `dHash:aHash` + `600×770` resize completes in ~35–80 ms per photo.

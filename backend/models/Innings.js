@@ -127,7 +127,10 @@ InningsBowlerSchema.index({ innings_id: 1, player_id: 1 });
 DeliverySchema.index({ match_id: 1, innings_id: 1, over_number: 1, ball_number: 1 });
 DeliverySchema.index({ innings_id: 1, over_number: 1, ball_number: 1 });
 DeliverySchema.index({ match_id: 1, innings_number: 1 });
-DeliverySchema.index({ match_id: 1, client_delivery_id: 1 }, { sparse: true });
+DeliverySchema.index(
+  { match_id: 1, client_delivery_id: 1 },
+  { unique: true, partialFilterExpression: { client_delivery_id: { $type: 'string' } } }
+);
 
 const Innings = mongoose.models.Innings || mongoose.model('Innings', InningsSchema);
 const InningsBatter = mongoose.models.InningsBatter || mongoose.model('InningsBatter', InningsBatterSchema);

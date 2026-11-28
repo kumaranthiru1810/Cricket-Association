@@ -204,6 +204,28 @@ async function runSecurityAuditTests() {
   for (const h of devHeaders) {
     assert(!allowedHeadersList.includes(h), `Dev impersonation header "${h}" must NOT be in CORS allowedHeaders in production`);
   }
+
+  // 13. Public portal endpoints must never leak emails (@)
+  const http = require('http');
+  const { app } = require('../server');
+  const pubServer = http.createServer(app);
+  await new Promise((resolve) => pubServer.listen(0, '127.0.0.1', resolve));
+  try {
+    const port = pubServer.address().port;
+    for (const pPath of ['/api/portal/home', '/api/portal/search?q=a', '/api/portal/live']) {
+      const bodyStr = await new Promise((resolve, reject) => {
+        http.get(`http://127.0.0.1:${port}${pPath}`, (r) => {
+          let d = '';
+          r.on('data', c => { d += c; });
+          r.on('end', () => resolve(d));
+        }).on('error', reject);
+      });
+      assert(!bodyStr.includes('@'), `Public endpoint ${pPath} must not expose email addresses (@)`);
+    }
+    console.log('✅ PASS: Public portal endpoints expose zero email addresses (@)');
+  } finally {
+    pubServer.close();
+  }
   console.log('✅ PASS: Final 2: Dev impersonation headers strictly rejected from CORS headers');
 
   // 13. Final Mandatory Deliverable: Unauthenticated write routes return 401

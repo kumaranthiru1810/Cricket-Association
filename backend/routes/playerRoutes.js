@@ -29,7 +29,8 @@ const { sendListResponse } = require('../utils/responseHelper');
  * POST /api/player/register
  * Individual player registration -> Status = PENDING -> Awaiting Admin Approval
  */
-const { registerRateLimiter, otpRateLimiter } = require('../middleware/securityMiddleware');
+const { registerRateLimiter, otpRateLimiter, otpRequestRateLimiter } = require('../middleware/securityMiddleware');
+const { requireTurnstile } = require('../middleware/turnstileMiddleware');
 
 router.post('/register', registerRateLimiter, async (req, res) => {
   try {
@@ -49,7 +50,7 @@ router.post('/register', registerRateLimiter, async (req, res) => {
  * Step 1: Request OTP for registered player name / email
  * Strictly verifies player exists & admin approval status before generating & dispatching OTP
  */
-router.post('/login', otpRateLimiter, async (req, res) => {
+router.post('/login', requireTurnstile, ...otpRequestRateLimiter, otpRateLimiter, async (req, res) => {
   try {
     const { name, email, playerName, nameOrEmail, emailOrPhone, input } = req.body;
     const identifier = playerName || nameOrEmail || emailOrPhone || input || email || name;
@@ -70,7 +71,7 @@ const authController = require('../controllers/authController');
  * POST /api/player/verify-otp
  * Step 2: Verify OTP and return authenticated session token
  */
-router.post('/verify-otp', async (req, res) => {
+router.post('/verify-otp', otpRateLimiter, async (req, res) => {
   try {
     const { name, email, playerName, nameOrEmail, emailOrPhone, input, otp } = req.body;
     const identifier = playerName || nameOrEmail || emailOrPhone || input || email || name;

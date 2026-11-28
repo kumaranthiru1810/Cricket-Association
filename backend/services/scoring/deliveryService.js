@@ -271,13 +271,14 @@ class DeliveryService {
           scorerService.getSquadForTeam(innings.batting_team_id, match),
           scorerService.getSquadForTeam(innings.bowling_team_id, match)
         ]);
-        if (!activeStrikerId) activeStrikerId = battingSquad[0]?.id || 'P101';
-        if (!activeNonStrikerId) activeNonStrikerId = battingSquad.find(p => p.id !== activeStrikerId)?.id || battingSquad[1]?.id || 'P102';
-        if (!activeBowlerId) activeBowlerId = bowlingSquad.find(p => p.role === 'BOWLER')?.id || bowlingSquad[0]?.id || 'P201';
+        if (!activeStrikerId) activeStrikerId = battingSquad[0]?.id || null;
+        if (!activeNonStrikerId) activeNonStrikerId = battingSquad.find(p => p.id !== activeStrikerId)?.id || battingSquad[1]?.id || null;
+        if (!activeBowlerId) activeBowlerId = bowlingSquad.find(p => p.role === 'BOWLER')?.id || bowlingSquad[0]?.id || null;
       } catch (_e) {
-        if (!activeStrikerId) activeStrikerId = 'P101';
-        if (!activeNonStrikerId) activeNonStrikerId = 'P102';
-        if (!activeBowlerId) activeBowlerId = 'P201';
+        // Handled by missing-player validation below
+      }
+      if (!activeStrikerId || !activeNonStrikerId || !activeBowlerId) {
+        throw { status: 400, message: 'Striker, non-striker, and bowler must be selected before recording a delivery.' };
       }
     }
 

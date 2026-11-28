@@ -94,14 +94,9 @@ class TeamAuth {
       otp: rawOtp
     });
 
-    console.log(`\n🏏 [COACH OTP DISPATCH] Coach: ${coachName || reg?.coach_name} | Email: ${cleanEmail} | Status: Dispatched securely via email\n`);
-
     return {
       success: true,
-      message: `OTP sent to ${cleanEmail} via Nodemailer.`,
-      teamName: resolvedTeamName,
-      coachName: coachName || reg?.coach_name || team?.coach_name,
-      email: cleanEmail
+      message: 'If an eligible account exists, an OTP has been sent.'
     };
   }
 

@@ -182,30 +182,17 @@ async function analyzeImageSignals(buffer) {
 }
 
 /**
- * Optional server-side ML face/object detector (never trusts client values).
- * Attempts to use locally installed @vladmandic/human or @tensorflow-models/coco-ssd
- * if compatible with the current Node.js runtime; otherwise returns unavailable.
+ * Server-side ML face/object detection is not bundled in this runtime;
+ * always returns available: false so every photo routes to PENDING_REVIEW
+ * for authoritative Admin verification (fail-safe: never auto-approves).
  */
 async function runServerSideDetection(_buffer) {
-  // Check if a compatible server-side ML detector is installed and loadable
-  try {
-    // eslint-disable-next-line global-require
-    require.resolve('@vladmandic/human');
-  } catch (_e) {
-    return {
-      available: false,
-      uncertain: true,
-      faceCount: null,
-      animalDetected: false,
-      engine: 'server-ml-unavailable'
-    };
-  }
   return {
     available: false,
     uncertain: true,
     faceCount: null,
     animalDetected: false,
-    engine: 'server-ml-unconfigured'
+    engine: 'manual-admin-review'
   };
 }
 

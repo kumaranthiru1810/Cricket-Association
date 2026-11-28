@@ -1337,13 +1337,24 @@ router.put('/players/:playerId', requireTeamAuth, async (req, res) => {
     let updated = false;
     let savedPlayer = null;
 
-    // 1. Try Player collection
+    // 1. Try Player collection (strictly scoped to this team to prevent IDOR)
     const isObjectId = mongoose.isValidObjectId && mongoose.isValidObjectId(playerId);
-    const playerQuery = {
+    const teamScope = {
       $or: [
-        { id: playerId },
-        ...(isObjectId ? [{ _id: playerId }] : []),
-        ...(email ? [{ email: email.toLowerCase().trim() }] : [])
+        { team_id: teamId },
+        ...(teamName ? [{ club_choice: new RegExp(`^${teamName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }] : [])
+      ]
+    };
+    const playerQuery = {
+      $and: [
+        teamScope,
+        {
+          $or: [
+            { id: playerId },
+            ...(isObjectId ? [{ _id: playerId }] : []),
+            ...(email ? [{ email: email.toLowerCase().trim() }] : [])
+          ]
+        }
       ]
     };
 
@@ -1455,12 +1466,23 @@ router.delete('/players/:playerId', requireTeamAuth, async (req, res) => {
 
     let removed = false;
 
-    // 1. Remove or deactivate in Player collection
+    // 1. Remove or deactivate in Player collection (strictly scoped to this team to prevent IDOR)
     const isObjectId = mongoose.isValidObjectId && mongoose.isValidObjectId(playerId);
-    const playerQuery = {
+    const teamScope = {
       $or: [
-        { id: playerId },
-        ...(isObjectId ? [{ _id: playerId }] : [])
+        { team_id: teamId },
+        ...(teamName ? [{ club_choice: new RegExp(`^${teamName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }] : [])
+      ]
+    };
+    const playerQuery = {
+      $and: [
+        teamScope,
+        {
+          $or: [
+            { id: playerId },
+            ...(isObjectId ? [{ _id: playerId }] : [])
+          ]
+        }
       ]
     };
     const playerDoc = await Player.findOne(playerQuery);

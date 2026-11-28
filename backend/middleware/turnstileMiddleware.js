@@ -19,12 +19,24 @@ function getClientIp(req) {
   return req.ip || req.connection?.remoteAddress || undefined;
 }
 
+function isProdMode() {
+  const nodeEnv = (process.env.NODE_ENV || 'production').trim();
+  return nodeEnv !== 'development' && nodeEnv !== 'test';
+}
+
 /**
  * Verifies a Cloudflare Turnstile token against siteverify API.
  */
 async function verifyTurnstileToken(token, remoteIp) {
   const secret = getTurnstileSecret();
   if (!secret) {
+    if (isProdMode()) {
+      return {
+        success: false,
+        unavailable: true,
+        error: 'Security verification service is not configured on the server.'
+      };
+    }
     return { success: true, skipped: true };
   }
 
@@ -69,6 +81,12 @@ async function requireTurnstile(req, res, next) {
   try {
     const secret = getTurnstileSecret();
     if (!secret) {
+      if (isProdMode()) {
+        return res.status(503).json({
+          success: false,
+          error: 'Security verification service is not configured.'
+        });
+      }
       return next();
     }
 

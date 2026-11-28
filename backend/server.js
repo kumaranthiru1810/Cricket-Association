@@ -101,13 +101,28 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ limit: '1mb', extended: true }));
 app.use(cookieParser());
 
-// Performance 2: Static file serving for uploaded photos with 30-day public caching and ETag
+// Static file serving for uploaded photos (blocks unapproved PENDING_REVIEW/REJECTED player photos)
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
+app.use('/uploads/players', async (req, res, next) => {
+  try {
+    const filename = path.basename(req.path || '');
+    if (filename && db.models?.User) {
+      const escaped = filename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const u = await db.models.User.findOne({
+        $or: [{ photo: new RegExp(escaped + '$') }, { image_path: new RegExp(escaped + '$') }]
+      }).select('photo_verification_status photo_status').lean();
+      if (u && ['PENDING_REVIEW', 'REJECTED'].includes(String(u.photo_verification_status || '').toUpperCase())) {
+        return res.status(403).json({ success: false, message: 'Photo is not publicly accessible until verified.' });
+      }
+    }
+  } catch (_e) {}
+  return next();
+});
 app.use('/uploads', express.static(UPLOAD_DIR, {
-  maxAge: 2592000 * 1000, // 30 days
+  maxAge: 300 * 1000, // 5 minutes
   etag: true,
   setHeaders: (res) => {
-    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+    res.setHeader('Cache-Control', 'private, max-age=300, must-revalidate');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Disposition', 'inline');
   }
@@ -309,6 +324,9 @@ if (require.main === module) {
         try {
           require('./services/playerRatingService').reconcileCompletedMatchRatings().catch((err) => {
             console.warn('[NightlyRatingReconcile]', err?.message || err);
+          });
+          require('./services/passportPhotoService').cleanupExpiredRejectedPhotos().catch((err) => {
+            console.warn('[NightlyPhotoCleanup]', err?.message || err);
           });
         } catch (_e) {}
       }, NIGHTLY_MS).unref();

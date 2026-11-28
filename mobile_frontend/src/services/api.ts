@@ -536,7 +536,7 @@ export const ScorerApi = {
     return currentUser;
   },
 
-  checkRegistrationExists: async (params: { role?: string; email?: string; name?: string; teamName?: string }) => {
+  checkRegistrationExists: async (params: { role?: string; email?: string; name?: string; teamName?: string; mobile?: string }) => {
     return request('/auth/check-registration-exists', {
       method: 'POST',
       body: JSON.stringify(params)

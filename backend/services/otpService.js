@@ -29,19 +29,26 @@ function generate4DigitOtpCode() {
 }
 
 /**
- * Generate SHA-256 hash of plain text OTP
+ * Generate HMAC-SHA256 hash of plain text OTP using OTP_HMAC_SECRET
  */
 function hashOtp(otp) {
   if (!otp) return '';
-  return crypto.createHash('sha256').update(String(otp).trim()).digest('hex');
+  const { OTP_HMAC_SECRET } = require('../config/env');
+  return crypto
+    .createHmac('sha256', String(OTP_HMAC_SECRET || 'dev_only_otp_hmac_key'))
+    .update(String(otp).trim())
+    .digest('hex');
 }
 
 /**
- * Verify OTP code against hash
+ * Verify OTP code against stored HMAC hash (constant-time)
  */
 function verifyOtpCode(plainOtp, storedHash) {
   if (!plainOtp || !storedHash) return false;
-  return hashOtp(plainOtp) === storedHash;
+  const computed = Buffer.from(hashOtp(plainOtp), 'utf8');
+  const expected = Buffer.from(String(storedHash), 'utf8');
+  if (computed.length !== expected.length) return false;
+  return crypto.timingSafeEqual(computed, expected);
 }
 
 /**

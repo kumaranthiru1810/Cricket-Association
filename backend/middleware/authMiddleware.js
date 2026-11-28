@@ -32,7 +32,7 @@ function verifyToken(req, res, next) {
     }
 
     try {
-      const decoded = jwt.verify(token, JWT_SECRET);
+      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
       req.user = decoded;
       return next();
     } catch (_err) {
@@ -169,18 +169,13 @@ async function verifyMatchPermission(req, res, next) {
       return next();
     }
 
-    // Scorer must be assigned to this match, or match must be unassigned, or admin
-    const isDev = require('../config/env').isDevelopment;
-    let isAssigned = (match.assigned_scorer_id === req.user.id) ||
-                     (!match.assigned_scorer_id) ||
-                     (isDev && (match.assigned_scorer_id === 'SCR-101' || (req.user.email && ['ramesh@gmail.com', 'scorer@cfvd.org'].includes(req.user.email))));
+    // Unassigned matches can only be accessed by Admin (handled above);
+    // scorers require an exact assigned_scorer_id match (no name-based or unassigned bypass).
+    let isAssigned = Boolean(match.assigned_scorer_id && req.user?.id && match.assigned_scorer_id === req.user.id);
 
-    if (!isAssigned && req.user) {
+    if (!isAssigned && match.assigned_scorer_id && req.user) {
       const uEmail = (req.user.email || '').toLowerCase();
-      const uName = (req.user.name || '').trim().toLowerCase();
-      if (uName && ((match.assigned_scorer_name || '').trim().toLowerCase() === uName || (match.scorer_name || '').trim().toLowerCase() === uName || (match.assigned_scorer_id || '').trim().toLowerCase() === uName)) {
-        isAssigned = true;
-      } else if (uEmail || req.user.id) {
+      if (uEmail || req.user.id) {
         const off = await db.models.Official.findOne({
           $or: [
             ...(uEmail ? [{ email: uEmail }] : []),
