@@ -303,6 +303,16 @@ if (require.main === module) {
 
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`🏏 Cricket Express & Socket.IO Server running on http://localhost:${PORT}`);
+    if (process.env.NODE_ENV !== 'test') {
+      const NIGHTLY_MS = 24 * 60 * 60 * 1000;
+      setInterval(() => {
+        try {
+          require('./services/playerRatingService').reconcileCompletedMatchRatings().catch((err) => {
+            console.warn('[NightlyRatingReconcile]', err?.message || err);
+          });
+        } catch (_e) {}
+      }, NIGHTLY_MS).unref();
+    }
   });
 }
 

@@ -437,19 +437,29 @@ class TeamRegistrationModel {
       { upsert: true, returnDocument: 'after' }
     );
 
-    // 2. Add approved squad players to db.models.Player & User accounts
+    // 2. Add approved squad players to db.models.Player & User accounts (preserving existing unique playerId)
     if (reg.players && reg.players.length > 0) {
       for (let i = 0; i < reg.players.length; i++) {
         const p = reg.players[i];
-        const playerId = `PLY-${teamId}-${i + 1}`;
+        const pEmail = String(p.email || '').trim().toLowerCase();
+        const [existingPlayer, existingUser] = await Promise.all([
+          pEmail ? db.models.Player.findOne({ email: pEmail }).select('id').lean() : null,
+          pEmail ? userModel.findByEmail(pEmail) : null
+        ]);
+        const canonicalPlayerId =
+          (existingPlayer?.id && /^PLY-/i.test(existingPlayer.id) ? existingPlayer.id : null) ||
+          (existingUser?.id && /^PLY-/i.test(existingUser.id) ? existingUser.id : null) ||
+          existingPlayer?.id ||
+          `PLY-${teamId}-${i + 1}`;
+
         await db.models.Player.findOneAndUpdate(
-          { email: p.email },
+          { email: pEmail || p.email },
           {
+            $setOnInsert: { id: canonicalPlayerId },
             $set: {
-              id: playerId,
               team_id: teamId,
               name: p.name,
-              email: p.email,
+              email: pEmail || p.email,
               phone: p.phone || p.mobile || null,
               mobile: p.phone || p.mobile || null,
               aadhaar: p.aadhaar || null,
@@ -462,12 +472,11 @@ class TeamRegistrationModel {
         );
 
         // Ensure user account exists so player can login via OTP
-        const existingUser = await userModel.findByEmail(p.email);
         if (!existingUser) {
           await userModel.create({
-            id: playerId,
+            id: canonicalPlayerId,
             name: p.name,
-            email: p.email,
+            email: pEmail || p.email,
             mobile: p.phone || p.mobile || null,
             aadhaar: p.aadhaar || null,
             role: 'PLAYER',
@@ -475,7 +484,7 @@ class TeamRegistrationModel {
           });
         } else {
           await db.models.User.updateOne(
-            { email: p.email },
+            { email: pEmail || p.email },
             { $set: { status: 'ACTIVE', role: 'PLAYER', mobile: p.phone || p.mobile || existingUser.mobile || null, aadhaar: p.aadhaar || existingUser.aadhaar || null, updated_at: new Date() } }
           );
         }

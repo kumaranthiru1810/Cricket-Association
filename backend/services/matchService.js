@@ -261,6 +261,28 @@ class MatchService {
     match.result_summary = '';
     match.target_runs = undefined;
 
+    // Block players whose passport photo is explicitly PENDING_REVIEW or REJECTED
+    // (Existing legitimate players with NONE/undefined or VERIFIED are allowed)
+    const selectedIds = [
+      ...(Array.isArray(teamAPlayingXI) ? teamAPlayingXI : []),
+      ...(Array.isArray(teamBPlayingXI) ? teamBPlayingXI : [])
+    ].filter(Boolean);
+    if (selectedIds.length > 0) {
+      const [uDocs, pDocs] = await Promise.all([
+        db.models.User.find({ id: { $in: selectedIds } }).select('id name photo_verification_status').lean(),
+        db.models.Player.find({ id: { $in: selectedIds } }).select('id name photo_verification_status').lean()
+      ]);
+      for (const doc of [...(uDocs || []), ...(pDocs || [])]) {
+        const pvs = String(doc?.photo_verification_status || '').toUpperCase();
+        if (pvs === 'PENDING_REVIEW' || pvs === 'REJECTED') {
+          throw {
+            status: 400,
+            message: `Player ${doc.name || doc.id} cannot participate in matches while their passport photo status is ${pvs}. Admin photo approval is required.`
+          };
+        }
+      }
+    }
+
     // Association Rule 15: Dynamic minimum players per team configured by Admin
     const rule15 = await this.getRule15Config();
     const minRequired = rule15.enabled ? rule15.minPlayers : 1;

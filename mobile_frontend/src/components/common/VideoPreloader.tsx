@@ -12,7 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideoPlayer, VideoView } from 'expo-video';
 
-const LOCAL_PRELOADER_VIDEO = require('../../../assets/videos/preloader.mp4');
+const LOCAL_MOBILE_PRELOADER_VIDEO = require('../../../assets/videos/preloader-mobile.mp4');
 
 interface NativeVideoComponentProps {
   onProgress: (pct: number) => void;
@@ -21,7 +21,7 @@ interface NativeVideoComponentProps {
 }
 
 function NativeVideoComponent({ onProgress, onEnded, contentFit = 'contain' }: NativeVideoComponentProps) {
-  const player = useVideoPlayer(LOCAL_PRELOADER_VIDEO, (p) => {
+  const player = useVideoPlayer(LOCAL_MOBILE_PRELOADER_VIDEO, (p) => {
     p.loop = false;
     p.muted = false;
     p.volume = 1.0;
@@ -234,7 +234,7 @@ export default function VideoPreloader({ onComplete }: VideoPreloaderProps) {
                 pointerEvents: 'none',
                 zIndex: 0,
               }}
-              src="/preloader.mp4"
+              src={width <= 768 ? '/preloader-mobile.mp4' : '/preloader.mp4'}
             />
             <video
               ref={webVideoRef}
@@ -255,7 +255,7 @@ export default function VideoPreloader({ onComplete }: VideoPreloaderProps) {
                 backgroundColor: 'transparent',
                 zIndex: 1,
               }}
-              src="/preloader.mp4"
+              src={width <= 768 ? '/preloader-mobile.mp4' : '/preloader.mp4'}
               onEnded={() => handleDismiss()}
               onTimeUpdate={handleTimeUpdate}
             />

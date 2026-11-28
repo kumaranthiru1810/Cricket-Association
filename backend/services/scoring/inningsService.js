@@ -159,6 +159,10 @@ class InningsService {
       match.status = 'INNINGS_BREAK';
       await match.save();
 
+      try {
+        require('../playerRatingService').enqueueMatchRatingRecalculation(matchId, 'INNINGS_COMPLETED');
+      } catch (_e) {}
+
       return {
         success: true,
         message: '1st Innings ended. 2nd Innings target set.',
@@ -188,6 +192,10 @@ class InningsService {
         match.winner_id = 'TIE';
       }
       await match.save();
+
+      try {
+        require('../playerRatingService').enqueueMatchRatingRecalculation(matchId, 'INNINGS_COMPLETED');
+      } catch (_e) {}
 
       return {
         success: true,
@@ -452,6 +460,10 @@ class InningsService {
     try {
       progRes = await tournamentService.onMatchCompleted(matchId);
     } catch (_err) {}
+
+    try {
+      require('../playerRatingService').enqueueMatchRatingRecalculation(matchId, 'MATCH_ENDED');
+    } catch (_e) {}
 
     return {
       success: true,

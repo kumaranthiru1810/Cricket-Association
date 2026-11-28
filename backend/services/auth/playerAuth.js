@@ -178,8 +178,11 @@ class PlayerAuth {
     const cleanEmail = playerInfo.email.trim().toLowerCase();
     let user = await userModel.findByEmail(cleanEmail);
     if (!user) {
+      await db.initDb();
+      const existingPlayer = await db.models.Player.findOne({ email: cleanEmail }).select('id').lean();
+      const generatedId = existingPlayer?.id || `PLY-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
       user = await userModel.create({
-        id: `USR-PLY-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
+        id: generatedId,
         name: playerInfo.name,
         email: cleanEmail,
         role: 'PLAYER',
@@ -252,7 +255,48 @@ class PlayerAuth {
   /**
    * Register Individual Player
    */
-  async registerPlayer({ name, email, password, mobile, phone, aadhaar, aadhaarNumber, aadhaar_number, role, category, taluk, battingStyle, bowlingStyle, bowlingArm, bowlingCategory, bowlingAction, clubChoice }) {
+  async registerPlayer(payload) {
+    const {
+      name,
+      email,
+      password,
+      mobile,
+      phone,
+      aadhaar,
+      aadhaarNumber,
+      aadhaar_number,
+      role,
+      category,
+      taluk,
+      battingStyle,
+      bowlingStyle,
+      bowlingArm,
+      bowlingCategory,
+      bowlingAction,
+      clubChoice,
+      fatherName,
+      dateOfBirth,
+      age,
+      placeOfBirth,
+      address,
+      occupationType,
+      workingInstitution,
+      studyingInstitution,
+      studyLevel,
+      branchYearSec,
+      classSection,
+      batterHand,
+      batterPosition,
+      bowlerHand,
+      bowlerType,
+      isWicketKeeper,
+      declarationPlace,
+      declarationDate,
+      declarationAgreed,
+      photo,
+      clientFaceAnalysis
+    } = payload || {};
+
     if (!name || !email) {
       throw { status: 400, message: 'Player name and email are required.' };
     }
@@ -260,10 +304,18 @@ class PlayerAuth {
     const cleanEmail = email.trim().toLowerCase();
     const existing = await userModel.findByEmail(cleanEmail);
     if (existing) {
-      throw { status: 409, message: 'An account with this email address already exists. Please log in directly.' };
+      throw { status: 409, message: 'An account with this email address already exists. Two players cannot use the same email.' };
+    }
+    await db.initDb();
+    const existingPlayerDoc = await db.models.Player.findOne({ email: cleanEmail }).lean();
+    if (existingPlayerDoc) {
+      throw { status: 409, message: 'A player with this email address is already registered. Two players cannot use the same email.' };
     }
 
     const cleanPhone = (phone || mobile) ? String(phone || mobile).replace(/\D/g, '') : null;
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      throw { status: 400, message: 'A valid 10-digit contact phone number is required.' };
+    }
     const cleanAadhaar = (aadhaar || aadhaarNumber || aadhaar_number) ? String(aadhaar || aadhaarNumber || aadhaar_number).replace(/\D/g, '') : null;
 
     let passwordHash = password ? String(password).trim() : null;
@@ -274,7 +326,37 @@ class PlayerAuth {
       } catch (_e) { }
     }
 
-    const playerId = `PLY-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+    await db.initDb();
+    let playerId = `PLY-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const [uExists, pExists] = await Promise.all([
+        db.models.User.exists({ id: playerId }),
+        db.models.Player.exists({ id: playerId })
+      ]);
+      if (!uExists && !pExists) break;
+      playerId = `PLY-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+    let storedPhoto = photo || null;
+    let photoPhash = null;
+    let photoVerificationStatus = 'NONE';
+    let photoVerificationReason = '';
+    let photoMetadata = null;
+
+    if (storedPhoto && typeof storedPhoto === 'string' && storedPhoto.startsWith('data:image/')) {
+      const passportPhotoService = require('../passportPhotoService');
+      const verified = await passportPhotoService.verifyAndProcessPassportPhoto({
+        input: storedPhoto,
+        email: cleanEmail,
+        userId: playerId,
+        clientFaceAnalysis
+      });
+      storedPhoto = verified.url;
+      photoPhash = verified.phash;
+      photoVerificationStatus = verified.verificationStatus;
+      photoVerificationReason = verified.verificationReason;
+      photoMetadata = verified.metadata;
+    }
+
     const user = await userModel.create({
       id: playerId,
       name: name.trim(),
@@ -286,6 +368,11 @@ class PlayerAuth {
       password_hash: passwordHash,
       role: 'PLAYER',
       status: 'ACTIVE',
+      photo: storedPhoto,
+      image_path: storedPhoto,
+      photo_phash: photoPhash,
+      photo_verification_status: photoVerificationStatus,
+      photo_verification_reason: photoVerificationReason,
       player_details: {
         role: role || 'Batsman',
         playing_role: role || 'Batsman',
@@ -300,7 +387,32 @@ class PlayerAuth {
         bowling_arm: bowlingArm || '',
         bowling_category: bowlingCategory || '',
         bowling_action: bowlingAction || '',
-        club_choice: clubChoice || ''
+        club_choice: clubChoice || '',
+        photo: storedPhoto,
+        image_path: storedPhoto,
+        photo_phash: photoPhash,
+        photo_verification_status: photoVerificationStatus,
+        photo_verification_reason: photoVerificationReason,
+        photo_metadata: photoMetadata,
+        father_name: fatherName ? String(fatherName).trim() : '',
+        date_of_birth: dateOfBirth ? String(dateOfBirth).trim() : '',
+        age: age ? String(age).trim() : '',
+        place_of_birth: placeOfBirth ? String(placeOfBirth).trim() : '',
+        address: address ? String(address).trim() : '',
+        occupation_type: occupationType ? String(occupationType).trim() : '',
+        working_institution: workingInstitution ? String(workingInstitution).trim() : '',
+        studying_institution: studyingInstitution ? String(studyingInstitution).trim() : '',
+        study_level: studyLevel ? String(studyLevel).trim() : '',
+        branch_year_sec: branchYearSec ? String(branchYearSec).trim() : '',
+        class_section: classSection ? String(classSection).trim() : '',
+        batter_hand: batterHand ? String(batterHand).trim() : '',
+        batter_position: batterPosition ? String(batterPosition).trim() : '',
+        bowler_hand: bowlerHand ? String(bowlerHand).trim() : '',
+        bowler_type: bowlerType ? String(bowlerType).trim() : '',
+        is_wicket_keeper: Boolean(isWicketKeeper),
+        declaration_place: declarationPlace ? String(declarationPlace).trim() : '',
+        declaration_date: declarationDate ? String(declarationDate).trim() : '',
+        declaration_agreed: Boolean(declarationAgreed)
       }
     });
 

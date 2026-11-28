@@ -27,6 +27,7 @@ router.post('/send-registration-otp', requireTurnstile, otpRequestRateLimiter, v
 router.post('/verify-registration-otp', otpRateLimiter, validateBody(otpVerifySchema), (req, res) => authController.verifyRegistrationOtp(req, res));
 router.post('/check-registration-exists', (req, res) => authController.checkRegistrationExists(req, res));
 router.post('/check-team-exists', (req, res) => authController.checkTeamExists(req, res));
+router.post('/check-player-email', (req, res) => authController.checkPlayerEmail(req, res));
 
 // 1.1. Multi-Step Forgot Password Flow (4-Digit OTP & Bcrypt Password Reset)
 router.post('/forgot-password/request-otp', requireTurnstile, otpRequestRateLimiter, validateBody(otpRequestSchema), (req, res) => authController.requestForgotPasswordOtp(req, res));

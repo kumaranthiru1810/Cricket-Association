@@ -630,6 +630,13 @@ export const ScorerApi = {
     });
   },
 
+  checkPlayerEmail: async (email: string) => {
+    return request('/auth/check-player-email', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    });
+  },
+
   requestOtp: async (email: string, role?: string, turnstileToken?: string) => {
     return request('/auth/request-otp', {
       method: 'POST',
@@ -720,6 +727,27 @@ export const ScorerApi = {
     bowlingCategory?: string;
     bowlingAction?: string;
     clubChoice?: string;
+    fatherName?: string;
+    dateOfBirth?: string;
+    age?: string;
+    placeOfBirth?: string;
+    address?: string;
+    occupationType?: string;
+    workingInstitution?: string;
+    studyingInstitution?: string;
+    studyLevel?: string;
+    branchYearSec?: string;
+    classSection?: string;
+    batterHand?: string;
+    batterPosition?: string;
+    bowlerHand?: string;
+    bowlerType?: string;
+    isWicketKeeper?: boolean;
+    declarationPlace?: string;
+    declarationDate?: string;
+    declarationAgreed?: boolean;
+    photo?: string;
+    clientFaceAnalysis?: any;
     otp?: string;
   }) => {
     const res = await request('/auth/register-player', {
@@ -1736,6 +1764,8 @@ export const PlayerApi = {
   },
 
   updateProfile: async (updates: {
+    name?: string;
+    aadhaar?: string;
     battingStyle?: string;
     bowlingStyle?: string;
     jerseyNumber?: number;
@@ -1743,6 +1773,8 @@ export const PlayerApi = {
     taluk?: string;
     photo?: string | null;
     image_path?: string | null;
+    player_details?: Record<string, any>;
+    [key: string]: any;
   }) => {
     return request('/player/profile', {
       method: 'PUT',

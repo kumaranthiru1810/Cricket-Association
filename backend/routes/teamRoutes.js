@@ -505,21 +505,24 @@ router.get('/squad', requireTeamAuth, async (req, res) => {
       .filter(Boolean);
 
     let photoMap = {};
+    let idMap = {};
     if (emailsToFetch.length > 0) {
       try {
         const [directPList, uList] = await Promise.all([
-          db.models.Player.find({ email: { $in: emailsToFetch } }, 'email photo image_path').lean(),
-          db.models.User.find({ email: { $in: emailsToFetch } }, 'email photo image_path player_details').lean()
+          db.models.Player.find({ email: { $in: emailsToFetch } }, 'id email photo image_path').lean(),
+          db.models.User.find({ email: { $in: emailsToFetch } }, 'id email photo image_path player_details').lean()
         ]);
-        (directPList || []).forEach(dp => {
-          const e = (dp.email || '').toLowerCase();
-          const img = dp.photo || dp.image_path;
-          if (e && img) photoMap[e] = img;
-        });
         (uList || []).forEach(u => {
           const e = (u.email || '').toLowerCase();
           const img = u.photo || u.image_path || u.player_details?.photo || u.player_details?.image_path;
           if (e && img && !photoMap[e]) photoMap[e] = img;
+          if (e && u.id) idMap[e] = u.id;
+        });
+        (directPList || []).forEach(dp => {
+          const e = (dp.email || '').toLowerCase();
+          const img = dp.photo || dp.image_path;
+          if (e && img) photoMap[e] = img;
+          if (e && dp.id) idMap[e] = dp.id;
         });
       } catch (_e) {}
     }
@@ -527,8 +530,10 @@ router.get('/squad', requireTeamAuth, async (req, res) => {
     const squad = (players || []).map((p, idx) => {
       const pEmail = (p.email || '').toLowerCase().trim();
       const resolvedPhoto = p.photo || p.image_path || photoMap[pEmail] || null;
+      const resolvedId = idMap[pEmail] || p.id || (p._id ? String(p._id) : `PL-${idx + 1}`);
       return {
-        id: p.id || (p._id ? String(p._id) : `PL-${idx + 1}`),
+        id: resolvedId,
+        playerId: resolvedId,
         name: p.name,
         email: p.email,
         role: p.role,

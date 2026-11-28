@@ -317,7 +317,14 @@ export const TeamsPage: React.FC = () => {
                               </View>
                             )}
                             <View style={{ flex: 1 }}>
-                              <Text style={styles.squadPlayerName}>{player.name}</Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                                <Text style={styles.squadPlayerName}>{player.name}</Text>
+                                {(player.playerId || player.id) ? (
+                                  <View style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#1d4ed8' }}>{player.playerId || player.id}</Text>
+                                  </View>
+                                ) : null}
+                              </View>
                               <Text style={styles.squadPlayerRole}>
                                 {(player.role || 'ALL_ROUNDER').replace('_', ' ')}
                               </Text>

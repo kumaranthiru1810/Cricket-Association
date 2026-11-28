@@ -162,7 +162,9 @@ class TeamAuth {
 
     const cleanCoachEmail = coachEmail.trim().toLowerCase();
 
-    // Validate squad players
+    // Validate squad players (must have valid unique email AND must already be registered as a Player)
+    const seenPlayerEmails = new Set();
+    const normalizedPlayerEmails = [];
     for (let i = 0; i < players.length; i++) {
       const p = players[i];
       if (!p.name || !p.name.trim()) {
@@ -171,8 +173,39 @@ class TeamAuth {
       if (!p.email || !p.email.trim() || !p.email.includes('@')) {
         throw { status: 400, message: `Valid Email ID for Player #${i + 1} (${p.name || 'Unnamed'}) is required.` };
       }
-      if (p.email.trim().toLowerCase() === cleanCoachEmail) {
+      const pEmailClean = p.email.trim().toLowerCase();
+      if (pEmailClean === cleanCoachEmail) {
         throw { status: 400, message: `Coach email cannot be identical to Player #${i + 1} email.` };
+      }
+      if (seenPlayerEmails.has(pEmailClean)) {
+        throw { status: 400, message: `Duplicate email "${pEmailClean}" in squad. Two players cannot share the same email.` };
+      }
+      seenPlayerEmails.add(pEmailClean);
+      normalizedPlayerEmails.push(pEmailClean);
+    }
+
+    await db.initDb();
+    const [regUsers, regPlayers] = await Promise.all([
+      db.models.User.find({
+        email: { $in: normalizedPlayerEmails },
+        role: 'PLAYER',
+        status: { $ne: 'DELETED' }
+      }).select('email').lean(),
+      db.models.Player.find({
+        email: { $in: normalizedPlayerEmails }
+      }).select('email').lean()
+    ]);
+    const registeredSet = new Set([
+      ...(regUsers || []).map(u => String(u.email || '').trim().toLowerCase()),
+      ...(regPlayers || []).map(pl => String(pl.email || '').trim().toLowerCase())
+    ]);
+    for (let i = 0; i < players.length; i++) {
+      const pEmailClean = players[i].email.trim().toLowerCase();
+      if (!registeredSet.has(pEmailClean)) {
+        throw {
+          status: 400,
+          message: `Player #${i + 1} (${pEmailClean}) is not registered as a Player yet. Every squad player must complete Player Registration first.`
+        };
       }
     }
 

@@ -16,13 +16,8 @@ function getSmtpConfig() {
   const user = rawUser ? rawUser.replace(/^"|"$/g, '').trim() : '';
   const pass = rawPass ? rawPass.replace(/^"|"$/g, '').replace(/\s+/g, '').trim() : '';
   
-  // Port 465 uses SSL/TLS (secure: true); Port 587 uses STARTTLS (secure: false)
-  let secure = false;
-  if (process.env.SMTP_SECURE !== undefined && process.env.SMTP_SECURE !== '') {
-    secure = process.env.SMTP_SECURE === 'true';
-  } else {
-    secure = (port === 465);
-  }
+  // Port 465 uses implicit SSL/TLS (secure: true); Port 587 uses STARTTLS (secure: false)
+  const secure = port === 465;
 
   const env = require('./env');
   const from = process.env.SMTP_FROM
@@ -63,7 +58,8 @@ async function getDailyEmailStatus() {
   const date = getDailyDateKey();
   const cfg = getSmtpConfig();
   const primaryProvider = (process.env.EMAIL_PROVIDER || 'brevo').toLowerCase().trim();
-  const fallbackProvider = (process.env.EMAIL_FALLBACK_PROVIDER || (primaryProvider === 'brevo' ? 'resend' : 'smtp')).toLowerCase().trim();
+  const defaultFallback = process.env.RESEND_API_KEY ? 'resend' : 'smtp';
+  const fallbackProvider = (process.env.EMAIL_FALLBACK_PROVIDER || (primaryProvider === 'brevo' ? defaultFallback : 'smtp')).toLowerCase().trim();
 
   if (mongoose.connection.readyState !== 1) {
     return {
@@ -219,7 +215,7 @@ async function send250ThresholdAlert(count, dateKey) {
 
   if (recipients.size === 0) return { sent: 0 };
 
-  const fallbackProvider = (process.env.EMAIL_FALLBACK_PROVIDER || 'resend').toLowerCase().trim();
+  const fallbackProvider = (process.env.EMAIL_FALLBACK_PROVIDER || (process.env.RESEND_API_KEY ? 'resend' : 'smtp')).toLowerCase().trim();
   const subject = `[URGENT ALERT] 250 Daily Email/OTP Limit Reached (${dateKey})`;
   const textContent =
     `Cricket Federation of Virudhunagar District - Email Quota Alert\n\n` +
@@ -286,7 +282,8 @@ async function dispatchEmailWithHardening({
   }
 
   const configuredPrimary = (process.env.EMAIL_PROVIDER || 'brevo').toLowerCase().trim();
-  const configuredFallback = (process.env.EMAIL_FALLBACK_PROVIDER || (configuredPrimary === 'brevo' ? 'resend' : 'smtp')).toLowerCase().trim();
+  const defaultFallbackProv = process.env.RESEND_API_KEY ? 'resend' : 'smtp';
+  const configuredFallback = (process.env.EMAIL_FALLBACK_PROVIDER || (configuredPrimary === 'brevo' ? defaultFallbackProv : 'smtp')).toLowerCase().trim();
   const providerChain = configuredPrimary === 'auto'
     ? ['brevo', 'resend', 'smtp']
     : [configuredPrimary, ...(configuredFallback && configuredFallback !== configuredPrimary ? [configuredFallback] : [])];

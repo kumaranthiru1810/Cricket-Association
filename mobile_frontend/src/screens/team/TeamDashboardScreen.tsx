@@ -888,6 +888,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
       const q = squadSearchQuery.toLowerCase();
       return (
         (p.name || '').toLowerCase().includes(q) ||
+        String(p.playerId || p.player_id || p.id || '').toLowerCase().includes(q) ||
         (p.role || '').toLowerCase().includes(q) ||
         (p.email || '').toLowerCase().includes(q) ||
         String(p.jersey || p.jerseyNumber || '').includes(q)
@@ -2100,7 +2101,7 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                       <View style={styles.searchBarBox}>
                         <TextInput
                           style={styles.searchBarInput}
-                          placeholder="Search player name, role, jersey #..."
+                          placeholder="Search player name, ID, role, jersey #..."
                           placeholderTextColor="#64748b"
                           value={squadSearchQuery}
                           onChangeText={setSquadSearchQuery}
@@ -2153,6 +2154,11 @@ export default function TeamDashboardScreen({ onExit, initialParams }: TeamDashb
                               <View style={{ flex: 1, marginLeft: 12 }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
                                   <Text style={styles.squadPlayerName}>{player.name}</Text>
+                                  {(player.playerId || player.id) ? (
+                                    <View style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                                      <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#1d4ed8' }}>{player.playerId || player.id}</Text>
+                                    </View>
+                                  ) : null}
                                   {isCap && (
                                     <View style={styles.captainBadge}>
                                       <Text style={styles.captainBadgeText}>CAPTAIN</Text>

@@ -16,10 +16,25 @@ const teamRegistrationModel = require('../models/teamRegistrationModel');
 const playerModel = require('../models/playerModel');
 const fs = require('fs');
 const path = require('path');
+const cloudinaryService = require('./cloudinaryService');
 
-function savePlayerPhotoToDisk(photoString, identifier) {
+async function savePlayerPhotoToDisk(photoString, identifier) {
   if (!photoString || typeof photoString !== 'string') return null;
   if (!photoString.startsWith('data:image/')) return photoString;
+
+  // 1. Prefer Cloudinary when configured
+  if (cloudinaryService.isConfigured()) {
+    const cleanId = (identifier || 'player').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const cloudRes = await cloudinaryService.uploadImage(photoString, {
+      folder: 'cfvd/players',
+      publicId: `plyr_${cleanId}_${Date.now()}`
+    });
+    if (cloudRes.uploaded && cloudRes.url) {
+      return cloudRes.url;
+    }
+  }
+
+  // 2. Fallback to local disk
   try {
     const uploadsDir = path.join(__dirname, '..', 'uploads', 'players');
     if (!fs.existsSync(uploadsDir)) {
@@ -122,9 +137,10 @@ class PlayerService {
     const email = (playerDoc?.email || userDoc?.email || squadEntry?.email || userEmail || '').toLowerCase();
     const role = playerDoc?.role || squadEntry?.role || userDoc?.role || 'BATTER';
     const jerseyNumber = playerDoc?.jersey_number ?? squadEntry?.jersey_number ?? null;
-    const battingStyle = playerDoc?.batting_style || '';
-    const bowlingStyle = playerDoc?.bowling_style || '';
-    const mobile = userDoc?.mobile || playerDoc?.mobile || '';
+    const battingStyle = playerDoc?.batting_style || userDoc?.player_details?.batting_style || '';
+    const bowlingStyle = playerDoc?.bowling_style || userDoc?.player_details?.bowling_style || '';
+    const mobile = userDoc?.mobile || playerDoc?.mobile || userDoc?.player_details?.phone || '';
+    const aadhaar = userDoc?.aadhaar || playerDoc?.aadhaar || userDoc?.player_details?.aadhaar || '';
     const status = userDoc?.status === 'ACTIVE' ? 'APPROVED' : (userDoc?.status || playerDoc?.status || squadEntry?.status || 'APPROVED');
 
     const baseStats = playerDoc?.stats || {};
@@ -134,14 +150,32 @@ class PlayerService {
       { catches: baseStats.catches || 0, runOuts: 0, stumpings: baseStats.stumpings || 0 }
     );
 
+    const resolvedPhotoVerificationStatus = [
+      playerDoc?.photo_verification_status,
+      userDoc?.photo_verification_status,
+      userDoc?.player_details?.photo_verification_status
+    ].find(v => v && String(v).toUpperCase() !== 'NONE') || 'NONE';
+
+    const resolvedPhotoVerificationReason = [
+      playerDoc?.photo_verification_reason,
+      userDoc?.photo_verification_reason,
+      userDoc?.player_details?.photo_verification_reason
+    ].find(v => v && String(v).trim()) || '';
+
     return {
       id: playerDoc?.id || userDoc?.id || `PLY-${email.replace(/[^a-z0-9]/g, '')}`,
       name,
       email,
       mobile,
+      aadhaar,
+      player_details: userDoc?.player_details || {},
       photo: playerDoc?.photo || playerDoc?.image_path || userDoc?.photo || userDoc?.image_path || userDoc?.player_details?.photo || userDoc?.player_details?.image_path || null,
       image_path: playerDoc?.image_path || playerDoc?.photo || userDoc?.image_path || userDoc?.photo || userDoc?.player_details?.image_path || userDoc?.player_details?.photo || null,
       imagePath: playerDoc?.image_path || playerDoc?.photo || userDoc?.image_path || userDoc?.photo || userDoc?.player_details?.image_path || userDoc?.player_details?.photo || null,
+      photo_verification_status: resolvedPhotoVerificationStatus,
+      photo_verification_reason: resolvedPhotoVerificationReason,
+      photo_status: playerDoc?.photo_status || userDoc?.photo_status || 'PENDING',
+      photo_verification_history: (userDoc?.photo_verification_history?.length ? userDoc.photo_verification_history : playerDoc?.photo_verification_history) || [],
       role,
       jerseyNumber: jerseyNumber !== null ? Number(jerseyNumber) : null,
       battingStyle,
@@ -151,7 +185,7 @@ class PlayerService {
       coachName,
       coachEmail,
       status: status.toUpperCase(),
-      taluk: userDoc?.taluk || playerDoc?.taluk || squadEntry?.taluk || '',
+      taluk: userDoc?.player_details?.taluk || userDoc?.taluk || playerDoc?.taluk || squadEntry?.taluk || '',
       performancePoints: pointsData.points,
       tier: pointsData.currentTier,
       tierTitle: pointsData.tierTitle,
@@ -191,15 +225,55 @@ class PlayerService {
       }
     }
     const photoInput = updates.photo !== undefined ? updates.photo : (updates.image_path !== undefined ? updates.image_path : updates.imagePath);
+    let photoVerificationStatus = null;
+    let photoVerificationReason = null;
+    let photoPhash = null;
+    let photoHistoryEntry = null;
     if (photoInput !== undefined) {
       if (photoInput) {
-        const photoStr = String(photoInput).trim();
-        try {
-          savePlayerPhotoToDisk(photoStr, cleanEmail);
-        } catch (_e) {}
-        // Direct DB storage in MongoDB
+        let photoStr = String(photoInput).trim();
+        if (photoStr.startsWith('data:')) {
+          if (!/^data:image\/(jpeg|jpg|png);base64,/i.test(photoStr)) {
+            throw { status: 400, message: 'Invalid image format. Only JPG, JPEG, and PNG files are allowed.' };
+          }
+          const base64Body = photoStr.split(',')[1] || '';
+          const approxBytes = Math.floor((base64Body.length * 3) / 4);
+          if (approxBytes > 5 * 1024 * 1024) {
+            throw { status: 400, message: 'Photo size exceeds the 5 MB limit. Please choose a smaller image.' };
+          }
+          const passportPhotoService = require('./passportPhotoService');
+          const verified = await passportPhotoService.verifyAndProcessPassportPhoto({
+            input: photoStr,
+            email: cleanEmail,
+            userId: userDoc?.id || playerDoc?.id || cleanEmail
+          });
+          photoStr = verified.url || photoStr;
+          photoVerificationStatus = 'PENDING_REVIEW';
+          photoVerificationReason = 'Replacement photo submitted by player; awaiting Admin verification.';
+          photoPhash = verified.phash || null;
+        } else {
+          const existingPhoto = userDoc?.photo || playerDoc?.photo || '';
+          if (photoStr !== existingPhoto) {
+            photoVerificationStatus = 'PENDING_REVIEW';
+            photoVerificationReason = 'Replacement photo submitted by player; awaiting Admin verification.';
+          }
+        }
         safePlayerUpdates.photo = photoStr;
         safePlayerUpdates.image_path = photoStr;
+        if (photoPhash) safePlayerUpdates.photo_phash = photoPhash;
+        if (photoVerificationStatus) {
+          safePlayerUpdates.photo_verification_status = photoVerificationStatus;
+          safePlayerUpdates.photo_verification_reason = photoVerificationReason;
+          safePlayerUpdates.photo_status = 'NEEDS_REVIEW';
+          photoHistoryEntry = {
+            status: 'PENDING_REVIEW',
+            reason: photoVerificationReason,
+            actor: cleanEmail,
+            actor_role: 'PLAYER',
+            photo: photoStr,
+            timestamp: new Date()
+          };
+        }
       } else {
         safePlayerUpdates.photo = null;
         safePlayerUpdates.image_path = null;
@@ -208,14 +282,19 @@ class PlayerService {
 
     // Update in Player collection if exists
     if (playerDoc) {
+      const playerUpdateDoc = { $set: { ...safePlayerUpdates, updated_at: new Date() } };
+      if (photoHistoryEntry) playerUpdateDoc.$push = { photo_verification_history: photoHistoryEntry };
       await db.models.Player.updateOne(
         { _id: playerDoc._id },
-        { $set: { ...safePlayerUpdates, updated_at: new Date() } }
+        playerUpdateDoc
       );
     } else {
-      // Create Player record if not yet existing
+      // Create Player record if not yet existing, preserving User's PLY- id if present
+      const fixedId = (userDoc?.id && /^PLY-/i.test(userDoc.id))
+        ? userDoc.id
+        : `PLY-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
       await db.models.Player.create({
-        id: `PLY-${Date.now()}`,
+        id: fixedId,
         team_id: 'TM-01',
         name: userDoc?.name || 'Player',
         email: cleanEmail,
@@ -229,21 +308,86 @@ class PlayerService {
       });
     }
 
-    // Update mobile, taluk, photo & image_path in User collection
+    // Update mobile, name, aadhaar, taluk, player_details, photo & image_path in User collection
+    // Strictly forbid changing email or password here (use Forgot Password to reset password)
     const userUpdates = {};
-    if (updates.mobile !== undefined) userUpdates.mobile = String(updates.mobile).trim();
+    if (updates.name !== undefined && String(updates.name).trim()) {
+      userUpdates.name = String(updates.name).trim();
+      safePlayerUpdates.name = userUpdates.name;
+    }
+    if (updates.mobile !== undefined) {
+      const cleanMob = String(updates.mobile).replace(/\D/g, '');
+      userUpdates.mobile = cleanMob;
+      userUpdates['player_details.phone'] = cleanMob;
+      userUpdates['player_details.mobile'] = cleanMob;
+      safePlayerUpdates.mobile = cleanMob;
+      safePlayerUpdates.phone = cleanMob;
+    }
+    if (updates.aadhaar !== undefined) {
+      const cleanAad = String(updates.aadhaar).replace(/\D/g, '');
+      userUpdates.aadhaar = cleanAad;
+      userUpdates['player_details.aadhaar'] = cleanAad;
+      userUpdates['player_details.aadhaar_number'] = cleanAad;
+      safePlayerUpdates.aadhaar = cleanAad;
+    }
     if (updates.taluk !== undefined) userUpdates['player_details.taluk'] = String(updates.taluk).trim();
+    if (safePlayerUpdates.batting_style) userUpdates['player_details.batting_style'] = safePlayerUpdates.batting_style;
+    if (safePlayerUpdates.bowling_style) userUpdates['player_details.bowling_style'] = safePlayerUpdates.bowling_style;
+
+    if (updates.player_details && typeof updates.player_details === 'object') {
+      const allowedDetailKeys = [
+        'club_choice', 'father_name', 'date_of_birth', 'age', 'place_of_birth', 'address',
+        'occupation_type', 'working_institution', 'studying_institution', 'study_level',
+        'branch_year_sec', 'class_section', 'category', 'role', 'playing_role',
+        'batter_hand', 'batter_position', 'bowler_hand', 'bowler_type', 'is_wicket_keeper', 'taluk'
+      ];
+      for (const key of allowedDetailKeys) {
+        if (updates.player_details[key] !== undefined) {
+          userUpdates[`player_details.${key}`] = updates.player_details[key];
+        }
+      }
+    }
+
     if (photoInput !== undefined) {
       userUpdates.photo = safePlayerUpdates.photo;
       userUpdates.image_path = safePlayerUpdates.image_path;
       userUpdates['player_details.photo'] = safePlayerUpdates.photo;
       userUpdates['player_details.image_path'] = safePlayerUpdates.image_path;
+      if (photoPhash) {
+        userUpdates.photo_phash = photoPhash;
+        userUpdates['player_details.photo_phash'] = photoPhash;
+      }
+      if (photoVerificationStatus) {
+        userUpdates.photo_verification_status = photoVerificationStatus;
+        userUpdates.photo_verification_reason = photoVerificationReason;
+        userUpdates.photo_status = photoVerificationStatus === 'VERIFIED' ? 'AUTO_PASS' : 'NEEDS_REVIEW';
+        userUpdates['player_details.photo_verification_status'] = photoVerificationStatus;
+        userUpdates['player_details.photo_verification_reason'] = photoVerificationReason;
+      }
     }
-    if (Object.keys(userUpdates).length > 0) {
+    if (Object.keys(userUpdates).length > 0 || photoHistoryEntry) {
+      const userUpdateQuery = { $set: { ...userUpdates, updated_at: new Date() } };
+      if (photoHistoryEntry) {
+        userUpdateQuery.$push = { photo_verification_history: photoHistoryEntry };
+      }
       await db.models.User.updateOne(
         { email: cleanEmail },
-        { $set: { ...userUpdates, updated_at: new Date() } }
+        userUpdateQuery
       );
+    }
+
+    if (photoHistoryEntry && db.models.Notification) {
+      try {
+        await db.models.Notification.create({
+          id: `NOTIF-REUPLOAD-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
+          type: 'PHOTO_REUPLOAD',
+          title: 'Player Replacement Photo Submitted',
+          message: `Player ${userDoc?.name || playerDoc?.name || cleanEmail} (${userDoc?.id || playerDoc?.id || cleanEmail}) submitted a replacement passport photo for verification.`,
+          target_role: 'ADMIN',
+          reference_id: userDoc?.id || playerDoc?.id || cleanEmail,
+          status: 'UNREAD'
+        });
+      } catch (_e) {}
     }
 
     // Also synchronize photo & image_path across playerModel, TeamPlayer & TeamRegistration squads
@@ -375,22 +519,25 @@ class PlayerService {
         const [usersWithPhoto, playersWithPhoto] = await Promise.all([
           db.models.User.find({
             email: { $in: squadEmails }
-          }).select('email photo image_path player_details').lean(),
+          }).select('id email photo image_path player_details').lean(),
           db.models.Player.find({
             email: { $in: squadEmails }
-          }).select('email photo image_path').lean()
+          }).select('id email photo image_path').lean()
         ]);
 
         const photoMap = {};
+        const idMap = {};
         for (const u of (usersWithPhoto || [])) {
           const em = (u.email || '').toLowerCase().trim();
           const p = u.photo || u.image_path || u.player_details?.photo || u.player_details?.image_path;
           if (p) photoMap[em] = p;
+          if (em && u.id) idMap[em] = u.id;
         }
         for (const pl of (playersWithPhoto || [])) {
           const em = (pl.email || '').toLowerCase().trim();
           const p = pl.photo || pl.image_path;
           if (p) photoMap[em] = p;
+          if (em && pl.id) idMap[em] = pl.id;
         }
 
         squadList = squadList.map(member => {
@@ -402,9 +549,12 @@ class PlayerService {
             member.image_path ||
             photoMap[em] ||
             null;
+          const resolvedId = idMap[em] || member.id;
 
           return {
             ...member,
+            id: resolvedId,
+            playerId: resolvedId,
             photo: foundPhoto,
             image_path: foundPhoto
           };

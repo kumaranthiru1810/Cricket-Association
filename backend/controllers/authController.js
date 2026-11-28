@@ -394,6 +394,61 @@ class AuthController {
     return this.login(req, res);
   }
 
+  // Check if an email belongs to an already-registered Player (used by Team Registration)
+  async checkPlayerEmail(req, res) {
+    try {
+      const cleanEmail = String(req.body?.email || '').trim().toLowerCase();
+      if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        return res.status(400).json({ registered: false, message: 'Please enter a valid player email address.' });
+      }
+      const db = require('../config/db');
+      await db.initDb();
+      const userDoc = await db.models.User.findOne({
+        email: cleanEmail,
+        role: 'PLAYER',
+        status: { $ne: 'DELETED' }
+      }).select('id name email mobile aadhaar player_details').lean();
+
+      if (userDoc) {
+        return res.status(200).json({
+          registered: true,
+          player: {
+            id: userDoc.id,
+            name: userDoc.name,
+            email: userDoc.email,
+            phone: userDoc.mobile || userDoc.player_details?.phone || '',
+            aadhaar: userDoc.aadhaar || userDoc.player_details?.aadhaar || '',
+            role: userDoc.player_details?.role || 'Batter'
+          }
+        });
+      }
+
+      const playerDoc = await db.models.Player.findOne({ email: cleanEmail })
+        .select('id name email phone mobile aadhaar role')
+        .lean();
+      if (playerDoc) {
+        return res.status(200).json({
+          registered: true,
+          player: {
+            id: playerDoc.id,
+            name: playerDoc.name,
+            email: playerDoc.email,
+            phone: playerDoc.phone || playerDoc.mobile || '',
+            aadhaar: playerDoc.aadhaar || '',
+            role: playerDoc.role || 'Batter'
+          }
+        });
+      }
+
+      return res.status(200).json({
+        registered: false,
+        message: 'This email is not registered as a Player yet. Please complete Player Registration first.'
+      });
+    } catch (err) {
+      return res.status(500).json({ registered: false, message: err.message || 'Failed to verify player email.' });
+    }
+  }
+
   // Find Player Team by Email & Send to Player's Email
   async findPlayerTeam(req, res) {
     try {

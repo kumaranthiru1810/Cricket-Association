@@ -1785,10 +1785,10 @@ class TournamentService {
       if (claimedMatch) {
         const statsSnapshot = { teams: [], players: [], potm: null };
         try {
-          // 1. Trigger PlayerMatchRating calculation idempotently
+          // 1. Trigger PlayerMatchRating calculation in background
           try {
             const playerRatingService = require('./playerRatingService');
-            await playerRatingService.recalculateMatchRatings(matchId);
+            playerRatingService.enqueueMatchRatingRecalculation(matchId, 'TOURNAMENT_ON_MATCH_COMPLETED');
           } catch (_ratingErr) { }
 
           // 2. Roll up permanent Team.stats (with exact snapshot for safe reversal)
