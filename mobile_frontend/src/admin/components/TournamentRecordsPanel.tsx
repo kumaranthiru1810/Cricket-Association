@@ -18,6 +18,7 @@ import {
   Platform,
   useWindowDimensions
 } from 'react-native';
+import { FontAwesome5 } from '@expo/vector-icons';
 import { adminApi } from '../services/adminApi';
 import { showSuccess, showError, showWarning } from '../../utils/sweetalert';
 
@@ -75,6 +76,182 @@ function getTournamentSortTimestamp(t: any): number {
   return Number.isNaN(ts) ? 0 : ts;
 }
 
+function buildDemoRecordSet(cfg: {
+  id: string;
+  name: string;
+  short_name: string;
+  season: string;
+  start_date: string;
+  end_date: string;
+  tournament_type: string;
+  winner: string;
+  runner: string;
+  motmFinal: { player_name: string; team_name: string };
+  mott: { player_name: string; team_name: string; runs: number; wickets: number };
+}) {
+  const teams = [
+    cfg.winner,
+    cfg.runner,
+    'Sivakasi Super Strikers',
+    'Rajapalayam Royals',
+    'Aruppukottai Warriors',
+    'Srivilliputhur Titans'
+  ];
+  const players = [
+    ['R. Saravanan', teams[0]],
+    ['K. Karthik', teams[1]],
+    ['M. Vignesh', teams[0]],
+    ['S. Praveen', teams[2]],
+    ['A. Murugan', teams[1]],
+    ['T. Aravind', teams[3]],
+    ['V. Dinesh', teams[4]],
+    ['P. Naveen', teams[5]],
+    ['G. Rajesh', teams[2]],
+    ['N. Senthil', teams[3]]
+  ];
+
+  const top10Runs = players.map(([name, team], i) => ({
+    player_id: `${cfg.id}-BAT-${i + 1}`,
+    player_name: name,
+    team_name: team,
+    innings: 7 - (i % 2),
+    runs: 342 - i * 24,
+    highest_score: 94 - i * 5,
+    average: Number((57.0 - i * 3.8).toFixed(2)),
+    strike_rate: Number((146.5 - i * 3.2).toFixed(2))
+  }));
+
+  const top10Wickets = [...players].reverse().map(([name, team], i) => ({
+    player_id: `${cfg.id}-BWL-${i + 1}`,
+    player_name: name,
+    team_name: team,
+    innings: 7,
+    overs: `${26 - i}.0`,
+    wickets: 16 - i,
+    runs_conceded: 138 + i * 9,
+    economy: Number((5.3 + i * 0.35).toFixed(2))
+  }));
+
+  const top10Catches = players.map(([name, team], i) => ({
+    player_id: `${cfg.id}-FLD-${i + 1}`,
+    player_name: name,
+    team_name: team,
+    catches: 11 - i
+  }));
+
+  const top10BestAvg = [...top10Runs].sort((a, b) => b.average - a.average);
+  const top10BestEcon = [...top10Wickets].sort((a, b) => a.economy - b.economy);
+  const top10BestBat = top10Runs.map((p, i) => ({
+    ...p,
+    runs: p.highest_score,
+    balls: 54 - i * 2,
+    fours: 9 - (i % 4),
+    sixes: 4 - (i % 3),
+    score_display: `${p.highest_score}${i % 2 === 0 ? '*' : ''} (${54 - i * 2})`
+  }));
+  const top10BestBowl = top10Wickets.map((p, i) => ({
+    ...p,
+    wickets: Math.max(2, 5 - Math.floor(i / 3)),
+    runs_conceded: 14 + i * 3,
+    overs: '4.0',
+    figures: `${Math.max(2, 5 - Math.floor(i / 3))}/${14 + i * 3}`
+  }));
+
+  return {
+    success: true,
+    is_demo: true,
+    tournament: {
+      id: cfg.id,
+      name: cfg.name,
+      short_name: cfg.short_name,
+      season: cfg.season,
+      start_date: cfg.start_date,
+      end_date: cfg.end_date,
+      status: 'COMPLETED',
+      tournament_type: cfg.tournament_type
+    },
+    winner: { team_id: `${cfg.id}-W`, name: cfg.winner },
+    runner_up: { team_id: `${cfg.id}-R`, name: cfg.runner },
+    man_of_the_match_final: cfg.motmFinal,
+    man_of_the_tournament: cfg.mott,
+    awards: {
+      most_runs: top10Runs[0],
+      most_wickets: top10Wickets[0],
+      most_catches: top10Catches[0],
+      best_batting_average: top10BestAvg[0],
+      best_bowling_economy: top10BestEcon[0],
+      best_batting: top10BestBat[0],
+      best_bowling: top10BestBowl[0]
+    },
+    points_table: teams.map((teamName, idx) => ({
+      team_id: `${cfg.id}-TM-${idx + 1}`,
+      team_name: teamName,
+      played: 5,
+      won: Math.max(0, 5 - idx),
+      lost: Math.min(5, idx),
+      tied: 0,
+      no_result: 0,
+      points: Math.max(0, (5 - idx) * 2),
+      nrr: Number((1.45 - idx * 0.52).toFixed(3))
+    })),
+    top_10: {
+      most_runs: top10Runs,
+      most_wickets: top10Wickets,
+      most_catches: top10Catches,
+      best_batting_average: top10BestAvg,
+      best_bowling_economy: top10BestEcon,
+      best_batting: top10BestBat,
+      best_bowling: top10BestBowl
+    }
+  };
+}
+
+const DEMO_RECORDS_LIST = [
+  buildDemoRecordSet({
+    id: 'DEMO-CFVD-2026',
+    name: 'CFVD District Premier League 2026',
+    short_name: 'CDPL26',
+    season: '2026',
+    start_date: '2026-08-10',
+    end_date: '2026-09-05',
+    tournament_type: 'GROUP_KNOCKOUT',
+    winner: 'Virudhunagar Strikers CC',
+    runner: 'Sattur Spartans',
+    motmFinal: { player_name: 'R. Saravanan', team_name: 'Virudhunagar Strikers CC' },
+    mott: { player_name: 'M. Vignesh', team_name: 'Virudhunagar Strikers CC', runs: 294, wickets: 12 }
+  }),
+  buildDemoRecordSet({
+    id: 'DEMO-CFVD-2025',
+    name: 'CFVD Senior District Championship 2025',
+    short_name: 'CSDC25',
+    season: '2025',
+    start_date: '2025-10-05',
+    end_date: '2025-11-18',
+    tournament_type: 'LEAGUE_PLAYOFFS',
+    winner: 'Sattur Super Kings',
+    runner: 'Virudhunagar Spartans',
+    motmFinal: { player_name: 'K. Karthik', team_name: 'Sattur Super Kings' },
+    mott: { player_name: 'R. Saravanan', team_name: 'Sattur Super Kings', runs: 342, wickets: 9 }
+  }),
+  buildDemoRecordSet({
+    id: 'DEMO-CFVD-2024',
+    name: 'CFVD Memorial Knockout Trophy 2024',
+    short_name: 'CMKT24',
+    season: '2024',
+    start_date: '2024-09-12',
+    end_date: '2024-10-22',
+    tournament_type: 'SINGLE_ELIMINATION',
+    winner: 'Srivi Super Kings',
+    runner: 'Sivakasi Super Strikers',
+    motmFinal: { player_name: 'S. Praveen', team_name: 'Srivi Super Kings' },
+    mott: { player_name: 'A. Murugan', team_name: 'Srivi Super Kings', runs: 265, wickets: 14 }
+  })
+];
+
+const DEMO_RECORDS_MAP: Record<string, any> = Object.fromEntries(
+  DEMO_RECORDS_LIST.map(rec => [rec.tournament.id, rec])
+);
+
 export const TournamentRecordsPanel: React.FC<Props> = ({ tournaments: initialTournaments }) => {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
@@ -100,13 +277,19 @@ export const TournamentRecordsPanel: React.FC<Props> = ({ tournaments: initialTo
   const [importing, setImporting] = useState(false);
 
   useEffect(() => {
+    const mergeWithDemo = (liveList: any[]) => {
+      const seenIds = new Set(liveList.map(t => t.id));
+      const demoTournaments = DEMO_RECORDS_LIST.map(d => d.tournament).filter(dt => !seenIds.has(dt.id));
+      setTournaments([...liveList, ...demoTournaments]);
+    };
+
     if (Array.isArray(initialTournaments) && initialTournaments.length > 0) {
-      setTournaments(initialTournaments);
+      mergeWithDemo(initialTournaments);
     } else {
       adminApi.getTournaments().then((res: any) => {
         const list = res?.tournaments || res?.data || [];
-        if (Array.isArray(list)) setTournaments(list);
-      }).catch(() => {});
+        mergeWithDemo(Array.isArray(list) ? list : []);
+      }).catch(() => mergeWithDemo([]));
     }
   }, [initialTournaments]);
 
@@ -146,6 +329,10 @@ export const TournamentRecordsPanel: React.FC<Props> = ({ tournaments: initialTo
     if (!tid) return;
     setSelectedId(tid);
     setDropdownOpen(false);
+    if (DEMO_RECORDS_MAP[tid]) {
+      setRecords(DEMO_RECORDS_MAP[tid]);
+      return;
+    }
     setLoading(true);
     try {
       const res: any = await adminApi.getTournamentRecords(tid);
@@ -200,20 +387,23 @@ export const TournamentRecordsPanel: React.FC<Props> = ({ tournaments: initialTo
       <head>
         <meta charset="utf-8" />
         <title>${escapeHtml(t.name)} - Official Tournament Records</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
         <style>
-          body { font-family: Arial, sans-serif; color: #0f172a; padding: 24px; max-width: 960px; margin: 0 auto; }
-          .hdr { border-bottom: 3px solid #0f2452; padding-bottom: 12px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; }
-          .hdr h1 { margin: 0; font-size: 20px; color: #0f2452; }
-          .hdr p { margin: 4px 0 0; font-size: 12px; color: #64748b; }
-          .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
-          .card { border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; background: #f8fafc; }
-          .card .lbl { font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase; }
-          .card .val { font-size: 15px; font-weight: bold; color: #0f2452; margin-top: 4px; }
-          .card .sub { font-size: 12px; color: #475569; margin-top: 2px; }
-          table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
-          th, td { border: 1px solid #cbd5e1; padding: 7px 8px; text-align: left; }
+          @page { size: landscape; margin: 10mm; }
+          * { box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; color: #0f172a; padding: 14px 18px; max-width: 1120px; margin: 0 auto; }
+          .hdr { border-bottom: 3px solid #0f2452; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+          .hdr h1 { margin: 0; font-size: 18px; color: #0f2452; }
+          .hdr p { margin: 3px 0 0; font-size: 11px; color: #64748b; }
+          .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+          .card { border: 1px solid #cbd5e1; border-radius: 6px; padding: 7px 10px; background: #f8fafc; break-inside: avoid; }
+          .card .lbl { font-size: 10px; font-weight: bold; color: #64748b; text-transform: uppercase; }
+          .card .val { font-size: 13px; font-weight: bold; color: #0f2452; margin-top: 2px; }
+          .card .sub { font-size: 10.5px; color: #475569; margin-top: 1px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 11px; }
+          th, td { border: 1px solid #cbd5e1; padding: 5px 7px; text-align: left; }
           th { background: #0f2452; color: #fbbf24; }
-          @media print { body { padding: 8px; } }
+          @media print { body { padding: 0; } }
         </style>
       </head>
       <body>
@@ -512,10 +702,12 @@ export const TournamentRecordsPanel: React.FC<Props> = ({ tournaments: initialTo
           </View>
           <View style={s.actionBtnRow}>
             <TouchableOpacity style={s.pdfBtn} onPress={handlePrintOrPdf}>
-              <Text style={s.pdfBtnText}>📄 Download PDF</Text>
+              <FontAwesome5 name="file-pdf" size={14} color="#ffffff" />
+              <Text style={s.pdfBtnText}>Download PDF</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.excelBtn} onPress={handleDownloadExcel}>
-              <Text style={s.excelBtnText}>📊 Download Excel</Text>
+              <FontAwesome5 name="file-excel" size={14} color="#ffffff" />
+              <Text style={s.excelBtnText}>Download Excel</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.printBtn} onPress={handlePrintOrPdf}>
               <Text style={s.printBtnText}>🖨️ Print</Text>
@@ -636,7 +828,8 @@ export const TournamentRecordsPanel: React.FC<Props> = ({ tournaments: initialTo
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>
             <Text style={s.sectionHeading}>📊 Top 10 Tournament Leaderboards</Text>
             <TouchableOpacity style={s.excelBtn} onPress={handleDownloadExcel}>
-              <Text style={s.excelBtnText}>📊 Export Top 10 Excel (.xls)</Text>
+              <FontAwesome5 name="file-excel" size={14} color="#ffffff" />
+              <Text style={s.excelBtnText}>Export Top 10 Excel (.xls)</Text>
             </TouchableOpacity>
           </View>
 
@@ -777,19 +970,16 @@ const s = StyleSheet.create({
     backgroundColor: '#f8fafc'
   },
   dropdownList: {
-    position: 'absolute',
-    top: 46,
-    left: 0,
-    right: 0,
+    marginTop: 6,
     backgroundColor: '#ffffff',
     borderRadius: 12,
     borderWidth: 1.5,
     borderColor: '#f59e0b',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.14,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 6,
     zIndex: 100
   },
   dropdownHeader: {
@@ -852,9 +1042,9 @@ const s = StyleSheet.create({
   selectedTitle: { fontSize: 16, fontWeight: '900', color: '#ffffff' },
   selectedMeta: { fontSize: 12, color: '#cbd5e1', marginTop: 2 },
   actionBtnRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  pdfBtn: { backgroundColor: '#dc2626', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+  pdfBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#dc2626', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
   pdfBtnText: { color: '#ffffff', fontWeight: '800', fontSize: 12 },
-  excelBtn: { backgroundColor: '#059669', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+  excelBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#059669', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
   excelBtnText: { color: '#ffffff', fontWeight: '800', fontSize: 12 },
   printBtn: { backgroundColor: '#ffffff', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
   printBtnText: { color: '#0f2452', fontWeight: '800', fontSize: 12 },
