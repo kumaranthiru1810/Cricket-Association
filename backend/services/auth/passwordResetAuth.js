@@ -69,11 +69,17 @@ class PasswordResetAuth {
       otp: rawOtp,
       priority: 'OTP'
     });
+    const env = require('../../config/env');
     if (emailResult && emailResult.quotaExceeded) {
       throw { status: 429, message: 'OTP service is busy, please try again later' };
     }
+    if ((!emailResult || emailResult.success === false) && !env.isDevelopment) {
+      throw {
+        status: 502,
+        message: emailResult?.error || 'Unable to send verification OTP email right now. Please check email provider settings or try again.'
+      };
+    }
 
-    const env = require('../../config/env');
     return {
       success: true,
       message: `Verification code sent to ${cleanEmail}. Please enter the 6-digit OTP code sent to your email.`,
@@ -218,11 +224,17 @@ class PasswordResetAuth {
       otp: rawOtp,
       priority: 'PASSWORD_RESET'
     });
+    const env = require('../../config/env');
     if (emailResult && emailResult.quotaExceeded) {
       throw { status: 429, message: 'OTP service is busy, please try again later' };
     }
+    if ((!emailResult || emailResult.success === false) && !env.isDevelopment) {
+      throw {
+        status: 502,
+        message: emailResult?.error || 'Unable to send verification OTP email right now. Please check email provider settings or try again.'
+      };
+    }
 
-    const env = require('../../config/env');
     return {
       success: true,
       message: 'If an eligible account exists for this email, a verification code has been dispatched.',
