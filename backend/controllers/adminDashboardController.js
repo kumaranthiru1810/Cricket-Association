@@ -462,12 +462,88 @@ class AdminDashboardController {
   async updateUser(req, res) {
     try {
       const { id } = req.params;
-      const { name, email, mobile, role, status } = req.body;
-      await db.query(
-        'UPDATE users SET name = ?, email = ?, mobile = ?, role = ?, status = ?, updated_at = NOW() WHERE id = ?',
-        [name, email.toLowerCase(), mobile, role, status, id]
-      );
-      return res.status(200).json({ success: true, message: 'User updated successfully.' });
+      await db.initDb();
+      const {
+        name,
+        email,
+        mobile,
+        aadhaar,
+        role,
+        status,
+        player_details,
+        scorer_details,
+        umpire_details
+      } = req.body || {};
+
+      const cleanEmail = email ? String(email).trim().toLowerCase() : undefined;
+      const cleanMobile = mobile !== undefined ? String(mobile).replace(/\D/g, '') : undefined;
+      const cleanAadhaar = aadhaar !== undefined ? String(aadhaar).replace(/\D/g, '') : undefined;
+
+      const updateFields = {
+        ...(name !== undefined && { name: String(name).trim() }),
+        ...(cleanEmail !== undefined && { email: cleanEmail }),
+        ...(cleanMobile !== undefined && { mobile: cleanMobile }),
+        ...(cleanAadhaar !== undefined && { aadhaar: cleanAadhaar }),
+        ...(role !== undefined && { role: String(role).toUpperCase() }),
+        ...(status !== undefined && { status: String(status).toUpperCase() }),
+        updated_at: new Date()
+      };
+
+      if (player_details && typeof player_details === 'object') {
+        for (const [k, v] of Object.entries(player_details)) {
+          if (v !== undefined) {
+            updateFields[`player_details.${k}`] = v;
+          }
+        }
+        if (cleanMobile !== undefined) {
+          updateFields['player_details.phone'] = cleanMobile;
+          updateFields['player_details.mobile'] = cleanMobile;
+        }
+        if (cleanAadhaar !== undefined) {
+          updateFields['player_details.aadhaar'] = cleanAadhaar;
+          updateFields['player_details.aadhaar_number'] = cleanAadhaar;
+        }
+      }
+
+      if (scorer_details && typeof scorer_details === 'object') {
+        for (const [k, v] of Object.entries(scorer_details)) {
+          if (v !== undefined) updateFields[`scorer_details.${k}`] = v;
+        }
+      }
+
+      if (umpire_details && typeof umpire_details === 'object') {
+        for (const [k, v] of Object.entries(umpire_details)) {
+          if (v !== undefined) updateFields[`umpire_details.${k}`] = v;
+        }
+      }
+
+      const updated = await db.models.User.findOneAndUpdate(
+        { id },
+        { $set: updateFields },
+        { returnDocument: 'after' }
+      ).lean();
+
+      if (!updated) {
+        return res.status(404).json({ success: false, message: 'User not found.' });
+      }
+
+      if (String(updated.role || '').toUpperCase() === 'PLAYER') {
+        await db.models.Player.updateMany(
+          { $or: [{ id }, ...(cleanEmail ? [{ email: cleanEmail }] : [])] },
+          {
+            $set: {
+              ...(name !== undefined && { name: String(name).trim() }),
+              ...(cleanEmail !== undefined && { email: cleanEmail }),
+              ...(cleanMobile !== undefined && { phone: cleanMobile, mobile: cleanMobile }),
+              ...(cleanAadhaar !== undefined && { aadhaar: cleanAadhaar }),
+              ...(player_details?.batting_style && { batting_style: player_details.batting_style }),
+              ...(player_details?.bowling_style && { bowling_style: player_details.bowling_style })
+            }
+          }
+        ).catch(() => {});
+      }
+
+      return res.status(200).json({ success: true, message: 'User updated successfully.', user: updated });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -479,11 +555,21 @@ class AdminDashboardController {
   async deleteUser(req, res) {
     try {
       const { id } = req.params;
-      if (id.startsWith('ADM-')) {
+      await db.initDb();
+      const existing = await db.models.User.findOne({ id }).lean();
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'User not found.' });
+      }
+      if (existing.is_super_admin || existing.role === 'SUPER_ADMIN' || String(id).startsWith('ADM-')) {
         return res.status(403).json({ success: false, message: 'Cannot delete primary administrator accounts.' });
       }
-      await db.query('DELETE FROM users WHERE id = ?', [id]);
-      return res.status(200).json({ success: true, message: 'User deleted successfully.' });
+      await db.models.User.deleteOne({ id });
+      const emailFilter = existing.email ? [{ email: existing.email }] : [];
+      await Promise.all([
+        db.models.Player.deleteMany({ $or: [{ id }, ...emailFilter] }).catch(() => {}),
+        db.models.Scorer.deleteMany({ $or: [{ id }, ...emailFilter] }).catch(() => {})
+      ]);
+      return res.status(200).json({ success: true, message: 'User permanently deleted. They must register again to access the portal.' });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -693,15 +779,36 @@ class AdminDashboardController {
       const [tPlayers] = await db.query('SELECT * FROM team_players WHERE team_id = ?', [team.id]);
       const [dPlayers] = await db.query('SELECT * FROM players WHERE team_id = ?', [team.id]);
 
-      const squad = [...(tPlayers || []).map(p => ({
+      const squadEmails = (tPlayers || [])
+        .map(p => String(p.player_email || '').trim().toLowerCase())
+        .filter(Boolean);
+      const idByEmail = {};
+      if (squadEmails.length > 0 && db.models) {
+        try {
+          const [uRows, pRows] = await Promise.all([
+            db.models.User ? db.models.User.find({ email: { $in: squadEmails } }, 'id email').lean() : [],
+            db.models.Player ? db.models.Player.find({ email: { $in: squadEmails } }, 'id email').lean() : []
+          ]);
+          (uRows || []).forEach(u => { if (u.email && u.id) idByEmail[u.email.toLowerCase()] = u.id; });
+          (pRows || []).forEach(pl => { if (pl.email && pl.id) idByEmail[pl.email.toLowerCase()] = pl.id; });
+        } catch (_e) {}
+      }
+
+      const squad = [...(tPlayers || []).map(p => {
+        const em = String(p.player_email || '').trim().toLowerCase();
+        const resolvedId = idByEmail[em] || p.id;
+        return {
+          id: resolvedId,
+          playerId: resolvedId,
+          name: p.player_name,
+          email: p.player_email,
+          role: p.player_role
+        };
+      }), ...(dPlayers || []).map(p => ({
         id: p.id,
-        name: p.player_name,
-        email: p.player_email,
-        role: p.player_role
-      })), ...(dPlayers || []).map(p => ({
-        id: p.id,
+        playerId: p.id,
         name: p.name,
-        email: 'N/A',
+        email: p.email || 'N/A',
         role: p.role,
         jersey: p.jersey_number
       }))];

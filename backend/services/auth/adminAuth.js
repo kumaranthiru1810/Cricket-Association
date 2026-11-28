@@ -275,8 +275,8 @@ class AdminAuth {
       throw { status: 400, message: 'Email or name and password/OTP are required.' };
     }
 
-    if (roleRequired === 'PLAYER' && playerLoginFn) {
-      return playerLoginFn(identifier, teamName || '');
+    if (roleRequired === 'PLAYER' && !passwordOrOtp && teamName && playerLoginFn) {
+      return playerLoginFn(identifier, teamName);
     }
 
     if (!passwordOrOtp) {
@@ -371,9 +371,13 @@ class AdminAuth {
         id: user.id,
         name: user.name,
         email: user.email,
+        mobile: user.mobile || user.player_details?.phone || null,
         role: user.role,
         status: user.status,
-        team_id: user.team_id
+        team_id: user.team_id,
+        photo: user.photo || user.image_path || user.player_details?.photo || user.player_details?.image_path || null,
+        image_path: user.image_path || user.photo || user.player_details?.image_path || user.player_details?.photo || null,
+        photo_verification_status: user.photo_verification_status || user.player_details?.photo_verification_status || 'NONE'
       },
       token
     };

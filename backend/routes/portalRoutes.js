@@ -1148,8 +1148,14 @@ router.get('/players/:playerId', async (req, res) => {
         jersey_number: playerDoc.jersey_number || playerDoc.jerseyNumber || 10,
         batting_style: playerDoc.batting_style || 'Right Hand Bat',
         bowling_style: playerDoc.bowling_style || 'Right Arm Medium',
-        photo: playerDoc.photo || playerDoc.image_path || playerDoc.profile_photo || playerDoc.image || null,
-        image: playerDoc.photo || playerDoc.image_path || playerDoc.profile_photo || playerDoc.image || null,
+        photo: ['PENDING_REVIEW', 'REJECTED'].includes(String(playerDoc.photo_verification_status || '').toUpperCase())
+          ? null
+          : (playerDoc.photo || playerDoc.image_path || playerDoc.profile_photo || playerDoc.image || null),
+        image: ['PENDING_REVIEW', 'REJECTED'].includes(String(playerDoc.photo_verification_status || '').toUpperCase())
+          ? null
+          : (playerDoc.photo || playerDoc.image_path || playerDoc.profile_photo || playerDoc.image || null),
+        photo_verification_status: playerDoc.photo_verification_status || 'NONE',
+        photo_verified: playerDoc.photo_verification_status === 'VERIFIED',
         is_captain: Boolean(playerDoc.is_captain),
         is_wicket_keeper: Boolean(playerDoc.is_wicket_keeper),
         status: 'ACTIVE'

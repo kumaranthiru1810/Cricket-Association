@@ -29,6 +29,10 @@ import { FontAwesome } from '@expo/vector-icons';
 import { useAppNavigation } from '../../navigation/AppNavigator';
 import { ScorerApi, fetchMasterSettings } from '../../services/api';
 import { TurnstileWidget } from '../../components/common/TurnstileWidget';
+import { CalendarPickerModal } from '../../components/common/CFVDDatePickerModal';
+import { validatePassportPhotoFile, ClientFaceAnalysis } from '../../utils/passportPhotoValidator';
+import { PassportPhotoCropperModal } from '../../components/common/PassportPhotoCropperModal';
+import { adminApi } from '../../admin/services/adminApi';
 import { showSuccess, showError, showWarning, showInfo } from '../../utils/sweetalert';
 import EmailDomainSuggestions from '../../components/common/EmailDomainSuggestions';
 
@@ -158,6 +162,7 @@ const SAMPLE_15_SQUAD: Array<{ name: string; email: string; role: string }> = [
 ];
 
 export const REGISTRATION_ROLES: { key: RegistrationRole; label: string; icon: string; desc: string }[] = [
+  { key: 'PLAYER', label: 'Player', icon: '🏏', desc: 'Individual player enrollment & district ID' },
   { key: 'TEAM', label: 'Team & Coach', icon: '🛡️', desc: 'Club & institution team squad registration' },
   { key: 'SCORER', label: 'Scorer', icon: '📋', desc: 'Certified match scorer accreditation' },
   { key: 'UMPIRE', label: 'Umpire', icon: '⚖️', desc: 'Official umpire panel accreditation' }
@@ -203,17 +208,21 @@ DropdownField.displayName = 'DropdownField';
 
 interface RegistrationScreenProps {
   onExit?: () => void;
+  adminMode?: boolean;
+  initialRole?: RegistrationRole;
+  onAdminSuccess?: () => void;
 }
 
-export default function RegistrationScreen({ onExit }: RegistrationScreenProps = {}) {
+export default function RegistrationScreen({ onExit, adminMode = false, initialRole, onAdminSuccess }: RegistrationScreenProps = {}) {
   const { navigate, goBack, params } = useAppNavigation();
 
   const getInitialRole = (): RegistrationRole => {
-    const r = (params?.initialRole as string)?.toUpperCase();
+    const r = ((initialRole || params?.initialRole) as string)?.toUpperCase();
+    if (r === 'PLAYER') return 'PLAYER';
     if (r === 'TEAM' || r === 'COACH') return 'TEAM';
     if (r === 'SCORER') return 'SCORER';
     if (r === 'UMPIRE') return 'UMPIRE';
-    return 'TEAM';
+    return adminMode ? 'PLAYER' : 'TEAM';
   };
 
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -246,7 +255,8 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   // OTP & Password State
   const [otpSent, setOtpSent] = useState<boolean>(false);
   const [otpCode, setOtpCode] = useState<string>('');
-  const [isEmailVerified, setIsEmailVerified] = useState<boolean>(false);
+  const [isEmailVerifiedState, setIsEmailVerified] = useState<boolean>(Boolean(adminMode));
+  const isEmailVerified = adminMode ? true : isEmailVerifiedState;
   const [password, setPassword] = useState<string>('');
   const [confirmPassword, setConfirmPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
@@ -432,6 +442,31 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   const [pKeeperSpec, setPKeeperSpec] = useState<string>('Wicket Keeper Batsman');
   const [pClub, setPClub] = useState<string>('');
   const [pAgreed, setPAgreed] = useState<boolean>(true);
+  const [pFatherName, setPFatherName] = useState<string>('');
+  const [pDob, setPDob] = useState<string>('');
+  const [pAge, setPAge] = useState<string>('');
+  const [pPlaceOfBirth, setPPlaceOfBirth] = useState<string>('');
+  const [pAddress, setPAddress] = useState<string>('');
+  const [pOccupationType, setPOccupationType] = useState<'STUDYING' | 'WORKING' | 'NONE'>('STUDYING');
+  const [pWorkingInstitution, setPWorkingInstitution] = useState<string>('');
+  const [pStudyingInstitution, setPStudyingInstitution] = useState<string>('');
+  const [pStudyLevel, setPStudyLevel] = useState<'COLLEGE' | 'SCHOOL'>('COLLEGE');
+  const [pBranchYearSec, setPBranchYearSec] = useState<string>('');
+  const [pClassSection, setPClassSection] = useState<string>('');
+  const [pBatterHand, setPBatterHand] = useState<'RH' | 'LH'>('RH');
+  const [pBatterPosition, setPBatterPosition] = useState<'OPEN' | 'TOP_ORDER' | 'MIDDLE_ORDER'>('TOP_ORDER');
+  const [pBowlerHand, setPBowlerHand] = useState<'RH' | 'LH' | ''>('RH');
+  const [pBowlerType, setPBowlerType] = useState<'MEDIUM' | 'OFF_SPIN' | 'LEG_SPINNER' | 'ORTHODOX' | 'CHINAMAN' | ''>('MEDIUM');
+  const [pIsWicketKeeper, setPIsWicketKeeper] = useState<boolean>(false);
+  const [pDeclarationPlace, setPDeclarationPlace] = useState<string>('Virudhunagar');
+  const [pDeclarationDate, setPDeclarationDate] = useState<string>(() => new Date().toLocaleDateString('en-GB'));
+  const [pPhoto, setPPhoto] = useState<string>('');
+  const [pPhotoClientAnalysis, setPPhotoClientAnalysis] = useState<ClientFaceAnalysis | null>(null);
+  const [pPhotoCheckMsg, setPPhotoCheckMsg] = useState<string>('');
+  const [showPhotoCropper, setShowPhotoCropper] = useState<boolean>(false);
+  const [pPhotoConsent, setPPhotoConsent] = useState<boolean>(true);
+  const [pGuardianConsent, setPGuardianConsent] = useState<boolean>(true);
+  const [calendarTarget, setCalendarTarget] = useState<'DOB' | 'DECLARATION' | null>(null);
 
   // Helper to retrieve valid bowling action options for given arm & category
   const getBowlingActionOptions = (arm: string, category: string): string[] => {
@@ -624,10 +659,13 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
   const switchRole = (role: RegistrationRole) => {
     setActiveRole(role);
+    if (!adminMode && Platform.OS === 'web' && typeof window !== 'undefined' && window.history?.replaceState) {
+      window.history.replaceState(null, '', `/register/${role.toLowerCase()}?initialRole=${role}`);
+    }
     setFieldErrors({});
     setOtpSent(false);
     setOtpCode('');
-    setIsEmailVerified(false);
+    if (!adminMode) setIsEmailVerified(false);
     setIsOtpModalVisible(false);
     setOtpModalError(null);
     setOtpModalSuccess(null);
@@ -659,6 +697,19 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
         setPTaluk('Virudhunagar');
         setPBattingStyle('Right-Handed Batsman');
         setPClub('');
+        setPFatherName('');
+        setPDob('');
+        setPAge('');
+        setPPlaceOfBirth('');
+        setPAddress('');
+        setPOccupationType('STUDYING');
+        setPStudyingInstitution('');
+        setPStudyLevel('COLLEGE');
+        setPBranchYearSec('');
+        setPClassSection('');
+        setPWorkingInstitution('');
+        setPDeclarationPlace('');
+        setPPhoto('');
         setPAgreed(false);
       } else if (activeRole === 'TEAM') {
         setTeamName('');
@@ -701,11 +752,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     const demoPass = 'test1234'; // ggignore
     setPassword(demoPass);
     setConfirmPassword(demoPass);
-    setIsEmailVerified(true);
-    setOtpCode('1234');
+    setIsEmailVerified(false);
+    setOtpCode('');
 
     if (activeRole === 'PLAYER') {
-      setPName('Saravanan');
+      setPName('M. SARAVANAN');
       setPEmail('saravanan.r@strikerscc.org');
       setPMobile('9876543210');
       setPAadhaar('5432 9876 1234');
@@ -713,9 +764,25 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       setPCategory('Senior Men');
       setPTaluk('Virudhunagar');
       setPBattingStyle('Right-Handed Batsman');
-      setPClub('Virudhunagar Strikers CC');
+      setPClub('VIRUDHUNAGAR STRIKERS CRICKET CLUB');
+      setPFatherName('R. MURUGAN');
+      setPDob('15/05/2004');
+      setPAge('22');
+      setPPlaceOfBirth('VIRUDHUNAGAR');
+      setPAddress('12, Gandhi Nagar, Near Kamarajar Stadium, Virudhunagar, 626001');
+      setPOccupationType('STUDYING');
+      setPStudyingInstitution('VHNSN COLLEGE VIRUDHUNAGAR');
+      setPStudyLevel('COLLEGE');
+      setPBranchYearSec('BSC COMPUTER SCIENCE III YEAR A');
+      setPBatterHand('RH');
+      setPBatterPosition('TOP_ORDER');
+      setPBowlerHand('RH');
+      setPBowlerType('MEDIUM');
+      setPIsWicketKeeper(false);
+      setPDeclarationPlace('VIRUDHUNAGAR');
+      setPDeclarationDate(new Date().toLocaleDateString('en-GB'));
       setPAgreed(true);
-      setStatusMessage('⚡ Demo Player details filled! Click "✕ Clear Demo" to reset.');
+      setStatusMessage('⚡ Demo Player form filled for preview! Clicking "Send Verification OTP" will clear demo data.');
       setStatusType('success');
     } else if (activeRole === 'TEAM') {
       setTeamName('Virudhunagar Super Strikers CC');
@@ -872,6 +939,12 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
   // Open Cricket OTP Popup Modal
   const openOtpModal = async (triggerSend: boolean = true) => {
+    if (isDemoFilled) {
+      handleDemoFill(); // Clears all demo data
+      showWarning('Demo Data Cleared', 'Demo preview has been cleared. Please enter your real details and then verify your email.');
+      return;
+    }
+
     setStatusMessage(null);
     setStatusType(null);
     setOtpModalError(null);
@@ -1016,6 +1089,11 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     if (mobileErr) errs.mobile = mobileErr;
     if (aadhaarErr) errs.aadhaar = aadhaarErr;
     if (talukErr) errs.taluk = talukErr;
+    if (!pFatherName.trim()) errs.fatherName = "Father's Name is required.";
+    if (!pDob.trim()) errs.dob = 'Date of Birth is required.';
+    else if (!pAge || Number(pAge) < 5) errs.dob = 'Player must be at least 5 years old.';
+    if (!pPlaceOfBirth.trim()) errs.placeOfBirth = 'Place of Birth is required.';
+    if (!pAddress.trim()) errs.address = 'Address for Communication is required.';
 
     if (Object.keys(errs).length > 0) {
       setFieldErrors((prev) => ({ ...prev, ...errs }));
@@ -1091,7 +1169,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
         computedBowlingStyle = `N/A (${pKeeperSpec})`;
       }
 
-      const resp = await ScorerApi.registerPlayer({
+      const playerPayload = {
         name,
         email,
         password,
@@ -1108,8 +1186,33 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
         bowlingCategory: (isBowler || isAllRounder) ? pBowlingCategory : undefined,
         bowlingAction: (isBowler || isAllRounder) ? pBowlingAction : undefined,
         clubChoice: pClub.trim() || undefined,
+        fatherName: pFatherName.trim(),
+        dateOfBirth: pDob.trim(),
+        age: pAge.trim(),
+        placeOfBirth: pPlaceOfBirth.trim(),
+        address: pAddress.trim(),
+        occupationType: pOccupationType,
+        workingInstitution: pWorkingInstitution.trim(),
+        studyingInstitution: pStudyingInstitution.trim(),
+        studyLevel: pStudyLevel,
+        branchYearSec: pBranchYearSec.trim(),
+        classSection: pClassSection.trim(),
+        batterHand: pBatterHand,
+        batterPosition: pBatterPosition,
+        bowlerHand: pBowlerHand,
+        bowlerType: pBowlerType,
+        isWicketKeeper: pIsWicketKeeper,
+        declarationPlace: pDeclarationPlace.trim(),
+        declarationDate: pDeclarationDate.trim(),
+        declarationAgreed: pAgreed,
+        photo: pPhoto || undefined,
+        clientFaceAnalysis: pPhotoClientAnalysis || undefined,
         otp: otpCode.trim()
-      });
+      };
+
+      const resp = adminMode
+        ? await adminApi.createUser({ ...playerPayload, role: 'PLAYER', playingRole: pRole, status: 'ACTIVE' })
+        : await ScorerApi.registerPlayer(playerPayload);
 
       setIsLoading(false);
       setStatusMessage(resp?.message || '✓ Player Account Created! You can now log in.');
@@ -1117,10 +1220,14 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
 
       await showSuccess(
         'Registration Complete!',
-        `Welcome ${name}! Your account has been registered. You can now log in.`,
-        2200
+        adminMode ? `Player ${name} created successfully.` : `Welcome ${name}! Your account has been registered. You can now log in.`,
+        1800
       );
-      navigate('Login', { initialRole: 'PLAYER' });
+      if (adminMode) {
+        onAdminSuccess?.();
+      } else {
+        navigate('Login', { initialRole: 'PLAYER' });
+      }
     } catch (err: any) {
       setIsLoading(false);
       setStatusMessage(err?.message || 'Player registration failed. Please try again.');
@@ -1129,7 +1236,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
   };
 
   // 2. Team Squad Helpers & Submission
-  const handleAddPlayer = () => {
+  const handleAddPlayer = async () => {
     setStatusMessage(null);
     setStatusType(null);
 
@@ -1170,23 +1277,51 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
       return;
     }
 
+    // Verify player email is ALREADY registered as a Player before adding to squad
+    let verifiedPlayerName = name;
+    let verifiedPlayerPhone = phone;
+    let verifiedPlayerAadhaar = rawAadhaar;
+    let verifiedPlayerRole = role;
+    try {
+      const checkRes = await ScorerApi.checkPlayerEmail(email);
+      if (!checkRes?.registered) {
+        const notRegMsg =
+          checkRes?.message ||
+          `Email "${email}" is not registered as a Player yet. Only registered players can be added to a team.`;
+        setFieldErrors((prev) => ({ ...prev, squadPlayerEmail: notRegMsg }));
+        showWarning('Player Not Registered', notRegMsg);
+        return;
+      }
+      if (checkRes.player) {
+        if (!verifiedPlayerName && checkRes.player.name) verifiedPlayerName = checkRes.player.name;
+        if (!verifiedPlayerPhone && checkRes.player.phone) verifiedPlayerPhone = checkRes.player.phone;
+        if (!verifiedPlayerAadhaar && checkRes.player.aadhaar) verifiedPlayerAadhaar = checkRes.player.aadhaar;
+        if (checkRes.player.role) verifiedPlayerRole = verifiedPlayerRole || checkRes.player.role;
+      }
+    } catch (err: any) {
+      const errMsg = err?.message || 'Unable to verify if player is registered.';
+      setFieldErrors((prev) => ({ ...prev, squadPlayerEmail: errMsg }));
+      showWarning('Player Verification Failed', errMsg);
+      return;
+    }
+
     if (editingPlayerId) {
       // Update existing player
-      setPlayers((prev) => prev.map((p) => p.id === editingPlayerId ? { ...p, name, email, role, phone, mobile: phone, aadhaar: formatAadhaar(rawAadhaar) } : p));
+      setPlayers((prev) => prev.map((p) => p.id === editingPlayerId ? { ...p, name: verifiedPlayerName, email, role: verifiedPlayerRole, phone: verifiedPlayerPhone, mobile: verifiedPlayerPhone, aadhaar: formatAadhaar(verifiedPlayerAadhaar) } : p));
       setEditingPlayerId(null);
-      setStatusMessage(`✓ Updated ${name} (${role}) in squad!`);
+      setStatusMessage(`✓ Updated ${verifiedPlayerName} (${verifiedPlayerRole}) in squad!`);
     } else {
       const newPlayer: SquadPlayer = {
         id: Date.now().toString() + Math.random().toString(36).substring(2, 6),
-        name,
+        name: verifiedPlayerName,
         email,
-        role,
-        phone,
-        mobile: phone,
-        aadhaar: rawAadhaar ? formatAadhaar(rawAadhaar) : ''
+        role: verifiedPlayerRole,
+        phone: verifiedPlayerPhone,
+        mobile: verifiedPlayerPhone,
+        aadhaar: verifiedPlayerAadhaar ? formatAadhaar(verifiedPlayerAadhaar) : ''
       };
       setPlayers((prev) => [...prev, newPlayer]);
-      setStatusMessage(`✓ Added ${name} (${role}) to squad! (${players.length + 1} players in squad)`);
+      setStatusMessage(`✓ Verified & Added ${verifiedPlayerName} (${verifiedPlayerRole}) to squad! (${players.length + 1} players in squad)`);
     }
 
     setSquadPlayerName('');
@@ -1341,7 +1476,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     setStatusType('info');
 
     try {
-      const resp = await ScorerApi.registerTeam({
+      const teamPayload = {
         teamName: teamName.trim(),
         coachName: coachName.trim(),
         coachEmail: coachEmail.trim().toLowerCase(),
@@ -1361,9 +1496,30 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
           aadhaar: (p.aadhaar || '').replace(/\D/g, '')
         })),
         otp: otpCode.trim()
-      });
+      };
+
+      const resp = adminMode
+        ? await adminApi.createTeam({
+            name: teamPayload.teamName,
+            shortName: teamPayload.teamName.slice(0, 3).toUpperCase(),
+            coachName: teamPayload.coachName,
+            coachEmail: teamPayload.coachEmail,
+            coachPhone: teamPayload.coachPhone,
+            coachMobile: teamPayload.coachMobile,
+            coachAadhaar: teamPayload.coachAadhaar,
+            password: teamPayload.password,
+            city: teamPayload.city,
+            taluk: teamPayload.taluk,
+            players: teamPayload.players
+          })
+        : await ScorerApi.registerTeam(teamPayload);
 
       setIsLoading(false);
+      if (adminMode) {
+        await showSuccess('Team Created!', `Team "${teamName.trim()}" and squad added successfully.`, 1800);
+        onAdminSuccess?.();
+        return;
+      }
       const teamNotice = `Team "${teamName.trim()}" registration is PENDING Admin approval.\nOnce approved by District Administrator, Coach ${coachName} can log in with password.`;
       setStatusMessage(resp?.message || teamNotice);
       setStatusType('success');
@@ -1465,7 +1621,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     setStatusType('info');
 
     try {
-      const resp = await ScorerApi.registerScorer({
+      const scorerPayload = {
         name,
         email,
         password,
@@ -1473,9 +1629,17 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
         taluk: targetTaluk,
         certificationLevel: sLevel,
         otp: otpCode.trim()
-      });
+      };
+      const resp = adminMode
+        ? await adminApi.createUser({ ...scorerPayload, role: 'SCORER', status: 'ACTIVE' })
+        : await ScorerApi.registerScorer(scorerPayload);
 
       setIsLoading(false);
+      if (adminMode) {
+        await showSuccess('Scorer Added!', `Scorer ${name} created successfully.`, 1800);
+        onAdminSuccess?.();
+        return;
+      }
       const scorerNotice = `Welcome ${name}! Your scorer registration request is PENDING Admin approval.\nOnce approved by District Administrator, you can log in with your credentials.`;
       setStatusMessage(resp?.message || scorerNotice);
       setStatusType('success');
@@ -1577,7 +1741,7 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
     setStatusType('info');
 
     try {
-      const resp = await ScorerApi.registerUmpire({
+      const umpirePayload = {
         name,
         email,
         mobile: uMobile.trim().replace(/\D/g, '') || undefined,
@@ -1594,9 +1758,17 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
         profilePhoto: uProfilePhoto.trim() || undefined,
         additionalInfo: uAdditionalInfo.trim() || undefined,
         otp: otpCode.trim()
-      });
+      };
+      const resp = adminMode
+        ? await adminApi.createUser({ ...umpirePayload, role: 'UMPIRE', status: 'ACTIVE' })
+        : await ScorerApi.registerUmpire(umpirePayload);
 
       setIsLoading(false);
+      if (adminMode) {
+        await showSuccess('Umpire Added!', `Umpire ${name} created successfully.`, 1800);
+        onAdminSuccess?.();
+        return;
+      }
       const umpireNotice = `Welcome ${name}!\nYour Umpire Registration is PENDING Admin approval.\nOnce approved by District Administrator, you can log in with your credentials.`;
       setStatusMessage(resp?.message || umpireNotice);
       setStatusType('success');
@@ -1980,14 +2152,14 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                         style={[styles.input, fieldErrors.name && styles.inputError]}
                         value={pName}
                         onChangeText={(val) => {
-                          const sanitized = val.replace(/[^a-zA-Z\s]/g, '');
+                          const sanitized = val.replace(/\t/g, '').replace(/[^a-zA-Z. ]/g, '').toUpperCase();
                           setPName(sanitized);
                           const err = validateNameValue(sanitized, 'Player Name');
                           setFieldErrors((prev) => ({ ...prev, name: err || undefined }));
                         }}
-                        placeholder="e.g. Saravanan"
+                        placeholder="e.g. M. SARAVANAN"
                         placeholderTextColor="#94a3b8"
-                        autoCapitalize="words"
+                        autoCapitalize="characters"
                       />
                       {fieldErrors.name && (
                         <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.name}</Text>
@@ -2180,12 +2352,13 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                           style={[styles.input, fieldErrors.taluk && styles.inputError]}
                           value={pCustomTaluk}
                           onChangeText={(val) => {
-                            setPCustomTaluk(val);
-                            setFieldErrors((prev) => ({ ...prev, taluk: val.trim() ? undefined : 'Please enter your Taluk name.' }));
+                            const sanitized = val.replace(/\t/g, '').replace(/[^a-zA-Z ]/g, '').toUpperCase();
+                            setPCustomTaluk(sanitized);
+                            setFieldErrors((prev) => ({ ...prev, taluk: sanitized.trim() ? undefined : 'Please enter your Taluk name.' }));
                           }}
-                          placeholder="Type your taluk name here..."
+                          placeholder="TYPE YOUR TALUK NAME HERE..."
                           placeholderTextColor="#94a3b8"
-                          autoCapitalize="words"
+                          autoCapitalize="characters"
                         />
                         {fieldErrors.taluk && (
                           <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.taluk}</Text>
@@ -2278,6 +2451,429 @@ export default function RegistrationScreen({ onExit }: RegistrationScreenProps =
                       />
                     </View>
                   )}
+
+                  {/* Official CFVD Player's Registration Form Details */}
+                  <View style={{ backgroundColor: '#f8fafc', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#cbd5e1', gap: 12, marginTop: 6 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '900', color: '#0f2452', letterSpacing: 0.4 }}>
+                      📋 OFFICIAL CFVD PLAYER REGISTRATION FORM DETAILS
+                    </Text>
+
+                    <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Name of Club / School / College / Academy</Text>
+                        <TextInput
+                          style={styles.input}
+                          value={pClub}
+                          onChangeText={(val) => {
+                            const sanitized = val.replace(/\t/g, '').replace(/[^a-zA-Z0-9 ]/g, '').toUpperCase();
+                            setPClub(sanitized);
+                          }}
+                          placeholder="E.G. VIRUDHUNAGAR CRICKET CLUB"
+                          placeholderTextColor="#94a3b8"
+                          autoCapitalize="characters"
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Father&apos;s Name *</Text>
+                        <TextInput
+                          style={[styles.input, fieldErrors.fatherName && styles.inputError]}
+                          value={pFatherName}
+                          onChangeText={(val) => {
+                            const sanitized = val.replace(/\t/g, '').replace(/[^a-zA-Z. ]/g, '').toUpperCase();
+                            setPFatherName(sanitized);
+                            setFieldErrors((prev) => ({ ...prev, fatherName: sanitized.trim() ? undefined : "Father's Name is required." }));
+                          }}
+                          placeholder="E.G. K. RAMESH"
+                          placeholderTextColor="#94a3b8"
+                          autoCapitalize="characters"
+                        />
+                        {fieldErrors.fatherName ? <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.fatherName}</Text> : null}
+                      </View>
+                    </View>
+
+                    <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Date of Birth (DD/MM/YYYY) *</Text>
+                        <TouchableOpacity
+                          onPress={() => setCalendarTarget('DOB')}
+                          activeOpacity={0.8}
+                          style={[
+                            styles.input,
+                            { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+                            fieldErrors.dob && styles.inputError
+                          ]}
+                        >
+                          <Text style={{ fontSize: 13.5, color: pDob ? '#0f172a' : '#94a3b8', fontWeight: pDob ? '700' : '400' }}>
+                            {pDob || 'Select Date of Birth'}
+                          </Text>
+                          <FontAwesome name="calendar" size={15} color="#0f2452" />
+                        </TouchableOpacity>
+                        {fieldErrors.dob ? <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.dob}</Text> : null}
+                      </View>
+                      <View style={{ flex: 0.5 }}>
+                        <Text style={styles.label}>Age (Auto)</Text>
+                        <TextInput
+                          style={[styles.input, { backgroundColor: '#f1f5f9', color: '#0f2452', fontWeight: '700' }]}
+                          value={pAge}
+                          editable={false}
+                          placeholder="Auto"
+                          placeholderTextColor="#94a3b8"
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Place of Birth *</Text>
+                        <TextInput
+                          style={[styles.input, fieldErrors.placeOfBirth && styles.inputError]}
+                          value={pPlaceOfBirth}
+                          onChangeText={(val) => {
+                            const sanitized = val.replace(/\t/g, '').replace(/[^a-zA-Z ]/g, '').toUpperCase();
+                            setPPlaceOfBirth(sanitized);
+                            setFieldErrors((prev) => ({ ...prev, placeOfBirth: sanitized.trim() ? undefined : 'Place of Birth is required.' }));
+                          }}
+                          placeholder="E.G. VIRUDHUNAGAR"
+                          placeholderTextColor="#94a3b8"
+                          autoCapitalize="characters"
+                        />
+                        {fieldErrors.placeOfBirth ? <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.placeOfBirth}</Text> : null}
+                      </View>
+                    </View>
+
+                    <View>
+                      <Text style={styles.label}>Address for Communication (Aadhaar / Passport Proof) *</Text>
+                      <TextInput
+                        style={[styles.input, { minHeight: 58, textAlignVertical: 'top' }, fieldErrors.address && styles.inputError]}
+                        value={pAddress}
+                        onChangeText={(val) => {
+                          const sanitized = val.replace(/\t/g, ' ').replace(/[^a-zA-Z0-9,/. \n]/g, '');
+                          setPAddress(sanitized);
+                          setFieldErrors((prev) => ({ ...prev, address: sanitized.trim() ? undefined : 'Address for Communication is required.' }));
+                        }}
+                        placeholder="Door No, Street, Area, District, PIN Code"
+                        multiline
+                        placeholderTextColor="#94a3b8"
+                      />
+                      {fieldErrors.address ? <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.address}</Text> : null}
+                    </View>
+
+                    {/* Studying / Working Section */}
+                    <View style={{ gap: 8 }}>
+                      <Text style={styles.label}>Current Status (Studying / Working)</Text>
+                      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                        {([
+                          { key: 'STUDYING', label: '🎓 Studying (School / College)' },
+                          { key: 'WORKING', label: '💼 Working (Govt / Bank / Institution)' },
+                          { key: 'NONE', label: 'Other' }
+                        ] as const).map((opt) => (
+                          <TouchableOpacity
+                            key={opt.key}
+                            onPress={() => setPOccupationType(opt.key)}
+                            style={{
+                              paddingHorizontal: 10,
+                              paddingVertical: 7,
+                              borderRadius: 8,
+                              borderWidth: 1,
+                              borderColor: pOccupationType === opt.key ? '#0f2452' : '#cbd5e1',
+                              backgroundColor: pOccupationType === opt.key ? '#0f2452' : '#ffffff'
+                            }}
+                          >
+                            <Text style={{ fontSize: 11.5, fontWeight: '700', color: pOccupationType === opt.key ? '#facc15' : '#334155' }}>
+                              {opt.label}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+
+                      {pOccupationType === 'STUDYING' && (
+                        <View style={{ gap: 8 }}>
+                          <TextInput
+                            style={styles.input}
+                            value={pStudyingInstitution}
+                            onChangeText={(val) => setPStudyingInstitution(val.replace(/\t/g, '').replace(/[^a-zA-Z ]/g, '').toUpperCase())}
+                            placeholder="NAME OF SCHOOL OR COLLEGE"
+                            placeholderTextColor="#94a3b8"
+                            autoCapitalize="characters"
+                          />
+                          <View style={{ flexDirection: 'row', gap: 8 }}>
+                            {(['COLLEGE', 'SCHOOL'] as const).map((lvl) => (
+                              <TouchableOpacity
+                                key={lvl}
+                                onPress={() => setPStudyLevel(lvl)}
+                                style={{
+                                  paddingHorizontal: 12,
+                                  paddingVertical: 6,
+                                  borderRadius: 6,
+                                  borderWidth: 1,
+                                  borderColor: pStudyLevel === lvl ? '#0284c7' : '#cbd5e1',
+                                  backgroundColor: pStudyLevel === lvl ? '#e0f2fe' : '#ffffff'
+                                }}
+                              >
+                                <Text style={{ fontSize: 11.5, fontWeight: '700', color: pStudyLevel === lvl ? '#0369a1' : '#475569' }}>
+                                  {lvl}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                          {pStudyLevel === 'COLLEGE' ? (
+                            <TextInput
+                              style={styles.input}
+                              value={pBranchYearSec}
+                              onChangeText={(val) => setPBranchYearSec(val.replace(/\t/g, '').replace(/[^a-zA-Z ]/g, '').toUpperCase())}
+                              placeholder="COLLEGE BRANCH YEAR AND SECTION"
+                              placeholderTextColor="#94a3b8"
+                              autoCapitalize="characters"
+                            />
+                          ) : (
+                            <TextInput
+                              style={styles.input}
+                              value={pClassSection}
+                              onChangeText={(val) => setPClassSection(val.replace(/\t/g, '').replace(/[^a-zA-Z ]/g, '').toUpperCase())}
+                              placeholder="SCHOOL CLASS AND SECTION"
+                              placeholderTextColor="#94a3b8"
+                              autoCapitalize="characters"
+                            />
+                          )}
+                        </View>
+                      )}
+
+                      {pOccupationType === 'WORKING' && (
+                        <TextInput
+                          style={styles.input}
+                          value={pWorkingInstitution}
+                          onChangeText={(val) => setPWorkingInstitution(val.replace(/\t/g, '').replace(/[^a-zA-Z ]/g, '').toUpperCase())}
+                          placeholder="NAME OF INSTITUTION OR BANK OR GOVT OFFICE"
+                          placeholderTextColor="#94a3b8"
+                          autoCapitalize="characters"
+                        />
+                      )}
+                    </View>
+
+                    {/* Official Proficiency Checkboxes */}
+                    <View style={{ gap: 8 }}>
+                      <Text style={styles.label}>Proficiency (Tick Applicable)</Text>
+                      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#475569' }}>Batter:</Text>
+                        {(['RH', 'LH'] as const).map((h) => (
+                          <TouchableOpacity
+                            key={`bh-${h}`}
+                            onPress={() => setPBatterHand(h)}
+                            style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: pBatterHand === h ? '#0f2452' : '#cbd5e1', backgroundColor: pBatterHand === h ? '#0f2452' : '#fff' }}
+                          >
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: pBatterHand === h ? '#facc15' : '#334155' }}>{h}</Text>
+                          </TouchableOpacity>
+                        ))}
+                        {([
+                          { k: 'OPEN', l: 'OPEN' },
+                          { k: 'TOP_ORDER', l: 'TOP ORDER' },
+                          { k: 'MIDDLE_ORDER', l: 'MIDDLE ORDER' }
+                        ] as const).map((pos) => (
+                          <TouchableOpacity
+                            key={pos.k}
+                            onPress={() => setPBatterPosition(pos.k)}
+                            style={{ paddingHorizontal: 9, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: pBatterPosition === pos.k ? '#0f2452' : '#cbd5e1', backgroundColor: pBatterPosition === pos.k ? '#0f2452' : '#fff' }}
+                          >
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: pBatterPosition === pos.k ? '#facc15' : '#334155' }}>{pos.l}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+
+                      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#475569' }}>Bowler:</Text>
+                        {(['RH', 'LH'] as const).map((h) => (
+                          <TouchableOpacity
+                            key={`bwh-${h}`}
+                            onPress={() => setPBowlerHand(pBowlerHand === h ? '' : h)}
+                            style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: pBowlerHand === h ? '#0f2452' : '#cbd5e1', backgroundColor: pBowlerHand === h ? '#0f2452' : '#fff' }}
+                          >
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: pBowlerHand === h ? '#facc15' : '#334155' }}>{h}</Text>
+                          </TouchableOpacity>
+                        ))}
+                        {([
+                          { k: 'MEDIUM', l: 'MEDIUM' },
+                          { k: 'OFF_SPIN', l: 'OFF SPIN' },
+                          { k: 'LEG_SPINNER', l: 'LEG SPINNER' },
+                          { k: 'ORTHODOX', l: 'ORTHODOX' },
+                          { k: 'CHINAMAN', l: 'CHINAMAN' }
+                        ] as const).map((bt) => (
+                          <TouchableOpacity
+                            key={bt.k}
+                            onPress={() => setPBowlerType(pBowlerType === bt.k ? '' : bt.k)}
+                            style={{ paddingHorizontal: 9, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: pBowlerType === bt.k ? '#0f2452' : '#cbd5e1', backgroundColor: pBowlerType === bt.k ? '#0f2452' : '#fff' }}
+                          >
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: pBowlerType === bt.k ? '#facc15' : '#334155' }}>{bt.l}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+
+                      <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#475569' }}>Wicket Keeper:</Text>
+                        {[true, false].map((wk) => (
+                          <TouchableOpacity
+                            key={String(wk)}
+                            onPress={() => setPIsWicketKeeper(wk)}
+                            style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: pIsWicketKeeper === wk ? '#0f2452' : '#cbd5e1', backgroundColor: pIsWicketKeeper === wk ? '#0f2452' : '#fff' }}
+                          >
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: pIsWicketKeeper === wk ? '#facc15' : '#334155' }}>
+                              {wk ? 'YES' : 'NO'}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+
+                    {/* Passport Photo (Web Upload / Camera & Cropper with Validation) & Declaration Place/Date */}
+                    {Platform.OS === 'web' && (
+                      <View style={{ gap: 6 }}>
+                        <Text style={styles.label}>
+                          Affix Passport Size Photo (JPG/PNG • 600×770 recommended • Max 5MB)
+                        </Text>
+                        <Text style={{ fontSize: 11, color: '#475569' }}>
+                          Guidelines: Clear front-facing portrait. If photographing a printed passport photo on cloth/table, use &quot;Crop / Camera&quot; to trim borders &amp; tilt.
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                          <input
+                            type="file"
+                            accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+                            onChange={async (e: any) => {
+                              const file = e?.target?.files?.[0];
+                              if (!file) return;
+                              setPPhotoCheckMsg('Validating passport photograph...');
+                              const res = await validatePassportPhotoFile(file);
+                              if (!res.valid || !res.dataUri) {
+                                // If it looks like an uncropped camera photo, open the cropper instead of blocking immediately
+                                if (res.error && /aspect ratio|portrait-style/i.test(res.error)) {
+                                  setPPhotoCheckMsg('Opening crop & perspective tool to trim outer borders...');
+                                  setShowPhotoCropper(true);
+                                  return;
+                                }
+                                setPPhoto('');
+                                setPPhotoClientAnalysis(null);
+                                setPPhotoCheckMsg('');
+                                setFieldErrors((prev) => ({ ...prev, photo: res.error || 'Invalid passport photo.' }));
+                                showWarning('Invalid Passport Photo', res.error || 'Please upload a valid passport photograph.');
+                                if (e?.target) e.target.value = '';
+                                return;
+                              }
+                              setPPhoto(res.dataUri);
+                              setPPhotoClientAnalysis(res.clientFaceAnalysis || null);
+                              setFieldErrors((prev) => ({ ...prev, photo: undefined }));
+                              setPPhotoCheckMsg(
+                                res.clientFaceAnalysis?.supported && res.clientFaceAnalysis.faceCount === 1
+                                  ? `✓ Valid portrait (${res.width}×${res.height}px) • 1 human face detected`
+                                  : `✓ Valid portrait (${res.width}×${res.height}px) • Queued for Admin face review`
+                              );
+                            }}
+                          />
+                          <TouchableOpacity
+                            onPress={() => setShowPhotoCropper(true)}
+                            style={{ backgroundColor: '#0f2452', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 7 }}
+                          >
+                            <Text style={{ color: '#fff', fontSize: 11.5, fontWeight: '700' }}>✂️ Crop / Camera Photo</Text>
+                          </TouchableOpacity>
+                          {pPhoto ? (
+                            <Image source={{ uri: pPhoto }} style={{ width: 52, height: 66, borderRadius: 6, borderWidth: 1, borderColor: '#cbd5e1' }} />
+                          ) : null}
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => setPPhotoConsent(!pPhotoConsent)}
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}
+                        >
+                          <Text style={{ fontSize: 13 }}>{pPhotoConsent ? '☑' : '☐'}</Text>
+                          <Text style={{ fontSize: 11, color: '#334155', flex: 1 }}>
+                            I consent to automated &amp; admin passport photo verification for CFVD player registration.
+                          </Text>
+                        </TouchableOpacity>
+                        {Number(pAge) > 0 && Number(pAge) < 18 && (
+                          <TouchableOpacity
+                            onPress={() => setPGuardianConsent(!pGuardianConsent)}
+                            style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                          >
+                            <Text style={{ fontSize: 13 }}>{pGuardianConsent ? '☑' : '☐'}</Text>
+                            <Text style={{ fontSize: 11, color: '#334155', flex: 1 }}>
+                              Parent / Guardian Consent: I confirm parent/guardian approval for this minor player&apos;s photo verification.
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                        {fieldErrors.photo ? (
+                          <Text style={styles.fieldErrorText}>⚠️ {fieldErrors.photo}</Text>
+                        ) : pPhotoCheckMsg ? (
+                          <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#166534' }}>{pPhotoCheckMsg}</Text>
+                        ) : null}
+                      </View>
+                    )}
+
+                    <PassportPhotoCropperModal
+                      visible={showPhotoCropper}
+                      onClose={() => setShowPhotoCropper(false)}
+                      onConfirm={(res) => {
+                        if (!res.valid || !res.dataUri) return;
+                        setPPhoto(res.dataUri);
+                        setPPhotoClientAnalysis(res.clientFaceAnalysis || null);
+                        setFieldErrors((prev) => ({ ...prev, photo: undefined }));
+                        setPPhotoCheckMsg(
+                          res.clientFaceAnalysis?.supported && res.clientFaceAnalysis.faceCount === 1
+                            ? `✓ Cropped portrait (${res.width}×${res.height}px) • 1 human face detected`
+                            : `✓ Cropped portrait (${res.width}×${res.height}px) • Queued for Admin face review`
+                        );
+                      }}
+                    />
+
+                    <View style={[styles.formRow, isMobile && { flexDirection: 'column' }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Declaration Place</Text>
+                        <TextInput
+                          style={styles.input}
+                          value={pDeclarationPlace}
+                          onChangeText={(val) => setPDeclarationPlace(val.replace(/\t/g, '').replace(/[^a-zA-Z ]/g, '').toUpperCase())}
+                          placeholder="VIRUDHUNAGAR"
+                          placeholderTextColor="#94a3b8"
+                          autoCapitalize="characters"
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Declaration Date</Text>
+                        <TouchableOpacity
+                          onPress={() => setCalendarTarget('DECLARATION')}
+                          activeOpacity={0.8}
+                          style={[styles.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                        >
+                          <Text style={{ fontSize: 13.5, color: pDeclarationDate ? '#0f172a' : '#94a3b8', fontWeight: pDeclarationDate ? '700' : '400' }}>
+                            {pDeclarationDate || 'Select Declaration Date'}
+                          </Text>
+                          <FontAwesome name="calendar" size={15} color="#0f2452" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+
+                  <CalendarPickerModal
+                    visible={calendarTarget !== null}
+                    title={calendarTarget === 'DOB' ? 'Select Date of Birth (Min Age 5+)' : 'Select Declaration Date'}
+                    value={calendarTarget === 'DOB' ? pDob : pDeclarationDate}
+                    showToday={calendarTarget !== 'DOB'}
+                    maxDate={
+                      calendarTarget === 'DOB'
+                        ? new Date(new Date().getFullYear() - 5, new Date().getMonth(), new Date().getDate())
+                        : new Date()
+                    }
+                    onClose={() => setCalendarTarget(null)}
+                    onSelect={(ddmmyyyy) => {
+                      if (calendarTarget === 'DOB') {
+                        setPDob(ddmmyyyy);
+                        const m = ddmmyyyy.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+                        if (m) {
+                          const birth = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+                          const now = new Date();
+                          let age = now.getFullYear() - birth.getFullYear();
+                          const mDiff = now.getMonth() - birth.getMonth();
+                          if (mDiff < 0 || (mDiff === 0 && now.getDate() < birth.getDate())) age--;
+                          setPAge(age >= 0 ? String(age) : '');
+                        }
+                        setFieldErrors((prev) => ({ ...prev, dob: undefined }));
+                      } else if (calendarTarget === 'DECLARATION') {
+                        setPDeclarationDate(ddmmyyyy);
+                      }
+                    }}
+                  />
 
                   {/* Dynamic Cricketing Profile Summary Pill */}
                   <View style={styles.cricketSummaryBadge}>

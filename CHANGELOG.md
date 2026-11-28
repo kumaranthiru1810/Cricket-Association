@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased] - 2026-11-28
+- **Rating Engine Refinements & Easy-English Guide**: Added batting qualification threshold (`>= 6` balls, `>= 10` runs, or dismissed), multi-innings `parRuns` scaling (`innings_batted`), bowler dot-ball calculation counting byes/leg-byes as dots, `raw avg X (provisional)` display under 5 matches, hand-calculated unit tests (`40(25)` & `4-0-28-2`), and a clear 6-step easy-English "How Player Ratings Work" modal.
+- **Rating Engine Upgrades**: Added per-match role inference, additive fielding bonus (`+0.3/+0.4/+0.6`, cap `+1.0`), overs-scaled benchmarks & `parRuns`-relative milestones, `Delivery` dot-ball aggregation, match-innings team-win lookup (no bonus on ties/NR), Bayesian career shrinkage (`k=3`), leaderboard min 3 matches, `T10`/`CUSTOM` buckets, expandable match breakdown, "How ratings work" modal, and `backend/scripts/calibrate-benchmarks.js`.
+- **Dynamic Player Ratings & Career Stats**: Removed all hardcoded rating fallbacks (`7.5`, `7.8 ★`, `7.2 ★`, `8.0 ★`, `_fallbackLeaderboard`) from Player Dashboard, Scorecard, and backend rating service.
+- **Background Rating Queue & Reconciliation**: Added non-blocking `enqueueMatchRatingRecalculation(matchId)`, batch `$in` player lookups, dismissal-only delivery queries, denormalized `Player.stats` sync, `"Your rating was updated"` notifications, 60-second career-ratings caching, and nightly reconciliation (`docs/RATING_METHOD.md`).
+- **Camera-Captured Printed Passport Photo Cropping**: Added interactive 4-corner perspective warp & rotation cropper (`PassportPhotoCropperModal`) and `backend/config/photoVerification.js`.
+
+
 ## [Unreleased] - Live Scoring & Real-Time Performance Upgrade
 
 ### Backend

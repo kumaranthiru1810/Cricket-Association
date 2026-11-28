@@ -103,51 +103,6 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
 
     const newErrors: { identifier?: string; password?: string; teamName?: string } = {};
 
-    // PLAYER login: team name + email (no password)
-    if (activeRole === 'PLAYER') {
-      if (!teamName.trim()) {
-        newErrors.teamName = 'Please enter your team name.';
-      }
-      const emailResult = validateEmail(input);
-      if (!emailResult.isValid) {
-        newErrors.identifier = emailResult.error;
-      }
-      if (Object.keys(newErrors).length > 0) {
-        setFieldErrors(newErrors);
-        showWarning('Validation Error', newErrors.teamName || newErrors.identifier || 'Please fill all fields.');
-        return;
-      }
-
-      setIsLoading(true);
-      setStatusMessage('Verifying player credentials...');
-      setStatusType('info');
-      try {
-        const res = await ScorerApi.loginWithPassword(input, '', 'PLAYER', teamName.trim());
-        if (res?.token) {
-          setAuthToken(res.token, 'PLAYER');
-          if (res.user) setCurrentUser({ ...res.user, role: 'PLAYER', portalRole: 'PLAYER' });
-        }
-        setStatusMessage(res?.message || 'Login successful!');
-        setStatusType('success');
-        await showSuccess('Login Successful!', res?.message || 'Welcome to Player Portal!', 1500);
-        setIsLoading(false);
-        navigate('Player', { user: res?.user, playerName: input });
-      } catch (err: any) {
-        setIsLoading(false);
-        const rawMsg = err?.message || 'Login failed. Please check your team name and email.';
-        const isPending = err?.pendingApproval || rawMsg.toLowerCase().includes('pending');
-        if (isPending) {
-          setStatusMessage(rawMsg);
-          setStatusType('error');
-          showError('Pending Admin Approval', rawMsg);
-        } else {
-          setFieldErrors({ identifier: rawMsg });
-          showError('Authentication Failed', rawMsg);
-        }
-      }
-      return;
-    }
-
     // 1. Email validation: Must contain '@', '.', and valid email structure
     const emailResult = validateEmail(input);
     if (!emailResult.isValid) {
@@ -189,7 +144,9 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
       );
 
       setIsLoading(false);
-      if (activeRole === 'TEAM') {
+      if (activeRole === 'PLAYER') {
+        navigate('Player', { user: res?.user, playerName: res?.user?.name || input });
+      } else if (activeRole === 'TEAM') {
         navigate('Team', { user: res?.user, teamName: res?.user?.teamName || input });
       } else if (activeRole === 'SCORER') {
         navigate('Scorer', { user: res?.user });
@@ -337,44 +294,6 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
               </View>
             </View>
 
-            {/* Team Name Field - PLAYER only */}
-            {activeRole === 'PLAYER' && (
-              <>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: isDesktop ? 6 : 4 }}>
-                  <Text style={[styles.label, { marginBottom: 0 }]}>Team Name *</Text>
-                  <TouchableOpacity
-                    onPress={() => setShowFindTeamModal(true)}
-                    activeOpacity={0.7}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Text style={{ color: '#d97706', fontSize: isDesktop ? 13 : 11.5, fontWeight: '700' }}>
-                      🔍 Find your team
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                <TextInput
-                  style={[
-                    styles.input,
-                    (fieldErrors as any).teamName && styles.inputError,
-                    (fieldErrors as any).teamName && { marginBottom: 4 }
-                  ]}
-                  value={teamName}
-                  onChangeText={(text) => {
-                    setTeamName(text);
-                    if ((fieldErrors as any).teamName) {
-                      setFieldErrors((prev) => ({ ...prev, teamName: undefined }));
-                    }
-                  }}
-                  placeholder="e.g. Strikers Cricket Club"
-                  placeholderTextColor="#94a3b8"
-                  autoCapitalize="words"
-                />
-                {(fieldErrors as any).teamName ? (
-                  <Text style={styles.fieldErrorText}>{(fieldErrors as any).teamName}</Text>
-                ) : null}
-              </>
-            )}
-
             {/* Identifier Field */}
             <Text style={styles.label}>
               {activeRole === 'PLAYER' && 'Registered Player Email *'}
@@ -425,9 +344,8 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
             ) : null}
 
 
-            {/* Password Field - Hidden for PLAYER role */}
-            {activeRole !== 'PLAYER' && (
-              <>
+            {/* Password Field */}
+            <>
                 {/* Password Field Header with Inline Forgot Password Link */}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: isDesktop ? 8 : 6 }}>
                   <Text style={[styles.label, { marginBottom: 0 }]}>Account Password *</Text>
@@ -468,7 +386,6 @@ export default function LoginScreen({ onExit }: LoginScreenProps = {}) {
                   <Text style={styles.fieldErrorText}>{fieldErrors.password}</Text>
                 ) : null}
               </>
-            )}
 
             <TouchableOpacity
               onPress={() => setRememberDevice((v) => !v)}

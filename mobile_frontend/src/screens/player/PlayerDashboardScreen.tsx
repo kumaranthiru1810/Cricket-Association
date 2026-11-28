@@ -24,7 +24,29 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
 import CricketLoader from '../../components/common/CricketLoader';
+import { validateName, validatePhone, validateAadhaar } from '../../utils/validation';
 import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
+
+const EDIT_PLAYER_ROLES = ['Batsman', 'Bowler', 'All-Rounder', 'Wicket Keeper', 'Captain', 'Vice Captain'];
+const EDIT_AGE_CATEGORIES = ['Senior Men', "Women's Senior", 'Under-23', 'Under-19', 'Under-16', 'Under-14', 'Under-12'];
+const EDIT_BATTING_STYLES = ['Right-Handed Batsman', 'Left-Handed Batsman'];
+const EDIT_BOWLING_STYLES = [
+  'Right-Arm Fast',
+  'Right-Arm Fast-Medium',
+  'Right-Arm Medium Pace',
+  'Right-Arm Medium-Fast',
+  'Off Spinner (Off Break)',
+  'Leg Spinner (Leg Break)',
+  'Left-Arm Fast',
+  'Left-Arm Fast-Medium',
+  'Left-Arm Medium Pace',
+  'Left-Arm Orthodox (Finger Spin)',
+  'Left-Arm Chinaman (Wrist Spin)'
+];
+const EDIT_TALUKS = [
+  'Virudhunagar', 'Sivakasi', 'Rajapalayam', 'Srivilliputhur',
+  'Aruppukottai', 'Sattur', 'Kariapatti', 'Tiruchuli', 'Vembakottai'
+];
 import { PlayerApi, ScorerApi, getCurrentUser, setCurrentUser, setAuthToken, SOCKET_URL, resolveImageUrl } from '../../services/api';
 import {
   RefreshIcon,
@@ -114,6 +136,15 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
   const [playerForm, setPlayerForm] = useState<any>(null);
   const [formMatchLimit, setFormMatchLimit] = useState<5 | 10>(5);
   const [isLoadingRatings, setIsLoadingRatings] = useState<boolean>(false);
+  const [showHowRatingsWork, setShowHowRatingsWork] = useState<boolean>(false);
+  const [expandedFormMatchId, setExpandedFormMatchId] = useState<string | null>(null);
+  const [showPhotoRejectedModal, setShowPhotoRejectedModal] = useState<boolean>(false);
+  const [photoReuploadModalOpen, setPhotoReuploadModalOpen] = useState<boolean>(false);
+  const [reuploadPhotoUri, setReuploadPhotoUri] = useState<string | null>(null);
+  const [reuploadFileName, setReuploadFileName] = useState<string>('');
+  const [reuploadError, setReuploadError] = useState<string | null>(null);
+  const [reuploadSuccess, setReuploadSuccess] = useState<string | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState<boolean>(false);
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -128,6 +159,27 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
 
   // Edit Profile Modal State
   const [isEditProfileVisible, setIsEditProfileVisible] = useState<boolean>(false);
+  const [editName, setEditName] = useState<string>('');
+  const [editAadhaar, setEditAadhaar] = useState<string>('');
+  const [editClub, setEditClub] = useState<string>('');
+  const [editFatherName, setEditFatherName] = useState<string>('');
+  const [editDob, setEditDob] = useState<string>('');
+  const [editAge, setEditAge] = useState<string>('');
+  const [editPlaceOfBirth, setEditPlaceOfBirth] = useState<string>('');
+  const [editAddress, setEditAddress] = useState<string>('');
+  const [editCategory, setEditCategory] = useState<string>('Senior Men');
+  const [editPlayingRole, setEditPlayingRole] = useState<string>('Batsman');
+  const [editOccupationType, setEditOccupationType] = useState<string>('STUDYING');
+  const [editWorkingInst, setEditWorkingInst] = useState<string>('');
+  const [editStudyingInst, setEditStudyingInst] = useState<string>('');
+  const [editStudyLevel, setEditStudyLevel] = useState<string>('COLLEGE');
+  const [editBranchYearSec, setEditBranchYearSec] = useState<string>('');
+  const [editClassSection, setEditClassSection] = useState<string>('');
+  const [editBatterHand, setEditBatterHand] = useState<string>('RH');
+  const [editBatterPos, setEditBatterPos] = useState<string>('TOP_ORDER');
+  const [editBowlerHand, setEditBowlerHand] = useState<string>('');
+  const [editBowlerType, setEditBowlerType] = useState<string>('');
+  const [editIsKeeper, setEditIsKeeper] = useState<boolean>(false);
   const [editBattingStyle, setEditBattingStyle] = useState<string>('Right Hand Bat');
   const [editBowlingStyle, setEditBowlingStyle] = useState<string>('Right Arm Medium');
   const [editJerseyNumber, setEditJerseyNumber] = useState<string>('10');
@@ -207,6 +259,8 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
         setEditMobile(p.mobile || '');
         setEditTaluk(p.taluk || '');
         setEditPhoto(p.photo || null);
+        // Inline warning banners on Overview & My Profile handle REJECTED state without repeated popups
+        setShowPhotoRejectedModal(false);
       } else if (profileRes.status === 'rejected') {
         console.warn('Profile fetch failed:', profileRes.reason?.message);
       }
@@ -477,14 +531,149 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
     }
   };
 
+  const handleOpenPhotoReupload = () => {
+    setReuploadPhotoUri(null);
+    setReuploadFileName('');
+    setReuploadError(null);
+    setReuploadSuccess(null);
+    setPhotoReuploadModalOpen(true);
+  };
+
+  const handlePickReuploadPhoto = async () => {
+    setReuploadError(null);
+    setReuploadSuccess(null);
+    const MAX_BYTES = 5 * 1024 * 1024;
+    if (Platform.OS === 'web') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.jpg,.jpeg,.png,image/jpeg,image/png';
+      input.onchange = (e: any) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const mime = String(file.type || '').toLowerCase();
+        const ext = String(file.name || '').toLowerCase();
+        const validMime = ['image/jpeg', 'image/jpg', 'image/png'].includes(mime);
+        const validExt = /\.(jpe?g|png)$/i.test(ext);
+        if (!validMime && !validExt) {
+          setReuploadError('Invalid file type. Please select a JPG, JPEG, or PNG image.');
+          return;
+        }
+        if (file.size > MAX_BYTES) {
+          setReuploadError('File size exceeds 5 MB. Please choose a smaller image.');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const raw = ev.target?.result as string;
+          if (!raw || !/^data:image\/(jpeg|jpg|png);base64,/i.test(raw)) {
+            setReuploadError('Invalid image data. Only JPG, JPEG, and PNG files are supported.');
+            return;
+          }
+          setReuploadPhotoUri(raw);
+          setReuploadFileName(file.name || 'passport_photo.jpg');
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+      return;
+    }
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      setReuploadError('Permission required to access your photo library.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 5],
+      quality: 0.9,
+      base64: true
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      const asset = result.assets[0];
+      const uriStr = String(asset.uri || '').toLowerCase();
+      if (uriStr && !/\.(jpe?g|png)$/i.test(uriStr) && !asset.base64) {
+        setReuploadError('Invalid file type. Only JPG, JPEG, and PNG images are allowed.');
+        return;
+      }
+      const b64 = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      if (asset.fileSize && asset.fileSize > MAX_BYTES) {
+        setReuploadError('File size exceeds 5 MB. Please choose a smaller image.');
+        return;
+      }
+      setReuploadPhotoUri(b64);
+      setReuploadFileName(asset.fileName || 'passport_photo.jpg');
+    }
+  };
+
+  const handleSubmitReuploadPhoto = async () => {
+    if (isUploadingPhoto) return;
+    if (!reuploadPhotoUri) {
+      setReuploadError('Please select a JPG, JPEG, or PNG photo to submit.');
+      return;
+    }
+    setReuploadError(null);
+    setReuploadSuccess(null);
+    setIsUploadingPhoto(true);
+    try {
+      const res = await PlayerApi.updateProfile({
+        photo: reuploadPhotoUri,
+        image_path: reuploadPhotoUri
+      });
+      if (res && res.profile) {
+        setProfile(res.profile);
+        setEditPhoto(res.profile.photo || res.profile.image_path || null);
+      }
+      setReuploadSuccess('Your replacement photo has been submitted for Admin verification (PENDING REVIEW).');
+      setTimeout(() => {
+        setPhotoReuploadModalOpen(false);
+        setReuploadPhotoUri(null);
+        setReuploadSuccess(null);
+      }, 1500);
+    } catch (err: any) {
+      setReuploadError(err?.message || 'Failed to upload replacement photo. Please try again.');
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
   const handleOpenEditProfile = () => {
+    const cu = getCurrentUser();
+    const pd = profile?.player_details || cu?.player_details || {};
+    const fallbackPhoto = profile?.photo || profile?.image_path || cu?.photo || cu?.image_path || null;
+    setEditName(profile?.name || cu?.name || playerName || '');
+    setEditAadhaar(profile?.aadhaar || pd?.aadhaar || pd?.aadhaar_number || cu?.aadhaar || '');
+    setEditClub(pd?.club_choice || '');
+    setEditFatherName(pd?.father_name || '');
+    setEditDob(pd?.date_of_birth || '');
+    setEditAge(pd?.age ? String(pd.age) : '');
+    setEditPlaceOfBirth(pd?.place_of_birth || '');
+    setEditAddress(pd?.address || '');
+    setEditCategory(pd?.category || 'Senior Men');
+    setEditPlayingRole(pd?.role || pd?.playing_role || profile?.role || 'Batsman');
+    setEditOccupationType(pd?.occupation_type || (pd?.working_institution ? 'WORKING' : 'STUDYING'));
+    setEditWorkingInst(pd?.working_institution || '');
+    setEditStudyingInst(pd?.studying_institution || '');
+    setEditStudyLevel(pd?.study_level || (pd?.class_section ? 'SCHOOL' : 'COLLEGE'));
+    setEditBranchYearSec(pd?.branch_year_sec || '');
+    setEditClassSection(pd?.class_section || '');
+    setEditBatterHand(pd?.batter_hand || 'RH');
+    setEditBatterPos(pd?.batter_position || 'TOP_ORDER');
+    setEditBowlerHand(pd?.bowler_hand || '');
+    setEditBowlerType(pd?.bowler_type || '');
+    setEditIsKeeper(Boolean(pd?.is_wicket_keeper));
     if (profile) {
-      setEditBattingStyle(profile.battingStyle || '');
-      setEditBowlingStyle(profile.bowlingStyle || '');
+      const rawBat = String(profile.battingStyle || pd?.batting_style || '').trim();
+      const rawBowl = String(profile.bowlingStyle || pd?.bowling_style || '').trim();
+      setEditBattingStyle(EDIT_BATTING_STYLES.includes(rawBat) ? rawBat : (rawBat.toLowerCase().includes('left') ? 'Left-Handed Batsman' : 'Right-Handed Batsman'));
+      setEditBowlingStyle(EDIT_BOWLING_STYLES.includes(rawBowl) ? rawBowl : 'Right-Arm Medium Pace');
       setEditJerseyNumber(profile.jerseyNumber !== undefined && profile.jerseyNumber !== null ? String(profile.jerseyNumber) : '');
-      setEditMobile(profile.mobile || '');
-      setEditTaluk(profile.taluk || '');
-      setEditPhoto(profile.photo || profile.image_path || null);
+      setEditMobile(profile.mobile || pd?.phone || cu?.mobile || '');
+      const rawTaluk = String(profile.taluk || pd?.taluk || '').trim();
+      setEditTaluk(EDIT_TALUKS.includes(rawTaluk) ? rawTaluk : 'Virudhunagar');
+      setEditPhoto(fallbackPhoto);
+    } else if (fallbackPhoto) {
+      setEditPhoto(fallbackPhoto);
     }
     setProfileFeedback(null);
     setIsEditProfileVisible(true);
@@ -564,18 +753,108 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
 
   const handleSaveProfile = async () => {
     setProfileFeedback(null);
+
+    const nameCheck = validateName(editName, 'Player Full Name');
+    if (!nameCheck.isValid) {
+      setProfileFeedback({ message: nameCheck.error || 'Please enter a valid Player Full Name.', type: 'error' });
+      return;
+    }
+
+    if (editFatherName.trim()) {
+      const fatherCheck = validateName(editFatherName, "Father's Name");
+      if (!fatherCheck.isValid) {
+        setProfileFeedback({ message: fatherCheck.error || "Please enter a valid Father's Name.", type: 'error' });
+        return;
+      }
+    }
+
+    const cleanMob = editMobile.replace(/\D/g, '');
+    if (cleanMob) {
+      const phoneCheck = validatePhone(cleanMob, 'Mobile Number');
+      if (!phoneCheck.isValid) {
+        setProfileFeedback({ message: phoneCheck.error || 'Please enter a valid 10-digit mobile number.', type: 'error' });
+        return;
+      }
+    }
+
+    const cleanAadhaar = editAadhaar.replace(/\D/g, '');
+    if (cleanAadhaar) {
+      const aadhaarCheck = validateAadhaar(cleanAadhaar);
+      if (!aadhaarCheck.isValid) {
+        setProfileFeedback({ message: aadhaarCheck.error || 'Please enter a valid 12-digit Aadhaar number.', type: 'error' });
+        return;
+      }
+    }
+
+    if (editDob.trim()) {
+      const dobMatch = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(editDob.trim());
+      if (!dobMatch) {
+        setProfileFeedback({ message: 'Date of Birth must be in DD/MM/YYYY format.', type: 'error' });
+        return;
+      }
+      const d = Number(dobMatch[1]);
+      const m = Number(dobMatch[2]);
+      const y = Number(dobMatch[3]);
+      const dt = new Date(y, m - 1, d);
+      if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d || y < 1940 || y > new Date().getFullYear() - 5) {
+        setProfileFeedback({ message: 'Please enter a valid Date of Birth.', type: 'error' });
+        return;
+      }
+    }
+
+    if (editAge.trim()) {
+      const ageNum = Number(editAge.trim());
+      if (isNaN(ageNum) || ageNum < 5 || ageNum > 80) {
+        setProfileFeedback({ message: 'Age must be a valid number between 5 and 80.', type: 'error' });
+        return;
+      }
+    }
+
+    if (editJerseyNumber.trim()) {
+      const jNum = Number(editJerseyNumber.trim());
+      if (isNaN(jNum) || jNum < 0 || jNum > 999) {
+        setProfileFeedback({ message: 'Jersey Number must be between 0 and 999.', type: 'error' });
+        return;
+      }
+    }
+
     setIsSavingProfile(true);
 
     try {
       const jerseyNum = parseInt(editJerseyNumber, 10);
       const updates = {
+        name: editName.trim() || undefined,
+        aadhaar: editAadhaar.replace(/\D/g, '') || undefined,
         battingStyle: editBattingStyle.trim(),
         bowlingStyle: editBowlingStyle.trim(),
         jerseyNumber: isNaN(jerseyNum) ? undefined : jerseyNum,
-        mobile: editMobile.trim(),
+        mobile: editMobile.replace(/\D/g, ''),
         taluk: editTaluk.trim(),
         photo: editPhoto,
-        image_path: editPhoto
+        image_path: editPhoto,
+        player_details: {
+          club_choice: editClub.trim(),
+          father_name: editFatherName.trim(),
+          date_of_birth: editDob.trim(),
+          age: editAge.trim(),
+          place_of_birth: editPlaceOfBirth.trim(),
+          address: editAddress.trim(),
+          category: editCategory.trim(),
+          role: editPlayingRole.trim(),
+          playing_role: editPlayingRole.trim(),
+          occupation_type: editOccupationType,
+          working_institution: editOccupationType === 'WORKING' ? editWorkingInst.trim() : '',
+          studying_institution: editOccupationType === 'STUDYING' ? editStudyingInst.trim() : '',
+          study_level: editOccupationType === 'STUDYING' ? editStudyLevel : '',
+          branch_year_sec: editOccupationType === 'STUDYING' && editStudyLevel === 'COLLEGE' ? editBranchYearSec.trim() : '',
+          class_section: editOccupationType === 'STUDYING' && editStudyLevel === 'SCHOOL' ? editClassSection.trim() : '',
+          batter_hand: editBatterHand,
+          batter_position: editBatterPos,
+          bowler_hand: editBowlerHand,
+          bowler_type: editBowlerType,
+          is_wicket_keeper: editIsKeeper,
+          taluk: editTaluk.trim()
+        }
       };
 
       const res = await PlayerApi.updateProfile(updates);
@@ -830,9 +1109,9 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                     activeOpacity={0.8}
                     accessibilityLabel="Player Profile"
                   >
-                    {resolvePhotoUrl(profile?.photo || profile?.image_path || profile?.avatar) ? (
+                    {resolvePhotoUrl(profile?.photo || profile?.image_path || profile?.avatar || getCurrentUser()?.photo || getCurrentUser()?.image_path) ? (
                       <Image
-                        source={{ uri: resolvePhotoUrl(profile.photo || profile.image_path || profile.avatar)! }}
+                        source={{ uri: resolvePhotoUrl(profile?.photo || profile?.image_path || profile?.avatar || getCurrentUser()?.photo || getCurrentUser()?.image_path)! }}
                         style={[styles.headerAvatarCircle, isMobileS && { width: 32, height: 32, borderRadius: 16 }]}
                         resizeMode="cover"
                       />
@@ -929,6 +1208,57 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
             ) : null}
           {!isLoading && activeTab === 'overview' && (
             <View>
+              {(() => {
+                const pStatus = String(profile?.photo_verification_status || profile?.player_details?.photo_verification_status || '').toUpperCase();
+                const pReason = profile?.photo_verification_reason || profile?.player_details?.photo_verification_reason || '';
+                if (!pStatus || pStatus === 'NONE' || pStatus === 'VERIFIED') return null;
+                const isRejected = pStatus === 'REJECTED';
+                return (
+                  <View style={{
+                    backgroundColor: isRejected ? '#fef2f2' : '#fff7ed',
+                    borderWidth: 1.5,
+                    borderColor: isRejected ? '#ef4444' : '#f97316',
+                    borderRadius: 12,
+                    padding: 14,
+                    marginBottom: 14,
+                    gap: 8
+                  }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <View style={{ backgroundColor: isRejected ? '#dc2626' : '#ea580c', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 5 }}>
+                          <Text style={{ color: '#fff', fontSize: 10.5, fontWeight: '800', letterSpacing: 0.4 }}>
+                            {isRejected ? 'ACTION REQUIRED' : 'PENDING REVIEW'}
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 13.5, fontWeight: '800', color: isRejected ? '#991b1b' : '#9a3412' }}>
+                          {isRejected ? 'Passport Photo Rejected' : 'Passport Photo Under Admin Review'}
+                        </Text>
+                      </View>
+                      <View style={{ backgroundColor: isRejected ? '#fee2e2' : '#ffedd5', borderWidth: 1, borderColor: isRejected ? '#fca5a5' : '#fdba74', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 }}>
+                        <Text style={{ fontSize: 10.5, fontWeight: '800', color: isRejected ? '#b91c1c' : '#c2410c' }}>
+                          {isRejected ? 'REJECTED' : 'PENDING REVIEW'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 12.5, color: '#334155', lineHeight: 18 }}>
+                      {isRejected
+                        ? `Reason: ${pReason || 'Please upload a clear passport-size portrait photo.'}`
+                        : 'Your replacement photo has been submitted and is awaiting Administrator approval.'}
+                    </Text>
+                    {isRejected && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 2 }}>
+                        <TouchableOpacity
+                          onPress={handleOpenPhotoReupload}
+                          activeOpacity={0.85}
+                          style={{ backgroundColor: '#dc2626', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 }}
+                        >
+                          <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>📸 Upload New Photo</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                );
+              })()}
               {/* MODULE 4: CAREER PERFORMANCE & MATCH FORM RATINGS */}
               <View style={styles.ratingsCardContainer}>
                 {/* Header: Title + Confidence Badge */}
@@ -937,17 +1267,24 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                     <Text style={{ fontSize: 20, marginRight: 8 }}>⭐</Text>
                     <View>
                       <Text style={styles.ratingsCardTitle}>PLAYER PERFORMANCE & CAREER RATING</Text>
-                      <Text style={styles.ratingsCardSubtitle}>Official format-aware rating benchmarked against TNCA standards</Text>
+                      <Text style={styles.ratingsCardSubtitle}>Official format-aware rating benchmarked against format averages</Text>
                     </View>
                   </View>
-                  <View style={[
-                    styles.confidenceBadge,
-                    careerRatings?.confidence === 'Established' ? styles.confidenceEstablished :
-                    careerRatings?.confidence === 'Developing' ? styles.confidenceDeveloping : styles.confidenceProvisional
-                  ]}>
-                    <Text style={styles.confidenceBadgeText}>
-                      ● {careerRatings?.confidence || 'Provisional'}
-                    </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <TouchableOpacity onPress={() => setShowHowRatingsWork(true)} activeOpacity={0.7}>
+                      <Text style={{ color: '#93c5fd', fontSize: 11.5, fontWeight: '700', textDecorationLine: 'underline' }}>
+                        ? How ratings work
+                      </Text>
+                    </TouchableOpacity>
+                    <View style={[
+                      styles.confidenceBadge,
+                      careerRatings?.confidence === 'Established' ? styles.confidenceEstablished :
+                      careerRatings?.confidence === 'Developing' ? styles.confidenceDeveloping : styles.confidenceProvisional
+                    ]}>
+                      <Text style={styles.confidenceBadgeText}>
+                        ● {careerRatings?.matches_count ? careerRatings.confidence : 'No Matches Yet'}
+                      </Text>
+                    </View>
                   </View>
                 </View>
 
@@ -958,13 +1295,22 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                     <Text style={styles.overallRatingLabel}>OVERALL RATING</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'baseline', marginVertical: 6 }}>
                       <Text style={styles.overallRatingValue}>
-                        {careerRatings?.overall_rating !== null && careerRatings?.overall_rating !== undefined ? Number(careerRatings.overall_rating).toFixed(1) : '7.5'}
+                        {careerRatings?.overall_rating !== null && careerRatings?.overall_rating !== undefined ? Number(careerRatings.overall_rating).toFixed(1) : '—'}
                       </Text>
-                      <Text style={styles.overallRatingMax}> / 10 ★</Text>
+                      {careerRatings?.overall_rating !== null && careerRatings?.overall_rating !== undefined ? (
+                        <Text style={styles.overallRatingMax}> / 10 ★</Text>
+                      ) : null}
                     </View>
                     <Text style={styles.overallRatingMatches}>
-                      Based on {careerRatings?.matches_count || matchesPlayed || 0} evaluated match{careerRatings?.matches_count === 1 ? '' : 'es'}
+                      {(careerRatings?.matches_count || 0) > 0
+                        ? `Based on ${careerRatings.matches_count} evaluated match${careerRatings.matches_count === 1 ? '' : 'es'}`
+                        : 'Your rating will appear after your first completed match'}
                     </Text>
+                    {(careerRatings?.matches_count || 0) > 0 && (careerRatings?.matches_count || 0) < 5 && careerRatings?.raw_overall_rating !== null && careerRatings?.raw_overall_rating !== undefined ? (
+                      <Text style={{ fontSize: 11, color: '#cbd5e1', marginTop: 3, fontWeight: '600' }}>
+                        raw avg {Number(careerRatings.raw_overall_rating).toFixed(1)} (provisional)
+                      </Text>
+                    ) : null}
                   </View>
 
                   {/* Format Ratings (T20, One Day, Multi-Day) */}
@@ -998,6 +1344,26 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                         {careerRatings?.formats?.MULTI_DAY?.rating !== null && careerRatings?.formats?.MULTI_DAY?.rating !== undefined ? `${Number(careerRatings.formats.MULTI_DAY.rating).toFixed(1)} ★` : '—'}
                       </Text>
                     </View>
+
+                    <View style={styles.formatRatingPill}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={styles.formatBadgeT20}>T10</Text>
+                        <Text style={styles.formatMatchesText}>({careerRatings?.formats?.T10?.matches ?? 0} matches)</Text>
+                      </View>
+                      <Text style={styles.formatScoreText}>
+                        {careerRatings?.formats?.T10?.rating !== null && careerRatings?.formats?.T10?.rating !== undefined ? `${Number(careerRatings.formats.T10.rating).toFixed(1)} ★` : '—'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.formatRatingPill}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={styles.formatBadgeODI}>CUSTOM</Text>
+                        <Text style={styles.formatMatchesText}>({careerRatings?.formats?.CUSTOM?.matches ?? 0} matches)</Text>
+                      </View>
+                      <Text style={styles.formatScoreText}>
+                        {careerRatings?.formats?.CUSTOM?.rating !== null && careerRatings?.formats?.CUSTOM?.rating !== undefined ? `${Number(careerRatings.formats.CUSTOM.rating).toFixed(1)} ★` : '—'}
+                      </Text>
+                    </View>
                   </View>
 
                   {/* Discipline Star Breakdown (Batting, Bowling, Fielding, Impact) */}
@@ -1005,25 +1371,25 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                     <View style={styles.disciplineItem}>
                       <Text style={styles.disciplineLabel}>🏏 BATTING</Text>
                       <Text style={styles.disciplineScore}>
-                        {careerRatings?.components?.batting !== null && careerRatings?.components?.batting !== undefined ? `${Number(careerRatings.components.batting).toFixed(1)} ★` : '7.8 ★'}
+                        {careerRatings?.components?.batting !== null && careerRatings?.components?.batting !== undefined ? `${Number(careerRatings.components.batting).toFixed(1)} ★` : '—'}
                       </Text>
                     </View>
                     <View style={styles.disciplineItem}>
                       <Text style={styles.disciplineLabel}>🎯 BOWLING</Text>
                       <Text style={styles.disciplineScore}>
-                        {careerRatings?.components?.bowling !== null && careerRatings?.components?.bowling !== undefined ? `${Number(careerRatings.components.bowling).toFixed(1)} ★` : '7.2 ★'}
+                        {careerRatings?.components?.bowling !== null && careerRatings?.components?.bowling !== undefined ? `${Number(careerRatings.components.bowling).toFixed(1)} ★` : '—'}
                       </Text>
                     </View>
                     <View style={styles.disciplineItem}>
                       <Text style={styles.disciplineLabel}>🧤 FIELDING</Text>
                       <Text style={styles.disciplineScore}>
-                        {careerRatings?.components?.fielding !== null && careerRatings?.components?.fielding !== undefined ? `${Number(careerRatings.components.fielding).toFixed(1)} ★` : '8.0 ★'}
+                        {careerRatings?.components?.fielding !== null && careerRatings?.components?.fielding !== undefined ? `${Number(careerRatings.components.fielding).toFixed(1)} ★` : '—'}
                       </Text>
                     </View>
                     <View style={styles.disciplineItem}>
                       <Text style={styles.disciplineLabel}>⚡ MATCH IMPACT</Text>
                       <Text style={styles.disciplineScore}>
-                        {careerRatings?.components?.impact !== null && careerRatings?.components?.impact !== undefined ? `${Number(careerRatings.components.impact).toFixed(1)} ★` : '7.5 ★'}
+                        {careerRatings?.components?.impact !== null && careerRatings?.components?.impact !== undefined ? `${Number(careerRatings.components.impact).toFixed(1)} ★` : '—'}
                       </Text>
                     </View>
                   </View>
@@ -1115,7 +1481,30 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                               ].filter(Boolean).join(' • ')}
                             </Text>
                           )}
-                          <Text style={styles.formTapScorecardText}>Tap for Scorecard ›</Text>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                            <Text style={styles.formTapScorecardText}>Tap for Scorecard ›</Text>
+                            <TouchableOpacity
+                              onPress={(e: any) => {
+                                if (e?.stopPropagation) e.stopPropagation();
+                                setExpandedFormMatchId(prev => prev === m.match_id ? null : m.match_id);
+                              }}
+                            >
+                              <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#93c5fd' }}>
+                                {expandedFormMatchId === m.match_id ? 'Hide Breakdown ▴' : 'Breakdown ▾'}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                          {expandedFormMatchId === m.match_id && (
+                            <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.15)', gap: 3 }}>
+                              <Text style={{ fontSize: 10, color: '#cbd5e1', fontWeight: '700' }}>Role Used: {m.role || 'BATSMAN'}</Text>
+                              <Text style={{ fontSize: 10, color: '#e2e8f0' }}>
+                                Bat: {m.batting_rating ?? '—'} • Bowl: {m.bowling_rating ?? '—'} • Field: {m.fielding_rating ?? '—'}
+                              </Text>
+                              <Text style={{ fontSize: 10, color: '#fbbf24', fontWeight: '700' }}>
+                                Impact: {m.impact_rating ?? '—'} • Overall: {m.raw_rating ?? '—'} ★
+                              </Text>
+                            </View>
+                          )}
                         </TouchableOpacity>
                       ))}
                     </ScrollView>
@@ -1126,6 +1515,81 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                   )}
                 </View>
               </View>
+
+              {/* How Ratings Work Modal (from docs/RATING_METHOD.md) */}
+              <Modal visible={showHowRatingsWork} transparent animationType="fade" onRequestClose={() => setShowHowRatingsWork(false)}>
+                <View style={styles.modalBackdrop}>
+                  <View style={[styles.modalCardContainer, { maxWidth: 560 }]}>
+                    <View style={styles.modalHeaderRow}>
+                      <Text style={styles.modalMainTitle}>How Player Ratings Work</Text>
+                      <TouchableOpacity onPress={() => setShowHowRatingsWork(false)}>
+                        <CloseIcon size={18} color="#64748b" />
+                      </TouchableOpacity>
+                    </View>
+                    <ScrollView style={{ padding: 18, maxHeight: 460 }} contentContainerStyle={{ gap: 12 }}>
+                      <View style={{ backgroundColor: '#f8fafc', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a', marginBottom: 4 }}>
+                          1. When Your Rating Updates
+                        </Text>
+                        <Text style={{ fontSize: 12.5, color: '#334155', lineHeight: 19 }}>
+                          Your rating is calculated automatically as soon as a match is officially marked Completed. Abandoned or no-result matches never affect your rating.
+                        </Text>
+                      </View>
+
+                      <View style={{ backgroundColor: '#f8fafc', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a', marginBottom: 4 }}>
+                          2. Batting Score (Out of 10)
+                        </Text>
+                        <Text style={{ fontSize: 12.5, color: '#334155', lineHeight: 19 }}>
+                          • Based on Runs Scored (55%), Strike Rate (30%), and Boundaries 4s &amp; 6s (15%) compared to the match format average (T20, One-Day, Multi-Day, T10).{'\n'}
+                          • Big milestones and staying Not Out add bonus points.{'\n'}
+                          • If you faced fewer than 6 balls, scored under 10 runs, and were not out, it counts as Did Not Bat (DNB) so a short cameo never hurts your score.
+                        </Text>
+                      </View>
+
+                      <View style={{ backgroundColor: '#f8fafc', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a', marginBottom: 4 }}>
+                          3. Bowling Score (Out of 10)
+                        </Text>
+                        <Text style={{ fontSize: 12.5, color: '#334155', lineHeight: 19 }}>
+                          • Based on Wickets (50%), Economy Rate (35%), and Dot Balls (15%).{'\n'}
+                          • Any legal ball with 0 runs off the bat/wides/no-balls counts as a dot ball (byes and leg-byes still count as dots for the bowler).{'\n'}
+                          • Maiden overs (+0.5 each) and 2+, 3+, or 5+ wicket hauls add extra bonus points.
+                        </Text>
+                      </View>
+
+                      <View style={{ backgroundColor: '#f8fafc', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a', marginBottom: 4 }}>
+                          4. Fielding Bonus (Up to +1.0)
+                        </Text>
+                        <Text style={{ fontSize: 12.5, color: '#334155', lineHeight: 19 }}>
+                          Catches (+0.3), assisted run-outs (+0.3), stumpings (+0.4), and direct-hit run-outs (+0.6) are added directly on top of your overall score. Fielding can only increase your rating—it never lowers it.
+                        </Text>
+                      </View>
+
+                      <View style={{ backgroundColor: '#f8fafc', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a', marginBottom: 4 }}>
+                          5. Match Impact &amp; Fair Role Weights
+                        </Text>
+                        <Text style={{ fontSize: 12.5, color: '#334155', lineHeight: 19 }}>
+                          Winning the match (+1.5) and Player of the Match (+2.5) boost your Impact score. Your overall match rating combines Batting, Bowling, and Impact based on what you actually did—if you didn&apos;t bat or didn&apos;t bowl, that part is skipped fairly.
+                        </Text>
+                      </View>
+
+                      <View style={{ backgroundColor: '#eff6ff', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#bfdbfe' }}>
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#1e3a8a', marginBottom: 4 }}>
+                          6. Career Rating &amp; Confidence Badge
+                        </Text>
+                        <Text style={{ fontSize: 12.5, color: '#1e40af', lineHeight: 19 }}>
+                          • Your last 5 matches carry slightly higher weight (1.25×) so recent form matters.{'\n'}
+                          • With fewer than 5 matches, your career rating is gently blended with the league average so 1 lucky match doesn&apos;t skew the leaderboard—your raw average is shown right below it.{'\n'}
+                          • Confidence levels: 1–2 matches = Provisional, 3–4 = Developing, 5+ = Established.
+                        </Text>
+                      </View>
+                    </ScrollView>
+                  </View>
+                </View>
+              </Modal>
 
               <View style={styles.highlightCardsRow}>
                 <View style={styles.navyStatCard}>
@@ -1612,9 +2076,9 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                 {/* Profile Photo & Player Identity Showcase */}
                 <View style={styles.profileAvatarCardRow}>
                   <View style={styles.profileAvatarLargeFrame}>
-                    {resolvePhotoUrl(profile?.photo || profile?.image_path) ? (
+                    {resolvePhotoUrl(profile?.photo || profile?.image_path || getCurrentUser()?.photo || getCurrentUser()?.image_path) ? (
                       <Image
-                        source={{ uri: resolvePhotoUrl(profile.photo || profile.image_path)! }}
+                        source={{ uri: resolvePhotoUrl(profile?.photo || profile?.image_path || getCurrentUser()?.photo || getCurrentUser()?.image_path)! }}
                         style={styles.profileAvatarLargeImg}
                         resizeMode="cover"
                       />
@@ -1636,6 +2100,64 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                       </View>
                     </TouchableOpacity>
                   </View>
+                  {(() => {
+                    const pStatus = String(profile?.photo_verification_status || profile?.player_details?.photo_verification_status || '').toUpperCase();
+                    const pReason = profile?.photo_verification_reason || profile?.player_details?.photo_verification_reason || '';
+                    if (!pStatus || pStatus === 'NONE') return null;
+                    const isRejected = pStatus === 'REJECTED';
+                    const isVerified = pStatus === 'VERIFIED';
+                    return (
+                      <View style={{
+                        marginTop: 8,
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        borderRadius: 10,
+                        borderWidth: 1.5,
+                        borderColor: isRejected ? '#ef4444' : (isVerified ? '#16a34a' : '#f97316'),
+                        backgroundColor: isRejected ? '#fef2f2' : (isVerified ? '#f0fdf4' : '#fff7ed'),
+                        gap: 6,
+                        maxWidth: 340
+                      }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          {isRejected && (
+                            <View style={{ backgroundColor: '#dc2626', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                              <Text style={{ color: '#fff', fontSize: 9.5, fontWeight: '800' }}>ACTION REQUIRED</Text>
+                            </View>
+                          )}
+                          <View style={{
+                            backgroundColor: isRejected ? '#fee2e2' : (isVerified ? '#dcfce7' : '#ffedd5'),
+                            paddingHorizontal: 7,
+                            paddingVertical: 2,
+                            borderRadius: 999
+                          }}>
+                            <Text style={{
+                              fontSize: 10.5,
+                              fontWeight: '800',
+                              color: isRejected ? '#b91c1c' : (isVerified ? '#15803d' : '#c2410c')
+                            }}>
+                              {isVerified ? 'APPROVED' : (isRejected ? 'REJECTED' : 'PENDING REVIEW')}
+                            </Text>
+                          </View>
+                        </View>
+                        {pReason ? (
+                          <Text style={{ fontSize: 11.5, color: '#334155', lineHeight: 16 }}>
+                            {isRejected ? `Rejection Reason: ${pReason}` : pReason}
+                          </Text>
+                        ) : null}
+                        {isRejected && (
+                          <TouchableOpacity
+                            onPress={handleOpenPhotoReupload}
+                            activeOpacity={0.85}
+                            style={{ alignSelf: 'flex-start', backgroundColor: '#dc2626', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, marginTop: 2 }}
+                          >
+                            <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#ffffff' }}>
+                              📸 Upload New Photo
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    );
+                  })()}
 
                   <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -1865,6 +2387,11 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
                             <Text style={[styles.squadMemberName, isCurrentPlayer && { color: '#b45309' }]}>
                               {pl.name}
                             </Text>
+                            {(pl.playerId || pl.id) ? (
+                              <View style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 5 }}>
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#1d4ed8' }}>{pl.playerId || pl.id}</Text>
+                              </View>
+                            ) : null}
                             {isCurrentPlayer && (
                               <View style={styles.youPillBadge}>
                                 <Text style={styles.youPillBadgeText}>YOU</Text>
@@ -2420,7 +2947,170 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
         </View>
       </View>
 
+      {/* Dedicated Photo Re-upload Modal */}
+      <Modal
+        visible={photoReuploadModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { if (!isUploadingPhoto) setPhotoReuploadModalOpen(false); }}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCardContainer, { maxWidth: 460 }]}>
+            <View style={[styles.modalHeaderRow, { backgroundColor: '#fff7ed', borderBottomColor: '#fed7aa' }]}>
+              <View>
+                <Text style={[styles.modalMainTitle, { color: '#9a3412', fontSize: 15 }]}>
+                  Upload New Passport Photo
+                </Text>
+                <Text style={{ fontSize: 11.5, color: '#7c2d12', marginTop: 2 }}>
+                  Accepted formats: JPG, JPEG, PNG (Max 5 MB)
+                </Text>
+              </View>
+              <TouchableOpacity
+                disabled={isUploadingPhoto}
+                onPress={() => setPhotoReuploadModalOpen(false)}
+                accessibilityLabel="Close upload modal"
+              >
+                <CloseIcon size={18} color="#9a3412" />
+              </TouchableOpacity>
+            </View>
+            <View style={{ padding: 18, gap: 14 }}>
+              {(profile?.photo_verification_reason || profile?.player_details?.photo_verification_reason) ? (
+                <View style={{ backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca', borderRadius: 8, padding: 10 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#991b1b', marginBottom: 2 }}>Admin Rejection Reason:</Text>
+                  <Text style={{ fontSize: 12, color: '#7f1d1d' }}>
+                    {profile?.photo_verification_reason || profile?.player_details?.photo_verification_reason}
+                  </Text>
+                </View>
+              ) : null}
+
+              <View style={{ alignItems: 'center', gap: 10, paddingVertical: 8, backgroundColor: '#f8fafc', borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                {reuploadPhotoUri ? (
+                  <>
+                    <Image
+                      source={{ uri: reuploadPhotoUri }}
+                      style={{ width: 120, height: 145, borderRadius: 10, borderWidth: 2, borderColor: '#cbd5e1' }}
+                      resizeMode="cover"
+                    />
+                    <Text style={{ fontSize: 11.5, color: '#475569', fontWeight: '600' }} numberOfLines={1}>
+                      {reuploadFileName || 'Selected photo ready'}
+                    </Text>
+                  </>
+                ) : (
+                  <Text style={{ fontSize: 12.5, color: '#64748b', paddingVertical: 20 }}>
+                    No new photo selected yet
+                  </Text>
+                )}
+                <TouchableOpacity
+                  disabled={isUploadingPhoto}
+                  onPress={handlePickReuploadPhoto}
+                  style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#1d4ed8' }}>
+                    {reuploadPhotoUri ? 'Choose Different Photo' : 'Select JPG / JPEG / PNG Photo'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {reuploadError ? (
+                <View style={{ backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fca5a5', borderRadius: 8, padding: 10 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#b91c1c' }}>{reuploadError}</Text>
+                </View>
+              ) : null}
+
+              {reuploadSuccess ? (
+                <View style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#86efac', borderRadius: 8, padding: 10 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#15803d' }}>{reuploadSuccess}</Text>
+                </View>
+              ) : null}
+
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10 }}>
+                <TouchableOpacity
+                  disabled={isUploadingPhoto}
+                  onPress={() => setPhotoReuploadModalOpen(false)}
+                  style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8, borderWidth: 1, borderColor: '#cbd5e1' }}
+                >
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#475569' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  disabled={isUploadingPhoto || !reuploadPhotoUri}
+                  onPress={handleSubmitReuploadPhoto}
+                  style={{
+                    backgroundColor: (isUploadingPhoto || !reuploadPhotoUri) ? '#94a3b8' : '#ea580c',
+                    paddingHorizontal: 16,
+                    paddingVertical: 9,
+                    borderRadius: 8,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8
+                  }}
+                >
+                  {isUploadingPhoto && <ActivityIndicator size="small" color="#ffffff" />}
+                  <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#ffffff' }}>
+                    {isUploadingPhoto ? 'Submitting...' : 'Submit for Verification'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Edit Profile Modal */}
+      {/* Photo Rejected Notification Popup (shown on every login while photo is REJECTED) */}
+      <Modal
+        visible={showPhotoRejectedModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPhotoRejectedModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCardContainer, { maxWidth: 440 }]}>
+            <View style={[styles.modalHeaderRow, { backgroundColor: '#fef2f2', borderBottomColor: '#fecaca' }]}>
+              <Text style={[styles.modalMainTitle, { color: '#991b1b', fontSize: 15 }]}>
+                ⚠️ Change Your Photo for Admin Verification
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowPhotoRejectedModal(false)}
+                accessibilityLabel="Close photo alert"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <CloseIcon size={18} color="#991b1b" />
+              </TouchableOpacity>
+            </View>
+            <View style={{ padding: 18, gap: 12 }}>
+              <Text style={{ fontSize: 13.5, color: '#334155', lineHeight: 20 }}>
+                Your passport profile photo was rejected by the Administrator. Please upload a clear passport-size portrait photo so your account can be verified.
+              </Text>
+              {(profile?.photo_verification_reason || profile?.player_details?.photo_verification_reason) ? (
+                <View style={{ backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a', borderRadius: 8, padding: 10 }}>
+                  <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#92400e', marginBottom: 2 }}>Admin Reason:</Text>
+                  <Text style={{ fontSize: 12.5, color: '#78350f' }}>
+                    {profile?.photo_verification_reason || profile?.player_details?.photo_verification_reason}
+                  </Text>
+                </View>
+              ) : null}
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 4 }}>
+                <TouchableOpacity
+                  onPress={() => setShowPhotoRejectedModal(false)}
+                  style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8, borderWidth: 1, borderColor: '#cbd5e1' }}
+                >
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#475569' }}>Later</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowPhotoRejectedModal(false);
+                    handleOpenEditProfile();
+                  }}
+                  style={{ backgroundColor: '#dc2626', paddingHorizontal: 16, paddingVertical: 9, borderRadius: 8 }}
+                >
+                  <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#fff' }}>📸 Change Photo Now</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <Modal
         visible={isEditProfileVisible}
         transparent={true}
@@ -2428,7 +3118,7 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
         onRequestClose={() => setIsEditProfileVisible(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCardContainer}>
+          <View style={[styles.modalCardContainer, { maxWidth: isDesktop ? 680 : '96%', maxHeight: '90%' }]}>
             <View style={styles.modalHeaderRow}>
               <View>
                 <Text style={styles.modalMainTitle}>Edit Player Profile</Text>
@@ -2445,15 +3135,15 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
               </View>
             )}
 
-            <ScrollView style={{ paddingHorizontal: 18, paddingVertical: 14 }}>
+            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ paddingHorizontal: 18, paddingVertical: 14, paddingBottom: 24 }}>
               {/* Profile Photo Picker */}
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Player Profile Photo</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
                   <View style={styles.photoPreviewCircle}>
-                    {editPhoto ? (
+                    {resolvePhotoUrl(editPhoto || profile?.photo || profile?.image_path || getCurrentUser()?.photo || getCurrentUser()?.image_path) ? (
                       <Image
-                        source={{ uri: editPhoto }}
+                        source={{ uri: resolvePhotoUrl(editPhoto || profile?.photo || profile?.image_path || getCurrentUser()?.photo || getCurrentUser()?.image_path)! }}
                         style={{ width: 68, height: 68, borderRadius: 34 }}
                         resizeMode="cover"
                       />
@@ -2503,46 +3193,392 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Batting Style</Text>
+                <Text style={styles.formLabel}>Registered Email (Locked)</Text>
+                <TextInput
+                  style={[styles.formInput, { backgroundColor: '#f1f5f9', color: '#64748b' }]}
+                  value={profile?.email || playerEmail || ''}
+                  editable={false}
+                />
+                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+                  Email &amp; Password cannot be changed here. To change your password, use Forgot Password on the Login screen.
+                </Text>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Player Full Name</Text>
                 <TextInput
                   style={styles.formInput}
-                  value={editBattingStyle}
-                  onChangeText={setEditBattingStyle}
-                  placeholder="e.g. Right Hand Bat / Left Hand Bat"
+                  value={editName}
+                  onChangeText={setEditName}
+                  placeholder="Full Name"
                   placeholderTextColor="#94a3b8"
                 />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Aadhaar Number (12 Digits)</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={editAadhaar}
+                  onChangeText={(t) => setEditAadhaar(t.replace(/\D/g, '').slice(0, 12))}
+                  keyboardType="number-pad"
+                  maxLength={12}
+                  placeholder="12-digit Aadhaar"
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Name of Club / School / College / Academy</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={editClub}
+                  onChangeText={setEditClub}
+                  placeholder="Club / School / College / Academy"
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Father&apos;s Name</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={editFatherName}
+                  onChangeText={setEditFatherName}
+                  placeholder="Father's Name"
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.formLabel}>Date of Birth (DD/MM/YYYY)</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={editDob}
+                    onChangeText={(txt) => {
+                      const digits = txt.replace(/\D/g, '').slice(0, 8);
+                      let formatted = digits;
+                      if (digits.length > 4) formatted = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+                      else if (digits.length > 2) formatted = `${digits.slice(0, 2)}/${digits.slice(2)}`;
+                      setEditDob(formatted);
+                      if (digits.length === 8) {
+                        const dd = Number(digits.slice(0, 2));
+                        const mm = Number(digits.slice(2, 4));
+                        const yyyy = Number(digits.slice(4, 8));
+                        const dobDate = new Date(yyyy, mm - 1, dd);
+                        if (dobDate.getFullYear() === yyyy && dobDate.getMonth() === mm - 1 && dobDate.getDate() === dd) {
+                          const today = new Date();
+                          let calcAge = today.getFullYear() - yyyy;
+                          const mDiff = today.getMonth() - (mm - 1);
+                          if (mDiff < 0 || (mDiff === 0 && today.getDate() < dd)) calcAge--;
+                          if (calcAge >= 5 && calcAge <= 80) setEditAge(String(calcAge));
+                        }
+                      }
+                    }}
+                    keyboardType="number-pad"
+                    maxLength={10}
+                    placeholder="DD/MM/YYYY"
+                    placeholderTextColor="#94a3b8"
+                  />
+                </View>
+                <View style={[styles.formGroup, { flex: 0.6 }]}>
+                  <Text style={styles.formLabel}>Age</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={editAge}
+                    onChangeText={(t) => setEditAge(t.replace(/\D/g, '').slice(0, 2))}
+                    keyboardType="numeric"
+                    maxLength={2}
+                    placeholder="Age"
+                    placeholderTextColor="#94a3b8"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Place of Birth</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={editPlaceOfBirth}
+                  onChangeText={setEditPlaceOfBirth}
+                  placeholder="Place of Birth"
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Address for Communication</Text>
+                <TextInput
+                  style={[styles.formInput, { minHeight: 56 }]}
+                  multiline
+                  value={editAddress}
+                  onChangeText={setEditAddress}
+                  placeholder="Full residential address"
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Playing Role</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {EDIT_PLAYER_ROLES.map((r) => (
+                    <TouchableOpacity
+                      key={r}
+                      onPress={() => setEditPlayingRole(r)}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 6,
+                        borderWidth: 1,
+                        borderColor: editPlayingRole === r ? '#0f2452' : '#cbd5e1',
+                        backgroundColor: editPlayingRole === r ? '#0f2452' : '#fff'
+                      }}
+                    >
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: editPlayingRole === r ? '#fff' : '#334155' }}>
+                        {r}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Age Category</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {EDIT_AGE_CATEGORIES.map((cat) => (
+                    <TouchableOpacity
+                      key={cat}
+                      onPress={() => setEditCategory(cat)}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 6,
+                        borderWidth: 1,
+                        borderColor: editCategory === cat ? '#0f2452' : '#cbd5e1',
+                        backgroundColor: editCategory === cat ? '#0f2452' : '#fff'
+                      }}
+                    >
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: editCategory === cat ? '#fff' : '#334155' }}>
+                        {cat}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Current Status (Studying / Working)</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {['STUDYING', 'WORKING', 'NONE'].map((occ) => (
+                    <TouchableOpacity
+                      key={occ}
+                      onPress={() => setEditOccupationType(occ)}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 6,
+                        borderWidth: 1,
+                        borderColor: editOccupationType === occ ? '#0f2452' : '#cbd5e1',
+                        backgroundColor: editOccupationType === occ ? '#0f2452' : '#fff'
+                      }}
+                    >
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: editOccupationType === occ ? '#fff' : '#334155' }}>
+                        {occ}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {editOccupationType === 'WORKING' && (
+                <View style={styles.formGroup}>
+                  <Text style={styles.formLabel}>Working Institution / Bank / Govt Office</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={editWorkingInst}
+                    onChangeText={setEditWorkingInst}
+                    placeholder="Institution Name"
+                    placeholderTextColor="#94a3b8"
+                  />
+                </View>
+              )}
+
+              {editOccupationType === 'STUDYING' && (
+                <>
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+                    {['COLLEGE', 'SCHOOL'].map((lvl) => (
+                      <TouchableOpacity
+                        key={lvl}
+                        onPress={() => setEditStudyLevel(lvl)}
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          borderRadius: 6,
+                          borderWidth: 1,
+                          borderColor: editStudyLevel === lvl ? '#0f2452' : '#cbd5e1',
+                          backgroundColor: editStudyLevel === lvl ? '#0f2452' : '#fff'
+                        }}
+                      >
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: editStudyLevel === lvl ? '#fff' : '#334155' }}>
+                          {lvl}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <View style={styles.formGroup}>
+                    <Text style={styles.formLabel}>{editStudyLevel === 'COLLEGE' ? 'College Name' : 'School Name'}</Text>
+                    <TextInput
+                      style={styles.formInput}
+                      value={editStudyingInst}
+                      onChangeText={setEditStudyingInst}
+                      placeholder="School / College Name"
+                      placeholderTextColor="#94a3b8"
+                    />
+                  </View>
+                  <View style={styles.formGroup}>
+                    <Text style={styles.formLabel}>{editStudyLevel === 'COLLEGE' ? 'Branch & Year & Sec' : 'Class & Section'}</Text>
+                    <TextInput
+                      style={styles.formInput}
+                      value={editStudyLevel === 'COLLEGE' ? editBranchYearSec : editClassSection}
+                      onChangeText={editStudyLevel === 'COLLEGE' ? setEditBranchYearSec : setEditClassSection}
+                      placeholder={editStudyLevel === 'COLLEGE' ? 'e.g. B.Sc CS / II Yr / A' : 'e.g. 10th / B'}
+                      placeholderTextColor="#94a3b8"
+                    />
+                  </View>
+                </>
+              )}
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Batting Style</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {EDIT_BATTING_STYLES.map((bs) => (
+                    <TouchableOpacity
+                      key={bs}
+                      onPress={() => {
+                        setEditBattingStyle(bs);
+                        setEditBatterHand(bs.toLowerCase().includes('left') ? 'LH' : 'RH');
+                      }}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 6,
+                        borderWidth: 1,
+                        borderColor: editBattingStyle === bs ? '#0f2452' : '#cbd5e1',
+                        backgroundColor: editBattingStyle === bs ? '#0f2452' : '#fff'
+                      }}
+                    >
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: editBattingStyle === bs ? '#fff' : '#334155' }}>
+                        {bs}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Batting Position</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {[
+                    { key: 'OPEN', label: 'Opener' },
+                    { key: 'TOP_ORDER', label: 'Top Order' },
+                    { key: 'MIDDLE_ORDER', label: 'Middle Order' }
+                  ].map((pos) => (
+                    <TouchableOpacity
+                      key={pos.key}
+                      onPress={() => setEditBatterPos(pos.key)}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 6,
+                        borderWidth: 1,
+                        borderColor: editBatterPos === pos.key ? '#0f2452' : '#cbd5e1',
+                        backgroundColor: editBatterPos === pos.key ? '#0f2452' : '#fff'
+                      }}
+                    >
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: editBatterPos === pos.key ? '#fff' : '#334155' }}>
+                        {pos.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Bowling Style</Text>
-                <TextInput
-                  style={styles.formInput}
-                  value={editBowlingStyle}
-                  onChangeText={setEditBowlingStyle}
-                  placeholder="e.g. Right Arm Fast / Off Break"
-                  placeholderTextColor="#94a3b8"
-                />
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {EDIT_BOWLING_STYLES.map((bws) => (
+                    <TouchableOpacity
+                      key={bws}
+                      onPress={() => {
+                        setEditBowlingStyle(bws);
+                        setEditBowlerHand(bws.toLowerCase().includes('left') ? 'LH' : 'RH');
+                      }}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 6,
+                        borderWidth: 1,
+                        borderColor: editBowlingStyle === bws ? '#0f2452' : '#cbd5e1',
+                        backgroundColor: editBowlingStyle === bws ? '#0f2452' : '#fff'
+                      }}
+                    >
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: editBowlingStyle === bws ? '#fff' : '#334155' }}>
+                        {bws}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Preferred Jersey Number</Text>
+                <Text style={styles.formLabel}>Wicket Keeper</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {[
+                    { val: true, label: 'YES' },
+                    { val: false, label: 'NO' }
+                  ].map((wk) => (
+                    <TouchableOpacity
+                      key={wk.label}
+                      onPress={() => setEditIsKeeper(wk.val)}
+                      style={{
+                        paddingHorizontal: 14,
+                        paddingVertical: 6,
+                        borderRadius: 6,
+                        borderWidth: 1,
+                        borderColor: editIsKeeper === wk.val ? '#0f2452' : '#cbd5e1',
+                        backgroundColor: editIsKeeper === wk.val ? '#0f2452' : '#fff'
+                      }}
+                    >
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: editIsKeeper === wk.val ? '#fff' : '#334155' }}>
+                        {wk.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Preferred Jersey Number (0–999)</Text>
                 <TextInput
                   style={styles.formInput}
                   value={editJerseyNumber}
-                  onChangeText={setEditJerseyNumber}
-                  keyboardType="numeric"
+                  onChangeText={(t) => setEditJerseyNumber(t.replace(/\D/g, '').slice(0, 3))}
+                  keyboardType="number-pad"
+                  maxLength={3}
                   placeholder="e.g. 7, 10, 18"
                   placeholderTextColor="#94a3b8"
                 />
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Mobile Number</Text>
+                <Text style={styles.formLabel}>Mobile Number (10 Digits)</Text>
                 <TextInput
                   style={styles.formInput}
                   value={editMobile}
-                  onChangeText={setEditMobile}
+                  onChangeText={(t) => setEditMobile(t.replace(/\D/g, '').slice(0, 10))}
                   keyboardType="phone-pad"
+                  maxLength={10}
                   placeholder="e.g. 9876543210"
                   placeholderTextColor="#94a3b8"
                 />
@@ -2550,13 +3586,26 @@ export default function PlayerDashboardScreen({ onExit, initialParams }: PlayerD
 
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Taluk / Jurisdiction</Text>
-                <TextInput
-                  style={styles.formInput}
-                  value={editTaluk}
-                  onChangeText={setEditTaluk}
-                  placeholder="e.g. Virudhunagar / Sivakasi"
-                  placeholderTextColor="#94a3b8"
-                />
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {EDIT_TALUKS.map((tk) => (
+                    <TouchableOpacity
+                      key={tk}
+                      onPress={() => setEditTaluk(tk)}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 6,
+                        borderWidth: 1,
+                        borderColor: editTaluk === tk ? '#0f2452' : '#cbd5e1',
+                        backgroundColor: editTaluk === tk ? '#0f2452' : '#fff'
+                      }}
+                    >
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: editTaluk === tk ? '#fff' : '#334155' }}>
+                        {tk}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
             </ScrollView>
 
@@ -3995,6 +5044,7 @@ const styles = StyleSheet.create({
   modalCardContainer: {
     width: '100%',
     maxWidth: 580,
+    maxHeight: '92%',
     backgroundColor: '#ffffff',
     borderRadius: 14,
     borderWidth: 1,

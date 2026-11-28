@@ -69,6 +69,155 @@ router.get('/users', async (req, res) => {
 });
 
 /**
+ * POST /api/admin/users
+ * Directly create a new federation user (PLAYER, SCORER, UMPIRE, COACH, USER) as Admin
+ */
+router.post('/users', async (req, res) => {
+  try {
+    const db = require('../config/db');
+    await db.initDb();
+    const {
+      name, email, mobile, phone, role, password, status, aadhaar,
+      clubChoice, fatherName, dateOfBirth, age, placeOfBirth, address,
+      occupationType, workingInstitution, studyingInstitution, studyLevel,
+      branchYearSec, classSection, taluk, category,
+      playingRole, battingStyle, bowlingStyle,
+      batterHand, batterPosition, bowlerHand, bowlerType, isWicketKeeper,
+      declarationPlace, declarationDate, photo, clientFaceAnalysis,
+      certificationLevel, experience, experienceYears, qualification,
+      certificationNumber, previousOrganization, specialization, district, state, additionalInfo
+    } = req.body || {};
+    if (!name || !String(name).trim() || !email || !String(email).trim()) {
+      return res.status(400).json({ success: false, error: 'Name and email are required.' });
+    }
+    const cleanEmail = String(email).trim().toLowerCase();
+    const existing = await db.models.User.findOne({ email: cleanEmail }).lean();
+    if (existing) {
+      return res.status(409).json({ success: false, error: 'An account with this email already exists.' });
+    }
+    const targetRole = String(role || 'PLAYER').toUpperCase();
+    if (targetRole === 'ADMIN' || targetRole === 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, error: 'Administrators must be added via Super Admin OTP governance.' });
+    }
+    const cleanMobile = (mobile || phone) ? String(mobile || phone).replace(/\D/g, '') : null;
+    const cleanAadhaar = aadhaar ? String(aadhaar).replace(/\D/g, '') : null;
+    let passwordHash = null;
+    if (password && String(password).trim()) {
+      const bcrypt = require('bcryptjs');
+      passwordHash = await bcrypt.hash(String(password).trim(), 10);
+    }
+    const prefix = targetRole === 'PLAYER' ? 'PLY' : (targetRole === 'SCORER' ? 'SCR' : (targetRole === 'UMPIRE' ? 'UMP' : (targetRole === 'COACH' ? 'COACH' : 'USR')));
+    const userId = `${prefix}-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+
+    let storedPhoto = photo || null;
+    let photoPhash = null;
+    let photoVerificationStatus = 'NONE';
+    let photoVerificationReason = '';
+    let photoMetadata = null;
+
+    if (storedPhoto && typeof storedPhoto === 'string' && storedPhoto.startsWith('data:image/')) {
+      const passportPhotoService = require('../services/passportPhotoService');
+      const verified = await passportPhotoService.verifyAndProcessPassportPhoto({
+        input: storedPhoto,
+        email: cleanEmail,
+        userId,
+        clientFaceAnalysis
+      });
+      storedPhoto = verified.url;
+      photoPhash = verified.phash;
+      photoVerificationStatus = verified.verificationStatus;
+      photoVerificationReason = verified.verificationReason;
+      photoMetadata = verified.metadata;
+    }
+
+    const userDoc = {
+      id: userId,
+      name: String(name).trim(),
+      email: cleanEmail,
+      mobile: cleanMobile,
+      aadhaar: cleanAadhaar,
+      role: targetRole,
+      status: String(status || 'ACTIVE').toUpperCase(),
+      password_hash: passwordHash,
+      ...(storedPhoto ? {
+        photo: storedPhoto,
+        image_path: storedPhoto,
+        photo_phash: photoPhash,
+        photo_verification_status: photoVerificationStatus,
+        photo_verification_reason: photoVerificationReason
+      } : {})
+    };
+
+    if (targetRole === 'PLAYER') {
+      userDoc.player_details = {
+        role: playingRole || 'Batsman',
+        playing_role: playingRole || 'Batsman',
+        category: category || 'Senior Men',
+        taluk: taluk || 'Virudhunagar',
+        phone: cleanMobile,
+        mobile: cleanMobile,
+        aadhaar: cleanAadhaar,
+        aadhaar_number: cleanAadhaar,
+        batting_style: battingStyle || (batterHand === 'LH' ? 'Left-Handed Batsman' : 'Right-Handed Batsman'),
+        bowling_style: bowlingStyle || (bowlerHand ? `${bowlerHand === 'LH' ? 'Left-arm' : 'Right-arm'} ${bowlerType || 'Medium'}` : 'Right-arm Fast'),
+        club_choice: clubChoice ? String(clubChoice).trim() : '',
+        father_name: fatherName ? String(fatherName).trim() : '',
+        date_of_birth: dateOfBirth ? String(dateOfBirth).trim() : '',
+        age: age ? String(age).trim() : '',
+        place_of_birth: placeOfBirth ? String(placeOfBirth).trim() : '',
+        address: address ? String(address).trim() : '',
+        occupation_type: occupationType ? String(occupationType).trim() : '',
+        working_institution: workingInstitution ? String(workingInstitution).trim() : '',
+        studying_institution: studyingInstitution ? String(studyingInstitution).trim() : '',
+        study_level: studyLevel ? String(studyLevel).trim() : '',
+        branch_year_sec: branchYearSec ? String(branchYearSec).trim() : '',
+        class_section: classSection ? String(classSection).trim() : '',
+        batter_hand: batterHand || 'RH',
+        batter_position: batterPosition || 'TOP_ORDER',
+        bowler_hand: bowlerHand || '',
+        bowler_type: bowlerType || '',
+        is_wicket_keeper: Boolean(isWicketKeeper),
+        declaration_place: declarationPlace ? String(declarationPlace).trim() : 'Virudhunagar',
+        declaration_date: declarationDate ? String(declarationDate).trim() : new Date().toLocaleDateString('en-GB'),
+        declaration_agreed: true,
+        ...(storedPhoto ? {
+          photo: storedPhoto,
+          image_path: storedPhoto,
+          photo_phash: photoPhash,
+          photo_verification_status: photoVerificationStatus,
+          photo_verification_reason: photoVerificationReason,
+          photo_metadata: photoMetadata
+        } : {})
+      };
+    } else if (targetRole === 'SCORER') {
+      userDoc.scorer_details = {
+        certification_level: certificationLevel || 'District Certified',
+        taluk: taluk || 'Virudhunagar'
+      };
+    } else if (targetRole === 'UMPIRE') {
+      userDoc.umpire_details = {
+        certification_level: qualification || certificationLevel || 'Panel A - Senior',
+        taluk: taluk || district || 'Virudhunagar',
+        experience: experience || '',
+        experience_years: Number(experienceYears || 0),
+        qualification: qualification || '',
+        certification_number: certificationNumber || '',
+        previous_organization: previousOrganization || '',
+        specialization: specialization || 'On-field Umpire',
+        district: district || taluk || 'Virudhunagar',
+        state: state || 'Tamil Nadu',
+        additional_info: additionalInfo || ''
+      };
+    }
+
+    const created = await db.models.User.create(userDoc);
+    return res.status(201).json({ success: true, message: `User ${created.name} (${targetRole}) created.`, user: created });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * PATCH /api/admin/users/:id/status
  * Activate or suspend user
  */
@@ -334,6 +483,39 @@ router.post('/tournaments/:id/preview-matches', (req, res) => tournamentControll
 router.get('/tournaments/:id/schedule', (req, res) => tournamentController.getSchedule(req, res));
 router.get('/tournaments/:id/points-table', (req, res) => tournamentController.getPointsTable(req, res));
 router.get('/tournaments/:id/statistics', (req, res) => tournamentController.getStatistics(req, res));
+router.get('/tournaments/:id/records', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = require('../config/db');
+    const tournamentService = require('../services/tournamentService');
+    await db.initDb();
+    const tournament = await db.models.Tournament.findOne({ id }).lean();
+    if (!tournament) {
+      return res.status(404).json({ success: false, error: 'Tournament not found' });
+    }
+    const [pointsTable, statistics, matches] = await Promise.all([
+      tournamentService.getPointsTable(id).catch(() => []),
+      tournamentService.getStatistics(id).catch(() => ({})),
+      db.models.Match.find({ tournament_id: id }).sort({ match_date: 1 }).lean().catch(() => [])
+    ]);
+    return res.json({
+      success: true,
+      tournament,
+      pointsTable,
+      standings: pointsTable,
+      statistics,
+      matches,
+      records: {
+        tournament,
+        pointsTable,
+        statistics,
+        matches
+      }
+    });
+  } catch (err) {
+    return res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
 router.get('/tournaments/registrations/all', (req, res) => tournamentController.getAllRegistrations(req, res));
 router.patch('/tournaments/registrations/:regId/approve', (req, res) => tournamentController.approveRegistration(req, res));
 router.post('/tournaments/registrations/:regId/approve', (req, res) => tournamentController.approveRegistration(req, res));
@@ -1157,12 +1339,26 @@ router.put('/home-popup', async (req, res) => {
   try {
     const db = require('../config/db');
     await db.initDb();
+    let customImg = String(req.body.customImageUrl || '').trim();
+    if (customImg.startsWith('data:image/')) {
+      const cloudinaryService = require('../services/cloudinaryService');
+      if (cloudinaryService.isConfigured()) {
+        const cloudRes = await cloudinaryService.uploadImage(customImg, {
+          folder: 'cfvd/popups',
+          publicId: `popup_${Date.now()}`
+        });
+        if (cloudRes.uploaded && cloudRes.url) {
+          customImg = cloudRes.url;
+        }
+      }
+    }
+
     const payload = {
       enabled: Boolean(req.body.enabled),
       presetKey: String(req.body.presetKey || 'custom'),
       badgeText: String(req.body.badgeText || 'OFFICIAL CFVD NOTICE').trim(),
       imageKey: String(req.body.imageKey || 'stadium'),
-      customImageUrl: String(req.body.customImageUrl || '').trim(),
+      customImageUrl: customImg,
       title: String(req.body.title || '').trim(),
       message: String(req.body.message || '').trim(),
       highlightText: String(req.body.highlightText || '').trim(),
@@ -1468,6 +1664,93 @@ router.get('/email-status', requireAdminAuth, async (req, res) => {
     res.json({ success: true, ...status });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin Passport Photo Manual Verification (Approve / Reject)
+router.patch('/users/:id/photo-verification', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const status = String(req.body?.status || '').toUpperCase().trim();
+    if (!['VERIFIED', 'REJECTED'].includes(status)) {
+      return res.status(400).json({ success: false, error: 'Status must be VERIFIED or REJECTED.' });
+    }
+    const rawReason = String(req.body?.reason || '').trim();
+    if (status === 'REJECTED' && !rawReason) {
+      return res.status(400).json({ success: false, error: 'Rejection reason is required when rejecting a photo.' });
+    }
+    const reason = rawReason || 'Approved by Administrator.';
+
+    const db = require('../config/db');
+    await db.initDb();
+    const user = await db.models.User.findOne({ id }).lean();
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found.' });
+    }
+
+    const adminEmail = req.adminUser?.email || 'ADMIN';
+    const now = new Date();
+    const historyEntry = {
+      status,
+      reason,
+      actor: adminEmail,
+      actor_role: 'ADMIN',
+      photo: user.photo || user.image_path || null,
+      timestamp: now
+    };
+    const updateFields = {
+      photo_verification_status: status,
+      photo_verification_reason: reason,
+      photo_verified_by: adminEmail,
+      photo_verified_at: now,
+      photo_status: status === 'VERIFIED' ? 'APPROVED' : 'REJECTED',
+      'player_details.photo_verification_status': status,
+      'player_details.photo_verification_reason': reason,
+      'player_details.photo_verified_by': adminEmail,
+      'player_details.photo_verified_at': now
+    };
+
+    await Promise.all([
+      db.models.User.updateOne(
+        { id },
+        { $set: updateFields, $push: { photo_verification_history: historyEntry } }
+      ),
+      db.models.Player.updateMany(
+        { $or: [{ id }, ...(user.email ? [{ email: user.email }] : [])] },
+        {
+          $set: {
+            photo_verification_status: status,
+            photo_verification_reason: reason,
+            photo_verified_by: adminEmail,
+            photo_verified_at: now,
+            photo_status: status === 'VERIFIED' ? 'APPROVED' : 'REJECTED'
+          },
+          $push: { photo_verification_history: historyEntry }
+        }
+      ),
+      db.models.Notification.create({
+        id: `NOTIF-PHOTO-${Date.now()}`,
+        type: 'PHOTO_VERIFICATION',
+        title: status === 'VERIFIED' ? 'Passport Photo Verified' : 'Passport Photo Rejected',
+        message: status === 'VERIFIED'
+          ? `Your passport photo has been verified by CFVD Admin.`
+          : `Your passport photo was rejected: ${reason}. Please upload a replacement photo.`,
+        target_user_id: id,
+        target_email: user.email || null,
+        status: 'UNREAD'
+      })
+    ]);
+
+    const updatedUser = await db.models.User.findOne({ id }).select('photo_verification_history').lean();
+    return res.json({
+      success: true,
+      message: `Player photo marked as ${status}.`,
+      photo_verification_status: status,
+      photo_verification_reason: reason,
+      photo_verification_history: updatedUser?.photo_verification_history || [historyEntry]
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

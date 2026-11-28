@@ -842,6 +842,9 @@ class DeliveryService {
         } catch (err) {
           console.error('[BG onMatchCompleted require error]', err?.message || err);
         }
+        try {
+          require('../playerRatingService').enqueueMatchRatingRecalculation(matchId, 'DELIVERY_COMPLETED');
+        } catch (_ratingErr) {}
       });
     }
 

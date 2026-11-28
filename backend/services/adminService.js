@@ -73,11 +73,32 @@ async function getUsers(role = null, status = null) {
     query.status = String(status).toUpperCase();
   }
   const users = await db.models.User.find(query).sort({ created_at: -1 }).lean();
-  return users.map(u => ({
-    ...u,
-    is_permanent_super_admin: Boolean(u.is_super_admin || u.role === 'SUPER_ADMIN'),
-    admin_tier: (u.is_super_admin || u.role === 'SUPER_ADMIN') ? 'Permanent Super Administrator' : (u.role === 'ADMIN' ? 'Dynamic Administrator' : u.role)
-  }));
+
+  // Enrich PLAYER users with any missing fields from the Player collection
+  const playerEmails = users
+    .filter(u => String(u.role || '').toUpperCase() === 'PLAYER' && u.email)
+    .map(u => String(u.email).trim().toLowerCase());
+  const playerMap = new Map();
+  if (playerEmails.length > 0 && db.models.Player) {
+    const playerDocs = await db.models.Player.find({ email: { $in: playerEmails } }).lean().catch(() => []);
+    for (const p of playerDocs) {
+      if (p.email) playerMap.set(String(p.email).trim().toLowerCase(), p);
+    }
+  }
+
+  return users.map(u => {
+    const pDoc = u.email ? playerMap.get(String(u.email).trim().toLowerCase()) : null;
+    const mergedPlayerDetails = String(u.role || '').toUpperCase() === 'PLAYER'
+      ? { ...(pDoc || {}), ...(u.player_details || {}) }
+      : u.player_details;
+    return {
+      ...u,
+      player_details: mergedPlayerDetails,
+      photo: u.photo || u.image_path || mergedPlayerDetails?.photo || mergedPlayerDetails?.image_path || null,
+      is_permanent_super_admin: Boolean(u.is_super_admin || u.role === 'SUPER_ADMIN'),
+      admin_tier: (u.is_super_admin || u.role === 'SUPER_ADMIN') ? 'Permanent Super Administrator' : (u.role === 'ADMIN' ? 'Dynamic Administrator' : u.role)
+    };
+  });
 }
 
 /**
@@ -1674,11 +1695,93 @@ async function getTeams() {
 async function saveTeam(teamData, adminEmail) {
   await db.initDb();
   const id = teamData.id || `TM-${Date.now()}`;
+  const cleanCoachEmail = teamData.coachEmail ? String(teamData.coachEmail).trim().toLowerCase() : (teamData.coach_email ? String(teamData.coach_email).trim().toLowerCase() : '');
+  const cleanCoachPhone = String(teamData.coachPhone || teamData.coachMobile || teamData.coach_phone || teamData.phone || '').replace(/\D/g, '');
+  const cleanCoachAadhaar = String(teamData.coachAadhaar || teamData.coach_aadhaar || '').replace(/\D/g, '');
+  const shortName = teamData.shortName || teamData.short_name || String(teamData.name || 'TM').slice(0, 3).toUpperCase();
+
+  let passwordHash = null;
+  if (teamData.password && String(teamData.password).trim()) {
+    try {
+      const bcrypt = require('bcryptjs');
+      passwordHash = await bcrypt.hash(String(teamData.password).trim(), 10);
+    } catch (_e) {}
+  }
+
+  const teamPayload = {
+    id,
+    name: teamData.name,
+    team_name: teamData.name,
+    short_name: shortName,
+    coach_name: teamData.coachName || teamData.coach_name || '',
+    coach_email: cleanCoachEmail,
+    phone: cleanCoachPhone || teamData.phone || '',
+    city: teamData.city || teamData.taluk || 'Virudhunagar',
+    taluk: teamData.taluk || teamData.city || 'Virudhunagar',
+    status: teamData.status || 'ACTIVE',
+    ...(passwordHash ? { password_hash: passwordHash } : {})
+  };
+
   const team = await db.models.Team.findOneAndUpdate(
     { id },
-    { $set: { id, ...teamData } },
+    { $set: teamPayload },
     { upsert: true, returnDocument: 'after' }
   ).lean();
+
+  if (cleanCoachEmail) {
+    const existingCoach = await db.models.User.findOne({ email: cleanCoachEmail }).lean();
+    if (!existingCoach) {
+      await db.models.User.create({
+        id: `COACH-${Date.now()}`,
+        name: teamPayload.coach_name || 'Team Coach',
+        email: cleanCoachEmail,
+        mobile: cleanCoachPhone || null,
+        aadhaar: cleanCoachAadhaar || null,
+        role: 'COACH',
+        status: 'ACTIVE',
+        ...(passwordHash ? { password_hash: passwordHash } : {})
+      });
+    } else if (passwordHash || cleanCoachPhone || cleanCoachAadhaar) {
+      await db.models.User.updateOne(
+        { email: cleanCoachEmail },
+        {
+          $set: {
+            ...(cleanCoachPhone ? { mobile: cleanCoachPhone } : {}),
+            ...(cleanCoachAadhaar ? { aadhaar: cleanCoachAadhaar } : {}),
+            ...(passwordHash ? { password_hash: passwordHash } : {})
+          }
+        }
+      );
+    }
+  }
+
+  if (Array.isArray(teamData.players) && teamData.players.length > 0 && db.models.TeamRegistration) {
+    const regId = `TREG-${Date.now()}`;
+    await db.models.TeamRegistration.create({
+      id: regId,
+      team_name: teamPayload.name,
+      coach_name: teamPayload.coach_name || 'Team Coach',
+      coach_email: cleanCoachEmail || `coach.${Date.now()}@cfvd.local`,
+      coach_phone: cleanCoachPhone || null,
+      coach_aadhaar: cleanCoachAadhaar || null,
+      city: teamPayload.city,
+      taluk: teamPayload.taluk,
+      phone: cleanCoachPhone || '',
+      status: 'APPROVED',
+      approved_by: adminEmail,
+      approved_at: new Date(),
+      players: teamData.players.map((p, idx) => ({
+        jersey_number: p.jerseyNumber || idx + 1,
+        name: String(p.name || '').trim(),
+        email: String(p.email || '').trim().toLowerCase(),
+        phone: p.phone ? String(p.phone).replace(/\D/g, '') : null,
+        mobile: p.phone ? String(p.phone).replace(/\D/g, '') : null,
+        aadhaar: p.aadhaar ? String(p.aadhaar).replace(/\D/g, '') : null,
+        role: p.role || 'Batter',
+        status: 'APPROVED'
+      }))
+    });
+  }
 
   await addAuditLog({
     action: 'SAVE_TEAM',

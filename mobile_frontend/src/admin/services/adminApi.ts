@@ -243,9 +243,51 @@ export const adminApi = {
     });
   },
 
+  createUser: async (data: {
+    name: string;
+    email: string;
+    mobile?: string;
+    role: string;
+    password?: string;
+    status?: string;
+    aadhaar?: string;
+    [key: string]: any;
+  }) => {
+    return adminRequest('/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+
+  createTeam: async (data: {
+    name: string;
+    shortName?: string;
+    coachName?: string;
+    coachEmail?: string;
+    coachPhone?: string;
+    coachMobile?: string;
+    coachAadhaar?: string;
+    password?: string;
+    city?: string;
+    taluk?: string;
+    players?: Array<{ name: string; email: string; phone?: string; aadhaar?: string; role?: string }>;
+  }) => {
+    return adminRequest('/admin/teams', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+
   deleteUser: async (id: string) => {
     return adminRequest(`/admin/users/${id}`, {
       method: 'DELETE'
+    });
+  },
+
+  verifyPlayerPhoto: async (id: string, status: 'VERIFIED' | 'REJECTED', reason?: string) => {
+    return adminRequest(`/admin/users/${id}/photo-verification`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, reason })
     });
   },
 

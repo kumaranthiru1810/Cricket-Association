@@ -290,22 +290,17 @@ export default function ScorecardScreen({ onExit, initialMatchId, initialParams 
 
     const list = Object.values(map);
     if (list.length === 0) {
-      return [
-        { name: 'Muthu Raj', catches: 1, runOuts: 1, stumpings: 0, cleanCollects: 4, boundarySaves: 2, misfields: 0, rating: '9.8 ★ Elite', isKeeper: false },
-        { name: 'Suresh Kumar', catches: 2, runOuts: 0, stumpings: 0, cleanCollects: 3, boundarySaves: 1, misfields: 0, rating: '9.5 ★ Elite', isKeeper: false },
-        { name: 'Vijay', catches: 0, runOuts: 1, stumpings: 0, cleanCollects: 5, boundarySaves: 1, misfields: 0, rating: '9.1 ★ Pro', isKeeper: false },
-        { name: 'K. Balaji', catches: 1, runOuts: 0, stumpings: 0, cleanCollects: 2, boundarySaves: 0, misfields: 0, rating: '8.8 ★ Sharp', isKeeper: false }
-      ];
+      return [];
     }
 
     return list.map(item => {
       const pts = (item.catches * 15) + (item.runOuts * 20) + (item.stumpings * 18) + (item.boundarySaves * 12) + (item.cleanCollects * 4) - (item.misfields * 5);
-      const ratingVal = Math.min(9.9, Math.max(7.5, 7.8 + (pts / 15)));
-      const tag = ratingVal >= 9.5 ? '★ Elite' : ratingVal >= 9.0 ? '★ Pro' : '★ Sharp';
+      const ratingVal = Math.min(10.0, Math.max(1.0, 5.0 + (pts / 15)));
+      const tag = ratingVal >= 8.5 ? '★ Elite' : ratingVal >= 7.0 ? '★ Pro' : '★ Sharp';
       return {
         ...item,
-        cleanCollects: Math.max(item.cleanCollects, (item.catches > 0 || item.runOuts > 0) ? 3 : 2),
-        boundarySaves: Math.max(item.boundarySaves, item.runOuts > 0 ? 1 : 0),
+        cleanCollects: item.cleanCollects,
+        boundarySaves: item.boundarySaves,
         rating: `${ratingVal.toFixed(1)} ${tag}`
       };
     });

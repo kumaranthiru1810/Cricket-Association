@@ -139,10 +139,10 @@ export function validateName(name: string, fieldName = 'Name'): ValidationResult
     };
   }
 
-  if (/[^a-zA-Z\s]/.test(clean)) {
+  if (/[^a-zA-Z.\s]/.test(clean)) {
     return {
       isValid: false,
-      error: `${fieldName} must not contain special characters. Only letters and spaces are allowed.`
+      error: `${fieldName} must not contain special characters. Only letters, initials (.), and spaces are allowed.`
     };
   }
 

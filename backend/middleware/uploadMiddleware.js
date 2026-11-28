@@ -10,6 +10,7 @@
 
 const multer = require('multer');
 const sharp = require('sharp');
+const cloudinaryService = require('../services/cloudinaryService');
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
@@ -83,22 +84,44 @@ async function processImageUpload(req, res, next) {
     // Generate secure random filename
     const randomHex = crypto.randomBytes(16).toString('hex');
     const filename = `${randomHex}.webp`;
-    const outputPath = path.join(UPLOAD_DIR, filename);
 
     // Resize to max 800px on the longest dimension and compress with WebP
-    await sharp(buffer)
+    const webpBuffer = await sharp(buffer)
       .resize(800, 800, {
         fit: 'inside',
         withoutEnlargement: true
       })
       .webp({ quality: 80 })
-      .toFile(outputPath);
+      .toBuffer();
 
-    // Attach processed file URL and path to request
+    // 1. Prefer Cloudinary when configured (Render / Production)
+    if (cloudinaryService.isConfigured()) {
+      const cloudRes = await cloudinaryService.uploadImage(webpBuffer, {
+        folder: 'cfvd/uploads',
+        publicId: randomHex,
+        mimeType: 'image/webp'
+      });
+      if (cloudRes.uploaded && cloudRes.url) {
+        req.uploadedFile = {
+          filename,
+          url: cloudRes.url,
+          publicId: cloudRes.publicId,
+          storage: 'cloudinary'
+        };
+        req.fileUrl = cloudRes.url;
+        return next();
+      }
+    }
+
+    // 2. Fallback: write to local disk
+    const outputPath = path.join(UPLOAD_DIR, filename);
+    fs.writeFileSync(outputPath, webpBuffer);
+
     req.uploadedFile = {
       filename,
       path: outputPath,
-      url: `/uploads/${filename}`
+      url: `/uploads/${filename}`,
+      storage: 'local'
     };
     req.fileUrl = `/uploads/${filename}`;
 

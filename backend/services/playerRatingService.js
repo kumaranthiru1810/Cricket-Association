@@ -17,48 +17,17 @@
  */
 
 const db = require('../config/db');
+const {
+  FORMAT_BENCHMARKS,
+  ROLE_WEIGHTS,
+  CONFIDENCE_THRESHOLDS
+} = require('../config/ratingBenchmarks');
 
-// Format Benchmarks Configuration
-const FORMAT_BENCHMARKS = {
-  T20: {
-    parSR: 130.0,
-    parRuns: 25.0,
-    parEconomy: 7.50,
-    parBallsPerWicket: 18.0
-  },
-  ONE_DAY: {
-    parSR: 85.0,
-    parRuns: 35.0,
-    parEconomy: 5.20,
-    parBallsPerWicket: 30.0
-  },
-  MULTI_DAY: {
-    parSR: 55.0,
-    parRuns: 45.0,
-    parEconomy: 3.20,
-    parBallsPerWicket: 42.0
-  },
-  T10: {
-    parSR: 160.0,
-    parRuns: 18.0,
-    parEconomy: 9.00,
-    parBallsPerWicket: 12.0
-  },
-  CUSTOM: {
-    parSR: 120.0,
-    parRuns: 25.0,
-    parEconomy: 7.50,
-    parBallsPerWicket: 20.0
-  }
-};
-
-// Role Base Weight Matrices
-const ROLE_WEIGHTS = {
-  BATSMAN: { batting: 0.70, bowling: 0.00, fielding: 0.15, impact: 0.15 },
-  BOWLER: { batting: 0.00, bowling: 0.70, fielding: 0.15, impact: 0.15 },
-  ALL_ROUNDER: { batting: 0.40, bowling: 0.40, fielding: 0.10, impact: 0.10 },
-  WICKETKEEPER: { batting: 0.55, bowling: 0.00, fielding: 0.30, impact: 0.15 }
-};
+const CAREER_RATINGS_CACHE_TTL_MS = 60 * 1000; // 60 seconds
+const _careerRatingsCache = new Map();
+const _pendingMatchJobs = new Set();
+const _jobQueue = [];
+let _workerRunning = false;
 
 class PlayerRatingService {
   /**
@@ -73,9 +42,19 @@ class PlayerRatingService {
     format = 'T20'
   }) {
     const normRole = (role || 'BATSMAN').toUpperCase().replace(/[\s-]/g, '_');
-    const roleKey = ROLE_WEIGHTS[normRole] ? normRole : (normRole.includes('BOWL') ? 'BOWLER' : (normRole.includes('ALL') ? 'ALL_ROUNDER' : (normRole.includes('KEEPER') ? 'WICKETKEEPER' : 'BATSMAN')));
+    const priorRoleKey = ROLE_WEIGHTS[normRole] ? normRole : (normRole.includes('BOWL') ? 'BOWLER' : (normRole.includes('ALL') ? 'ALL_ROUNDER' : (normRole.includes('KEEPER') ? 'WICKETKEEPER' : 'BATSMAN')));
     const normFormat = (format || 'T20').toUpperCase().replace(/[\s-]/g, '_');
-    const benchmark = FORMAT_BENCHMARKS[normFormat] || FORMAT_BENCHMARKS.T20;
+    const baseBenchmark = FORMAT_BENCHMARKS[normFormat] || FORMAT_BENCHMARKS.T20;
+
+    // Scale parRuns and parBallsPerWicket by scheduled overs when provided (e.g. 8-over match)
+    const scheduledOvers = Number(matchContext.overs_per_side || 0);
+    const stdOvers = Number(baseBenchmark.standardOvers || 20);
+    const overScale = scheduledOvers > 0 && stdOvers > 0 ? (scheduledOvers / stdOvers) : 1;
+    const benchmark = {
+      ...baseBenchmark,
+      parRuns: Math.max(4, Number((baseBenchmark.parRuns * overScale).toFixed(2))),
+      parBallsPerWicket: Math.max(4, Number((baseBenchmark.parBallsPerWicket * overScale).toFixed(2)))
+    };
 
     const availability = {
       batting: false,
@@ -91,18 +70,26 @@ class PlayerRatingService {
 
     // ─────────────────────────────────────────────────────────────
     // A. BATTING RATING (0.0 to 10.0)
+    // Counts for role inference & weights only if >= 6 balls, >= 10 runs, or dismissed
     // ─────────────────────────────────────────────────────────────
-    if (battingStats && (battingStats.balls > 0 || battingStats.runs > 0 || battingStats.is_out)) {
+    const batBalls = Math.max(0, Number(battingStats?.balls || 0));
+    const batRuns = Math.max(0, Number(battingStats?.runs || 0));
+    const batIsOut = Boolean(battingStats?.is_out);
+    const didMeaningfullyBat = Boolean(battingStats && (batBalls >= 6 || batRuns >= 10 || batIsOut));
+
+    if (didMeaningfullyBat) {
       availability.batting = true;
-      const runs = Math.max(0, Number(battingStats.runs || 0));
-      const balls = Math.max(0, Number(battingStats.balls || 0));
+      const runs = batRuns;
+      const balls = batBalls;
       const fours = Math.max(0, Number(battingStats.fours || 0));
       const sixes = Math.max(0, Number(battingStats.sixes || 0));
-      const isOut = Boolean(battingStats.is_out);
+      const isOut = batIsOut;
+      const inningsBatted = Math.max(1, Number(battingStats.innings_batted || matchContext.innings_batted || 1));
+      const batParRuns = benchmark.parRuns * inningsBatted;
       const sr = balls > 0 ? (runs / balls) * 100 : (runs > 0 ? benchmark.parSR : 0);
 
-      // 1. Run volume vs format benchmark
-      const volumeRatio = runs / benchmark.parRuns;
+      // 1. Run volume vs scaled format benchmark (scaled by innings batted in multi-innings matches)
+      const volumeRatio = runs / batParRuns;
       let runVolumeScore = Math.min(10.0, Math.pow(Math.max(0.01, volumeRatio), 0.75) * 5.5);
       if (runs === 0 && isOut) {
         runVolumeScore = balls <= 1 ? 0.5 : 1.5;
@@ -121,17 +108,17 @@ class PlayerRatingService {
       const boundaryScore = boundaryRatio * 10.0;
 
       // Base Batting Score (weights sum to 1.0)
-      let baseBat = (runVolumeScore * 0.55) + (velocityScore * 0.30) + (boundaryScore * 0.15);
+      const baseBat = (runVolumeScore * 0.55) + (velocityScore * 0.30) + (boundaryScore * 0.15);
 
-      // Bonuses
+      // Milestone bonuses expressed as multiples of scaled parRuns (2x, 3x, 4x, 6x, 8x)
       let milestoneBonus = 0;
-      if (runs >= 200) milestoneBonus = 1.8;
-      else if (runs >= 150) milestoneBonus = 1.4;
-      else if (runs >= 100) milestoneBonus = 1.0;
-      else if (runs >= 75) milestoneBonus = 0.8;
-      else if (runs >= 50) milestoneBonus = 0.5;
+      if (runs >= batParRuns * 8) milestoneBonus = 1.8;
+      else if (runs >= batParRuns * 6) milestoneBonus = 1.4;
+      else if (runs >= batParRuns * 4) milestoneBonus = 1.0;
+      else if (runs >= batParRuns * 3) milestoneBonus = 0.8;
+      else if (runs >= batParRuns * 2) milestoneBonus = 0.5;
 
-      const finishBonus = (!isOut && runs >= 15) ? 0.6 : 0;
+      const finishBonus = (!isOut && runs >= Math.max(10, batParRuns * 0.6)) ? 0.6 : 0;
 
       let teamContrib = 0;
       const teamRuns = Number(matchContext.team_total_runs || 0);
@@ -149,7 +136,7 @@ class PlayerRatingService {
     // B. BOWLING RATING (0.0 to 10.0)
     // ─────────────────────────────────────────────────────────────
     const oversBowled = Number(bowlingStats?.overs || 0);
-    const ballsBowled = Number(bowlingStats?.balls_bowled || (oversBowled * 6));
+    const ballsBowled = Number(bowlingStats?.balls_bowled || bowlingStats?.balls || (oversBowled * 6));
     const legalBalls = Math.max(0, ballsBowled);
 
     if (bowlingStats && (legalBalls > 0 || oversBowled > 0)) {
@@ -157,12 +144,14 @@ class PlayerRatingService {
       const wickets = Math.max(0, Number(bowlingStats.wickets || 0));
       const runsConceded = Math.max(0, Number(bowlingStats.runs_conceded || 0));
       const maidens = Math.max(0, Number(bowlingStats.maidens || 0));
-      const dotBalls = Math.max(0, Number(bowlingStats.dot_balls || 0));
+      const dotBalls = bowlingStats.dot_balls !== undefined && bowlingStats.dot_balls !== null
+        ? Math.max(0, Number(bowlingStats.dot_balls))
+        : null;
 
-      const decimalOvers = (oversBowled > 0) ? oversBowled : (legalBalls / 6);
+      const decimalOvers = legalBalls > 0 ? (legalBalls / 6) : oversBowled;
       const economy = decimalOvers > 0 ? (runsConceded / decimalOvers) : 0;
 
-      // 1. Wicket Penetration (format par is ~1 wicket = 5.5)
+      // 1. Wicket Penetration
       let wicketScore = 3.5;
       if (wickets === 1) wicketScore = 5.5;
       else if (wickets === 2) wicketScore = 7.5;
@@ -171,17 +160,18 @@ class PlayerRatingService {
       else if (wickets >= 5) wicketScore = 10.0;
       else if (wickets === 0 && decimalOvers >= 2.0) wicketScore = 3.0;
 
-      // 2. Economy Containment vs benchmark
-      const economyDiff = benchmark.parEconomy - economy;
-      let economyScore = 5.5 + (economyDiff * 1.0);
-      economyScore = Math.max(1.0, Math.min(10.0, economyScore));
+      // 2. Economy Containment relative to par, weighted by overs bowled (min 1 over for full weight)
+      const rawEconScore = Math.max(1.0, Math.min(10.0, 5.5 * (benchmark.parEconomy / Math.max(economy, 0.5))));
+      const econWeight = Math.min(1.0, decimalOvers / 1.0);
+      const economyScore = (rawEconScore * econWeight) + (5.5 * (1 - econWeight));
 
-      // 3. Dot ball pressure (0-10 scale)
-      const dotRatio = legalBalls > 0 ? (dotBalls > 0 ? dotBalls / legalBalls : 0.40) : 0.40;
+      // 3. Dot ball pressure from Delivery records (fallback 0.40 only when deliveries unavailable)
+      const hasDotData = dotBalls !== null && (bowlingStats.has_delivery_dots !== false);
+      const dotRatio = legalBalls > 0 && hasDotData ? Math.min(1.0, dotBalls / legalBalls) : 0.40;
       const dotScore = dotRatio * 10.0;
 
       // Base Bowling Score (weights sum to 1.0: 50% wickets, 35% economy, 15% dots)
-      let baseBowl = (wicketScore * 0.50) + (economyScore * 0.35) + (dotScore * 0.15);
+      const baseBowl = (wicketScore * 0.50) + (economyScore * 0.35) + (dotScore * 0.15);
 
       // Bonuses
       const maidenBonus = maidens * 0.5;
@@ -195,20 +185,23 @@ class PlayerRatingService {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // C. FIELDING RATING (0.0 to 10.0)
+    // C. FIELDING RATING & ADDITIVE BONUS (Never lowers overall)
     // ─────────────────────────────────────────────────────────────
     const catches = Math.max(0, Number(fieldingStats?.catches || 0));
     const directHits = Math.max(0, Number(fieldingStats?.direct_hit_run_outs || 0));
     const assistedRunOuts = Math.max(0, Number(fieldingStats?.assisted_run_outs || 0));
     const stumpings = Math.max(0, Number(fieldingStats?.stumpings || 0));
     const totalDismissals = catches + directHits + assistedRunOuts + stumpings;
+    const fieldingAdditiveBonus = Math.min(
+      1.0,
+      (catches * 0.3) + (directHits * 0.6) + (assistedRunOuts * 0.3) + (stumpings * 0.4)
+    );
 
     if (totalDismissals > 0) {
       availability.fielding = true;
       const rawField = 5.0 + (catches * 1.8) + (directHits * 3.5) + (assistedRunOuts * 2.0) + (stumpings * 2.5);
       rField = Math.max(0.0, Math.min(10.0, Number(rawField.toFixed(1))));
-    } else if (roleKey === 'WICKETKEEPER') {
-      // Wicketkeepers are constantly active; give neutral active baseline if match played
+    } else if (priorRoleKey === 'WICKETKEEPER') {
       availability.fielding = true;
       rField = 5.0;
     }
@@ -216,28 +209,37 @@ class PlayerRatingService {
     // ─────────────────────────────────────────────────────────────
     // D. MATCH IMPACT RATING (0.0 to 10.0)
     // ─────────────────────────────────────────────────────────────
-    // If player had any participation (batted, bowled or fielded)
     if (availability.batting || availability.bowling || availability.fielding) {
       availability.impact = true;
-      let rawImpact = 5.0; // Neutral baseline
+      let rawImpact = 5.0;
 
       if (matchContext.team_won) rawImpact += 1.5;
       if (matchContext.player_of_the_match) rawImpact += 2.5;
 
-      // Performance impact modifiers
       if (rBat !== null && rBat >= 6.5) rawImpact += 0.8;
       if (rBowl !== null && rBowl >= 6.5) rawImpact += 0.8;
       if (rBat !== null && rBat >= 6.0 && rBowl !== null && rBowl >= 6.0) {
-        rawImpact += 1.2; // All-Rounder dual contribution synergy
+        rawImpact += 1.2;
       }
 
       rImpact = Math.max(0.0, Math.min(10.0, Number(rawImpact.toFixed(1))));
     }
 
     // ─────────────────────────────────────────────────────────────
-    // E. OVERALL MATCH RATING & WEIGHT RENORMALIZATION
+    // E. INFER PER-MATCH ROLE & WEIGHT RENORMALIZATION
     // ─────────────────────────────────────────────────────────────
-    const baseWeights = ROLE_WEIGHTS[roleKey] || ROLE_WEIGHTS.BATSMAN;
+    let roleKey = priorRoleKey;
+    const bowledMeaningfully = availability.bowling && (legalBalls >= 12 || oversBowled >= 2);
+    if (availability.batting && bowledMeaningfully) {
+      roleKey = 'ALL_ROUNDER';
+    } else if (availability.bowling && (ROLE_WEIGHTS[roleKey]?.bowling || 0) === 0) {
+      // Never give zero weight to bowling when player actually bowled
+      roleKey = availability.batting ? 'ALL_ROUNDER' : 'BOWLER';
+    } else if (availability.batting && (ROLE_WEIGHTS[roleKey]?.batting || 0) === 0) {
+      roleKey = availability.bowling ? 'ALL_ROUNDER' : 'BATSMAN';
+    }
+
+    const baseWeights = { ...(ROLE_WEIGHTS[roleKey] || ROLE_WEIGHTS.BATSMAN) };
     let activeWeightSum = 0;
     let weightedScoreSum = 0;
 
@@ -249,10 +251,6 @@ class PlayerRatingService {
       activeWeightSum += baseWeights.bowling;
       weightedScoreSum += (baseWeights.bowling * rBowl);
     }
-    if (availability.fielding && rField !== null) {
-      activeWeightSum += baseWeights.fielding;
-      weightedScoreSum += (baseWeights.fielding * rField);
-    }
     if (availability.impact && rImpact !== null) {
       activeWeightSum += baseWeights.impact;
       weightedScoreSum += (baseWeights.impact * rImpact);
@@ -261,11 +259,14 @@ class PlayerRatingService {
     let overallRating = null;
     if (activeWeightSum > 0) {
       let normalizedScore = weightedScoreSum / activeWeightSum;
-      // All-Rounder synergy bonus for performing in both disciplines
       if (roleKey === 'ALL_ROUNDER' && rBat !== null && rBat >= 6.0 && rBowl !== null && rBowl >= 6.0) {
         normalizedScore += 0.4;
       }
+      // Apply fielding as an additive bonus after weighted overall (capped at +1.0)
+      normalizedScore += fieldingAdditiveBonus;
       overallRating = Math.max(0.0, Math.min(10.0, Number(normalizedScore.toFixed(1))));
+    } else if (availability.fielding && rField !== null) {
+      overallRating = Math.max(0.0, Math.min(10.0, Number(rField.toFixed(1))));
     }
 
     return {
@@ -280,37 +281,65 @@ class PlayerRatingService {
     };
   }
 
+  invalidateCareerRatingsCache(playerId = null) {
+    if (!playerId) {
+      _careerRatingsCache.clear();
+      return;
+    }
+    const prefix = `${String(playerId)}::`;
+    for (const key of _careerRatingsCache.keys()) {
+      if (key.startsWith(prefix)) _careerRatingsCache.delete(key);
+    }
+  }
+
   /**
    * 2. Calculate Career Rating across Verified Completed Matches
+   * Cached for 60 seconds and invalidated on rating recalculation.
    */
-  async getCareerRatings(playerId) {
+  async getCareerRatings(playerId, filters = {}) {
     await db.initDb();
-    const baseQuery = {
-      $or: [{ player_id: playerId }, { player_name: playerId }],
-      overall_rating: { $ne: null }
-    };
+    const normFormat = filters?.format && String(filters.format).toUpperCase() !== 'ALL'
+      ? String(filters.format).toUpperCase().replace(/[\s-]/g, '_')
+      : null;
+    const tournamentId = filters?.tournamentId && String(filters.tournamentId).toUpperCase() !== 'ALL'
+      ? String(filters.tournamentId).trim()
+      : null;
 
-    let ratings = await db.models.PlayerMatchRating.find({ ...baseQuery, verification_status: 'VERIFIED' }).sort({ match_date: -1 }).lean();
-    if (ratings.length === 0) {
-      ratings = await db.models.PlayerMatchRating.find(baseQuery).sort({ match_date: -1 }).lean();
+    const cacheKey = `${String(playerId)}::${normFormat || 'ALL'}::${tournamentId || 'ALL'}`;
+    const cached = _careerRatingsCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value;
     }
+
+    const query = {
+      $or: [{ player_id: playerId }, { player_name: playerId }],
+      overall_rating: { $ne: null },
+      verification_status: 'VERIFIED'
+    };
+    if (normFormat) query.format = normFormat;
+    if (tournamentId) query.tournament_id = tournamentId;
+
+    const ratings = await db.models.PlayerMatchRating.find(query).sort({ match_date: -1 }).lean();
     const matchesCount = ratings.length;
 
-    // Confidence label based on data volume
+    // Confidence label based on data volume (1-2 Provisional, 3-4 Developing, 5+ Established)
     let confidence = 'No Data';
-    if (matchesCount >= 5) confidence = 'Established';
-    else if (matchesCount >= 3) confidence = 'Developing';
+    if (matchesCount >= CONFIDENCE_THRESHOLDS.ESTABLISHED_MIN_MATCHES) confidence = 'Established';
+    else if (matchesCount >= CONFIDENCE_THRESHOLDS.DEVELOPING_MIN_MATCHES) confidence = 'Developing';
     else if (matchesCount >= 1) confidence = 'Provisional';
 
     if (matchesCount === 0) {
-      return {
+      const emptyResult = {
         overall_rating: null,
+        raw_overall_rating: null,
         confidence,
         matches_count: 0,
         formats: {
           T20: { rating: null, matches: 0 },
           ONE_DAY: { rating: null, matches: 0 },
-          MULTI_DAY: { rating: null, matches: 0 }
+          MULTI_DAY: { rating: null, matches: 0 },
+          T10: { rating: null, matches: 0 },
+          CUSTOM: { rating: null, matches: 0 }
         },
         components: {
           batting: null,
@@ -319,6 +348,8 @@ class PlayerRatingService {
           impact: null
         }
       };
+      _careerRatingsCache.set(cacheKey, { value: emptyResult, expiresAt: Date.now() + CAREER_RATINGS_CACHE_TTL_MS });
+      return emptyResult;
     }
 
     // Weighted Recency Aggregation:
@@ -334,7 +365,9 @@ class PlayerRatingService {
     const formatBuckets = {
       T20: { sum: 0, count: 0 },
       ONE_DAY: { sum: 0, count: 0 },
-      MULTI_DAY: { sum: 0, count: 0 }
+      MULTI_DAY: { sum: 0, count: 0 },
+      T10: { sum: 0, count: 0 },
+      CUSTOM: { sum: 0, count: 0 }
     };
 
     ratings.forEach((r, idx) => {
@@ -368,10 +401,28 @@ class PlayerRatingService {
       }
     });
 
-    const overallCareerRating = totalOverallWeight > 0 ? Number((weightedOverallSum / totalOverallWeight).toFixed(1)) : null;
+    const rawOverallCareerRating = totalOverallWeight > 0 ? Number((weightedOverallSum / totalOverallWeight).toFixed(1)) : null;
 
-    return {
+    // Bayesian shrinkage toward league average (k = 3, prior from DB, default 5.5)
+    let overallCareerRating = rawOverallCareerRating;
+    if (rawOverallCareerRating !== null) {
+      let prior = 5.5;
+      try {
+        const leagueAgg = await db.models.PlayerMatchRating.aggregate([
+          { $match: { verification_status: 'VERIFIED', overall_rating: { $ne: null } } },
+          { $group: { _id: null, avg: { $avg: '$overall_rating' } } }
+        ]);
+        if (leagueAgg && leagueAgg[0] && typeof leagueAgg[0].avg === 'number') {
+          prior = Number(leagueAgg[0].avg.toFixed(2));
+        }
+      } catch (_e) {}
+      const k = 3;
+      overallCareerRating = Number((((matchesCount * rawOverallCareerRating) + (k * prior)) / (matchesCount + k)).toFixed(1));
+    }
+
+    const result = {
       overall_rating: overallCareerRating,
+      raw_overall_rating: rawOverallCareerRating,
       confidence,
       matches_count: matchesCount,
       formats: {
@@ -386,6 +437,14 @@ class PlayerRatingService {
         MULTI_DAY: {
           rating: formatBuckets.MULTI_DAY.count > 0 ? Number((formatBuckets.MULTI_DAY.sum / formatBuckets.MULTI_DAY.count).toFixed(1)) : null,
           matches: formatBuckets.MULTI_DAY.count
+        },
+        T10: {
+          rating: formatBuckets.T10.count > 0 ? Number((formatBuckets.T10.sum / formatBuckets.T10.count).toFixed(1)) : null,
+          matches: formatBuckets.T10.count
+        },
+        CUSTOM: {
+          rating: formatBuckets.CUSTOM.count > 0 ? Number((formatBuckets.CUSTOM.sum / formatBuckets.CUSTOM.count).toFixed(1)) : null,
+          matches: formatBuckets.CUSTOM.count
         }
       },
       components: {
@@ -395,6 +454,8 @@ class PlayerRatingService {
         impact: impactCount > 0 ? Number((impactSum / impactCount).toFixed(1)) : null
       }
     };
+    _careerRatingsCache.set(cacheKey, { value: result, expiresAt: Date.now() + CAREER_RATINGS_CACHE_TTL_MS });
+    return result;
   }
 
   /**
@@ -407,10 +468,10 @@ class PlayerRatingService {
     };
 
     const limit = Math.min(20, Math.max(1, Number(matchLimit || 5)));
-    let ratings = await db.models.PlayerMatchRating.find({ ...baseQuery, verification_status: 'VERIFIED' }).sort({ match_date: -1 }).limit(limit).lean();
-    if (ratings.length === 0) {
-      ratings = await db.models.PlayerMatchRating.find(baseQuery).sort({ match_date: -1 }).limit(limit).lean();
-    }
+    const ratings = await db.models.PlayerMatchRating.find({ ...baseQuery, verification_status: 'VERIFIED' })
+      .sort({ match_date: -1 })
+      .limit(limit)
+      .lean();
 
     if (ratings.length === 0) {
       return {
@@ -476,8 +537,13 @@ class PlayerRatingService {
         tournament_name: r.tournament_name || 'District Match',
         match_date: r.match_date ? new Date(r.match_date).toISOString().split('T')[0] : '2026-10-20',
         format: r.format || 'T20',
+        role: r.role || 'BATSMAN',
         rating: r.overall_rating !== null ? `${r.overall_rating} ★` : 'Not Rated',
         raw_rating: r.overall_rating,
+        batting_rating: r.batting_rating ?? null,
+        bowling_rating: r.bowling_rating ?? null,
+        fielding_rating: r.fielding_rating ?? null,
+        impact_rating: r.impact_rating ?? null,
         batting_chip: battingChip,
         bowling_chip: bowlingChip,
         fielding_summary: {
@@ -520,91 +586,417 @@ class PlayerRatingService {
       $or: [{ player_id: playerId }, { player_name: playerId }]
     };
     const maxLimit = Math.min(50, Math.max(1, Number(limit || 20)));
-    let docs = await db.models.PlayerMatchRating.find({ ...baseQuery, verification_status: 'VERIFIED' })
+    const docs = await db.models.PlayerMatchRating.find({ ...baseQuery, verification_status: 'VERIFIED' })
       .sort({ match_date: -1 })
       .limit(maxLimit)
       .lean();
-    if (docs.length === 0) {
-      docs = await db.models.PlayerMatchRating.find(baseQuery)
-        .sort({ match_date: -1 })
-        .limit(maxLimit)
-        .lean();
-    }
     return docs;
   }
 
   /**
+   * Enqueue background match rating recalculation (outside HTTP request path).
+   */
+  enqueueMatchRatingRecalculation(matchId, reason = 'MATCH_UPDATED') {
+    if (!matchId) return;
+    const key = String(matchId);
+    if (_pendingMatchJobs.has(key)) return;
+    _pendingMatchJobs.add(key);
+    _jobQueue.push({ matchId: key, reason, attempts: 0 });
+    setImmediate(() => this._drainQueue());
+  }
+
+  async _drainQueue() {
+    if (_workerRunning) return;
+    _workerRunning = true;
+    try {
+      while (_jobQueue.length > 0) {
+        const job = _jobQueue.shift();
+        if (!job) continue;
+        try {
+          await this.recalculateMatchRatings(job.matchId);
+          _pendingMatchJobs.delete(job.matchId);
+        } catch (err) {
+          if (job.attempts < 2) {
+            job.attempts += 1;
+            _jobQueue.push(job);
+          } else {
+            _pendingMatchJobs.delete(job.matchId);
+            console.warn(`[RatingWorker] Failed match ${job.matchId} (${job.reason}):`, err.message);
+          }
+        }
+      }
+    } finally {
+      _workerRunning = false;
+    }
+  }
+
+  /**
+   * Re-aggregate denormalized career stats on Player from VERIFIED PlayerMatchRating rows.
+   */
+  async _syncPlayerCareerStats(playerIds = []) {
+    if (!Array.isArray(playerIds) || playerIds.length === 0) return;
+    const allRatings = await db.models.PlayerMatchRating.find({
+      player_id: { $in: playerIds },
+      verification_status: 'VERIFIED'
+    }).lean();
+
+    const byPlayer = new Map();
+    for (const r of allRatings) {
+      if (!byPlayer.has(r.player_id)) byPlayer.set(r.player_id, []);
+      byPlayer.get(r.player_id).push(r);
+    }
+
+    const matchIds = [...new Set(allRatings.map(r => r.match_id).filter(Boolean))];
+    const potmMatches = matchIds.length > 0
+      ? await db.models.Match.find({ id: { $in: matchIds }, player_of_the_match: { $ne: null } })
+          .select('id player_of_the_match')
+          .lean()
+      : [];
+    const potmCountByPlayer = new Map();
+    for (const m of potmMatches) {
+      const p = String(m.player_of_the_match || '');
+      potmCountByPlayer.set(p, (potmCountByPlayer.get(p) || 0) + 1);
+    }
+
+    const bulkOps = [];
+    for (const pId of playerIds) {
+      const rows = byPlayer.get(pId) || [];
+      let innings = 0;
+      let notOuts = 0;
+      let runs = 0;
+      let balls = 0;
+      let fours = 0;
+      let sixes = 0;
+      let fifties = 0;
+      let hundreds = 0;
+      let highestScore = 0;
+      let wickets = 0;
+      let ballsBowled = 0;
+      let maidens = 0;
+      let runsConceded = 0;
+      let catches = 0;
+      let stumpings = 0;
+      let runOuts = 0;
+      let bestWkts = -1;
+      let bestRuns = 9999;
+
+      for (const r of rows) {
+        const s = r.match_stats || {};
+        if (r.component_availability?.batting) {
+          innings += 1;
+          if (!s.is_out) notOuts += 1;
+          const rVal = Number(s.runs || 0);
+          runs += rVal;
+          balls += Number(s.balls || 0);
+          fours += Number(s.fours || 0);
+          sixes += Number(s.sixes || 0);
+          if (rVal >= 100) hundreds += 1;
+          else if (rVal >= 50) fifties += 1;
+          if (rVal > highestScore) highestScore = rVal;
+        }
+        if (r.component_availability?.bowling) {
+          const w = Number(s.wickets || 0);
+          const rc = Number(s.runs_conceded || 0);
+          const b = Number(s.balls_bowled || 0) || Math.round(Number(s.overs || 0) * 6);
+          wickets += w;
+          runsConceded += rc;
+          ballsBowled += b;
+          maidens += Number(s.maidens || 0);
+          if (w > bestWkts || (w === bestWkts && rc < bestRuns)) {
+            bestWkts = w;
+            bestRuns = rc;
+          }
+        }
+        catches += Number(s.catches || 0);
+        stumpings += Number(s.stumpings || 0);
+        runOuts += Number(s.run_outs || 0);
+      }
+
+      const oversFloat = Number((Math.floor(ballsBowled / 6) + (ballsBowled % 6) / 10).toFixed(1));
+      const economy = ballsBowled > 0 ? Number(((runsConceded / ballsBowled) * 6).toFixed(2)) : 0;
+      const bestBowling = bestWkts >= 0 ? `${bestWkts}/${bestRuns}` : null;
+      const pName = rows[0]?.player_name || '';
+      const potmAwards = (potmCountByPlayer.get(pId) || 0) + (pName && pName !== pId ? (potmCountByPlayer.get(pName) || 0) : 0);
+
+      bulkOps.push({
+        updateOne: {
+          filter: { id: pId },
+          update: {
+            $set: {
+              'stats.matches': rows.length,
+              'stats.innings': innings,
+              'stats.not_outs': notOuts,
+              'stats.runs': runs,
+              'stats.balls': balls,
+              'stats.fours': fours,
+              'stats.sixes': sixes,
+              'stats.fifties': fifties,
+              'stats.hundreds': hundreds,
+              'stats.highest_score': highestScore,
+              'stats.wickets': wickets,
+              'stats.overs': oversFloat,
+              'stats.maidens': maidens,
+              'stats.runs_conceded': runsConceded,
+              'stats.economy': economy,
+              'stats.best_bowling': bestBowling,
+              'stats.best_bowling_wickets': bestWkts >= 0 ? bestWkts : 0,
+              'stats.best_bowling_runs': bestWkts >= 0 ? bestRuns : 0,
+              'stats.catches': catches,
+              'stats.stumpings': stumpings,
+              'stats.run_outs': runOuts,
+              'stats.potm_awards': potmAwards
+            }
+          }
+        }
+      });
+    }
+
+    if (bulkOps.length > 0 && db.models.Player) {
+      await db.models.Player.bulkWrite(bulkOps);
+    }
+  }
+
+  /**
    * 4. Idempotently Recalculate & Persist Match Ratings for an Entire Match
+   * - Only COMPLETED matches (excluding ABANDONED / NO_RESULT) produce VERIFIED ratings.
+   * - Players who neither batted, bowled, nor fielded receive no rating.
+   * - Batch-fetches players ($in) and queries only dismissal deliveries.
    */
   async recalculateMatchRatings(matchId) {
     await db.initDb();
-    const match = await db.models.Match.findOne({ id: matchId }).lean();
+    const match = await db.models.Match.findOne({ id: matchId })
+      .select('id status winner_id is_abandoned team_a_id team_b_id tournament_id tournament_name match_date match_type overs_per_side player_of_the_match')
+      .lean();
     if (!match) return { success: false, message: `Match ${matchId} not found` };
 
-    // Fetch all batting, bowling and delivery records
-    const [batters, bowlers, deliveries, teamA, teamB] = await Promise.all([
-      db.models.InningsBatter.find({ match_id: matchId }).lean(),
-      db.models.InningsBowler.find({ match_id: matchId }).lean(),
-      db.models.Delivery.find({ match_id: matchId }).lean(),
-      db.models.Team.findOne({ id: match.team_a_id }).lean(),
-      db.models.Team.findOne({ id: match.team_b_id }).lean()
+    const isAbandonedOrNoResult =
+      Boolean(match.is_abandoned) ||
+      ['ABANDONED', 'NO_RESULT', 'CANCELLED'].includes(String(match.winner_id || '').toUpperCase()) ||
+      ['ABANDONED', 'CANCELLED', 'POSTPONED'].includes(String(match.status || '').toUpperCase());
+
+    if (String(match.status || '').toUpperCase() !== 'COMPLETED' || isAbandonedOrNoResult) {
+      const existingRows = await db.models.PlayerMatchRating.find({ match_id: matchId }).select('player_id').lean();
+      const affectedIds = existingRows.map(r => r.player_id).filter(Boolean);
+      if (affectedIds.length > 0) {
+        await db.models.PlayerMatchRating.deleteMany({ match_id: matchId });
+        await this._syncPlayerCareerStats(affectedIds);
+        affectedIds.forEach(id => this.invalidateCareerRatingsCache(id));
+      }
+      return { success: true, skipped: true, matchId, playersEvaluated: 0, ratings: [] };
+    }
+
+    // Fetch innings for this match first (InningsBatter/InningsBowler are keyed by innings_id)
+    const inningsList = await db.models.Innings.find({ match_id: matchId })
+      .select('id innings_number batting_team_id bowling_team_id total_runs')
+      .sort({ innings_number: 1 })
+      .lean();
+    const inningsMap = new Map(inningsList.map(i => [i.id, i]));
+    const inningsIds = inningsList.map(i => i.id).filter(Boolean);
+    const inningScope = inningsIds.length > 0
+      ? { $or: [{ match_id: matchId }, { innings_id: { $in: inningsIds } }] }
+      : { match_id: matchId };
+
+    // Fetch batters, bowlers, dismissal deliveries, and dot-ball counts per bowler from Delivery
+    const [batters, bowlers, dismissalDeliveries, dotBallAgg] = await Promise.all([
+      db.models.InningsBatter.find(inningScope)
+        .select('innings_id player_id player_name runs balls fours sixes strike_rate is_out dismissal_type dismissal_text fielder_id')
+        .lean(),
+      db.models.InningsBowler.find(inningScope)
+        .select('innings_id player_id player_name overs balls maidens runs_conceded wickets economy')
+        .lean(),
+      db.models.Delivery.find({
+        match_id: matchId,
+        dismissal_type: { $in: ['CAUGHT', 'CAUGHT_AND_BOWLED', 'RUN_OUT', 'STUMPED'] }
+      })
+        .select('fielder_id assist_fielder_id dismissal_type')
+        .lean(),
+      db.models.Delivery.aggregate([
+        { $match: { match_id: matchId, is_legal_delivery: true } },
+        {
+          $group: {
+            _id: '$bowler_id',
+            totalLegal: { $sum: 1 },
+            // Dot ball = legal delivery where runs charged to bowler (batter runs + wides + no-balls) is 0; byes/leg-byes count as dots
+            dotBalls: {
+              $sum: {
+                $cond: [
+                  {
+                    $eq: [
+                      {
+                        $add: [
+                          {
+                            $cond: [
+                              { $in: [{ $toUpper: { $ifNull: ['$extra_type', 'NONE'] } }, ['BYE', 'BYES', 'B', 'LEG_BYE', 'LEGBYE', 'LEG_BYES', 'LB']] },
+                              { $ifNull: ['$runs_batter', 0] },
+                              { $ifNull: ['$runs_batter', { $ifNull: ['$total_runs', 0] }] }
+                            ]
+                          },
+                          {
+                            $cond: [
+                              { $in: [{ $toUpper: { $ifNull: ['$extra_type', 'NONE'] } }, ['WIDE', 'WIDES', 'WD', 'NO_BALL', 'NOBALL', 'NB']] },
+                              { $ifNull: ['$runs_extras', { $ifNull: ['$extras', 0] }] },
+                              0
+                            ]
+                          }
+                        ]
+                      },
+                      0
+                    ]
+                  },
+                  1,
+                  0
+                ]
+              }
+            }
+          }
+        }
+      ])
     ]);
 
-    // Aggregate fielding events by fielder
+    const dotMap = new Map();
+    for (const d of (dotBallAgg || [])) {
+      if (d._id) dotMap.set(d._id, { totalLegal: d.totalLegal, dotBalls: d.dotBalls });
+    }
+
+    // Track each player's team for THIS match from Innings
+    const playerTeamMap = new Map();
+    const sortedBatters = [...batters].sort((a, b) => {
+      const ia = inningsMap.get(a.innings_id)?.innings_number || 0;
+      const ib = inningsMap.get(b.innings_id)?.innings_number || 0;
+      return ia - ib;
+    });
+
     const fieldingMap = {};
-    deliveries.forEach(del => {
+    for (const del of dismissalDeliveries) {
       const fId = del.fielder_id || del.assist_fielder_id;
-      if (fId) {
-        if (!fieldingMap[fId]) fieldingMap[fId] = { catches: 0, direct_hit_run_outs: 0, assisted_run_outs: 0, stumpings: 0 };
-        if (del.dismissal_type === 'CAUGHT' || del.dismissal_type === 'CAUGHT_AND_BOWLED') {
-          fieldingMap[fId].catches++;
-        } else if (del.dismissal_type === 'RUN_OUT') {
-          if (del.assist_fielder_id && del.assist_fielder_id === fId) fieldingMap[fId].assisted_run_outs++;
-          else fieldingMap[fId].direct_hit_run_outs++;
-        } else if (del.dismissal_type === 'STUMPED') {
-          fieldingMap[fId].stumpings++;
-        }
+      if (!fId) continue;
+      if (!fieldingMap[fId]) fieldingMap[fId] = { catches: 0, direct_hit_run_outs: 0, assisted_run_outs: 0, stumpings: 0 };
+      if (del.dismissal_type === 'CAUGHT' || del.dismissal_type === 'CAUGHT_AND_BOWLED') {
+        fieldingMap[fId].catches++;
+      } else if (del.dismissal_type === 'RUN_OUT') {
+        if (del.assist_fielder_id && del.assist_fielder_id === fId) fieldingMap[fId].assisted_run_outs++;
+        else fieldingMap[fId].direct_hit_run_outs++;
+      } else if (del.dismissal_type === 'STUMPED') {
+        fieldingMap[fId].stumpings++;
       }
-    });
+    }
 
-    // Also check dismissal text from InningsBatter
-    batters.forEach(b => {
+    for (const b of batters) {
       const fId = b.fielder_id;
-      if (fId) {
-        if (!fieldingMap[fId]) fieldingMap[fId] = { catches: 0, direct_hit_run_outs: 0, assisted_run_outs: 0, stumpings: 0 };
-        if (b.dismissal_type === 'CAUGHT') fieldingMap[fId].catches = Math.max(fieldingMap[fId].catches, 1);
-        else if (b.dismissal_type === 'STUMPED') fieldingMap[fId].stumpings = Math.max(fieldingMap[fId].stumpings, 1);
-        else if (b.dismissal_type === 'RUN_OUT') fieldingMap[fId].direct_hit_run_outs = Math.max(fieldingMap[fId].direct_hit_run_outs, 1);
-      }
-    });
+      if (!fId) continue;
+      if (!fieldingMap[fId]) fieldingMap[fId] = { catches: 0, direct_hit_run_outs: 0, assisted_run_outs: 0, stumpings: 0 };
+      if (b.dismissal_type === 'CAUGHT') fieldingMap[fId].catches = Math.max(fieldingMap[fId].catches, 1);
+      else if (b.dismissal_type === 'STUMPED') fieldingMap[fId].stumpings = Math.max(fieldingMap[fId].stumpings, 1);
+      else if (b.dismissal_type === 'RUN_OUT') fieldingMap[fId].direct_hit_run_outs = Math.max(fieldingMap[fId].direct_hit_run_outs, 1);
+    }
 
-    // Identify all unique players in this match
-    const playerIds = new Set();
-    batters.forEach(b => { if (b.player_id) playerIds.add(b.player_id); });
-    bowlers.forEach(bw => { if (bw.player_id) playerIds.add(bw.player_id); });
-    Object.keys(fieldingMap).forEach(f => playerIds.add(f));
+    // Aggregate per-player batting/bowling across ALL innings (including 2nd innings & super over)
+    const batByPlayer = new Map();
+    for (const b of sortedBatters) {
+      if (!b.player_id) continue;
+      const inn = inningsMap.get(b.innings_id);
+      if (inn?.batting_team_id) playerTeamMap.set(b.player_id, inn.batting_team_id);
+      const battedInInnings = Number(b.balls || 0) > 0 || Number(b.runs || 0) > 0 || Boolean(b.is_out);
+      const prev = batByPlayer.get(b.player_id);
+      if (!prev) {
+        batByPlayer.set(b.player_id, { ...b, innings_batted: battedInInnings ? 1 : 0 });
+      } else {
+        prev.runs = Number(prev.runs || 0) + Number(b.runs || 0);
+        prev.balls = Number(prev.balls || 0) + Number(b.balls || 0);
+        prev.fours = Number(prev.fours || 0) + Number(b.fours || 0);
+        prev.sixes = Number(prev.sixes || 0) + Number(b.sixes || 0);
+        if (battedInInnings) prev.innings_batted = Number(prev.innings_batted || 0) + 1;
+        // is_out reflects whether dismissed in the final innings batted
+        prev.is_out = Boolean(b.is_out);
+        prev.strike_rate = prev.balls > 0 ? Number(((prev.runs / prev.balls) * 100).toFixed(2)) : 0;
+      }
+    }
+
+    const bowlByPlayer = new Map();
+    for (const bw of bowlers) {
+      if (!bw.player_id) continue;
+      const inn = inningsMap.get(bw.innings_id);
+      if (inn?.bowling_team_id && !playerTeamMap.has(bw.player_id)) {
+        playerTeamMap.set(bw.player_id, inn.bowling_team_id);
+      }
+      const prev = bowlByPlayer.get(bw.player_id);
+      if (!prev) {
+        const bCount = Number(bw.balls || 0) || Math.round(Number(bw.overs || 0) * 6);
+        bowlByPlayer.set(bw.player_id, { ...bw, balls: bCount });
+      } else {
+        prev.wickets = Number(prev.wickets || 0) + Number(bw.wickets || 0);
+        prev.runs_conceded = Number(prev.runs_conceded || 0) + Number(bw.runs_conceded || 0);
+        prev.maidens = Number(prev.maidens || 0) + Number(bw.maidens || 0);
+        const totalBalls = Number(prev.balls || 0) +
+          (Number(bw.balls || 0) || Math.round(Number(bw.overs || 0) * 6));
+        prev.balls = totalBalls;
+        prev.overs = Number((Math.floor(totalBalls / 6) + (totalBalls % 6) / 10).toFixed(1));
+        prev.economy = totalBalls > 0 ? Number(((prev.runs_conceded / totalBalls) * 6).toFixed(2)) : 0;
+      }
+    }
+
+    for (const [pId, bw] of bowlByPlayer.entries()) {
+      const dInfo = dotMap.get(pId);
+      if (dInfo && dInfo.totalLegal > 0) {
+        bw.dot_balls = dInfo.dotBalls;
+        bw.has_delivery_dots = true;
+      } else {
+        bw.has_delivery_dots = false;
+      }
+    }
+
+    const playerIds = new Set([
+      ...batByPlayer.keys(),
+      ...bowlByPlayer.keys(),
+      ...Object.keys(fieldingMap)
+    ]);
+
+    const idList = [...playerIds];
+    const playerDocs = idList.length > 0 && db.models.Player
+      ? await db.models.Player.find({ $or: [{ id: { $in: idList } }, { name: { $in: idList } }] })
+          .select('id name role team_id')
+          .lean()
+      : [];
+    const playerDocMap = new Map();
+    for (const pd of playerDocs) {
+      if (pd.id) playerDocMap.set(pd.id, pd);
+      if (pd.name) playerDocMap.set(pd.name, pd);
+    }
 
     const updatedRatings = [];
-    for (const pId of playerIds) {
-      const bStat = batters.find(b => b.player_id === pId) || null;
-      const bwStat = bowlers.find(bw => bw.player_id === pId) || null;
+    const ratedPlayerIds = [];
+
+    for (const pId of idList) {
+      const bStat = batByPlayer.get(pId) || null;
+      const bwStat = bowlByPlayer.get(pId) || null;
       const fStat = fieldingMap[pId] || null;
 
-      // Determine player role from Player model if available
-      const pDoc = await db.models.Player.findOne({ $or: [{ id: pId }, { name: pId }] }).lean();
-      const role = pDoc?.role || (bwStat && !bStat ? 'BOWLER' : (bStat && bwStat ? 'ALL_ROUNDER' : 'BATSMAN'));
-      const playerName = pDoc?.name || bStat?.player_name || bwStat?.player_name || pId;
+      const didBat = Boolean(bStat && (Number(bStat.balls || 0) >= 6 || Number(bStat.runs || 0) >= 10 || bStat.is_out));
+      const didBowl = Boolean(bwStat && (Number(bwStat.overs || 0) > 0 || Number(bwStat.balls || 0) > 0));
+      const didField = Boolean(fStat && ((fStat.catches || 0) + (fStat.direct_hit_run_outs || 0) + (fStat.assisted_run_outs || 0) + (fStat.stumpings || 0)) > 0);
 
+      // Rule: a player who neither batted, bowled, nor fielded gets no rating for this match
+      if (!didBat && !didBowl && !didField) {
+        continue;
+      }
+
+      const pDoc = playerDocMap.get(pId) || null;
+      const role = pDoc?.role || (didBowl && !didBat ? 'BOWLER' : (didBat && didBowl ? 'ALL_ROUNDER' : 'BATSMAN'));
+      const playerName = pDoc?.name || bStat?.player_name || bwStat?.player_name || pId;
       const isPOTM = match.player_of_the_match === pId || match.player_of_the_match === playerName;
-      const isWinner = match.winner_id && (pDoc?.team_id === match.winner_id);
+      const matchTeamId = playerTeamMap.get(pId) || pDoc?.team_id || null;
+      const winnerUpper = String(match.winner_id || '').toUpperCase();
+      const isTieOrNoResult = !match.winner_id || ['TIE', 'MATCH_TIED', 'NO_RESULT', 'ABANDONED'].includes(winnerUpper);
+      const isWinner = !isTieOrNoResult && Boolean(matchTeamId && matchTeamId === match.winner_id);
 
       const ratingResult = this.calculateMatchRating({
-        battingStats: bStat,
-        bowlingStats: bwStat,
-        fieldingStats: fStat,
+        battingStats: didBat ? bStat : null,
+        bowlingStats: didBowl ? bwStat : null,
+        fieldingStats: didField ? fStat : null,
         matchContext: {
           team_total_runs: 160,
-          team_won: Boolean(isWinner),
+          overs_per_side: match.overs_per_side || null,
+          team_won: isWinner,
           player_of_the_match: Boolean(isPOTM)
         },
         role,
@@ -647,17 +1039,41 @@ class PlayerRatingService {
           stumpings: fStat?.stumpings || 0
         },
         calculation_version: 'v2.0',
-        verification_status: match.status === 'COMPLETED' ? 'VERIFIED' : 'PROVISIONAL',
+        verification_status: 'VERIFIED',
         calculated_at: new Date()
       };
 
       await db.models.PlayerMatchRating.findOneAndUpdate(
         { player_id: pId, match_id: matchId },
         ratingData,
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: 'after' }
       );
 
       updatedRatings.push(ratingData);
+      ratedPlayerIds.push(pId);
+    }
+
+    // Remove stale ratings for players no longer participating in this match
+    if (ratedPlayerIds.length > 0) {
+      await db.models.PlayerMatchRating.deleteMany({
+        match_id: matchId,
+        player_id: { $nin: ratedPlayerIds }
+      });
+      await this._syncPlayerCareerStats(ratedPlayerIds);
+      ratedPlayerIds.forEach(id => this.invalidateCareerRatingsCache(id));
+
+      // Emit notification "Your rating was updated" to each rated player
+      if (db.models.Notification) {
+        const notifDocs = updatedRatings.map(r => ({
+          id: `NOTIF-RAT-${matchId}-${r.player_id}-${Date.now()}`,
+          type: 'RATING_UPDATED',
+          title: 'Your rating was updated',
+          message: `Your match rating (${r.overall_rating ?? '—'} ★) was updated for ${r.tournament_name}.`,
+          reference_id: r.player_id,
+          status: 'UNREAD'
+        }));
+        await db.models.Notification.insertMany(notifDocs, { ordered: false }).catch(() => {});
+      }
     }
 
     return {
@@ -669,7 +1085,46 @@ class PlayerRatingService {
   }
 
   /**
-   * 5. Public / Portal Ratings Leaderboard
+   * Nightly reconciliation job: find COMPLETED matches without PlayerMatchRating rows
+   * or whose match updatedAt is newer than calculated_at, and recalculate them.
+   */
+  async reconcileCompletedMatchRatings() {
+    await db.initDb();
+    const completedMatches = await db.models.Match.find({
+      status: 'COMPLETED',
+      is_abandoned: { $ne: true },
+      winner_id: { $nin: ['ABANDONED', 'NO_RESULT', 'CANCELLED'] }
+    })
+      .select('id updatedAt')
+      .lean();
+
+    const matchIds = completedMatches.map(m => m.id);
+    const existing = matchIds.length > 0
+      ? await db.models.PlayerMatchRating.aggregate([
+          { $match: { match_id: { $in: matchIds } } },
+          { $group: { _id: '$match_id', count: { $sum: 1 }, latestCalc: { $max: '$calculated_at' } } }
+        ])
+      : [];
+
+    const existingMap = new Map(existing.map(e => [e._id, e]));
+    let processedCount = 0;
+
+    for (const m of completedMatches) {
+      const info = existingMap.get(m.id);
+      const isMissing = !info || info.count === 0;
+      const isStale = info && m.updatedAt && info.latestCalc && new Date(m.updatedAt) > new Date(info.latestCalc);
+      if (isMissing || isStale) {
+        await this.recalculateMatchRatings(m.id);
+        processedCount++;
+      }
+    }
+
+    console.log(`[RatingReconciliation] Checked ${completedMatches.length} completed matches; recalculated ${processedCount}.`);
+    return { checked: completedMatches.length, recalculated: processedCount };
+  }
+
+  /**
+   * 5. Public / Portal Ratings Leaderboard (minimum 3 rated matches; Bayesian-shrunk rating)
    */
   async getRatingsLeaderboard({ category = 'overall', format = 'ALL', limit = 10 } = {}) {
     await db.initDb();
@@ -678,7 +1133,18 @@ class PlayerRatingService {
       matchFilter.format = format.toUpperCase();
     }
 
-    // Aggregate average ratings across verified matches
+    let prior = 5.5;
+    try {
+      const leagueAgg = await db.models.PlayerMatchRating.aggregate([
+        { $match: { verification_status: 'VERIFIED', overall_rating: { $ne: null } } },
+        { $group: { _id: null, avg: { $avg: '$overall_rating' } } }
+      ]);
+      if (leagueAgg && leagueAgg[0] && typeof leagueAgg[0].avg === 'number') {
+        prior = Number(leagueAgg[0].avg.toFixed(2));
+      }
+    } catch (_e) {}
+
+    const k = 3;
     const pipeline = [
       { $match: matchFilter },
       {
@@ -694,20 +1160,31 @@ class PlayerRatingService {
           latestMatchDate: { $max: '$match_date' }
         }
       },
+      { $match: { matchesCount: { $gte: 3 } } },
       {
         $project: {
           playerId: '$_id',
           playerName: 1,
           role: 1,
           matchesCount: 1,
-          overallRating: { $round: ['$avgOverallRating', 1] },
+          overallRating: {
+            $round: [
+              {
+                $divide: [
+                  { $add: [{ $multiply: ['$matchesCount', '$avgOverallRating'] }, k * prior] },
+                  { $add: ['$matchesCount', k] }
+                ]
+              },
+              1
+            ]
+          },
           battingRating: { $round: ['$avgBattingRating', 1] },
           bowlingRating: { $round: ['$avgBowlingRating', 1] },
           fieldingRating: { $round: ['$avgFieldingRating', 1] },
           confidence: {
             $cond: [
-              { $gte: ['$matchesCount', 5] }, 'Established',
-              { $cond: [{ $gte: ['$matchesCount', 3] }, 'Developing', 'Provisional'] }
+              { $gte: ['$matchesCount', CONFIDENCE_THRESHOLDS.ESTABLISHED_MIN_MATCHES] }, 'Established',
+              { $cond: [{ $gte: ['$matchesCount', CONFIDENCE_THRESHOLDS.DEVELOPING_MIN_MATCHES] }, 'Developing', 'Provisional'] }
             ]
           }
         }
@@ -721,177 +1198,8 @@ class PlayerRatingService {
     pipeline.push({ $sort: { [sortField]: -1, matchesCount: -1 } });
     pipeline.push({ $limit: Math.min(50, Math.max(1, Number(limit || 10))) });
 
-    let leaders = await db.models.PlayerMatchRating.aggregate(pipeline);
-
-    // If no verified matches exist yet, include provisional match ratings
-    if (leaders.length === 0) {
-      delete matchFilter.verification_status;
-      leaders = await db.models.PlayerMatchRating.aggregate(pipeline);
-    }
-
-    // If database has very few records, fall back to calculating from InningsBatter / InningsBowler / Player stats
-    if (leaders.length === 0) {
-      return this._fallbackLeaderboard(category, format, limit);
-    }
-
-    return leaders;
-  }
-
-  async _fallbackLeaderboard(category = 'overall', format = 'ALL', limit = 10) {
-    const maxLimit = Math.min(50, Math.max(1, Number(limit || 10)));
-    const normFormat = format && format !== 'ALL' ? format.toUpperCase().replace(/[\s-]/g, '_') : 'ALL';
-
-    const [players, teams, matches, inningsBatters, inningsBowlers] = await Promise.all([
-      db.models.Player.find({}).lean(),
-      db.models.Team ? db.models.Team.find({}).select('id name stats').lean() : Promise.resolve([]),
-      db.models.Match ? db.models.Match.find({ status: { $in: ['COMPLETED', 'LIVE'] } }).select('id match_type winner_id player_of_the_match').lean() : Promise.resolve([]),
-      db.models.InningsBatter ? db.models.InningsBatter.find({}).lean() : Promise.resolve([]),
-      db.models.InningsBowler ? db.models.InningsBowler.find({}).lean() : Promise.resolve([])
-    ]);
-
-    const teamMap = {};
-    (teams || []).forEach(t => { teamMap[t.id] = t; });
-
-    const matchMap = {};
-    (matches || []).forEach(m => { matchMap[m.id] = m; });
-
-    // Group innings batting & bowling records by player_id (filtered by format if specified)
-    const batByPlayer = {};
-    (inningsBatters || []).forEach(ib => {
-      if (!ib.player_id) return;
-      const m = ib.match_id ? matchMap[ib.match_id] : null;
-      const mFmt = (m?.match_type || 'T20').toUpperCase().replace(/[\s-]/g, '_');
-      if (normFormat !== 'ALL' && mFmt !== normFormat) return;
-      if (!batByPlayer[ib.player_id]) batByPlayer[ib.player_id] = [];
-      batByPlayer[ib.player_id].push({ ...ib, _format: mFmt, _match: m });
-    });
-
-    const bowlByPlayer = {};
-    (inningsBowlers || []).forEach(ibw => {
-      if (!ibw.player_id) return;
-      const m = ibw.match_id ? matchMap[ibw.match_id] : null;
-      const mFmt = (m?.match_type || 'T20').toUpperCase().replace(/[\s-]/g, '_');
-      if (normFormat !== 'ALL' && mFmt !== normFormat) return;
-      if (!bowlByPlayer[ibw.player_id]) bowlByPlayer[ibw.player_id] = [];
-      bowlByPlayer[ibw.player_id].push({ ...ibw, _format: mFmt, _match: m });
-    });
-
-    const computed = [];
-
-    for (const p of players) {
-      const pBats = batByPlayer[p.id] || [];
-      const pBowls = bowlByPlayer[p.id] || [];
-      const stats = p.stats || {};
-
-      const hasInningsData = pBats.length > 0 || pBowls.length > 0;
-      const hasCareerStats = (stats.runs || 0) > 0 || (stats.balls || 0) > 0 || (stats.wickets || 0) > 0 || (stats.overs || 0) > 0 || (stats.catches || 0) > 0 || (stats.stumpings || 0) > 0;
-
-      if (!hasInningsData && !hasCareerStats) {
-        continue;
-      }
-
-      if (hasInningsData) {
-        // Compute per-innings/match ratings using the real engine
-        const matchBuckets = {};
-        pBats.forEach(b => {
-          const key = b.match_id || b.innings_id || 'm0';
-          if (!matchBuckets[key]) matchBuckets[key] = { bat: null, bowl: null, format: b._format, match: b._match };
-          matchBuckets[key].bat = b;
-        });
-        pBowls.forEach(bw => {
-          const key = bw.match_id || bw.innings_id || 'm0';
-          if (!matchBuckets[key]) matchBuckets[key] = { bat: null, bowl: null, format: bw._format, match: bw._match };
-          matchBuckets[key].bowl = bw;
-        });
-
-        const bucketList = Object.values(matchBuckets);
-        let overallSum = 0; let overallCnt = 0;
-        let batSum = 0; let batCnt = 0;
-        let bowlSum = 0; let bowlCnt = 0;
-        let fieldSum = 0; let fieldCnt = 0;
-
-        for (const bk of bucketList) {
-          const isWinner = bk.match?.winner_id && p.team_id === bk.match.winner_id;
-          const isPOTM = bk.match?.player_of_the_match === p.id || bk.match?.player_of_the_match === p.name;
-          const res = this.calculateMatchRating({
-            battingStats: bk.bat,
-            bowlingStats: bk.bowl,
-            fieldingStats: null,
-            matchContext: { team_total_runs: 160, team_won: Boolean(isWinner), player_of_the_match: Boolean(isPOTM) },
-            role: p.role || 'BATTER',
-            format: bk.format || 'T20'
-          });
-          if (res.overall_rating !== null) { overallSum += res.overall_rating; overallCnt++; }
-          if (res.batting_rating !== null) { batSum += res.batting_rating; batCnt++; }
-          if (res.bowling_rating !== null) { bowlSum += res.bowling_rating; bowlCnt++; }
-          if (res.fielding_rating !== null) { fieldSum += res.fielding_rating; fieldCnt++; }
-        }
-
-        const matchesCount = Math.max(bucketList.length, Number(stats.matches || 0) || bucketList.length);
-        const confidence = matchesCount >= 5 ? 'Established' : (matchesCount >= 3 ? 'Developing' : 'Provisional');
-
-        computed.push({
-          playerId: p.id,
-          playerName: p.name,
-          role: p.role || 'Player',
-          matchesCount,
-          overallRating: overallCnt > 0 ? Number((overallSum / overallCnt).toFixed(1)) : null,
-          battingRating: batCnt > 0 ? Number((batSum / batCnt).toFixed(1)) : null,
-          bowlingRating: bowlCnt > 0 ? Number((bowlSum / bowlCnt).toFixed(1)) : null,
-          fieldingRating: fieldCnt > 0 ? Number((fieldSum / fieldCnt).toFixed(1)) : null,
-          confidence
-        });
-      } else if (normFormat === 'ALL') {
-        // Derive per-match average from aggregated Player.stats
-        const teamMatches = teamMap[p.team_id]?.stats?.matches || 0;
-        const matchesCount = Math.max(1, Number(stats.matches || teamMatches || 1));
-        const res = this.calculateMatchRating({
-          battingStats: (stats.runs > 0 || stats.balls > 0) ? {
-            runs: stats.runs / matchesCount,
-            balls: (stats.balls || Math.round(stats.runs * 0.8)) / matchesCount,
-            fours: (stats.fours || 0) / matchesCount,
-            sixes: (stats.sixes || 0) / matchesCount,
-            is_out: true
-          } : null,
-          bowlingStats: (stats.wickets > 0 || stats.overs > 0) ? {
-            overs: (stats.overs || (matchesCount * 2)) / matchesCount,
-            wickets: (stats.wickets || 0) / matchesCount,
-            runs_conceded: (stats.runs_conceded || 0) / matchesCount,
-            maidens: (stats.maidens || 0) / matchesCount
-          } : null,
-          fieldingStats: ((stats.catches || 0) + (stats.stumpings || 0)) > 0 ? {
-            catches: (stats.catches || 0) / matchesCount,
-            stumpings: (stats.stumpings || 0) / matchesCount
-          } : null,
-          matchContext: { team_total_runs: 160, team_won: false, player_of_the_match: false },
-          role: p.role || 'BATTER',
-          format: 'T20'
-        });
-
-        const confidence = matchesCount >= 5 ? 'Established' : (matchesCount >= 3 ? 'Developing' : 'Provisional');
-        computed.push({
-          playerId: p.id,
-          playerName: p.name,
-          role: p.role || 'Player',
-          matchesCount,
-          overallRating: res.overall_rating,
-          battingRating: res.batting_rating,
-          bowlingRating: res.bowling_rating,
-          fieldingRating: res.fielding_rating,
-          confidence
-        });
-      }
-    }
-
-    const sortKey = category === 'batting' ? 'battingRating' : (category === 'bowling' ? 'bowlingRating' : 'overallRating');
-    computed.sort((a, b) => {
-      const va = a[sortKey] ?? -1;
-      const vb = b[sortKey] ?? -1;
-      if (vb !== va) return vb - va;
-      return (b.matchesCount || 0) - (a.matchesCount || 0);
-    });
-
-    return computed.slice(0, maxLimit);
+    const leaders = await db.models.PlayerMatchRating.aggregate(pipeline);
+    return leaders || [];
   }
 }
 

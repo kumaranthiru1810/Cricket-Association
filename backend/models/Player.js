@@ -20,6 +20,53 @@ const PlayerSchema = new mongoose.Schema({
   bowling_style: { type: String, default: 'Right Arm Medium' },
   photo: { type: String, default: null },
   image_path: { type: String, default: null },
+  photo_phash: { type: String, default: null, index: true },
+  photo_verification_status: {
+    type: String,
+    enum: ['VERIFIED', 'PENDING_REVIEW', 'REJECTED', 'NONE'],
+    default: 'NONE',
+    index: true
+  },
+  photo_verification_reason: { type: String, default: '' },
+  photo_verified_by: { type: String, default: null },
+  photo_verified_at: { type: Date, default: null },
+  photo_verification_history: [{
+    status: { type: String, default: 'PENDING_REVIEW' },
+    reason: { type: String, default: '' },
+    actor: { type: String, default: '' },
+    actor_role: { type: String, default: 'SYSTEM' },
+    photo: { type: String, default: null },
+    timestamp: { type: Date, default: Date.now }
+  }],
+  photo_status: {
+    type: String,
+    enum: ['PENDING', 'AUTO_PASS', 'NEEDS_REVIEW', 'REJECTED', 'APPROVED'],
+    default: 'PENDING',
+    index: true
+  },
+  photo_checks: {
+    type: {
+      faceCount: { type: Number, default: null },
+      faceScore: { type: Number, default: null },
+      faceSizeRatio: { type: Number, default: null },
+      yaw: { type: Number, default: null },
+      pitch: { type: Number, default: null },
+      blurScore: { type: Number, default: null },
+      brightness: { type: Number, default: null },
+      nsfwScore: { type: Number, default: null },
+      antispoofScore: { type: Number, default: null },
+      livenessScore: { type: Number, default: null },
+      reasons: { type: [String], default: [] }
+    },
+    select: false,
+    default: undefined
+  },
+  photo_reviewed_by: { type: String, default: null },
+  photo_reviewed_at: { type: Date, default: null },
+  photo_reject_reason: { type: String, default: '' },
+  face_embedding: { type: [Number], select: false, default: undefined },
+  photo_reupload_attempts_today: { type: Number, default: 0 },
+  photo_reupload_date: { type: String, default: null },
   status: { type: String, default: 'ACTIVE' },
   stats: {
     matches: { type: Number, default: 0 },
@@ -39,7 +86,11 @@ const PlayerSchema = new mongoose.Schema({
     catches: { type: Number, default: 0 },
     stumpings: { type: Number, default: 0 },
     run_outs: { type: Number, default: 0 },
-    potm_awards: { type: Number, default: 0 }
+    potm_awards: { type: Number, default: 0 },
+    economy: { type: Number, default: 0 },
+    best_bowling: { type: String, default: null },
+    best_bowling_wickets: { type: Number, default: 0 },
+    best_bowling_runs: { type: Number, default: 0 }
   },
   team_membership_history: [{
     team_id: { type: String, required: true },

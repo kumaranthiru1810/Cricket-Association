@@ -134,6 +134,17 @@ class UndoEditService {
     }
 
     try {
+      require('../playerRatingService').enqueueMatchRatingRecalculation(matchId, 'UNDO_LAST_DELIVERY');
+    } catch (_e) {}
+
+    try {
+      const mDoc = await db.models.Match.findOne({ id: matchId }).select('status').lean();
+      if (mDoc && mDoc.status === 'COMPLETED') {
+        require('../playerRatingService').enqueueMatchRatingRecalculation(matchId, 'EDIT_DELIVERY');
+      }
+    } catch (_e) {}
+
+    try {
       broadcastScoreUpdate(matchId, {
         action: 'DELIVERY_UNDONE',
         undoneDeliveryId: lastDelivery.id,
@@ -394,6 +405,13 @@ class UndoEditService {
         }
       );
     }
+
+    try {
+      const mDoc = await db.models.Match.findOne({ id: matchId }).select('status').lean();
+      if (mDoc && mDoc.status === 'COMPLETED') {
+        require('../playerRatingService').enqueueMatchRatingRecalculation(matchId, 'EDIT_DELIVERY');
+      }
+    } catch (_e) {}
 
     try {
       broadcastScoreUpdate(matchId, {

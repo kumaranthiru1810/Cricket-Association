@@ -435,9 +435,7 @@
           pointer-events: none;
           z-index: 1;
         "
-      >
-        <source src="/preloader.mp4" type="video/mp4" />
-      </video>
+      ></video>
 
       <!-- Main Video Container - 100% Contained, Nothing Hidden -->
       <div style="
@@ -463,11 +461,7 @@
           playsinline
           webkit-playsinline
           preload="auto"
-        >
-          <source src="/preloader.mp4" type="video/mp4" />
-          <source src="./preloader.mp4" type="video/mp4" />
-          <source src="/assets/preloader.mp4" type="video/mp4" />
-        </video>
+        ></video>
       </div>
 
       <!-- Bottom Progress Bar & Title -->
@@ -679,6 +673,18 @@
             forceEnableStadiumAudio();
           });
         }
+
+        // Select mobile vs desktop preloader video based on viewport width
+        var isMobileView = window.innerWidth <= 768;
+        var preloaderSrc = isMobileView ? '/preloader-mobile.mp4' : '/preloader.mp4';
+        var backdropVideo = document.getElementById('cfvd-preloader-backdrop');
+        if (backdropVideo) {
+          backdropVideo.src = preloaderSrc;
+          backdropVideo.load();
+          backdropVideo.play().catch(function() {});
+        }
+        video.src = preloaderSrc;
+        video.load();
 
         // Start muted cleanly so browsers never emit autoplay NotAllowedError
         video.muted = true;

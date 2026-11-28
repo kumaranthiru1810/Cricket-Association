@@ -116,18 +116,101 @@ router.get('/profile', requirePlayerAuth, async (req, res) => {
  * POST /api/player/upload-photo
  * Upload or update player profile photo and image path
  */
-router.post('/upload-photo', requirePlayerAuth, uploadSingle, processImageUpload, async (req, res) => {
+router.post('/upload-photo', requirePlayerAuth, uploadSingle, async (req, res) => {
   try {
-    const photo = req.fileUrl || req.body?.photo || req.body?.image || req.body?.image_path || req.body?.imagePath;
-    if (!photo) {
+    const rawInput = req.file?.buffer || req.body?.photo || req.body?.image || req.body?.image_path || req.body?.imagePath;
+    if (!rawInput) {
       return res.status(400).json({ success: false, message: 'No photo uploaded.' });
     }
-    const updated = await playerService.updateProfile(req.user.id, req.user.email, { photo });
+
+    const passportPhotoService = require('../services/passportPhotoService');
+    const photoConfig = require('../config/photoVerification');
+    const db = require('../config/db');
+    await db.initDb();
+
+    // Enforce max 5 photo re-upload attempts per day
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const existingUser = await db.models.User.findOne({ $or: [{ id: req.user.id }, { email: req.user.email }] })
+      .select('photo_reupload_attempts_today photo_reupload_date')
+      .lean();
+    const attemptsToday = existingUser?.photo_reupload_date === todayKey ? Number(existingUser.photo_reupload_attempts_today || 0) : 0;
+    if (attemptsToday >= photoConfig.MAX_REUPLOAD_ATTEMPTS_PER_DAY) {
+      return res.status(429).json({
+        success: false,
+        message: `Maximum ${photoConfig.MAX_REUPLOAD_ATTEMPTS_PER_DAY} photo upload attempts per day reached. Please try again tomorrow.`
+      });
+    }
+
+    let clientFaceAnalysis = req.body?.clientFaceAnalysis || null;
+    if (typeof clientFaceAnalysis === 'string') {
+      try { clientFaceAnalysis = JSON.parse(clientFaceAnalysis); } catch (_e) { clientFaceAnalysis = null; }
+    }
+
+    const verified = await passportPhotoService.verifyAndProcessPassportPhoto({
+      input: rawInput,
+      email: req.user.email,
+      userId: req.user.id,
+      clientFaceAnalysis
+    });
+
+    await Promise.all([
+      db.models.User.updateOne(
+        { $or: [{ id: req.user.id }, { email: req.user.email }] },
+        {
+          $set: {
+            photo: verified.url,
+            image_path: verified.url,
+            photo_phash: verified.phash,
+            photo_verification_status: verified.verificationStatus,
+            photo_verification_reason: verified.verificationReason,
+            photo_status: verified.photoStatus || 'NEEDS_REVIEW',
+            photo_checks: verified.photoChecks,
+            photo_reupload_attempts_today: attemptsToday + 1,
+            photo_reupload_date: todayKey,
+            'player_details.photo': verified.url,
+            'player_details.image_path': verified.url,
+            'player_details.photo_phash': verified.phash,
+            'player_details.photo_verification_status': verified.verificationStatus,
+            'player_details.photo_verification_reason': verified.verificationReason,
+            'player_details.photo_metadata': verified.metadata
+          }
+        }
+      ),
+      db.models.Player.updateMany(
+        { $or: [{ id: req.user.id }, { email: req.user.email }] },
+        {
+          $set: {
+            photo: verified.url,
+            image_path: verified.url,
+            photo_phash: verified.phash,
+            photo_verification_status: verified.verificationStatus,
+            photo_verification_reason: verified.verificationReason,
+            photo_status: verified.photoStatus || 'NEEDS_REVIEW',
+            photo_checks: verified.photoChecks,
+            photo_reupload_attempts_today: attemptsToday + 1,
+            photo_reupload_date: todayKey
+          }
+        }
+      )
+    ]);
+
+    const updated = await playerService.getProfile(req.user.id, req.user.email).catch(() => ({
+      photo: verified.url,
+      image_path: verified.url
+    }));
+
     res.status(200).json({
       success: true,
-      message: 'Profile photo uploaded successfully!',
-      photo: updated.photo,
-      image_path: updated.image_path,
+      message: verified.verificationStatus === 'VERIFIED'
+        ? 'Passport photo verified and uploaded successfully!'
+        : 'Passport photo uploaded and queued for Admin review.',
+      photo: verified.url,
+      image_path: verified.url,
+      photoVerification: {
+        status: verified.verificationStatus,
+        reason: verified.verificationReason,
+        metadata: verified.metadata
+      },
       profile: updated
     });
   } catch (err) {
@@ -282,7 +365,11 @@ router.get('/ratings', requirePlayerAuth, async (req, res) => {
 
 router.get('/career-ratings', requirePlayerAuth, async (req, res) => {
   try {
-    const career = await playerRatingService.getCareerRatings(req.user.id);
+    const career = await playerRatingService.getCareerRatings(req.user.id, {
+      format: req.query.format,
+      tournamentId: req.query.tournamentId
+    });
+    res.set('Cache-Control', 'private, max-age=60');
     res.status(200).json({ success: true, career });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -337,7 +424,11 @@ router.get('/:id/ratings', async (req, res) => {
 
 router.get('/:id/career-ratings', async (req, res) => {
   try {
-    const career = await playerRatingService.getCareerRatings(req.params.id);
+    const career = await playerRatingService.getCareerRatings(req.params.id, {
+      format: req.query.format,
+      tournamentId: req.query.tournamentId
+    });
+    res.set('Cache-Control', 'public, max-age=60');
     res.status(200).json({ success: true, playerId: req.params.id, career });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

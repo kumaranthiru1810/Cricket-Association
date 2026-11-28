@@ -11,7 +11,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ActivityIndicator, ScrollView, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ActivityIndicator, ScrollView, Image, useWindowDimensions, Platform } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import PageHeader from '../components/PageHeader';
 import DataTable, { ColumnDef } from '../components/DataTable';
@@ -19,8 +19,10 @@ import StatusBadge from '../components/StatusBadge';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { EditIcon, CheckIcon, CloseIcon, EyeIcon, ShieldIcon } from '../components/Icons';
 import { adminApi } from '../services/adminApi';
+import { resolveImageUrl } from '../../services/api';
 import { useAdminLayout } from '../components/AdminLayout';
-// import DualAdminSecurityModal from '../../components/admin/DualAdminSecurityModal';
+import DualAdminSecurityModal from '../../components/admin/DualAdminSecurityModal';
+import RegistrationScreen from '../../screens/auth/RegistrationScreen';
 
 const PERMANENT_SUPER_ADMIN = 'Super Administrator';
 
@@ -29,11 +31,12 @@ export const UsersPage: React.FC = () => {
   const isMobile = width < 768;
   const isSmall = width < 480;
   const { showToast } = useAdminLayout();
-  // const [showDualSecurityModal, setShowDualSecurityModal] = useState(false);
+  const [showDualSecurityModal, setShowDualSecurityModal] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [photoVerifyOnly, setPhotoVerifyOnly] = useState(false);
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
 
@@ -43,8 +46,40 @@ export const UsersPage: React.FC = () => {
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editMobile, setEditMobile] = useState('');
+  const [editAadhaar, setEditAadhaar] = useState('');
   const [editRole, setEditRole] = useState('USER');
   const [editStatus, setEditStatus] = useState('ACTIVE');
+  // Extended Registration Fields for Edit Mode
+  const [editClub, setEditClub] = useState('');
+  const [editFatherName, setEditFatherName] = useState('');
+  const [editDob, setEditDob] = useState('');
+  const [editAge, setEditAge] = useState('');
+  const [editPlaceOfBirth, setEditPlaceOfBirth] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [editTaluk, setEditTaluk] = useState('Virudhunagar');
+  const [editCategory, setEditCategory] = useState('Senior Men');
+  const [editPlayingRole, setEditPlayingRole] = useState('Batsman');
+  const [editOccupationType, setEditOccupationType] = useState('STUDYING');
+  const [editWorkingInst, setEditWorkingInst] = useState('');
+  const [editStudyingInst, setEditStudyingInst] = useState('');
+  const [editStudyLevel, setEditStudyLevel] = useState('COLLEGE');
+  const [editBranchYearSec, setEditBranchYearSec] = useState('');
+  const [editClassSection, setEditClassSection] = useState('');
+  const [editBatterHand, setEditBatterHand] = useState('RH');
+  const [editBatterPos, setEditBatterPos] = useState('TOP_ORDER');
+  const [editBowlerHand, setEditBowlerHand] = useState('RH');
+  const [editBowlerType, setEditBowlerType] = useState('MEDIUM');
+  const [editIsKeeper, setEditIsKeeper] = useState(false);
+  const [editDeclPlace, setEditDeclPlace] = useState('Virudhunagar');
+  const [editDeclDate, setEditDeclDate] = useState('');
+  const [editScorerCert, setEditScorerCert] = useState('');
+  const [editUmpireQual, setEditUmpireQual] = useState('');
+  const [editUmpireCertNo, setEditUmpireCertNo] = useState('');
+  const [editUmpireExp, setEditUmpireExp] = useState('');
+  const [editUmpireSpec, setEditUmpireSpec] = useState('');
+  const [editUmpirePrevOrg, setEditUmpirePrevOrg] = useState('');
+  const [editUmpireDistrict, setEditUmpireDistrict] = useState('');
+  const [editUmpireState, setEditUmpireState] = useState('');
 
   // Add Administrator Modal State
   const [showAddAdminModal, setShowAddAdminModal] = useState(false);
@@ -70,13 +105,23 @@ export const UsersPage: React.FC = () => {
   // Status toggle confirmation
   const [confirmToggle, setConfirmToggle] = useState<{
     visible: boolean;
-    user: any;
+    user: any | null;
     targetStatus: string;
-  }>({
-    visible: false,
-    user: null,
-    targetStatus: ''
-  });
+  }>({ visible: false, user: null, targetStatus: 'ACTIVE' });
+
+  // Permanent User Deletion confirmation
+  const [confirmDeleteUser, setConfirmDeleteUser] = useState<{
+    visible: boolean;
+    user: any | null;
+  }>({ visible: false, user: null });
+
+  // Add User / Team Modal State (renders exact RegistrationScreen in adminMode)
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [showAddTeamModal, setShowAddTeamModal] = useState(false);
+
+  // Admin Photo Verification Reason & Loading
+  const [photoRejectReason, setPhotoRejectReason] = useState('');
+  const [verifyingPhoto, setVerifyingPhoto] = useState(false);
 
   const loadUsers = async () => {
     setLoading(true);
@@ -136,12 +181,46 @@ export const UsersPage: React.FC = () => {
   };
 
   const handleOpenEdit = (user: any) => {
+    const pd = user.player_details || {};
+    const sd = user.scorer_details || {};
+    const ud = user.umpire_details || {};
     setActiveUser(user);
-    setEditName(user.name);
-    setEditEmail(user.email);
-    setEditMobile(user.mobile || '');
-    setEditRole(user.role);
+    setEditName(user.name || '');
+    setEditEmail(user.email || '');
+    setEditMobile(user.mobile || pd.phone || pd.mobile || '');
+    setEditAadhaar(user.aadhaar || pd.aadhaar || pd.aadhaar_number || '');
+    setEditRole(user.role || 'USER');
     setEditStatus(user.status || 'ACTIVE');
+    setEditClub(pd.club_choice || '');
+    setEditFatherName(pd.father_name || '');
+    setEditDob(pd.date_of_birth || '');
+    setEditAge(pd.age ? String(pd.age) : '');
+    setEditPlaceOfBirth(pd.place_of_birth || '');
+    setEditAddress(pd.address || '');
+    setEditTaluk(pd.taluk || sd.taluk || ud.taluk || 'Virudhunagar');
+    setEditCategory(pd.category || 'Senior Men');
+    setEditPlayingRole(pd.role || pd.playing_role || 'Batsman');
+    setEditOccupationType(pd.occupation_type || (pd.working_institution ? 'WORKING' : 'STUDYING'));
+    setEditWorkingInst(pd.working_institution || '');
+    setEditStudyingInst(pd.studying_institution || '');
+    setEditStudyLevel(pd.study_level || (pd.class_section ? 'SCHOOL' : 'COLLEGE'));
+    setEditBranchYearSec(pd.branch_year_sec || '');
+    setEditClassSection(pd.class_section || '');
+    setEditBatterHand(pd.batter_hand || 'RH');
+    setEditBatterPos(pd.batter_position || 'TOP_ORDER');
+    setEditBowlerHand(pd.bowler_hand || '');
+    setEditBowlerType(pd.bowler_type || '');
+    setEditIsKeeper(Boolean(pd.is_wicket_keeper));
+    setEditDeclPlace(pd.declaration_place || pd.taluk || 'Virudhunagar');
+    setEditDeclDate(pd.declaration_date || '');
+    setEditScorerCert(sd.certification_level || '');
+    setEditUmpireQual(ud.qualification || ud.certification_level || '');
+    setEditUmpireCertNo(ud.certification_number || '');
+    setEditUmpireExp(ud.experience || '');
+    setEditUmpireSpec(ud.specialization || '');
+    setEditUmpirePrevOrg(ud.previous_organization || '');
+    setEditUmpireDistrict(ud.district || '');
+    setEditUmpireState(ud.state || 'Tamil Nadu');
     setIsEditMode(true);
   };
 
@@ -346,8 +425,55 @@ export const UsersPage: React.FC = () => {
         name: editName.trim(),
         email: editEmail.trim(),
         mobile: editMobile.trim(),
+        aadhaar: editAadhaar.trim(),
         role: editRole,
-        status: editStatus
+        status: editStatus,
+        ...(String(editRole).toUpperCase() === 'PLAYER' ? {
+          player_details: {
+            club_choice: editClub.trim(),
+            father_name: editFatherName.trim(),
+            date_of_birth: editDob.trim(),
+            age: editAge.trim(),
+            place_of_birth: editPlaceOfBirth.trim(),
+            address: editAddress.trim(),
+            taluk: editTaluk,
+            category: editCategory,
+            role: editPlayingRole,
+            playing_role: editPlayingRole,
+            occupation_type: editOccupationType,
+            working_institution: editOccupationType === 'WORKING' ? editWorkingInst.trim() : '',
+            studying_institution: editOccupationType === 'STUDYING' ? editStudyingInst.trim() : '',
+            study_level: editOccupationType === 'STUDYING' ? editStudyLevel : '',
+            branch_year_sec: editOccupationType === 'STUDYING' && editStudyLevel === 'COLLEGE' ? editBranchYearSec.trim() : '',
+            class_section: editOccupationType === 'STUDYING' && editStudyLevel === 'SCHOOL' ? editClassSection.trim() : '',
+            batter_hand: editBatterHand,
+            batter_position: editBatterPos,
+            bowler_hand: editBowlerHand,
+            bowler_type: editBowlerType,
+            is_wicket_keeper: editIsKeeper,
+            declaration_place: editDeclPlace.trim(),
+            declaration_date: editDeclDate.trim()
+          }
+        } : {}),
+        ...(String(editRole).toUpperCase() === 'SCORER' ? {
+          scorer_details: {
+            certification_level: editScorerCert.trim(),
+            taluk: editTaluk
+          }
+        } : {}),
+        ...(String(editRole).toUpperCase() === 'UMPIRE' ? {
+          umpire_details: {
+            qualification: editUmpireQual.trim(),
+            certification_level: editUmpireQual.trim(),
+            certification_number: editUmpireCertNo.trim(),
+            experience: editUmpireExp.trim(),
+            specialization: editUmpireSpec.trim(),
+            previous_organization: editUmpirePrevOrg.trim(),
+            district: editUmpireDistrict.trim() || editTaluk,
+            taluk: editUmpireDistrict.trim() || editTaluk,
+            state: editUmpireState.trim()
+          }
+        } : {})
       });
       showToast('User record updated successfully.', 'success');
       setActiveUser(null);
@@ -366,6 +492,19 @@ export const UsersPage: React.FC = () => {
       loadUsers();
     } catch (err: any) {
       showToast(`Status update failed: ${err.message}`, 'error');
+    }
+  };
+
+  const handleConfirmDeleteUser = async () => {
+    const user = confirmDeleteUser.user;
+    setConfirmDeleteUser({ visible: false, user: null });
+    if (!user) return;
+    try {
+      await adminApi.deleteUser(user.id);
+      showToast(`${user.name} permanently deleted. They must register again to access the portal.`, 'success');
+      loadUsers();
+    } catch (err: any) {
+      showToast(`Delete failed: ${err.message}`, 'error');
     }
   };
 
@@ -461,7 +600,19 @@ export const UsersPage: React.FC = () => {
             </View>
           );
         }
-        return <StatusBadge status={item.status || 'ACTIVE'} size="sm" />;
+        const pvs = String(item.photo_verification_status || item.player_details?.photo_verification_status || '').toUpperCase();
+        return (
+          <View style={{ gap: 4, alignItems: 'flex-start' }}>
+            <StatusBadge status={item.status || 'ACTIVE'} size="sm" />
+            {String(item.role || '').toUpperCase() === 'PLAYER' && (pvs === 'PENDING_REVIEW' || pvs === 'REJECTED') && (
+              <View style={{ backgroundColor: pvs === 'REJECTED' ? '#fef2f2' : '#fffbeb', borderWidth: 1, borderColor: pvs === 'REJECTED' ? '#fca5a5' : '#fcd34d', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                <Text style={{ fontSize: 9.5, fontWeight: '800', color: pvs === 'REJECTED' ? '#dc2626' : '#b45309' }}>
+                  {pvs === 'REJECTED' ? '✕ PHOTO REJECTED' : '📸 FOR VERIFY'}
+                </Text>
+              </View>
+            )}
+          </View>
+        );
       }
     },
     {
@@ -570,13 +721,21 @@ export const UsersPage: React.FC = () => {
               </TouchableOpacity>
             )}
 
-            {isDynamicAdmin && (
+            {isDynamicAdmin ? (
               <TouchableOpacity
                 style={[styles.actionBtn, { borderColor: '#fca5a5', backgroundColor: '#fef2f2' }]}
                 onPress={() => handleInitiateAdminStatusAction(item, 'REMOVE_ADMIN')}
                 accessibilityLabel="Remove Administrator"
               >
                 <Ionicons name="trash-outline" size={13} color="#dc2626" />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.actionBtn, { borderColor: '#fca5a5', backgroundColor: '#fef2f2' }]}
+                onPress={() => setConfirmDeleteUser({ visible: true, user: item })}
+                accessibilityLabel="Delete User Permanently"
+              >
+                <Text style={{ fontSize: 11 }}>🗑️</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -587,40 +746,56 @@ export const UsersPage: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <PageHeader
-        title="Players Management"
-        subtitle="Manage registered federation players and member accounts."
-        breadcrumbs={[{ label: 'Dashboard' }, { label: 'Players' }]}
-        actions={
-          <View style={[styles.headerActionsWrap, isMobile && { width: '100%', gap: 8 }]}>
-            {/* Dual-Admin Security (Commented out - not needed)
-            <TouchableOpacity
-              style={[
-                styles.addAdminBtn,
-                { backgroundColor: '#b91c1c' },
-                isMobile && { flex: 1, minWidth: 140, justifyContent: 'center', paddingHorizontal: 10 }
-              ]}
-              onPress={() => setShowDualSecurityModal(true)}
-              activeOpacity={0.8}
-            >
-              <ShieldIcon size={15} color="#ffffff" style={{ marginRight: 6 }} />
-              <Text style={styles.addAdminBtnText} numberOfLines={1}>Dual-Admin Security</Text>
-            </TouchableOpacity>
-            */}
-            <TouchableOpacity
-              style={[
-                styles.addAdminBtn,
-                isMobile && { flex: 1, minWidth: 140, justifyContent: 'center', paddingHorizontal: 10 }
-              ]}
-              onPress={() => setShowAddAdminModal(true)}
-              activeOpacity={0.8}
-            >
-              <ShieldIcon size={15} color="#ffffff" style={{ marginRight: 6 }} />
-              <Text style={styles.addAdminBtnText} numberOfLines={1}>+ Add Administrator</Text>
-            </TouchableOpacity>
-          </View>
-        }
-      />
+      {/* Top Right Professional Action Buttons (Highlighted header text removed per request) */}
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 14 }}>
+        <View style={[styles.headerActionsWrap, isMobile && { width: '100%', gap: 8 }]}>
+          <TouchableOpacity
+            style={[
+              styles.addAdminBtn,
+              { backgroundColor: '#059669' },
+              isMobile && { flex: 1, minWidth: 130, justifyContent: 'center', paddingHorizontal: 10 }
+            ]}
+            onPress={() => setShowAddUserModal(true)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.addAdminBtnText} numberOfLines={1}>+ Add User</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.addAdminBtn,
+              { backgroundColor: '#0284c7' },
+              isMobile && { flex: 1, minWidth: 130, justifyContent: 'center', paddingHorizontal: 10 }
+            ]}
+            onPress={() => setShowAddTeamModal(true)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.addAdminBtnText} numberOfLines={1}>+ Add Team</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.addAdminBtn,
+              { backgroundColor: '#b91c1c' },
+              isMobile && { flex: 1, minWidth: 140, justifyContent: 'center', paddingHorizontal: 10 }
+            ]}
+            onPress={() => setShowDualSecurityModal(true)}
+            activeOpacity={0.8}
+          >
+            <ShieldIcon size={15} color="#ffffff" style={{ marginRight: 6 }} />
+            <Text style={styles.addAdminBtnText} numberOfLines={1}>🛡️ Dual-Admin Security</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.addAdminBtn,
+              isMobile && { flex: 1, minWidth: 140, justifyContent: 'center', paddingHorizontal: 10 }
+            ]}
+            onPress={() => setShowAddAdminModal(true)}
+            activeOpacity={0.8}
+          >
+            <ShieldIcon size={15} color="#ffffff" style={{ marginRight: 6 }} />
+            <Text style={styles.addAdminBtnText} numberOfLines={1}>+ Add Administrator</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
 
       {/* Role & Status Filter Dropdowns */}
       <View style={[styles.filtersBar, { zIndex: 50, position: 'relative' }]}>
@@ -709,17 +884,50 @@ export const UsersPage: React.FC = () => {
               )}
             </View>
           </View>
+
+          {/* For Photo Verification Queue Toggle */}
+          <View style={{ justifyContent: 'flex-end' }}>
+            {(() => {
+              const forVerifyCount = users.filter(u => {
+                const pvs = String(u.photo_verification_status || u.player_details?.photo_verification_status || '').toUpperCase();
+                return String(u.role || '').toUpperCase() === 'PLAYER' && (pvs === 'PENDING_REVIEW' || pvs === 'REJECTED');
+              }).length;
+              return (
+                <TouchableOpacity
+                  onPress={() => setPhotoVerifyOnly(prev => !prev)}
+                  style={{
+                    backgroundColor: photoVerifyOnly ? '#b45309' : '#fffbeb',
+                    borderWidth: 1.5,
+                    borderColor: '#f59e0b',
+                    paddingHorizontal: 14,
+                    paddingVertical: 9,
+                    borderRadius: 8,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  <Text style={{ fontSize: 12.5, fontWeight: '800', color: photoVerifyOnly ? '#ffffff' : '#92400e' }}>
+                    📸 For Verify ({forVerifyCount})
+                  </Text>
+                </TouchableOpacity>
+              );
+            })()}
+          </View>
         </View>
       </View>
 
       {/* Users DataTable */}
       <DataTable
-        data={users}
+        data={photoVerifyOnly ? users.filter(u => {
+          const pvs = String(u.photo_verification_status || u.player_details?.photo_verification_status || '').toUpperCase();
+          return String(u.role || '').toUpperCase() === 'PLAYER' && (pvs === 'PENDING_REVIEW' || pvs === 'REJECTED');
+        }) : users}
         columns={columns}
         keyExtractor={item => item.id}
         loading={loading}
-        searchPlaceholder="Search by name, email, or mobile..."
-        searchFields={['name', 'email', 'mobile', 'role', 'admin_level']}
+        searchPlaceholder="Search by name, Player ID, email, or mobile..."
+        searchFields={['id', 'player_id', 'playerId', 'name', 'email', 'mobile', 'role', 'admin_level']}
         emptyTitle="No accounts found"
         emptyDescription="No registered users or administrators match the specified search or filter criteria."
       />
@@ -728,10 +936,10 @@ export const UsersPage: React.FC = () => {
       {activeUser && (
         <Modal visible={Boolean(activeUser)} transparent animationType="fade" onRequestClose={() => setActiveUser(null)}>
           <View style={styles.modalOverlay}>
-            <View style={styles.modalDialog}>
+            <View style={[styles.modalDialog, (isEditMode || String(activeUser.role || '').toUpperCase() === 'PLAYER') && { maxWidth: 820, width: '96%', maxHeight: '94%' }]}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>
-                  {isEditMode ? 'Edit User Record' : 'User Account Details'}
+                  {isEditMode ? 'Edit User Record' : (String(activeUser.role || '').toUpperCase() === 'PLAYER' ? "Player's Registration Form (Official Document)" : 'User Account Details')}
                 </Text>
                 <TouchableOpacity onPress={() => setActiveUser(null)}>
                   <CloseIcon size={20} color="#64748b" />
@@ -739,24 +947,32 @@ export const UsersPage: React.FC = () => {
               </View>
 
               {isEditMode ? (
-                <View style={styles.modalBody}>
-                  <View style={styles.fieldGroup}>
-                    <Text style={styles.fieldLabel}>Full Name</Text>
-                    <TextInput style={styles.fieldInput} value={editName} onChangeText={setEditName} />
+                <ScrollView style={{ maxHeight: 580 }} contentContainerStyle={styles.modalBody}>
+                  <View style={styles.fieldRow}>
+                    <View style={[styles.fieldGroup, { flex: 1 }]}>
+                      <Text style={styles.fieldLabel}>Full Name</Text>
+                      <TextInput style={styles.fieldInput} value={editName} onChangeText={setEditName} />
+                    </View>
+                    <View style={[styles.fieldGroup, { flex: 1 }]}>
+                      <Text style={styles.fieldLabel}>Email Address</Text>
+                      <TextInput style={styles.fieldInput} value={editEmail} onChangeText={setEditEmail} keyboardType="email-address" autoCapitalize="none" />
+                    </View>
                   </View>
-                  <View style={styles.fieldGroup}>
-                    <Text style={styles.fieldLabel}>Email Address</Text>
-                    <TextInput style={styles.fieldInput} value={editEmail} onChangeText={setEditEmail} keyboardType="email-address" />
-                  </View>
-                  <View style={styles.fieldGroup}>
-                    <Text style={styles.fieldLabel}>Mobile Number</Text>
-                    <TextInput style={styles.fieldInput} value={editMobile} onChangeText={setEditMobile} keyboardType="phone-pad" />
+                  <View style={styles.fieldRow}>
+                    <View style={[styles.fieldGroup, { flex: 1 }]}>
+                      <Text style={styles.fieldLabel}>Mobile Number</Text>
+                      <TextInput style={styles.fieldInput} value={editMobile} onChangeText={setEditMobile} keyboardType="phone-pad" maxLength={10} />
+                    </View>
+                    <View style={[styles.fieldGroup, { flex: 1 }]}>
+                      <Text style={styles.fieldLabel}>Aadhaar (UIDAI 12 Digits)</Text>
+                      <TextInput style={styles.fieldInput} value={editAadhaar} onChangeText={setEditAadhaar} keyboardType="number-pad" maxLength={14} />
+                    </View>
                   </View>
                   <View style={styles.fieldRow}>
                     <View style={[styles.fieldGroup, { flex: 1 }]}>
                       <Text style={styles.fieldLabel}>Role</Text>
                       <View style={styles.roleSelectRow}>
-                        {['ADMIN', 'SCORER', 'PLAYER', 'USER'].map(r => (
+                        {['PLAYER', 'TEAM', 'SCORER', 'UMPIRE', 'ADMIN', 'USER'].map(r => (
                           <TouchableOpacity
                             key={r}
                             style={[styles.roleSelectChip, editRole === r && styles.roleSelectChipActive]}
@@ -767,22 +983,493 @@ export const UsersPage: React.FC = () => {
                         ))}
                       </View>
                     </View>
-                  </View>
-                  <View style={styles.fieldGroup}>
-                    <Text style={styles.fieldLabel}>Account Status</Text>
-                    <View style={styles.roleSelectRow}>
-                      {['ACTIVE', 'INACTIVE', 'SUSPENDED'].map(s => (
-                        <TouchableOpacity
-                          key={s}
-                          style={[styles.roleSelectChip, editStatus === s && styles.roleSelectChipActive]}
-                          onPress={() => setEditStatus(s)}
-                        >
-                          <Text style={[styles.roleSelectText, editStatus === s && styles.roleSelectTextActive]}>{s}</Text>
-                        </TouchableOpacity>
-                      ))}
+                    <View style={[styles.fieldGroup, { flex: 1 }]}>
+                      <Text style={styles.fieldLabel}>Account Status</Text>
+                      <View style={styles.roleSelectRow}>
+                        {['ACTIVE', 'PENDING', 'INACTIVE', 'SUSPENDED'].map(s => (
+                          <TouchableOpacity
+                            key={s}
+                            style={[styles.roleSelectChip, editStatus === s && styles.roleSelectChipActive]}
+                            onPress={() => setEditStatus(s)}
+                          >
+                            <Text style={[styles.roleSelectText, editStatus === s && styles.roleSelectTextActive]}>{s}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
                     </View>
                   </View>
-                </View>
+
+                  {String(editRole).toUpperCase() === 'PLAYER' && (
+                    <>
+                      <View style={{ borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 10, marginTop: 4 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#0f2452', marginBottom: 8 }}>
+                          Official CFVD Player Registration Details
+                        </Text>
+                      </View>
+                      <View style={styles.fieldRow}>
+                        <View style={[styles.fieldGroup, { flex: 1.3 }]}>
+                          <Text style={styles.fieldLabel}>Club / School / College / Academy</Text>
+                          <TextInput style={styles.fieldInput} value={editClub} onChangeText={setEditClub} />
+                        </View>
+                        <View style={[styles.fieldGroup, { flex: 1 }]}>
+                          <Text style={styles.fieldLabel}>Father&apos;s Name</Text>
+                          <TextInput style={styles.fieldInput} value={editFatherName} onChangeText={setEditFatherName} />
+                        </View>
+                      </View>
+                      <View style={styles.fieldRow}>
+                        <View style={[styles.fieldGroup, { flex: 1 }]}>
+                          <Text style={styles.fieldLabel}>Date of Birth</Text>
+                          <TextInput style={styles.fieldInput} value={editDob} onChangeText={setEditDob} placeholder="DD/MM/YYYY" />
+                        </View>
+                        <View style={[styles.fieldGroup, { flex: 0.6 }]}>
+                          <Text style={styles.fieldLabel}>Age</Text>
+                          <TextInput style={styles.fieldInput} value={editAge} onChangeText={setEditAge} keyboardType="number-pad" />
+                        </View>
+                        <View style={[styles.fieldGroup, { flex: 1 }]}>
+                          <Text style={styles.fieldLabel}>Place of Birth</Text>
+                          <TextInput style={styles.fieldInput} value={editPlaceOfBirth} onChangeText={setEditPlaceOfBirth} />
+                        </View>
+                      </View>
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Address for Communication</Text>
+                        <TextInput style={[styles.fieldInput, { minHeight: 54 }]} multiline value={editAddress} onChangeText={setEditAddress} />
+                      </View>
+                      <View style={styles.fieldRow}>
+                        <View style={[styles.fieldGroup, { flex: 1 }]}>
+                          <Text style={styles.fieldLabel}>Taluk Jurisdiction</Text>
+                          <TextInput style={styles.fieldInput} value={editTaluk} onChangeText={setEditTaluk} />
+                        </View>
+                        <View style={[styles.fieldGroup, { flex: 1 }]}>
+                          <Text style={styles.fieldLabel}>Age Category</Text>
+                          <TextInput style={styles.fieldInput} value={editCategory} onChangeText={setEditCategory} />
+                        </View>
+                        <View style={[styles.fieldGroup, { flex: 1 }]}>
+                          <Text style={styles.fieldLabel}>Playing Role</Text>
+                          <TextInput style={styles.fieldInput} value={editPlayingRole} onChangeText={setEditPlayingRole} />
+                        </View>
+                      </View>
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Occupation Status</Text>
+                        <View style={styles.roleSelectRow}>
+                          {['STUDYING', 'WORKING', 'NONE'].map(occ => (
+                            <TouchableOpacity key={occ} style={[styles.roleSelectChip, editOccupationType === occ && styles.roleSelectChipActive]} onPress={() => setEditOccupationType(occ)}>
+                              <Text style={[styles.roleSelectText, editOccupationType === occ && styles.roleSelectTextActive]}>{occ}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                      {editOccupationType === 'WORKING' && (
+                        <View style={styles.fieldGroup}>
+                          <Text style={styles.fieldLabel}>Working Institution / Bank / Govt Office</Text>
+                          <TextInput style={styles.fieldInput} value={editWorkingInst} onChangeText={setEditWorkingInst} />
+                        </View>
+                      )}
+                      {editOccupationType === 'STUDYING' && (
+                        <View style={{ gap: 8 }}>
+                          <View style={styles.roleSelectRow}>
+                            {['COLLEGE', 'SCHOOL'].map(lvl => (
+                              <TouchableOpacity key={lvl} style={[styles.roleSelectChip, editStudyLevel === lvl && styles.roleSelectChipActive]} onPress={() => setEditStudyLevel(lvl)}>
+                                <Text style={[styles.roleSelectText, editStudyLevel === lvl && styles.roleSelectTextActive]}>{lvl}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                          <View style={styles.fieldRow}>
+                            <View style={[styles.fieldGroup, { flex: 1.2 }]}>
+                              <Text style={styles.fieldLabel}>School / College Name</Text>
+                              <TextInput style={styles.fieldInput} value={editStudyingInst} onChangeText={setEditStudyingInst} />
+                            </View>
+                            <View style={[styles.fieldGroup, { flex: 1 }]}>
+                              <Text style={styles.fieldLabel}>{editStudyLevel === 'COLLEGE' ? 'Branch & Year & Sec' : 'Class & Section'}</Text>
+                              <TextInput
+                                style={styles.fieldInput}
+                                value={editStudyLevel === 'COLLEGE' ? editBranchYearSec : editClassSection}
+                                onChangeText={editStudyLevel === 'COLLEGE' ? setEditBranchYearSec : setEditClassSection}
+                              />
+                            </View>
+                          </View>
+                        </View>
+                      )}
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Proficiency (Batter / Bowler / Wicket Keeper)</Text>
+                        <View style={styles.roleSelectRow}>
+                          {['RH', 'LH'].map(h => (
+                            <TouchableOpacity key={h} style={[styles.roleSelectChip, editBatterHand === h && styles.roleSelectChipActive]} onPress={() => setEditBatterHand(h)}>
+                              <Text style={[styles.roleSelectText, editBatterHand === h && styles.roleSelectTextActive]}>Batter: {h}</Text>
+                            </TouchableOpacity>
+                          ))}
+                          {['OPEN', 'TOP_ORDER', 'MIDDLE_ORDER'].map(pos => (
+                            <TouchableOpacity key={pos} style={[styles.roleSelectChip, editBatterPos === pos && styles.roleSelectChipActive]} onPress={() => setEditBatterPos(pos)}>
+                              <Text style={[styles.roleSelectText, editBatterPos === pos && styles.roleSelectTextActive]}>{pos.replace('_', ' ')}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                        <View style={[styles.roleSelectRow, { marginTop: 6 }]}>
+                          {['RH', 'LH', ''].map(bh => (
+                            <TouchableOpacity key={bh || 'NONE'} style={[styles.roleSelectChip, editBowlerHand === bh && styles.roleSelectChipActive]} onPress={() => setEditBowlerHand(bh)}>
+                              <Text style={[styles.roleSelectText, editBowlerHand === bh && styles.roleSelectTextActive]}>Bowler: {bh || 'None'}</Text>
+                            </TouchableOpacity>
+                          ))}
+                          {['MEDIUM', 'OFF_SPIN', 'LEG_SPINNER', 'ORTHODOX', 'CHINAMAN'].map(bt => (
+                            <TouchableOpacity key={bt} style={[styles.roleSelectChip, editBowlerType === bt && styles.roleSelectChipActive]} onPress={() => setEditBowlerType(bt)}>
+                              <Text style={[styles.roleSelectText, editBowlerType === bt && styles.roleSelectTextActive]}>{bt.replace('_', ' ')}</Text>
+                            </TouchableOpacity>
+                          ))}
+                          <TouchableOpacity style={[styles.roleSelectChip, editIsKeeper && styles.roleSelectChipActive]} onPress={() => setEditIsKeeper(!editIsKeeper)}>
+                            <Text style={[styles.roleSelectText, editIsKeeper && styles.roleSelectTextActive]}>Keeper: {editIsKeeper ? 'YES' : 'NO'}</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                      <View style={styles.fieldRow}>
+                        <View style={[styles.fieldGroup, { flex: 1 }]}>
+                          <Text style={styles.fieldLabel}>Declaration Place</Text>
+                          <TextInput style={styles.fieldInput} value={editDeclPlace} onChangeText={setEditDeclPlace} />
+                        </View>
+                        <View style={[styles.fieldGroup, { flex: 1 }]}>
+                          <Text style={styles.fieldLabel}>Declaration Date</Text>
+                          <TextInput style={styles.fieldInput} value={editDeclDate} onChangeText={setEditDeclDate} />
+                        </View>
+                      </View>
+                    </>
+                  )}
+
+                  {String(editRole).toUpperCase() === 'SCORER' && (
+                    <View style={styles.fieldRow}>
+                      <View style={[styles.fieldGroup, { flex: 1 }]}>
+                        <Text style={styles.fieldLabel}>Certification Level</Text>
+                        <TextInput style={styles.fieldInput} value={editScorerCert} onChangeText={setEditScorerCert} />
+                      </View>
+                      <View style={[styles.fieldGroup, { flex: 1 }]}>
+                        <Text style={styles.fieldLabel}>Taluk Jurisdiction</Text>
+                        <TextInput style={styles.fieldInput} value={editTaluk} onChangeText={setEditTaluk} />
+                      </View>
+                    </View>
+                  )}
+
+                  {String(editRole).toUpperCase() === 'UMPIRE' && (
+                    <>
+                      <View style={styles.fieldRow}>
+                        <View style={[styles.fieldGroup, { flex: 1 }]}>
+                          <Text style={styles.fieldLabel}>Qualification / Panel</Text>
+                          <TextInput style={styles.fieldInput} value={editUmpireQual} onChangeText={setEditUmpireQual} />
+                        </View>
+                        <View style={[styles.fieldGroup, { flex: 1 }]}>
+                          <Text style={styles.fieldLabel}>Certification Number</Text>
+                          <TextInput style={styles.fieldInput} value={editUmpireCertNo} onChangeText={setEditUmpireCertNo} />
+                        </View>
+                      </View>
+                      <View style={styles.fieldRow}>
+                        <View style={[styles.fieldGroup, { flex: 1 }]}>
+                          <Text style={styles.fieldLabel}>Experience</Text>
+                          <TextInput style={styles.fieldInput} value={editUmpireExp} onChangeText={setEditUmpireExp} />
+                        </View>
+                        <View style={[styles.fieldGroup, { flex: 1 }]}>
+                          <Text style={styles.fieldLabel}>Specialization</Text>
+                          <TextInput style={styles.fieldInput} value={editUmpireSpec} onChangeText={setEditUmpireSpec} />
+                        </View>
+                      </View>
+                      <View style={styles.fieldRow}>
+                        <View style={[styles.fieldGroup, { flex: 1 }]}>
+                          <Text style={styles.fieldLabel}>Previous Organization</Text>
+                          <TextInput style={styles.fieldInput} value={editUmpirePrevOrg} onChangeText={setEditUmpirePrevOrg} />
+                        </View>
+                        <View style={[styles.fieldGroup, { flex: 1 }]}>
+                          <Text style={styles.fieldLabel}>District / Taluk</Text>
+                          <TextInput style={styles.fieldInput} value={editUmpireDistrict} onChangeText={setEditUmpireDistrict} />
+                        </View>
+                        <View style={[styles.fieldGroup, { flex: 1 }]}>
+                          <Text style={styles.fieldLabel}>State</Text>
+                          <TextInput style={styles.fieldInput} value={editUmpireState} onChangeText={setEditUmpireState} />
+                        </View>
+                      </View>
+                    </>
+                  )}
+                </ScrollView>
+              ) : String(activeUser.role || '').toUpperCase() === 'PLAYER' ? (
+                <ScrollView style={{ maxHeight: 580 }} contentContainerStyle={{ padding: 14 }}>
+                  {(() => {
+                    const pd = activeUser.player_details || {};
+                    const photoUri = activeUser.photo || activeUser.image_path || pd.photo || pd.image_path || '';
+                    const tick = (cond: boolean) => (cond ? '☑' : '☐');
+                    const batterHand = String(pd.batter_hand || (String(pd.batting_style || '').toLowerCase().includes('left') ? 'LH' : 'RH')).toUpperCase();
+                    const batterPos = String(pd.batter_position || '').toUpperCase();
+                    const bowlerHand = String(pd.bowler_hand || (String(pd.bowling_arm || '').toLowerCase().includes('left') ? 'LH' : (String(pd.bowling_arm || '').toLowerCase().includes('right') ? 'RH' : ''))).toUpperCase();
+                    const bowlerType = String(pd.bowler_type || pd.bowling_style || '').toUpperCase();
+                    const isKeeper = Boolean(pd.is_wicket_keeper || String(pd.role || '').toLowerCase().includes('keeper'));
+                    return (
+                      <View style={{ backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#0f172a', padding: 12, borderRadius: 4 }}>
+                        {/* Header */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: 1.5, borderBottomColor: '#0f172a', paddingBottom: 8, marginBottom: 8 }}>
+                          <Image source={require('../../../assets/logo_transparent.png')} style={{ width: 52, height: 52 }} resizeMode="contain" />
+                          <View style={{ flex: 1, alignItems: 'center' }}>
+                            <Text style={{ fontSize: 13.5, fontWeight: '900', color: '#0f172a', textAlign: 'center' }}>
+                              CRICKET FEDERATION OF VIRUDHUNAGAR DISTRICT
+                            </Text>
+                            <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#334155', textAlign: 'center' }}>
+                              (Registered under Tamilnadu Societies Act 1975)
+                            </Text>
+                            <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#0f172a', textAlign: 'center' }}>
+                              Reg. No: SRG/VIRUDHUNAGAR/84/2026
+                            </Text>
+                          </View>
+                        </View>
+
+                        <Text style={{ fontSize: 12.5, fontWeight: '900', color: '#0f172a', textAlign: 'center', marginBottom: 8, textDecorationLine: 'underline' }}>
+                          PLAYER&apos;S REGISTRATION FORM ({activeUser.id})
+                        </Text>
+
+                        {/* Grid Rows */}
+                        <View style={{ borderWidth: 1, borderColor: '#0f172a' }}>
+                          {/* Club / School / College / Academy */}
+                          <View style={{ flexDirection: isMobile ? 'column' : 'row', borderBottomWidth: 1, borderBottomColor: '#0f172a' }}>
+                            <View style={{ flex: 1, padding: 6, borderRightWidth: isMobile ? 0 : 1, borderRightColor: '#0f172a', backgroundColor: '#f8fafc' }}>
+                              <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#0f172a' }}>NAME OF CLUB / SCHOOL / COLLEGE / ACADEMY:</Text>
+                            </View>
+                            <View style={{ flex: 1.4, padding: 6 }}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#0f172a' }}>{pd.club_choice || 'Not specified'}</Text>
+                            </View>
+                          </View>
+
+                          {/* Name, Father's Name & Photo */}
+                          <View style={{ flexDirection: isMobile ? 'column' : 'row', borderBottomWidth: 1, borderBottomColor: '#0f172a' }}>
+                            <View style={{ flex: 2.2, borderRightWidth: isMobile ? 0 : 1, borderRightColor: '#0f172a' }}>
+                              <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#0f172a' }}>
+                                <View style={{ flex: 1, padding: 6, borderRightWidth: 1, borderRightColor: '#0f172a' }}>
+                                  <Text style={{ fontSize: 9, fontWeight: '800', color: '#475569' }}>NAME OF THE PLAYER</Text>
+                                  <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0f172a', marginTop: 2 }}>{activeUser.name}</Text>
+                                </View>
+                                <View style={{ flex: 1, padding: 6 }}>
+                                  <Text style={{ fontSize: 9, fontWeight: '800', color: '#475569' }}>FATHER&apos;S NAME</Text>
+                                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#0f172a', marginTop: 2 }}>{pd.father_name || 'Not specified'}</Text>
+                                </View>
+                              </View>
+                              <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#0f172a' }}>
+                                <View style={{ flex: 1, padding: 6, borderRightWidth: 1, borderRightColor: '#0f172a' }}>
+                                  <Text style={{ fontSize: 9, fontWeight: '800', color: '#475569' }}>DATE OF BIRTH</Text>
+                                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#0f172a', marginTop: 2 }}>{pd.date_of_birth || '—'}</Text>
+                                </View>
+                                <View style={{ flex: 0.6, padding: 6, borderRightWidth: 1, borderRightColor: '#0f172a' }}>
+                                  <Text style={{ fontSize: 9, fontWeight: '800', color: '#475569' }}>AGE</Text>
+                                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#0f172a', marginTop: 2 }}>{pd.age || '—'}</Text>
+                                </View>
+                                <View style={{ flex: 1.2, padding: 6 }}>
+                                  <Text style={{ fontSize: 9, fontWeight: '800', color: '#475569' }}>AADHAR NUMBER</Text>
+                                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#991b1b', marginTop: 2 }}>{activeUser.aadhaar || pd.aadhaar || 'Not specified'}</Text>
+                                </View>
+                              </View>
+                              <View style={{ padding: 6 }}>
+                                <Text style={{ fontSize: 9, fontWeight: '800', color: '#475569' }}>
+                                  ADDRESS FOR COMMUNICATION <Text style={{ fontSize: 8, fontWeight: '600' }}>(ADDRESS PROOF REQUIRED AADHAR CARD (OR) PASSPORT COPY MUST BE ATTACHED)</Text>
+                                </Text>
+                                <Text style={{ fontSize: 11, color: '#0f172a', marginTop: 2 }}>{pd.address || 'Not specified'}</Text>
+                              </View>
+                            </View>
+                            {/* Passport Photo Box */}
+                            <View style={{ flex: 0.8, padding: 8, alignItems: 'center', justifyContent: 'center', minHeight: 110 }}>
+                              {photoUri ? (
+                                <Image source={{ uri: photoUri }} style={{ width: 82, height: 98, borderWidth: 1, borderColor: '#0f172a' }} resizeMode="cover" />
+                              ) : (
+                                <View style={{ width: 82, height: 98, borderWidth: 1, borderStyle: 'dashed', borderColor: '#64748b', alignItems: 'center', justifyContent: 'center', padding: 4 }}>
+                                  <Text style={{ fontSize: 8.5, textAlign: 'center', color: '#64748b', fontWeight: '700' }}>AFFIX PASSPORT SIZE PHOTO</Text>
+                                </View>
+                              )}
+                            </View>
+                          </View>
+
+                          {/* Working / Place of Birth / Contact */}
+                          <View style={{ flexDirection: isMobile ? 'column' : 'row', borderBottomWidth: 1, borderBottomColor: '#0f172a' }}>
+                            <View style={{ flex: 1.2, padding: 6, borderRightWidth: isMobile ? 0 : 1, borderRightColor: '#0f172a' }}>
+                              <Text style={{ fontSize: 8.5, fontWeight: '800', color: '#475569' }}>
+                                IF WORKING NAME OF THE INSTITUTION/BANK/ANY GOVT OFFICES <Text style={{ fontSize: 7.5, fontWeight: '600' }}>(TO BE SUBMITTED APPOINTMENT ORDER BY THE HEAD OF THE INSTITUTION / GAZETTED OFFICER IS REQUIRED)</Text>
+                              </Text>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#0f172a', marginTop: 2 }}>{pd.working_institution || '—'}</Text>
+                            </View>
+                            <View style={{ flex: 1, padding: 6, borderRightWidth: isMobile ? 0 : 1, borderRightColor: '#0f172a' }}>
+                              <Text style={{ fontSize: 8.5, fontWeight: '800', color: '#475569' }}>
+                                PLACE OF BIRTH <Text style={{ fontSize: 7.5, fontWeight: '600' }}>(BIRTH CERTIFICATE TO BE ATTACHED)</Text>
+                              </Text>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#0f172a', marginTop: 2 }}>{pd.place_of_birth || '—'}</Text>
+                            </View>
+                            <View style={{ flex: 1, padding: 6 }}>
+                              <Text style={{ fontSize: 9, fontWeight: '800', color: '#475569' }}>CONTACT NUMBER</Text>
+                              <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0f2452', marginTop: 2 }}>{activeUser.mobile || pd.phone || 'Not specified'}</Text>
+                            </View>
+                          </View>
+
+                          {/* Studying / College & School Split / Email */}
+                          <View style={{ flexDirection: isMobile ? 'column' : 'row', borderBottomWidth: 1, borderBottomColor: '#0f172a' }}>
+                            <View style={{ flex: 1.2, padding: 6, borderRightWidth: isMobile ? 0 : 1, borderRightColor: '#0f172a' }}>
+                              <Text style={{ fontSize: 8.5, fontWeight: '800', color: '#475569' }}>
+                                IF STUDYING NAME OF THE SCHOOL/COLLEGE <Text style={{ fontSize: 7.5, fontWeight: '600' }}>(TO BE ATTESTED BY THE HEAD OF THE INSTITUTION OF BONAFIDE CERTIFICATE IS REQUIRED)</Text>
+                              </Text>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#0f172a', marginTop: 2 }}>{pd.studying_institution || '—'}</Text>
+                            </View>
+                            <View style={{ flex: 1, flexDirection: 'row', borderRightWidth: isMobile ? 0 : 1, borderRightColor: '#0f172a' }}>
+                              <View style={{ flex: 1, borderRightWidth: 1, borderRightColor: '#0f172a' }}>
+                                <Text style={{ fontSize: 8.5, fontWeight: '900', color: '#0f172a', textAlign: 'center', borderBottomWidth: 1, borderBottomColor: '#0f172a', paddingVertical: 3, backgroundColor: '#f8fafc' }}>COLLEGE</Text>
+                                <Text style={{ fontSize: 7.5, fontWeight: '800', color: '#475569', textAlign: 'center', borderBottomWidth: 1, borderBottomColor: '#0f172a', paddingVertical: 2 }}>BRANCH & YEAR & SEC</Text>
+                                <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#0f172a', padding: 5, textAlign: 'center' }}>{pd.branch_year_sec || '—'}</Text>
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 8.5, fontWeight: '900', color: '#0f172a', textAlign: 'center', borderBottomWidth: 1, borderBottomColor: '#0f172a', paddingVertical: 3, backgroundColor: '#f8fafc' }}>SCHOOL</Text>
+                                <Text style={{ fontSize: 7.5, fontWeight: '800', color: '#475569', textAlign: 'center', borderBottomWidth: 1, borderBottomColor: '#0f172a', paddingVertical: 2 }}>CLASS & SECTION</Text>
+                                <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#0f172a', padding: 5, textAlign: 'center' }}>{pd.class_section || '—'}</Text>
+                              </View>
+                            </View>
+                            <View style={{ flex: 1, padding: 6 }}>
+                              <Text style={{ fontSize: 9, fontWeight: '800', color: '#475569' }}>E-MAIL ID</Text>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#0369a1', marginTop: 2 }}>{activeUser.email}</Text>
+                            </View>
+                          </View>
+
+                          {/* Proficiency */}
+                          <View style={{ flexDirection: isMobile ? 'column' : 'row' }}>
+                            <View style={{ flex: 0.9, padding: 6, borderRightWidth: isMobile ? 0 : 1, borderRightColor: '#0f172a', justifyContent: 'center' }}>
+                              <Text style={{ fontSize: 10, fontWeight: '800', color: '#0f172a' }}>PROFICIENCY</Text>
+                              <Text style={{ fontSize: 9, color: '#64748b' }}>({pd.role || 'Player'} • {pd.category || 'Senior'})</Text>
+                            </View>
+                            <View style={{ flex: 1.5, padding: 6, borderRightWidth: isMobile ? 0 : 1, borderRightColor: '#0f172a', gap: 4 }}>
+                              <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#0f172a' }}>
+                                BATTER: {tick(batterHand === 'RH')} RH  {tick(batterHand === 'LH')} LH
+                              </Text>
+                              <Text style={{ fontSize: 10, color: '#334155' }}>
+                                {tick(batterPos === 'OPEN')} OPEN  {tick(batterPos === 'TOP_ORDER')} TOP ORDER  {tick(batterPos === 'MIDDLE_ORDER')} MIDDLE ORDER
+                              </Text>
+                              <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#0f172a', marginTop: 2 }}>
+                                BOWLER: {tick(bowlerHand === 'RH')} RH  {tick(bowlerHand === 'LH')} LH
+                              </Text>
+                              <Text style={{ fontSize: 10, color: '#334155' }}>
+                                {tick(bowlerType.includes('MEDIUM') || bowlerType.includes('FAST'))} MEDIUM  {tick(bowlerType.includes('OFF'))} OFF SPIN  {tick(bowlerType.includes('LEG'))} LEG SPINNER  {tick(bowlerType.includes('ORTHODOX'))} ORTHODOX  {tick(bowlerType.includes('CHINAMAN'))} CHINAMAN
+                              </Text>
+                            </View>
+                            <View style={{ flex: 0.7, padding: 6, justifyContent: 'center', alignItems: 'center' }}>
+                              <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#0f172a', textAlign: 'center' }}>WICKET KEEPER</Text>
+                              <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#0f172a', marginTop: 4 }}>
+                                {tick(isKeeper)} YES   {tick(!isKeeper)} NO
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+
+                        {/* Declaration */}
+                        <View style={{ marginTop: 10, gap: 4 }}>
+                          <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#0f172a' }}>DECLARATION:</Text>
+                          <Text style={{ fontSize: 9.5, color: '#334155', lineHeight: 14 }}>
+                            THIS IS TO DECLARE THAT Mr/Ms/Mrs. <Text style={{ fontWeight: '800', textDecorationLine: 'underline' }}>{activeUser.name}</Text> IS A BONA FIDE RESIDENT WITHIN THE REVENUE DISTRICT OF VIRUDHUNAGAR. AND THAT THE PARTICULARS FURNISHED ABOVE ARE TRUE TO THE BEST OF MY KNOWLEDGE.
+                          </Text>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, flexWrap: 'wrap', gap: 6 }}>
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#0f172a' }}>
+                              PLACE: {pd.declaration_place || pd.taluk || 'Virudhunagar'}   •   DATE: {pd.declaration_date || (activeUser.created_at ? new Date(activeUser.created_at).toLocaleDateString('en-GB') : '—')}
+                            </Text>
+                            <Text style={{ fontSize: 10, fontWeight: '900', color: '#166534' }}>
+                              VERIFIED BY CFVD ({activeUser.status || 'ACTIVE'})
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Admin Passport Photo Verification Panel */}
+                        <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#cbd5e1', gap: 8 }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#0f2452' }}>
+                              📸 Passport Photo Verification Status:{' '}
+                              <Text style={{
+                                color:
+                                  (activeUser.photo_verification_status || pd.photo_verification_status) === 'VERIFIED'
+                                    ? '#16a34a'
+                                    : (activeUser.photo_verification_status || pd.photo_verification_status) === 'REJECTED'
+                                      ? '#dc2626'
+                                      : '#d97706'
+                              }}>
+                                {activeUser.photo_verification_status || pd.photo_verification_status || 'NONE'}
+                              </Text>
+                            </Text>
+                          </View>
+                          {(activeUser.photo_verification_reason || pd.photo_verification_reason) ? (
+                            <Text style={{ fontSize: 10.5, color: '#475569' }}>
+                              {activeUser.photo_verification_reason || pd.photo_verification_reason}
+                            </Text>
+                          ) : null}
+                          {Boolean(photoUri) && (
+                            <View style={{ gap: 8 }}>
+                              <TextInput
+                                style={styles.fieldInput}
+                                value={photoRejectReason}
+                                onChangeText={setPhotoRejectReason}
+                                placeholder="Required rejection reason (e.g. Blurry face / Group photo)"
+                                placeholderTextColor="#94a3b8"
+                              />
+                              <View style={{ flexDirection: 'row', gap: 8 }}>
+                                <TouchableOpacity
+                                  disabled={verifyingPhoto}
+                                  onPress={async () => {
+                                    setVerifyingPhoto(true);
+                                    try {
+                                      const res = await adminApi.verifyPlayerPhoto(activeUser.id, 'VERIFIED', 'Approved by Administrator.');
+                                      setActiveUser((prev: any) => prev ? {
+                                        ...prev,
+                                        photo_verification_status: 'VERIFIED',
+                                        photo_verification_reason: res.photo_verification_reason,
+                                        photo_verification_history: res.photo_verification_history || prev.photo_verification_history
+                                      } : null);
+                                      showToast('Player passport photo approved.', 'success');
+                                      loadUsers();
+                                    } catch (err: any) {
+                                      showToast(err.message || 'Failed to approve photo', 'error');
+                                    } finally {
+                                      setVerifyingPhoto(false);
+                                    }
+                                  }}
+                                  style={{ flex: 1, backgroundColor: '#16a34a', paddingVertical: 8, borderRadius: 6, alignItems: 'center' }}
+                                >
+                                  <Text style={{ color: '#fff', fontSize: 11.5, fontWeight: '800' }}>✓ Approve Photo</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  disabled={verifyingPhoto}
+                                  onPress={async () => {
+                                    const reason = photoRejectReason.trim();
+                                    if (!reason) {
+                                      showToast('Please enter a rejection reason before rejecting the photo.', 'error');
+                                      return;
+                                    }
+                                    setVerifyingPhoto(true);
+                                    try {
+                                      const res = await adminApi.verifyPlayerPhoto(activeUser.id, 'REJECTED', reason);
+                                      setActiveUser((prev: any) => prev ? {
+                                        ...prev,
+                                        photo_verification_status: 'REJECTED',
+                                        photo_verification_reason: res.photo_verification_reason,
+                                        photo_verification_history: res.photo_verification_history || prev.photo_verification_history
+                                      } : null);
+                                      setPhotoRejectReason('');
+                                      showToast('Player passport photo rejected.', 'info');
+                                      loadUsers();
+                                    } catch (err: any) {
+                                      showToast(err.message || 'Failed to reject photo', 'error');
+                                    } finally {
+                                      setVerifyingPhoto(false);
+                                    }
+                                  }}
+                                  style={{ flex: 1, backgroundColor: '#dc2626', paddingVertical: 8, borderRadius: 6, alignItems: 'center' }}
+                                >
+                                  <Text style={{ color: '#fff', fontSize: 11.5, fontWeight: '800' }}>✕ Reject Photo</Text>
+                                </TouchableOpacity>
+                              </View>
+                              {Array.isArray(activeUser.photo_verification_history) && activeUser.photo_verification_history.length > 0 && (
+                                <View style={{ marginTop: 6, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 6, padding: 8, gap: 4 }}>
+                                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#334155' }}>Verification History</Text>
+                                  {activeUser.photo_verification_history.slice(-4).reverse().map((h: any, hIdx: number) => (
+                                    <Text key={hIdx} style={{ fontSize: 10.5, color: '#475569' }}>
+                                      • [{h.status}] {h.reason} ({h.actor_role || 'SYSTEM'})
+                                    </Text>
+                                  ))}
+                                </View>
+                              )}
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })()}
+                </ScrollView>
               ) : (
                 <View style={styles.modalBody}>
                   <View style={styles.infoRow}>
@@ -838,6 +1525,104 @@ export const UsersPage: React.FC = () => {
                   </>
                 ) : (
                   <>
+                    {Platform.OS === 'web' && String(activeUser.role || '').toUpperCase() === 'PLAYER' && (
+                      <TouchableOpacity
+                        style={[styles.btnCancel, { borderColor: '#0f2452', backgroundColor: '#f8fafc' }]}
+                        onPress={() => {
+                          if (typeof window === 'undefined') return;
+                          const pd = activeUser.player_details || {};
+                          const rawPhoto = activeUser.photo || activeUser.image_path || pd.photo || pd.image_path || '';
+                          const photoUrl = resolveImageUrl(rawPhoto) || '';
+                          const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                          const tick = (c: boolean) => (c ? '☑' : '☐');
+                          const bHand = String(pd.batter_hand || (String(pd.batting_style || '').toLowerCase().includes('left') ? 'LH' : 'RH')).toUpperCase();
+                          const bPos = String(pd.batter_position || '').toUpperCase();
+                          const bwHand = String(pd.bowler_hand || (String(pd.bowling_arm || '').toLowerCase().includes('left') ? 'LH' : (String(pd.bowling_arm || '').toLowerCase().includes('right') ? 'RH' : ''))).toUpperCase();
+                          const bwType = String(pd.bowler_type || pd.bowling_style || '').toUpperCase();
+                          const isWk = Boolean(pd.is_wicket_keeper || String(pd.role || '').toLowerCase().includes('keeper'));
+                          const printWin = window.open('', '_blank', 'width=900,height=950');
+                          if (!printWin) {
+                            if (typeof window.print === 'function') window.print();
+                            return;
+                          }
+                          printWin.document.write(`<!DOCTYPE html><html><head><title>CFVD Player Registration - ${esc(activeUser.name)}</title>
+<style>
+  body { font-family: Arial, sans-serif; color: #0f172a; margin: 20px; }
+  .sheet { border: 2px solid #0f172a; padding: 14px; max-width: 780px; margin: 0 auto; }
+  .hdr { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 8px; }
+  .hdr h2 { margin: 0; font-size: 16px; }
+  .hdr p { margin: 2px 0; font-size: 11px; font-weight: bold; }
+  .title { text-align: center; font-weight: 900; text-decoration: underline; margin: 8px 0 10px; font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  td, th { border: 1px solid #0f172a; padding: 6px; vertical-align: top; }
+  .lbl { font-size: 9px; font-weight: 800; color: #334155; display: block; margin-bottom: 3px; }
+  .photo-box { width: 115px; text-align: center; vertical-align: middle; }
+  .photo-box img { width: 100px; height: 128px; object-fit: cover; border: 1px solid #0f172a; display: block; margin: 0 auto; }
+  .decl { margin-top: 12px; font-size: 10.5px; line-height: 1.5; }
+  @media print { body { margin: 8mm; } }
+</style></head><body>
+  <div class="sheet">
+    <div class="hdr">
+      <h2>CRICKET FEDERATION OF VIRUDHUNAGAR DISTRICT</h2>
+      <p>(Registered under Tamilnadu Societies Act 1975)</p>
+      <p>Reg. No: SRG/VIRUDHUNAGAR/84/2026</p>
+    </div>
+    <div class="title">PLAYER'S REGISTRATION FORM (${esc(activeUser.id)})</div>
+    <table>
+      <tr>
+        <td colspan="2"><span class="lbl">NAME OF CLUB / SCHOOL / COLLEGE / ACADEMY:</span><strong>${esc(pd.club_choice || 'Not specified')}</strong></td>
+        <td rowspan="4" class="photo-box">
+          ${photoUrl ? `<img src="${esc(photoUrl)}" alt="Passport Photo" />` : '<div style="width:100px;height:128px;border:1px dashed #64748b;display:flex;align-items:center;justify-content:center;font-size:10px;margin:0 auto;">AFFIX PASSPORT SIZE PHOTO</div>'}
+        </td>
+      </tr>
+      <tr>
+        <td><span class="lbl">NAME OF THE PLAYER</span><strong>${esc(activeUser.name)}</strong></td>
+        <td><span class="lbl">FATHER'S NAME</span><strong>${esc(pd.father_name || 'Not specified')}</strong></td>
+      </tr>
+      <tr>
+        <td><span class="lbl">DATE OF BIRTH &amp; AGE</span><strong>${esc(pd.date_of_birth || '—')} (${esc(pd.age || '—')} yrs)</strong></td>
+        <td><span class="lbl">AADHAR NUMBER</span><strong style="color:#991b1b">${esc(activeUser.aadhaar || pd.aadhaar || 'Not specified')}</strong></td>
+      </tr>
+      <tr>
+        <td colspan="2"><span class="lbl">ADDRESS FOR COMMUNICATION (AADHAR / PASSPORT COPY PROOF)</span>${esc(pd.address || 'Not specified')}</td>
+      </tr>
+      <tr>
+        <td><span class="lbl">IF WORKING (INSTITUTION / BANK / GOVT OFFICES)</span>${esc(pd.working_institution || '—')}</td>
+        <td><span class="lbl">PLACE OF BIRTH</span>${esc(pd.place_of_birth || '—')}</td>
+        <td><span class="lbl">CONTACT NUMBER</span><strong>${esc(activeUser.mobile || pd.phone || 'Not specified')}</strong></td>
+      </tr>
+      <tr>
+        <td><span class="lbl">IF STUDYING (NAME OF SCHOOL / COLLEGE)</span>${esc(pd.studying_institution || '—')}</td>
+        <td><span class="lbl">COLLEGE (BRANCH &amp; YEAR &amp; SEC) / SCHOOL (CLASS &amp; SEC)</span>${esc(pd.branch_year_sec || pd.class_section || '—')}</td>
+        <td><span class="lbl">E-MAIL ID</span>${esc(activeUser.email)}</td>
+      </tr>
+      <tr>
+        <td><span class="lbl">PROFICIENCY</span>${esc(pd.role || 'Player')} • ${esc(pd.category || 'Senior')}</td>
+        <td>
+          <div><strong>BATTER:</strong> ${tick(bHand === 'RH')} RH ${tick(bHand === 'LH')} LH | ${tick(bPos === 'OPEN')} OPEN ${tick(bPos === 'TOP_ORDER')} TOP ORDER ${tick(bPos === 'MIDDLE_ORDER')} MIDDLE ORDER</div>
+          <div style="margin-top:4px;"><strong>BOWLER:</strong> ${tick(bwHand === 'RH')} RH ${tick(bwHand === 'LH')} LH | ${tick(bwType.includes('MEDIUM') || bwType.includes('FAST'))} MEDIUM ${tick(bwType.includes('OFF'))} OFF SPIN ${tick(bwType.includes('LEG'))} LEG SPINNER ${tick(bwType.includes('ORTHODOX'))} ORTHODOX ${tick(bwType.includes('CHINAMAN'))} CHINAMAN</div>
+        </td>
+        <td><span class="lbl">WICKET KEEPER</span>${tick(isWk)} YES &nbsp; ${tick(!isWk)} NO</td>
+      </tr>
+    </table>
+    <div class="decl">
+      <strong>DECLARATION:</strong> THIS IS TO DECLARE THAT Mr/Ms/Mrs. <u><strong>${esc(activeUser.name)}</strong></u> IS A BONA FIDE RESIDENT WITHIN THE REVENUE DISTRICT OF VIRUDHUNAGAR. AND THAT THE PARTICULARS FURNISHED ABOVE ARE TRUE TO THE BEST OF MY KNOWLEDGE.
+      <div style="display:flex;justify-content:space-between;margin-top:16px;font-weight:bold;">
+        <span>PLACE: ${esc(pd.declaration_place || pd.taluk || 'Virudhunagar')} &nbsp;•&nbsp; DATE: ${esc(pd.declaration_date || '—')}</span>
+        <span>VERIFIED BY CFVD (${esc(activeUser.status || 'ACTIVE')})</span>
+      </div>
+    </div>
+  </div>
+  <script>
+    window.onload = function() { setTimeout(function() { window.print(); }, 350); };
+  </script>
+</body></html>`);
+                          printWin.document.close();
+                        }}
+                      >
+                        <Text style={[styles.btnCancelText, { color: '#0f2452' }]}>🖨️ Print Form</Text>
+                      </TouchableOpacity>
+                    )}
                     <TouchableOpacity style={styles.btnCancel} onPress={() => setActiveUser(null)}>
                       <Text style={styles.btnCancelText}>Close</Text>
                     </TouchableOpacity>
@@ -1143,7 +1928,7 @@ export const UsersPage: React.FC = () => {
         </Modal>
       )}
 
-      {/* High-Security Dual-Admin Approval & Revocation Modal (Commented out - not needed)
+      {/* High-Security Dual-Admin Approval & Revocation Modal */}
       <DualAdminSecurityModal
         visible={showDualSecurityModal}
         onClose={() => setShowDualSecurityModal(false)}
@@ -1152,7 +1937,63 @@ export const UsersPage: React.FC = () => {
           showToast('Dual-admin operation completed successfully.', 'success');
         }}
       />
-      */}
+
+      {/* Official Registration Modal (Exact Website Player / Team / Scorer / Umpire Form & Validations) */}
+      {(showAddUserModal || showAddTeamModal) && (
+        <Modal
+          visible={showAddUserModal || showAddTeamModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => {
+            setShowAddUserModal(false);
+            setShowAddTeamModal(false);
+          }}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalDialog, { maxWidth: 980, width: '96%', height: '92%', overflow: 'hidden' }]}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>
+                  {showAddTeamModal ? '+ Register Cricket Team (Official Form)' : '+ Register Federation Member (Player / Team / Scorer / Umpire)'}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowAddUserModal(false);
+                    setShowAddTeamModal(false);
+                  }}
+                >
+                  <CloseIcon size={20} color="#64748b" />
+                </TouchableOpacity>
+              </View>
+              <View style={{ flex: 1 }}>
+                <RegistrationScreen
+                  adminMode
+                  initialRole={showAddTeamModal ? 'TEAM' : 'PLAYER'}
+                  onExit={() => {
+                    setShowAddUserModal(false);
+                    setShowAddTeamModal(false);
+                  }}
+                  onAdminSuccess={() => {
+                    setShowAddUserModal(false);
+                    setShowAddTeamModal(false);
+                    loadUsers();
+                  }}
+                />
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Permanent User Delete Confirmation */}
+      <ConfirmDialog
+        visible={confirmDeleteUser.visible}
+        title="Permanently Delete User"
+        message={`Are you sure you want to permanently delete ${confirmDeleteUser.user?.name || 'this user'} (${confirmDeleteUser.user?.email || ''})? They will have to register again to access the portal.`}
+        confirmText="Delete Permanently"
+        variant="danger"
+        onConfirm={handleConfirmDeleteUser}
+        onCancel={() => setConfirmDeleteUser({ visible: false, user: null })}
+      />
     </View>
   );
 };

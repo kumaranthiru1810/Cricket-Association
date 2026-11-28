@@ -627,7 +627,6 @@ export const TournamentManagement: React.FC<TournamentManagementProps> = ({
       const res = await fetch(`${API_URL}/admin/users?role=UMPIRE`, {
         headers: {
           'Content-Type': 'application/json',
-          'x-user-role': 'ADMIN',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         }
       });

@@ -201,7 +201,7 @@ export default function TeamPublicProfileScreen({
             <View style={styles.statBox}>
               <Text style={styles.statLabel}>RUN RATE</Text>
               <Text style={[styles.statNumber, { color: '#0284c7' }]}>
-                {stats.runRate || '7.80'}
+                {stats.runRate || '—'}
               </Text>
               <Text style={styles.statSubText}>Runs / Over</Text>
             </View>
@@ -455,6 +455,11 @@ export default function TeamPublicProfileScreen({
                       <Text style={styles.playerNameText} numberOfLines={1}>
                         {player.name}
                       </Text>
+                      {(player.playerId || player.id) ? (
+                        <View style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 5 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#1d4ed8' }}>{player.playerId || player.id}</Text>
+                        </View>
+                      ) : null}
                       {player.is_captain && (
                         <View style={styles.captainBadge}>
                           <Text style={styles.captainBadgeText}>C</Text>
