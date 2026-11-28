@@ -28,10 +28,12 @@ class AdminAccessController {
 
   async requestPromote(req, res) {
     try {
-      const { email, name } = req.body;
+      const { email, name, approver1Id, approver2Id } = req.body;
       const data = await adminAccessService.requestPromote({
         email,
         name,
+        approver1Id,
+        approver2Id,
         requestedBy: req.user,
         ip: req.ip || req.connection?.remoteAddress
       });
@@ -89,9 +91,11 @@ class AdminAccessController {
 
   async requestRemove(req, res) {
     try {
-      const { targetAdminId } = req.body;
+      const { targetAdminId, approver1Id, approver2Id } = req.body;
       const data = await adminAccessService.requestRemove({
         targetAdminId,
+        approver1Id,
+        approver2Id,
         requestedBy: req.user,
         ip: req.ip || req.connection?.remoteAddress
       });
